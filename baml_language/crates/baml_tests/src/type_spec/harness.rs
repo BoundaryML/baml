@@ -140,6 +140,10 @@ pub(crate) struct ErrorChannel {
     pub(crate) non_exhaustive: Vec<TextRange>,
 }
 
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 pub(crate) fn collect_hir_ty_error_channel(
     db: &ProjectDatabase,
     file: baml_base::SourceFile,
@@ -502,6 +506,10 @@ struct OwnerInference<'db> {
 /// inferred expression and binding with its source range.
 /// Compiler-synthesized nodes are skipped: fixtures assert what the user
 /// wrote.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 pub(crate) fn collect_hir_ty_nodes(
     db: &ProjectDatabase,
     file: baml_base::SourceFile,

@@ -341,6 +341,10 @@ fn normalized_alias_map<'db>(
     aliases
 }
 
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn collect_package_aliases<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     pkg: PackageId<'db>,
@@ -1153,6 +1157,10 @@ fn impl_sort_key(db: &dyn baml_compiler2_ppir::Db, loc: ImplLoc<'_>) -> (String,
 /// E0138 concreteness gate's subjects) contributes no overlap - it
 /// carries its own rejection, and stacking a spurious overlap on top
 /// would double-report.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 pub fn impls_conflict(
     db: &dyn baml_compiler2_ppir::Db,
     a: &ImplFacts<'_>,
@@ -1325,6 +1333,10 @@ fn bounds_hold_at_common_instance(
 }
 
 /// An interned bound target as a plain constraint.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn plain_bound(target: &InterfaceRef) -> Interface {
     Interface::new(
         target.name.clone(),
@@ -1353,6 +1365,10 @@ fn renamed_var(prefix: char, idx: usize) -> ParamTy {
 /// generic params renamed to side-`prefix` unification variables.
 /// Associated bindings are dropped (interface outputs, not overlap
 /// inputs).
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn renamed_subject(
     rule: &ImplFacts<'_>,
     prefix: char,
@@ -1429,7 +1445,15 @@ pub fn package_orphan_violations<'db>(
     let current_package = pkg.name(db);
     let mut violations = Vec::new();
     for (loc, facts) in package_impls(db, pkg) {
+        #[expect(
+            deprecated,
+            reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+        )]
         let for_ty = facts.for_ty_pattern.to_plain();
+        #[expect(
+            deprecated,
+            reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+        )]
         let args: Vec<Ty> = facts
             .interface
             .generics

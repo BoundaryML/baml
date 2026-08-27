@@ -84,6 +84,10 @@ fn split_companion(name: &str) -> Option<(&str, &str)> {
 /// Walks every file visible to compiler2 (user files + stdlib stubs),
 /// extracts classes/enums/type aliases/functions/methods, resolves their
 /// types, and converts to codegen types.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
     enum MethodKind {
         Static,
@@ -282,7 +286,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     )));
                 let type_refs = &sig.type_refs;
                 let lower = |id| {
-                    let tir_ty = ctx.lower_type_ref(type_refs, id).to_plain();
+                    let tir_ty = baml_compiler2_hir_ty::lower::reject_holes(
+                        &ctx.lower_type_ref(type_refs, id),
+                    );
                     convert_tir_to_codegen_ty(&tir_ty, alias_map, recursive_aliases)
                 };
                 let method_defaults =
@@ -526,7 +532,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 .with_frame(scope_generics.clone());
             let type_refs = &sig.type_refs;
             let lower = |id| {
-                let tir_ty = ctx.lower_type_ref(type_refs, id).to_plain();
+                let tir_ty =
+                    baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(type_refs, id));
                 convert_tir_to_codegen_ty(&tir_ty, alias_map, recursive_aliases)
             };
             let func_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
@@ -634,7 +641,7 @@ fn resolve_type_ref(
     let id = id?;
     let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
         .with_frame(generic_params.to_vec());
-    let tir_ty = ctx.lower_type_ref(store, id).to_plain();
+    let tir_ty = baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(store, id));
     Some(convert_tir_to_codegen_ty(
         &tir_ty,
         alias_map,
@@ -757,7 +764,6 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
         TirTy::AssociatedTypeProjection { .. } | TirTy::Error { .. } => {
             cg::Ty::Unknown { attr: attr() }
         }
-        TirTy::Infer { .. } => cg::Ty::Void { attr: attr() },
     }
 }
 

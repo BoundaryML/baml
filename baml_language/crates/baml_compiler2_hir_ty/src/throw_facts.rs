@@ -222,7 +222,7 @@ fn extract_direct_and_declared<'db>(
         let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
         let id = builder.lower(te);
         let (store, _spans) = builder.finish();
-        let lowered = scope_ctx().lower_type_ref(&store, id).to_plain();
+        let lowered = crate::lower::reject_holes(&scope_ctx().lower_type_ref(&store, id));
         flatten_declared_ty_to_facts(&lowered)
     });
 
@@ -309,7 +309,7 @@ fn lower_param_types(
         .iter()
         .filter_map(|param| {
             let type_ref = param.type_ref?;
-            let ty = ctx.lower_type_ref(type_refs, type_ref).to_plain();
+            let ty = crate::lower::reject_holes(&ctx.lower_type_ref(type_refs, type_ref));
             Some((param.name.clone(), ty))
         })
         .collect()

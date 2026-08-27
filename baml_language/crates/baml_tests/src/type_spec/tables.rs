@@ -178,6 +178,10 @@ function mr_variant() -> Status throws never {
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn records_path_ladders() {
     let source = r#"
 class City {
@@ -241,6 +245,10 @@ function mr_chain(p: Person) -> string throws never {
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn records_call_plans() {
     let source = r#"
 function cp_id<T>(x: T) -> T throws never {
@@ -307,6 +315,10 @@ function cp_use() -> int throws never {
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn static_method_call_uses_owner_then_function_generic_frame() {
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
 
@@ -361,6 +373,10 @@ function rt_owner_use() -> RtBox<int> throws never {
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn runtime_call_plan_preserves_mixed_slots_and_precise_deferrals() {
     let source = r#"
 interface RtAnchor {}
@@ -438,6 +454,10 @@ function rt_use(runtime_t: reflect.Type, good: RtGood) -> RtAnchor throws never 
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn runtime_call_special_contracts_are_narrow_and_diagnostic() {
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
 
@@ -548,6 +568,10 @@ function sc_companion() -> baml.Map<string, int> throws never {
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn scoped_runtime_types_shadow_and_erase_at_block_exit() {
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
 
@@ -722,6 +746,10 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn unreflect_patterns_are_distinct_non_covering_and_effect_scoped() {
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
 
@@ -900,6 +928,10 @@ function ea_use() -> int throws never {
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn infers_parameter_defaults_as_own_root() {
     let source = r#"
 function pd_take(a: int, tag: string = "t", n: int = 1 + 2, bad: int = "x") -> int throws never {
@@ -945,6 +977,10 @@ function pd_take(a: int, tag: string = "t", n: int = 1 + 2, bad: int = "x") -> i
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn call_plan_waits_for_sibling_vars() {
     // The finish fixpoint must not commit a bounded var from its ground
     // lowers while a sibling var occurring in a DEFERRED lower is still
@@ -998,6 +1034,10 @@ function de_probe() -> bool throws never {
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn call_plan_effect_solves_from_deferred_lambda() {
     // Goals before solving (rustc's fulfillment-before-defaults, round
     // ordering): E's only REGISTERED bound is the declared-throws upper
@@ -1095,6 +1135,10 @@ function uv_probe(animal: UvCat | UvDog) -> string throws never {
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn pattern_ascription_records_written_nominal() {
     // Ruling 3 (S15): bindings record the WRITTEN pattern type; aliases
     // are nominal by design. The scrutinee's structural analysis may

@@ -329,6 +329,10 @@ impl<'db> ConvertedTables<'db> {
 /// `FunctionCoercion` (source shape from `type_of_expr`, target from the
 /// adjustment - the redundancy TIR stored, reconstructed at the
 /// boundary).
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db> {
     let mut out = ConvertedTables::default();
     for (&expr, ty) in &result.type_of_expr {
@@ -511,6 +515,10 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
     out
 }
 
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn convert_scoped_type_binding(binding: &hir_infer::ScopedTypeBinding) -> ScopedTypeBinding {
     ScopedTypeBinding {
         name: binding.name.clone(),
@@ -524,6 +532,10 @@ fn convert_scoped_type_binding(binding: &hir_infer::ScopedTypeBinding) -> Scoped
     }
 }
 
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn convert_runtime_check(check: &hir_infer::RuntimeCheck) -> RuntimeCheck {
     match check {
         hir_infer::RuntimeCheck::Argument { arg, expected } => RuntimeCheck::Argument {
@@ -541,6 +553,10 @@ fn convert_runtime_check(check: &hir_infer::RuntimeCheck) -> RuntimeCheck {
     }
 }
 
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> MemberResolution<'db> {
     match resolution {
         hir_infer::MemberResolution::Field { class, field } => MemberResolution::Field {

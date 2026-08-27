@@ -363,6 +363,10 @@ fn member_position_at(
 /// spellings the lowering produces are handled: a `MemberAccess` names its
 /// base directly, and a dotted `Path` records the type AFTER each segment,
 /// so the segment ending at the dot carries the receiver.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 pub fn receiver_at_dot<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     file: SourceFile,
@@ -1427,6 +1431,10 @@ pub(crate) fn member_resolution_target<'db>(
 }
 
 /// Cursor on a constructor-literal key (`data:` in `Success { data: … }`).
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn constructor_field_at<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     offset: TextSize,

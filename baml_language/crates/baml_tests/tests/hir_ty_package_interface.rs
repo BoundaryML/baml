@@ -189,6 +189,10 @@ fn enriched_interface_is_symbolic_loc_free_and_borsh_stable() {
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("/hir-ty-package-interface-consumer"));
@@ -360,6 +364,10 @@ function bad(
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn reflect_resolves_as_an_ordinary_builtin_package() {
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new(
@@ -469,6 +477,10 @@ function raw_only_value_is_available() -> string throws never {
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less() {
     let errors = error_messages(WITNESS_CONSUMER);
     assert!(errors.is_empty(), "{errors:#?}");

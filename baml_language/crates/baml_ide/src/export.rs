@@ -158,7 +158,7 @@ fn ty_head(ty: &Ty) -> Option<TyHead> {
         | Ty::Resource { .. }
         | Ty::PromptAst { .. }
         | Ty::Void { .. } => None,
-        Ty::Unknown { .. } | Ty::Never { .. } | Ty::Error { .. } | Ty::Infer { .. } => None,
+        Ty::Unknown { .. } | Ty::Never { .. } | Ty::Error { .. } => None,
     }
 }
 
@@ -866,6 +866,10 @@ fn interface_generics(db: &Db, iface: InterfaceLoc<'_>) -> Vec<(ParamTy, Vec<Int
 }
 
 /// An interned bounds map (the lowering layer's shape) as a plain list.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn plain_bounds(
     interned: impl IntoIterator<Item = (ParamTy, Vec<baml_type::interned::InterfaceRef>)>,
 ) -> Vec<(ParamTy, Vec<InterfaceBound>)> {
@@ -1222,6 +1226,10 @@ fn export_impl(db: &Db, imp: ImplLoc<'_>) -> Option<ImplExport> {
     })
 }
 
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn export_item<'db>(
     db: &'db Db,
     def: Definition<'db>,

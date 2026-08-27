@@ -1689,8 +1689,7 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
         | Ty::Void { .. }
         | Ty::Unknown { .. }
         | Ty::Never { .. }
-        | Ty::Error { .. }
-        | Ty::Infer { .. } => {}
+        | Ty::Error { .. } => {}
     }
 }
 

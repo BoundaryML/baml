@@ -396,6 +396,10 @@ impl ExportedType {
     }
 }
 
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn plain_interface(reference: &baml_type::interned::InterfaceRef) -> baml_type::Interface {
     baml_type::Interface::new(
         reference.name.clone(),
@@ -597,6 +601,10 @@ fn exported_function_param(name: Name, ty: Ty, has_default: bool) -> FunctionPar
 /// (`callable_throws`). The one place the two facts are paired. Exported
 /// generics are the function's OWN params: the frame minus the enclosing
 /// type's prefix (`enclosing_param_count`, 0 for a free function).
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn exported_function<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -678,9 +686,9 @@ fn lower_class_export<'db>(
         .with_bounds(crate::lower::class_generic_bounds(db, class_loc));
     let mut fields = Vec::new();
     for field in &class_data.fields {
-        let field_ty = field_ctx
-            .lower_type_ref(&class_data.type_refs, field.type_ref)
-            .to_plain();
+        let field_ty = crate::lower::reject_holes(
+            &field_ctx.lower_type_ref(&class_data.type_refs, field.type_ref),
+        );
         fields.push((
             field.name.clone(),
             field_ty,
@@ -728,6 +736,10 @@ fn lower_enum_export<'db>(
 }
 
 /// Lower a type-alias definition into its `ExportedType::TypeAlias`.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn lower_alias_export<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     pkg_items: &PackageItems<'db>,
@@ -766,10 +778,12 @@ fn lower_interface_export<'db>(
     ));
     let mut requires_refs = Vec::new();
     for &required in &data.requires {
-        let Some(root) = baml_type::interned::InterfaceRef::of_ty(&ctx.lower_type_ref_at(
-            &data.type_refs,
-            required,
-            crate::lower::TypePosition::ConstraintHead,
+        let Some(root) = baml_type::interned::InterfaceRef::of_ty(&crate::impls::interned_ty(
+            &crate::lower::reject_holes(&ctx.lower_type_ref_at(
+                &data.type_refs,
+                required,
+                crate::lower::TypePosition::ConstraintHead,
+            )),
         )) else {
             continue;
         };
@@ -790,10 +804,12 @@ fn lower_interface_export<'db>(
         .map(|assoc| ExportedAssociatedType {
             name: assoc.name.clone(),
             bound: assoc.bound.and_then(|bound| {
-                baml_type::interned::InterfaceRef::of_ty(&ctx.lower_type_ref_at(
-                    &data.type_refs,
-                    bound,
-                    crate::lower::TypePosition::ConstraintHead,
+                baml_type::interned::InterfaceRef::of_ty(&crate::impls::interned_ty(
+                    &crate::lower::reject_holes(&ctx.lower_type_ref_at(
+                        &data.type_refs,
+                        bound,
+                        crate::lower::TypePosition::ConstraintHead,
+                    )),
                 ))
                 .map(|bound| plain_interface(&bound))
             }),
@@ -1055,6 +1071,10 @@ fn mark_precompiled_callables_linkable(interface: &mut PackageInterface) {
 /// Lower the package's implementation registry into a canonical, loc-free
 /// export. Malformed headers have no `ImplFacts` row and are skipped; their
 /// source diagnostics remain owned by the declaration checker.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn exported_impls<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     pkg_id: PackageId<'db>,

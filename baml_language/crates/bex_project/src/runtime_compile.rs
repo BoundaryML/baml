@@ -167,8 +167,7 @@ impl StubViewpoint<'_> {
             | Ty::TypeVar(..)
             | Ty::Unknown { .. }
             | Ty::Never { .. }
-            | Ty::Error { .. }
-            | Ty::Infer { .. } => false,
+            | Ty::Error { .. } => false,
         }
     }
 }
@@ -1268,6 +1267,10 @@ struct SessionCompile {
     lease: bex_vm_types::SessionEvalLease,
 }
 
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn let_initializer_type(db: &ProjectDatabase, name: &str) -> Option<baml_type::Ty> {
     let package_id = PackageId::new(db, Name::new("user"));
     let package_items = baml_compiler2_hir::package::package_items(db, package_id);

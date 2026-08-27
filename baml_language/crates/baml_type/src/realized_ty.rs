@@ -100,7 +100,7 @@ impl<N: Clone + crate::HeadDisplay> std::fmt::Display for RealizedTy<N> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Interface, Name, NotRealizedTy, RealizedTy, Ty, TyAttr, TypeName};
+    use crate::{Interface, LoweringTy, Name, NotRealizedTy, RealizedTy, Ty, TyAttr, TypeName};
 
     fn def() -> TyAttr {
         TyAttr::default()
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn nested_infer_in_list_blocks_conversion() {
-        let ty: Ty = Ty::List(Box::new(Ty::Infer { attr: def() }), def());
+        let ty: LoweringTy = LoweringTy::List(Box::new(LoweringTy::Infer { attr: def() }), def());
         assert_eq!(
             RealizedTy::try_from(&ty),
             Err(NotRealizedTy { variant: "Infer" })
@@ -241,10 +241,10 @@ mod tests {
 
     #[test]
     fn nested_infer_in_function_ret_blocks_conversion() {
-        let ty: Ty = Ty::Function {
+        let ty: LoweringTy = LoweringTy::Function {
             params: Box::new([]),
-            ret: Box::new(Ty::Infer { attr: def() }),
-            throws: Box::new(Ty::Void { attr: def() }),
+            ret: Box::new(LoweringTy::Infer { attr: def() }),
+            throws: Box::new(LoweringTy::Void { attr: def() }),
             attr: def(),
         };
         assert_eq!(

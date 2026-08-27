@@ -9,6 +9,10 @@ mod tests {
 
     use crate::engine::TestDbExt;
 
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn render(ty: &baml_type::interned::Ty) -> String {
         ty.to_plain().render_canonical()
     }

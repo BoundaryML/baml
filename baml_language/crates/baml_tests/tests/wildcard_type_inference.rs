@@ -13,7 +13,7 @@
 //!     stays exhaustive.
 //!
 //! Both are filled during type checking from real inference — there is no
-//! spawn/throws special-casing; `_` lowers to a single `Ty::Infer` hole.
+//! spawn/throws special-casing; `_` lowers to a single inference-hole node.
 //!
 //! Tests here use `#[should_panic]` for compile-error assertions, which cannot be
 //! expressed in the BAML corpus.

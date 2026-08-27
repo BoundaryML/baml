@@ -117,7 +117,7 @@ pub(crate) fn lower_ref_in_at(
             .into_iter()
             .map(|diag| crate::lower::lowering_diag_error(&diag.kind)),
     );
-    lowered.to_plain()
+    crate::lower::reject_holes(&lowered)
 }
 
 /// [`lower_expr_in`] at an explicit [`crate::lower::TypePosition`].
@@ -189,12 +189,11 @@ pub fn interface_declared_param_bounds(
             .bounds
             .iter()
             .filter_map(|&id| {
-                ctx.lower_type_ref_at(
+                crate::lower::reject_holes(&ctx.lower_type_ref_at(
                     &data.type_refs,
                     id,
                     crate::lower::TypePosition::ConstraintHead,
-                )
-                .to_plain()
+                ))
                 .as_interface()
             })
             .collect();
@@ -227,7 +226,13 @@ pub fn package_resolved_aliases<'db>(
                 if let Definition::TypeAlias(loc) = def {
                     aliases
                         .entry(qualify_def(db, Definition::TypeAlias(*loc), name))
-                        .or_insert_with(|| crate::lower::type_alias_value(db, *loc).to_plain());
+                        .or_insert_with(
+                            #[expect(
+                                deprecated,
+                                reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+                            )]
+                            || crate::lower::type_alias_value(db, *loc).to_plain(),
+                        );
                 }
             }
         }
@@ -1577,7 +1582,7 @@ pub fn interface_requires<'db>(
 pub fn type_generic_bound_errors(
     db: &dyn baml_compiler2_ppir::Db,
     scope_bounds: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>,
-    ty: &Ty,
+    ty: &baml_type::LoweringTy,
 ) -> Vec<TirTypeError> {
     let facts = crate::facts::Facts::with_bounds(db, scope_bounds.clone());
     let mut errors = Vec::new();
@@ -1589,13 +1594,13 @@ pub fn type_generic_bound_errors(
 fn collect_type_generic_bound_errors<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &crate::facts::Facts<'db>,
-    ty: &Ty,
+    ty: &baml_type::LoweringTy,
     seen_aliases: &mut FxHashSet<QualifiedTypeName>,
     errors: &mut Vec<TirTypeError>,
 ) {
     use baml_type::normalize::TypeContext as _;
     match ty {
-        Ty::Class(qtn, args, _) => {
+        baml_type::LoweringTy::Class(qtn, args, _) => {
             for arg in args {
                 collect_type_generic_bound_errors(db, facts, arg, seen_aliases, errors);
             }
@@ -1605,7 +1610,7 @@ fn collect_type_generic_bound_errors<'db>(
                 check_head_args(facts, &params, &declared, args, errors);
             }
         }
-        Ty::Interface(qtn, args, pins, _) => {
+        baml_type::LoweringTy::Interface(qtn, args, pins, _) => {
             for arg in args {
                 collect_type_generic_bound_errors(db, facts, arg, seen_aliases, errors);
             }
@@ -1633,19 +1638,19 @@ fn collect_type_generic_bound_errors<'db>(
                 check_head_args(facts, &params, &declared, args, errors);
             }
         }
-        Ty::List(inner, _) => {
+        baml_type::LoweringTy::List(inner, _) => {
             collect_type_generic_bound_errors(db, facts, inner, seen_aliases, errors);
         }
-        Ty::Map { key, value, .. } => {
+        baml_type::LoweringTy::Map { key, value, .. } => {
             collect_type_generic_bound_errors(db, facts, key, seen_aliases, errors);
             collect_type_generic_bound_errors(db, facts, value, seen_aliases, errors);
         }
-        Ty::Union(members, _) => {
+        baml_type::LoweringTy::Union(members, _) => {
             for member in members {
                 collect_type_generic_bound_errors(db, facts, member, seen_aliases, errors);
             }
         }
-        Ty::Function {
+        baml_type::LoweringTy::Function {
             params,
             ret,
             throws,
@@ -1657,16 +1662,24 @@ fn collect_type_generic_bound_errors<'db>(
             collect_type_generic_bound_errors(db, facts, ret, seen_aliases, errors);
             collect_type_generic_bound_errors(db, facts, throws, seen_aliases, errors);
         }
-        Ty::Future(value, error, _) => {
+        baml_type::LoweringTy::Future(value, error, _) => {
             collect_type_generic_bound_errors(db, facts, value, seen_aliases, errors);
             collect_type_generic_bound_errors(db, facts, error, seen_aliases, errors);
         }
-        Ty::TypeAlias(qtn, _) => {
+        baml_type::LoweringTy::TypeAlias(qtn, _) => {
             if !seen_aliases.insert(qtn.clone()) {
                 return;
             }
             if let Some(expanded) = facts.alias_def(qtn) {
-                collect_type_generic_bound_errors(db, facts, &expanded, seen_aliases, errors);
+                // Alias definitions are finalized facts; the walk's lowering
+                // vocabulary is the wider member, so the upcast is zero-cost.
+                collect_type_generic_bound_errors(
+                    db,
+                    facts,
+                    expanded.as_lowering_ty(),
+                    seen_aliases,
+                    errors,
+                );
             }
             seen_aliases.remove(qtn);
         }
@@ -1678,20 +1691,35 @@ fn collect_type_generic_bound_errors<'db>(
 /// separate requirement, reported independently. Bounds may reference
 /// sibling params (`class Pair<A, B extends Container<A>>`), so the
 /// head's own bindings substitute through them first.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn check_head_args(
     facts: &crate::facts::Facts<'_>,
     params: &[ParamTy],
     declared: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
-    args: &[Ty],
+    args: &[baml_type::LoweringTy],
     errors: &mut Vec<TirTypeError>,
 ) {
     use baml_type::normalize::TypeContext as _;
     if params.is_empty() || args.is_empty() {
         return;
     }
-    let bindings = baml_type::unify::bind_type_vars(params, args);
+    // A hole-carrying argument is judged after instantiation, not here: only
+    // closed arguments are bound-checked, and only they contribute to the
+    // sibling-bound substitution environment. (The vacuous pass the retired
+    // lossy materialization gave holes, now decided by the narrowing instead
+    // of by walking an inert sentinel.)
+    let closed: Vec<Option<Ty>> = args.iter().map(|arg| Ty::try_from(arg).ok()).collect();
+    let (closed_params, closed_args): (Vec<ParamTy>, Vec<Ty>) = params
+        .iter()
+        .zip(&closed)
+        .filter_map(|(param, arg)| Some((param.clone(), arg.clone()?)))
+        .unzip();
+    let bindings = baml_type::unify::bind_type_vars(&closed_params, &closed_args);
     for (index, param) in params.iter().enumerate() {
-        let Some(actual) = args.get(index) else {
+        let Some(actual) = closed.get(index).and_then(Option::as_ref) else {
             continue;
         };
         for bound in declared.get(param).into_iter().flatten() {
@@ -1813,7 +1841,7 @@ pub enum Determination {
 /// Whether `ty` already carries an upstream error, so a projection over it
 /// must not emit a fresh diagnostic.
 fn projection_poisoned(ty: &Ty) -> bool {
-    matches!(ty, Ty::Error { .. } | Ty::Unknown { .. } | Ty::Infer { .. })
+    matches!(ty, Ty::Error { .. } | Ty::Unknown { .. })
 }
 
 /// Determine which interface declares `member` for `base`, in `ns` - the
@@ -1943,6 +1971,10 @@ pub fn lower_projection(
     ProjectionLowering { ty, diagnostics }
 }
 
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn determine_interface<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &crate::facts::Facts<'db>,
@@ -2062,7 +2094,7 @@ fn determine_interface<'db>(
                 },
             }
         }
-        Ty::Error { .. } | Ty::Unknown { .. } | Ty::Infer { .. } => Determination::Poisoned,
+        Ty::Error { .. } | Ty::Unknown { .. } => Determination::Poisoned,
         Ty::TypeAlias(..) => Determination::Poisoned,
         _ => match explicit {
             Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {
@@ -2179,6 +2211,10 @@ fn written_qualifier_proven_by(
 /// shadows its own closure (the stdlib's `Iterator requires
 /// Iterable<Item = Self.Item>` pinning idiom depends on it); declarers
 /// dedupe by realized identity across the pool.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn resolve_through_roots(
     db: &dyn baml_compiler2_ppir::Db,
     roots: Vec<baml_type::Interface>,
@@ -2257,6 +2293,10 @@ fn resolve_through_roots(
 /// A concrete base's projection through its visible impls, requires-aware
 /// root-wins across declarers (the most-derived interface shadows one it
 /// transitively requires, mirroring the symbolic road).
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn determine_concrete<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &crate::facts::Facts<'db>,
@@ -2349,6 +2389,10 @@ fn determine_concrete<'db>(
 /// and resolve per realized argument at runtime, exactly as a typevar `Self`
 /// does — plus the impl's realization of the associated types the qualifier
 /// left unwritten.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn concrete_realized_interface(
     db: &dyn baml_compiler2_ppir::Db,
     base: &Ty,

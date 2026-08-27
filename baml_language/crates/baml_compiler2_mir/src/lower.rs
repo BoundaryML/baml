@@ -119,6 +119,10 @@ pub fn resolved_aliases_for_package(
 /// be classified (recursive → pooled as a declaration) or expanded
 /// (non-recursive → inlined) — it survives as a name nothing declares, which
 /// `lower_to_runtime` now rejects.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn collect_type_aliases<'db>(
     db: &'db dyn crate::Db,
     pkg_id: baml_compiler2_hir::package::PackageId<'db>,
@@ -193,7 +197,7 @@ fn lower_ref_with_bindings<'db>(
         baml_compiler2_hir_ty::lower::lower_ctx_for_package(db, pkg_items, namespace_path.to_vec())
             .with_frame(generic_params)
             .with_bounds(bounds.clone());
-    let lowered = ctx.lower_type_ref(store, id).to_plain();
+    let lowered = baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(store, id));
     baml_type_runtime::substitute_ty(&lowered, bindings)
 }
 
@@ -244,7 +248,7 @@ fn lower_ref_in_scope_at<'db>(
             .with_frame(generic_params.to_vec())
             .with_bounds(bounds.clone())
             .with_self_ty(self_ty.map(|ty| baml_type::interned::Ty::from_plain(&ty)));
-    ctx.lower_type_ref_at(store, id, position).to_plain()
+    baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref_at(store, id, position))
 }
 
 /// The AST twin of [`lower_ref_in_scope`] (scratch firewall store).
@@ -387,6 +391,10 @@ fn qualify_def(
 
 /// An interned interface bound as the plain interface TYPE - the
 /// dispatch view MIR's per-param bound map holds.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn plain_interface_ty(bound: &baml_type::interned::InterfaceRef) -> Tir2Ty {
     baml_type::interned::Ty::intern(baml_type::interned::TyKind::Interface(
         bound.name.clone(),
@@ -3028,7 +3036,7 @@ impl<'db> LoweringContext<'db> {
         .with_bounds(generic_param_bounds)
         .with_self_ty(self_ty)
         .with_impl_target(impl_target);
-        let tir_ty = ctx.lower_type_ref(&store, id).to_plain();
+        let tir_ty = baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(&store, id));
         self.convert_tir_ty_for_runtime(&tir_ty)
     }
 
@@ -3664,6 +3672,10 @@ impl<'db> LoweringContext<'db> {
     /// carrying the enclosing function's rigid type variables — enumerated through
     /// the canonical L1 substrate, with each impl's generic bounds discharged by
     /// the canonical algebra against this scope's bounds.
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn l1_impl_views_for_recv(&self, recv: &Tir2Ty) -> Vec<InterfaceTypeView> {
         // hir_ty's substrate: alias transparency and impl-bound discharge
         // are internal to it (its own facts). Dispatch is by BASE type
@@ -12515,6 +12527,10 @@ impl<'db> LoweringContext<'db> {
             .collect()
     }
 
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn interface_closure_type_name_views(
         &self,
         iface_tn: &TypeName,
@@ -12707,6 +12723,10 @@ impl<'db> LoweringContext<'db> {
     /// receiver typing), or the free impl's `for` pattern lowered over the
     /// impl's generics. `None` when the enclosing function is not an impl
     /// method.
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn implements_subject_tir_ty(&self) -> Option<Tir2Ty> {
         use baml_compiler2_ppir::item_data::{
             ImplSubjectData, MethodOwner, impl_block_data, method_owner,

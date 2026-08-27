@@ -215,8 +215,7 @@ impl Ty {
             | Ty::TypeAlias(..)
             | Ty::Void { .. }
             | Ty::Unknown { .. }
-            | Ty::Error { .. }
-            | Ty::Infer { .. } => false,
+            | Ty::Error { .. } => false,
         }
     }
 
@@ -280,8 +279,7 @@ impl Ty {
             | Ty::TypeVar(..)
             | Ty::AssociatedTypeProjection { .. }
             | Ty::TypeAlias(..)
-            | Ty::Error { .. }
-            | Ty::Infer { .. } => false,
+            | Ty::Error { .. } => false,
         }
     }
 
@@ -603,8 +601,7 @@ impl Ty {
             Ty::TypeVar(..)
             | Ty::AssociatedTypeProjection { .. }
             | Ty::Never { .. }
-            | Ty::Error { .. }
-            | Ty::Infer { .. } => Err("compiler-only type should not reach runtime".to_string()),
+            | Ty::Error { .. } => Err("compiler-only type should not reach runtime".to_string()),
             Ty::Int { .. }
             | Ty::Bigint { .. }
             | Ty::Float { .. }
@@ -625,6 +622,189 @@ impl Ty {
             | Ty::Resource { .. }
             | Ty::PromptAst { .. } => Ok(()),
         }
+    }
+}
+
+// The lowering-stage constructors type-expression lowering builds with.
+// Hand-mirrored from the `Ty` set above until the `ty_family!` macro learns
+// to generate per-member constructors (the D3 interned-member work makes
+// that worthwhile for three members; two is not yet a pattern).
+impl LoweringTy {
+    /// `int` with default attributes.
+    pub fn int() -> Self {
+        LoweringTy::Int {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `float` with default attributes.
+    pub fn float() -> Self {
+        LoweringTy::Float {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `string` with default attributes.
+    pub fn string() -> Self {
+        LoweringTy::String {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `bool` with default attributes.
+    pub fn bool() -> Self {
+        LoweringTy::Bool {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `null` with default attributes.
+    pub fn null() -> Self {
+        LoweringTy::Null {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `never` with default attributes.
+    pub fn never() -> Self {
+        LoweringTy::Never {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `void` with default attributes.
+    pub fn void() -> Self {
+        LoweringTy::Void {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `unknown` (the top type) with default attributes.
+    pub fn unknown() -> Self {
+        LoweringTy::Unknown {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// The error-recovery sentinel with default attributes.
+    pub fn error() -> Self {
+        LoweringTy::Error {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// The `_` inference hole with default attributes.
+    pub fn infer() -> Self {
+        LoweringTy::Infer {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `T[]` (list) with default attributes.
+    pub fn list(inner: LoweringTy) -> Self {
+        LoweringTy::List(Box::new(inner), TyAttr::default())
+    }
+
+    /// `A | B | ...` (union) with default attributes.
+    pub fn union(members: impl IntoIterator<Item = LoweringTy>) -> Self {
+        LoweringTy::Union(members.into_iter().collect(), TyAttr::default())
+    }
+
+    /// `T?` — sugar for `T | null`, flattened and idempotent; mirrors
+    /// [`Ty::optional`].
+    pub fn optional(inner: LoweringTy) -> Self {
+        match inner {
+            LoweringTy::Union(members, attr) => {
+                if members.iter().any(LoweringTy::is_null) {
+                    LoweringTy::Union(members, attr)
+                } else {
+                    let mut members = members.into_vec();
+                    members.push(LoweringTy::null());
+                    LoweringTy::Union(members.into(), attr)
+                }
+            }
+            n @ LoweringTy::Null { .. } => n,
+            other => LoweringTy::Union(Box::new([other, LoweringTy::null()]), TyAttr::default()),
+        }
+    }
+
+    /// True if this is exactly the `null` type.
+    pub fn is_null(&self) -> bool {
+        matches!(self, LoweringTy::Null { .. })
+    }
+
+    /// Deep node predicate: does any node in this tree satisfy `pred`?
+    ///
+    /// The plain members carry no intern-time flags, so containment
+    /// questions walk. A hand-written traversal until the `ty_family!`
+    /// macro generates per-member child visitors.
+    pub fn any_node(&self, pred: &mut impl FnMut(&LoweringTy) -> bool) -> bool {
+        if pred(self) {
+            return true;
+        }
+        match self {
+            LoweringTy::List(inner, _) => inner.any_node(pred),
+            LoweringTy::Map { key, value, .. } => key.any_node(pred) || value.any_node(pred),
+            LoweringTy::Union(members, _) => members.iter().any(|member| member.any_node(pred)),
+            LoweringTy::Class(_, args, _) => args.iter().any(|arg| arg.any_node(pred)),
+            LoweringTy::Interface(_, args, pins, _) => {
+                args.iter().any(|arg| arg.any_node(pred))
+                    || pins.iter().any(|(_, ty)| ty.any_node(pred))
+            }
+            LoweringTy::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                params.iter().any(|param| param.ty.any_node(pred))
+                    || ret.any_node(pred)
+                    || throws.any_node(pred)
+            }
+            LoweringTy::Future(value, error, _) => value.any_node(pred) || error.any_node(pred),
+            LoweringTy::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                base.any_node(pred)
+                    || interface.generics.iter().any(|arg| arg.any_node(pred))
+                    || interface
+                        .associated_types
+                        .iter()
+                        .any(|(_, ty)| ty.any_node(pred))
+            }
+            LoweringTy::Int { .. }
+            | LoweringTy::Bigint { .. }
+            | LoweringTy::Float { .. }
+            | LoweringTy::String { .. }
+            | LoweringTy::Bool { .. }
+            | LoweringTy::Null { .. }
+            | LoweringTy::Uint8Array { .. }
+            | LoweringTy::Media(..)
+            | LoweringTy::Literal(..)
+            | LoweringTy::Enum(..)
+            | LoweringTy::EnumVariant(..)
+            | LoweringTy::RustType { .. }
+            | LoweringTy::Type { .. }
+            | LoweringTy::Resource { .. }
+            | LoweringTy::PromptAst { .. }
+            | LoweringTy::Void { .. }
+            | LoweringTy::TypeAlias(..)
+            | LoweringTy::TypeVar(..)
+            | LoweringTy::Unknown { .. }
+            | LoweringTy::Never { .. }
+            | LoweringTy::Error { .. }
+            | LoweringTy::Infer { .. } => false,
+        }
+    }
+
+    /// Whether any node is the `_` inference hole.
+    pub fn contains_hole(&self) -> bool {
+        self.any_node(&mut |node| matches!(node, LoweringTy::Infer { .. }))
+    }
+
+    /// Whether any node is the `Error` sentinel.
+    pub fn contains_error(&self) -> bool {
+        self.any_node(&mut |node| matches!(node, LoweringTy::Error { .. }))
     }
 }
 
@@ -859,8 +1039,7 @@ impl<N: Clone> Ty<N> {
             Ty::Never { .. } => "never".to_string(),
             Ty::Void { .. } => "void".to_string(),
             Ty::Unknown { .. } => "unknown".to_string(),
-            // The wildcard hole renders as the `_` the user wrote.
-            Ty::Infer { .. } => "_".to_string(),
+
             Ty::RustType { .. } => "$rust_type".to_string(),
             Ty::Type { .. } => "reflect.Type".to_string(),
             // Opaque leaf types render as their fixed qualified names; these
@@ -1079,7 +1258,7 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
             } => write!(f, "({base} as {}).{member}", interface.to_ty()),
             Ty::Never { .. } => write!(f, "never"),
             Ty::Error { .. } => write!(f, "<error>"),
-            Ty::Infer { .. } => write!(f, "_"),
+
             // Opaque leaf types: render identically to `render_with` so the two
             // renderers never diverge.
             Ty::RustType { .. } => write!(f, "$rust_type"),
@@ -1286,9 +1465,6 @@ mod tests {
             },
             Ty::TypeAlias(qtn("A"), TyAttr::default()),
             Ty::Error {
-                attr: TyAttr::default(),
-            },
-            Ty::Infer {
                 attr: TyAttr::default(),
             },
         ];

@@ -670,6 +670,10 @@ fn resolved_call_function<'db>(
     }
 }
 
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn dispatch_bindings_for_call(
     db: &dyn baml_compiler2_ppir::Db,
     inference: &baml_compiler2_hir_ty::infer::InferenceResult<'_>,

@@ -497,6 +497,10 @@ fn member_target_name(db: &dyn baml_compiler2_ppir::Db, target: SymbolTarget<'_>
     clippy::too_many_arguments,
     reason = "per-scope walk context threaded through one call site"
 )]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn collect_constructor_key_usages(
     db: &dyn baml_compiler2_ppir::Db,
     file: SourceFile,

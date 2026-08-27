@@ -230,6 +230,10 @@ impl Completions {
 
     /// An argument label in the call it belongs to — the most specific
     /// thing an argument slot can be, which the relevance says.
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     pub(super) fn add_argument_label(
         &mut self,
         db: &dyn baml_compiler2_ppir::Db,

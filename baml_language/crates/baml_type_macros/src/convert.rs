@@ -319,7 +319,7 @@ fn gen_narrow_reinterpret(family: &Family, sub: usize, sup: usize) -> TokenStrea
 
         impl #impl_g ::core::convert::TryFrom<#sup_ty> for #sub_ty #where_c {
             type Error = #err;
-            fn try_from(value: #sup_ty) -> ::core::result::Result<Self, Self::Error> {
+            fn try_from(value: #sup_ty) -> ::core::result::Result<Self, #err> {
                 #assert
                 #vfn(&value)?;
                 ::core::result::Result::Ok(#narrowed)
@@ -328,7 +328,7 @@ fn gen_narrow_reinterpret(family: &Family, sub: usize, sup: usize) -> TokenStrea
 
         impl #clone_impl_g ::core::convert::TryFrom<&#sup_ty> for #sub_ty #clone_where_c {
             type Error = #err;
-            fn try_from(value: &#sup_ty) -> ::core::result::Result<Self, Self::Error> {
+            fn try_from(value: &#sup_ty) -> ::core::result::Result<Self, #err> {
                 #assert
                 #vfn(value)?;
                 // A borrow can't be moved out, so clone the validated tree and
@@ -340,7 +340,7 @@ fn gen_narrow_reinterpret(family: &Family, sub: usize, sup: usize) -> TokenStrea
         #[doc = #ref_doc]
         impl #borrow_impl_g ::core::convert::TryFrom<&'a #sup_ty> for &'a #sub_ty #borrow_where_c {
             type Error = #err;
-            fn try_from(value: &'a #sup_ty) -> ::core::result::Result<Self, Self::Error> {
+            fn try_from(value: &'a #sup_ty) -> ::core::result::Result<Self, #err> {
                 #assert
                 #vfn(value)?;
                 // SAFETY: the walk proved every node is a valid `#sub_name`, and
@@ -702,11 +702,11 @@ fn gen_narrow(family: &Family, sub: usize, sup: usize) -> TokenStream {
     quote! {
         impl #clone_impl_g ::core::convert::TryFrom<&#sup_ty> for #sub_ty #clone_where_c {
             type Error = #err;
-            fn try_from(value: &#sup_ty) -> ::core::result::Result<Self, Self::Error> { #by_ref }
+            fn try_from(value: &#sup_ty) -> ::core::result::Result<Self, #err> { #by_ref }
         }
         impl #impl_g ::core::convert::TryFrom<#sup_ty> for #sub_ty #where_c {
             type Error = #err;
-            fn try_from(value: #sup_ty) -> ::core::result::Result<Self, Self::Error> { #owned }
+            fn try_from(value: #sup_ty) -> ::core::result::Result<Self, #err> { #owned }
         }
     }
 }
@@ -1007,11 +1007,11 @@ fn gen_sat(family: &Family, sub: usize, sup: usize, sat: &Satellite) -> TokenStr
         }
         impl #clone_impl_g ::core::convert::TryFrom<&#sup_sat> for #sub_sat #clone_where_c {
             type Error = #err;
-            fn try_from(value: &#sup_sat) -> ::core::result::Result<Self, Self::Error> { #narrow_ref }
+            fn try_from(value: &#sup_sat) -> ::core::result::Result<Self, #err> { #narrow_ref }
         }
         impl #impl_g ::core::convert::TryFrom<#sup_sat> for #sub_sat #where_c {
             type Error = #err;
-            fn try_from(value: #sup_sat) -> ::core::result::Result<Self, Self::Error> { #narrow_owned }
+            fn try_from(value: #sup_sat) -> ::core::result::Result<Self, #err> { #narrow_owned }
         }
     }
 }

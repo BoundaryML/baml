@@ -73,6 +73,10 @@ fn definition_of<'db>(
 
 /// Resolves an alias without retaining the result in a memo. One-shot
 /// fact-poor contexts use this directly; repeated scans use a cached context.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 pub(crate) fn uncached_alias_def(
     db: &dyn baml_compiler2_ppir::Db,
     name: &QualifiedTypeName,
@@ -168,6 +172,10 @@ impl TypeContext for Facts<'_> {
         )
     }
 
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn associated_type_bound(&self, interface: &Interface, assoc: Name) -> Vec<Interface> {
         // The declared `type assoc extends J`, realized at the qualifier's
         // args with `Self` left symbolic (the trait's contract: the oracle
@@ -215,6 +223,10 @@ impl TypeContext for Facts<'_> {
     /// unpinned member of a written reference realizes its declared
     /// DEFAULT - the spec's fill-at-reference rule, deliberately broader
     /// than rustc (documented at `realized_assoc_default`).
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn project(
         &self,
         base: &Ty,

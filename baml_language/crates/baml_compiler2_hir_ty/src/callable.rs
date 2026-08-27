@@ -148,14 +148,19 @@ pub fn callable_throws<'db>(
         // inferring: fall through to the body run, whose finalize unions
         // the named members with the inferred set.
         if !crate::lower::throws_clause_parts(&lowered).1 {
-            return CallableThrows(crate::lower::reject_holes(&lowered).to_plain());
+            return CallableThrows(crate::lower::reject_holes(&lowered));
         }
     }
     let result = crate::infer::infer_body(
         db,
         baml_compiler2_hir::body::BodyOwnerId::Function(function),
     );
-    CallableThrows(result.throws.to_plain())
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
+    let throws = result.throws.to_plain();
+    CallableThrows(throws)
 }
 
 /// Declaration-site resolved signature of a function or method, as the
@@ -228,6 +233,10 @@ pub fn function_signature_ty<'db>(
 ) -> FunctionSignatureTy {
     let sig = crate::lower::function_signature(db, function);
     let enclosing = enclosing_param_count(db, function);
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     let params = sig
         .params
         .iter()
@@ -245,10 +254,20 @@ pub fn function_signature_ty<'db>(
         baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
         _ => None,
     };
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
+    let return_type = sig.ret.to_plain();
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
+    let declared_throws = sig.throws_declared.then(|| sig.throws.to_plain());
     FunctionSignatureTy {
         params,
-        return_type: sig.ret.to_plain(),
-        declared_throws: sig.throws_declared.then(|| sig.throws.to_plain()),
+        return_type,
+        declared_throws,
         generic_params: sig.generic_params[enclosing.min(sig.generic_params.len())..].to_vec(),
         builtin_kind,
     }

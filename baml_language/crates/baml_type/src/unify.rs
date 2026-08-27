@@ -318,8 +318,7 @@ pub fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
             | Ty::TypeAlias(..)
             | Ty::Unknown { .. }
             | Ty::Never { .. }
-            | Ty::Error { .. }
-            | Ty::Infer { .. } => false,
+            | Ty::Error { .. } => false,
         }
     }
     occurs(param, ty, false)
@@ -746,8 +745,7 @@ fn unify_into_at(
             | Ty::TypeVar(..)
             | Ty::Unknown { .. }
             | Ty::Never { .. }
-            | Ty::Error { .. }
-            | Ty::Infer { .. },
+            | Ty::Error { .. },
             _,
         ) => Overlap::No,
     }
@@ -1345,8 +1343,7 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
         | Ty::TypeAlias(..)
         | Ty::Unknown { .. }
         | Ty::Never { .. }
-        | Ty::Error { .. }
-        | Ty::Infer { .. } => false,
+        | Ty::Error { .. } => false,
     }
 }
 

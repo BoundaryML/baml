@@ -418,7 +418,6 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
         Ty::Void { .. } => out.push_str("Void"),
         Ty::Unknown { .. } => out.push_str("BUnk"),
         Ty::Error { .. } => out.push_str("Err"),
-        Ty::Infer { .. } => out.push_str("Inf"),
         Ty::RustType { .. } => out.push_str("Rust"),
         Ty::Type { .. } => out.push_str("Type"),
         Ty::Function {

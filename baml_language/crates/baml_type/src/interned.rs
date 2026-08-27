@@ -24,10 +24,10 @@
 //!
 //! Variants, payload shapes, and discriminant order mirror the master
 //! [`ty_family!`](crate::Ty) enum (conversions are exhaustive matches, so
-//! drift is a compile error), with deliberate spec-driven deltas: `Infer`
-//! carries an optional [`InferVar`] so inference-table variables are native
-//! (`None` is the syntactic `_` hole, exactly what the plain enum's `Infer`
-//! means today).
+//! drift is a compile error), with one deliberate spec-driven delta: `Infer`
+//! carries an [`InferVar`], ALWAYS — the syntactic `_` hole is
+//! unrepresentable interned (it lives in [`crate::LoweringTy`], and lowering
+//! never interns), so the inference world is vars-only by construction.
 
 use std::{
     cmp::Ordering,
@@ -45,7 +45,7 @@ bitflags::bitflags! {
     /// node's own bit and all its children's flags.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
     pub struct TypeFlags: u16 {
-        /// Contains an `Infer` node (a table variable or a syntactic `_` hole).
+        /// Contains an `Infer` node (a live inference-table variable).
         const HAS_INFER = 1 << 0;
         /// Contains an `Error` sentinel.
         const HAS_ERROR = 1 << 1;
@@ -61,7 +61,8 @@ bitflags::bitflags! {
 // -- Handle -------------------------------------------------------------------
 
 /// An inference-table variable index. Only ever allocated by the hir_ty
-/// inference table; `Infer { var: None }` is the syntactic `_` hole.
+/// inference table and carried by [`TyKind::Infer`] (the syntactic `_`
+/// hole is unrepresentable interned: it lives in [`crate::LoweringTy`]).
 ///
 /// Deliberately a bare index: the representation carries variable IDENTITY,
 /// the inference table carries variable KIND. Distinctions like effect vars
@@ -119,7 +120,7 @@ impl Ty {
         self.0.flags
     }
 
-    /// Whether this type still contains inference variables or `_` holes.
+    /// Whether this type still contains inference variables.
     pub fn has_infer(&self) -> bool {
         self.0.flags.contains(TypeFlags::HAS_INFER)
     }
@@ -318,12 +319,14 @@ pub enum TyKind {
     Error {
         attr: TyAttr,
     },
-    // = 33 (31/32 are retired wire slots); `var: None` is
-    // the syntactic `_` hole (the plain enum's `Infer`), `Some` is a live
-    // inference-table variable (hir_ty only; must never survive
-    // `resolve_all`).
+    // = 33 (31/32 are retired wire slots); a live inference-table variable.
+    // ALWAYS a variable: the syntactic `_` hole lives in the plain
+    // `LoweringTy` only â lowering never interns, so by the time a type is
+    // interned every hole has been instantiated (`ingest_lowered`) or
+    // rejected (`reject_holes`). hir_ty only; must never survive
+    // `resolve_all`.
     Infer {
-        var: Option<InferVar>,
+        var: InferVar,
         attr: TyAttr,
     },
     // Deliberately absent:
@@ -695,18 +698,24 @@ impl Ty {
             crate::Ty::Unknown { attr } => TyKind::Unknown { attr: attr.clone() },
             crate::Ty::Never { attr } => TyKind::Never { attr: attr.clone() },
             crate::Ty::Error { attr } => TyKind::Error { attr: attr.clone() },
-            crate::Ty::Infer { attr } => TyKind::Infer {
-                var: None,
-                attr: attr.clone(),
-            },
         };
         Ty::intern(kind)
     }
 
-    /// Materializes the plain enum's structure. Total, but lossy for live
-    /// inference variables: `Infer { var: Some(_) }` becomes the plain `Infer`
-    /// hole (callers materializing results must run resolve-all first; the
-    /// `has_infer` flag makes that cheap to assert).
+    /// Materializes the finalized plain enum's structure.
+    ///
+    /// This is deliberately NOT a diagnostic path: unsolved-variable
+    /// reporting is inference FINALIZE's job — written `_` holes report
+    /// through `hole_vars` (E0147), origin-tracked variables through
+    /// `unsolved_var_diagnostics` (which materializes for its message via
+    /// `infer_to_diagnostic_unknown` and only then calls this), and the
+    /// residue erases to `Error` (`erase_infer`). A live variable reaching
+    /// here takes that same `Error` disposition (see the arm's BUG note);
+    /// it cannot panic, because error recovery keeps failing compiles
+    /// alive and a var can legally survive one.
+    #[deprecated = "a pre-D3 seam: downstream consumers should receive the finalized plain `Ty` \
+                    from inference finalize (the facts layer), never materialize interned state \
+                    themselves; removed when the D3 cutover makes the facts layer plain-native"]
     pub fn to_plain(&self) -> crate::Ty {
         let plain_all = |tys: &[Ty]| -> Box<[crate::Ty]> { tys.iter().map(Ty::to_plain).collect() };
         match self.kind() {
@@ -796,7 +805,15 @@ impl Ty {
             TyKind::Unknown { attr } => crate::Ty::Unknown { attr: attr.clone() },
             TyKind::Never { attr } => crate::Ty::Never { attr: attr.clone() },
             TyKind::Error { attr } => crate::Ty::Error { attr: attr.clone() },
-            TyKind::Infer { var: _, attr } => crate::Ty::Infer { attr: attr.clone() },
+            // BUG: reachable, not unreachable — error recovery does not halt
+            // the pipeline (an `Error` fact keeps a failing compile alive to
+            // collect more diagnostics), so an unsolved variable can legally
+            // survive into a downstream materialization. Until the
+            // unsolved-inference-diagnostics thread makes finalize report
+            // every variable, this takes the same disposition as
+            // `erase_infer`'s residue: the error sentinel. An ICE here would
+            // trade a missing diagnostic for a crash on user input.
+            TyKind::Infer { attr, .. } => crate::Ty::Error { attr: attr.clone() },
         }
     }
 }
@@ -854,7 +871,7 @@ impl Ty {
 
     pub fn infer_var(var: InferVar) -> Ty {
         Ty::intern(TyKind::Infer {
-            var: Some(var),
+            var,
             attr: TyAttr::default(),
         })
     }
@@ -953,11 +970,14 @@ mod tests {
             P::Unknown { attr: a() },
             P::Never { attr: a() },
             P::Error { attr: a() },
-            P::Infer { attr: a() },
         ]
     }
 
     #[test]
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn roundtrip_every_variant() {
         for plain in plain_samples() {
             let roundtripped = Ty::from_plain(&plain).to_plain();
@@ -1038,6 +1058,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn ordering_matches_plain_ordering() {
         let mut plain = plain_samples();
         let mut interned: Vec<Ty> = plain.iter().map(Ty::from_plain).collect();

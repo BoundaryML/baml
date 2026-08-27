@@ -138,11 +138,13 @@ pub fn impl_facts<'db>(
                             .bounds
                             .iter()
                             .filter_map(|&type_ref| {
-                                InterfaceRef::of_ty(&ctx.lower_type_ref_at(
-                                    &class_data.type_refs,
-                                    type_ref,
-                                    crate::lower::TypePosition::ConstraintHead,
-                                ))
+                                InterfaceRef::of_ty(&interned_ty(&crate::lower::reject_holes(
+                                    &ctx.lower_type_ref_at(
+                                        &class_data.type_refs,
+                                        type_ref,
+                                        crate::lower::TypePosition::ConstraintHead,
+                                    ),
+                                )))
                             })
                             .collect()
                     })
@@ -171,16 +173,20 @@ pub fn impl_facts<'db>(
                             .bounds
                             .iter()
                             .filter_map(|&type_ref| {
-                                InterfaceRef::of_ty(&ctx.lower_type_ref_at(
-                                    &data.type_refs,
-                                    type_ref,
-                                    crate::lower::TypePosition::ConstraintHead,
-                                ))
+                                InterfaceRef::of_ty(&interned_ty(&crate::lower::reject_holes(
+                                    &ctx.lower_type_ref_at(
+                                        &data.type_refs,
+                                        type_ref,
+                                        crate::lower::TypePosition::ConstraintHead,
+                                    ),
+                                )))
                             })
                             .collect()
                     })
                     .collect();
-                let for_ty = ctx.lower_type_ref(&data.type_refs, *for_target);
+                let for_ty = interned_ty(&crate::lower::reject_holes(
+                    &ctx.lower_type_ref(&data.type_refs, *for_target),
+                ));
                 (frame, bounds, for_ty)
             }
         };
@@ -196,11 +202,13 @@ pub fn impl_facts<'db>(
     let ctx = crate::lower::lower_ctx_for_file(db, file)
         .with_frame(params.clone())
         .with_bounds(bounds_map);
-    let interface = InterfaceRef::of_ty(&ctx.lower_type_ref_at(
-        &data.type_refs,
-        data.interface_target,
-        crate::lower::TypePosition::ConstraintHead,
-    ))?;
+    let interface = InterfaceRef::of_ty(&interned_ty(&crate::lower::reject_holes(
+        &ctx.lower_type_ref_at(
+            &data.type_refs,
+            data.interface_target,
+            crate::lower::TypePosition::ConstraintHead,
+        ),
+    )))?;
     let associated_types = data
         .associated_type_bindings
         .iter()
@@ -208,7 +216,9 @@ pub fn impl_facts<'db>(
             binding.type_ref.map(|type_ref| {
                 (
                     binding.name.clone(),
-                    ctx.lower_type_ref(&data.type_refs, type_ref),
+                    interned_ty(&crate::lower::reject_holes(
+                        &ctx.lower_type_ref(&data.type_refs, type_ref),
+                    )),
                 )
             })
         })
@@ -1371,6 +1381,10 @@ fn match_impl_head(
 /// impl's `type Output = T.Item` by VALUE once the match binds `T`, and
 /// the alias-only equivalence cannot project. Var-carrying input returns
 /// unchanged (the oracle's plain conversion erases inference vars).
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 pub(crate) fn reduce_ground_projections(
     db: &dyn baml_compiler2_ppir::Db,
     ty: &Ty,
@@ -1795,11 +1809,13 @@ fn direct_requires(
     data.requires
         .iter()
         .filter_map(|&required| {
-            let target = InterfaceRef::of_ty(&ctx.lower_type_ref_at(
-                &data.type_refs,
-                required,
-                crate::lower::TypePosition::ConstraintHead,
-            ))?;
+            let target = InterfaceRef::of_ty(&interned_ty(&crate::lower::reject_holes(
+                &ctx.lower_type_ref_at(
+                    &data.type_refs,
+                    required,
+                    crate::lower::TypePosition::ConstraintHead,
+                ),
+            )))?;
             Some(InterfaceRef::new(
                 target.name.clone(),
                 target

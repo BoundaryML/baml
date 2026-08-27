@@ -616,8 +616,17 @@ enum TaggedTagIssue {
     BadBodyParam,
 }
 
-/// Where a written `_` hole sits: an expression's turbofish, or a
-/// body-position type annotation's ref.
+/// What the lowering→inference ingestion does with a written `_` hole.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum IngestHoles {
+    /// An annotation-position hole: legal, anchored for unsolved reporting.
+    Anchored(HoleAnchor),
+    /// An expression-position hole: unconditionally diagnosed (E0147),
+    /// instantiated only for recovery.
+    ExprPosition(ExprId),
+}
+
+/// Where a written `_` hole sits: a body-position type annotation's ref.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum HoleAnchor {
     TypeRef(BodyTypeRefId),
@@ -1268,6 +1277,10 @@ pub(crate) fn owner_declared_bounds<'db>(
 /// Shared with the IDE's member enumeration, which must ask the same
 /// question in the same env — a `T extends Compare` receiver has members
 /// only because the owner declared that bound.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 pub(crate) fn owner_bounds<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     owner: BodyOwnerId<'db>,
@@ -1412,7 +1425,7 @@ fn infer_body_impl<'db>(
         match declared_throws_ref.map(|(store, throws)| lower.lower_type_ref(store, throws)) {
             Some(raw) => {
                 let (named, open) = crate::lower::throws_clause_parts(&raw);
-                (Some(named), open)
+                (Some(Ty::from_plain(&named)), open)
             }
             None => (None, false),
         };
@@ -3113,7 +3126,9 @@ impl<'db> InferenceContext<'db> {
             let (ty, diagnostics) =
                 self.lower_body_type_ref_at(type_ref, crate::lower::TypePosition::Existential);
             self.queue_body_lowering_diagnostics(diagnostics);
-            Some(ty)
+            // A composite template is a stored/structural position: a `_`
+            // inside it is a ruling-4 rejection, never a fresh variable.
+            Some(Ty::from_plain(&crate::lower::reject_holes(&ty)))
         };
         let mut identity = self.body_owner_identity;
         for byte in stmt.into_raw().into_u32().to_le_bytes() {
@@ -3199,7 +3214,7 @@ impl<'db> InferenceContext<'db> {
         store: &baml_compiler2_hir::type_ref::TypeRefStore,
         type_ref: baml_compiler2_hir::type_ref::TypeRefId,
         position: crate::lower::TypePosition,
-    ) -> (Ty, Vec<crate::lower::LoweringDiag>) {
+    ) -> (baml_type::LoweringTy, Vec<crate::lower::LoweringDiag>) {
         let mut runtime_params = FxHashMap::default();
         let mut occurrences = Vec::new();
         collect_unreflect_type_refs(store, type_ref, &mut occurrences);
@@ -3265,11 +3280,11 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         type_ref: BodyTypeRefId,
         position: crate::lower::TypePosition,
-    ) -> (Ty, Vec<crate::lower::LoweringDiag>) {
+    ) -> (baml_type::LoweringTy, Vec<crate::lower::LoweringDiag>) {
         let type_refs = Arc::clone(&self.type_refs);
         self.lower_scoped_type_ref_at(&type_refs.store, type_refs.raw_id(type_ref), position)
     }
-    fn lower_scoped_type_path(&self, segments: &[baml_type::Name]) -> Ty {
+    fn lower_scoped_type_path(&self, segments: &[baml_type::Name]) -> baml_type::LoweringTy {
         self.lower
             .lower_type_path_with_overlay(segments, &self.scoped_type_params())
     }
@@ -3584,17 +3599,14 @@ impl<'db> InferenceContext<'db> {
             // A variable flowing into a context: upper bound. A value
             // flowing into a variable: lower bound. (Var-var records on
             // both sides; resolution sees through whichever solves first.)
-            (TyKind::Infer { var: Some(var), .. }, _) => {
+            (TyKind::Infer { var, .. }, _) => {
                 self.table.add_upper_bound(*var, expected.clone());
-                if let TyKind::Infer {
-                    var: Some(other), ..
-                } = expected.kind()
-                {
+                if let TyKind::Infer { var: other, .. } = expected.kind() {
                     self.table.add_lower_bound(*other, actual.clone());
                 }
                 true
             }
-            (_, TyKind::Infer { var: Some(var), .. }) => {
+            (_, TyKind::Infer { var, .. }) => {
                 self.table.add_lower_bound(*var, actual.clone());
                 true
             }
@@ -3637,10 +3649,9 @@ impl<'db> InferenceContext<'db> {
                     TyKind::Union(actual_members, _) => actual_members.to_vec(),
                     _ => vec![actual.clone()],
                 };
-                let (naked, targets): (Vec<Ty>, Vec<Ty>) =
-                    members.into_iter().partition(|member| {
-                        matches!(member.kind(), TyKind::Infer { var: Some(_), .. })
-                    });
+                let (naked, targets): (Vec<Ty>, Vec<Ty>) = members
+                    .into_iter()
+                    .partition(|member| matches!(member.kind(), TyKind::Infer { var: _, .. }));
                 let remainder: Vec<Ty> = actual_members
                     .into_iter()
                     .filter(|member| !targets.contains(member))
@@ -3877,7 +3888,7 @@ impl<'db> InferenceContext<'db> {
             return;
         }
         let resolved = self.table.shallow_resolve(ty);
-        if let TyKind::Infer { var: Some(var), .. } = resolved.kind() {
+        if let TyKind::Infer { var, .. } = resolved.kind() {
             if self.table.is_establishment_var(*var) {
                 self.table.solve(
                     *var,
@@ -4049,6 +4060,10 @@ impl<'db> InferenceContext<'db> {
     /// null-algebra) are type algebra, not dispatch. Operand-validity
     /// diagnostics are S17's; the Compare obligation on ordered
     /// comparisons lands with I4.
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn infer_binary(
         &mut self,
         body: &ExprBody,
@@ -6190,7 +6205,8 @@ impl<'db> InferenceContext<'db> {
             target.target,
             crate::lower::TypePosition::ConstraintHead,
         );
-        let TyKind::Interface(name, args, pins, _) = target_ty.kind() else {
+        let target_interned = crate::impls::interned_ty(&crate::lower::reject_holes(&target_ty));
+        let TyKind::Interface(name, args, pins, _) = target_interned.kind() else {
             return None;
         };
         let self_ty = match baml_compiler2_ppir::item_data::method_owner(self.db, function) {
@@ -6202,7 +6218,9 @@ impl<'db> InferenceContext<'db> {
                 match &data.subject {
                     baml_compiler2_ppir::item_data::ImplSubjectData::Free {
                         for_target, ..
-                    } => self.lower.lower_type_ref(&data.type_refs, *for_target),
+                    } => crate::impls::interned_ty(&crate::lower::reject_holes(
+                        &self.lower.lower_type_ref(&data.type_refs, *for_target),
+                    )),
                     baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
                         crate::lower::class_self_ty(self.db, *class)
                     }
@@ -6876,6 +6894,10 @@ impl<'db> InferenceContext<'db> {
     /// `base.item` is E0121-ambiguous), and one whose `Self` appears in a
     /// parameter (the existential `base.as<I>.item` is object-safety
     /// rejected, and a written `Self` removes the need for a receiver).
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn qualified_path_value(
         &mut self,
         expr: ExprId,
@@ -7329,10 +7351,11 @@ impl<'db> InferenceContext<'db> {
         if segments.len() < 2 {
             return None;
         }
-        let ty = self.lower_scoped_type_path(segments);
-        let TyKind::EnumVariant(qtn, variant, _) = ty.kind() else {
+        let lowered = self.lower_scoped_type_path(segments);
+        let baml_type::LoweringTy::EnumVariant(qtn, variant, _) = &lowered else {
             return None;
         };
+        let ty = crate::impls::interned_ty(&crate::lower::reject_holes(&lowered));
         if let Some(record_at) = record_at
             && let Some(baml_compiler2_hir::contributions::Definition::Enum(enum_loc)) =
                 self.facts.definition_of(qtn)
@@ -7386,8 +7409,8 @@ impl<'db> InferenceContext<'db> {
             return None;
         }
         let written = self.lower_scoped_type_path(prefix);
-        let target = if !written.has_error() {
-            written
+        let target = if !written.contains_error() {
+            crate::impls::interned_ty(&crate::lower::reject_holes(&written))
         } else if let (OwnArgs::Call(call), Some((class, _))) = (own, self.static_class_for(prefix))
         {
             let frame = crate::lower::class_generic_frame(self.db, class);
@@ -7510,9 +7533,13 @@ impl<'db> InferenceContext<'db> {
                     baml_type::MediaKind::Pdf,
                     baml_type::TyAttr::default(),
                 )),
-                _ => self.lower_scoped_type_path(prefix),
+                _ => crate::impls::interned_ty(&crate::lower::reject_holes(
+                    &self.lower_scoped_type_path(prefix),
+                )),
             },
-            _ => self.lower_scoped_type_path(prefix),
+            _ => crate::impls::interned_ty(&crate::lower::reject_holes(
+                &self.lower_scoped_type_path(prefix),
+            )),
         };
         if ty.has_error() {
             return None;
@@ -7734,8 +7761,13 @@ impl<'db> InferenceContext<'db> {
         // contributions check against it exactly as a function's do
         // (open contributions judge at finalize).
         if let Some(declared) = &written_throws {
-            let (_, open) = crate::lower::throws_clause_parts(declared);
-            if !open && !declared.has_error() {
+            // The annotation funnel already instantiated any written `_`
+            // member as a fresh effect variable, so a lambda clause is never
+            // PARTIAL here — the variable itself carries the openness, and
+            // `sub` below binds contributions into it (the pre-split
+            // `throws_clause_parts` probe on the instantiated clause was
+            // vacuously closed).
+            if !declared.has_error() {
                 for (at, contribution) in &channel {
                     if contribution.has_infer() || !self.sub(contribution, declared) {
                         self.pending_diags.push(PendingDiag::ThrowsViolation {
@@ -9200,6 +9232,10 @@ impl<'db> InferenceContext<'db> {
     /// (the unqualified spelling may not resolve there), and generic args
     /// ride along so same-interface-different-args sources stay distinct
     /// (TIR's `qualified_interface_display`).
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn qualified_interface_display(&self, iface: &baml_type::interned::InterfaceRef) -> String {
         let qtn = &iface.name;
         let base = if qtn.is_local() && !self.lower.namespace_context().is_empty() {
@@ -9363,8 +9399,8 @@ impl<'db> InferenceContext<'db> {
             target.target,
             crate::lower::TypePosition::ConstraintHead,
         );
-        match target_ty.kind() {
-            TyKind::Interface(name, ..) => Some(name.name().clone()),
+        match &target_ty {
+            baml_type::LoweringTy::Interface(name, ..) => Some(name.name().clone()),
             _ => None,
         }
     }
@@ -9646,6 +9682,10 @@ impl<'db> InferenceContext<'db> {
     /// One body-position annotation, lowered and hole-instantiated - the
     /// single entry for every type written inside a body (let ascriptions,
     /// lambda signature slots, turbofish go through `instantiation_args`).
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn lower_body_annotation(&mut self, type_ref: BodyTypeRefId) -> Ty {
         if let Some(cached) = self.annotation_cache.get(&type_ref) {
             return cached.clone();
@@ -9657,7 +9697,7 @@ impl<'db> InferenceContext<'db> {
         // annotations): generic arguments must satisfy their heads'
         // declared bounds. Hole-carrying annotations skip - their holes
         // solve first and the instantiation sites judge them.
-        if !lowered.has_infer() {
+        if !lowered.contains_hole() {
             let env = self.wf_scope_env.get_or_init(|| match self.body_owner {
                 Some(function) => crate::lower::function_generic_bounds(self.db, function)
                     .into_iter()
@@ -9684,9 +9724,7 @@ impl<'db> InferenceContext<'db> {
                     .collect(),
                 None => rustc_hash::FxHashMap::default(),
             });
-            for error in
-                crate::interfaces::type_generic_bound_errors(self.db, env, &lowered.to_plain())
-            {
+            for error in crate::interfaces::type_generic_bound_errors(self.db, env, &lowered) {
                 self.pending_diags
                     .push(PendingDiag::AnnotWf { type_ref, error });
             }
@@ -9700,21 +9738,127 @@ impl<'db> InferenceContext<'db> {
     /// lowering is pure and emits var-less hole nodes for `_`; the inference
     /// side instantiates each hole as a fresh table variable, filled from
     /// context.
-    fn instantiate_holes(&mut self, ty: &Ty, at: HoleAnchor) -> Ty {
-        if !ty.has_infer() {
-            return ty.clone();
+    fn instantiate_holes(&mut self, ty: &baml_type::LoweringTy, at: HoleAnchor) -> Ty {
+        self.ingest_lowered(ty, IngestHoles::Anchored(at))
+    }
+
+    /// The lowering→inference ingestion: intern the closed structure, and
+    /// let the policy decide what each `_` hole becomes. Both policies mint
+    /// a fresh table variable — they differ in whether the hole is legal
+    /// (annotation positions record it in `hole_vars` for unsolved-hole
+    /// reporting) or immediately diagnosed (expression positions, an
+    /// unconditional E0147).
+    fn ingest_lowered(&mut self, ty: &baml_type::LoweringTy, policy: IngestHoles) -> Ty {
+        if let baml_type::LoweringTy::Infer { .. } = ty {
+            return match policy {
+                IngestHoles::Anchored(at) => {
+                    let var_ty = self.table.new_var_ty();
+                    if let TyKind::Infer { var, .. } = var_ty.kind() {
+                        self.hole_vars.push((*var, at));
+                    }
+                    var_ty
+                }
+                IngestHoles::ExprPosition(expr) => {
+                    self.pending_diags
+                        .push(PendingDiag::ExprPositionHole { expr });
+                    self.table.new_var_ty()
+                }
+            };
         }
-        if matches!(ty.kind(), TyKind::Infer { var: None, .. }) {
-            let var_ty = self.table.new_var_ty();
-            if let TyKind::Infer { var: Some(var), .. } = var_ty.kind() {
-                self.hole_vars.push((*var, at));
+        match baml_type::Ty::try_from(ty) {
+            // No holes below: the interned ingestion is total.
+            Ok(closed) => Ty::from_plain(&closed),
+            Err(_) => self.ingest_lowered_slow(ty, policy),
+        }
+    }
+
+    /// The hole-carrying slow path of [`Self::ingest_lowered`]: rebuild the
+    /// recursive shapes interned with each child re-ingested. Leaves never
+    /// reach here (a leaf is closed, so the fast path takes it).
+    fn ingest_lowered_slow(&mut self, ty: &baml_type::LoweringTy, policy: IngestHoles) -> Ty {
+        use baml_type::LoweringTy as LoweringTyShape;
+        let kind = match ty {
+            LoweringTyShape::List(inner, attr) => {
+                TyKind::List(self.ingest_lowered(inner, policy), attr.clone())
             }
-            return var_ty;
-        }
-        Ty::intern(
-            ty.kind()
-                .map_children(|child| self.instantiate_holes(child, at)),
-        )
+            LoweringTyShape::Map { key, value, attr } => TyKind::Map {
+                key: self.ingest_lowered(key, policy),
+                value: self.ingest_lowered(value, policy),
+                attr: attr.clone(),
+            },
+            LoweringTyShape::Union(members, attr) => TyKind::Union(
+                members
+                    .iter()
+                    .map(|member| self.ingest_lowered(member, policy))
+                    .collect(),
+                attr.clone(),
+            ),
+            LoweringTyShape::Class(name, args, attr) => TyKind::Class(
+                name.clone(),
+                args.iter()
+                    .map(|arg| self.ingest_lowered(arg, policy))
+                    .collect(),
+                attr.clone(),
+            ),
+            LoweringTyShape::Interface(name, args, pins, attr) => TyKind::Interface(
+                name.clone(),
+                args.iter()
+                    .map(|arg| self.ingest_lowered(arg, policy))
+                    .collect(),
+                pins.iter()
+                    .map(|(name, ty)| (name.clone(), self.ingest_lowered(ty, policy)))
+                    .collect(),
+                attr.clone(),
+            ),
+            LoweringTyShape::Function {
+                params,
+                ret,
+                throws,
+                attr,
+            } => TyKind::Function {
+                params: params
+                    .iter()
+                    .map(|param| baml_type::interned::FunctionParam {
+                        name: param.name.clone(),
+                        ty: self.ingest_lowered(&param.ty, policy),
+                        mode: param.mode,
+                    })
+                    .collect(),
+                ret: self.ingest_lowered(ret, policy),
+                throws: self.ingest_lowered(throws, policy),
+                attr: attr.clone(),
+            },
+            LoweringTyShape::Future(value, error, attr) => TyKind::Future(
+                self.ingest_lowered(value, policy),
+                self.ingest_lowered(error, policy),
+                attr.clone(),
+            ),
+            LoweringTyShape::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                attr,
+            } => TyKind::AssociatedTypeProjection {
+                base: self.ingest_lowered(base, policy),
+                interface: baml_type::interned::InterfaceRef::new(
+                    interface.name.clone(),
+                    interface
+                        .generics
+                        .iter()
+                        .map(|arg| self.ingest_lowered(arg, policy))
+                        .collect(),
+                    interface
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), self.ingest_lowered(ty, policy)))
+                        .collect(),
+                ),
+                member: member.clone(),
+                attr: attr.clone(),
+            },
+            _ => unreachable!("closed leaves take the ingest fast path"),
+        };
+        Ty::intern(kind)
     }
 
     /// [`Self::instantiate_holes`] for EXPRESSION-position type arguments
@@ -9725,19 +9869,8 @@ impl<'db> InferenceContext<'db> {
     /// still instantiates as a fresh var so inference proceeds for
     /// RECOVERY, but the diagnostic is unconditional and immediate,
     /// never dependent on whether the var happens to solve.
-    fn reject_expr_position_holes(&mut self, ty: &Ty, at: ExprId) -> Ty {
-        if !ty.has_infer() {
-            return ty.clone();
-        }
-        if matches!(ty.kind(), TyKind::Infer { var: None, .. }) {
-            self.pending_diags
-                .push(PendingDiag::ExprPositionHole { expr: at });
-            return self.table.new_var_ty();
-        }
-        Ty::intern(
-            ty.kind()
-                .map_children(|child| self.reject_expr_position_holes(child, at)),
-        )
+    fn reject_expr_position_holes(&mut self, ty: &baml_type::LoweringTy, at: ExprId) -> Ty {
+        self.ingest_lowered(ty, IngestHoles::ExprPosition(at))
     }
 
     /// `base catch (e) { arms }` / `catch_all`: narrowing on the ERROR
@@ -10219,7 +10352,7 @@ impl<'db> InferenceContext<'db> {
         make_container: impl FnOnce(Ty) -> Ty,
     ) -> Ty {
         let slot = self.table.new_establishment_var_ty();
-        let TyKind::Infer { var: Some(var), .. } = slot.kind() else {
+        let TyKind::Infer { var, .. } = slot.kind() else {
             unreachable!("a fresh establishment variable must be an inference type");
         };
         let var = *var;
@@ -10235,6 +10368,10 @@ impl<'db> InferenceContext<'db> {
         containing_type
     }
 
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn take_unresolved_infer_diagnostics(
         &mut self,
     ) -> Vec<(crate::diagnostics::DiagnosticLocation, baml_type::Ty)> {
@@ -10261,6 +10398,10 @@ impl<'db> InferenceContext<'db> {
         diagnostics
     }
 
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn finish(mut self) -> InferenceResult<'db> {
         // The fulfillment fixpoint: solve what FULL bounds determine,
         // attempt obligations, re-drive the deferred residue, repeat
@@ -11525,6 +11666,10 @@ impl<'db> InferenceContext<'db> {
     /// `(IntStore as Store).Item` finalizes as `int`. Targeted rather than
     /// full canonicalization, which would also expand nominal aliases;
     /// renders keep those by design.
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn reduce_projections(&self, ty: &Ty, fuel: u32) -> Ty {
         if fuel == 0 || !ty.has_projection() {
             return ty.clone();
@@ -11919,7 +12064,7 @@ impl<'db> InferenceContext<'db> {
     /// diagnostic).
     fn structurally_resolve(&mut self, ty: &Ty) -> Ty {
         let resolved = self.table.resolve_completely(ty);
-        let mut resolved = if let TyKind::Infer { var: Some(var), .. } = resolved.kind() {
+        let mut resolved = if let TyKind::Infer { var, .. } = resolved.kind() {
             let var = *var;
             let bounds = self.table.var_bounds(var);
             if self.try_solve_bounded_var(var, &bounds) {
@@ -12056,6 +12201,10 @@ impl<'db> InferenceContext<'db> {
     /// matches the value, or every matching impl's bounds hold (the
     /// mismatch then has some other cause). Diagnostic refinement only;
     /// never consulted on a passing check.
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn first_failing_blanket_bound(&self, actual: &Ty, expected: &Ty) -> Option<baml_type::Ty> {
         if actual.has_infer() || expected.has_infer() {
             return None;
@@ -12103,6 +12252,10 @@ impl<'db> InferenceContext<'db> {
     /// (own plus dependency closure), bodies pre-folded to `nf`'s canonical
     /// union form - see `baml_type::unify` for why raw bodies mis-decide
     /// alias-obscured unions at invariant positions.
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn overlap_alias_map(
         &self,
     ) -> &std::collections::HashMap<baml_type::QualifiedTypeName, baml_type::Ty> {
@@ -12232,11 +12385,7 @@ fn skolemize_infer(ty: &Ty) -> Ty {
     if !ty.has_infer() {
         return ty.clone();
     }
-    if let TyKind::Infer {
-        var: Some(var),
-        attr,
-    } = ty.kind()
-    {
+    if let TyKind::Infer { var, attr } = ty.kind() {
         return Ty::intern(TyKind::TypeVar(
             baml_type::ParamTy::new(
                 u32::MAX - var.index(),
@@ -12254,7 +12403,7 @@ fn collect_infer_vars(ty: &Ty, out: &mut Vec<baml_type::interned::InferVar>) {
     if !ty.has_infer() {
         return;
     }
-    if let TyKind::Infer { var: Some(var), .. } = ty.kind() {
+    if let TyKind::Infer { var, .. } = ty.kind() {
         out.push(*var);
     }
     baml_type::interned::for_each_child(ty.kind(), |child| collect_infer_vars(child, out));

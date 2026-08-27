@@ -670,6 +670,10 @@ class SearchService {
 }
 
 #[test]
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn lambda_scope_retypes_capture_from_function_parameter() {
     let mut db = make_db();
     let file = db.file(

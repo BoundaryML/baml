@@ -1176,21 +1176,13 @@ impl<H: Head> NormalTy<H, Named> {
             Ty::PromptAst { .. } => NormalTy::PromptAst,
             Ty::Unknown { .. } => NormalTy::Unknown,
             Ty::Never { .. } => NormalTy::Never,
-            // INVARIANT: every `_` inference hole is filled — or replaced with
-            // `Ty::Error` — during inference, BEFORE any normalization /
-            // equivalence / subtype check. Normalizing a hole is unsound: a
-            // "matches-anything" sentinel makes both `Box<int>` and `Box<string>`
-            // equal to `Box<_>`, which transitively (and falsely) equates
-            // `Box<int>` with `Box<string>`. There is no sound sentinel here, so a
-            // hole reaching normalization is a compiler bug, not a case to
-            // tolerate. (See `compiler2_tir::builder`: the `let`-binding path
-            // infers, fills, and only then checks; un-fillable holes become
-            // `Ty::Error` at the pattern ascription before any check runs.)
-            Ty::Infer { .. } => unreachable!(
-                "inference hole `_` reached type normalization; it must be filled \
-                 (or replaced with `Ty::Error`) during inference before any \
-                 equivalence/subtype check"
-            ),
+            // No `Infer` arm: the finalized `Ty` this oracle ingests cannot
+            // represent a `_` hole (holes live in `LoweringTy` only), so the
+            // old "hole reached normalization" unreachable! is now enforced by
+            // the type system. Normalizing a hole would be unsound — a
+            // "matches-anything" sentinel falsely equates `Box<int>` with
+            // `Box<string>` through `Box<_>` — so the axis split is what makes
+            // that unsoundness unrepresentable rather than merely checked.
             Ty::Error { .. } => NormalTy::Error,
             // Freshness is a compiler-only widening flag, irrelevant to type identity.
             Ty::Literal(lit, _freshness, _) => NormalTy::Literal(lit.clone()),
@@ -2769,6 +2761,10 @@ impl NormalTy<QualifiedTypeName, Named> {
     /// naming trap: the interned `Unknown` is the TOP type (the plain enum's
     /// `Unknown`); TIR's `Unknown` recovery sentinel is
     /// unrepresentable in the interned form by design.
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn from_interned<C: TypeContext>(
         ty: &interned::Ty,
         ctx: &C,

@@ -171,6 +171,10 @@ pub fn file_annotations(
 /// parameter-name hints — then recurse into any lambda bodies it contains
 /// (each lambda has its own `ExprBody` arena and source map, e.g. the body of a
 /// `test` block lowered to a lambda passed to `register_test`).
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn process_body(
     db: &dyn baml_compiler2_ppir::Db,
     file: SourceFile,

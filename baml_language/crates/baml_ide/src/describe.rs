@@ -699,6 +699,10 @@ fn describe_member(
 /// Scans all functions in all files for parameters and let bindings matching
 /// `name`. Returns a `SymbolDescription` for each match, with the containing
 /// function as a dependency.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn describe_locals(
     db: &dyn baml_compiler2_ppir::Db,
     files: &[SourceFile],
@@ -1300,6 +1304,10 @@ fn collect_interface_impls(
 /// SHORT name deliberately — every row sits under the interface it names, so
 /// repeating the full path would be noise; the variation a reader scans for
 /// is the instantiation and the implementor.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn render_impl_row(facts: &baml_compiler2_hir_ty::impls::ImplFacts<'_>) -> String {
     let iface = &facts.interface;
     let mut head = iface.name.name().as_str().to_string();

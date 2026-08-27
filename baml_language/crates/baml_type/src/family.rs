@@ -35,10 +35,22 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use crate::{Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, TyAttr, TypeName};
 
 ty_family! {
-    axes { concrete, abstract, literal, never, typevar, projection, tir, special, frame }
+    axes { concrete, abstract, literal, never, typevar, projection, lower, error, special, frame }
 
-    type Ty                 { includes: [concrete, abstract, literal, never, typevar, projection, tir, special], child: Self }
-    type RuntimeTy          { includes: [concrete, abstract, literal, never, typevar, projection, special],      child: Self }
+    // The FINALIZED compiler type: what type checking hands downstream (TIR
+    // facts, throw-facts persistence, the normalize oracle, MIR input). It can
+    // carry the `Error` sentinel — a diagnosed failure is a legitimate final
+    // answer — but not an inference hole: a `_` is a question, and finalized
+    // types are answers. Holes live in `LoweringTy` only.
+    type Ty                 { includes: [concrete, abstract, literal, never, typevar, projection, error, special],        child: Self }
+    // The pre-inference lowering type: `Ty` plus the `_` hole (`Infer`). The
+    // output vocabulary of pure type-expression lowering, consumed by the two
+    // policy folds — signatures reject holes (`reject_holes`), inference
+    // instantiates them as fresh table variables (`instantiate_holes`). The
+    // widest plain member, so the hand-written renderer lives here and every
+    // narrower member renders through its upcast.
+    type LoweringTy         { includes: [concrete, abstract, literal, never, typevar, projection, lower, error, special], child: Self }
+    type RuntimeTy          { includes: [concrete, abstract, literal, never, typevar, projection, special],               child: Self }
     // A deep, generator-independent public API type. Unlike `RuntimeTy`, this
     // excludes unresolved associated-type projections; unlike `RealizedTy`, it
     // retains named type variables for generic declarations. Type aliases are
@@ -297,14 +309,18 @@ ty_family! {
             attr: TyAttr,
         } = 28,
 
-        // --- TIR-only: present during type checking, erased at the runtime
-        // boundary (`lower_to_runtime`). Carried only by `Ty` (the `tir` axis).
+        // --- Compiler-only sentinels: present during type checking, erased at
+        // the runtime boundary (`lower_to_runtime`). Each sits on its own axis
+        // because the pipeline's stages admit them differently: `error` is
+        // carried by every compiler-side member (a diagnosed failure is a
+        // legitimate final answer), while `lower` exists only in `LoweringTy`
+        // (a finalized type is an answer, never a question).
         // reserved: 29 was `Unknown`, the TIR-era second error-recovery
         // sentinel. The inference engine has exactly one (`Error`); TIR's other
         // uses of `Unknown` are an absent expectation and a fresh inference
         // variable, neither of which is a type.
         /// Error sentinel: a hard type error was emitted for this expression.
-        #[axis(tir)]
+        #[axis(error)]
         Error {
             attr: TyAttr,
         } = 30,
@@ -314,10 +330,11 @@ ty_family! {
         /// Inference hole — the wildcard `_` written in a type-argument or
         /// `throws`-clause position. A leaf placeholder that asks the checker to
         /// infer the type at this slot from surrounding context (the initializer
-        /// of a `let`, or the inferred effective throw set). Filled during TIR
-        /// checking; like the other `tir`-axis sentinels it must never survive to
-        /// the runtime boundary (`lower_to_runtime` rejects it).
-        #[axis(tir)]
+        /// of a `let`, or the inferred effective throw set). Lowering mints it;
+        /// the policy folds consume it — signatures reject survivors, inference
+        /// instantiates each hole as a fresh table variable. It must never
+        /// survive to a finalized `Ty` (the narrowing conversion rejects it).
+        #[axis(lower)]
         Infer {
             attr: TyAttr,
         } = 33,
@@ -343,8 +360,9 @@ mod tests {
     use borsh::BorshDeserialize;
 
     use crate::{
-        CodegenTy, ConcreteRealizedTy, ConcreteTy, FunctionParamTy, MediaKind, Name, NotCodegenTy,
-        NotRealizedTy, NotRuntimeTy, RealizedTy, RuntimeTy, Ty, TyAttr, TyTemplate, TypeName,
+        CodegenTy, ConcreteRealizedTy, ConcreteTy, FunctionParamTy, LoweringTy, MediaKind, Name,
+        NotCodegenTy, NotRealizedTy, NotRuntimeTy, NotTy, RealizedTy, RuntimeTy, Ty, TyAttr,
+        TyTemplate, TypeName,
     };
 
     fn a() -> TyAttr {
@@ -599,6 +617,24 @@ mod tests {
         assert_eq!(ConcreteRealizedTy::try_from(&t).unwrap(), crz);
     }
 
+    /// The finalized `Ty` ⊂ `LoweringTy` pair: widening is the zero-cost
+    /// reinterpretation (every answer is a valid question-stage value), and
+    /// narrowing rejects a hole at any depth — the type-level form of "a
+    /// finalized type is an answer, never a question".
+    #[test]
+    fn finalized_ty_rejects_holes() {
+        let t = deep_concrete();
+        let lt = LoweringTy::from(&t);
+        assert_eq!(t.as_lowering_ty(), &lt);
+        assert_eq!(Ty::try_from(&lt).unwrap(), t);
+
+        let open: LoweringTy = LoweringTy::List(Box::new(LoweringTy::Infer { attr: a() }), a());
+        assert_eq!(Ty::try_from(&open), Err(NotTy { variant: "Infer" }));
+        // An `Error` is a finalized answer, so it narrows fine.
+        let errored: LoweringTy = LoweringTy::List(Box::new(LoweringTy::Error { attr: a() }), a());
+        assert!(Ty::try_from(&errored).is_ok());
+    }
+
     /// `RealizedTy` deeply rejects type variables (by name); `RuntimeTy` keeps
     /// them.
     #[test]
@@ -690,7 +726,7 @@ mod tests {
             tag::<Ty>(Ty::List(Box::new(Ty::Bool { attr: a() }), a())),
             13
         );
-        assert_eq!(tag::<Ty>(Ty::Infer { attr: a() }), 33);
+        assert_eq!(tag::<LoweringTy>(LoweringTy::Infer { attr: a() }), 33);
         assert_eq!(
             tag::<RuntimeTy>(RuntimeTy::TypeAlias(qtn("Alias"), a())),
             24

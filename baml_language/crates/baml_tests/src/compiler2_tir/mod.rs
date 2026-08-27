@@ -434,6 +434,10 @@ pub(crate) mod support {
     }
 
     /// Like `expr_desc` but enriches Call expressions with type params from inference.
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn expr_desc_rich(expr_id: ExprId, body: &ExprBody, inference: &InferenceResult) -> String {
         let expr = &body.exprs[expr_id];
         if let Expr::Call { callee, args, .. } = expr {
@@ -479,6 +483,10 @@ pub(crate) mod support {
     /// Uses `render_canonical()` (fully-qualified leaf names, including the
     /// implicit `user` package) so the TIR dump keeps `user.X` rather than the
     /// user-facing `Display`, which elides `user`.
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn expr_ty(inference: &InferenceResult, expr_id: ExprId) -> String {
         inference
             .type_of_expr
@@ -487,6 +495,10 @@ pub(crate) mod support {
             .unwrap_or_else(|| "unknown".into())
     }
 
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn render_expr(
         expr_id: ExprId,
         body: &ExprBody,
@@ -810,6 +822,10 @@ pub(crate) mod support {
         }
     }
 
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn render_stmt(
         stmt_id: StmtId,
         body: &ExprBody,
@@ -972,6 +988,10 @@ pub(crate) mod support {
 
     /// Render a file's TIR output in the same format as the onion skin tool.
     /// Uses the PPIR semantic index which includes synthetic stream_* types.
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
         use baml_compiler2_hir::package::PackageId;
 
@@ -2339,6 +2359,10 @@ pub(crate) mod support {
         output
     }
 
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     pub fn expr_type_in_function(
         db: &ProjectDatabase,
         file: baml_base::SourceFile,

@@ -31,8 +31,9 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_ppir::item_data::MethodOwner;
 use baml_type::{
-    Freshness, Name, ParamTy, TyAttr, TypeName,
-    interned::{FunctionParam, Ty, TyKind},
+    Freshness, LoweringFunctionParamTy, LoweringInterface, LoweringTy, Name, ParamTy, TyAttr,
+    TypeName,
+    interned::{Ty, TyKind},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -120,7 +121,7 @@ pub struct LowerCtx<'db> {
     /// free-impl method signatures/bodies, `None` for interface owners
     /// (there `Self` is the frame's universal slot 0, found by the
     /// param fallback first).
-    self_ty: Option<Ty>,
+    self_ty: Option<LoweringTy>,
     /// The impl's written interface target when this scope is an
     /// implements-block (or free-impl) method: the qualifier `Self.Member`
     /// projects through (rustc resolves `Self::Assoc` in an impl via the
@@ -232,8 +233,14 @@ impl<'db> LowerCtx<'db> {
     }
 
     #[must_use]
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     pub fn with_self_ty(mut self, self_ty: Option<Ty>) -> Self {
-        self.self_ty = self_ty;
+        // Owner `Self` types are declaration-side (hole-free), so the
+        // materialization into the lowering vocabulary is total.
+        self.self_ty = self_ty.map(|ty| ty.to_plain().into());
         self
     }
 
@@ -248,7 +255,7 @@ impl<'db> LowerCtx<'db> {
 
     // -- Span-free surface (signatures, fields, aliases) ----------------------
 
-    pub fn lower_type_ref(&self, store: &TypeRefStore, id: TypeRefId) -> Ty {
+    pub fn lower_type_ref(&self, store: &TypeRefStore, id: TypeRefId) -> LoweringTy {
         self.lower_type_ref_at(store, id, TypePosition::Existential)
     }
 
@@ -259,7 +266,7 @@ impl<'db> LowerCtx<'db> {
         &self,
         store: &TypeRefStore,
         id: TypeRefId,
-    ) -> (Ty, Vec<LoweringDiag>) {
+    ) -> (LoweringTy, Vec<LoweringDiag>) {
         self.lower_type_ref_at_with_diagnostics(store, id, TypePosition::Existential)
     }
 
@@ -269,7 +276,7 @@ impl<'db> LowerCtx<'db> {
         store: &TypeRefStore,
         id: TypeRefId,
         position: TypePosition,
-    ) -> (Ty, Vec<LoweringDiag>) {
+    ) -> (LoweringTy, Vec<LoweringDiag>) {
         self.lower_type_ref_with_overlay_and_diagnostics(store, id, position, &[])
     }
 
@@ -281,7 +288,7 @@ impl<'db> LowerCtx<'db> {
         store: &TypeRefStore,
         id: TypeRefId,
         position: TypePosition,
-    ) -> Ty {
+    ) -> LoweringTy {
         let saved = self.current_ref.replace(Some(id));
         let ty = self.lower_type_ref_inner(store, id, position);
         self.current_ref.set(saved);
@@ -298,7 +305,7 @@ impl<'db> LowerCtx<'db> {
         id: TypeRefId,
         position: TypePosition,
         overlay: &[ParamTy],
-    ) -> Ty {
+    ) -> LoweringTy {
         if overlay.is_empty() {
             return self.lower_type_ref_at(store, id, position);
         }
@@ -317,7 +324,7 @@ impl<'db> LowerCtx<'db> {
         id: TypeRefId,
         position: TypePosition,
         overlay: &[ParamTy],
-    ) -> (Ty, Vec<LoweringDiag>) {
+    ) -> (LoweringTy, Vec<LoweringDiag>) {
         let fork = self.fork_with_overlay_and_diagnostics(overlay);
         let ty = fork.lower_type_ref_at(store, id, position);
         (ty, fork.take_diagnostics())
@@ -333,14 +340,18 @@ impl<'db> LowerCtx<'db> {
         position: TypePosition,
         overlay: &[ParamTy],
         runtime_type_params: &FxHashMap<TypeRefId, ParamTy>,
-    ) -> (Ty, Vec<LoweringDiag>) {
+    ) -> (LoweringTy, Vec<LoweringDiag>) {
         let mut fork = self.fork_with_overlay_and_diagnostics(overlay);
         fork.runtime_type_params.clone_from(runtime_type_params);
         let ty = fork.lower_type_ref_at(store, id, position);
         (ty, fork.take_diagnostics())
     }
     /// [`Self::lower_type_path`] through the same body-local overlay.
-    pub fn lower_type_path_with_overlay(&self, segments: &[Name], overlay: &[ParamTy]) -> Ty {
+    pub fn lower_type_path_with_overlay(
+        &self,
+        segments: &[Name],
+        overlay: &[ParamTy],
+    ) -> LoweringTy {
         if overlay.is_empty() {
             return self.lower_type_path(segments);
         }
@@ -387,7 +398,7 @@ impl<'db> LowerCtx<'db> {
         store: &TypeRefStore,
         id: TypeRefId,
         position: TypePosition,
-    ) -> Ty {
+    ) -> LoweringTy {
         let attr = TyAttr::default;
         let extraction_contract = position == TypePosition::ExtractionContract;
         let position = if extraction_contract {
@@ -398,7 +409,7 @@ impl<'db> LowerCtx<'db> {
         match &store[id].kind {
             TypeRefKind::Unreflect { .. } => {
                 if let Some(param) = self.runtime_type_params.get(&id) {
-                    Ty::intern(TyKind::TypeVar(param.clone(), attr()))
+                    LoweringTy::TypeVar(param.clone(), attr())
                 } else {
                     if let Some(diags) = &self.diags {
                         diags.borrow_mut().push(LoweringDiag {
@@ -406,45 +417,47 @@ impl<'db> LowerCtx<'db> {
                             kind: LoweringDiagKind::RuntimeTypeHasNoScope,
                         });
                     }
-                    Ty::error()
+                    LoweringTy::error()
                 }
             }
-            TypeRefKind::Int => Ty::int(),
-            TypeRefKind::Bigint => Ty::intern(TyKind::Bigint { attr: attr() }),
-            TypeRefKind::Float => Ty::float(),
-            TypeRefKind::String => Ty::string(),
-            TypeRefKind::Bool => Ty::bool(),
-            TypeRefKind::Null => Ty::null(),
-            TypeRefKind::Never => Ty::never(),
-            TypeRefKind::Void => Ty::void(),
-            TypeRefKind::Uint8Array => Ty::intern(TyKind::Uint8Array { attr: attr() }),
-            TypeRefKind::Media { kind } => Ty::intern(TyKind::Media(*kind, attr())),
-            TypeRefKind::Unknown => Ty::intern(TyKind::Unknown { attr: attr() }),
-            TypeRefKind::Type => Ty::intern(TyKind::Type { attr: attr() }),
-            TypeRefKind::Rust => Ty::intern(TyKind::RustType { attr: attr() }),
-            TypeRefKind::Optional { inner } => Ty::optional(self.lower_type_ref(store, *inner)),
-            TypeRefKind::List { inner } => Ty::list(self.lower_type_ref(store, *inner)),
-            TypeRefKind::Map { key, value } => Ty::intern(TyKind::Map {
-                key: self.checked_map_key(self.lower_type_ref(store, *key)),
-                value: self.lower_type_ref(store, *value),
+            TypeRefKind::Int => LoweringTy::int(),
+            TypeRefKind::Bigint => LoweringTy::Bigint { attr: attr() },
+            TypeRefKind::Float => LoweringTy::float(),
+            TypeRefKind::String => LoweringTy::string(),
+            TypeRefKind::Bool => LoweringTy::bool(),
+            TypeRefKind::Null => LoweringTy::null(),
+            TypeRefKind::Never => LoweringTy::never(),
+            TypeRefKind::Void => LoweringTy::void(),
+            TypeRefKind::Uint8Array => LoweringTy::Uint8Array { attr: attr() },
+            TypeRefKind::Media { kind } => LoweringTy::Media(*kind, attr()),
+            TypeRefKind::Unknown => LoweringTy::Unknown { attr: attr() },
+            TypeRefKind::Type => LoweringTy::Type { attr: attr() },
+            TypeRefKind::Rust => LoweringTy::RustType { attr: attr() },
+            TypeRefKind::Optional { inner } => {
+                LoweringTy::optional(self.lower_type_ref(store, *inner))
+            }
+            TypeRefKind::List { inner } => LoweringTy::list(self.lower_type_ref(store, *inner)),
+            TypeRefKind::Map { key, value } => LoweringTy::Map {
+                key: Box::new(self.checked_map_key(self.lower_type_ref(store, *key))),
+                value: Box::new(self.lower_type_ref(store, *value)),
                 attr: attr(),
-            }),
-            TypeRefKind::Union { variants } => Ty::union(
+            },
+            TypeRefKind::Union { variants } => LoweringTy::union(
                 variants
                     .iter()
                     .map(|variant| self.lower_type_ref(store, *variant)),
             ),
             TypeRefKind::Literal { value } => {
-                Ty::intern(TyKind::Literal(value.clone(), Freshness::Regular, attr()))
+                LoweringTy::Literal(value.clone(), Freshness::Regular, attr())
             }
             TypeRefKind::Function {
                 params,
                 ret,
                 throws,
-            } => Ty::intern(TyKind::Function {
+            } => LoweringTy::Function {
                 params: params
                     .iter()
-                    .map(|param| FunctionParam {
+                    .map(|param| LoweringFunctionParamTy {
                         name: param.name.clone(),
                         ty: self.lower_type_ref(store, param.ty),
                         mode: if param.optional {
@@ -454,7 +467,7 @@ impl<'db> LowerCtx<'db> {
                         },
                     })
                     .collect(),
-                ret: self.lower_type_ref(store, *ret),
+                ret: Box::new(self.lower_type_ref(store, *ret)),
                 // Elaboration rewrites every legal omitted throws into a
                 // synthetic effect param; a survivor here is the ILLEGAL
                 // position - it recovers as `never` (mirroring TIR) and
@@ -463,7 +476,7 @@ impl<'db> LowerCtx<'db> {
                     .map(|throws| self.lower_type_ref(store, throws))
                     .unwrap_or_else(|| {
                         if extraction_contract {
-                            return Ty::intern(TyKind::Unknown { attr: attr() });
+                            return LoweringTy::Unknown { attr: attr() };
                         }
                         if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get())
                         {
@@ -472,20 +485,21 @@ impl<'db> LowerCtx<'db> {
                                 kind: LoweringDiagKind::FnTypeMissingThrows,
                             });
                         }
-                        Ty::never()
-                    }),
+                        LoweringTy::never()
+                    })
+                    .into(),
                 attr: attr(),
-            }),
+            },
             TypeRefKind::Path {
                 segments,
                 generic_args,
                 associated_type_bindings,
             } => {
-                let args: Vec<Ty> = generic_args
+                let args: Vec<LoweringTy> = generic_args
                     .iter()
                     .map(|arg| self.lower_type_ref(store, *arg))
                     .collect();
-                let bindings: Vec<(Name, Ty)> = associated_type_bindings
+                let bindings: Vec<(Name, LoweringTy)> = associated_type_bindings
                     .iter()
                     .map(|binding| (binding.name.clone(), self.lower_type_ref(store, binding.ty)))
                     .collect();
@@ -509,12 +523,12 @@ impl<'db> LowerCtx<'db> {
                 if interface.is_none()
                     && let Some(head) = self.projection_interface_for(&base_ty, member)
                 {
-                    return Ty::intern(TyKind::AssociatedTypeProjection {
-                        base: base_ty,
-                        interface: head,
+                    return LoweringTy::AssociatedTypeProjection {
+                        base: Box::new(base_ty),
+                        interface: Box::new(head),
                         member: member.clone(),
                         attr: attr(),
-                    });
+                    };
                 }
                 // The qualifier names the interface to project *through* -
                 // a constraint shape, not an existential value: written
@@ -522,29 +536,44 @@ impl<'db> LowerCtx<'db> {
                 // members are neither demanded nor default-filled.
                 let explicit = interface.map(|interface| {
                     self.lower_type_ref_at(store, interface, TypePosition::ConstraintHead)
-                        .to_plain()
                 });
-                let lowered = crate::interfaces::lower_projection(
-                    self.db,
-                    &self.plain_bounds_env(),
-                    base_ty.to_plain(),
-                    explicit,
-                    member.clone(),
-                );
-                self.record_type_errors(lowered.diagnostics);
-                Ty::from_plain(&lowered.ty)
+                // Determination needs closed shapes: a hole in the base or the
+                // qualifier cannot name an interface. Narrow, and route the
+                // failure through the projection's own unresolved diagnostic
+                // rather than a panic (the pre-split code materialized the
+                // hole and died in the plain algebra).
+                let base_plain = baml_type::Ty::try_from(&base_ty);
+                let explicit_plain = explicit.as_ref().map(baml_type::Ty::try_from).transpose();
+                match (base_plain, explicit_plain) {
+                    (Ok(base), Ok(explicit)) => {
+                        let lowered = crate::interfaces::lower_projection(
+                            self.db,
+                            &self.plain_bounds_env(),
+                            base,
+                            explicit,
+                            member.clone(),
+                        );
+                        self.record_type_errors(lowered.diagnostics);
+                        lowered.ty.as_lowering_ty().clone()
+                    }
+                    // BUG: a hole-based projection (`(Box<_> as I).Item` in a
+                    // `let` annotation) errors silently — matching the
+                    // pre-split `Determination::InvalidBase` path, which also
+                    // pushed no diagnostic. The unsolved-inference diagnostics
+                    // thread owes this case a real error; today the only
+                    // hole-position diagnostics are the signature/expression
+                    // rejections.
+                    _ => LoweringTy::error(),
+                }
             }
-            // `_` lowers to the var-less hole node; consumers apply policy
-            // (signatures reject holes, inference instantiates them) - the
-            // rust-analyzer pure-lowering + funnel discipline.
-            TypeRefKind::Infer => Ty::intern(TyKind::Infer {
-                var: None,
-                attr: attr(),
-            }),
+            // `_` lowers to the hole node; consumers apply policy (signatures
+            // reject holes, inference instantiates them as fresh table
+            // variables) - the rust-analyzer pure-lowering + funnel discipline.
+            TypeRefKind::Infer => LoweringTy::infer(),
             // `Missing` is an omitted annotation (a signature must be
             // explicit; the diagnostic arrives with S17), `Error` was
             // already diagnosed at parse time.
-            TypeRefKind::Error | TypeRefKind::Missing => Ty::error(),
+            TypeRefKind::Error | TypeRefKind::Missing => LoweringTy::error(),
         }
     }
 
@@ -559,7 +588,7 @@ impl<'db> LowerCtx<'db> {
     /// an interface-named prefix reaches the caller's projection-base
     /// rejection intact instead of tripping the existential completeness
     /// check first.
-    fn probe_projection_prefix(&self, prefix: &[Name]) -> Option<Ty> {
+    fn probe_projection_prefix(&self, prefix: &[Name]) -> Option<LoweringTy> {
         let resolved = self.resolve_type(prefix);
         if matches!(
             resolved,
@@ -582,11 +611,15 @@ impl<'db> LowerCtx<'db> {
             }
             _ => true,
         };
-        (clean && !ty.has_error()).then_some(ty)
+        (clean && !ty.contains_error()).then_some(ty)
     }
 
     /// The frame's bound env as the PLAIN constraint map the projection
     /// determination judges through.
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn plain_bounds_env(&self) -> rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>> {
         self.bounds
             .iter()
@@ -630,60 +663,91 @@ impl<'db> LowerCtx<'db> {
     /// a type-var base, the UNIQUE bound in its conjunction whose
     /// interface declares `member` (0 or ambiguity is Error - S17's
     /// diagnostic); for an interface-existential base, itself.
+    #[expect(
+        deprecated,
+        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+    )]
     fn projection_interface_for(
         &self,
-        base: &Ty,
+        base: &LoweringTy,
         member: &Name,
-    ) -> Option<baml_type::interned::InterfaceRef> {
-        let declares = |target: &baml_type::interned::InterfaceRef| {
+    ) -> Option<LoweringInterface> {
+        let declares = |name: &TypeName| {
             crate::interfaces::interface_declares_member(
                 self.db,
-                &target.name,
+                name,
                 member,
                 crate::interfaces::MemberNamespace::Type,
             )
         };
-        match base.kind() {
-            TyKind::TypeVar(param, _) => {
+        // The bound conjunctions and the impl target live interned (they are
+        // declaration-side and hole-free); the chosen one materializes into
+        // the lowering vocabulary at the return.
+        let materialize = |target: &baml_type::interned::InterfaceRef| {
+            LoweringInterface::new(
+                target.name.clone(),
+                target
+                    .generics
+                    .iter()
+                    .map(|ty| ty.to_plain().into())
+                    .collect(),
+                target
+                    .associated_types
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), ty.to_plain().into()))
+                    .collect(),
+            )
+        };
+        match base {
+            LoweringTy::TypeVar(param, _) => {
                 let candidates: Vec<&baml_type::interned::InterfaceRef> = self
                     .bounds
                     .get(param)
-                    .map(|bounds| bounds.iter().filter(|bound| declares(bound)).collect())
+                    .map(|bounds| {
+                        bounds
+                            .iter()
+                            .filter(|bound| declares(&bound.name))
+                            .collect()
+                    })
                     .unwrap_or_default();
                 match candidates.as_slice() {
-                    [only] => Some((*only).clone()),
+                    [only] => Some(materialize(only)),
                     _ => None,
                 }
             }
-            TyKind::Interface(name, args, pins, _) => {
-                let target = baml_type::interned::InterfaceRef::new(
-                    name.clone(),
-                    args.to_vec().into_boxed_slice(),
-                    pins.to_vec(),
-                );
-                declares(&target).then_some(target)
-            }
+            LoweringTy::Interface(name, args, pins, _) => declares(name)
+                .then(|| LoweringInterface::new(name.clone(), args.clone(), pins.clone())),
             // A chained step (`T.Item.Sub`): the previous member's
             // declared bound (`type Item extends J`), realized at its
-            // qualifier, is what declares the next member.
-            TyKind::AssociatedTypeProjection {
+            // qualifier, is what declares the next member. Realization is
+            // an interned-oracle question, so the closed parts narrow at
+            // the seam; a hole anywhere in the chain simply fails to
+            // determine (the ordinary fall-through).
+            LoweringTy::AssociatedTypeProjection {
                 base: prev_base,
                 interface,
                 member: prev_member,
                 ..
             } => {
-                let target = interface.clone();
-                let bound =
-                    crate::impls::realized_assoc_bound(self.db, &target, prev_base, prev_member)?;
+                let target = baml_type::interned::InterfaceRef::from_constraint(
+                    &baml_type::Interface::try_from(interface.as_ref().clone()).ok()?,
+                );
+                let prev_base_interned =
+                    Ty::from_plain(&baml_type::Ty::try_from(prev_base.as_ref()).ok()?);
+                let bound = crate::impls::realized_assoc_bound(
+                    self.db,
+                    &target,
+                    &prev_base_interned,
+                    prev_member,
+                )?;
                 match bound.kind() {
-                    TyKind::Interface(name, args, pins, _) => {
-                        let target = baml_type::interned::InterfaceRef::new(
+                    TyKind::Interface(name, args, pins, _) => declares(name).then(|| {
+                        materialize(&baml_type::interned::InterfaceRef::new(
                             name.clone(),
                             args.to_vec().into_boxed_slice(),
                             pins.to_vec(),
-                        );
-                        declares(&target).then_some(target)
-                    }
+                        ))
+                    }),
                     _ => None,
                 }
             }
@@ -694,8 +758,8 @@ impl<'db> LowerCtx<'db> {
             _ if Some(base) == self.self_ty.as_ref() => self
                 .self_impl_target
                 .as_ref()
-                .filter(|target| declares(target))
-                .cloned(),
+                .filter(|target| declares(&target.name))
+                .map(materialize),
             _ => None,
         }
     }
@@ -708,15 +772,18 @@ impl<'db> LowerCtx<'db> {
     /// could be instantiated at a non-string key (TIR's fail-closed
     /// rule; the stdlib's own `Map<K, V>` never writes a `map<K, V>`
     /// annotation). Inference holes and error recovery stay untouched.
-    fn checked_map_key(&self, key: Ty) -> Ty {
-        if key.has_infer() || key.has_error() {
+    fn checked_map_key(&self, key: LoweringTy) -> LoweringTy {
+        if key.contains_hole() || key.contains_error() {
             return key;
         }
         let facts = crate::facts::Facts::new(self.db);
         let string = Ty::intern(TyKind::String {
             attr: TyAttr::default(),
         });
-        if !baml_type::normalize::is_subtype_interned(&key, &string, &facts) {
+        // Past the gate the key is closed, so the interned oracle's
+        // ingestion is total.
+        let key_interned = Ty::from_plain(&reject_holes(&key));
+        if !baml_type::normalize::is_subtype_interned(&key_interned, &string, &facts) {
             // Diagnose but keep the WRITTEN key (TIR's shape): the
             // diagnostic is the enforcement, and downstream surfaces
             // (codegen schemas, renders) still see what the user wrote.
@@ -724,7 +791,7 @@ impl<'db> LowerCtx<'db> {
                 diags.borrow_mut().push(LoweringDiag {
                     type_ref,
                     kind: LoweringDiagKind::InvalidMapKey {
-                        key: key.to_plain(),
+                        key: reject_holes(&key),
                     },
                 });
             }
@@ -740,10 +807,10 @@ impl<'db> LowerCtx<'db> {
     fn lower_path(
         &self,
         segments: &[Name],
-        args: Vec<Ty>,
-        bindings: Vec<(Name, Ty)>,
+        args: Vec<LoweringTy>,
+        bindings: Vec<(Name, LoweringTy)>,
         position: TypePosition,
-    ) -> Ty {
+    ) -> LoweringTy {
         let attr = TyAttr::default;
         let short = segments.last().expect("type paths are never empty");
 
@@ -759,34 +826,40 @@ impl<'db> LowerCtx<'db> {
         if segments.len() == 1
             && let Some(param) = generic_head
         {
-            return Ty::intern(TyKind::TypeVar(param.clone(), attr()));
+            return LoweringTy::TypeVar(param.clone(), attr());
         }
         if segments.len() > 1
             && args.is_empty()
             && bindings.is_empty()
             && let Some(param) = generic_head
         {
-            let mut ty = Ty::intern(TyKind::TypeVar(param.clone(), attr()));
+            let mut ty = LoweringTy::TypeVar(param.clone(), attr());
             for member in &segments[1..] {
                 if let Some(interface) = self.projection_interface_for(&ty, member) {
-                    ty = Ty::intern(TyKind::AssociatedTypeProjection {
-                        base: ty,
-                        interface,
+                    ty = LoweringTy::AssociatedTypeProjection {
+                        base: Box::new(ty),
+                        interface: Box::new(interface),
                         member: member.clone(),
                         attr: attr(),
-                    });
+                    };
                     continue;
                 }
+                // A chained projection over a hole-carrying prefix cannot
+                // determine; poison silently (same contract as the inner
+                // projection arm).
+                let Ok(ty_plain) = baml_type::Ty::try_from(&ty) else {
+                    return LoweringTy::error();
+                };
                 let lowered = crate::interfaces::lower_projection(
                     self.db,
                     &self.plain_bounds_env(),
-                    ty.to_plain(),
+                    ty_plain,
                     None,
                     member.clone(),
                 );
                 self.record_type_errors(lowered.diagnostics);
-                ty = Ty::from_plain(&lowered.ty);
-                if ty.has_error() {
+                ty = lowered.ty.as_lowering_ty().clone();
+                if matches!(ty, LoweringTy::Error { .. }) {
                     return ty;
                 }
             }
@@ -843,7 +916,7 @@ impl<'db> LowerCtx<'db> {
                 ResolvedTypeDefinition::Source(_) => None,
             };
             if let Some(qtn) = enum_qtn {
-                return Ty::intern(TyKind::EnumVariant(qtn, short.clone(), attr()));
+                return LoweringTy::EnumVariant(qtn, short.clone(), attr());
             }
         }
 
@@ -860,7 +933,7 @@ impl<'db> LowerCtx<'db> {
                 .rev()
                 .find(|param| param.name() == &segments[0])
             {
-                return Some(Ty::intern(TyKind::TypeVar(param.clone(), attr())));
+                return Some(LoweringTy::TypeVar(param.clone(), attr()));
             }
             // `Self.Member` under a concrete impl owner: the head is the
             // subject itself; `projection_interface_for`'s concrete-Self
@@ -879,24 +952,27 @@ impl<'db> LowerCtx<'db> {
                     // determination (bound conjunctions, requires
                     // closures, chained declared bounds).
                     if let Some(interface) = self.projection_interface_for(&ty, member) {
-                        ty = Ty::intern(TyKind::AssociatedTypeProjection {
-                            base: ty,
-                            interface,
+                        ty = LoweringTy::AssociatedTypeProjection {
+                            base: Box::new(ty),
+                            interface: Box::new(interface),
                             member: member.clone(),
                             attr: attr(),
-                        });
+                        };
                         continue;
                     }
+                    let Ok(ty_plain) = baml_type::Ty::try_from(&ty) else {
+                        return LoweringTy::error();
+                    };
                     let lowered = crate::interfaces::lower_projection(
                         self.db,
                         &self.plain_bounds_env(),
-                        ty.to_plain(),
+                        ty_plain,
                         None,
                         member.clone(),
                     );
                     self.record_type_errors(lowered.diagnostics);
-                    ty = Ty::from_plain(&lowered.ty);
-                    if ty.has_error() {
+                    ty = lowered.ty.as_lowering_ty().clone();
+                    if matches!(ty, LoweringTy::Error { .. }) {
                         return ty;
                     }
                 }
@@ -910,7 +986,10 @@ impl<'db> LowerCtx<'db> {
             // ordinary unresolved-path report below.
             if let Some(head) = self.probe_projection_prefix(&segments[..segments.len() - 1]) {
                 let member = segments.last().expect("checked len > 1");
-                let head_plain = head.to_plain();
+                // A hole-carrying prefix cannot host a member projection;
+                // degrade to `Error` inside the prefix (the ordinary
+                // determination failure diagnostics still apply).
+                let head_plain = reject_holes(&head);
                 if let Some(iface_qtn) = crate::interfaces::interface_base_without_member_pin(
                     self.db,
                     &head_plain,
@@ -922,7 +1001,7 @@ impl<'db> LowerCtx<'db> {
                             member: member.clone(),
                         },
                     ]);
-                    return Ty::error();
+                    return LoweringTy::error();
                 }
                 let lowered = crate::interfaces::lower_projection(
                     self.db,
@@ -932,7 +1011,7 @@ impl<'db> LowerCtx<'db> {
                     member.clone(),
                 );
                 self.record_type_errors(lowered.diagnostics);
-                return Ty::from_plain(&lowered.ty);
+                return lowered.ty.as_lowering_ty().clone();
             }
         }
 
@@ -951,7 +1030,7 @@ impl<'db> LowerCtx<'db> {
                 },
             });
         }
-        Ty::error()
+        LoweringTy::error()
     }
 
     /// "Did you mean" candidates for an unresolved SINGLE-SEGMENT type
@@ -989,10 +1068,10 @@ impl<'db> LowerCtx<'db> {
         &self,
         def: Definition<'db>,
         short: &Name,
-        mut args: Vec<Ty>,
-        bindings: Vec<(Name, Ty)>,
+        mut args: Vec<LoweringTy>,
+        bindings: Vec<(Name, LoweringTy)>,
         position: TypePosition,
-    ) -> Ty {
+    ) -> LoweringTy {
         let attr = TyAttr::default;
         match def {
             Definition::Class(class_loc) => {
@@ -1000,16 +1079,16 @@ impl<'db> LowerCtx<'db> {
                 self.record_arity(short, args.len(), data.generic_params.len());
                 enforce_arity(&mut args, data.generic_params.len());
                 let qtn = self.qualify(def, short);
-                let ty = class_ty(qtn, args);
+                let ty = class_lowering_ty(qtn, args);
                 // The `baml.Map<K, V>` spelling bridges to the structural
                 // map (B-1080), so it gets the same key validation as the
                 // `map<k, v>` syntax.
-                if let TyKind::Map { key, value, attr } = ty.kind() {
-                    return Ty::intern(TyKind::Map {
-                        key: self.checked_map_key(key.clone()),
-                        value: value.clone(),
-                        attr: attr.clone(),
-                    });
+                if let LoweringTy::Map { key, value, attr } = ty {
+                    return LoweringTy::Map {
+                        key: Box::new(self.checked_map_key(*key)),
+                        value,
+                        attr,
+                    };
                 }
                 ty
             }
@@ -1021,7 +1100,7 @@ impl<'db> LowerCtx<'db> {
                 // A binding naming an undeclared member, or re-binding an
                 // already-bound one, is diagnosed and dropped - the lowered
                 // instantiation carries only the interface's declared shape.
-                let mut checked: Vec<(Name, Ty)> = Vec::with_capacity(bindings.len());
+                let mut checked: Vec<(Name, LoweringTy)> = Vec::with_capacity(bindings.len());
                 for (name, value) in bindings {
                     if !data.associated_types.iter().any(|assoc| assoc.name == name) {
                         self.record_type_errors(vec![
@@ -1068,8 +1147,11 @@ impl<'db> LowerCtx<'db> {
                         .first()
                         .cloned()
                         .expect("interface frame starts with Self");
-                    let plain_args: Vec<baml_type::Ty> =
-                        args.iter().map(baml_type::interned::Ty::to_plain).collect();
+                    // Default realization speaks the finalized vocabulary; a
+                    // hole inside an argument degrades to `Error` within the
+                    // realized default only (the argument itself stays a hole
+                    // in the built node, so inference still fills it).
+                    let plain_args: Vec<baml_type::Ty> = args.iter().map(reject_holes).collect();
                     for assoc in &data.associated_types {
                         if bindings.iter().any(|(name, _)| name == &assoc.name) {
                             continue;
@@ -1083,13 +1165,15 @@ impl<'db> LowerCtx<'db> {
                         else {
                             continue;
                         };
-                        let self_ty = Ty::intern(TyKind::Interface(
+                        let self_ty = baml_type::Ty::Interface(
                             qtn.clone(),
-                            args.clone().into_boxed_slice(),
-                            bindings.clone().into_boxed_slice(),
+                            plain_args.clone().into(),
+                            bindings
+                                .iter()
+                                .map(|(name, ty)| (name.clone(), reject_holes(ty)))
+                                .collect(),
                             attr(),
-                        ))
-                        .to_plain();
+                        );
                         let realized = crate::interfaces::realize_associated_default(
                             &default,
                             &iface_params,
@@ -1097,7 +1181,7 @@ impl<'db> LowerCtx<'db> {
                             &self_param,
                             &self_ty,
                         );
-                        bindings.push((assoc.name.clone(), Ty::from_plain(&realized)));
+                        bindings.push((assoc.name.clone(), realized.into()));
                     }
                     let missing: Vec<Name> = data
                         .associated_types
@@ -1107,7 +1191,7 @@ impl<'db> LowerCtx<'db> {
                         .collect();
                     if !missing.is_empty() {
                         for name in &missing {
-                            bindings.push((name.clone(), Ty::error()));
+                            bindings.push((name.clone(), LoweringTy::error()));
                         }
                         self.record_type_errors(vec![
                             crate::diagnostics::TirTypeError::MissingAssociatedTypeBindings {
@@ -1119,21 +1203,19 @@ impl<'db> LowerCtx<'db> {
                 }
                 // Sorted for order-insensitive identity.
                 bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
-                Ty::intern(TyKind::Interface(qtn, args.into(), bindings.into(), attr()))
+                LoweringTy::Interface(qtn, args.into(), bindings.into(), attr())
             }
-            Definition::Enum(_) => Ty::intern(TyKind::Enum(self.qualify(def, short), attr())),
+            Definition::Enum(_) => LoweringTy::Enum(self.qualify(def, short), attr()),
             // Aliases stay nominal at lowering; expansion is lazy and
             // cycle-guarded, through the fact oracle.
-            Definition::TypeAlias(_) => {
-                Ty::intern(TyKind::TypeAlias(self.qualify(def, short), attr()))
-            }
+            Definition::TypeAlias(_) => LoweringTy::TypeAlias(self.qualify(def, short), attr()),
             // Value-namespace definitions are not types.
             Definition::Function(_)
             | Definition::TemplateString(_)
             | Definition::Client(_)
             | Definition::Test(_)
             | Definition::RetryPolicy(_)
-            | Definition::Let(_) => Ty::error(),
+            | Definition::Let(_) => LoweringTy::error(),
         }
     }
 
@@ -1141,10 +1223,10 @@ impl<'db> LowerCtx<'db> {
         &self,
         exported: crate::package_interface::ExportedType,
         short: &Name,
-        mut args: Vec<Ty>,
-        bindings: Vec<(Name, Ty)>,
+        mut args: Vec<LoweringTy>,
+        bindings: Vec<(Name, LoweringTy)>,
         position: TypePosition,
-    ) -> Ty {
+    ) -> LoweringTy {
         use crate::package_interface::ExportedType;
         let attr = TyAttr::default;
         match exported {
@@ -1155,17 +1237,17 @@ impl<'db> LowerCtx<'db> {
             } => {
                 self.record_arity(short, args.len(), generic_params.len());
                 enforce_arity(&mut args, generic_params.len());
-                Ty::intern(TyKind::Class(qtn, args.into_boxed_slice(), attr()))
+                LoweringTy::Class(qtn, args.into_boxed_slice(), attr())
             }
             ExportedType::Enum { qtn, .. } => {
                 self.record_arity(short, args.len(), 0);
                 self.reject_non_interface_bindings(bindings);
-                Ty::intern(TyKind::Enum(qtn, attr()))
+                LoweringTy::Enum(qtn, attr())
             }
             ExportedType::TypeAlias { qtn, .. } => {
                 self.record_arity(short, args.len(), 0);
                 self.reject_non_interface_bindings(bindings);
-                Ty::intern(TyKind::TypeAlias(qtn, attr()))
+                LoweringTy::TypeAlias(qtn, attr())
             }
             ExportedType::Interface {
                 qtn,
@@ -1204,7 +1286,7 @@ impl<'db> LowerCtx<'db> {
                 }
 
                 if position == TypePosition::Existential {
-                    let plain_args: Vec<_> = args.iter().map(Ty::to_plain).collect();
+                    let plain_args: Vec<_> = args.iter().map(reject_holes).collect();
                     for assoc in &associated_types {
                         if checked.iter().any(|(name, _)| name == &assoc.name) {
                             continue;
@@ -1212,13 +1294,15 @@ impl<'db> LowerCtx<'db> {
                         let Some(default) = &assoc.default else {
                             continue;
                         };
-                        let self_ty = Ty::intern(TyKind::Interface(
+                        let self_ty = baml_type::Ty::Interface(
                             qtn.clone(),
-                            args.clone().into_boxed_slice(),
-                            checked.clone().into_boxed_slice(),
+                            plain_args.clone().into(),
+                            checked
+                                .iter()
+                                .map(|(name, ty)| (name.clone(), reject_holes(ty)))
+                                .collect(),
                             attr(),
-                        ))
-                        .to_plain();
+                        );
                         let realized = crate::interfaces::realize_associated_default(
                             default,
                             &generic_params,
@@ -1226,7 +1310,7 @@ impl<'db> LowerCtx<'db> {
                             &self_param,
                             &self_ty,
                         );
-                        checked.push((assoc.name.clone(), Ty::from_plain(&realized)));
+                        checked.push((assoc.name.clone(), realized.into()));
                     }
                     let missing: Vec<Name> = associated_types
                         .iter()
@@ -1234,7 +1318,12 @@ impl<'db> LowerCtx<'db> {
                         .filter(|name| !checked.iter().any(|(bound, _)| bound == name))
                         .collect();
                     if !missing.is_empty() {
-                        checked.extend(missing.iter().cloned().map(|name| (name, Ty::error())));
+                        checked.extend(
+                            missing
+                                .iter()
+                                .cloned()
+                                .map(|name| (name, LoweringTy::error())),
+                        );
                         self.record_type_errors(vec![
                             crate::diagnostics::TirTypeError::MissingAssociatedTypeBindings {
                                 interface: qtn.clone(),
@@ -1244,17 +1333,17 @@ impl<'db> LowerCtx<'db> {
                     }
                 }
                 checked.sort_by(|(a, _), (b, _)| a.cmp(b));
-                Ty::intern(TyKind::Interface(
+                LoweringTy::Interface(
                     qtn,
                     args.into_boxed_slice(),
                     checked.into_boxed_slice(),
                     attr(),
-                ))
+                )
             }
         }
     }
 
-    fn reject_non_interface_bindings(&self, bindings: Vec<(Name, Ty)>) {
+    fn reject_non_interface_bindings(&self, bindings: Vec<(Name, LoweringTy)>) {
         for (name, _) in bindings {
             self.record_type_errors(vec![crate::diagnostics::TirTypeError::UnresolvedType {
                 name,
@@ -1468,7 +1557,7 @@ impl<'db> LowerCtx<'db> {
     /// `Type.from_json`), resolved exactly as a written annotation path -
     /// classes, enums, aliases, and in-scope generic params - with no
     /// written args or bindings.
-    pub fn lower_type_path(&self, segments: &[Name]) -> Ty {
+    pub fn lower_type_path(&self, segments: &[Name]) -> LoweringTy {
         self.lower_path(segments, Vec::new(), Vec::new(), TypePosition::Existential)
     }
 
@@ -1507,10 +1596,10 @@ pub fn substitute_params(ty: &baml_type::interned::Ty, args: &[baml_type::intern
 
 /// Generic-arity recovery without diagnostics (S17): extras truncated,
 /// missing padded with `Error`.
-fn enforce_arity(args: &mut Vec<Ty>, expected: usize) {
+fn enforce_arity(args: &mut Vec<LoweringTy>, expected: usize) {
     args.truncate(expected);
     while args.len() < expected {
-        args.push(Ty::error());
+        args.push(LoweringTy::error());
     }
 }
 
@@ -1568,6 +1657,41 @@ pub fn function_generic_frame<'db>(
 /// argument-path patch. Keyed on the builtin package specifically: a
 /// user-defined `class Array<T>` stays nominal. The single constructor for
 /// class types, shared by annotation lowering and `class_self_ty`.
+/// [`class_ty`]'s lowering-vocabulary twin: same builtin bridges
+/// (`baml.future.Future`, `baml.Array`, `baml.Map`), plain members. Two
+/// copies because the bridge serves both the lowering chain and the
+/// interned inference world; the D3 unification collapses them.
+pub fn class_lowering_ty(qtn: TypeName, mut args: Vec<LoweringTy>) -> LoweringTy {
+    let attr = TyAttr::default;
+    if !qtn.is_local() && qtn.package().as_str() == "baml" {
+        if qtn.namespace().len() == 1
+            && qtn.namespace()[0].as_str() == "future"
+            && qtn.name().as_str() == "Future"
+            && args.len() == 2
+        {
+            let error_ty = args.pop().expect("checked len");
+            let value_ty = args.pop().expect("checked len");
+            return LoweringTy::Future(Box::new(value_ty), Box::new(error_ty), attr());
+        }
+        if qtn.namespace().is_empty() {
+            if qtn.name().as_str() == "Array" && args.len() == 1 {
+                let element = args.pop().expect("checked len");
+                return LoweringTy::List(Box::new(element), attr());
+            }
+            if qtn.name().as_str() == "Map" && args.len() == 2 {
+                let value = args.pop().expect("checked len");
+                let key = args.pop().expect("checked len");
+                return LoweringTy::Map {
+                    key: Box::new(key),
+                    value: Box::new(value),
+                    attr: attr(),
+                };
+            }
+        }
+    }
+    LoweringTy::Class(qtn, args.into(), attr())
+}
+
 pub fn class_ty(qtn: TypeName, mut args: Vec<Ty>) -> Ty {
     let attr = TyAttr::default;
     if !qtn.is_local() && qtn.package().as_str() == "baml" {
@@ -1708,11 +1832,13 @@ pub fn impl_generic_bounds<'db>(
                     .bounds
                     .iter()
                     .filter_map(|&type_ref| {
-                        baml_type::interned::InterfaceRef::of_ty(&ctx.lower_type_ref_at(
-                            &data.type_refs,
-                            type_ref,
-                            TypePosition::ConstraintHead,
-                        ))
+                        baml_type::interned::InterfaceRef::of_ty(&Ty::from_plain(&reject_holes(
+                            &ctx.lower_type_ref_at(
+                                &data.type_refs,
+                                type_ref,
+                                TypePosition::ConstraintHead,
+                            ),
+                        )))
                     })
                     .collect();
                 if !bounds.is_empty() {
@@ -1786,15 +1912,96 @@ pub struct SignatureParam {
 
 /// Ruling 4: `_` never infers in declaration signatures. Lowering emits the
 /// hole node uniformly; this is the signature-side policy fold that rejects
-/// survivors (the inference side instead instantiates holes as fresh vars).
-pub fn reject_holes(ty: &Ty) -> Ty {
-    if !ty.has_infer() {
-        return ty.clone();
+/// survivors, producing the FINALIZED type (the inference side instead
+/// instantiates holes as fresh vars). Every hole becomes the `Error`
+/// sentinel — its rejection diagnostic is the position's own (S17 / E0147),
+/// not this fold's — with the closed spine around it preserved.
+pub fn reject_holes(ty: &LoweringTy) -> baml_type::Ty {
+    baml_type::Ty::try_from(ty).unwrap_or_else(|_| fill_holes_as_errors(ty))
+}
+
+/// The slow path of [`reject_holes`], reached only for genuinely
+/// hole-carrying trees (the fast path is the family's generated narrowing):
+/// rebuild with every `Infer` replaced by `Error`. A hand-written walk until
+/// the `ty_family!` macro grows per-member child rebuilds.
+fn fill_holes_as_errors(ty: &LoweringTy) -> baml_type::Ty {
+    let fill_all = |tys: &[LoweringTy]| -> Box<[baml_type::Ty]> {
+        tys.iter().map(fill_holes_as_errors).collect()
+    };
+    let attr = |attr: &TyAttr| attr.clone();
+    match ty {
+        LoweringTy::Infer { attr: a } => baml_type::Ty::Error { attr: attr(a) },
+        LoweringTy::List(inner, a) => {
+            baml_type::Ty::List(Box::new(fill_holes_as_errors(inner)), attr(a))
+        }
+        LoweringTy::Map {
+            key,
+            value,
+            attr: a,
+        } => baml_type::Ty::Map {
+            key: Box::new(fill_holes_as_errors(key)),
+            value: Box::new(fill_holes_as_errors(value)),
+            attr: attr(a),
+        },
+        LoweringTy::Union(members, a) => baml_type::Ty::Union(fill_all(members), attr(a)),
+        LoweringTy::Class(name, args, a) => {
+            baml_type::Ty::Class(name.clone(), fill_all(args), attr(a))
+        }
+        LoweringTy::Interface(name, args, assoc, a) => baml_type::Ty::Interface(
+            name.clone(),
+            fill_all(args),
+            assoc
+                .iter()
+                .map(|(name, ty)| (name.clone(), fill_holes_as_errors(ty)))
+                .collect(),
+            attr(a),
+        ),
+        LoweringTy::Function {
+            params,
+            ret,
+            throws,
+            attr: a,
+        } => baml_type::Ty::Function {
+            params: params
+                .iter()
+                .map(|param| baml_type::FunctionParamTy {
+                    name: param.name.clone(),
+                    ty: fill_holes_as_errors(&param.ty),
+                    mode: param.mode,
+                })
+                .collect(),
+            ret: Box::new(fill_holes_as_errors(ret)),
+            throws: Box::new(fill_holes_as_errors(throws)),
+            attr: attr(a),
+        },
+        LoweringTy::Future(value, error, a) => baml_type::Ty::Future(
+            Box::new(fill_holes_as_errors(value)),
+            Box::new(fill_holes_as_errors(error)),
+            attr(a),
+        ),
+        LoweringTy::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attr: a,
+        } => baml_type::Ty::AssociatedTypeProjection {
+            base: Box::new(fill_holes_as_errors(base)),
+            interface: Box::new(baml_type::Interface::new(
+                interface.name.clone(),
+                fill_all(&interface.generics),
+                interface
+                    .associated_types
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), fill_holes_as_errors(ty)))
+                    .collect(),
+            )),
+            member: member.clone(),
+            attr: attr(a),
+        },
+        // Hole-free leaves: the generated narrowing is total on them.
+        other => baml_type::Ty::try_from(other)
+            .unwrap_or_else(|_| unreachable!("every hole-carrying shape is matched above")),
     }
-    if matches!(ty.kind(), TyKind::Infer { var: None, .. }) {
-        return Ty::error();
-    }
-    Ty::intern(ty.kind().map_children(reject_holes))
 }
 
 /// The declared interface bounds for a CLASS's own generic frame - the
@@ -1813,19 +2020,9 @@ pub fn class_generic_bounds<'db>(
             .bounds
             .iter()
             .filter_map(|&type_ref| {
-                match ctx
-                    .lower_type_ref_at(&data.type_refs, type_ref, TypePosition::ConstraintHead)
-                    .kind()
-                {
-                    TyKind::Interface(name, args, pins, _) => {
-                        Some(baml_type::interned::InterfaceRef::new(
-                            name.clone(),
-                            args.to_vec().into_boxed_slice(),
-                            pins.to_vec(),
-                        ))
-                    }
-                    _ => None,
-                }
+                baml_type::interned::InterfaceRef::of_ty(&Ty::from_plain(&reject_holes(
+                    &ctx.lower_type_ref_at(&data.type_refs, type_ref, TypePosition::ConstraintHead),
+                )))
             })
             .collect();
         if !refs.is_empty() {
@@ -1845,13 +2042,11 @@ pub fn function_generic_bounds<'db>(
     let frame = function_generic_frame(db, function);
     let ctx = lower_ctx_for_file(db, function.file(db)).with_frame(frame.clone());
     let mut out = FxHashMap::default();
-    let as_ref = |ty: &Ty| match ty.kind() {
-        TyKind::Interface(name, args, pins, _) => Some(baml_type::interned::InterfaceRef::new(
-            name.clone(),
-            args.to_vec().into_boxed_slice(),
-            pins.to_vec(),
-        )),
-        _ => None,
+    // A lowered constraint head enters the interned bounds vocabulary
+    // through the reject fold: a hole inside a written bound degrades to
+    // `Error` (its diagnostic is the WF walk's), never panics.
+    let as_ref = |ty: &LoweringTy| {
+        baml_type::interned::InterfaceRef::of_ty(&Ty::from_plain(&reject_holes(ty)))
     };
     let mut frame_iter = frame.iter();
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
@@ -1956,13 +2151,11 @@ pub fn interface_scope_bounds<'db>(
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
     let frame = interface_frame(db, interface);
     let ctx = lower_ctx_for_file(db, interface.file(db)).with_frame(frame.clone());
-    let as_ref = |ty: &Ty| match ty.kind() {
-        TyKind::Interface(name, args, pins, _) => Some(baml_type::interned::InterfaceRef::new(
-            name.clone(),
-            args.to_vec().into_boxed_slice(),
-            pins.to_vec(),
-        )),
-        _ => None,
+    // A lowered constraint head enters the interned bounds vocabulary
+    // through the reject fold: a hole inside a written bound degrades to
+    // `Error` (its diagnostic is the WF walk's), never panics.
+    let as_ref = |ty: &LoweringTy| {
+        baml_type::interned::InterfaceRef::of_ty(&Ty::from_plain(&reject_holes(ty)))
     };
     let mut out = FxHashMap::default();
     let mut frame_iter = frame.iter();
@@ -2099,7 +2292,9 @@ pub fn owner_self_ty<'db>(
             match &data.subject {
                 baml_compiler2_ppir::item_data::ImplSubjectData::Free { for_target, .. } => {
                     let ctx = lower_ctx_for_file(db, impl_loc.file(db)).with_frame(frame.to_vec());
-                    Some(ctx.lower_type_ref(&data.type_refs, *for_target))
+                    Some(Ty::from_plain(&reject_holes(
+                        &ctx.lower_type_ref(&data.type_refs, *for_target),
+                    )))
                 }
                 baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
                     Some(class_self_ty(db, *class))
@@ -2126,11 +2321,13 @@ pub fn owner_impl_target<'db>(
     let ctx = lower_ctx_for_file(db, function.file(db))
         .with_frame(frame.to_vec())
         .with_bounds(function_generic_bounds(db, function));
-    let interface = baml_type::interned::InterfaceRef::of_ty(&ctx.lower_type_ref_at(
-        &target.type_refs,
-        target.target,
-        TypePosition::ConstraintHead,
-    ))?;
+    let interface = baml_type::interned::InterfaceRef::of_ty(&Ty::from_plain(&reject_holes(
+        &ctx.lower_type_ref_at(
+            &target.type_refs,
+            target.target,
+            TypePosition::ConstraintHead,
+        ),
+    )))?;
     let mut pins = target
         .associated_type_bindings
         .iter()
@@ -2138,7 +2335,9 @@ pub fn owner_impl_target<'db>(
             binding.type_ref.map(|type_ref| {
                 (
                     binding.name.clone(),
-                    ctx.lower_type_ref(&target.type_refs, type_ref),
+                    Ty::from_plain(&reject_holes(
+                        &ctx.lower_type_ref(&target.type_refs, type_ref),
+                    )),
                 )
             })
         })
@@ -2268,9 +2467,7 @@ pub fn signature_lowering_diagnostics<'db>(
     let mut lower_and_judge = |type_ref: baml_compiler2_hir::type_ref::TypeRefId| {
         let (lowered, diagnostics) = ctx.lower_type_ref_with_diagnostics(&data.type_refs, type_ref);
         extend_lowering_diagnostics(&mut out, &elaborated_map.type_refs, diagnostics);
-        for error in
-            crate::interfaces::type_generic_bound_errors(db, &scope_env, &lowered.to_plain())
-        {
+        for error in crate::interfaces::type_generic_bound_errors(db, &scope_env, &lowered) {
             out.push((elaborated_map.type_refs.span(type_ref), error));
         }
     };
@@ -2308,10 +2505,10 @@ pub fn signature_lowering_diagnostics<'db>(
             TypePosition::ConstraintHead,
         );
         extend_lowering_diagnostics(&mut out, &source_map.type_refs, diagnostics);
-        match lowered.kind() {
+        match &lowered {
             // The compiler-derived builtin interface is a VALUE type,
             // never a bound (E0154).
-            TyKind::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
+            LoweringTy::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
                 out.push((
                     source_map.type_refs.span(*bound),
                     TirTypeError::BuiltinInterfaceNotABound {
@@ -2319,17 +2516,22 @@ pub fn signature_lowering_diagnostics<'db>(
                     },
                 ));
             }
-            TyKind::Interface(..) => {
-                for error in bound_binding_violations(db, &func_data.type_refs, *bound, &lowered) {
+            LoweringTy::Interface(..) => {
+                for error in bound_binding_violations(
+                    db,
+                    &func_data.type_refs,
+                    *bound,
+                    &Ty::from_plain(&reject_holes(&lowered)),
+                ) {
                     out.push((source_map.type_refs.span(*bound), error));
                 }
             }
-            _ if lowered.has_error() => {}
+            _ if lowered.contains_error() => {}
             _ => {
                 out.push((
                     source_map.type_refs.span(*bound),
                     TirTypeError::GenericBoundNotInterface {
-                        bound: lowered.to_plain(),
+                        bound: reject_holes(&lowered),
                     },
                 ));
             }
@@ -2345,6 +2547,10 @@ pub fn signature_lowering_diagnostics<'db>(
 /// the interface's own obligation, checked at its declaration; a value
 /// still carrying a type variable resolves at instantiation and fails
 /// open. TIR's bound-side check from `lower_generic_param_interface_bounds`.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn bound_binding_violations(
     db: &dyn baml_compiler2_ppir::Db,
     store: &TypeRefStore,
@@ -2399,6 +2605,10 @@ fn bound_binding_violations(
 
 /// An interned scope-bounds map as the plain constraint env the
 /// well-formedness walk judges type-variable arguments through.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn plain_scope_bounds(
     interned: FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
 ) -> FxHashMap<ParamTy, Vec<baml_type::Interface>> {
@@ -2450,9 +2660,7 @@ pub fn class_lowering_diagnostics<'db>(
         let (lowered, diagnostics) =
             ctx.lower_type_ref_with_diagnostics(&data.type_refs, field.type_ref);
         extend_lowering_diagnostics(&mut out, &source_map.type_refs, diagnostics);
-        for error in
-            crate::interfaces::type_generic_bound_errors(db, &scope_env, &lowered.to_plain())
-        {
+        for error in crate::interfaces::type_generic_bound_errors(db, &scope_env, &lowered) {
             out.push((source_map.type_refs.span(field.type_ref), error));
         }
     }
@@ -2463,8 +2671,8 @@ pub fn class_lowering_diagnostics<'db>(
             TypePosition::ConstraintHead,
         );
         extend_lowering_diagnostics(&mut out, &source_map.type_refs, diagnostics);
-        match lowered.kind() {
-            TyKind::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
+        match &lowered {
+            LoweringTy::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
                 out.push((
                     source_map.type_refs.span(*bound),
                     TirTypeError::BuiltinInterfaceNotABound {
@@ -2472,17 +2680,22 @@ pub fn class_lowering_diagnostics<'db>(
                     },
                 ));
             }
-            TyKind::Interface(..) => {
-                for error in bound_binding_violations(db, &data.type_refs, *bound, &lowered) {
+            LoweringTy::Interface(..) => {
+                for error in bound_binding_violations(
+                    db,
+                    &data.type_refs,
+                    *bound,
+                    &Ty::from_plain(&reject_holes(&lowered)),
+                ) {
                     out.push((source_map.type_refs.span(*bound), error));
                 }
             }
-            _ if lowered.has_error() => {}
+            _ if lowered.contains_error() => {}
             _ => {
                 out.push((
                     source_map.type_refs.span(*bound),
                     TirTypeError::GenericBoundNotInterface {
-                        bound: lowered.to_plain(),
+                        bound: reject_holes(&lowered),
                     },
                 ));
             }
@@ -2513,9 +2726,7 @@ pub fn interface_lowering_diagnostics<'db>(
                  out: &mut Vec<(text_size::TextRange, TirTypeError)>| {
         let (lowered, diagnostics) = ctx.lower_type_ref_with_diagnostics(&data.type_refs, type_ref);
         extend_lowering_diagnostics(out, &source_map.type_refs, diagnostics);
-        for error in
-            crate::interfaces::type_generic_bound_errors(db, &scope_env, &lowered.to_plain())
-        {
+        for error in crate::interfaces::type_generic_bound_errors(db, &scope_env, &lowered) {
             out.push((source_map.type_refs.span(type_ref), error));
         }
     };
@@ -2539,8 +2750,11 @@ pub fn interface_lowering_diagnostics<'db>(
                 .get(index)
                 .map(|sig_map| sig_map.name_span)
                 .unwrap_or(source_map.name_span);
-            for error in crate::interfaces::type_generic_bound_errors(db, &env, &method.function_ty)
-            {
+            for error in crate::interfaces::type_generic_bound_errors(
+                db,
+                &env,
+                method.function_ty.as_lowering_ty(),
+            ) {
                 out.push((span, error));
             }
         }
@@ -2550,8 +2764,8 @@ pub fn interface_lowering_diagnostics<'db>(
     for assoc in &data.associated_types {
         let Some(bound) = assoc.bound else { continue };
         let lowered = ctx.lower_type_ref_at(&data.type_refs, bound, TypePosition::ConstraintHead);
-        match lowered.kind() {
-            TyKind::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
+        match &lowered {
+            LoweringTy::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
                 out.push((
                     source_map.type_refs.span(bound),
                     TirTypeError::BuiltinInterfaceNotABound {
@@ -2559,13 +2773,13 @@ pub fn interface_lowering_diagnostics<'db>(
                     },
                 ));
             }
-            TyKind::Interface(..) => {}
-            _ if lowered.has_error() => {}
+            LoweringTy::Interface(..) => {}
+            _ if lowered.contains_error() => {}
             _ => {
                 out.push((
                     source_map.type_refs.span(bound),
                     TirTypeError::GenericBoundNotInterface {
-                        bound: lowered.to_plain(),
+                        bound: reject_holes(&lowered),
                     },
                 ));
             }
@@ -2670,12 +2884,12 @@ pub fn interface_lowering_diagnostics<'db>(
             TypePosition::ConstraintHead,
         );
         extend_lowering_diagnostics(&mut out, &source_map.type_refs, diagnostics);
-        if !lowered.has_error() && !matches!(lowered.kind(), TyKind::Interface(..)) {
+        if !lowered.contains_error() && !matches!(lowered, LoweringTy::Interface(..)) {
             out.push((
                 source_map.type_refs.span(target),
                 TirTypeError::InterfaceRequiresNonInterface {
                     interface: interface_qualified_name(db, interface),
-                    target: lowered.to_plain(),
+                    target: reject_holes(&lowered),
                 },
             ));
         }
@@ -2704,8 +2918,7 @@ pub fn resolve_class_fields<'db>(
         .map(|field| {
             (
                 field.name.clone(),
-                ctx.lower_type_ref(&data.type_refs, field.type_ref)
-                    .to_plain(),
+                reject_holes(&ctx.lower_type_ref(&data.type_refs, field.type_ref)),
                 field.attributes.clone(),
             )
         })
@@ -2731,9 +2944,7 @@ pub fn type_alias_lowering_diagnostics<'db>(
     // non-generic, so the scope env is empty). The walk expands nested
     // aliases itself; judging the WRITTEN body here keeps one report at
     // the declaration instead of one per use.
-    for error in
-        crate::interfaces::type_generic_bound_errors(db, &FxHashMap::default(), &lowered.to_plain())
-    {
+    for error in crate::interfaces::type_generic_bound_errors(db, &FxHashMap::default(), &lowered) {
         out.push((source_map.type_refs.span(value), error));
     }
     out
@@ -2784,14 +2995,16 @@ pub fn function_signature<'db>(
         .map(|param| SignatureParam {
             name: param.name.clone(),
             ty: self_ty(param).unwrap_or_else(|| {
-                reject_holes(&ctx.lower_type_ref(&data.type_refs, param.type_ref))
+                Ty::from_plain(&reject_holes(
+                    &ctx.lower_type_ref(&data.type_refs, param.type_ref),
+                ))
             }),
             has_default: param.has_default,
         })
         .collect();
     let ret = data
         .return_type
-        .map(|ret| reject_holes(&ctx.lower_type_ref(&data.type_refs, ret)))
+        .map(|ret| Ty::from_plain(&reject_holes(&ctx.lower_type_ref(&data.type_refs, ret))))
         .unwrap_or_else(Ty::error);
     let throws_declared = data.throws.is_some();
     let throws = data
@@ -2804,7 +3017,7 @@ pub fn function_signature<'db>(
                 // what `callable_throws` computes through the body run.
                 Ty::from_plain(&crate::callable::callable_throws(db, function).0)
             } else {
-                reject_holes(&lowered)
+                Ty::from_plain(&reject_holes(&lowered))
             }
         })
         .unwrap_or_else(|| {
@@ -2833,7 +3046,9 @@ pub fn class_field_types<'db>(
         .map(|field| {
             (
                 field.name.clone(),
-                reject_holes(&ctx.lower_type_ref(&data.type_refs, field.type_ref)),
+                Ty::from_plain(&reject_holes(
+                    &ctx.lower_type_ref(&data.type_refs, field.type_ref),
+                )),
             )
         })
         .collect()
@@ -2844,7 +3059,7 @@ pub fn type_alias_value<'db>(db: &'db dyn baml_compiler2_ppir::Db, alias: TypeAl
     let data = baml_compiler2_ppir::item_data::type_alias_data(db, alias);
     let ctx = lower_ctx_for_file(db, alias.file(db));
     data.value
-        .map(|value| reject_holes(&ctx.lower_type_ref(&data.type_refs, value)))
+        .map(|value| Ty::from_plain(&reject_holes(&ctx.lower_type_ref(&data.type_refs, value))))
         .unwrap_or_else(Ty::error)
 }
 
@@ -2931,7 +3146,11 @@ fn lower_assoc_type_ref<'db>(
     let ctx = lower_ctx_for_file(db, interface.file(db))
         .with_frame(interface_frame(db, interface))
         .with_bounds(interface_scope_bounds(db, interface));
-    Some(ctx.lower_type_ref_at(&data.type_refs, type_ref, position))
+    Some(Ty::from_plain(&reject_holes(&ctx.lower_type_ref_at(
+        &data.type_refs,
+        type_ref,
+        position,
+    ))))
 }
 
 /// Splits a lowered `throws` clause into its named members and whether it
@@ -2939,24 +3158,26 @@ fn lower_assoc_type_ref<'db>(
 /// declares the named types AND opens the remainder to inference. The
 /// hole is only meaningful as a top-level member; nested holes stay
 /// ruling-4 rejections through `reject_holes` on the named part.
-pub fn throws_clause_parts(ty: &Ty) -> (Ty, bool) {
-    let members: Vec<&Ty> = match ty.kind() {
-        TyKind::Union(members, _) => members.iter().collect(),
+pub fn throws_clause_parts(ty: &LoweringTy) -> (baml_type::Ty, bool) {
+    let members: Vec<&LoweringTy> = match ty {
+        LoweringTy::Union(members, _) => members.iter().collect(),
         _ => vec![ty],
     };
     let mut named = Vec::new();
     let mut open = false;
     for member in members {
-        if matches!(member.kind(), TyKind::Infer { var: None, .. }) {
+        if matches!(member, LoweringTy::Infer { .. }) {
             open = true;
         } else {
             named.push(reject_holes(member));
         }
     }
     let named = match named.len() {
-        0 => Ty::never(),
+        0 => baml_type::Ty::Never {
+            attr: TyAttr::default(),
+        },
         1 => named.pop().expect("checked len"),
-        _ => Ty::intern(TyKind::Union(named.into(), TyAttr::default())),
+        _ => baml_type::Ty::Union(named.into(), TyAttr::default()),
     };
     (named, open)
 }

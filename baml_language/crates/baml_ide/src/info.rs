@@ -467,6 +467,10 @@ form stringifies each value and produces a `string`."
 /// Build `TypeInfo` for a resolved [`SymbolTarget`]. Every arm reads
 /// recorded compiler data (firewall items, source maps, inference records) —
 /// no span-equality matching, no name heuristics.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn target_type_info(
     db: &dyn baml_compiler2_ppir::Db,
     target: crate::resolve::SymbolTarget<'_>,
@@ -830,6 +834,10 @@ fn owning_path(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> String {
 /// block spells its resolved for-target, and an interface default method
 /// spells the interface's path. Full canonical paths throughout — member
 /// owners never elide.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn method_owner_path(
     db: &dyn baml_compiler2_ppir::Db,
     func: baml_compiler2_hir::loc::FunctionLoc<'_>,
@@ -859,6 +867,10 @@ fn method_owner_path(
 /// Hover for a template-frame name (`ctx`, `role`): the matching parameter
 /// of the driver's `body` callback — the same signature slot inference
 /// injects interpolation names from.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn template_frame_param_info(
     db: &dyn baml_compiler2_ppir::Db,
     file: SourceFile,
@@ -899,6 +911,10 @@ fn range_contains(range: TextRange, offset: TextSize) -> bool {
     range.contains(offset) || range.end() == offset
 }
 
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn generic_type_parameter_info_at(
     db: &dyn baml_compiler2_ppir::Db,
     file: SourceFile,
@@ -1040,6 +1056,10 @@ fn generic_type_parameter_info_at(
 // ── type_info_for_definition ──────────────────────────────────────────────────
 
 /// Build `TypeInfo` for a top-level item definition.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definition<'_>) -> TypeInfo {
     match def {
         Definition::Function(func_loc) => {
@@ -1387,6 +1407,10 @@ fn callback_forwarding_note(
 /// inferences whose binding maps were populated from the use-site's own
 /// arena. Mirrors the structure already used by
 /// `completions.rs::find_binding_ty_for_local`.
+#[expect(
+    deprecated,
+    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
+)]
 fn find_binding_ty_in_scopes(
     db: &dyn baml_compiler2_ppir::Db,
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,

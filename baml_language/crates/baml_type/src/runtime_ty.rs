@@ -407,8 +407,6 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
         ),
         // Error-recovery sentinels cannot exist in a type-checked program.
         Ty::Error { .. } => return Err(NotRuntimeTy { variant: "Error" }),
-        // An inference hole must have been filled during type checking.
-        Ty::Infer { .. } => return Err(NotRuntimeTy { variant: "Infer" }),
     })
 }
 
@@ -512,6 +510,7 @@ fn ty_has_cycle(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::LoweringTy;
 
     fn def() -> TyAttr {
         TyAttr::default()
@@ -637,7 +636,7 @@ mod tests {
 
     #[test]
     fn nested_infer_in_list_blocks_conversion() {
-        let ty: Ty = Ty::List(Box::new(Ty::Infer { attr: def() }), def());
+        let ty: LoweringTy = LoweringTy::List(Box::new(LoweringTy::Infer { attr: def() }), def());
         assert_eq!(
             RuntimeTy::try_from(&ty),
             Err(NotRuntimeTy { variant: "Infer" })
@@ -671,10 +670,10 @@ mod tests {
 
     #[test]
     fn nested_infer_in_function_ret_blocks_conversion() {
-        let ty: Ty = Ty::Function {
+        let ty: LoweringTy = LoweringTy::Function {
             params: Box::new([]),
-            ret: Box::new(Ty::Infer { attr: def() }),
-            throws: Box::new(Ty::Void { attr: def() }),
+            ret: Box::new(LoweringTy::Infer { attr: def() }),
+            throws: Box::new(LoweringTy::Void { attr: def() }),
             attr: def(),
         };
         assert_eq!(

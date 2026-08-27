@@ -208,7 +208,7 @@ impl InferenceTable {
     pub fn shallow_resolve(&mut self, ty: &Ty) -> Ty {
         let mut ty = ty.clone();
         loop {
-            let TyKind::Infer { var: Some(var), .. } = ty.kind() else {
+            let TyKind::Infer { var, .. } = ty.kind() else {
                 return ty;
             };
             match self.vars.probe_value(VarKey(*var)) {
@@ -251,7 +251,7 @@ impl InferenceTable {
             return Ok(());
         }
         match (left.kind(), right.kind()) {
-            (TyKind::Infer { var: Some(a), .. }, TyKind::Infer { var: Some(b), .. }) => {
+            (TyKind::Infer { var: a, .. }, TyKind::Infer { var: b, .. }) => {
                 let root_a = self.vars.find(VarKey(*a)).0.index();
                 let root_b = self.vars.find(VarKey(*b)).0.index();
                 self.vars.union(VarKey(*a), VarKey(*b));
@@ -267,8 +267,8 @@ impl InferenceTable {
                 }
                 Ok(())
             }
-            (TyKind::Infer { var: Some(var), .. }, _) => self.bind(*var, &right, &left),
-            (_, TyKind::Infer { var: Some(var), .. }) => self.bind(*var, &left, &right),
+            (TyKind::Infer { var, .. }, _) => self.bind(*var, &right, &left),
+            (_, TyKind::Infer { var, .. }) => self.bind(*var, &left, &right),
             _ => self.unify_kinds(&left, &right),
         }
     }
@@ -398,7 +398,7 @@ impl InferenceTable {
         if !ty.has_infer() {
             return false;
         }
-        if let TyKind::Infer { var: Some(var), .. } = ty.kind() {
+        if let TyKind::Infer { var, .. } = ty.kind() {
             if self.vars.unioned(VarKey(*var), root) {
                 return true;
             }
