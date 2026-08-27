@@ -20,7 +20,7 @@ use baml_compiler2_hir::{
 };
 use baml_type::{
     Literal, MediaKind, Name, ParamTy, TyAttr, TypeName,
-    interned::{InterfaceRef, Ty, TyKind},
+    interned::{InferInterface, InferTy, Ty},
     normalize::TypeContext as _,
 };
 
@@ -111,33 +111,33 @@ pub(crate) fn external_class_for_type(
         )
     };
     Some(match receiver.kind() {
-        TyKind::Class(qtn, args, _) => (qtn.clone(), args.to_vec()),
-        TyKind::List(element, _) => builtin(&[], "Array", vec![element.clone()]),
-        TyKind::Map { key, value, .. } => builtin(&[], "Map", vec![key.clone(), value.clone()]),
-        TyKind::Future(value, error, _) => {
+        InferTy::Class(qtn, args, _) => (qtn.clone(), args.to_vec()),
+        InferTy::List(element, _) => builtin(&[], "Array", vec![element.clone()]),
+        InferTy::Map { key, value, .. } => builtin(&[], "Map", vec![key.clone(), value.clone()]),
+        InferTy::Future(value, error, _) => {
             builtin(&["future"], "Future", vec![value.clone(), error.clone()])
         }
-        TyKind::String { .. } | TyKind::Literal(Literal::String(_), _, _) => {
+        InferTy::String { .. } | InferTy::Literal(Literal::String(_), _, _) => {
             builtin(&[], "String", Vec::new())
         }
-        TyKind::Int { .. } | TyKind::Literal(Literal::Int(_), _, _) => {
+        InferTy::Int { .. } | InferTy::Literal(Literal::Int(_), _, _) => {
             builtin(&[], "Int", Vec::new())
         }
-        TyKind::Bigint { .. } | TyKind::Literal(Literal::Bigint(_), _, _) => {
+        InferTy::Bigint { .. } | InferTy::Literal(Literal::Bigint(_), _, _) => {
             builtin(&[], "Bigint", Vec::new())
         }
-        TyKind::Float { .. } | TyKind::Literal(Literal::Float(_), _, _) => {
+        InferTy::Float { .. } | InferTy::Literal(Literal::Float(_), _, _) => {
             builtin(&[], "Float", Vec::new())
         }
-        TyKind::Bool { .. } | TyKind::Literal(Literal::Bool(_), _, _) => {
+        InferTy::Bool { .. } | InferTy::Literal(Literal::Bool(_), _, _) => {
             builtin(&[], "Bool", Vec::new())
         }
-        TyKind::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
-        TyKind::Type { .. } => (
+        InferTy::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
+        InferTy::Type { .. } => (
             TypeName::new(Name::new("reflect"), Vec::new(), Name::new("Type")),
             Vec::new(),
         ),
-        TyKind::Media(kind, _) => {
+        InferTy::Media(kind, _) => {
             let class = match kind {
                 MediaKind::Image => "Image",
                 MediaKind::Audio => "Audio",
@@ -147,7 +147,7 @@ pub(crate) fn external_class_for_type(
             };
             builtin(&["media"], class, Vec::new())
         }
-        TyKind::TypeAlias(qtn, _) => {
+        InferTy::TypeAlias(qtn, _) => {
             let expanded = facts.alias_def(qtn)?;
             return external_class_for_type(
                 facts,
@@ -180,39 +180,39 @@ pub(crate) fn receiver_class<'db>(
         }
     };
     match receiver.kind() {
-        TyKind::Class(qtn, args, _) => match facts.definition_of(qtn) {
+        InferTy::Class(qtn, args, _) => match facts.definition_of(qtn) {
             Some(Definition::Class(class)) => Some((class, args.to_vec())),
             _ => None,
         },
-        TyKind::List(element, _) => builtin(&[], "Array", vec![element.clone()]),
-        TyKind::Map { key, value, .. } => builtin(&[], "Map", vec![key.clone(), value.clone()]),
-        TyKind::Future(value, error, _) => {
+        InferTy::List(element, _) => builtin(&[], "Array", vec![element.clone()]),
+        InferTy::Map { key, value, .. } => builtin(&[], "Map", vec![key.clone(), value.clone()]),
+        InferTy::Future(value, error, _) => {
             builtin(&["future"], "Future", vec![value.clone(), error.clone()])
         }
-        TyKind::String { .. } | TyKind::Literal(Literal::String(_), _, _) => {
+        InferTy::String { .. } | InferTy::Literal(Literal::String(_), _, _) => {
             builtin(&[], "String", Vec::new())
         }
-        TyKind::Int { .. } | TyKind::Literal(Literal::Int(_), _, _) => {
+        InferTy::Int { .. } | InferTy::Literal(Literal::Int(_), _, _) => {
             builtin(&[], "Int", Vec::new())
         }
-        TyKind::Bigint { .. } | TyKind::Literal(Literal::Bigint(_), _, _) => {
+        InferTy::Bigint { .. } | InferTy::Literal(Literal::Bigint(_), _, _) => {
             builtin(&[], "Bigint", Vec::new())
         }
-        TyKind::Float { .. } | TyKind::Literal(Literal::Float(_), _, _) => {
+        InferTy::Float { .. } | InferTy::Literal(Literal::Float(_), _, _) => {
             builtin(&[], "Float", Vec::new())
         }
-        TyKind::Bool { .. } | TyKind::Literal(Literal::Bool(_), _, _) => {
+        InferTy::Bool { .. } | InferTy::Literal(Literal::Bool(_), _, _) => {
             builtin(&[], "Bool", Vec::new())
         }
-        TyKind::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
-        TyKind::Type { .. } => {
+        InferTy::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
+        InferTy::Type { .. } => {
             let qtn = TypeName::new(Name::new("reflect"), Vec::new(), Name::new("Type"));
             match facts.definition_of(&qtn) {
                 Some(Definition::Class(class)) => Some((class, Vec::new())),
                 _ => None,
             }
         }
-        TyKind::Media(kind, _) => {
+        InferTy::Media(kind, _) => {
             let class = match kind {
                 MediaKind::Image => "Image",
                 MediaKind::Audio => "Audio",
@@ -225,7 +225,7 @@ pub(crate) fn receiver_class<'db>(
         }
         // Aliases are transparent: expand through the oracle (fuel-bounded
         // like every alias walk) and resolve on the expansion.
-        TyKind::TypeAlias(qtn, _) => {
+        InferTy::TypeAlias(qtn, _) => {
             let expanded = facts.alias_def(qtn)?;
             let fuel = fuel.checked_sub(1)?;
             receiver_class(facts, &Ty::from_plain(&expanded), fuel)
@@ -264,7 +264,7 @@ pub enum MemberDeclarer<'db> {
     /// own declared field list.
     VirtualField {
         interface: InterfaceLoc<'db>,
-        realized: InterfaceRef,
+        realized: InferInterface,
         field_index: u32,
     },
     /// A virtual METHOD slot: only the interface and the member are
@@ -290,7 +290,7 @@ pub enum MemberDeclarer<'db> {
     /// A virtual field declared by a mounted interface.
     ExternalVirtualField {
         interface: baml_type::QualifiedTypeName,
-        realized: InterfaceRef,
+        realized: InferInterface,
         field_index: u32,
     },
 }
@@ -320,7 +320,7 @@ pub enum InterfaceMemberLookup<'db> {
     /// `sources` are the realized declaring interfaces, rendered
     /// qualified at report time for the `as<I>` disambiguation hint.
     Ambiguous {
-        sources: Vec<InterfaceRef>,
+        sources: Vec<InferInterface>,
         is_field: bool,
     },
     /// A concrete receiver reached an interface FIELD: reachable only
@@ -328,13 +328,13 @@ pub enum InterfaceMemberLookup<'db> {
     /// a class-owned field of the same name resolves earlier in the
     /// caller's ladder, so this is the interface-only case).
     FieldRequiresProjection {
-        interface: InterfaceRef,
+        interface: InferInterface,
     },
     /// The member exists on the interface but uses `Self` outside the
     /// receiver position, so it is uncallable through an existential
     /// (or union) receiver - Rust's `dyn Trait` object-safety split.
     SelfRestricted {
-        interface: InterfaceRef,
+        interface: InferInterface,
         position: crate::diagnostics::SelfCallPosition,
     },
     NotFound,
@@ -353,20 +353,16 @@ pub(crate) fn member_roots<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
     receiver: &Ty,
-) -> Option<(Vec<InterfaceRef>, bool)> {
+) -> Option<(Vec<InferInterface>, bool)> {
     match receiver.kind() {
-        TyKind::Interface(qtn, args, pins, _) => Some((
-            vec![InterfaceRef::new(
-                qtn.clone(),
-                (args.to_vec()).into(),
-                pins.to_vec(),
-            )],
+        InferTy::Interface(qtn, args, pins, _) => Some((
+            vec![InferInterface::new(qtn.clone(), args.clone(), pins.clone())],
             true,
         )),
-        TyKind::TypeVar(param, _) => Some((
+        InferTy::TypeVar(param, _) => Some((
             baml_type::normalize::TypeContext::type_var_bound(facts, param)
                 .iter()
-                .map(InterfaceRef::from_constraint)
+                .map(InferInterface::from_constraint)
                 .collect(),
             false,
         )),
@@ -374,7 +370,7 @@ pub(crate) fn member_roots<'db>(
         // (`item_bounds`) candidates - the associated type's DECLARED
         // bound (`type Item extends Labeled`) is what its members
         // resolve through, realized for the projection's subject.
-        TyKind::AssociatedTypeProjection {
+        InferTy::AssociatedTypeProjection {
             base,
             interface,
             member,
@@ -406,9 +402,9 @@ pub fn lookup_interface_member<'db>(
         // trait-impl candidate tier (I6).
         return lookup_impl_member(db, facts, receiver, name);
     };
-    let mut declarers: Vec<(InterfaceRef, InterfaceMember<'db>)> = Vec::new();
-    let push = |declarers: &mut Vec<(InterfaceRef, InterfaceMember<'db>)>,
-                realized: &InterfaceRef,
+    let mut declarers: Vec<(InferInterface, InterfaceMember<'db>)> = Vec::new();
+    let push = |declarers: &mut Vec<(InferInterface, InterfaceMember<'db>)>,
+                realized: &InferInterface,
                 member: InterfaceMember<'db>| {
         if !declarers.iter().any(|(seen, _)| seen == realized) {
             declarers.push((realized.clone(), member));
@@ -465,7 +461,7 @@ pub fn lookup_interface_member<'db>(
 pub(crate) fn declared_method_self_restriction<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
-    target: &InterfaceRef,
+    target: &InferInterface,
     name: &Name,
 ) -> Option<crate::diagnostics::SelfCallPosition> {
     if let Some(crate::package_interface::ExportedType::Interface {
@@ -530,7 +526,7 @@ pub fn concrete_member_ambiguity<'db>(
     facts: &Facts<'db>,
     receiver: &Ty,
     name: &Name,
-) -> Option<(Vec<InterfaceRef>, bool)> {
+) -> Option<(Vec<InferInterface>, bool)> {
     match lookup_impl_member(db, facts, receiver, name) {
         InterfaceMemberLookup::Ambiguous { sources, is_field } => Some((sources, is_field)),
         _ => None,
@@ -555,7 +551,7 @@ fn lookup_impl_member<'db>(
     receiver: &Ty,
     name: &Name,
 ) -> InterfaceMemberLookup<'db> {
-    let mut providers: Vec<(InterfaceRef, InterfaceMember<'db>)> = Vec::new();
+    let mut providers: Vec<(InferInterface, InterfaceMember<'db>)> = Vec::new();
     for resolved in crate::impls::impls_for_type(db, receiver) {
         if !env_discharges_rigid_bounds(db, facts, &resolved) {
             continue;
@@ -629,7 +625,7 @@ fn lookup_impl_member<'db>(
     // rule): a class-owned field of the same name resolved earlier in the
     // caller's ladder, so a field reached here needs `obj.as<I>.field` -
     // and two distinct declaring interfaces make even that ambiguous.
-    let field_sources: Vec<InterfaceRef> = providers
+    let field_sources: Vec<InferInterface> = providers
         .iter()
         .filter(|(_, member)| !member.is_method)
         .map(|(target, _)| target.clone())
@@ -647,7 +643,8 @@ fn lookup_impl_member<'db>(
     // Interface methods: the most-derived provider shadows the ones it
     // `requires` (root-wins); distinct survivors are ambiguous (E0121).
     if providers.len() > 1 {
-        let heads: Vec<InterfaceRef> = providers.iter().map(|(target, _)| target.clone()).collect();
+        let heads: Vec<InferInterface> =
+            providers.iter().map(|(target, _)| target.clone()).collect();
         providers.retain(|(target, _)| {
             !heads.iter().any(|other| {
                 other.name != target.name
@@ -677,12 +674,12 @@ fn assoc_bound_roots<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
     base: &Ty,
-    interface_ref: &baml_type::interned::InterfaceRef,
+    interface_ref: &baml_type::interned::InferInterface,
     member: &Name,
-) -> Vec<InterfaceRef> {
+) -> Vec<InferInterface> {
     if crate::package_interface::mounted_type_row(db, &interface_ref.name).is_some() {
         return match crate::impls::realized_assoc_bound(db, interface_ref, base, member)
-            .and_then(|ty| InterfaceRef::of_ty(&ty))
+            .and_then(|ty| InferInterface::of_ty(&ty))
         {
             Some(bound) => vec![bound],
             None => Vec::new(),
@@ -710,17 +707,17 @@ fn assoc_bound_roots<'db>(
         bound,
         crate::lower::TypePosition::ConstraintHead,
     )));
-    let target = InterfaceRef::new(
+    let target = InferInterface::new(
         interface_ref.name.clone(),
-        (interface_ref.generics.to_vec()).into(),
-        interface_ref.associated_types.to_vec(),
+        interface_ref.generics.clone(),
+        interface_ref.associated_types.clone(),
     );
     let instantiation = interface_instantiation(base, &target, data);
     match crate::lower::substitute_params(&bound_ty, &instantiation).kind() {
-        TyKind::Interface(name, args, pins, _) => vec![InterfaceRef::new(
+        InferTy::Interface(name, args, pins, _) => vec![InferInterface::new(
             name.clone(),
-            (args.to_vec()).into(),
-            pins.to_vec(),
+            args.clone(),
+            pins.clone(),
         )],
         _ => Vec::new(),
     }
@@ -744,15 +741,14 @@ fn env_discharges_rigid_bounds<'db>(
         }
         for bound in bounds {
             // Pins are outputs, not part of the relation.
-            let goal = InterfaceRef::new(
+            let goal = InferInterface::new(
                 bound.name.clone(),
                 bound
                     .generics
                     .iter()
                     .map(|arg| crate::impls::substitute_bindings(arg, &resolved.bindings))
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice(),
-                Vec::new(),
+                    .collect(),
+                Box::new([]),
             );
             if !env_proves(db, facts, actual, &goal) {
                 return false;
@@ -771,14 +767,14 @@ fn env_proves<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
     actual: &Ty,
-    goal: &InterfaceRef,
+    goal: &InferInterface,
 ) -> bool {
-    let TyKind::TypeVar(param, _) = actual.kind() else {
+    let InferTy::TypeVar(param, _) = actual.kind() else {
         return crate::impls::resolve_impl(db, actual, goal).is_some();
     };
     let eq = crate::impls::AliasOnlyFacts::new(db);
     for bound in baml_type::normalize::TypeContext::type_var_bound(facts, param) {
-        let root = InterfaceRef::from_constraint(&bound);
+        let root = InferInterface::from_constraint(&bound);
         let heads = crate::impls::requires_heads(db, &root, actual, 8);
         if heads
             .iter()
@@ -794,7 +790,7 @@ fn env_proves<'db>(
 pub(crate) fn member_on_interface<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
-    target: &InterfaceRef,
+    target: &InferInterface,
     receiver: &Ty,
     name: &Name,
     existential: bool,
@@ -979,7 +975,7 @@ pub enum MemberSource {
     Inherent,
     /// An interface the receiver reaches declares it: through a bound, an
     /// existential, an assoc-type bound, or an impl the receiver matches.
-    Interface(InterfaceRef),
+    Interface(InferInterface),
 }
 
 /// Every member name `receiver` exposes, in the resolution ladder's own
@@ -1217,7 +1213,7 @@ fn extend_from_interface<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
     out: &mut Vec<MemberCandidate<'db>>,
-    target: &InterfaceRef,
+    target: &InferInterface,
     existential: bool,
 ) {
     for (name, is_method, is_static, decl) in interface_member_rows(db, facts, target, existential)
@@ -1242,7 +1238,7 @@ fn extend_from_interface<'db>(
 fn interface_member_rows<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
-    target: &InterfaceRef,
+    target: &InferInterface,
     existential: bool,
 ) -> Vec<(Name, bool, bool, MemberDecl<'db>)> {
     let mut rows = Vec::new();
@@ -1303,13 +1299,13 @@ pub(crate) fn instantiate_external_signature(
     let params = function
         .params
         .iter()
-        .map(|param| baml_type::interned::FunctionParam {
+        .map(|param| baml_type::interned::InferFunctionParamTy {
             name: param.name.clone(),
             ty: crate::lower::substitute_params(&Ty::from_plain(&param.ty), instantiation),
             mode: param.mode,
         })
         .collect();
-    Ty::intern(TyKind::Function {
+    Ty::intern(InferTy::Function {
         params,
         ret: crate::lower::substitute_params(&Ty::from_plain(&function.return_type), instantiation),
         throws: crate::lower::substitute_params(
@@ -1367,7 +1363,7 @@ fn external_interface_callable(
 /// when the facts determine it).
 pub(crate) fn interface_instantiation(
     receiver: &Ty,
-    target: &InterfaceRef,
+    target: &InferInterface,
     data: &baml_compiler2_ppir::item_data::InterfaceData<'_>,
 ) -> Vec<Ty> {
     let mut out = vec![receiver.clone()];
@@ -1388,7 +1384,7 @@ pub(crate) fn interface_instantiation(
             .find(|(name, _)| *name == assoc.name)
             .map(|(_, ty)| ty.clone())
             .unwrap_or_else(|| {
-                Ty::intern(TyKind::AssociatedTypeProjection {
+                Ty::intern(InferTy::AssociatedTypeProjection {
                     base: receiver.clone(),
                     interface: interface_ref.clone(),
                     member: assoc.name.clone(),
@@ -1408,10 +1404,10 @@ fn interface_frame<'db>(
 }
 
 fn instantiate_signature(signature: &crate::lower::FunctionSignature, instantiation: &[Ty]) -> Ty {
-    let params: Box<[baml_type::interned::FunctionParam]> = signature
+    let params: Box<[baml_type::interned::InferFunctionParamTy]> = signature
         .params
         .iter()
-        .map(|param| baml_type::interned::FunctionParam {
+        .map(|param| baml_type::interned::InferFunctionParamTy {
             name: Some(param.name.clone()),
             ty: crate::lower::substitute_params(&param.ty, instantiation),
             mode: if param.has_default {
@@ -1421,7 +1417,7 @@ fn instantiate_signature(signature: &crate::lower::FunctionSignature, instantiat
             },
         })
         .collect();
-    Ty::intern(TyKind::Function {
+    Ty::intern(InferTy::Function {
         params,
         ret: crate::lower::substitute_params(&signature.ret, instantiation),
         throws: crate::lower::substitute_params(&signature.throws, instantiation),
@@ -1451,10 +1447,10 @@ fn signature_breaks_one_self(signature: &crate::lower::FunctionSignature) -> boo
 /// Projection bases are exempt.
 fn self_occurs(ty: &Ty, top_ok: bool) -> bool {
     match ty.kind() {
-        TyKind::TypeVar(param, _) if param.index() == 0 && param.as_str() == "Self" => !top_ok,
-        TyKind::AssociatedTypeProjection { .. } => false,
+        InferTy::TypeVar(param, _) if param.index() == 0 && param.as_str() == "Self" => !top_ok,
+        InferTy::AssociatedTypeProjection { .. } => false,
         // Unions and optionals are covariant-transparent.
-        TyKind::Union(members, _) => members.iter().any(|member| self_occurs(member, top_ok)),
+        InferTy::Union(members, _) => members.iter().any(|member| self_occurs(member, top_ok)),
         _ => {
             let mut found = false;
             let mut children = Vec::new();
@@ -1481,13 +1477,13 @@ pub enum UnionMemberLookup<'db> {
     Found(InterfaceMember<'db>),
     /// Two or more shared interfaces declare the member.
     Ambiguous {
-        sources: Vec<InterfaceRef>,
+        sources: Vec<InferInterface>,
         is_field: bool,
     },
     /// The single shared declarer's method uses `Self` outside the
     /// receiver position - uncallable through the union view.
     SelfRestricted {
-        interface: InterfaceRef,
+        interface: InferInterface,
         position: crate::diagnostics::SelfCallPosition,
     },
     /// Every arm is a concrete class carrying an OWN field of this name
@@ -1507,7 +1503,7 @@ pub fn lookup_union_member<'db>(
     members: &[Ty],
     name: &Name,
 ) -> UnionMemberLookup<'db> {
-    let mut shared: Option<Vec<InterfaceRef>> = None;
+    let mut shared: Option<Vec<InferInterface>> = None;
     for arm in members {
         let arm_ifaces = union_arm_interfaces(db, facts, arm, 4);
         shared = Some(match shared {
@@ -1521,7 +1517,7 @@ pub fn lookup_union_member<'db>(
             break;
         }
     }
-    let mut declarers: Vec<(InterfaceRef, bool)> = Vec::new();
+    let mut declarers: Vec<(InferInterface, bool)> = Vec::new();
     for iface in shared.unwrap_or_default() {
         if let Some(is_field) = interface_declares_member(db, &iface, name)
             && !declarers.iter().any(|(seen, _)| *seen == iface)
@@ -1568,13 +1564,13 @@ fn union_arm_interfaces<'db>(
     facts: &Facts<'db>,
     arm: &Ty,
     fuel: u32,
-) -> Vec<InterfaceRef> {
+) -> Vec<InferInterface> {
     if fuel == 0 {
         return Vec::new();
     }
     match arm.kind() {
-        TyKind::Interface(qtn, args, pins, _) => {
-            let root = InterfaceRef::new(qtn.clone(), (args.to_vec()).into(), pins.to_vec());
+        InferTy::Interface(qtn, args, pins, _) => {
+            let root = InferInterface::new(qtn.clone(), args.clone(), pins.clone());
             let mut out = vec![root.clone()];
             for required in crate::impls::direct_requires_closure(db, &root, arm, 8) {
                 if !out.contains(&required) {
@@ -1583,10 +1579,10 @@ fn union_arm_interfaces<'db>(
             }
             out
         }
-        TyKind::TypeVar(param, _) => {
+        InferTy::TypeVar(param, _) => {
             let mut out = Vec::new();
             for bound in baml_type::normalize::TypeContext::type_var_bound(facts, param) {
-                let root = InterfaceRef::from_constraint(&bound);
+                let root = InferInterface::from_constraint(&bound);
                 if !out.contains(&root) {
                     out.push(root.clone());
                 }
@@ -1623,7 +1619,7 @@ fn union_arm_interfaces<'db>(
 /// determination alike.
 fn interface_declares_member(
     db: &dyn baml_compiler2_ppir::Db,
-    target: &InterfaceRef,
+    target: &InferInterface,
     name: &Name,
 ) -> Option<bool> {
     use crate::interfaces::{InterfaceMemberKind, MemberNamespace, ValueMemberKind};
@@ -1656,7 +1652,9 @@ fn union_class_field_join<'db>(
     for arm in members {
         if matches!(
             arm.kind(),
-            TyKind::Interface(..) | TyKind::TypeVar(..) | TyKind::AssociatedTypeProjection { .. }
+            InferTy::Interface(..)
+                | InferTy::TypeVar(..)
+                | InferTy::AssociatedTypeProjection { .. }
         ) {
             return None;
         }
@@ -1665,7 +1663,7 @@ fn union_class_field_join<'db>(
                 .iter()
                 .find(|(field, _)| field == name)
                 .map(|(_, ty)| crate::lower::substitute_params(ty, &class_args))?
-        } else if let TyKind::Class(qtn, class_args, _) = arm.kind()
+        } else if let InferTy::Class(qtn, class_args, _) = arm.kind()
             && let Some(crate::package_interface::ExportedType::Class { fields, .. }) =
                 crate::package_interface::mounted_type_row(db, qtn)
         {

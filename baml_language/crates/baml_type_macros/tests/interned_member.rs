@@ -1,6 +1,6 @@
 //! End-to-end exercise of the `child: interned(Handle)` member mode, on a
-//! self-contained miniature family (the real family adopts the mode at the
-//! `TyKind` cutover). What this pins:
+//! self-contained miniature family (the real family's `InferTy` member is
+//! the production instance). What this pins:
 //!
 //! - the type-shape transform: `Box<Ty<N>>`/bare `Ty<N>` → handle,
 //!   `Box<[Ty<N>]>` → `Box<[Handle]>`, `Box<Sat<N>>` → inline twin,
@@ -62,6 +62,14 @@ ty_family! {
         pub head: N,
         pub args: Box<[Ty<N>]>,
         pub bindings: Box<[(Name, Ty<N>)]>,
+    } methods {
+        pub fn to_ty(&self) -> Ty<N> {
+            // `Ref` after `Ty::` is the VARIANT (which shares the satellite's
+            // name), so the rewriter must leave it alone while still
+            // retargeting the `Ty` head — the variant/satellite collision the
+            // member-path guard exists for.
+            Ty::Ref(self.head.clone(), TyAttr::EMPTY)
+        }
     }
 
     #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -108,6 +116,10 @@ ty_family! {
         /// Attr-less leaf, exercising the accessor fallbacks.
         #[axis(var)]
         Marker(u32) = 10,
+        /// Shares its name with the `Ref` satellite (the production family's
+        /// `Interface` does exactly this).
+        #[axis(core)]
+        Ref(N, TyAttr) = 11,
     }
 }
 
@@ -181,6 +193,7 @@ fn interned_axis_membership() {
         InternTy::Pairs(..) => "pairs",
         InternTy::Var { .. } => "var",
         InternTy::Marker(..) => "marker",
+        InternTy::Ref(..) => "ref",
     };
     assert_eq!(seen, "var");
 }
@@ -200,6 +213,20 @@ fn interned_ord_parity() {
     assert!(p_leaf < p_named);
     let i_named = InternTy::Named(TestName("n"), a());
     assert!(leaf < i_named);
+}
+
+/// A methods body naming a variant that collides with a satellite name
+/// (`Ty::Ref`) rewrites the member head but not the variant.
+#[test]
+fn methods_variant_satellite_collision() {
+    let wide_ref = WideRef {
+        head: TestName("It"),
+        args: Box::new([]),
+        bindings: Box::new([]),
+    };
+    assert!(matches!(wide_ref.to_ty(), WideTy::Ref(TestName("It"), _)));
+    let intern_ref = InternTy::Ref(TestName("It"), a());
+    assert_eq!(intern_ref.attr(), &a());
 }
 
 /// The plain side of the family is unaffected: the deep equal-size pair keeps

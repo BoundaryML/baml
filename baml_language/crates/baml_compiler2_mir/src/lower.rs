@@ -168,7 +168,7 @@ fn lower_ty_with_bindings<'db>(
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     bindings: &FxHashMap<ParamTy, Tir2Ty>,
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
 ) -> Tir2Ty {
     // The AST node lowers through hir's firewall into a scratch store,
     // then through hir_ty's ONE type-lowering road (S16: MIR's
@@ -190,7 +190,7 @@ fn lower_ref_with_bindings<'db>(
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     bindings: &FxHashMap<ParamTy, Tir2Ty>,
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
 ) -> Tir2Ty {
     let generic_params: Vec<ParamTy> = bindings.keys().cloned().collect();
     let ctx =
@@ -212,7 +212,7 @@ fn lower_ref_in_scope<'db>(
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     generic_params: &[ParamTy],
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
     self_ty: Option<Tir2Ty>,
 ) -> Tir2Ty {
     lower_ref_in_scope_at(
@@ -239,7 +239,7 @@ fn lower_ref_in_scope_at<'db>(
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     generic_params: &[ParamTy],
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
     self_ty: Option<Tir2Ty>,
     position: baml_compiler2_hir_ty::lower::TypePosition,
 ) -> Tir2Ty {
@@ -259,7 +259,7 @@ fn lower_expr_in_scope<'db>(
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     generic_params: &[ParamTy],
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
     self_ty: Option<Tir2Ty>,
 ) -> Tir2Ty {
     let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
@@ -395,8 +395,8 @@ fn qualify_def(
     deprecated,
     reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
 )]
-fn plain_interface_ty(bound: &baml_type::interned::InterfaceRef) -> Tir2Ty {
-    baml_type::interned::Ty::intern(baml_type::interned::TyKind::Interface(
+fn plain_interface_ty(bound: &baml_type::interned::InferInterface) -> Tir2Ty {
+    baml_type::interned::Ty::intern(baml_type::interned::InferTy::Interface(
         bound.name.clone(),
         bound.generics.clone(),
         bound.associated_types.clone(),
@@ -1396,7 +1396,7 @@ fn lower_ref_interface_target_args<'db>(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     generic_params: &[ParamTy],
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
 ) -> Vec<Tir2Ty> {
     match &store[target].kind {
         baml_compiler2_hir::type_ref::TypeRefKind::Path { generic_args, .. } => generic_args
@@ -10338,7 +10338,7 @@ impl LoweringContext<'_> {
     /// erasing to `unknown`.
     fn enclosing_generic_param_bounds(
         &self,
-    ) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+    ) -> FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> {
         let Some(fl) = self.func_loc else {
             return FxHashMap::default();
         };
@@ -12551,7 +12551,7 @@ impl<'db> LoweringContext<'db> {
             baml_compiler2_hir_ty::impls::try_interned_ty(ty)
                 .unwrap_or_else(baml_type::interned::Ty::error)
         };
-        let root = baml_type::interned::InterfaceRef::new(
+        let root = baml_type::interned::InferInterface::new(
             baml_type::TypeName::new(
                 iface_tn.package().clone(),
                 iface_ns,

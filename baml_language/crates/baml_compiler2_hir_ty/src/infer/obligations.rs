@@ -29,7 +29,7 @@
 //! table's existing snapshot/rollback when a consumer arrives.
 
 use baml_compiler2_ast::ExprId;
-use baml_type::interned::{InterfaceRef, Ty, TyKind};
+use baml_type::interned::{InferInterface, InferTy, Ty};
 
 use super::InferenceContext;
 
@@ -39,7 +39,7 @@ pub(super) enum Obligation {
     /// records a mismatch at `at`; there is no output to bind.
     Implements {
         ty: Ty,
-        interface: InterfaceRef,
+        interface: InferInterface,
         at: ExprId,
         /// True for a GENERIC-PARAM bound obligation: only a concrete
         /// type can instantiate an interface-bounded parameter (an
@@ -110,7 +110,7 @@ impl<'db> InferenceContext<'db> {
                     // verdict and report cannot diverge.
                     let ty = self.canonicalize_unions(&ty);
                     if *not_concrete_rejects
-                        && matches!(ty.kind(), TyKind::Interface(..) | TyKind::Union(..))
+                        && matches!(ty.kind(), InferTy::Interface(..) | InferTy::Union(..))
                     {
                         self.pending_diags
                             .push(super::PendingDiag::BoundedArgNotConcrete {
@@ -143,7 +143,7 @@ impl<'db> InferenceContext<'db> {
                 // `assemble_candidates_from_object_ty`): an existential
                 // subject has no impl to select - it proves the goal
                 // from its OWN reference plus its `requires` closure.
-                if matches!(ty.kind(), TyKind::Interface(..)) {
+                if matches!(ty.kind(), InferTy::Interface(..)) {
                     return self.select_object(&ty, &interface, *at);
                 }
                 // Variable-bearing goal: rustc's SELECTION, licensed by a
@@ -190,7 +190,7 @@ impl<'db> InferenceContext<'db> {
     /// (rustc's "type annotations needed"). Committing on uniqueness is
     /// sound because coherence (I7) guarantees at most one impl per
     /// realized instance.
-    fn select_impl(&mut self, goal: &Ty, interface: &InterfaceRef, at: ExprId) -> Attempt {
+    fn select_impl(&mut self, goal: &Ty, interface: &InferInterface, at: ExprId) -> Attempt {
         let candidates = crate::impls::impl_candidates(self.db, goal, &interface.name);
         let mut applicable = None;
         for facts in candidates {
@@ -224,11 +224,11 @@ impl<'db> InferenceContext<'db> {
     /// never>` proving `Iterable<Error = ?E2>` commits `?E2 := never`).
     /// As in impl selection: exactly one applicable head commits,
     /// several stall, none records the mismatch.
-    fn select_object(&mut self, subject: &Ty, goal: &InterfaceRef, at: ExprId) -> Attempt {
-        let TyKind::Interface(name, args, pins, _) = subject.kind() else {
+    fn select_object(&mut self, subject: &Ty, goal: &InferInterface, at: ExprId) -> Attempt {
+        let InferTy::Interface(name, args, pins, _) = subject.kind() else {
             return Attempt::Stalled;
         };
-        let subject_target = InterfaceRef::new(name.clone(), (args.to_vec()).into(), pins.to_vec());
+        let subject_target = InferInterface::new(name.clone(), args.clone(), pins.clone());
         let heads = crate::impls::requires_heads(self.db, &subject_target, subject, 8);
         let goal_target = goal.clone();
         let mut applicable = None;
@@ -259,7 +259,7 @@ impl<'db> InferenceContext<'db> {
     /// pairwise, and every goal pin unifies with the head's realization
     /// of that member (the head may pin MORE; a member the head does not
     /// realize cannot prove a pinned requirement).
-    fn confirm_object(&mut self, head: &InterfaceRef, goal: &InterfaceRef) -> bool {
+    fn confirm_object(&mut self, head: &InferInterface, goal: &InferInterface) -> bool {
         if head.name != goal.name || head.generics.len() != goal.generics.len() {
             return false;
         }
@@ -298,7 +298,7 @@ impl<'db> InferenceContext<'db> {
                 continue;
             };
             for bound in bounds {
-                let interface = InterfaceRef::new(
+                let interface = InferInterface::new(
                     bound.name.clone(),
                     bound
                         .generics
@@ -340,7 +340,7 @@ impl<'db> InferenceContext<'db> {
     fn confirm_impl(
         &mut self,
         goal: &Ty,
-        interface: &InterfaceRef,
+        interface: &InferInterface,
         facts: &crate::impls::ImplFacts<'_>,
     ) -> Option<rustc_hash::FxHashMap<baml_type::ParamTy, Ty>> {
         if facts.interface.generics.len() != interface.generics.len() {
@@ -363,7 +363,7 @@ impl<'db> InferenceContext<'db> {
                 .find(|(declared, _)| declared == name)
                 .map(|(_, ty)| crate::impls::substitute_bindings(ty, &instantiation))
                 .or_else(|| {
-                    let implemented = InterfaceRef::new(
+                    let implemented = InferInterface::new(
                         facts.interface.name.clone(),
                         facts
                             .interface
@@ -420,7 +420,7 @@ impl<'db> InferenceContext<'db> {
         goal: &Ty,
         facts: &crate::impls::ImplFacts<'_>,
     ) -> Option<rustc_hash::FxHashMap<baml_type::ParamTy, Ty>> {
-        if let TyKind::TypeVar(param, _) = facts.for_ty_pattern.kind()
+        if let InferTy::TypeVar(param, _) = facts.for_ty_pattern.kind()
             && facts.generic_params.iter().any(|(p, _)| p == param)
             && !crate::impls::is_concrete_receiver(goal)
         {
@@ -514,16 +514,15 @@ impl<'db> InferenceContext<'db> {
             })
             .collect();
         pins.dedup_by(|(a, _), (b, _)| a == b);
-        let implemented = InterfaceRef::new(
+        let implemented = InferInterface::new(
             facts.interface.name.clone(),
             facts
                 .interface
                 .generics
                 .iter()
                 .map(|arg| crate::impls::substitute_bindings(arg, &instantiation))
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
-            pins,
+                .collect(),
+            pins.into_boxed_slice(),
         );
         let member = crate::method_resolution::member_on_interface(
             self.db,
@@ -542,20 +541,20 @@ impl<'db> InferenceContext<'db> {
     /// concrete types. The spec's concreteness rule holds by
     /// construction: a union reaches the registry and no impl subject is
     /// a union, so it fails - never "passes as a subtype".
-    fn implements_holds(&mut self, ty: &Ty, interface: &InterfaceRef) -> bool {
+    fn implements_holds(&mut self, ty: &Ty, interface: &InferInterface) -> bool {
         let target = interface.clone();
         let eq = crate::impls::AliasOnlyFacts::new(self.db);
         match ty.kind() {
-            TyKind::TypeVar(param, _) => {
+            InferTy::TypeVar(param, _) => {
                 let carried = baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
                 carried.iter().any(|have| {
-                    let have = InterfaceRef::from_constraint(have);
+                    let have = InferInterface::from_constraint(have);
                     carried_satisfies(&have, &target, &eq)
                         || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
                 })
             }
-            TyKind::Interface(name, args, pins, _) => {
-                let have = InterfaceRef::new(name.clone(), (args.to_vec()).into(), pins.to_vec());
+            InferTy::Interface(name, args, pins, _) => {
+                let have = InferInterface::new(name.clone(), args.clone(), pins.clone());
                 carried_satisfies(&have, &target, &eq)
                     || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
             }
@@ -564,7 +563,7 @@ impl<'db> InferenceContext<'db> {
             // proves against its declared bound through the algebra's
             // projection-subtype rule (`associated_type_bound`).
             // Fail-closed - TIR's vacuous rule retired with I5.
-            TyKind::AssociatedTypeProjection { .. } => {
+            InferTy::AssociatedTypeProjection { .. } => {
                 let existential = interface.existential();
                 self.sub(ty, &existential)
             }
@@ -572,8 +571,8 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn resolve_interface_ref(&mut self, interface: &InterfaceRef) -> InterfaceRef {
-        InterfaceRef::new(
+    fn resolve_interface_ref(&mut self, interface: &InferInterface) -> InferInterface {
+        InferInterface::new(
             interface.name.clone(),
             interface
                 .generics
@@ -589,7 +588,7 @@ impl<'db> InferenceContext<'db> {
     }
 }
 
-fn interface_has_infer(interface: &InterfaceRef) -> bool {
+fn interface_has_infer(interface: &InferInterface) -> bool {
     interface.generics.iter().any(Ty::has_infer)
         || interface
             .associated_types
@@ -601,8 +600,8 @@ fn interface_has_infer(interface: &InterfaceRef) -> bool {
 /// everything `want` pins to the same type (it may pin MORE; a bare
 /// `have` does not satisfy a pinned requirement).
 fn carried_satisfies(
-    have: &InterfaceRef,
-    want: &InterfaceRef,
+    have: &InferInterface,
+    want: &InferInterface,
     eq: &crate::impls::AliasOnlyFacts<'_>,
 ) -> bool {
     use baml_type::normalize::equivalent_interned;

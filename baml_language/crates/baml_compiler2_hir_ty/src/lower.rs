@@ -33,7 +33,7 @@ use baml_compiler2_ppir::item_data::MethodOwner;
 use baml_type::{
     Freshness, LoweringFunctionParamTy, LoweringInterface, LoweringTy, Name, ParamTy, TyAttr,
     TypeName,
-    interned::{Ty, TyKind},
+    interned::{InferTy, Ty},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -126,11 +126,11 @@ pub struct LowerCtx<'db> {
     /// implements-block (or free-impl) method: the qualifier `Self.Member`
     /// projects through (rustc resolves `Self::Assoc` in an impl via the
     /// impl's trait ref the same way).
-    self_impl_target: Option<baml_type::interned::InterfaceRef>,
+    self_impl_target: Option<baml_type::interned::InferInterface>,
     /// The frame's declared interface bounds (I2's param env): each
     /// param's CONJUNCTION. Projections (`T.Output`) determine their
     /// interface through these.
-    bounds: FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    bounds: FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
     /// Body-local runtime type atoms replaced by their synthesized rigid
     /// parameters. Empty for declaration signatures.
     runtime_type_params: FxHashMap<TypeRefId, ParamTy>,
@@ -227,7 +227,7 @@ impl<'db> LowerCtx<'db> {
     }
     /// See `LowerCtx::self_ty`.
     #[must_use]
-    pub fn with_impl_target(mut self, target: Option<baml_type::interned::InterfaceRef>) -> Self {
+    pub fn with_impl_target(mut self, target: Option<baml_type::interned::InferInterface>) -> Self {
         self.self_impl_target = target;
         self
     }
@@ -247,7 +247,7 @@ impl<'db> LowerCtx<'db> {
     #[must_use]
     pub fn with_bounds(
         mut self,
-        bounds: FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+        bounds: FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
     ) -> LowerCtx<'db> {
         self.bounds = bounds;
         self
@@ -683,7 +683,7 @@ impl<'db> LowerCtx<'db> {
         // The bound conjunctions and the impl target live interned (they are
         // declaration-side and hole-free); the chosen one materializes into
         // the lowering vocabulary at the return.
-        let materialize = |target: &baml_type::interned::InterfaceRef| {
+        let materialize = |target: &baml_type::interned::InferInterface| {
             LoweringInterface::new(
                 target.name.clone(),
                 target
@@ -700,7 +700,7 @@ impl<'db> LowerCtx<'db> {
         };
         match base {
             LoweringTy::TypeVar(param, _) => {
-                let candidates: Vec<&baml_type::interned::InterfaceRef> = self
+                let candidates: Vec<&baml_type::interned::InferInterface> = self
                     .bounds
                     .get(param)
                     .map(|bounds| {
@@ -729,7 +729,7 @@ impl<'db> LowerCtx<'db> {
                 member: prev_member,
                 ..
             } => {
-                let target = baml_type::interned::InterfaceRef::from_constraint(
+                let target = baml_type::interned::InferInterface::from_constraint(
                     &baml_type::Interface::try_from(interface.as_ref().clone()).ok()?,
                 );
                 let prev_base_interned =
@@ -741,11 +741,11 @@ impl<'db> LowerCtx<'db> {
                     prev_member,
                 )?;
                 match bound.kind() {
-                    TyKind::Interface(name, args, pins, _) => declares(name).then(|| {
-                        materialize(&baml_type::interned::InterfaceRef::new(
+                    InferTy::Interface(name, args, pins, _) => declares(name).then(|| {
+                        materialize(&baml_type::interned::InferInterface::new(
                             name.clone(),
-                            args.to_vec().into_boxed_slice(),
-                            pins.to_vec(),
+                            args.clone(),
+                            pins.clone(),
                         ))
                     }),
                     _ => None,
@@ -777,7 +777,7 @@ impl<'db> LowerCtx<'db> {
             return key;
         }
         let facts = crate::facts::Facts::new(self.db);
-        let string = Ty::intern(TyKind::String {
+        let string = Ty::intern(InferTy::String {
             attr: TyAttr::default(),
         });
         // Past the gate the key is closed, so the interned oracle's
@@ -1583,7 +1583,7 @@ pub fn substitute_params(ty: &baml_type::interned::Ty, args: &[baml_type::intern
     if !ty.flags().contains(TypeFlags::HAS_TYPEVAR) {
         return ty.clone();
     }
-    if let TyKind::TypeVar(param, _) = ty.kind()
+    if let InferTy::TypeVar(param, _) = ty.kind()
         && let Some(replacement) = args.get(param.index() as usize)
     {
         return replacement.clone();
@@ -1649,78 +1649,101 @@ pub fn function_generic_frame<'db>(
     frame
 }
 
-/// The type a class reference denotes, with the builtin bridgings applied
-/// uniformly: `baml.future.Future<V, E>` is the dedicated Future kind, and
+/// The builtin class spellings that ARE structural types, so a class
+/// reference at them denotes the structural kind rather than a nominal
+/// `Class`: `baml.future.Future<V, E>` is the dedicated Future kind, and
 /// (B-1080) the builtin `baml.Array<T>` / `baml.Map<K, V>` class spellings
-/// ARE the structural types - lowering them to `List`/`Map` makes every
-/// algebra arm relate them for free, instead of TIR's one-directional
-/// argument-path patch. Keyed on the builtin package specifically: a
-/// user-defined `class Array<T>` stays nominal. The single constructor for
-/// class types, shared by annotation lowering and `class_self_ty`.
-/// [`class_ty`]'s lowering-vocabulary twin: same builtin bridges
-/// (`baml.future.Future`, `baml.Array`, `baml.Map`), plain members. Two
-/// copies because the bridge serves both the lowering chain and the
-/// interned inference world; the D3 unification collapses them.
-pub fn class_lowering_ty(qtn: TypeName, mut args: Vec<LoweringTy>) -> LoweringTy {
-    let attr = TyAttr::default;
-    if !qtn.is_local() && qtn.package().as_str() == "baml" {
-        if qtn.namespace().len() == 1
-            && qtn.namespace()[0].as_str() == "future"
-            && qtn.name().as_str() == "Future"
-            && args.len() == 2
-        {
-            let error_ty = args.pop().expect("checked len");
-            let value_ty = args.pop().expect("checked len");
-            return LoweringTy::Future(Box::new(value_ty), Box::new(error_ty), attr());
-        }
-        if qtn.namespace().is_empty() {
-            if qtn.name().as_str() == "Array" && args.len() == 1 {
-                let element = args.pop().expect("checked len");
-                return LoweringTy::List(Box::new(element), attr());
-            }
-            if qtn.name().as_str() == "Map" && args.len() == 2 {
-                let value = args.pop().expect("checked len");
-                let key = args.pop().expect("checked len");
-                return LoweringTy::Map {
-                    key: Box::new(key),
-                    value: Box::new(value),
-                    attr: attr(),
-                };
-            }
-        }
-    }
-    LoweringTy::Class(qtn, args.into(), attr())
+/// lower to `List`/`Map`, making every algebra arm relate them for free
+/// instead of TIR's one-directional argument-path patch. Keyed on the builtin
+/// package specifically: a user-defined `class Array<T>` stays nominal.
+///
+/// The ONE bridge decision, shared by the two vocabulary-specific
+/// constructors below ([`class_lowering_ty`], [`class_ty`]) so the name/arity
+/// predicate cannot drift between the lowering chain and the interned
+/// inference world.
+enum BuiltinStructural {
+    Future,
+    List,
+    Map,
 }
 
-pub fn class_ty(qtn: TypeName, mut args: Vec<Ty>) -> Ty {
-    let attr = TyAttr::default;
-    if !qtn.is_local() && qtn.package().as_str() == "baml" {
-        if qtn.namespace().len() == 1
-            && qtn.namespace()[0].as_str() == "future"
-            && qtn.name().as_str() == "Future"
-            && args.len() == 2
-        {
-            let error_ty = args.pop().expect("checked len");
-            let value_ty = args.pop().expect("checked len");
-            return Ty::intern(TyKind::Future(value_ty, error_ty, attr()));
+fn builtin_structural(qtn: &TypeName, arity: usize) -> Option<BuiltinStructural> {
+    if qtn.is_local() || qtn.package().as_str() != "baml" {
+        return None;
+    }
+    if qtn.namespace().len() == 1
+        && qtn.namespace()[0].as_str() == "future"
+        && qtn.name().as_str() == "Future"
+        && arity == 2
+    {
+        return Some(BuiltinStructural::Future);
+    }
+    if qtn.namespace().is_empty() {
+        if qtn.name().as_str() == "Array" && arity == 1 {
+            return Some(BuiltinStructural::List);
         }
-        if qtn.namespace().is_empty() {
-            if qtn.name().as_str() == "Array" && args.len() == 1 {
-                let element = args.pop().expect("checked len");
-                return Ty::intern(TyKind::List(element, attr()));
-            }
-            if qtn.name().as_str() == "Map" && args.len() == 2 {
-                let value = args.pop().expect("checked len");
-                let key = args.pop().expect("checked len");
-                return Ty::intern(TyKind::Map {
-                    key,
-                    value,
-                    attr: attr(),
-                });
-            }
+        if qtn.name().as_str() == "Map" && arity == 2 {
+            return Some(BuiltinStructural::Map);
         }
     }
-    Ty::intern(TyKind::Class(qtn, args.into(), attr()))
+    None
+}
+
+/// The type a class reference denotes in the lowering vocabulary, builtin
+/// bridges ([`builtin_structural`]) applied. The single constructor for class
+/// types in the lowering chain, shared by annotation lowering and
+/// `class_self_ty`.
+pub fn class_lowering_ty(qtn: TypeName, mut args: Vec<LoweringTy>) -> LoweringTy {
+    let attr = TyAttr::default;
+    match builtin_structural(&qtn, args.len()) {
+        Some(BuiltinStructural::Future) => {
+            let error_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
+            let value_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
+            LoweringTy::Future(Box::new(value_ty), Box::new(error_ty), attr())
+        }
+        Some(BuiltinStructural::List) => {
+            let element = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
+            LoweringTy::List(Box::new(element), attr())
+        }
+        Some(BuiltinStructural::Map) => {
+            let value = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
+            let key = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
+            LoweringTy::Map {
+                key: Box::new(key),
+                value: Box::new(value),
+                attr: attr(),
+            }
+        }
+        None => LoweringTy::Class(qtn, args.into(), attr()),
+    }
+}
+
+/// [`class_lowering_ty`]'s interned-vocabulary twin, for types minted inside
+/// inference (instantiated class heads, pattern heads): same bridge decision,
+/// handle children.
+pub fn class_ty(qtn: TypeName, mut args: Vec<Ty>) -> Ty {
+    let attr = TyAttr::default;
+    match builtin_structural(&qtn, args.len()) {
+        Some(BuiltinStructural::Future) => {
+            let error_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
+            let value_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
+            Ty::intern(InferTy::Future(value_ty, error_ty, attr()))
+        }
+        Some(BuiltinStructural::List) => {
+            let element = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
+            Ty::intern(InferTy::List(element, attr()))
+        }
+        Some(BuiltinStructural::Map) => {
+            let value = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
+            let key = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
+            Ty::intern(InferTy::Map {
+                key,
+                value,
+                attr: attr(),
+            })
+        }
+        None => Ty::intern(InferTy::Class(qtn, args.into(), attr())),
+    }
 }
 
 /// The qualified name a class definition contributes, from its file's
@@ -1746,7 +1769,7 @@ pub fn class_qualified_name<'db>(
 pub fn class_self_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, class: ClassLoc<'db>) -> Ty {
     let args: Vec<Ty> = class_generic_frame(db, class)
         .into_iter()
-        .map(|param| Ty::intern(TyKind::TypeVar(param, TyAttr::default())))
+        .map(|param| Ty::intern(InferTy::TypeVar(param, TyAttr::default())))
         .collect();
     class_ty(class_qualified_name(db, class), args)
 }
@@ -1817,7 +1840,7 @@ pub fn impl_frame<'db>(
 pub fn impl_generic_bounds<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     block: baml_compiler2_hir::loc::ImplLoc<'db>,
-) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+) -> FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> {
     let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
     match &data.subject {
         baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
@@ -1832,7 +1855,7 @@ pub fn impl_generic_bounds<'db>(
                     .bounds
                     .iter()
                     .filter_map(|&type_ref| {
-                        baml_type::interned::InterfaceRef::of_ty(&Ty::from_plain(&reject_holes(
+                        baml_type::interned::InferInterface::of_ty(&Ty::from_plain(&reject_holes(
                             &ctx.lower_type_ref_at(
                                 &data.type_refs,
                                 type_ref,
@@ -2010,7 +2033,7 @@ fn fill_holes_as_errors(ty: &LoweringTy) -> baml_type::Ty {
 pub fn class_generic_bounds<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     class: ClassLoc<'db>,
-) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+) -> FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> {
     let frame = class_generic_frame(db, class);
     let ctx = lower_ctx_for_file(db, class.file(db)).with_frame(frame.clone());
     let data = baml_compiler2_ppir::item_data::class_data(db, class);
@@ -2020,7 +2043,7 @@ pub fn class_generic_bounds<'db>(
             .bounds
             .iter()
             .filter_map(|&type_ref| {
-                baml_type::interned::InterfaceRef::of_ty(&Ty::from_plain(&reject_holes(
+                baml_type::interned::InferInterface::of_ty(&Ty::from_plain(&reject_holes(
                     &ctx.lower_type_ref_at(&data.type_refs, type_ref, TypePosition::ConstraintHead),
                 )))
             })
@@ -2038,7 +2061,7 @@ pub fn class_generic_bounds<'db>(
 pub fn function_generic_bounds<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
-) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+) -> FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> {
     let frame = function_generic_frame(db, function);
     let ctx = lower_ctx_for_file(db, function.file(db)).with_frame(frame.clone());
     let mut out = FxHashMap::default();
@@ -2046,7 +2069,7 @@ pub fn function_generic_bounds<'db>(
     // through the reject fold: a hole inside a written bound degrades to
     // `Error` (its diagnostic is the WF walk's), never panics.
     let as_ref = |ty: &LoweringTy| {
-        baml_type::interned::InterfaceRef::of_ty(&Ty::from_plain(&reject_holes(ty)))
+        baml_type::interned::InferInterface::of_ty(&Ty::from_plain(&reject_holes(ty)))
     };
     let mut frame_iter = frame.iter();
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
@@ -2147,7 +2170,7 @@ pub fn function_generic_bounds<'db>(
 pub fn interface_scope_bounds<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+) -> FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> {
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
     let frame = interface_frame(db, interface);
     let ctx = lower_ctx_for_file(db, interface.file(db)).with_frame(frame.clone());
@@ -2155,7 +2178,7 @@ pub fn interface_scope_bounds<'db>(
     // through the reject fold: a hole inside a written bound degrades to
     // `Error` (its diagnostic is the WF walk's), never panics.
     let as_ref = |ty: &LoweringTy| {
-        baml_type::interned::InterfaceRef::of_ty(&Ty::from_plain(&reject_holes(ty)))
+        baml_type::interned::InferInterface::of_ty(&Ty::from_plain(&reject_holes(ty)))
     };
     let mut out = FxHashMap::default();
     let mut frame_iter = frame.iter();
@@ -2164,27 +2187,27 @@ pub fn interface_scope_bounds<'db>(
             .iter()
             .skip(1)
             .take(data.generic_params.len())
-            .map(|param| Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default())))
+            .map(|param| Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default())))
             .collect();
         // Each associated slot pins to the frame's OWN var, so inside the
         // interface `Self.Member` reduces to that slot (TIR's layout: the
         // member is a frame position, bound per-receiver at impl
         // selection - a default method's projection stays symbolic, never
         // the declared default).
-        let pins: Vec<(Name, Ty)> = frame
+        let pins: Box<[(Name, Ty)]> = frame
             .iter()
             .skip(1 + data.generic_params.len())
             .zip(&data.associated_types)
             .map(|(param, assoc)| {
                 (
                     assoc.name.clone(),
-                    Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default())),
+                    Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default())),
                 )
             })
             .collect();
         out.insert(
             self_param.clone(),
-            vec![baml_type::interned::InterfaceRef::new(
+            vec![baml_type::interned::InferInterface::new(
                 interface_qualified_name(db, interface),
                 args.into_boxed_slice(),
                 pins,
@@ -2314,14 +2337,14 @@ pub fn owner_impl_target<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
     frame: &[baml_type::ParamTy],
-) -> Option<baml_type::interned::InterfaceRef> {
+) -> Option<baml_type::interned::InferInterface> {
     let target = baml_compiler2_ppir::item_data::method_interface_target(db, function).as_ref()?;
     // The impl's bounds ride along: a written `type Member = T.Item`
     // binding must find `Item`'s declaring interface through `T`'s bound.
     let ctx = lower_ctx_for_file(db, function.file(db))
         .with_frame(frame.to_vec())
         .with_bounds(function_generic_bounds(db, function));
-    let interface = baml_type::interned::InterfaceRef::of_ty(&Ty::from_plain(&reject_holes(
+    let interface = baml_type::interned::InferInterface::of_ty(&Ty::from_plain(&reject_holes(
         &ctx.lower_type_ref_at(
             &target.type_refs,
             target.target,
@@ -2347,10 +2370,10 @@ pub fn owner_impl_target<'db>(
             pins.push((name.clone(), ty.clone()));
         }
     }
-    Some(baml_type::interned::InterfaceRef::new(
+    Some(baml_type::interned::InferInterface::new(
         interface.name.clone(),
         interface.generics,
-        pins,
+        pins.into_boxed_slice(),
     ))
 }
 
@@ -2415,11 +2438,11 @@ pub(crate) fn is_open_throws_contract(db: &dyn baml_compiler2_ppir::Db, ty: &Ty)
         seen_aliases: &mut FxHashSet<TypeName>,
     ) -> bool {
         match ty.kind() {
-            TyKind::Unknown { .. } => true,
-            TyKind::Union(members, _) => members
+            InferTy::Unknown { .. } => true,
+            InferTy::Union(members, _) => members
                 .iter()
                 .any(|member| visit(facts, member, seen_aliases)),
-            TyKind::TypeAlias(name, _) if seen_aliases.insert(name.clone()) => {
+            InferTy::TypeAlias(name, _) if seen_aliases.insert(name.clone()) => {
                 baml_type::normalize::TypeContext::alias_def(facts, name)
                     .map(|target| visit(facts, &Ty::from_plain(&target), seen_aliases))
                     .unwrap_or(false)
@@ -2610,7 +2633,7 @@ fn bound_binding_violations(
     reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
 )]
 fn plain_scope_bounds(
-    interned: FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    interned: FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
 ) -> FxHashMap<ParamTy, Vec<baml_type::Interface>> {
     interned
         .into_iter()
@@ -2979,7 +3002,7 @@ pub fn function_signature<'db>(
             return None;
         }
         match owner {
-            Some(MethodOwner::Interface(_)) => Some(Ty::intern(TyKind::TypeVar(
+            Some(MethodOwner::Interface(_)) => Some(Ty::intern(InferTy::TypeVar(
                 frame
                     .first()
                     .cloned()

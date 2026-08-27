@@ -41,7 +41,7 @@ use baml_compiler2_hir::{
 };
 use baml_type::{
     Freshness, Int63, Literal, TyAttr,
-    interned::{InterfaceRef, Ty, TyKind},
+    interned::{InferInterface, InferTy, Ty},
     normalize::{canonical_union_interned, equivalent_interned, is_subtype_interned},
 };
 use rustc_hash::FxHashMap;
@@ -57,7 +57,7 @@ use crate::{
 /// The unit-type identification (ruling: interim until tuples): `void`
 /// and `null` both denote the single-value unit.
 fn is_unit(ty: &Ty) -> bool {
-    matches!(ty.kind(), TyKind::Void { .. } | TyKind::Null { .. })
+    matches!(ty.kind(), InferTy::Void { .. } | InferTy::Null { .. })
 }
 
 /// The function type at a callback root: `ty` itself, or the sole non-null
@@ -70,13 +70,13 @@ fn is_unit(ty: &Ty) -> bool {
 /// `null`, so the function arm is the only expectation it can satisfy.
 fn callback_root_fn(ty: &Ty) -> Option<&Ty> {
     match ty.kind() {
-        TyKind::Function { .. } => Some(ty),
-        TyKind::Union(members, _) => {
+        InferTy::Function { .. } => Some(ty),
+        InferTy::Union(members, _) => {
             let mut callback = None;
             for member in members {
                 match member.kind() {
-                    TyKind::Null { .. } => {}
-                    TyKind::Function { .. } if callback.is_none() => callback = Some(member),
+                    InferTy::Null { .. } => {}
+                    InferTy::Function { .. } if callback.is_none() => callback = Some(member),
                     _ => return None,
                 }
             }
@@ -89,7 +89,7 @@ fn callback_root_fn(ty: &Ty) -> Option<&Ty> {
 /// The implicit `baml.spawn.SpawnParams<V, E>` a spawn's `with` chain
 /// threads (BEP-034).
 fn spawn_params_ty(value: Ty, error: Ty) -> Ty {
-    Ty::intern(TyKind::Class(
+    Ty::intern(InferTy::Class(
         baml_type::TypeName::new(
             baml_type::Name::new("baml"),
             vec![baml_type::Name::new("spawn")],
@@ -147,7 +147,7 @@ fn negate_literal(lit: &Literal, freshness: Freshness) -> Option<Ty> {
         }),
         Literal::String(_) | Literal::Bool(_) => return None,
     };
-    Some(Ty::intern(TyKind::Literal(
+    Some(Ty::intern(InferTy::Literal(
         negated,
         freshness,
         TyAttr::default(),
@@ -167,7 +167,8 @@ fn negate_literal(lit: &Literal, freshness: Freshness) -> Option<Ty> {
 /// same catchable error the through-a-variable path gets.
 fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Option<Ty> {
     use baml_compiler2_ast::BinaryOp;
-    let (TyKind::Literal(a, a_fresh, _), TyKind::Literal(b, b_fresh, _)) = (lhs.kind(), rhs.kind())
+    let (InferTy::Literal(a, a_fresh, _), InferTy::Literal(b, b_fresh, _)) =
+        (lhs.kind(), rhs.kind())
     else {
         return None;
     };
@@ -175,7 +176,7 @@ fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Op
         (Freshness::Regular, Freshness::Regular) => Freshness::Regular,
         _ => Freshness::Fresh,
     };
-    let lit = |value: Literal| Ty::intern(TyKind::Literal(value, freshness, TyAttr::default()));
+    let lit = |value: Literal| Ty::intern(InferTy::Literal(value, freshness, TyAttr::default()));
     let boolean = |value: bool| Some(lit(Literal::Bool(value)));
     let int = |value: i64| Int63::new(value).map(|value| lit(Literal::Int(value.get())));
     match (a, b) {
@@ -326,12 +327,12 @@ fn format_float(value: f64) -> Option<String> {
 fn syntactic_union(members: &[Ty]) -> Ty {
     fn push(flat: &mut Vec<Ty>, ty: &Ty) {
         match ty.kind() {
-            TyKind::Union(inner, _) => {
+            InferTy::Union(inner, _) => {
                 for member in inner {
                     push(flat, member);
                 }
             }
-            TyKind::Never { .. } => {}
+            InferTy::Never { .. } => {}
             _ => {
                 if !flat.contains(ty) {
                     flat.push(ty.clone());
@@ -355,8 +356,8 @@ fn syntactic_union(members: &[Ty]) -> Ty {
 /// call site and in the runtime's defaulted-slot filling); required
 /// parameters may rename freely.
 fn function_params_runtime_compatible(
-    source: &[baml_type::interned::FunctionParam],
-    target: &[baml_type::interned::FunctionParam],
+    source: &[baml_type::interned::InferFunctionParamTy],
+    target: &[baml_type::interned::InferFunctionParamTy],
 ) -> bool {
     source.len() == target.len()
         && source.iter().zip(target).all(|(source, target)| {
@@ -573,7 +574,7 @@ pub enum CallTypeArgPlan {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuntimeCheck {
     Argument { arg: ExprId, expected: Ty },
-    Bound { argument: Ty, bound: InterfaceRef },
+    Bound { argument: Ty, bound: InferInterface },
 }
 
 /// One lexical `type T = unreflect(value)` binding. The parameter is rigid and
@@ -701,7 +702,7 @@ enum PendingDiag<'db> {
         expr: ExprId,
         base: Ty,
         member: baml_type::Name,
-        sources: Vec<baml_type::interned::InterfaceRef>,
+        sources: Vec<baml_type::interned::InferInterface>,
         is_field: bool,
     },
     /// An interface FIELD reached on a concrete receiver: reachable only
@@ -710,14 +711,14 @@ enum PendingDiag<'db> {
         expr: ExprId,
         base: Ty,
         member: baml_type::Name,
-        interface: baml_type::interned::InterfaceRef,
+        interface: baml_type::interned::InferInterface,
     },
     /// A method declared with `Self` outside the receiver position,
     /// called through an existential/union receiver (Rust's `dyn`
     /// object-safety split).
     SelfRestrictedMember {
         expr: ExprId,
-        interface: baml_type::interned::InterfaceRef,
+        interface: baml_type::interned::InferInterface,
         member: baml_type::Name,
         position: crate::diagnostics::SelfCallPosition,
     },
@@ -734,7 +735,7 @@ enum PendingDiag<'db> {
     ItemProjectionSelfSlot {
         expr: ExprId,
         var: Ty,
-        interface: baml_type::interned::InterfaceRef,
+        interface: baml_type::interned::InferInterface,
         member: baml_type::Name,
         takes_self: bool,
         /// Whether the reference is a VALUE (uncalled). A receiver method
@@ -757,7 +758,7 @@ enum PendingDiag<'db> {
     BoundedArgNotConcrete {
         expr: ExprId,
         arg: Ty,
-        bound: baml_type::interned::InterfaceRef,
+        bound: baml_type::interned::InferInterface,
     },
     /// A constructor entry naming an implemented interface's FIELD; the
     /// backing class field is the constructor's key.
@@ -1262,7 +1263,7 @@ fn infer_parameter_defaults<'db>(
 pub(crate) fn owner_declared_bounds<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     owner: BodyOwnerId<'db>,
-) -> FxHashMap<baml_type::ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+) -> FxHashMap<baml_type::ParamTy, Vec<baml_type::interned::InferInterface>> {
     match owner {
         BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
             crate::lower::function_generic_bounds(db, function)
@@ -1563,7 +1564,7 @@ impl Expectation {
     /// sentinel - e.g. the `throws Error` placeholder inside a function
     /// type until S12 - must not discard the useful structure around it.
     fn has_type(ty: Ty) -> Expectation {
-        if matches!(ty.kind(), TyKind::Error { .. }) {
+        if matches!(ty.kind(), InferTy::Error { .. }) {
             Expectation::None
         } else {
             Expectation::HasType(ty)
@@ -1584,7 +1585,7 @@ impl Expectation {
         match self {
             Expectation::HasType(ty) => {
                 let resolved = table.shallow_resolve(ty);
-                if matches!(resolved.kind(), TyKind::Infer { .. }) {
+                if matches!(resolved.kind(), InferTy::InferVar { .. }) {
                     Expectation::None
                 } else {
                     Expectation::HasType(resolved)
@@ -1959,7 +1960,7 @@ impl<'db> InferenceContext<'db> {
         if actual.has_error() || expected.has_error() {
             return true;
         }
-        if matches!(expected.kind(), TyKind::TypeVar(param, _) if runtime_params.contains(param)) {
+        if matches!(expected.kind(), InferTy::TypeVar(param, _) if runtime_params.contains(param)) {
             return true;
         }
         if !actual.has_infer()
@@ -1972,7 +1973,7 @@ impl<'db> InferenceContext<'db> {
         }
 
         match (actual.kind(), expected.kind()) {
-            (TyKind::Union(actual_members, _), _) => {
+            (InferTy::Union(actual_members, _), _) => {
                 for member in actual_members {
                     if !self.runtime_static_skeleton_matches(member, &expected, runtime_params) {
                         return false;
@@ -1980,7 +1981,7 @@ impl<'db> InferenceContext<'db> {
                 }
                 true
             }
-            (_, TyKind::Union(expected_members, _)) => {
+            (_, InferTy::Union(expected_members, _)) => {
                 for member in expected_members {
                     if self.runtime_static_skeleton_matches(&actual, member, runtime_params) {
                         return true;
@@ -1988,16 +1989,16 @@ impl<'db> InferenceContext<'db> {
                 }
                 false
             }
-            (TyKind::List(actual_item, _), TyKind::List(expected_item, _)) => {
+            (InferTy::List(actual_item, _), InferTy::List(expected_item, _)) => {
                 self.runtime_static_skeleton_matches(actual_item, expected_item, runtime_params)
             }
             (
-                TyKind::Map {
+                InferTy::Map {
                     key: actual_key,
                     value: actual_value,
                     ..
                 },
-                TyKind::Map {
+                InferTy::Map {
                     key: expected_key,
                     value: expected_value,
                     ..
@@ -2011,8 +2012,8 @@ impl<'db> InferenceContext<'db> {
                     )
             }
             (
-                TyKind::Class(actual_name, actual_args, _),
-                TyKind::Class(expected_name, expected_args, _),
+                InferTy::Class(actual_name, actual_args, _),
+                InferTy::Class(expected_name, expected_args, _),
             ) if actual_name == expected_name && actual_args.len() == expected_args.len() => {
                 for (actual_arg, expected_arg) in actual_args.iter().zip(expected_args) {
                     if !self.runtime_static_skeleton_matches(
@@ -2026,8 +2027,8 @@ impl<'db> InferenceContext<'db> {
                 true
             }
             (
-                TyKind::Interface(actual_name, actual_args, actual_pins, _),
-                TyKind::Interface(expected_name, expected_args, expected_pins, _),
+                InferTy::Interface(actual_name, actual_args, actual_pins, _),
+                InferTy::Interface(expected_name, expected_args, expected_pins, _),
             ) if actual_name == expected_name && actual_args.len() == expected_args.len() => {
                 for (actual_arg, expected_arg) in actual_args.iter().zip(expected_args) {
                     if !self.runtime_static_skeleton_matches(
@@ -2055,15 +2056,15 @@ impl<'db> InferenceContext<'db> {
             }
             // A class may satisfy a runtime-parameterized interface. The
             // subsequent `Sub` call owns that implementation lookup.
-            (TyKind::Class(..), TyKind::Interface(..)) => true,
+            (InferTy::Class(..), InferTy::Interface(..)) => true,
             (
-                TyKind::Function {
+                InferTy::Function {
                     params: actual_params,
                     ret: actual_ret,
                     throws: actual_throws,
                     ..
                 },
-                TyKind::Function {
+                InferTy::Function {
                     params: expected_params,
                     ret: expected_ret,
                     throws: expected_throws,
@@ -2087,8 +2088,8 @@ impl<'db> InferenceContext<'db> {
                     )
             }
             (
-                TyKind::Future(actual_value, actual_error, _),
-                TyKind::Future(expected_value, expected_error, _),
+                InferTy::Future(actual_value, actual_error, _),
+                InferTy::Future(expected_value, expected_error, _),
             ) => {
                 self.runtime_static_skeleton_matches(actual_value, expected_value, runtime_params)
                     && self.runtime_static_skeleton_matches(
@@ -2099,12 +2100,12 @@ impl<'db> InferenceContext<'db> {
             }
             // Projections are resolved by `Sub`; their head may legitimately
             // differ from the concrete type they reduce to.
-            (_, TyKind::AssociatedTypeProjection { .. }) => true,
+            (_, InferTy::AssociatedTypeProjection { .. }) => true,
             // Open inference and rigid generic leaves carry no statically
             // inspectable shape. The committed `Sub` relation immediately
             // after this guard owns their bounds and obligations.
-            (TyKind::Infer { .. } | TyKind::TypeVar(..), _)
-            | (_, TyKind::Infer { .. } | TyKind::TypeVar(..)) => true,
+            (InferTy::InferVar { .. } | InferTy::TypeVar(..), _)
+            | (_, InferTy::InferVar { .. } | InferTy::TypeVar(..)) => true,
             _ => false,
         }
     }
@@ -2202,12 +2203,12 @@ impl<'db> InferenceContext<'db> {
     fn record_function_adapter(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
         let got = self.table.resolve_completely(got);
         let got = self.expand_alias_ty(&got);
-        let TyKind::Function { params: source, .. } = got.kind() else {
+        let InferTy::Function { params: source, .. } = got.kind() else {
             return;
         };
         let target_fn = self.table.resolve_completely(expected);
         let target_fn = self.expand_alias_ty(&target_fn);
-        let TyKind::Function { params: target, .. } = target_fn.kind() else {
+        let InferTy::Function { params: target, .. } = target_fn.kind() else {
             return;
         };
         if function_params_runtime_compatible(source, target) {
@@ -2240,7 +2241,7 @@ impl<'db> InferenceContext<'db> {
                 } else {
                     lit
                 };
-                Ty::intern(TyKind::Literal(
+                Ty::intern(InferTy::Literal(
                     lit.clone(),
                     Freshness::Fresh,
                     TyAttr::default(),
@@ -2250,7 +2251,7 @@ impl<'db> InferenceContext<'db> {
             // A byte-string literal (`b"..."`) IS a `uint8array` value -
             // its own expr kind, not a `Literal` (no literal TYPE per
             // byte-string; TIR agrees).
-            Expr::ByteStringLiteral(_) => Ty::intern(TyKind::Uint8Array {
+            Expr::ByteStringLiteral(_) => Ty::intern(InferTy::Uint8Array {
                 attr: TyAttr::default(),
             }),
             Expr::Path(segments) => self.resolve_value_path(expr, segments),
@@ -2461,7 +2462,7 @@ impl<'db> InferenceContext<'db> {
                 let target = self.expand_alias_ty(&target);
                 if target.has_error() {
                     Ty::error()
-                } else if !matches!(target.kind(), TyKind::Interface(..)) {
+                } else if !matches!(target.kind(), InferTy::Interface(..)) {
                     self.pending_diags.push(PendingDiag::QualifierNotInterface {
                         expr,
                         target: target.clone(),
@@ -2534,7 +2535,7 @@ impl<'db> InferenceContext<'db> {
                     // when the tag validated; an unresolved tag already
                     // reported UnresolvedName and stays quiet here.
                     let (result, frame) = match resolved.kind() {
-                        TyKind::Function { params, ret, .. } => {
+                        InferTy::Function { params, ret, .. } => {
                             let func = match self.result.member_resolutions.get(tag) {
                                 Some(MemberResolution::Free { func }) => Some(*func),
                                 _ => None,
@@ -2547,10 +2548,10 @@ impl<'db> InferenceContext<'db> {
                                 param.name.as_ref().is_some_and(|n| n.as_str() == "body")
                                     && matches!(
                                         param.ty.kind(),
-                                        TyKind::Function { ret: body_ret, .. }
+                                        InferTy::Function { ret: body_ret, .. }
                                             if matches!(
                                                 body_ret.kind(),
-                                                TyKind::Class(qtn, _, _)
+                                                InferTy::Class(qtn, _, _)
                                                     if qtn.is_builtin_root_type("TaggedString")
                                             )
                                     )
@@ -2574,7 +2575,7 @@ impl<'db> InferenceContext<'db> {
                             } else {
                                 let mut frame = FxHashMap::default();
                                 if let Some(first) = params.first()
-                                    && let TyKind::Function {
+                                    && let InferTy::Function {
                                         params: body_params,
                                         ..
                                     } = first.ty.kind()
@@ -2681,7 +2682,7 @@ impl<'db> InferenceContext<'db> {
                         self.check_expr(body, entry.key, &key_ty);
                         self.check_expr(body, entry.value, &value_ty);
                     }
-                    Ty::intern(TyKind::Map {
+                    Ty::intern(InferTy::Map {
                         key: key_ty,
                         value: value_ty,
                         attr: TyAttr::default(),
@@ -2693,7 +2694,7 @@ impl<'db> InferenceContext<'db> {
                     // legal solution and leaving it open lets `m[0] = 1`
                     // silently solve `?K := int`.
                     self.untyped_empty_container_ty(expr, |value| {
-                        Ty::intern(TyKind::Map {
+                        Ty::intern(InferTy::Map {
                             key: Ty::string(),
                             value,
                             attr: TyAttr::default(),
@@ -2708,7 +2709,7 @@ impl<'db> InferenceContext<'db> {
                             (self.widen_fresh(&key_ty), self.widen_fresh(&value_ty))
                         })
                         .unzip();
-                    Ty::intern(TyKind::Map {
+                    Ty::intern(InferTy::Map {
                         key: self.union_of(&keys),
                         value: self.union_of(&values),
                         attr: TyAttr::default(),
@@ -2763,14 +2764,14 @@ impl<'db> InferenceContext<'db> {
                         for field in fields {
                             self.check_expr(body, field.value, &value_ty);
                         }
-                        Ty::intern(TyKind::Map {
+                        Ty::intern(InferTy::Map {
                             key: key_ty,
                             value: value_ty,
                             attr: TyAttr::default(),
                         })
                     } else if fields.is_empty() {
                         self.untyped_empty_container_ty(expr, |value| {
-                            Ty::intern(TyKind::Map {
+                            Ty::intern(InferTy::Map {
                                 key: Ty::string(),
                                 value,
                                 attr: TyAttr::default(),
@@ -2785,7 +2786,7 @@ impl<'db> InferenceContext<'db> {
                                 self.widen_fresh(&value_ty)
                             })
                             .collect();
-                        Ty::intern(TyKind::Map {
+                        Ty::intern(InferTy::Map {
                             key: Ty::string(),
                             value: self.union_of(&values),
                             attr: TyAttr::default(),
@@ -3022,7 +3023,7 @@ impl<'db> InferenceContext<'db> {
                 // List elements directly; everything else through the
                 // Iterator protocol (the `iter.Iterable` Item projection).
                 let element = match collection_ty.kind() {
-                    TyKind::List(element, _) => element.clone(),
+                    InferTy::List(element, _) => element.clone(),
                     _ => self.iteration_item(&collection_ty, *collection),
                 };
                 let outcome = self.lower_pattern(body, *binding, &element);
@@ -3140,7 +3141,7 @@ impl<'db> InferenceContext<'db> {
             parameter: baml_type::ParamTy::new(0x8000_0000 | (identity & 0x7fff_ffff), name),
             operand: direct_operand,
             template_ty,
-            occurrence_ty: Ty::intern(TyKind::Unknown {
+            occurrence_ty: Ty::intern(InferTy::Unknown {
                 attr: TyAttr::default(),
             }),
         };
@@ -3237,7 +3238,7 @@ impl<'db> InferenceContext<'db> {
                     ),
                     operand: Some(operand),
                     template_ty: None,
-                    occurrence_ty: Ty::intern(TyKind::Unknown {
+                    occurrence_ty: Ty::intern(InferTy::Unknown {
                         attr: TyAttr::default(),
                     }),
                 };
@@ -3334,7 +3335,7 @@ impl<'db> InferenceContext<'db> {
                             // (void == unit interim, but the WRITTEN void
                             // contract says "no result").
                             let resolved = self.table.resolve_completely(&init_ty);
-                            if matches!(resolved.kind(), TyKind::Void { .. }) {
+                            if matches!(resolved.kind(), InferTy::Void { .. }) {
                                 self.pending_diags
                                     .push(PendingDiag::VoidResultUsed { expr: init });
                             }
@@ -3532,7 +3533,7 @@ impl<'db> InferenceContext<'db> {
             let resolved = self.table.resolve_completely(&got);
             if branch_diverges != Diverges::Always
                 && !resolved.has_error()
-                && !matches!(resolved.kind(), TyKind::Never { .. })
+                && !matches!(resolved.kind(), InferTy::Never { .. })
             {
                 self.pending_diags.push(PendingDiag::LetElseMustDiverge {
                     expr: else_expr,
@@ -3580,8 +3581,8 @@ impl<'db> InferenceContext<'db> {
         // A bare inference variable still records its upper bound through
         // the Infer arm below (an `unknown` upper participates in bounds
         // resolution); only STRUCTURED actuals take the fast path.
-        if matches!(expected.kind(), TyKind::Unknown { .. })
-            && !matches!(actual.kind(), TyKind::Infer { .. })
+        if matches!(expected.kind(), InferTy::Unknown { .. })
+            && !matches!(actual.kind(), InferTy::InferVar { .. })
         {
             self.commit_establishments_to_unknown(&actual);
             return true;
@@ -3599,14 +3600,14 @@ impl<'db> InferenceContext<'db> {
             // A variable flowing into a context: upper bound. A value
             // flowing into a variable: lower bound. (Var-var records on
             // both sides; resolution sees through whichever solves first.)
-            (TyKind::Infer { var, .. }, _) => {
+            (InferTy::InferVar { var, .. }, _) => {
                 self.table.add_upper_bound(*var, expected.clone());
-                if let TyKind::Infer { var: other, .. } = expected.kind() {
+                if let InferTy::InferVar { var: other, .. } = expected.kind() {
                     self.table.add_lower_bound(*other, actual.clone());
                 }
                 true
             }
-            (_, TyKind::Infer { var, .. }) => {
+            (_, InferTy::InferVar { var, .. }) => {
                 self.table.add_lower_bound(*var, actual.clone());
                 true
             }
@@ -3619,7 +3620,7 @@ impl<'db> InferenceContext<'db> {
             // catch arm's `?E[]` member gets `?E := int` from the return
             // check here). Ground unions skip this arm and keep the
             // single oracle verdict below.
-            (TyKind::Union(members, _), _) if actual.has_infer() => {
+            (InferTy::Union(members, _), _) if actual.has_infer() => {
                 let members: Vec<Ty> = members.to_vec();
                 let mut ok = true;
                 for member in members {
@@ -3643,15 +3644,15 @@ impl<'db> InferenceContext<'db> {
             //   - defers. Forced answers only, the unique-candidate
             //   discipline; TS likewise refuses to partition a source
             //   across several naked variables.
-            (_, TyKind::Union(members, _)) if expected.has_infer() => {
+            (_, InferTy::Union(members, _)) if expected.has_infer() => {
                 let members: Vec<Ty> = members.to_vec();
                 let actual_members: Vec<Ty> = match actual.kind() {
-                    TyKind::Union(actual_members, _) => actual_members.to_vec(),
+                    InferTy::Union(actual_members, _) => actual_members.to_vec(),
                     _ => vec![actual.clone()],
                 };
                 let (naked, targets): (Vec<Ty>, Vec<Ty>) = members
                     .into_iter()
-                    .partition(|member| matches!(member.kind(), TyKind::Infer { var: _, .. }));
+                    .partition(|member| matches!(member.kind(), InferTy::InferVar { var: _, .. }));
                 let remainder: Vec<Ty> = actual_members
                     .into_iter()
                     .filter(|member| !targets.contains(member))
@@ -3691,7 +3692,7 @@ impl<'db> InferenceContext<'db> {
                 true
             }
             // Invariant constructors: Sub decays to Eq of the pieces.
-            (TyKind::Class(a_name, a_args, _), TyKind::Class(b_name, b_args, _))
+            (InferTy::Class(a_name, a_args, _), InferTy::Class(b_name, b_args, _))
                 if a_name == b_name && a_args.len() == b_args.len() =>
             {
                 let pairs: Vec<(Ty, Ty)> =
@@ -3702,15 +3703,15 @@ impl<'db> InferenceContext<'db> {
                 }
                 ok
             }
-            (TyKind::List(a, _), TyKind::List(b, _)) => {
+            (InferTy::List(a, _), InferTy::List(b, _)) => {
                 let (a, b) = (a.clone(), b.clone());
                 self.eq_piece(&a, &b)
             }
             (
-                TyKind::Map {
+                InferTy::Map {
                     key: ak, value: av, ..
                 },
-                TyKind::Map {
+                InferTy::Map {
                     key: bk, value: bv, ..
                 },
             ) => {
@@ -3719,7 +3720,7 @@ impl<'db> InferenceContext<'db> {
                 let value_ok = self.eq_piece(&av, &bv);
                 key_ok && value_ok
             }
-            (TyKind::Future(av, ae, _), TyKind::Future(bv, be, _)) => {
+            (InferTy::Future(av, ae, _), InferTy::Future(bv, be, _)) => {
                 let (av, ae, bv, be) = (av.clone(), ae.clone(), bv.clone(), be.clone());
                 let value_ok = self.eq_piece(&av, &bv);
                 let error_ok = self.eq_piece(&ae, &be);
@@ -3727,13 +3728,13 @@ impl<'db> InferenceContext<'db> {
             }
             // Function types: contravariant params, covariant ret/throws.
             (
-                TyKind::Function {
+                InferTy::Function {
                     params: a_params,
                     ret: a_ret,
                     throws: a_throws,
                     ..
                 },
-                TyKind::Function {
+                InferTy::Function {
                     params: b_params,
                     ret: b_ret,
                     throws: b_throws,
@@ -3764,12 +3765,12 @@ impl<'db> InferenceContext<'db> {
             // prove conformance, but it has no way to recover these pins and
             // leaves the call's type arguments as `Error`.
             (
-                TyKind::Function {
+                InferTy::Function {
                     ret: actual_ret,
                     throws: actual_throws,
                     ..
                 },
-                TyKind::Interface(name, _, expected_pins, _),
+                InferTy::Interface(name, _, expected_pins, _),
             ) if name.is_reflect_root_type("AnyFunction") => {
                 let mut ok = true;
                 for (pin, expected_pin) in expected_pins {
@@ -3801,8 +3802,8 @@ impl<'db> InferenceContext<'db> {
                     // through (the fill-at-reference default is the
                     // oracle's business).
                     if let (
-                        TyKind::Interface(a_name, a_args, a_pins, _),
-                        TyKind::Interface(b_name, b_args, b_pins, _),
+                        InferTy::Interface(a_name, a_args, a_pins, _),
+                        InferTy::Interface(b_name, b_args, b_pins, _),
                     ) = (actual.kind(), expected.kind())
                         && a_name == b_name
                         && a_args.len() == b_args.len()
@@ -3823,7 +3824,7 @@ impl<'db> InferenceContext<'db> {
                                 match a_pins.iter().find(|(a_pin, _)| a_pin == pin) {
                                     Some((_, a_ty)) => (a_ty.clone(), b_ty.clone()),
                                     None => (
-                                        Ty::intern(TyKind::Unknown {
+                                        Ty::intern(InferTy::Unknown {
                                             attr: TyAttr::default(),
                                         }),
                                         b_ty.clone(),
@@ -3845,21 +3846,21 @@ impl<'db> InferenceContext<'db> {
                     // ?R>` confirms through the `T[]` impl, pinning `?R
                     // := int`). Fulfillment handles ground goals, var
                     // goals via selection, and ambiguity by stalling.
-                    if let TyKind::Interface(name, args, pins, _) = expected.kind()
-                        && !matches!(actual.kind(), TyKind::Infer { .. })
+                    if let InferTy::Interface(name, args, pins, _) = expected.kind()
+                        && !matches!(actual.kind(), InferTy::InferVar { .. })
                         && let Some(anchor) = self.obligation_anchor
                     {
-                        let interface = baml_type::interned::InterfaceRef::new(
+                        let interface = baml_type::interned::InferInterface::new(
                             name.clone(),
-                            args.to_vec().into_boxed_slice(),
-                            pins.to_vec(),
+                            args.clone(),
+                            pins.clone(),
                         );
                         // A union is a subtype of an existential iff ALL
                         // members are (spec: Variance rule 2.1) - and
                         // only concrete types implement, so the goal
                         // decomposes per member before registration.
                         let goals: Vec<Ty> = match actual.kind() {
-                            TyKind::Union(members, _) => members.to_vec(),
+                            InferTy::Union(members, _) => members.to_vec(),
                             _ => vec![actual],
                         };
                         for goal in goals {
@@ -3888,11 +3889,11 @@ impl<'db> InferenceContext<'db> {
             return;
         }
         let resolved = self.table.shallow_resolve(ty);
-        if let TyKind::Infer { var, .. } = resolved.kind() {
+        if let InferTy::InferVar { var, .. } = resolved.kind() {
             if self.table.is_establishment_var(*var) {
                 self.table.solve(
                     *var,
-                    Ty::intern(TyKind::Unknown {
+                    Ty::intern(InferTy::Unknown {
                         attr: TyAttr::default(),
                     }),
                 );
@@ -3999,7 +4000,7 @@ impl<'db> InferenceContext<'db> {
         let mut fresh: Vec<Literal> = Vec::new();
         let mut regular: Vec<Literal> = Vec::new();
         let mut collect = |ty: &Ty| {
-            if let TyKind::Literal(lit, freshness, _) = ty.kind() {
+            if let InferTy::Literal(lit, freshness, _) = ty.kind() {
                 match freshness {
                     Freshness::Fresh => fresh.push(lit.clone()),
                     Freshness::Regular => regular.push(lit.clone()),
@@ -4008,7 +4009,7 @@ impl<'db> InferenceContext<'db> {
         };
         for member in members {
             match member.kind() {
-                TyKind::Union(inner, _) => inner.iter().for_each(&mut collect),
+                InferTy::Union(inner, _) => inner.iter().for_each(&mut collect),
                 _ => collect(member),
             }
         }
@@ -4018,16 +4019,20 @@ impl<'db> InferenceContext<'db> {
         }
         let remark = |ty: &Ty| -> Ty {
             match ty.kind() {
-                TyKind::Literal(lit, Freshness::Regular, attr)
+                InferTy::Literal(lit, Freshness::Regular, attr)
                     if fresh.contains(lit) && !regular.contains(lit) =>
                 {
-                    Ty::intern(TyKind::Literal(lit.clone(), Freshness::Fresh, attr.clone()))
+                    Ty::intern(InferTy::Literal(
+                        lit.clone(),
+                        Freshness::Fresh,
+                        attr.clone(),
+                    ))
                 }
                 _ => ty.clone(),
             }
         };
         match joined.kind() {
-            TyKind::Union(joined_members, attr) => Ty::intern(TyKind::Union(
+            InferTy::Union(joined_members, attr) => Ty::intern(InferTy::Union(
                 joined_members.iter().map(remark).collect(),
                 attr.clone(),
             )),
@@ -4040,10 +4045,10 @@ impl<'db> InferenceContext<'db> {
     /// re-canonicalizes (`1 | 2` at a binding is `int`).
     fn widen_fresh(&mut self, ty: &Ty) -> Ty {
         match ty.kind() {
-            TyKind::Literal(_, Freshness::Fresh, _) => widen_fresh_literal(ty),
-            TyKind::Union(members, _)
+            InferTy::Literal(_, Freshness::Fresh, _) => widen_fresh_literal(ty),
+            InferTy::Union(members, _)
                 if members.iter().any(|member| {
-                    matches!(member.kind(), TyKind::Literal(_, Freshness::Fresh, _))
+                    matches!(member.kind(), InferTy::Literal(_, Freshness::Fresh, _))
                 }) =>
             {
                 let widened: Vec<Ty> = members.iter().map(widen_fresh_literal).collect();
@@ -4123,7 +4128,7 @@ impl<'db> InferenceContext<'db> {
                     } else {
                         !equal
                     };
-                    return Ty::intern(TyKind::Literal(
+                    return Ty::intern(InferTy::Literal(
                         Literal::Bool(value),
                         Freshness::Fresh,
                         TyAttr::default(),
@@ -4145,8 +4150,8 @@ impl<'db> InferenceContext<'db> {
                     && !rhs_ty.has_infer()
                     && !lhs_ty.has_error()
                     && !rhs_ty.has_error()
-                    && !matches!(lhs_ty.kind(), TyKind::Unknown { .. })
-                    && !matches!(rhs_ty.kind(), TyKind::Unknown { .. })
+                    && !matches!(lhs_ty.kind(), InferTy::Unknown { .. })
+                    && !matches!(rhs_ty.kind(), InferTy::Unknown { .. })
                 {
                     let widen = |this: &mut Self, ty: &Ty| -> baml_type::Ty {
                         use baml_base::Literal as Lit;
@@ -4288,14 +4293,14 @@ impl<'db> InferenceContext<'db> {
         let lambda_ty = self.infer_expr(body, spawn_body, &Expectation::None);
         let resolved = self.structurally_resolve(&lambda_ty);
         let (value, error) = match resolved.kind() {
-            TyKind::Function { ret, throws, .. } => (ret.clone(), throws.clone()),
+            InferTy::Function { ret, throws, .. } => (ret.clone(), throws.clone()),
             _ => (resolved.clone(), Ty::never()),
         };
         let mut cur_value = self.widen_fresh(&value);
         let mut cur_error = self.widen_fresh(&error);
         for &with_id in with_exprs {
             let unknown = || {
-                Ty::intern(TyKind::Unknown {
+                Ty::intern(InferTy::Unknown {
                     attr: TyAttr::default(),
                 })
             };
@@ -4306,8 +4311,8 @@ impl<'db> InferenceContext<'db> {
             // unification), but the verdict is the shape check - a full
             // subtype check against open `unknown` slots would trip the
             // class-invariance rule on perfectly good modifiers.
-            let expected = Ty::intern(TyKind::Function {
-                params: Box::new([baml_type::interned::FunctionParam {
+            let expected = Ty::intern(InferTy::Function {
+                params: Box::new([baml_type::interned::InferFunctionParamTy {
                     name: None,
                     ty: spawn_params_ty(cur_value.clone(), cur_error.clone()),
                     mode: baml_type::FunctionParamMode::Required,
@@ -4319,11 +4324,11 @@ impl<'db> InferenceContext<'db> {
             let got = self.infer_expr(body, with_id, &Expectation::has_type(expected.clone()));
             let got = self.structurally_resolve(&got);
             let link = match got.kind() {
-                TyKind::Function { params, ret, .. } => {
+                InferTy::Function { params, ret, .. } => {
                     let ret = ret.clone();
                     let ret = self.structurally_resolve(&ret);
                     match ret.kind() {
-                        TyKind::Class(qn, args, _)
+                        InferTy::Class(qn, args, _)
                             if is_spawn_params_qtn(qn) && args.len() == 2 =>
                         {
                             // The modifier must accept the chain's
@@ -4344,7 +4349,7 @@ impl<'db> InferenceContext<'db> {
                             }
                             let ret = self.table.resolve_completely(&ret);
                             match ret.kind() {
-                                TyKind::Class(_, args, _) => {
+                                InferTy::Class(_, args, _) => {
                                     Some((args[0].clone(), args[1].clone()))
                                 }
                                 _ => None,
@@ -4370,9 +4375,9 @@ impl<'db> InferenceContext<'db> {
                         Expr::Path(_) | Expr::MemberAccess { .. }
                     );
                     let got_resolved = self.table.resolve_completely(&got);
-                    if (is_value_ref || matches!(got_resolved.kind(), TyKind::Function { .. }))
+                    if (is_value_ref || matches!(got_resolved.kind(), InferTy::Function { .. }))
                         && !got_resolved.has_error()
-                        && !matches!(got_resolved.kind(), TyKind::Unknown { .. })
+                        && !matches!(got_resolved.kind(), InferTy::Unknown { .. })
                     {
                         self.pending_diags.push(PendingDiag::SpawnWithBad {
                             at: with_id,
@@ -4385,7 +4390,7 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
-        Ty::intern(TyKind::Future(cur_value, cur_error, TyAttr::default()))
+        Ty::intern(InferTy::Future(cur_value, cur_error, TyAttr::default()))
     }
 
     /// `await e : T` for `e : Future<T, E>`; `E` joins the effect
@@ -4400,20 +4405,20 @@ impl<'db> InferenceContext<'db> {
         let fut = self.infer_expr(body, future, &Expectation::None);
         let resolved = self.structurally_resolve(&fut);
         match resolved.kind() {
-            TyKind::Future(value, error, _) => {
+            InferTy::Future(value, error, _) => {
                 let (value, error) = (value.clone(), error.clone());
                 self.record_throw(expr, &error);
                 value
             }
-            TyKind::Union(members, _)
+            InferTy::Union(members, _)
                 if !members.is_empty()
                     && members
                         .iter()
-                        .all(|member| matches!(member.kind(), TyKind::Future(..))) =>
+                        .all(|member| matches!(member.kind(), InferTy::Future(..))) =>
             {
                 let mut values = Vec::new();
                 for member in members {
-                    if let TyKind::Future(value, error, _) = member.kind() {
+                    if let InferTy::Future(value, error, _) = member.kind() {
                         values.push(value.clone());
                         let error = error.clone();
                         self.record_throw(expr, &error);
@@ -4421,11 +4426,11 @@ impl<'db> InferenceContext<'db> {
                 }
                 self.union_of(&values)
             }
-            TyKind::Never { .. } => resolved,
-            TyKind::Infer { .. } => {
+            InferTy::Never { .. } => resolved,
+            InferTy::InferVar { .. } => {
                 let value = self.table.new_var_ty();
                 let error = self.table.new_effect_var_ty();
-                let demanded = Ty::intern(TyKind::Future(
+                let demanded = Ty::intern(InferTy::Future(
                     value.clone(),
                     error.clone(),
                     TyAttr::default(),
@@ -4437,11 +4442,11 @@ impl<'db> InferenceContext<'db> {
             _ if resolved.has_error() => resolved,
             _ => {
                 let unknown = || {
-                    Ty::intern(TyKind::Unknown {
+                    Ty::intern(InferTy::Unknown {
                         attr: TyAttr::default(),
                     })
                 };
-                let expected = Ty::intern(TyKind::Future(unknown(), unknown(), TyAttr::default()));
+                let expected = Ty::intern(InferTy::Future(unknown(), unknown(), TyAttr::default()));
                 self.result
                     .type_mismatches
                     .insert(expr, (expected, resolved));
@@ -4506,20 +4511,20 @@ impl<'db> InferenceContext<'db> {
             }
         };
         let element = match resolved_subject.kind() {
-            TyKind::List(element, _) => {
+            InferTy::List(element, _) => {
                 let element = element.clone();
                 let expectation = key_expectation(self, Ty::int());
                 self.check_expr(body, index, &expectation);
                 element
             }
-            TyKind::Map { key, value, .. } => {
+            InferTy::Map { key, value, .. } => {
                 let key = key.clone();
                 let value = value.clone();
                 let expectation = key_expectation(self, key);
                 self.check_expr(body, index, &expectation);
                 value
             }
-            TyKind::Uint8Array { .. } => {
+            InferTy::Uint8Array { .. } => {
                 let expectation = key_expectation(self, Ty::int());
                 self.check_expr(body, index, &expectation);
                 Ty::int()
@@ -4562,13 +4567,13 @@ impl<'db> InferenceContext<'db> {
                 // (TIR's `try_fold_unary`, extended to the non-bool
                 // literals truthiness admits), freshness preserved.
                 let resolved = self.table.resolve_completely(&ty);
-                if let TyKind::Literal(_, freshness, _) = resolved.kind() {
+                if let InferTy::Literal(_, freshness, _) = resolved.kind() {
                     let negated = match crate::infer::truthy::truthiness(&resolved) {
                         crate::infer::truthy::Truthiness::AlwaysTruthy => false,
                         crate::infer::truthy::Truthiness::AlwaysFalsy => true,
                         crate::infer::truthy::Truthiness::Runtime => return Ty::bool(),
                     };
-                    return Ty::intern(TyKind::Literal(
+                    return Ty::intern(InferTy::Literal(
                         Literal::Bool(negated),
                         *freshness,
                         TyAttr::default(),
@@ -4587,7 +4592,7 @@ impl<'db> InferenceContext<'db> {
                 // fold and keeps the dispatch result - the VM throws the
                 // same catchable IntegerOverflow either way.
                 let resolved = self.table.resolve_completely(&ty);
-                if let TyKind::Literal(lit, freshness, _) = resolved.kind()
+                if let InferTy::Literal(lit, freshness, _) = resolved.kind()
                     && !dispatched.has_error()
                     && let Some(folded) = negate_literal(lit, *freshness)
                 {
@@ -4645,7 +4650,7 @@ impl<'db> InferenceContext<'db> {
         // operator report - the operand as written still has no impl, and
         // that is this diagnostic's claim.
         let dirty = |ty: &Ty| {
-            matches!(ty.kind(), TyKind::Error { .. } | TyKind::Unknown { .. }) || ty.has_infer()
+            matches!(ty.kind(), InferTy::Error { .. } | InferTy::Unknown { .. }) || ty.has_infer()
         };
         if dirty(lhs) || rhs.is_some_and(dirty) {
             return;
@@ -4677,15 +4682,15 @@ impl<'db> InferenceContext<'db> {
         let rhs = rhs_resolved.as_ref();
         let lhs = self.table.resolve_completely(lhs);
         let rhs = rhs.map(|ty| self.table.resolve_completely(ty));
-        if matches!(lhs.kind(), TyKind::Never { .. })
+        if matches!(lhs.kind(), InferTy::Never { .. })
             || rhs
                 .as_ref()
-                .is_some_and(|ty| matches!(ty.kind(), TyKind::Never { .. }))
+                .is_some_and(|ty| matches!(ty.kind(), InferTy::Never { .. }))
         {
             return Ty::never();
         }
         let undispatchable = |ty: &Ty| {
-            ty.has_error() || ty.has_infer() || matches!(ty.kind(), TyKind::Unknown { .. })
+            ty.has_error() || ty.has_infer() || matches!(ty.kind(), InferTy::Unknown { .. })
         };
         if undispatchable(&lhs) || rhs.as_ref().is_some_and(undispatchable) {
             return Ty::error();
@@ -4721,7 +4726,7 @@ impl<'db> InferenceContext<'db> {
         lhs: &Ty,
         rhs: Option<&Ty>,
     ) -> Option<Ty> {
-        if let TyKind::TypeVar(param, _) = lhs.kind() {
+        if let InferTy::TypeVar(param, _) = lhs.kind() {
             let bounds = baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
             let bound = bounds.iter().find(|bound| {
                 !bound.name.is_local()
@@ -4756,9 +4761,9 @@ impl<'db> InferenceContext<'db> {
             {
                 return None;
             }
-            return Some(Ty::intern(TyKind::AssociatedTypeProjection {
+            return Some(Ty::intern(InferTy::AssociatedTypeProjection {
                 base: lhs.clone(),
-                interface: baml_type::interned::InterfaceRef::new(
+                interface: baml_type::interned::InferInterface::new(
                     bound.name.clone(),
                     bound.generics.iter().map(Ty::from_plain).collect(),
                     bound
@@ -4776,12 +4781,9 @@ impl<'db> InferenceContext<'db> {
         // int>` adds like the virtual `x.add(rhs)` call it desugars to.
         // The pin is the result; a recovered error pin surfaces as the
         // operator failure (the completeness check already named it).
-        if let TyKind::Interface(qtn, args, pins, _) = lhs.kind() {
-            let root = baml_type::interned::InterfaceRef::new(
-                qtn.clone(),
-                (args.to_vec()).into(),
-                pins.to_vec(),
-            );
+        if let InferTy::Interface(qtn, args, pins, _) = lhs.kind() {
+            let root =
+                baml_type::interned::InferInterface::new(qtn.clone(), args.clone(), pins.clone());
             let mut heads = vec![root.clone()];
             heads.extend(crate::impls::direct_requires_closure(
                 self.db, &root, lhs, 8,
@@ -4827,11 +4829,11 @@ impl<'db> InferenceContext<'db> {
         // such match): an aliased nullable answers as its union.
         let resolved = self.structurally_resolve(ty);
         match resolved.kind() {
-            TyKind::Null { .. } => Ty::never(),
-            TyKind::Union(members, _) => {
+            InferTy::Null { .. } => Ty::never(),
+            InferTy::Union(members, _) => {
                 let non_null: Vec<Ty> = members
                     .iter()
-                    .filter(|member| !matches!(member.kind(), TyKind::Null { .. }))
+                    .filter(|member| !matches!(member.kind(), InferTy::Null { .. }))
                     .cloned()
                     .collect();
                 // Filtering never REWRITES the survivors (the
@@ -4851,7 +4853,7 @@ impl<'db> InferenceContext<'db> {
     fn null_coalesce(&mut self, inner: Ty, rhs: &Ty) -> Ty {
         let rhs = self.table.resolve_completely(rhs);
         let ground = |ty: &Ty| {
-            !ty.has_infer() && !ty.has_error() && !matches!(ty.kind(), TyKind::Never { .. })
+            !ty.has_infer() && !ty.has_error() && !matches!(ty.kind(), InferTy::Never { .. })
         };
         if ground(&inner) && ground(&rhs) {
             if self.cached_subtype(&rhs, &inner) {
@@ -4996,7 +4998,7 @@ impl<'db> InferenceContext<'db> {
             return;
         }
         let got = self.infer_expr(body, operand, &Expectation::None);
-        let pending_type = matches!(got.kind(), TyKind::Class(name, _, _)
+        let pending_type = matches!(got.kind(), InferTy::Class(name, _, _)
             if name.package().as_str() == "reflect"
                 && name.namespace().iter().map(baml_type::Name::as_str)
                     .eq(["class"])
@@ -5004,7 +5006,7 @@ impl<'db> InferenceContext<'db> {
         if pending_type
             || got.has_error()
             || got.has_infer()
-            || matches!(got.kind(), TyKind::Unknown { .. })
+            || matches!(got.kind(), InferTy::Unknown { .. })
         {
             return;
         }
@@ -5012,12 +5014,12 @@ impl<'db> InferenceContext<'db> {
         // view is accepted and converts to the `type` value it wraps at the
         // VM's type-operand boundary — the same explicit-computation-point
         // model as `int + float`, never a subtyping edge.
-        let expected = Ty::intern(TyKind::Union(
+        let expected = Ty::intern(InferTy::Union(
             Box::new([
-                Ty::intern(TyKind::Type {
+                Ty::intern(InferTy::Type {
                     attr: TyAttr::default(),
                 }),
-                Ty::intern(TyKind::Interface(
+                Ty::intern(InferTy::Interface(
                     baml_type::QualifiedTypeName::from_dotted_path("reflect.TypeView"),
                     Box::new([]),
                     Box::new([]),
@@ -5151,7 +5153,7 @@ impl<'db> InferenceContext<'db> {
             return;
         }
         let target_ret = function_signature(self.db, target).ret.clone();
-        if target_ret.has_error() || matches!(target_ret.kind(), TyKind::Unknown { .. }) {
+        if target_ret.has_error() || matches!(target_ret.kind(), InferTy::Unknown { .. }) {
             return;
         }
         let Some(schema_arg) = self
@@ -5219,7 +5221,7 @@ impl<'db> InferenceContext<'db> {
         if arg.has_infer() {
             let _ = self.table.unify(
                 &arg,
-                &Ty::intern(TyKind::Unknown {
+                &Ty::intern(InferTy::Unknown {
                     attr: TyAttr::default(),
                 }),
             );
@@ -5245,7 +5247,7 @@ impl<'db> InferenceContext<'db> {
         // by a function type forces here, exactly as a method
         // receiver would.
         let callee_fn_ty = &self.structurally_resolve(callee_fn_ty);
-        let TyKind::Function {
+        let InferTy::Function {
             params,
             ret,
             throws,
@@ -5259,7 +5261,7 @@ impl<'db> InferenceContext<'db> {
             // <unresolved>`) is still provably not callable, and that
             // finding stands on its own (E0006).
             let concrete_uncallable_union = || match callee_fn_ty.kind() {
-                TyKind::Union(members, _) => {
+                InferTy::Union(members, _) => {
                     let clean: Vec<Ty> = members
                         .iter()
                         .filter(|member| !member.has_error())
@@ -5270,7 +5272,7 @@ impl<'db> InferenceContext<'db> {
                             !member.has_infer()
                                 && !matches!(
                                     member.kind(),
-                                    TyKind::Function { .. } | TyKind::Unknown { .. }
+                                    InferTy::Function { .. } | InferTy::Unknown { .. }
                                 )
                         }))
                     .then(|| syntactic_union(&clean))
@@ -5279,7 +5281,7 @@ impl<'db> InferenceContext<'db> {
             };
             if !callee_fn_ty.has_error()
                 && !callee_fn_ty.has_infer()
-                && !matches!(callee_fn_ty.kind(), TyKind::Unknown { .. })
+                && !matches!(callee_fn_ty.kind(), InferTy::Unknown { .. })
             {
                 self.pending_diags.push(PendingDiag::NotCallable {
                     expr: callee,
@@ -5300,7 +5302,7 @@ impl<'db> InferenceContext<'db> {
         self.record_throw(callee, &callee_throws);
         // A bound method call: the receiver already fills the `self` slot,
         // so written arguments match against the remaining parameters.
-        let params: Vec<baml_type::interned::FunctionParam> = params
+        let params: Vec<baml_type::interned::InferFunctionParamTy> = params
             .iter()
             .skip(usize::from(bound_receiver))
             .cloned()
@@ -5400,7 +5402,7 @@ impl<'db> InferenceContext<'db> {
                         .get(&arg.expr)
                         .cloned()
                         .unwrap_or_else(|| self.infer_expr(body, arg.expr, &Expectation::None));
-                    let local_id = Ty::intern(TyKind::Class(
+                    let local_id = Ty::intern(InferTy::Class(
                         baml_type::QualifiedTypeName::new(
                             baml_type::Name::new(baml_builtins2::PACKAGE_BOUNDARY),
                             vec![],
@@ -5809,7 +5811,7 @@ impl<'db> InferenceContext<'db> {
         let mut has_interface_provider = false;
         let mut joined: Option<Ty> = None;
         for arm in members {
-            let TyKind::Class(qtn, _, _) = arm.kind() else {
+            let InferTy::Class(qtn, _, _) = arm.kind() else {
                 return None;
             };
             if matches!(
@@ -5879,7 +5881,7 @@ impl<'db> InferenceContext<'db> {
         // union (`(int | null).to_string()` is `string.from<int | null>`);
         // a full miss then reports "no common interface" instead of the
         // bare "no member".
-        if let TyKind::Union(union_members, _) = resolved.kind() {
+        if let InferTy::Union(union_members, _) = resolved.kind() {
             let union_members = union_members.to_vec();
             match crate::method_resolution::lookup_union_member(
                 self.db,
@@ -6018,7 +6020,7 @@ impl<'db> InferenceContext<'db> {
                             });
                     }
                     return (
-                        Ty::intern(TyKind::Unknown {
+                        Ty::intern(InferTy::Unknown {
                             attr: TyAttr::default(),
                         }),
                         false,
@@ -6089,7 +6091,7 @@ impl<'db> InferenceContext<'db> {
                 && !resolved.has_error()
                 && !resolved.has_infer()
             {
-                if matches!(resolved.kind(), TyKind::Union(..)) {
+                if matches!(resolved.kind(), InferTy::Union(..)) {
                     self.pending_diags
                         .push(PendingDiag::UnionNoCommonInterface {
                             expr: call,
@@ -6196,7 +6198,7 @@ impl<'db> InferenceContext<'db> {
     /// `Self` - the class's self type, or a free impl's for-target.
     /// `None` anywhere else; the caller falls back to ordinary
     /// resolution.
-    fn default_receiver_target(&mut self) -> Option<(InterfaceRef, Ty)> {
+    fn default_receiver_target(&mut self) -> Option<(InferInterface, Ty)> {
         let function = self.body_owner?;
         let target =
             baml_compiler2_ppir::item_data::method_interface_target(self.db, function).as_ref()?;
@@ -6206,7 +6208,7 @@ impl<'db> InferenceContext<'db> {
             crate::lower::TypePosition::ConstraintHead,
         );
         let target_interned = crate::impls::interned_ty(&crate::lower::reject_holes(&target_ty));
-        let TyKind::Interface(name, args, pins, _) = target_interned.kind() else {
+        let InferTy::Interface(name, args, pins, _) = target_interned.kind() else {
             return None;
         };
         let self_ty = match baml_compiler2_ppir::item_data::method_owner(self.db, function) {
@@ -6229,7 +6231,7 @@ impl<'db> InferenceContext<'db> {
             _ => return None,
         };
         Some((
-            InterfaceRef::new(name.clone(), (args.to_vec()).into(), pins.to_vec()),
+            InferInterface::new(name.clone(), args.clone(), pins.clone()),
             self_ty,
         ))
     }
@@ -6675,7 +6677,7 @@ impl<'db> InferenceContext<'db> {
         own: OwnArgs,
         params: &[baml_type::ParamTy],
         callee: &baml_type::Name,
-        bounds: &FxHashMap<baml_type::ParamTy, Vec<InterfaceRef>>,
+        bounds: &FxHashMap<baml_type::ParamTy, Vec<InferInterface>>,
         position: crate::lower::TypePosition,
     ) -> Vec<Ty> {
         match own {
@@ -6774,7 +6776,7 @@ impl<'db> InferenceContext<'db> {
             .params
             .first()
             .is_some_and(|param| param.name.as_str() == "self");
-        let iface_ref = InterfaceRef::new(
+        let iface_ref = InferInterface::new(
             crate::interfaces::interface_loc_qtn(self.db, interface)
                 .unwrap_or_else(|| unreachable!("a resolved interface item has a source QTN")),
             // The WRITTEN arguments: `Conv<int>` and `Conv<string>` are
@@ -6786,7 +6788,7 @@ impl<'db> InferenceContext<'db> {
             realized.map_or_else(Box::default, |realized| {
                 realized.generics.iter().map(Ty::from_plain).collect()
             }),
-            Vec::new(),
+            Box::new([]),
         );
         self.pending_diags
             .push(PendingDiag::ItemProjectionSelfSlot {
@@ -6934,7 +6936,7 @@ impl<'db> InferenceContext<'db> {
         // The interface-view gate is a STRUCTURE demand, as it is for
         // `.as<I>`: an alias naming an interface answers as the interface.
         let interface = self.expand_alias_ty(&interface);
-        let Some(qualifier) = InterfaceRef::of_ty(&interface) else {
+        let Some(qualifier) = InferInterface::of_ty(&interface) else {
             self.pending_diags.push(PendingDiag::QualifierNotInterface {
                 expr,
                 target: interface,
@@ -7210,7 +7212,7 @@ impl<'db> InferenceContext<'db> {
                 .iter()
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
-            let receiver = Ty::intern(TyKind::Class(
+            let receiver = Ty::intern(InferTy::Class(
                 qtn.clone(),
                 class_args.into(),
                 TyAttr::default(),
@@ -7499,37 +7501,37 @@ impl<'db> InferenceContext<'db> {
     fn static_qualifier_ty(&self, prefix: &[baml_type::Name]) -> Option<Ty> {
         let ty = match prefix {
             [single] => match single.as_str() {
-                "int" => Ty::intern(TyKind::Int {
+                "int" => Ty::intern(InferTy::Int {
                     attr: baml_type::TyAttr::default(),
                 }),
-                "bigint" => Ty::intern(TyKind::Bigint {
+                "bigint" => Ty::intern(InferTy::Bigint {
                     attr: baml_type::TyAttr::default(),
                 }),
-                "float" => Ty::intern(TyKind::Float {
+                "float" => Ty::intern(InferTy::Float {
                     attr: baml_type::TyAttr::default(),
                 }),
-                "string" => Ty::intern(TyKind::String {
+                "string" => Ty::intern(InferTy::String {
                     attr: baml_type::TyAttr::default(),
                 }),
-                "bool" => Ty::intern(TyKind::Bool {
+                "bool" => Ty::intern(InferTy::Bool {
                     attr: baml_type::TyAttr::default(),
                 }),
-                "uint8array" => Ty::intern(TyKind::Uint8Array {
+                "uint8array" => Ty::intern(InferTy::Uint8Array {
                     attr: baml_type::TyAttr::default(),
                 }),
-                "image" => Ty::intern(TyKind::Media(
+                "image" => Ty::intern(InferTy::Media(
                     baml_type::MediaKind::Image,
                     baml_type::TyAttr::default(),
                 )),
-                "audio" => Ty::intern(TyKind::Media(
+                "audio" => Ty::intern(InferTy::Media(
                     baml_type::MediaKind::Audio,
                     baml_type::TyAttr::default(),
                 )),
-                "video" => Ty::intern(TyKind::Media(
+                "video" => Ty::intern(InferTy::Media(
                     baml_type::MediaKind::Video,
                     baml_type::TyAttr::default(),
                 )),
-                "pdf" => Ty::intern(TyKind::Media(
+                "pdf" => Ty::intern(InferTy::Media(
                     baml_type::MediaKind::Pdf,
                     baml_type::TyAttr::default(),
                 )),
@@ -7607,7 +7609,7 @@ impl<'db> InferenceContext<'db> {
             // this the lambda's params would fall back to `Ty::error` and the
             // slot's synthetic effect would never see the lambda's throws.
             .and_then(|ty| match callback_root_fn(&ty)?.kind() {
-                TyKind::Function {
+                InferTy::Function {
                     params,
                     ret,
                     throws,
@@ -7751,7 +7753,7 @@ impl<'db> InferenceContext<'db> {
                     !throws.has_infer()
                         && !throws.has_error()
                         && !throws.has_typevar()
-                        && !matches!(throws.kind(), TyKind::Unknown { .. })
+                        && !matches!(throws.kind(), InferTy::Unknown { .. })
                 })
         } else {
             None
@@ -7795,11 +7797,11 @@ impl<'db> InferenceContext<'db> {
             }
         });
 
-        let params: Box<[baml_type::interned::FunctionParam]> = def
+        let params: Box<[baml_type::interned::InferFunctionParamTy]> = def
             .params
             .iter()
             .zip(&param_tys)
-            .map(|(param, ty)| baml_type::interned::FunctionParam {
+            .map(|(param, ty)| baml_type::interned::InferFunctionParamTy {
                 name: Some(param.name.clone()),
                 ty: ty.clone(),
                 mode: if param.default.is_some() {
@@ -7809,7 +7811,7 @@ impl<'db> InferenceContext<'db> {
                 },
             })
             .collect();
-        Ty::intern(TyKind::Function {
+        Ty::intern(InferTy::Function {
             params,
             ret: ret_ty,
             throws: throws_ty,
@@ -7848,7 +7850,7 @@ impl<'db> InferenceContext<'db> {
             };
             for bound in param_bounds {
                 if runtime_params.is_empty() && self.scoped_type_bindings.is_empty() {
-                    let interface = baml_type::interned::InterfaceRef::new(
+                    let interface = baml_type::interned::InferInterface::new(
                         bound.name.clone(),
                         bound
                             .generics
@@ -7873,7 +7875,7 @@ impl<'db> InferenceContext<'db> {
                     .iter()
                     .any(|runtime| runtime == &param || interface_mentions_param(&bound, runtime));
                 let argument = substitute_static_call_params(
-                    &Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default())),
+                    &Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default())),
                     instantiation,
                     &runtime_params,
                 );
@@ -7925,12 +7927,12 @@ impl<'db> InferenceContext<'db> {
                 continue;
             };
             for bound in bounds {
-                let bound = InterfaceRef::from_constraint(bound);
+                let bound = InferInterface::from_constraint(bound);
                 let runtime_slot_dependent = runtime_params
                     .iter()
                     .any(|runtime| runtime == param || interface_mentions_param(&bound, runtime));
                 let argument = substitute_static_call_params(
-                    &Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default())),
+                    &Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default())),
                     instantiation,
                     &runtime_params,
                 );
@@ -8020,7 +8022,7 @@ impl<'db> InferenceContext<'db> {
                 continue;
             };
             for bound in param_bounds {
-                let interface = baml_type::interned::InterfaceRef::new(
+                let interface = baml_type::interned::InferInterface::new(
                     bound.name.clone(),
                     bound
                         .generics
@@ -8070,7 +8072,7 @@ impl<'db> InferenceContext<'db> {
         site: ExprId,
         generic_params: &[baml_type::ParamTy],
         callee: Option<&baml_type::Name>,
-        bounds: &FxHashMap<baml_type::ParamTy, Vec<InterfaceRef>>,
+        bounds: &FxHashMap<baml_type::ParamTy, Vec<InferInterface>>,
         position: crate::lower::TypePosition,
     ) -> Vec<Ty> {
         let written = self
@@ -8143,7 +8145,7 @@ impl<'db> InferenceContext<'db> {
                         .and_then(|bounds| bounds.first())
                         .map(interface_occurrence_ty)
                         .unwrap_or_else(|| {
-                            Ty::intern(TyKind::Unknown {
+                            Ty::intern(InferTy::Unknown {
                                 attr: TyAttr::default(),
                             })
                         });
@@ -8661,7 +8663,7 @@ impl<'db> InferenceContext<'db> {
             }
         }
         let short = type_name.0.last().expect("type paths are never empty");
-        let object_ty = Ty::intern(TyKind::Class(
+        let object_ty = Ty::intern(InferTy::Class(
             self.lower.qualify_definition(
                 baml_compiler2_hir::contributions::Definition::Class(class),
                 short,
@@ -8735,8 +8737,8 @@ impl<'db> InferenceContext<'db> {
                 continue;
             };
             for bound in generic_param_bounds.get(index).into_iter().flatten() {
-                let bound = InterfaceRef::from_constraint(bound);
-                let interface = InterfaceRef::new(
+                let bound = InferInterface::from_constraint(bound);
+                let interface = InferInterface::new(
                     bound.name.clone(),
                     bound
                         .generics
@@ -8796,7 +8798,7 @@ impl<'db> InferenceContext<'db> {
                 });
             }
         }
-        let object_ty = Ty::intern(TyKind::Class(
+        let object_ty = Ty::intern(InferTy::Class(
             class_name,
             instantiation.into_boxed_slice(),
             TyAttr::default(),
@@ -8871,11 +8873,11 @@ impl<'db> InferenceContext<'db> {
         // reachable (they need not agree across arms); zero shared
         // declarers report "no common interface", two or more are
         // ambiguous.
-        if let TyKind::Union(members, _) = resolved.kind() {
+        if let InferTy::Union(members, _) = resolved.kind() {
             let members = members.to_vec();
             return self.union_member_access(at, &resolved, &members, member);
         }
-        if let TyKind::Class(qtn, args, _) = resolved.kind()
+        if let InferTy::Class(qtn, args, _) = resolved.kind()
             && let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
                 self.facts.definition_of(qtn)
             && let Some((_, field_ty)) = crate::lower::class_field_types(self.db, class)
@@ -8890,7 +8892,7 @@ impl<'db> InferenceContext<'db> {
                 }),
             );
         }
-        if let TyKind::Class(qtn, args, _) = resolved.kind()
+        if let InferTy::Class(qtn, args, _) = resolved.kind()
             && let Some(crate::package_interface::ExportedType::Class { fields, .. }) =
                 crate::package_interface::mounted_type_row(self.db, qtn)
             && let Some((_, field_ty, _)) = fields.iter().find(|(field, ..)| field == member)
@@ -9019,7 +9021,7 @@ impl<'db> InferenceContext<'db> {
                         });
                 }
                 return (
-                    Ty::intern(TyKind::Unknown {
+                    Ty::intern(InferTy::Unknown {
                         attr: TyAttr::default(),
                     }),
                     None,
@@ -9236,7 +9238,7 @@ impl<'db> InferenceContext<'db> {
         deprecated,
         reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
     )]
-    fn qualified_interface_display(&self, iface: &baml_type::interned::InterfaceRef) -> String {
+    fn qualified_interface_display(&self, iface: &baml_type::interned::InferInterface) -> String {
         let qtn = &iface.name;
         let base = if qtn.is_local() && !self.lower.namespace_context().is_empty() {
             match qtn.namespace().as_slice() {
@@ -9520,7 +9522,7 @@ impl<'db> InferenceContext<'db> {
     fn expand_alias_ty(&mut self, ty: &Ty) -> Ty {
         let mut resolved = ty.clone();
         let mut fuel = 8u32;
-        while let TyKind::TypeAlias(qtn, _) = resolved.kind() {
+        while let InferTy::TypeAlias(qtn, _) = resolved.kind() {
             if fuel == 0 {
                 break;
             }
@@ -9543,10 +9545,10 @@ impl<'db> InferenceContext<'db> {
     fn expected_list_element(&mut self, expected: &Expectation) -> Option<Ty> {
         let shape = self.expectation_shape(expected)?;
         match shape.kind() {
-            TyKind::List(element, _) => Some(element.clone()),
-            TyKind::Union(members, _) => {
+            InferTy::List(element, _) => Some(element.clone()),
+            InferTy::Union(members, _) => {
                 let mut lists = members.iter().filter_map(|member| match member.kind() {
-                    TyKind::List(element, _) => Some(element.clone()),
+                    InferTy::List(element, _) => Some(element.clone()),
                     _ => None,
                 });
                 let first = lists.next()?;
@@ -9560,10 +9562,10 @@ impl<'db> InferenceContext<'db> {
     fn expected_map_entry(&mut self, expected: &Expectation) -> Option<(Ty, Ty)> {
         let shape = self.expectation_shape(expected)?;
         match shape.kind() {
-            TyKind::Map { key, value, .. } => Some((key.clone(), value.clone())),
-            TyKind::Union(members, _) => {
+            InferTy::Map { key, value, .. } => Some((key.clone(), value.clone())),
+            InferTy::Union(members, _) => {
                 let mut maps = members.iter().filter_map(|member| match member.kind() {
-                    TyKind::Map { key, value, .. } => Some((key.clone(), value.clone())),
+                    InferTy::Map { key, value, .. } => Some((key.clone(), value.clone())),
                     _ => None,
                 });
                 let first = maps.next()?;
@@ -9753,7 +9755,7 @@ impl<'db> InferenceContext<'db> {
             return match policy {
                 IngestHoles::Anchored(at) => {
                     let var_ty = self.table.new_var_ty();
-                    if let TyKind::Infer { var, .. } = var_ty.kind() {
+                    if let InferTy::InferVar { var, .. } = var_ty.kind() {
                         self.hole_vars.push((*var, at));
                     }
                     var_ty
@@ -9779,28 +9781,28 @@ impl<'db> InferenceContext<'db> {
         use baml_type::LoweringTy as LoweringTyShape;
         let kind = match ty {
             LoweringTyShape::List(inner, attr) => {
-                TyKind::List(self.ingest_lowered(inner, policy), attr.clone())
+                InferTy::List(self.ingest_lowered(inner, policy), attr.clone())
             }
-            LoweringTyShape::Map { key, value, attr } => TyKind::Map {
+            LoweringTyShape::Map { key, value, attr } => InferTy::Map {
                 key: self.ingest_lowered(key, policy),
                 value: self.ingest_lowered(value, policy),
                 attr: attr.clone(),
             },
-            LoweringTyShape::Union(members, attr) => TyKind::Union(
+            LoweringTyShape::Union(members, attr) => InferTy::Union(
                 members
                     .iter()
                     .map(|member| self.ingest_lowered(member, policy))
                     .collect(),
                 attr.clone(),
             ),
-            LoweringTyShape::Class(name, args, attr) => TyKind::Class(
+            LoweringTyShape::Class(name, args, attr) => InferTy::Class(
                 name.clone(),
                 args.iter()
                     .map(|arg| self.ingest_lowered(arg, policy))
                     .collect(),
                 attr.clone(),
             ),
-            LoweringTyShape::Interface(name, args, pins, attr) => TyKind::Interface(
+            LoweringTyShape::Interface(name, args, pins, attr) => InferTy::Interface(
                 name.clone(),
                 args.iter()
                     .map(|arg| self.ingest_lowered(arg, policy))
@@ -9815,10 +9817,10 @@ impl<'db> InferenceContext<'db> {
                 ret,
                 throws,
                 attr,
-            } => TyKind::Function {
+            } => InferTy::Function {
                 params: params
                     .iter()
-                    .map(|param| baml_type::interned::FunctionParam {
+                    .map(|param| baml_type::interned::InferFunctionParamTy {
                         name: param.name.clone(),
                         ty: self.ingest_lowered(&param.ty, policy),
                         mode: param.mode,
@@ -9828,7 +9830,7 @@ impl<'db> InferenceContext<'db> {
                 throws: self.ingest_lowered(throws, policy),
                 attr: attr.clone(),
             },
-            LoweringTyShape::Future(value, error, attr) => TyKind::Future(
+            LoweringTyShape::Future(value, error, attr) => InferTy::Future(
                 self.ingest_lowered(value, policy),
                 self.ingest_lowered(error, policy),
                 attr.clone(),
@@ -9838,9 +9840,9 @@ impl<'db> InferenceContext<'db> {
                 interface,
                 member,
                 attr,
-            } => TyKind::AssociatedTypeProjection {
+            } => InferTy::AssociatedTypeProjection {
                 base: self.ingest_lowered(base, policy),
-                interface: baml_type::interned::InterfaceRef::new(
+                interface: baml_type::interned::InferInterface::new(
                     interface.name.clone(),
                     interface
                         .generics
@@ -9899,13 +9901,13 @@ impl<'db> InferenceContext<'db> {
         let mut facts: Vec<Ty> = Vec::new();
         for (_, contribution) in &channel {
             let finalized = self.finalize_incoming_effect(contribution);
-            if matches!(finalized.kind(), TyKind::Never { .. }) {
+            if matches!(finalized.kind(), InferTy::Never { .. }) {
                 continue;
             }
             let resolved = self.table.resolve_completely(&finalized);
             let canonical = self.matrix_scrut(&resolved);
             match canonical.kind() {
-                TyKind::Union(members, _) => {
+                InferTy::Union(members, _) => {
                     for member in members {
                         if !facts.contains(member) {
                             facts.push(member.clone());
@@ -9942,7 +9944,7 @@ impl<'db> InferenceContext<'db> {
                     baml_type::Name::new("ErrorContext"),
                 )) {
                     Some(baml_compiler2_hir::contributions::Definition::Class(_)) => {
-                        Ty::intern(TyKind::Class(
+                        Ty::intern(InferTy::Class(
                             baml_type::TypeName::new(
                                 baml_type::Name::new("baml"),
                                 vec![baml_type::Name::new("errors")],
@@ -9967,7 +9969,7 @@ impl<'db> InferenceContext<'db> {
                     .lower_pattern(
                         body,
                         arm.pattern,
-                        &Ty::intern(TyKind::Unknown {
+                        &Ty::intern(InferTy::Unknown {
                             attr: TyAttr::default(),
                         }),
                     )
@@ -10008,7 +10010,7 @@ impl<'db> InferenceContext<'db> {
                 // its claim probed as `unknown` - so with no facts left
                 // its world is `never`, not the top type.
                 let arm_scrut = if may.is_empty() {
-                    if matches!(claim.kind(), TyKind::Unknown { .. }) {
+                    if matches!(claim.kind(), InferTy::Unknown { .. }) {
                         Ty::never()
                     } else {
                         claim.clone()
@@ -10044,8 +10046,8 @@ impl<'db> InferenceContext<'db> {
     fn panic_subset(&mut self, claim: &Ty) -> Option<Ty> {
         let expanded = self.expand_alias_ty(claim);
         match expanded.kind() {
-            TyKind::Class(qtn, _, _) if qtn.is_panic_type() => Some(expanded.clone()),
-            TyKind::Union(members, _) => {
+            InferTy::Class(qtn, _, _) if qtn.is_panic_type() => Some(expanded.clone()),
+            InferTy::Union(members, _) => {
                 let members = members.to_vec();
                 let panics: Vec<Ty> = members
                     .iter()
@@ -10111,10 +10113,10 @@ impl<'db> InferenceContext<'db> {
             return;
         }
         let nullable = match resolved.kind() {
-            TyKind::Null { .. } | TyKind::Unknown { .. } => true,
-            TyKind::Union(members, _) => members
+            InferTy::Null { .. } | InferTy::Unknown { .. } => true,
+            InferTy::Union(members, _) => members
                 .iter()
-                .any(|member| matches!(member.kind(), TyKind::Null { .. })),
+                .any(|member| matches!(member.kind(), InferTy::Null { .. })),
             _ => false,
         };
         // An optional link INSIDE a chain sees its base already peeled;
@@ -10149,10 +10151,10 @@ impl<'db> InferenceContext<'db> {
                         continue;
                     }
                     let nullable = match resolved.kind() {
-                        TyKind::Null { .. } => true,
-                        TyKind::Union(members, _) => members
+                        InferTy::Null { .. } => true,
+                        InferTy::Union(members, _) => members
                             .iter()
-                            .any(|member| matches!(member.kind(), TyKind::Null { .. })),
+                            .any(|member| matches!(member.kind(), InferTy::Null { .. })),
                         _ => false,
                     };
                     if nullable {
@@ -10187,7 +10189,7 @@ impl<'db> InferenceContext<'db> {
     /// clause mentions rigid type vars (the check defers through bounds
     /// rather than being skipped: B-1082's rule).
     fn record_throw(&mut self, at: ExprId, ty: &Ty) {
-        if matches!(ty.kind(), TyKind::Never { .. }) || ty.has_error() {
+        if matches!(ty.kind(), InferTy::Never { .. }) || ty.has_error() {
             return;
         }
         // Thrown literals KEEP their literal types (no widening): catch
@@ -10352,7 +10354,7 @@ impl<'db> InferenceContext<'db> {
         make_container: impl FnOnce(Ty) -> Ty,
     ) -> Ty {
         let slot = self.table.new_establishment_var_ty();
-        let TyKind::Infer { var, .. } = slot.kind() else {
+        let InferTy::InferVar { var, .. } = slot.kind() else {
             unreachable!("a fresh establishment variable must be an inference type");
         };
         let var = *var;
@@ -10590,7 +10592,7 @@ impl<'db> InferenceContext<'db> {
                 // elements to the sentinel without erasing the finding).
                 let tainted = |ty: &Ty| {
                     ty.has_error()
-                        && matches!(ty.kind(), TyKind::Error { .. } | TyKind::Unknown { .. })
+                        && matches!(ty.kind(), InferTy::Error { .. } | InferTy::Unknown { .. })
                 };
                 if tainted(expected) || tainted(actual) {
                     continue;
@@ -10604,7 +10606,7 @@ impl<'db> InferenceContext<'db> {
                 // The for-desugar's iterability failure reads as its own
                 // message (TIR's NotIterable), not a raw interface mismatch.
                 let error = match expected.kind() {
-                    TyKind::Interface(qtn, _, _, _)
+                    InferTy::Interface(qtn, _, _, _)
                         if qtn.package().as_str() == "baml"
                             && qtn.namespace().len() == 1
                             && qtn.namespace()[0].as_str() == "iter"
@@ -10620,7 +10622,7 @@ impl<'db> InferenceContext<'db> {
                     // bound fails - names the unsatisfied bound (rustc's
                     // obligation-cause refinement of a fulfillment error)
                     // rather than a bare mismatch.
-                    TyKind::Interface(..) => {
+                    InferTy::Interface(..) => {
                         match self.first_failing_blanket_bound(actual, expected) {
                             Some(bound) => TirTypeError::BlanketBoundNotSatisfied {
                                 value_type: actual.to_plain(),
@@ -11116,7 +11118,7 @@ impl<'db> InferenceContext<'db> {
                         // implementor either — impls attach to its base, so a
                         // `Self`-returning method would produce a base-typed
                         // value inhabiting the literal type.
-                        if matches!(slot.kind(), TyKind::Never { .. } | TyKind::Literal(..)) {
+                        if matches!(slot.kind(), InferTy::Never { .. } | InferTy::Literal(..)) {
                             diags.push(TirDiagnostic {
                                 error: TirTypeError::SelflessMethodNeedsConcreteSelf {
                                     interface_name: baml_type::Name::new(
@@ -11131,7 +11133,7 @@ impl<'db> InferenceContext<'db> {
                             });
                             continue;
                         }
-                        if !matches!(slot.kind(), TyKind::Interface(..) | TyKind::Union(..)) {
+                        if !matches!(slot.kind(), InferTy::Interface(..) | InferTy::Union(..)) {
                             continue;
                         }
                         if !takes_self {
@@ -11370,7 +11372,7 @@ impl<'db> InferenceContext<'db> {
                         // A synthetic-effect-param extra traces to a
                         // CALLBACK parameter: the humanized wording names
                         // it (TIR's CallbackThrowsContractViolation).
-                        if let TyKind::TypeVar(param, _) = extra.kind()
+                        if let InferTy::TypeVar(param, _) = extra.kind()
                             && baml_type::is_synthetic_effect_param(param.name())
                             && let Some(callback) = self.callback_param_for_effect(param)
                         {
@@ -11583,7 +11585,7 @@ impl<'db> InferenceContext<'db> {
                     }
                     RuntimeCheck::Bound { argument, bound } => {
                         *argument = self.finalize_ty(argument);
-                        *bound = InterfaceRef::new(
+                        *bound = InferInterface::new(
                             bound.name.clone(),
                             bound
                                 .generics
@@ -11607,7 +11609,7 @@ impl<'db> InferenceContext<'db> {
                 }
                 RuntimeCheck::Bound { argument, bound } => {
                     *argument = self.finalize_ty(argument);
-                    *bound = InterfaceRef::new(
+                    *bound = InferInterface::new(
                         bound.name.clone(),
                         bound
                             .generics
@@ -11686,7 +11688,7 @@ impl<'db> InferenceContext<'db> {
         if rebuilt.has_infer() {
             return rebuilt;
         }
-        if let TyKind::AssociatedTypeProjection {
+        if let InferTy::AssociatedTypeProjection {
             base,
             interface,
             member,
@@ -11727,14 +11729,14 @@ impl<'db> InferenceContext<'db> {
     /// oracle cannot determine stays the error sentinel: iteration over
     /// a type with no `Iterable` evidence has no element type.
     fn iteration_item(&mut self, collection: &Ty, at: ExprId) -> Ty {
-        let iterable = baml_type::interned::InterfaceRef::new(
+        let iterable = baml_type::interned::InferInterface::new(
             baml_type::TypeName::new(
                 baml_type::Name::new("baml"),
                 vec![baml_type::Name::new("iter")],
                 baml_type::Name::new("Iterable"),
             ),
             Box::new([]),
-            Vec::new(),
+            Box::new([]),
         );
         // rustc's for-desugar is an `into_iter` CALL: the iterability
         // obligation registers against the collection (selection
@@ -11750,7 +11752,7 @@ impl<'db> InferenceContext<'db> {
             not_concrete_rejects: false,
         });
         let existential = iterable.existential();
-        let projection = Ty::intern(TyKind::AssociatedTypeProjection {
+        let projection = Ty::intern(InferTy::AssociatedTypeProjection {
             base: collection.clone(),
             interface: iterable,
             member: baml_type::Name::new("Item"),
@@ -11789,7 +11791,7 @@ impl<'db> InferenceContext<'db> {
     /// boundary; it folds into the shared algebra at cutover (S16).
     fn canonicalize_unions(&self, ty: &Ty) -> Ty {
         match ty.kind() {
-            TyKind::Union(members, _) => {
+            InferTy::Union(members, _) => {
                 let members: Vec<Ty> = members
                     .iter()
                     .map(|member| self.canonicalize_unions(member))
@@ -11800,7 +11802,7 @@ impl<'db> InferenceContext<'db> {
                 // cascade suppression), so a container member like
                 // `!error[]` would MERGE into `int[]` and vanish.
                 // rustc's discipline is the opposite for identity -
-                // `TyKind::Error` equals only itself in canonical
+                // `InferTy::Error` equals only itself in canonical
                 // forms; compat lives in the relate layer alone.
                 // Until the shared algebra splits those roles (S16,
                 // when TIR stops consuming it), flatten/dedup/collapse
@@ -11810,13 +11812,13 @@ impl<'db> InferenceContext<'db> {
                 }
                 let joined = canonical_union_interned(&members, &self.facts);
                 match joined.kind() {
-                    TyKind::Union(members, attr) => {
+                    InferTy::Union(members, attr) => {
                         let (mut ordered, nulls): (Vec<Ty>, Vec<Ty>) = members
                             .iter()
                             .cloned()
-                            .partition(|member| !matches!(member.kind(), TyKind::Null { .. }));
+                            .partition(|member| !matches!(member.kind(), InferTy::Null { .. }));
                         ordered.extend(nulls);
-                        Ty::intern(TyKind::Union(ordered.into(), attr.clone()))
+                        Ty::intern(InferTy::Union(ordered.into(), attr.clone()))
                     }
                     _ => joined,
                 }
@@ -11911,7 +11913,7 @@ impl<'db> InferenceContext<'db> {
             // only the declared `throws unknown` check when the lambda's
             // `never` has not landed yet). Informative uppers keep the
             // meet (B-898's `?D <= Generate<int>` solves the class).
-            .filter(|ty| !matches!(ty.kind(), TyKind::Unknown { .. }))
+            .filter(|ty| !matches!(ty.kind(), InferTy::Unknown { .. }))
             .partition(|ty| !ty.has_infer());
         if lowers.is_empty() && uppers.is_empty() {
             // GENERALIZATION (rustc's combine/generalize shape):
@@ -12064,7 +12066,7 @@ impl<'db> InferenceContext<'db> {
     /// diagnostic).
     fn structurally_resolve(&mut self, ty: &Ty) -> Ty {
         let resolved = self.table.resolve_completely(ty);
-        let mut resolved = if let TyKind::Infer { var, .. } = resolved.kind() {
+        let mut resolved = if let InferTy::InferVar { var, .. } = resolved.kind() {
             let var = *var;
             let bounds = self.table.var_bounds(var);
             if self.try_solve_bounded_var(var, &bounds) {
@@ -12108,7 +12110,7 @@ impl<'db> InferenceContext<'db> {
         // sees the nominal wrapper, so no consumer can forget to
         // expand. Recorded types keep the written name - this is the
         // demanded STRUCTURE, not the render.
-        if matches!(resolved.kind(), TyKind::TypeAlias(..)) {
+        if matches!(resolved.kind(), InferTy::TypeAlias(..)) {
             return self.expand_alias_ty(&resolved);
         }
         resolved
@@ -12156,11 +12158,11 @@ impl<'db> InferenceContext<'db> {
         let data = baml_compiler2_ppir::item_data::function_data(self.db, function);
         for (index, param_ty) in self.param_tys.iter().enumerate() {
             let resolved = self.table.resolve_completely(param_ty);
-            let Some(TyKind::Function { throws, .. }) = callback_root_fn(&resolved).map(Ty::kind)
+            let Some(InferTy::Function { throws, .. }) = callback_root_fn(&resolved).map(Ty::kind)
             else {
                 continue;
             };
-            if matches!(throws.kind(), TyKind::TypeVar(p, _) if p == effect) {
+            if matches!(throws.kind(), InferTy::TypeVar(p, _) if p == effect) {
                 return data.params.get(index).map(|param| param.name.clone());
             }
         }
@@ -12385,8 +12387,8 @@ fn skolemize_infer(ty: &Ty) -> Ty {
     if !ty.has_infer() {
         return ty.clone();
     }
-    if let TyKind::Infer { var, attr } = ty.kind() {
-        return Ty::intern(TyKind::TypeVar(
+    if let InferTy::InferVar { var, attr } = ty.kind() {
+        return Ty::intern(InferTy::TypeVar(
             baml_type::ParamTy::new(
                 u32::MAX - var.index(),
                 baml_type::Name::new(format!("?{}", var.index())),
@@ -12403,7 +12405,7 @@ fn collect_infer_vars(ty: &Ty, out: &mut Vec<baml_type::interned::InferVar>) {
     if !ty.has_infer() {
         return;
     }
-    if let TyKind::Infer { var, .. } = ty.kind() {
+    if let InferTy::InferVar { var, .. } = ty.kind() {
         out.push(*var);
     }
     baml_type::interned::for_each_child(ty.kind(), |child| collect_infer_vars(child, out));
@@ -12414,20 +12416,20 @@ fn collect_infer_vars(ty: &Ty, out: &mut Vec<baml_type::interned::InferVar>) {
 /// (only pairs plain unification could relate member-wise).
 fn same_head_constructor(source: &Ty, target: &Ty) -> bool {
     match (source.kind(), target.kind()) {
-        (TyKind::List(..), TyKind::List(..))
-        | (TyKind::Map { .. }, TyKind::Map { .. })
-        | (TyKind::Future(..), TyKind::Future(..)) => true,
-        (TyKind::Class(a, a_args, _), TyKind::Class(b, b_args, _)) => {
+        (InferTy::List(..), InferTy::List(..))
+        | (InferTy::Map { .. }, InferTy::Map { .. })
+        | (InferTy::Future(..), InferTy::Future(..)) => true,
+        (InferTy::Class(a, a_args, _), InferTy::Class(b, b_args, _)) => {
             a == b && a_args.len() == b_args.len()
         }
-        (TyKind::Interface(a, a_args, _, _), TyKind::Interface(b, b_args, _, _)) => {
+        (InferTy::Interface(a, a_args, _, _), InferTy::Interface(b, b_args, _, _)) => {
             a == b && a_args.len() == b_args.len()
         }
         (
-            TyKind::Function {
+            InferTy::Function {
                 params: a_params, ..
             },
-            TyKind::Function {
+            InferTy::Function {
                 params: b_params, ..
             },
         ) => a_params.len() == b_params.len(),
@@ -12447,7 +12449,7 @@ fn ty_mentions_param(ty: &Ty, param: &baml_type::ParamTy) -> bool {
         if *found {
             return;
         }
-        if matches!(ty.kind(), TyKind::TypeVar(p, _) if p == param) {
+        if matches!(ty.kind(), InferTy::TypeVar(p, _) if p == param) {
             *found = true;
             return;
         }
@@ -12462,7 +12464,7 @@ fn ty_mentions_param(ty: &Ty, param: &baml_type::ParamTy) -> bool {
 
 fn external_bounds_map(
     external: &crate::callable::ExternalCallable,
-) -> FxHashMap<baml_type::ParamTy, Vec<InterfaceRef>> {
+) -> FxHashMap<baml_type::ParamTy, Vec<InferInterface>> {
     external
         .owner_generic_params
         .iter()
@@ -12476,7 +12478,7 @@ fn external_bounds_map(
         .map(|(param, bounds)| {
             (
                 param.clone(),
-                bounds.iter().map(InterfaceRef::from_constraint).collect(),
+                bounds.iter().map(InferInterface::from_constraint).collect(),
             )
         })
         .collect()
@@ -12532,7 +12534,7 @@ fn external_target_path(target: &crate::callable::ExternalCallTarget) -> baml_ty
     baml_type::Name::new(path)
 }
 
-fn interface_mentions_param(interface: &InterfaceRef, param: &baml_type::ParamTy) -> bool {
+fn interface_mentions_param(interface: &InferInterface, param: &baml_type::ParamTy) -> bool {
     interface
         .generics
         .iter()
@@ -12545,7 +12547,7 @@ fn interface_mentions_param(interface: &InterfaceRef, param: &baml_type::ParamTy
 /// itself? See [`InferCtx::report_runtime_type_escape`] for why the bare
 /// parameter is the one shape that does not escape.
 fn runtime_param_escapes(published: &Ty, param: &baml_type::ParamTy) -> bool {
-    if matches!(published.kind(), TyKind::TypeVar(candidate, _) if candidate == param) {
+    if matches!(published.kind(), InferTy::TypeVar(candidate, _) if candidate == param) {
         return false;
     }
     ty_mentions_param(published, param)
@@ -12611,8 +12613,8 @@ fn collect_unreflect_type_refs(
     }
 }
 
-fn interface_occurrence_ty(interface: &InterfaceRef) -> Ty {
-    Ty::intern(TyKind::Interface(
+fn interface_occurrence_ty(interface: &InferInterface) -> Ty {
+    Ty::intern(InferTy::Interface(
         interface.name.clone(),
         interface.generics.clone(),
         interface.associated_types.clone(),
@@ -12628,7 +12630,7 @@ fn substitute_static_call_params(
     args: &[Ty],
     runtime_params: &[baml_type::ParamTy],
 ) -> Ty {
-    if let TyKind::TypeVar(param, _) = ty.kind() {
+    if let InferTy::TypeVar(param, _) = ty.kind() {
         if runtime_params.contains(param) {
             return ty.clone();
         }
@@ -12646,7 +12648,7 @@ fn substitute_static_call_params(
 }
 
 fn replace_rigid_param(ty: &Ty, param: &baml_type::ParamTy, replacement: &Ty) -> Ty {
-    if matches!(ty.kind(), TyKind::TypeVar(candidate, _) if candidate == param) {
+    if matches!(ty.kind(), InferTy::TypeVar(candidate, _) if candidate == param) {
         return replacement.clone();
     }
     if !ty.has_typevar() {
@@ -12659,11 +12661,11 @@ fn replace_rigid_param(ty: &Ty, param: &baml_type::ParamTy, replacement: &Ty) ->
 }
 
 fn substitute_static_interface_params(
-    interface: &InterfaceRef,
+    interface: &InferInterface,
     args: &[Ty],
     runtime_params: &[baml_type::ParamTy],
-) -> InterfaceRef {
-    InterfaceRef::new(
+) -> InferInterface {
+    InferInterface::new(
         interface.name.clone(),
         interface
             .generics
@@ -12684,7 +12686,7 @@ fn substitute_static_interface_params(
 }
 
 fn bind_receiver(fn_ty: Ty) -> Ty {
-    let TyKind::Function {
+    let InferTy::Function {
         params,
         ret,
         throws,
@@ -12702,7 +12704,7 @@ fn bind_receiver(fn_ty: Ty) -> Ty {
     if !binds {
         return fn_ty;
     }
-    Ty::intern(TyKind::Function {
+    Ty::intern(InferTy::Function {
         params: params[1..].to_vec().into_boxed_slice(),
         ret: ret.clone(),
         throws: throws.clone(),
@@ -12714,10 +12716,10 @@ fn bind_receiver(fn_ty: Ty) -> Ty {
 /// into an interned function type. Shared by direct calls (turbofish-aware
 /// instantiation) and value-position references (fresh-var instantiation).
 fn function_value_ty(signature: &crate::lower::FunctionSignature, instantiation: &[Ty]) -> Ty {
-    let params: Box<[baml_type::interned::FunctionParam]> = signature
+    let params: Box<[baml_type::interned::InferFunctionParamTy]> = signature
         .params
         .iter()
-        .map(|param| baml_type::interned::FunctionParam {
+        .map(|param| baml_type::interned::InferFunctionParamTy {
             name: Some(param.name.clone()),
             ty: substitute_params(&param.ty, instantiation),
             mode: if param.has_default {
@@ -12727,7 +12729,7 @@ fn function_value_ty(signature: &crate::lower::FunctionSignature, instantiation:
             },
         })
         .collect();
-    Ty::intern(TyKind::Function {
+    Ty::intern(InferTy::Function {
         params,
         ret: substitute_params(&signature.ret, instantiation),
         throws: substitute_params(&signature.throws, instantiation),
@@ -12759,7 +12761,7 @@ fn erase_infer(ty: &Ty) -> Ty {
     if !ty.has_infer() {
         return ty.clone();
     }
-    if matches!(ty.kind(), TyKind::Infer { .. }) {
+    if matches!(ty.kind(), InferTy::InferVar { .. }) {
         return Ty::error();
     }
     Ty::intern(ty.kind().map_children(erase_infer))
@@ -12771,8 +12773,8 @@ fn infer_to_diagnostic_unknown(ty: &Ty) -> Ty {
     if !ty.has_infer() {
         return ty.clone();
     }
-    if matches!(ty.kind(), TyKind::Infer { .. }) {
-        return Ty::intern(TyKind::Unknown {
+    if matches!(ty.kind(), InferTy::InferVar { .. }) {
+        return Ty::intern(InferTy::Unknown {
             attr: TyAttr::default(),
         });
     }
@@ -12784,7 +12786,7 @@ fn infer_to_diagnostic_unknown(ty: &Ty) -> Ty {
 /// only - container-element widening arrives with the join machinery.
 fn widen_fresh_literal(ty: &Ty) -> Ty {
     match ty.kind() {
-        TyKind::Literal(literal, Freshness::Fresh, attr) => {
+        InferTy::Literal(literal, Freshness::Fresh, attr) => {
             Ty::intern(literal_base(literal, attr.clone()))
         }
         _ => ty.clone(),
@@ -12792,13 +12794,13 @@ fn widen_fresh_literal(ty: &Ty) -> Ty {
 }
 
 /// The base primitive a literal type belongs to.
-pub(crate) fn literal_base(literal: &Literal, attr: TyAttr) -> TyKind {
+pub(crate) fn literal_base(literal: &Literal, attr: TyAttr) -> InferTy {
     match literal {
-        Literal::Int(_) => TyKind::Int { attr },
-        Literal::Bigint(_) => TyKind::Bigint { attr },
-        Literal::Float(_) => TyKind::Float { attr },
-        Literal::String(_) => TyKind::String { attr },
-        Literal::Bool(_) => TyKind::Bool { attr },
+        Literal::Int(_) => InferTy::Int { attr },
+        Literal::Bigint(_) => InferTy::Bigint { attr },
+        Literal::Float(_) => InferTy::Float { attr },
+        Literal::String(_) => InferTy::String { attr },
+        Literal::Bool(_) => InferTy::Bool { attr },
     }
 }
 
@@ -12808,22 +12810,22 @@ pub(crate) fn literal_base(literal: &Literal, attr: TyAttr) -> TyKind {
 fn operand_members(ty: &Ty) -> Vec<Ty> {
     fn widen(ty: &Ty) -> Ty {
         match ty.kind() {
-            TyKind::Literal(literal, _, attr) => Ty::intern(literal_base(literal, attr.clone())),
+            InferTy::Literal(literal, _, attr) => Ty::intern(literal_base(literal, attr.clone())),
             // A builtin primitive-companion class receiver (`self` inside
             // `class Float`) IS its primitive for dispatch - the single
             // collapse rule (`baml_type::QualifiedTypeName::builtin_primitive`).
-            TyKind::Class(qtn, args, attr) if args.is_empty() => {
+            InferTy::Class(qtn, args, attr) if args.is_empty() => {
                 use baml_type::PrimitiveType;
                 match qtn.builtin_primitive() {
-                    Some(PrimitiveType::Int) => Ty::intern(TyKind::Int { attr: attr.clone() }),
+                    Some(PrimitiveType::Int) => Ty::intern(InferTy::Int { attr: attr.clone() }),
                     Some(PrimitiveType::Bigint) => {
-                        Ty::intern(TyKind::Bigint { attr: attr.clone() })
+                        Ty::intern(InferTy::Bigint { attr: attr.clone() })
                     }
-                    Some(PrimitiveType::Float) => Ty::intern(TyKind::Float { attr: attr.clone() }),
+                    Some(PrimitiveType::Float) => Ty::intern(InferTy::Float { attr: attr.clone() }),
                     Some(PrimitiveType::String) => {
-                        Ty::intern(TyKind::String { attr: attr.clone() })
+                        Ty::intern(InferTy::String { attr: attr.clone() })
                     }
-                    Some(PrimitiveType::Bool) => Ty::intern(TyKind::Bool { attr: attr.clone() }),
+                    Some(PrimitiveType::Bool) => Ty::intern(InferTy::Bool { attr: attr.clone() }),
                     _ => ty.clone(),
                 }
             }
@@ -12831,7 +12833,7 @@ fn operand_members(ty: &Ty) -> Vec<Ty> {
         }
     }
     match ty.kind() {
-        TyKind::Union(members, _) => members.iter().map(widen).collect(),
+        InferTy::Union(members, _) => members.iter().map(widen).collect(),
         _ => vec![widen(ty)],
     }
 }
@@ -12876,7 +12878,7 @@ mod runtime_param_escape_tests {
     }
 
     fn var(param: &baml_type::ParamTy) -> Ty {
-        Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default()))
+        Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default()))
     }
 
     /// The whole rule is one boundary: the parameter ITSELF is a value's type
@@ -12889,7 +12891,7 @@ mod runtime_param_escape_tests {
         assert!(!runtime_param_escapes(&Ty::int(), &param));
         assert!(!runtime_param_escapes(&Ty::never(), &param));
         assert!(runtime_param_escapes(
-            &Ty::intern(TyKind::List(var(&param), TyAttr::default())),
+            &Ty::intern(InferTy::List(var(&param), TyAttr::default())),
             &param
         ));
         assert!(runtime_param_escapes(
@@ -12905,7 +12907,7 @@ mod runtime_param_escape_tests {
         let other = baml_type::ParamTy::new(0x8000_0002, baml_type::Name::new("Other"));
         assert!(!runtime_param_escapes(&var(&other), &param()));
         assert!(!runtime_param_escapes(
-            &Ty::intern(TyKind::List(var(&other), TyAttr::default())),
+            &Ty::intern(InferTy::List(var(&other), TyAttr::default())),
             &param()
         ));
     }

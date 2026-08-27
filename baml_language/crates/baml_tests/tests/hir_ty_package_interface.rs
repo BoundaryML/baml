@@ -208,7 +208,7 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
     let baml_type::Ty::Interface(qtn, args, pins, _) = ty else {
         unreachable!()
     };
-    let root = baml_type::interned::InterfaceRef::new(
+    let root = baml_type::interned::InferInterface::new(
         qtn,
         if args.is_empty() {
             Box::new([baml_type::interned::Ty::int()])

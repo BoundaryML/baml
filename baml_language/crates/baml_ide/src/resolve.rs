@@ -470,7 +470,7 @@ pub fn receiver_at_dot<'db>(
     // package qualifier, and inference records the error sentinel for the
     // `baml` it could not read as a value. Reporting that as a receiver
     // would answer "no members" for a dot that has plenty.
-    best.filter(|(_, ty, _)| !matches!(ty.kind(), baml_type::interned::TyKind::Error { .. }))
+    best.filter(|(_, ty, _)| !matches!(ty.kind(), baml_type::interned::InferTy::Error { .. }))
         .map(|(owner, ty, _)| (owner, ty))
 }
 
@@ -591,7 +591,7 @@ pub fn object_literal_at<'db>(
             if !(span.contains(offset) || span.end() == offset) {
                 continue;
             }
-            let Some(baml_type::interned::TyKind::Class(qtn, ..)) = inference
+            let Some(baml_type::interned::InferTy::Class(qtn, ..)) = inference
                 .type_of_expr
                 .get(&expr_id)
                 .map(baml_type::interned::Ty::kind)

@@ -24,7 +24,7 @@
 use baml_compiler2_ast::{ExprBody, ExprId, MatchArmId, PatId, Pattern};
 use baml_type::{
     Freshness, TyAttr,
-    interned::{InterfaceRef, Ty, TyKind},
+    interned::{InferInterface, InferTy, Ty},
     normalize::{TypeContext as _, normalize_interned},
 };
 
@@ -333,7 +333,7 @@ impl<'db> InferenceContext<'db> {
                         .map(|_| self.table.new_var_ty())
                         .collect(),
                 };
-                Some(Ty::intern(TyKind::Class(
+                Some(Ty::intern(InferTy::Class(
                     qtn,
                     args.into(),
                     TyAttr::default(),
@@ -504,7 +504,7 @@ impl<'db> InferenceContext<'db> {
                     0xc000_0000 | (identity & 0x3fff_ffff),
                     baml_type::Name::new(format!("$unreflect${identity:08x}")),
                 );
-                let constructor = Ty::intern(TyKind::TypeVar(parameter, TyAttr::default()));
+                let constructor = Ty::intern(InferTy::TypeVar(parameter, TyAttr::default()));
                 PatternOutcome {
                     // Each runtime predicate is possible but cannot cover a
                     // static alphabet. Its statement-independent rigid
@@ -664,7 +664,7 @@ impl<'db> InferenceContext<'db> {
         let adopted = scrut_members(scrut)
             .into_iter()
             .find_map(|member| match member.kind() {
-                TyKind::Interface(member_qtn, args, pins, _)
+                InferTy::Interface(member_qtn, args, pins, _)
                     if *member_qtn == qtn
                         && (written_args.is_empty()
                             || (written_args.len() == args.len()
@@ -702,13 +702,17 @@ impl<'db> InferenceContext<'db> {
                 },
             )
         };
-        let head = Ty::intern(TyKind::Interface(
+        let head = Ty::intern(InferTy::Interface(
             qtn.clone(),
             args.clone().into_boxed_slice(),
             pins.clone().into_boxed_slice(),
             attr(),
         ));
-        let target = InterfaceRef::new(qtn.clone(), args.into_boxed_slice(), pins);
+        let target = InferInterface::new(
+            qtn.clone(),
+            args.into_boxed_slice(),
+            pins.into_boxed_slice(),
+        );
 
         let declared: Vec<baml_type::Name> =
             data.fields.iter().map(|field| field.name.clone()).collect();
@@ -770,11 +774,11 @@ impl<'db> InferenceContext<'db> {
         let dpat = {
             let iface_dpat = DPat::interface(dpat_ty(&head), fields, dpat_ty(scrut));
             match scrut.kind() {
-                TyKind::Union(members, _) => {
+                InferTy::Union(members, _) => {
                     let claimed: Vec<&Ty> = members
                         .iter()
                         .filter(|member| {
-                            matches!(member.kind(), TyKind::Interface(member_qtn, _, _, _) if *member_qtn == qtn)
+                            matches!(member.kind(), InferTy::Interface(member_qtn, _, _, _) if *member_qtn == qtn)
                         })
                         .collect();
                     match claimed.as_slice() {
@@ -957,7 +961,7 @@ impl<'db> InferenceContext<'db> {
             };
         }
         let covers = self.provable_subtype(scrut, pat_ty);
-        if let TyKind::Union(members, _) = scrut.kind()
+        if let InferTy::Union(members, _) = scrut.kind()
             && !covers
         {
             let members: Vec<Ty> = members.to_vec();
@@ -1044,10 +1048,10 @@ impl<'db> InferenceContext<'db> {
             return DPat::wildcard(col_plain);
         }
         match pat_ty.kind() {
-            TyKind::Literal(..) | TyKind::EnumVariant(..) | TyKind::Null { .. } => {
+            InferTy::Literal(..) | InferTy::EnumVariant(..) | InferTy::Null { .. } => {
                 DPat::single(pat_plain, col_plain)
             }
-            TyKind::Bool { .. } => DPat::or(
+            InferTy::Bool { .. } => DPat::or(
                 [true, false]
                     .into_iter()
                     .map(|value| {
@@ -1063,7 +1067,7 @@ impl<'db> InferenceContext<'db> {
                     .collect(),
                 col_plain,
             ),
-            TyKind::Enum(qtn, _) => {
+            InferTy::Enum(qtn, _) => {
                 let variants = self.facts.enum_variants(qtn).unwrap_or_default();
                 DPat::or(
                     variants
@@ -1078,14 +1082,14 @@ impl<'db> InferenceContext<'db> {
                     col_plain,
                 )
             }
-            TyKind::Union(members, _) => DPat::or(
+            InferTy::Union(members, _) => DPat::or(
                 members
                     .iter()
                     .map(|member| self.dpat_for_type(member, col))
                     .collect(),
                 col_plain,
             ),
-            TyKind::Class(qtn, args, _) => {
+            InferTy::Class(qtn, args, _) => {
                 let fields = self.class_pattern_field_types(qtn, args);
                 DPat::class_inst(
                     qtn.clone(),
@@ -1097,7 +1101,7 @@ impl<'db> InferenceContext<'db> {
                     pat_plain,
                 )
             }
-            TyKind::TypeVar(..) => {
+            InferTy::TypeVar(..) => {
                 // Rigid: covers only a column of the SAME variable;
                 // otherwise possible-but-not-covering (never a blanket
                 // claim - the B-633 rule).
@@ -1209,12 +1213,12 @@ impl<'db> InferenceContext<'db> {
             let candidates: Vec<&Ty> = scrut_members(scrut)
                 .into_iter()
                 .filter(|member| {
-                    matches!(member.kind(), TyKind::Class(member_qtn, _, _) if *member_qtn == qtn)
+                    matches!(member.kind(), InferTy::Class(member_qtn, _, _) if *member_qtn == qtn)
                 })
                 .collect();
             match candidates.as_slice() {
                 [only] => match only.kind() {
-                    TyKind::Class(_, args, _) => args.to_vec(),
+                    InferTy::Class(_, args, _) => args.to_vec(),
                     _ => Vec::new(),
                 },
                 // None or ambiguous: Error args (S17's diagnostic).
@@ -1269,7 +1273,7 @@ impl<'db> InferenceContext<'db> {
                 dpat_ty(&head),
             );
             match scrut.kind() {
-                TyKind::Union(members, _) => {
+                InferTy::Union(members, _) => {
                     // Same class AND agreeing instantiation: against
                     // `Box<int> | Box<string>`, `Box<int> { .. }` claims
                     // exactly the `Box<int>` member, so
@@ -1281,7 +1285,7 @@ impl<'db> InferenceContext<'db> {
                     let claimed: Vec<&Ty> = members
                         .iter()
                         .filter(|member| match member.kind() {
-                            TyKind::Class(member_qtn, member_args, _) => {
+                            InferTy::Class(member_qtn, member_args, _) => {
                                 *member_qtn == qtn
                                     && (args.is_empty()
                                         || (member_args.len() == args.len()
@@ -1365,11 +1369,11 @@ impl<'db> InferenceContext<'db> {
         // slices cover one another regardless of their ascriptions.
         let scrut_structure = self.structurally_resolve(scrut);
         let claimed_union = match scrut_structure.kind() {
-            TyKind::Union(members, _) => {
+            InferTy::Union(members, _) => {
                 let members = members.to_vec();
                 let mut lists: Vec<Ty> = Vec::new();
                 for member in &members {
-                    if matches!(member.kind(), TyKind::List(..)) {
+                    if matches!(member.kind(), InferTy::List(..)) {
                         lists.push(member.clone());
                     }
                 }
@@ -1398,7 +1402,7 @@ impl<'db> InferenceContext<'db> {
             None => effective,
         };
         let element = match effective.kind() {
-            TyKind::List(element, _) => element.clone(),
+            InferTy::List(element, _) => element.clone(),
             _ => Ty::error(),
         };
         let mut sub_dpats = Vec::new();
@@ -1493,7 +1497,7 @@ impl<'db> InferenceContext<'db> {
                 suffix,
                 ..
             } => {
-                let TyKind::List(element, _) = expanded.kind() else {
+                let InferTy::List(element, _) = expanded.kind() else {
                     return false;
                 };
                 if let Some(type_ref) = self.type_refs.array_ascriptions.get(&pat).copied() {
@@ -1517,8 +1521,8 @@ impl<'db> InferenceContext<'db> {
             Pattern::Class { class, .. } => match expanded.kind() {
                 // A class head demands the same class; interfaces and
                 // rigid vars could still adopt or implement - true.
-                TyKind::Class(qtn, ..) => class.last().is_none_or(|name| name == qtn.name()),
-                TyKind::Interface(..) | TyKind::TypeVar(..) => true,
+                InferTy::Class(qtn, ..) => class.last().is_none_or(|name| name == qtn.name()),
+                InferTy::Interface(..) | InferTy::TypeVar(..) => true,
                 _ => false,
             },
             // Type patterns carry their own runtime test; the lowering
@@ -1590,7 +1594,7 @@ fn rest_pattern_shape_ok(body: &ExprBody, pat: PatId) -> bool {
 /// A scrutinee's members: union members, or the type itself.
 fn scrut_members(scrut: &Ty) -> Vec<&Ty> {
     match scrut.kind() {
-        TyKind::Union(members, _) => members.iter().collect(),
+        InferTy::Union(members, _) => members.iter().collect(),
         _ => vec![scrut],
     }
 }
@@ -1715,7 +1719,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
             return Vec::new();
         };
         let head = Ty::from_plain(iface_ty);
-        let target = InterfaceRef::new(
+        let target = InferInterface::new(
             qtn.clone(),
             args.iter()
                 .map(Ty::from_plain)

@@ -2712,8 +2712,8 @@ impl InternedCanonicalCache {
         if !matches!(
             (sub.kind(), sup.kind()),
             (
-                interned::TyKind::Interface(..),
-                interned::TyKind::Interface(..)
+                interned::InferTy::Interface(..),
+                interned::InferTy::Interface(..)
             )
         ) && interned_heads_definitely_differ(sub, sup)
         {
@@ -2754,10 +2754,10 @@ impl NormalTy {
 }
 
 /// The interned representation is name-headed by construction
-/// (`interned::TyKind::Class(TypeName, ..)`), so this whole ingestion path is
+/// (`interned::InferTy::Class(TypeName, ..)`), so this whole ingestion path is
 /// fixed at `H = QualifiedTypeName`; only the μ-phase varies.
 impl NormalTy<QualifiedTypeName, Named> {
-    /// [`NormalTy::from_ty`], mirrored over `interned::TyKind`. The one
+    /// [`NormalTy::from_ty`], mirrored over `interned::InferTy`. The one
     /// naming trap: the interned `Unknown` is the TOP type (the plain enum's
     /// `Unknown`); TIR's `Unknown` recovery sentinel is
     /// unrepresentable in the interned form by design.
@@ -2771,7 +2771,7 @@ impl NormalTy<QualifiedTypeName, Named> {
         expanding: &mut HashSet<QualifiedTypeName>,
         fuel: u32,
     ) -> NormalTy<QualifiedTypeName, Named> {
-        use interned::TyKind as K;
+        use interned::InferTy as K;
         match ty.kind() {
             K::Int { .. } => NormalTy::Int,
             K::Bigint { .. } => NormalTy::Bigint,
@@ -2792,7 +2792,7 @@ impl NormalTy<QualifiedTypeName, Named> {
             // Same invariant as the plain arm: holes are filled (or made
             // `Error`) and live variables are resolved or deferred BEFORE any
             // oracle query; either reaching normalization is a compiler bug.
-            K::Infer { .. } => unreachable!(
+            K::InferVar { .. } => unreachable!(
                 "inference hole/variable reached type normalization; holes must \
                  be instantiated and variables resolved (or the check deferred) \
                  before any equivalence/subtype query"
@@ -2943,8 +2943,8 @@ pub fn is_subtype_interned<C: TypeContext>(
     if !matches!(
         (sub.kind(), sup.kind()),
         (
-            interned::TyKind::Interface(..),
-            interned::TyKind::Interface(..)
+            interned::InferTy::Interface(..),
+            interned::InferTy::Interface(..)
         )
     ) && interned_heads_definitely_differ(sub, sup)
     {
@@ -2970,7 +2970,7 @@ pub fn equivalent_interned<C: TypeContext>(a: &interned::Ty, b: &interned::Ty, c
 /// the identical-head fast path cheaper, but distinct nominal heads are still
 /// common during inference and cannot be changed by canonicalization.
 fn interned_heads_definitely_differ(a: &interned::Ty, b: &interned::Ty) -> bool {
-    use interned::TyKind as K;
+    use interned::InferTy as K;
     match (a.kind(), b.kind()) {
         (K::Class(q1, ..), K::Class(q2, ..))
         | (K::Interface(q1, ..), K::Interface(q2, ..))

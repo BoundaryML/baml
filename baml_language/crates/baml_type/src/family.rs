@@ -35,7 +35,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use crate::{Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, TyAttr, TypeName};
 
 ty_family! {
-    axes { concrete, abstract, literal, never, typevar, projection, lower, error, special, frame }
+    axes { concrete, abstract, literal, never, typevar, projection, lower, infer, error, special, frame }
 
     // The FINALIZED compiler type: what type checking hands downstream (TIR
     // facts, throw-facts persistence, the normalize oracle, MIR input). It can
@@ -68,6 +68,16 @@ ty_family! {
     // `RealizedTy` is a valid `TyTemplate`; narrowing back proves no template
     // leaf survives), giving the "is fully realized" check for free.
     type TyTemplate         { includes: [concrete, abstract, literal, never, projection, special, frame],        child: Self }
+    // The INTERNED member: the hash-cons pool's kind (see `crate::interned`).
+    // Children are pool handles, so this is the one-level-deep structural
+    // layer a handle dereferences to. It is the inference engine's working
+    // representation: the finalized axes plus `infer` — a live table variable
+    // is representable, the syntactic `_` hole is not (`lower` excluded), so
+    // the F1 ruling ("during inference there are never var-less holes") holds
+    // by construction. Excluded from the conversion matrix and walkers; its
+    // boundary conversions (total interning, fallible finalization) are
+    // hand-written in `interned.rs` alongside the pool.
+    type InferTy            { includes: [concrete, abstract, literal, never, typevar, projection, infer, error, special], child: interned(crate::interned::Ty) }
 
     satellite FunctionParamTy<N: Clone = TypeName> {
         pub name: Option<Name>,
@@ -135,6 +145,24 @@ ty_family! {
                 generics,
                 associated_types,
             }
+        }
+
+        /// The interface *existential* type (`Ty::Interface`) denoted by this
+        /// constraint, with default attributes.
+        ///
+        /// A constraint may pin only some associated types whereas a
+        /// fully-specified existential pins all of them; this lifts the
+        /// constraint verbatim, so the result carries exactly the bindings the
+        /// constraint holds. Generated for every member, so each member's
+        /// renderer (and any other consumer of the existential view) reads it
+        /// from its own satellite.
+        pub fn to_ty(&self) -> Ty<N> {
+            Ty::Interface(
+                self.name.clone(),
+                self.generics.clone(),
+                self.associated_types.clone(),
+                TyAttr::default(),
+            )
         }
     }
 
@@ -352,6 +380,21 @@ ty_family! {
         TypeArgRef(u32) = 34,
         // reserved = 35 (the removed `TypeArgRefOrWildcard` dispatch-guard ref)
         // reserved = 36 (the removed `Wildcard` match-any hole)
+
+        /// A live inference-table variable. ALWAYS a variable: the syntactic
+        /// `_` hole is unrepresentable here (it lives on the `lower` axis,
+        /// which the interned member excludes) — lowering never interns, so by
+        /// the time a type is interned every hole has been instantiated
+        /// (`ingest_lowered`) or rejected (`reject_holes`). Present only in
+        /// [`InferTy`] (the `infer` axis): inference-engine-internal, must
+        /// never survive `resolve_all`. The discriminant is nominal — the
+        /// interned member is never transmuted or serialized — but stays
+        /// unique so declaration order keeps `Ord` parity meaningful.
+        #[axis(infer)]
+        InferVar {
+            var: crate::interned::InferVar,
+            attr: TyAttr,
+        } = 37,
     }
 }
 

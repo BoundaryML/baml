@@ -435,7 +435,7 @@ fn build_packages(
     use baml_compiler2_ppir::item_data::{AssociatedTypeBindingData, ImplSubjectData};
     use baml_type as ty;
     use rustc_hash::FxHashMap;
-    type BoundsMap = FxHashMap<ty::ParamTy, Vec<baml_type::interned::InterfaceRef>>;
+    type BoundsMap = FxHashMap<ty::ParamTy, Vec<baml_type::interned::InferInterface>>;
     use bex_vm_types::{
         ObjectIndex,
         types::{InterfaceBound, ProgramImplRule, ProgramMethodImpl},

@@ -35,7 +35,7 @@ use baml_compiler2_hir::{
 };
 use baml_type::{
     FunctionParamTy, Interface, Literal, Name, ParamTy, RealizedTy, Ty, TyAttr, TypeName,
-    interned::InterfaceRef, normalize::TypeContext,
+    interned::InferInterface, normalize::TypeContext,
 };
 use rustc_hash::FxHashMap;
 
@@ -1189,7 +1189,7 @@ pub fn source_mounted_impl_conflict(
     mounted: &crate::package_interface::ExportedImpl,
 ) -> Overlap {
     let mounted_facts = ImplFacts {
-        interface: InterfaceRef::from_constraint(&mounted.interface),
+        interface: InferInterface::from_constraint(&mounted.interface),
         for_ty_pattern: baml_type::interned::Ty::from_plain(&mounted.for_ty_pattern),
         generic_params: mounted
             .generic_params
@@ -1203,7 +1203,7 @@ pub fn source_mounted_impl_conflict(
                         .get(index)
                         .into_iter()
                         .flatten()
-                        .map(InterfaceRef::from_constraint)
+                        .map(InferInterface::from_constraint)
                         .collect(),
                 )
             })
@@ -1321,7 +1321,7 @@ fn bounds_hold_at_common_instance(
                 && crate::impls::resolve_impl(
                     db,
                     &crate::impls::interned_ty(witness),
-                    &InterfaceRef::from_constraint(&bound),
+                    &InferInterface::from_constraint(&bound),
                 )
                 .is_none()
             {
@@ -1337,7 +1337,7 @@ fn bounds_hold_at_common_instance(
     deprecated,
     reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
 )]
-fn plain_bound(target: &InterfaceRef) -> Interface {
+fn plain_bound(target: &InferInterface) -> Interface {
     Interface::new(
         target.name.clone(),
         target

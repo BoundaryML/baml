@@ -8,7 +8,7 @@
 
 use baml_type::{
     Name, TypeName,
-    interned::{InterfaceRef, Ty, TyKind},
+    interned::{InferInterface, InferTy, Ty},
 };
 
 use crate::impls::{resolve_impl, resolved_pin};
@@ -113,8 +113,8 @@ pub fn operator_output(
 
 /// The impl goal an operator application poses: `baml.ops.<interface>` with
 /// the rhs operand filling the single generic slot when present.
-fn operator_goal(interface: &str, rhs: Option<&Ty>) -> InterfaceRef {
-    InterfaceRef::new(
+fn operator_goal(interface: &str, rhs: Option<&Ty>) -> InferInterface {
+    InferInterface::new(
         TypeName::new(
             Name::new("baml"),
             vec![Name::new("ops")],
@@ -124,7 +124,7 @@ fn operator_goal(interface: &str, rhs: Option<&Ty>) -> InterfaceRef {
             .into_iter()
             .collect::<Vec<_>>()
             .into_boxed_slice(),
-        Vec::new(),
+        Box::new([]),
     )
 }
 
@@ -142,7 +142,7 @@ pub fn operator_method<'db>(
     rhs: Option<&Ty>,
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
     let widen = |ty: &Ty| match ty.kind() {
-        TyKind::Literal(literal, _, attr) => {
+        InferTy::Literal(literal, _, attr) => {
             Ty::intern(crate::infer::literal_base(literal, attr.clone()))
         }
         _ => ty.clone(),

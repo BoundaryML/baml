@@ -877,12 +877,12 @@ fn template_frame_param_info(
     offset: TextSize,
     name: &Name,
 ) -> Option<TypeInfo> {
-    use baml_type::interned::TyKind;
+    use baml_type::interned::InferTy;
 
     let driver = crate::resolve::template_driver_at(db, file, offset)?;
     let signature = baml_compiler2_hir_ty::lower::function_signature(db, driver);
     let body_param = signature.params.first()?;
-    let TyKind::Function { params, .. } = body_param.ty.kind() else {
+    let InferTy::Function { params, .. } = body_param.ty.kind() else {
         return None;
     };
     let param = params

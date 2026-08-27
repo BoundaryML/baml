@@ -511,7 +511,7 @@ function sc_companion() -> baml.Map<string, int> throws never {
             if snippet.starts_with("pkg.get_function") {
                 extraction_throws = plan.slots.first().and_then(|slot| match slot {
                     CallTypeArgPlan::Static { ty, .. } => match ty.kind() {
-                        baml_type::interned::TyKind::Function { throws, .. } => {
+                        baml_type::interned::InferTy::Function { throws, .. } => {
                             Some(throws.to_plain().render_canonical())
                         }
                         _ => None,
@@ -635,7 +635,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                     baml_compiler2_hir_ty::infer::RuntimeCheck::Argument { expected, .. }
                         if matches!(
                             expected.kind(),
-                            baml_type::interned::TyKind::TypeVar(param, _)
+                            baml_type::interned::InferTy::TypeVar(param, _)
                                 if param.index() & 0x8000_0000 != 0
                         )
                 ),
@@ -670,7 +670,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                 assert!(binding.parameter.index() & 0x8000_0000 != 0);
                 assert!(matches!(
                     plan.type_args.as_slice(),
-                    [ty] if matches!(ty.kind(), baml_type::interned::TyKind::TypeVar(param, _)
+                    [ty] if matches!(ty.kind(), baml_type::interned::InferTy::TypeVar(param, _)
                         if param == &binding.parameter)
                 ));
             }
@@ -679,7 +679,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                 saw_branch = true;
                 assert!(matches!(
                     plan.type_args.as_slice(),
-                    [ty] if matches!(ty.kind(), baml_type::interned::TyKind::TypeVar(param, _)
+                    [ty] if matches!(ty.kind(), baml_type::interned::InferTy::TypeVar(param, _)
                         if param == &binding.parameter)
                 ));
             }
@@ -723,7 +723,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
             saw_lambda_erasure = true;
             assert!(matches!(
                 ty.kind(),
-                baml_type::interned::TyKind::Function { ret, .. }
+                baml_type::interned::InferTy::Function { ret, .. }
                     if ret.to_plain().render_canonical() == "unknown"
             ));
         }
@@ -847,7 +847,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
             if snippet.starts_with("(x: int) ->") {
                 saw_lambda_effect |= matches!(
                     ty.kind(),
-                    baml_type::interned::TyKind::Function { throws, .. }
+                    baml_type::interned::InferTy::Function { throws, .. }
                         if throws.to_plain().render_canonical() == "user.ScopeEffect"
                 ) && result.throws.to_plain().render_canonical() == "never";
             }

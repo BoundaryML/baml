@@ -9,7 +9,7 @@
 //!   refcount bump, `==` is a pointer compare, and `Hash` hashes the pointer.
 //!   The pool guarantees structurally-identical kinds share one allocation,
 //!   so pointer identity IS structural identity.
-//! - Children of [`TyKind`] are handles, so interning is recursive: pool
+//! - Children of [`InferTy`] are handles, so interning is recursive: pool
 //!   lookups hash and compare shallowly (child pointers, not child trees),
 //!   and substructure is shared automatically.
 //! - [`TypeFlags`] ("does this contain an inference variable / error /
@@ -22,12 +22,17 @@
 //!   being salsa-based throughout. Entries are freed when the last handle
 //!   drops.
 //!
-//! Variants, payload shapes, and discriminant order mirror the master
-//! [`ty_family!`](crate::Ty) enum (conversions are exhaustive matches, so
-//! drift is a compile error), with one deliberate spec-driven delta: `Infer`
-//! carries an [`InferVar`], ALWAYS — the syntactic `_` hole is
-//! unrepresentable interned (it lives in [`crate::LoweringTy`], and lowering
-//! never interns), so the inference world is vars-only by construction.
+//! The pool's kind ([`InferTy`]) and its twin satellites are *generated* by
+//! [`ty_family!`](crate::Ty) (the `child: interned(..)` member in
+//! `family.rs`): the finalized axes plus `infer`, children as handles, one
+//! source of truth with the plain members. The spec-driven delta lives in the
+//! axes: [`InferTy::InferVar`] carries an [`InferVar`], ALWAYS — the
+//! syntactic `_` hole is unrepresentable interned (it lives on the `lower`
+//! axis, in [`crate::LoweringTy`], and lowering never interns), so the
+//! inference world is vars-only by construction. The hand-written pieces in
+//! this module — pool, flags, child walkers, boundary conversions, and the
+//! twins' constructor impls — attach to those generated types; the walkers
+//! are exhaustive matches, so variant drift is a compile error.
 
 use std::{
     cmp::Ordering,
@@ -36,7 +41,7 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
-use crate::{Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, TyAttr, TypeName};
+use crate::{Freshness, FunctionParamMode, Name, TyAttr, TypeName};
 
 // -- Flags --------------------------------------------------------------------
 
@@ -61,14 +66,14 @@ bitflags::bitflags! {
 // -- Handle -------------------------------------------------------------------
 
 /// An inference-table variable index. Only ever allocated by the hir_ty
-/// inference table and carried by [`TyKind::Infer`] (the syntactic `_`
+/// inference table and carried by [`InferTy::InferVar`] (the syntactic `_`
 /// hole is unrepresentable interned: it lives in [`crate::LoweringTy`]).
 ///
 /// Deliberately a bare index: the representation carries variable IDENTITY,
 /// the inference table carries variable KIND. Distinctions like effect vars
 /// (throws slots defaulting to `never`), diverging vars, and canonical
 /// placeholders are table-side policy metadata keyed by this index -
-/// rust-analyzer's `diverging_type_vars` side-set pattern - not new `TyKind`
+/// rust-analyzer's `diverging_type_vars` side-set pattern - not new `InferTy`
 /// variants. rustc needs kind-in-type (`IntVar`/`FloatVar`) only because
 /// numeric literal defaulting changes structural unification; BAML has no
 /// such rule.
@@ -92,13 +97,13 @@ pub struct Ty(Arc<TyData>);
 #[derive(PartialEq, Eq, Hash)]
 struct TyData {
     flags: TypeFlags,
-    kind: TyKind,
+    kind: InferTy,
 }
 
 impl Ty {
     /// Interns `kind`, returning the unique handle for it. Flags are computed
     /// here; there is no other way to construct a `Ty`.
-    pub fn intern(kind: TyKind) -> Ty {
+    pub fn intern(kind: InferTy) -> Ty {
         let data = TyData {
             flags: compute_flags(&kind),
             kind,
@@ -112,7 +117,7 @@ impl Ty {
         Ty(arc)
     }
 
-    pub fn kind(&self) -> &TyKind {
+    pub fn kind(&self) -> &InferTy {
         &self.0.kind
     }
 
@@ -210,150 +215,23 @@ fn pool() -> &'static Mutex<HashSet<Arc<TyData>>> {
 
 // -- Kind ---------------------------------------------------------------------
 
-/// Structural type kind; the interned mirror of the master `ty_family!` enum,
-/// same variants in the same (discriminant) order, children as handles.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TyKind {
-    // = 0
-    Int {
-        attr: TyAttr,
-    },
-    // = 1
-    Bigint {
-        attr: TyAttr,
-    },
-    // = 2
-    Float {
-        attr: TyAttr,
-    },
-    // = 3
-    String {
-        attr: TyAttr,
-    },
-    // = 4
-    Bool {
-        attr: TyAttr,
-    },
-    // = 5
-    Null {
-        attr: TyAttr,
-    },
-    // = 6
-    Uint8Array {
-        attr: TyAttr,
-    },
-    // = 7
-    Media(MediaKind, TyAttr),
-    // = 8
-    Literal(Literal, Freshness, TyAttr),
-    // = 9
-    Class(TypeName, Box<[Ty]>, TyAttr),
-    // = 10
-    Interface(TypeName, Box<[Ty]>, Box<[(Name, Ty)]>, TyAttr),
-    // = 11
-    Enum(TypeName, TyAttr),
-    // = 12
-    EnumVariant(TypeName, Name, TyAttr),
-    // = 13
-    List(Ty, TyAttr),
-    // = 14
-    Map {
-        key: Ty,
-        value: Ty,
-        attr: TyAttr,
-    },
-    // = 15
-    Union(Box<[Ty]>, TyAttr),
-    // = 16
-    Function {
-        params: Box<[FunctionParam]>,
-        ret: Ty,
-        throws: Ty,
-        attr: TyAttr,
-    },
-    // = 17
-    Future(Ty, Ty, TyAttr),
-    // = 18
-    RustType {
-        attr: TyAttr,
-    },
-    // = 19
-    Type {
-        attr: TyAttr,
-    },
-    // = 20
-    Resource {
-        attr: TyAttr,
-    },
-    // = 21
-    PromptAst {
-        attr: TyAttr,
-    },
-    // = 22
-    Void {
-        attr: TyAttr,
-    },
-    // = 24 (23 reserved)
-    TypeAlias(TypeName, TyAttr),
-    // = 25
-    TypeVar(ParamTy, TyAttr),
-    // = 26
-    AssociatedTypeProjection {
-        base: Ty,
-        interface: InterfaceRef,
-        member: Name,
-        attr: TyAttr,
-    },
-    // = 27; the spec's top type (the user-denotable `unknown` keyword,
-    // `T <: unknown` for all `T`).
-    Unknown {
-        attr: TyAttr,
-    },
-    // = 28
-    Never {
-        attr: TyAttr,
-    },
-    // = 30 (29 is a retired wire slot); the single error sentinel: a
-    // diagnostic was already emitted for this node, downstream must not
-    // cascade further errors from it.
-    Error {
-        attr: TyAttr,
-    },
-    // = 33 (31/32 are retired wire slots); a live inference-table variable.
-    // ALWAYS a variable: the syntactic `_` hole lives in the plain
-    // `LoweringTy` only â lowering never interns, so by the time a type is
-    // interned every hole has been instantiated (`ingest_lowered`) or
-    // rejected (`reject_holes`). hir_ty only; must never survive
-    // `resolve_all`.
-    Infer {
-        var: InferVar,
-        attr: TyAttr,
-    },
-    // Deliberately absent:
-    // - `TypeArgRef` (= 34): the frame axis exists only in `TyTemplate`, not
-    //   in the plain `Ty` this module mirrors; it joins this representation
-    //   when the family axes migrate at cutover.
-}
+/// The pool's kind and twin satellites, generated by `ty_family!` (the
+/// `InferTy` member declaration in `family.rs`). Re-exported here so the
+/// interned world's vocabulary lives in one namespace with the pool; the
+/// hand-written pieces below attach to the generated types.
+pub use crate::{InferFunctionParamTy, InferInterface, InferTy};
 
-/// Interned twin of the `FunctionParamTy` satellite.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FunctionParam {
-    pub name: Option<Name>,
-    pub ty: Ty,
-    pub mode: FunctionParamMode,
-}
-
-impl FunctionParam {
-    pub fn required(name: Option<Name>, ty: Ty) -> FunctionParam {
-        FunctionParam {
+impl InferFunctionParamTy {
+    pub fn required(name: Option<Name>, ty: Ty) -> InferFunctionParamTy {
+        InferFunctionParamTy {
             name,
             ty,
             mode: FunctionParamMode::Required,
         }
     }
 
-    pub fn optional(name: Option<Name>, ty: Ty) -> FunctionParam {
-        FunctionParam {
+    pub fn optional(name: Option<Name>, ty: Ty) -> InferFunctionParamTy {
+        InferFunctionParamTy {
             name,
             ty,
             mode: FunctionParamMode::Optional,
@@ -361,40 +239,32 @@ impl FunctionParam {
     }
 }
 
-/// Interned twin of the `Interface` satellite (an interface *constraint*,
-/// distinct from the `TyKind::Interface` existential).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct InterfaceRef {
-    pub name: TypeName,
-    pub generics: Box<[Ty]>,
-    pub associated_types: Box<[(Name, Ty)]>,
-}
-
-impl InterfaceRef {
+impl InferInterface {
     /// Sorts `associated_types` by name, mirroring the plain satellite's
-    /// order-insensitivity invariant.
+    /// order-insensitivity invariant (and `Interface::new`'s signature —
+    /// slices sort in place, no `Vec` needed).
     pub fn new(
         name: TypeName,
         generics: Box<[Ty]>,
-        mut associated_types: Vec<(Name, Ty)>,
-    ) -> InterfaceRef {
+        mut associated_types: Box<[(Name, Ty)]>,
+    ) -> InferInterface {
         associated_types.sort_by(|(a, _), (b, _)| a.cmp(b));
-        InterfaceRef {
+        InferInterface {
             name,
             generics,
-            associated_types: associated_types.into_boxed_slice(),
+            associated_types,
         }
     }
 
     /// The interface reference an existential type carries, when `ty`
     /// is one - the single extraction every consumer shares (rustc has
     /// exactly one `TraitRef`; nobody hand-builds a parallel copy).
-    pub fn of_ty(ty: &Ty) -> Option<InterfaceRef> {
+    pub fn of_ty(ty: &Ty) -> Option<InferInterface> {
         match ty.kind() {
-            TyKind::Interface(name, args, pins, _) => Some(InterfaceRef::new(
+            InferTy::Interface(name, args, pins, _) => Some(InferInterface::new(
                 name.clone(),
-                args.to_vec().into_boxed_slice(),
-                pins.to_vec(),
+                args.clone(),
+                pins.clone(),
             )),
             _ => None,
         }
@@ -402,8 +272,8 @@ impl InterfaceRef {
 
     /// From the plain algebra's constraint satellite (the `TypeContext`
     /// boundary).
-    pub fn from_constraint(interface: &crate::Interface) -> InterfaceRef {
-        InterfaceRef::new(
+    pub fn from_constraint(interface: &crate::Interface) -> InferInterface {
+        InferInterface::new(
             interface.name.clone(),
             interface
                 .generics
@@ -421,7 +291,7 @@ impl InterfaceRef {
 
     /// The existential type this reference denotes (`dyn`-style view).
     pub fn existential(&self) -> Ty {
-        Ty::intern(TyKind::Interface(
+        Ty::intern(InferTy::Interface(
             self.name.clone(),
             self.generics.clone(),
             self.associated_types.clone(),
@@ -434,42 +304,42 @@ impl InterfaceRef {
 
 /// Calls `visit` on each direct child type of `kind` (including types nested
 /// in satellites: function params, interface generics and bindings).
-pub fn for_each_child(kind: &TyKind, mut visit: impl FnMut(&Ty)) {
+pub fn for_each_child(kind: &InferTy, mut visit: impl FnMut(&Ty)) {
     match kind {
-        TyKind::Int { .. }
-        | TyKind::Bigint { .. }
-        | TyKind::Float { .. }
-        | TyKind::String { .. }
-        | TyKind::Bool { .. }
-        | TyKind::Null { .. }
-        | TyKind::Uint8Array { .. }
-        | TyKind::Media(..)
-        | TyKind::Literal(..)
-        | TyKind::Enum(..)
-        | TyKind::EnumVariant(..)
-        | TyKind::RustType { .. }
-        | TyKind::Type { .. }
-        | TyKind::Resource { .. }
-        | TyKind::PromptAst { .. }
-        | TyKind::Void { .. }
-        | TyKind::TypeAlias(..)
-        | TyKind::TypeVar(..)
-        | TyKind::Unknown { .. }
-        | TyKind::Never { .. }
-        | TyKind::Error { .. }
-        | TyKind::Infer { .. } => {}
-        TyKind::Class(_, args, _) => args.iter().for_each(visit),
-        TyKind::Interface(_, args, assoc, _) => {
+        InferTy::Int { .. }
+        | InferTy::Bigint { .. }
+        | InferTy::Float { .. }
+        | InferTy::String { .. }
+        | InferTy::Bool { .. }
+        | InferTy::Null { .. }
+        | InferTy::Uint8Array { .. }
+        | InferTy::Media(..)
+        | InferTy::Literal(..)
+        | InferTy::Enum(..)
+        | InferTy::EnumVariant(..)
+        | InferTy::RustType { .. }
+        | InferTy::Type { .. }
+        | InferTy::Resource { .. }
+        | InferTy::PromptAst { .. }
+        | InferTy::Void { .. }
+        | InferTy::TypeAlias(..)
+        | InferTy::TypeVar(..)
+        | InferTy::Unknown { .. }
+        | InferTy::Never { .. }
+        | InferTy::Error { .. }
+        | InferTy::InferVar { .. } => {}
+        InferTy::Class(_, args, _) => args.iter().for_each(visit),
+        InferTy::Interface(_, args, assoc, _) => {
             args.iter().for_each(&mut visit);
             assoc.iter().for_each(|(_, ty)| visit(ty));
         }
-        TyKind::List(inner, _) => visit(inner),
-        TyKind::Map { key, value, .. } => {
+        InferTy::List(inner, _) => visit(inner),
+        InferTy::Map { key, value, .. } => {
             visit(key);
             visit(value);
         }
-        TyKind::Union(members, _) => members.iter().for_each(visit),
-        TyKind::Function {
+        InferTy::Union(members, _) => members.iter().for_each(visit),
+        InferTy::Function {
             params,
             ret,
             throws,
@@ -479,11 +349,11 @@ pub fn for_each_child(kind: &TyKind, mut visit: impl FnMut(&Ty)) {
             visit(ret);
             visit(throws);
         }
-        TyKind::Future(value, error, _) => {
+        InferTy::Future(value, error, _) => {
             visit(value);
             visit(error);
         }
-        TyKind::AssociatedTypeProjection {
+        InferTy::AssociatedTypeProjection {
             base, interface, ..
         } => {
             visit(base);
@@ -496,42 +366,42 @@ pub fn for_each_child(kind: &TyKind, mut visit: impl FnMut(&Ty)) {
     }
 }
 
-impl TyKind {
+impl InferTy {
     /// Rebuilds this kind with every direct child type replaced by
     /// `f(child)` (satellite-nested children included) - the rebuild dual of
     /// [`for_each_child`]. Leaf kinds clone unchanged. Callers intern the
     /// result; short-circuit on [`Ty::flags`] first when the fold cannot
     /// apply (e.g. no `HAS_INFER`).
-    pub fn map_children(&self, mut f: impl FnMut(&Ty) -> Ty) -> TyKind {
+    pub fn map_children(&self, mut f: impl FnMut(&Ty) -> Ty) -> InferTy {
         match self {
-            TyKind::Int { .. }
-            | TyKind::Bigint { .. }
-            | TyKind::Float { .. }
-            | TyKind::String { .. }
-            | TyKind::Bool { .. }
-            | TyKind::Null { .. }
-            | TyKind::Uint8Array { .. }
-            | TyKind::Media(..)
-            | TyKind::Literal(..)
-            | TyKind::Enum(..)
-            | TyKind::EnumVariant(..)
-            | TyKind::RustType { .. }
-            | TyKind::Type { .. }
-            | TyKind::Resource { .. }
-            | TyKind::PromptAst { .. }
-            | TyKind::Void { .. }
-            | TyKind::TypeAlias(..)
-            | TyKind::TypeVar(..)
-            | TyKind::Unknown { .. }
-            | TyKind::Never { .. }
-            | TyKind::Error { .. }
-            | TyKind::Infer { .. } => self.clone(),
-            TyKind::Class(name, args, attr) => TyKind::Class(
+            InferTy::Int { .. }
+            | InferTy::Bigint { .. }
+            | InferTy::Float { .. }
+            | InferTy::String { .. }
+            | InferTy::Bool { .. }
+            | InferTy::Null { .. }
+            | InferTy::Uint8Array { .. }
+            | InferTy::Media(..)
+            | InferTy::Literal(..)
+            | InferTy::Enum(..)
+            | InferTy::EnumVariant(..)
+            | InferTy::RustType { .. }
+            | InferTy::Type { .. }
+            | InferTy::Resource { .. }
+            | InferTy::PromptAst { .. }
+            | InferTy::Void { .. }
+            | InferTy::TypeAlias(..)
+            | InferTy::TypeVar(..)
+            | InferTy::Unknown { .. }
+            | InferTy::Never { .. }
+            | InferTy::Error { .. }
+            | InferTy::InferVar { .. } => self.clone(),
+            InferTy::Class(name, args, attr) => InferTy::Class(
                 name.clone(),
                 args.iter().map(&mut f).collect(),
                 attr.clone(),
             ),
-            TyKind::Interface(name, args, assoc, attr) => TyKind::Interface(
+            InferTy::Interface(name, args, assoc, attr) => InferTy::Interface(
                 name.clone(),
                 args.iter().map(&mut f).collect(),
                 assoc
@@ -540,24 +410,24 @@ impl TyKind {
                     .collect(),
                 attr.clone(),
             ),
-            TyKind::List(inner, attr) => TyKind::List(f(inner), attr.clone()),
-            TyKind::Map { key, value, attr } => TyKind::Map {
+            InferTy::List(inner, attr) => InferTy::List(f(inner), attr.clone()),
+            InferTy::Map { key, value, attr } => InferTy::Map {
                 key: f(key),
                 value: f(value),
                 attr: attr.clone(),
             },
-            TyKind::Union(members, attr) => {
-                TyKind::Union(members.iter().map(&mut f).collect(), attr.clone())
+            InferTy::Union(members, attr) => {
+                InferTy::Union(members.iter().map(&mut f).collect(), attr.clone())
             }
-            TyKind::Function {
+            InferTy::Function {
                 params,
                 ret,
                 throws,
                 attr,
-            } => TyKind::Function {
+            } => InferTy::Function {
                 params: params
                     .iter()
-                    .map(|param| FunctionParam {
+                    .map(|param| InferFunctionParamTy {
                         name: param.name.clone(),
                         ty: f(&param.ty),
                         mode: param.mode,
@@ -567,15 +437,17 @@ impl TyKind {
                 throws: f(throws),
                 attr: attr.clone(),
             },
-            TyKind::Future(value, error, attr) => TyKind::Future(f(value), f(error), attr.clone()),
-            TyKind::AssociatedTypeProjection {
+            InferTy::Future(value, error, attr) => {
+                InferTy::Future(f(value), f(error), attr.clone())
+            }
+            InferTy::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
                 attr,
-            } => TyKind::AssociatedTypeProjection {
+            } => InferTy::AssociatedTypeProjection {
                 base: f(base),
-                interface: InterfaceRef {
+                interface: InferInterface {
                     name: interface.name.clone(),
                     generics: interface.generics.iter().map(&mut f).collect(),
                     associated_types: interface
@@ -591,13 +463,13 @@ impl TyKind {
     }
 }
 
-fn compute_flags(kind: &TyKind) -> TypeFlags {
+fn compute_flags(kind: &InferTy) -> TypeFlags {
     let own = match kind {
-        TyKind::Literal(_, Freshness::Fresh, _) => TypeFlags::HAS_FRESH_LITERAL,
-        TyKind::TypeVar(..) => TypeFlags::HAS_TYPEVAR,
-        TyKind::AssociatedTypeProjection { .. } => TypeFlags::HAS_PROJECTION,
-        TyKind::Error { .. } => TypeFlags::HAS_ERROR,
-        TyKind::Infer { .. } => TypeFlags::HAS_INFER,
+        InferTy::Literal(_, Freshness::Fresh, _) => TypeFlags::HAS_FRESH_LITERAL,
+        InferTy::TypeVar(..) => TypeFlags::HAS_TYPEVAR,
+        InferTy::AssociatedTypeProjection { .. } => TypeFlags::HAS_PROJECTION,
+        InferTy::Error { .. } => TypeFlags::HAS_ERROR,
+        InferTy::InferVar { .. } => TypeFlags::HAS_INFER,
         _ => TypeFlags::empty(),
     };
     let mut flags = own;
@@ -614,21 +486,21 @@ impl Ty {
         let interned_all =
             |tys: &[crate::Ty]| -> Box<[Ty]> { tys.iter().map(Ty::from_plain).collect() };
         let kind = match ty {
-            crate::Ty::Int { attr } => TyKind::Int { attr: attr.clone() },
-            crate::Ty::Bigint { attr } => TyKind::Bigint { attr: attr.clone() },
-            crate::Ty::Float { attr } => TyKind::Float { attr: attr.clone() },
-            crate::Ty::String { attr } => TyKind::String { attr: attr.clone() },
-            crate::Ty::Bool { attr } => TyKind::Bool { attr: attr.clone() },
-            crate::Ty::Null { attr } => TyKind::Null { attr: attr.clone() },
-            crate::Ty::Uint8Array { attr } => TyKind::Uint8Array { attr: attr.clone() },
-            crate::Ty::Media(kind, attr) => TyKind::Media(*kind, attr.clone()),
+            crate::Ty::Int { attr } => InferTy::Int { attr: attr.clone() },
+            crate::Ty::Bigint { attr } => InferTy::Bigint { attr: attr.clone() },
+            crate::Ty::Float { attr } => InferTy::Float { attr: attr.clone() },
+            crate::Ty::String { attr } => InferTy::String { attr: attr.clone() },
+            crate::Ty::Bool { attr } => InferTy::Bool { attr: attr.clone() },
+            crate::Ty::Null { attr } => InferTy::Null { attr: attr.clone() },
+            crate::Ty::Uint8Array { attr } => InferTy::Uint8Array { attr: attr.clone() },
+            crate::Ty::Media(kind, attr) => InferTy::Media(*kind, attr.clone()),
             crate::Ty::Literal(lit, freshness, attr) => {
-                TyKind::Literal(lit.clone(), *freshness, attr.clone())
+                InferTy::Literal(lit.clone(), *freshness, attr.clone())
             }
             crate::Ty::Class(name, args, attr) => {
-                TyKind::Class(name.clone(), interned_all(args), attr.clone())
+                InferTy::Class(name.clone(), interned_all(args), attr.clone())
             }
-            crate::Ty::Interface(name, args, assoc, attr) => TyKind::Interface(
+            crate::Ty::Interface(name, args, assoc, attr) => InferTy::Interface(
                 name.clone(),
                 interned_all(args),
                 assoc
@@ -637,26 +509,26 @@ impl Ty {
                     .collect(),
                 attr.clone(),
             ),
-            crate::Ty::Enum(name, attr) => TyKind::Enum(name.clone(), attr.clone()),
+            crate::Ty::Enum(name, attr) => InferTy::Enum(name.clone(), attr.clone()),
             crate::Ty::EnumVariant(name, variant, attr) => {
-                TyKind::EnumVariant(name.clone(), variant.clone(), attr.clone())
+                InferTy::EnumVariant(name.clone(), variant.clone(), attr.clone())
             }
-            crate::Ty::List(inner, attr) => TyKind::List(Ty::from_plain(inner), attr.clone()),
-            crate::Ty::Map { key, value, attr } => TyKind::Map {
+            crate::Ty::List(inner, attr) => InferTy::List(Ty::from_plain(inner), attr.clone()),
+            crate::Ty::Map { key, value, attr } => InferTy::Map {
                 key: Ty::from_plain(key),
                 value: Ty::from_plain(value),
                 attr: attr.clone(),
             },
-            crate::Ty::Union(members, attr) => TyKind::Union(interned_all(members), attr.clone()),
+            crate::Ty::Union(members, attr) => InferTy::Union(interned_all(members), attr.clone()),
             crate::Ty::Function {
                 params,
                 ret,
                 throws,
                 attr,
-            } => TyKind::Function {
+            } => InferTy::Function {
                 params: params
                     .iter()
-                    .map(|param| FunctionParam {
+                    .map(|param| InferFunctionParamTy {
                         name: param.name.clone(),
                         ty: Ty::from_plain(&param.ty),
                         mode: param.mode,
@@ -667,23 +539,23 @@ impl Ty {
                 attr: attr.clone(),
             },
             crate::Ty::Future(value, error, attr) => {
-                TyKind::Future(Ty::from_plain(value), Ty::from_plain(error), attr.clone())
+                InferTy::Future(Ty::from_plain(value), Ty::from_plain(error), attr.clone())
             }
-            crate::Ty::RustType { attr } => TyKind::RustType { attr: attr.clone() },
-            crate::Ty::Type { attr } => TyKind::Type { attr: attr.clone() },
-            crate::Ty::Resource { attr } => TyKind::Resource { attr: attr.clone() },
-            crate::Ty::PromptAst { attr } => TyKind::PromptAst { attr: attr.clone() },
-            crate::Ty::Void { attr } => TyKind::Void { attr: attr.clone() },
-            crate::Ty::TypeAlias(name, attr) => TyKind::TypeAlias(name.clone(), attr.clone()),
-            crate::Ty::TypeVar(param, attr) => TyKind::TypeVar(param.clone(), attr.clone()),
+            crate::Ty::RustType { attr } => InferTy::RustType { attr: attr.clone() },
+            crate::Ty::Type { attr } => InferTy::Type { attr: attr.clone() },
+            crate::Ty::Resource { attr } => InferTy::Resource { attr: attr.clone() },
+            crate::Ty::PromptAst { attr } => InferTy::PromptAst { attr: attr.clone() },
+            crate::Ty::Void { attr } => InferTy::Void { attr: attr.clone() },
+            crate::Ty::TypeAlias(name, attr) => InferTy::TypeAlias(name.clone(), attr.clone()),
+            crate::Ty::TypeVar(param, attr) => InferTy::TypeVar(param.clone(), attr.clone()),
             crate::Ty::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
                 attr,
-            } => TyKind::AssociatedTypeProjection {
+            } => InferTy::AssociatedTypeProjection {
                 base: Ty::from_plain(base),
-                interface: InterfaceRef::new(
+                interface: InferInterface::new(
                     interface.name.clone(),
                     interned_all(&interface.generics),
                     interface
@@ -695,9 +567,9 @@ impl Ty {
                 member: member.clone(),
                 attr: attr.clone(),
             },
-            crate::Ty::Unknown { attr } => TyKind::Unknown { attr: attr.clone() },
-            crate::Ty::Never { attr } => TyKind::Never { attr: attr.clone() },
-            crate::Ty::Error { attr } => TyKind::Error { attr: attr.clone() },
+            crate::Ty::Unknown { attr } => InferTy::Unknown { attr: attr.clone() },
+            crate::Ty::Never { attr } => InferTy::Never { attr: attr.clone() },
+            crate::Ty::Error { attr } => InferTy::Error { attr: attr.clone() },
         };
         Ty::intern(kind)
     }
@@ -719,21 +591,21 @@ impl Ty {
     pub fn to_plain(&self) -> crate::Ty {
         let plain_all = |tys: &[Ty]| -> Box<[crate::Ty]> { tys.iter().map(Ty::to_plain).collect() };
         match self.kind() {
-            TyKind::Int { attr } => crate::Ty::Int { attr: attr.clone() },
-            TyKind::Bigint { attr } => crate::Ty::Bigint { attr: attr.clone() },
-            TyKind::Float { attr } => crate::Ty::Float { attr: attr.clone() },
-            TyKind::String { attr } => crate::Ty::String { attr: attr.clone() },
-            TyKind::Bool { attr } => crate::Ty::Bool { attr: attr.clone() },
-            TyKind::Null { attr } => crate::Ty::Null { attr: attr.clone() },
-            TyKind::Uint8Array { attr } => crate::Ty::Uint8Array { attr: attr.clone() },
-            TyKind::Media(kind, attr) => crate::Ty::Media(*kind, attr.clone()),
-            TyKind::Literal(lit, freshness, attr) => {
+            InferTy::Int { attr } => crate::Ty::Int { attr: attr.clone() },
+            InferTy::Bigint { attr } => crate::Ty::Bigint { attr: attr.clone() },
+            InferTy::Float { attr } => crate::Ty::Float { attr: attr.clone() },
+            InferTy::String { attr } => crate::Ty::String { attr: attr.clone() },
+            InferTy::Bool { attr } => crate::Ty::Bool { attr: attr.clone() },
+            InferTy::Null { attr } => crate::Ty::Null { attr: attr.clone() },
+            InferTy::Uint8Array { attr } => crate::Ty::Uint8Array { attr: attr.clone() },
+            InferTy::Media(kind, attr) => crate::Ty::Media(*kind, attr.clone()),
+            InferTy::Literal(lit, freshness, attr) => {
                 crate::Ty::Literal(lit.clone(), *freshness, attr.clone())
             }
-            TyKind::Class(name, args, attr) => {
+            InferTy::Class(name, args, attr) => {
                 crate::Ty::Class(name.clone(), plain_all(args), attr.clone())
             }
-            TyKind::Interface(name, args, assoc, attr) => crate::Ty::Interface(
+            InferTy::Interface(name, args, assoc, attr) => crate::Ty::Interface(
                 name.clone(),
                 plain_all(args),
                 assoc
@@ -742,18 +614,18 @@ impl Ty {
                     .collect(),
                 attr.clone(),
             ),
-            TyKind::Enum(name, attr) => crate::Ty::Enum(name.clone(), attr.clone()),
-            TyKind::EnumVariant(name, variant, attr) => {
+            InferTy::Enum(name, attr) => crate::Ty::Enum(name.clone(), attr.clone()),
+            InferTy::EnumVariant(name, variant, attr) => {
                 crate::Ty::EnumVariant(name.clone(), variant.clone(), attr.clone())
             }
-            TyKind::List(inner, attr) => crate::Ty::List(Box::new(inner.to_plain()), attr.clone()),
-            TyKind::Map { key, value, attr } => crate::Ty::Map {
+            InferTy::List(inner, attr) => crate::Ty::List(Box::new(inner.to_plain()), attr.clone()),
+            InferTy::Map { key, value, attr } => crate::Ty::Map {
                 key: Box::new(key.to_plain()),
                 value: Box::new(value.to_plain()),
                 attr: attr.clone(),
             },
-            TyKind::Union(members, attr) => crate::Ty::Union(plain_all(members), attr.clone()),
-            TyKind::Function {
+            InferTy::Union(members, attr) => crate::Ty::Union(plain_all(members), attr.clone()),
+            InferTy::Function {
                 params,
                 ret,
                 throws,
@@ -771,19 +643,19 @@ impl Ty {
                 throws: Box::new(throws.to_plain()),
                 attr: attr.clone(),
             },
-            TyKind::Future(value, error, attr) => crate::Ty::Future(
+            InferTy::Future(value, error, attr) => crate::Ty::Future(
                 Box::new(value.to_plain()),
                 Box::new(error.to_plain()),
                 attr.clone(),
             ),
-            TyKind::RustType { attr } => crate::Ty::RustType { attr: attr.clone() },
-            TyKind::Type { attr } => crate::Ty::Type { attr: attr.clone() },
-            TyKind::Resource { attr } => crate::Ty::Resource { attr: attr.clone() },
-            TyKind::PromptAst { attr } => crate::Ty::PromptAst { attr: attr.clone() },
-            TyKind::Void { attr } => crate::Ty::Void { attr: attr.clone() },
-            TyKind::TypeAlias(name, attr) => crate::Ty::TypeAlias(name.clone(), attr.clone()),
-            TyKind::TypeVar(param, attr) => crate::Ty::TypeVar(param.clone(), attr.clone()),
-            TyKind::AssociatedTypeProjection {
+            InferTy::RustType { attr } => crate::Ty::RustType { attr: attr.clone() },
+            InferTy::Type { attr } => crate::Ty::Type { attr: attr.clone() },
+            InferTy::Resource { attr } => crate::Ty::Resource { attr: attr.clone() },
+            InferTy::PromptAst { attr } => crate::Ty::PromptAst { attr: attr.clone() },
+            InferTy::Void { attr } => crate::Ty::Void { attr: attr.clone() },
+            InferTy::TypeAlias(name, attr) => crate::Ty::TypeAlias(name.clone(), attr.clone()),
+            InferTy::TypeVar(param, attr) => crate::Ty::TypeVar(param.clone(), attr.clone()),
+            InferTy::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
@@ -802,9 +674,9 @@ impl Ty {
                 member: member.clone(),
                 attr: attr.clone(),
             },
-            TyKind::Unknown { attr } => crate::Ty::Unknown { attr: attr.clone() },
-            TyKind::Never { attr } => crate::Ty::Never { attr: attr.clone() },
-            TyKind::Error { attr } => crate::Ty::Error { attr: attr.clone() },
+            InferTy::Unknown { attr } => crate::Ty::Unknown { attr: attr.clone() },
+            InferTy::Never { attr } => crate::Ty::Never { attr: attr.clone() },
+            InferTy::Error { attr } => crate::Ty::Error { attr: attr.clone() },
             // BUG: reachable, not unreachable — error recovery does not halt
             // the pipeline (an `Error` fact keeps a failing compile alive to
             // collect more diagnostics), so an unsolved variable can legally
@@ -813,7 +685,7 @@ impl Ty {
             // every variable, this takes the same disposition as
             // `erase_infer`'s residue: the error sentinel. An ICE here would
             // trade a missing diagnostic for a crash on user input.
-            TyKind::Infer { attr, .. } => crate::Ty::Error { attr: attr.clone() },
+            InferTy::InferVar { attr, .. } => crate::Ty::Error { attr: attr.clone() },
         }
     }
 }
@@ -822,66 +694,66 @@ impl Ty {
 
 impl Ty {
     pub fn int() -> Ty {
-        Ty::intern(TyKind::Int {
+        Ty::intern(InferTy::Int {
             attr: TyAttr::default(),
         })
     }
 
     pub fn float() -> Ty {
-        Ty::intern(TyKind::Float {
+        Ty::intern(InferTy::Float {
             attr: TyAttr::default(),
         })
     }
 
     pub fn string() -> Ty {
-        Ty::intern(TyKind::String {
+        Ty::intern(InferTy::String {
             attr: TyAttr::default(),
         })
     }
 
     pub fn bool() -> Ty {
-        Ty::intern(TyKind::Bool {
+        Ty::intern(InferTy::Bool {
             attr: TyAttr::default(),
         })
     }
 
     pub fn null() -> Ty {
-        Ty::intern(TyKind::Null {
+        Ty::intern(InferTy::Null {
             attr: TyAttr::default(),
         })
     }
 
     pub fn never() -> Ty {
-        Ty::intern(TyKind::Never {
+        Ty::intern(InferTy::Never {
             attr: TyAttr::default(),
         })
     }
 
     pub fn void() -> Ty {
-        Ty::intern(TyKind::Void {
+        Ty::intern(InferTy::Void {
             attr: TyAttr::default(),
         })
     }
 
     pub fn error() -> Ty {
-        Ty::intern(TyKind::Error {
+        Ty::intern(InferTy::Error {
             attr: TyAttr::default(),
         })
     }
 
     pub fn infer_var(var: InferVar) -> Ty {
-        Ty::intern(TyKind::Infer {
+        Ty::intern(InferTy::InferVar {
             var,
             attr: TyAttr::default(),
         })
     }
 
     pub fn list(inner: Ty) -> Ty {
-        Ty::intern(TyKind::List(inner, TyAttr::default()))
+        Ty::intern(InferTy::List(inner, TyAttr::default()))
     }
 
     pub fn union(members: impl IntoIterator<Item = Ty>) -> Ty {
-        Ty::intern(TyKind::Union(
+        Ty::intern(InferTy::Union(
             members.into_iter().collect(),
             TyAttr::default(),
         ))
@@ -890,19 +762,19 @@ impl Ty {
     /// `T?` is a flat `T | null` union.
     pub fn optional(inner: Ty) -> Ty {
         match inner.kind() {
-            TyKind::Union(members, attr) => {
+            InferTy::Union(members, attr) => {
                 if members
                     .iter()
-                    .any(|member| matches!(member.kind(), TyKind::Null { .. }))
+                    .any(|member| matches!(member.kind(), InferTy::Null { .. }))
                 {
                     inner
                 } else {
                     let mut members = members.to_vec();
                     members.push(Ty::null());
-                    Ty::intern(TyKind::Union(members.into(), attr.clone()))
+                    Ty::intern(InferTy::Union(members.into(), attr.clone()))
                 }
             }
-            TyKind::Null { .. } => inner,
+            InferTy::Null { .. } => inner,
             _ => Ty::union([inner, Ty::null()]),
         }
     }
@@ -913,6 +785,7 @@ impl Ty {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Literal, ParamTy};
 
     fn plain_samples() -> Vec<crate::Ty> {
         use crate::Ty as P;
@@ -988,7 +861,7 @@ mod tests {
     #[test]
     fn optional_flattens_union_and_is_idempotent() {
         let optional = Ty::optional(Ty::union([Ty::int(), Ty::string()]));
-        let TyKind::Union(members, _) = optional.kind() else {
+        let InferTy::Union(members, _) = optional.kind() else {
             panic!("expected union");
         };
         assert_eq!(members.len(), 3);
@@ -997,12 +870,12 @@ mod tests {
         assert!(
             members
                 .iter()
-                .any(|member| matches!(member.kind(), TyKind::Null { .. }))
+                .any(|member| matches!(member.kind(), InferTy::Null { .. }))
         );
         assert!(
             !members
                 .iter()
-                .any(|member| matches!(member.kind(), TyKind::Union(..)))
+                .any(|member| matches!(member.kind(), InferTy::Union(..)))
         );
         assert!(Ty::optional(optional.clone()) == optional);
     }
@@ -1017,7 +890,7 @@ mod tests {
         // Substructure is shared too: the element of `int[]` is the `int`.
         let int = Ty::int();
         let list = Ty::list(int.clone());
-        let TyKind::List(elem, _) = list.kind() else {
+        let InferTy::List(elem, _) = list.kind() else {
             panic!("expected list");
         };
         assert!(*elem == int);
@@ -1074,7 +947,7 @@ mod tests {
     /// Whether the pool currently holds an entry for `kind`. Test-only; the
     /// pool is global and shared with concurrently running tests, so tests
     /// probe unique keys instead of asserting pool sizes.
-    fn pool_contains(kind: &TyKind) -> bool {
+    fn pool_contains(kind: &InferTy) -> bool {
         let data = TyData {
             flags: compute_flags(kind),
             kind: kind.clone(),
@@ -1084,7 +957,7 @@ mod tests {
 
     #[test]
     fn dropping_last_handle_evicts_pool_entry() {
-        let probe_kind = TyKind::Literal(
+        let probe_kind = InferTy::Literal(
             Literal::String("interned-eviction-probe".into()),
             Freshness::Regular,
             TyAttr::default(),

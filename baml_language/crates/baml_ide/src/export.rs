@@ -871,7 +871,7 @@ fn interface_generics(db: &Db, iface: InterfaceLoc<'_>) -> Vec<(ParamTy, Vec<Int
     reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
 )]
 fn plain_bounds(
-    interned: impl IntoIterator<Item = (ParamTy, Vec<baml_type::interned::InterfaceRef>)>,
+    interned: impl IntoIterator<Item = (ParamTy, Vec<baml_type::interned::InferInterface>)>,
 ) -> Vec<(ParamTy, Vec<InterfaceBound>)> {
     interned
         .into_iter()

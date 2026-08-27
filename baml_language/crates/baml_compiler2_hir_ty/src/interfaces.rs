@@ -57,7 +57,7 @@ pub(crate) struct LowerScope<'a, 'db> {
 
 fn interned_bounds(
     bounds: &TypeVarBoundsMap,
-) -> rustc_hash::FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+) -> rustc_hash::FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> {
     bounds
         .iter()
         .map(|(param, ifaces)| {
@@ -65,7 +65,7 @@ fn interned_bounds(
                 param.clone(),
                 ifaces
                     .iter()
-                    .map(baml_type::interned::InterfaceRef::from_constraint)
+                    .map(baml_type::interned::InferInterface::from_constraint)
                     .collect(),
             )
         })
@@ -1622,7 +1622,7 @@ fn collect_type_generic_bound_errors<'db>(
                 let plain = interface_declared_param_bounds(db, iface);
                 let declared: rustc_hash::FxHashMap<
                     ParamTy,
-                    Vec<baml_type::interned::InterfaceRef>,
+                    Vec<baml_type::interned::InferInterface>,
                 > = plain
                     .iter()
                     .map(|(param, bounds)| {
@@ -1630,7 +1630,7 @@ fn collect_type_generic_bound_errors<'db>(
                             param.clone(),
                             bounds
                                 .iter()
-                                .map(baml_type::interned::InterfaceRef::from_constraint)
+                                .map(baml_type::interned::InferInterface::from_constraint)
                                 .collect(),
                         )
                     })
@@ -1698,7 +1698,7 @@ fn collect_type_generic_bound_errors<'db>(
 fn check_head_args(
     facts: &crate::facts::Facts<'_>,
     params: &[ParamTy],
-    declared: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    declared: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
     args: &[baml_type::LoweringTy],
     errors: &mut Vec<TirTypeError>,
 ) {
@@ -2059,7 +2059,7 @@ fn determine_interface<'db>(
             member: inner_member,
             ..
         } => {
-            let inner_ref = baml_type::interned::InterfaceRef::from_constraint(inner_interface);
+            let inner_ref = baml_type::interned::InferInterface::from_constraint(inner_interface);
             let inner_base_interned = baml_type::interned::Ty::from_plain(inner_base);
             let root = crate::impls::realized_assoc_bound(
                 db,
@@ -2234,7 +2234,7 @@ fn resolve_through_roots(
             push(&mut declarers, root);
             continue;
         }
-        let root_ref = baml_type::interned::InterfaceRef::from_constraint(&root);
+        let root_ref = baml_type::interned::InferInterface::from_constraint(&root);
         let subject = root_ref.existential();
         if crate::package_interface::mounted_type_row(db, &root.name).is_some() {
             for inherited in crate::impls::direct_requires_closure(db, &root_ref, &subject, 64) {
@@ -2331,17 +2331,17 @@ fn determine_concrete<'db>(
         }
     }
     if declarers.len() > 1 {
-        let heads: Vec<baml_type::interned::InterfaceRef> = declarers
+        let heads: Vec<baml_type::interned::InferInterface> = declarers
             .iter()
             .map(|iface| {
-                baml_type::interned::InterfaceRef::new(
+                baml_type::interned::InferInterface::new(
                     iface.name.clone(),
                     iface
                         .generics
                         .iter()
                         .map(baml_type::interned::Ty::from_plain)
                         .collect(),
-                    Vec::new(),
+                    Box::new([]),
                 )
             })
             .collect();
@@ -2399,7 +2399,7 @@ fn concrete_realized_interface(
     qualifier: &baml_type::Interface,
 ) -> Option<baml_type::Interface> {
     let interned = crate::impls::try_interned_ty(base)?;
-    let goal = baml_type::interned::InterfaceRef::from_constraint(qualifier);
+    let goal = baml_type::interned::InferInterface::from_constraint(qualifier);
     let resolved = crate::impls::resolve_impl(db, &interned, &goal)?;
     let view = resolved.implemented_view(db, &interned);
     Some(baml_type::Interface {

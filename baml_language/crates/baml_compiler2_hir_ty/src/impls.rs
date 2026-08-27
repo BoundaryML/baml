@@ -34,7 +34,7 @@
 use baml_compiler2_hir::{loc::ImplLoc, package::PackageId};
 use baml_type::{
     Name, ParamTy, TypeName,
-    interned::{InterfaceRef, Ty, TyKind},
+    interned::{InferInterface, InferTy, Ty},
     normalize::{TypeContext, equivalent_interned},
 };
 use rustc_hash::FxHashMap;
@@ -86,11 +86,11 @@ pub fn try_interned_ty(ty: &baml_type::Ty) -> Option<Ty> {
 /// One impl's resolution-relevant facts, normalized to the free shape.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImplFacts<'db> {
-    pub interface: InterfaceRef,
+    pub interface: InferInterface,
     pub for_ty_pattern: Ty,
     /// The impl's own generic params with their CONJUNCTIVE bounds (each
     /// bound an interface reference).
-    pub generic_params: Vec<(ParamTy, Vec<InterfaceRef>)>,
+    pub generic_params: Vec<(ParamTy, Vec<InferInterface>)>,
     pub associated_types: Vec<(Name, Ty)>,
     pub methods: Vec<baml_compiler2_hir::loc::FunctionLoc<'db>>,
 }
@@ -124,7 +124,7 @@ pub fn impl_facts<'db>(
     let file = block.file(db);
 
     // The generic frame and for-target, normalized to the free shape.
-    let (params, param_bounds, for_ty_pattern): (Vec<ParamTy>, Vec<Vec<InterfaceRef>>, _) =
+    let (params, param_bounds, for_ty_pattern): (Vec<ParamTy>, Vec<Vec<InferInterface>>, _) =
         match &data.subject {
             ImplSubjectData::InClass { class, .. } => {
                 let frame = crate::lower::class_generic_frame(db, *class);
@@ -138,7 +138,7 @@ pub fn impl_facts<'db>(
                             .bounds
                             .iter()
                             .filter_map(|&type_ref| {
-                                InterfaceRef::of_ty(&interned_ty(&crate::lower::reject_holes(
+                                InferInterface::of_ty(&interned_ty(&crate::lower::reject_holes(
                                     &ctx.lower_type_ref_at(
                                         &class_data.type_refs,
                                         type_ref,
@@ -173,7 +173,7 @@ pub fn impl_facts<'db>(
                             .bounds
                             .iter()
                             .filter_map(|&type_ref| {
-                                InterfaceRef::of_ty(&interned_ty(&crate::lower::reject_holes(
+                                InferInterface::of_ty(&interned_ty(&crate::lower::reject_holes(
                                     &ctx.lower_type_ref_at(
                                         &data.type_refs,
                                         type_ref,
@@ -193,7 +193,7 @@ pub fn impl_facts<'db>(
 
     // The impl's own bounds ride along: `type Output = T.Item` must
     // find `Item`'s declaring interface through `T`'s declared bound.
-    let bounds_map: FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> = params
+    let bounds_map: FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> = params
         .iter()
         .cloned()
         .zip(param_bounds.iter())
@@ -202,7 +202,7 @@ pub fn impl_facts<'db>(
     let ctx = crate::lower::lower_ctx_for_file(db, file)
         .with_frame(params.clone())
         .with_bounds(bounds_map);
-    let interface = InterfaceRef::of_ty(&interned_ty(&crate::lower::reject_holes(
+    let interface = InferInterface::of_ty(&interned_ty(&crate::lower::reject_holes(
         &ctx.lower_type_ref_at(
             &data.type_refs,
             data.interface_target,
@@ -367,22 +367,22 @@ impl TypeContext for AliasOnlyFacts<'_> {
 pub(crate) fn is_concrete_receiver(ty: &Ty) -> bool {
     matches!(
         ty.kind(),
-        TyKind::Class(..)
-            | TyKind::Enum(..)
-            | TyKind::Int { .. }
-            | TyKind::Bigint { .. }
-            | TyKind::Float { .. }
-            | TyKind::String { .. }
-            | TyKind::Bool { .. }
-            | TyKind::Null { .. }
-            | TyKind::Uint8Array { .. }
-            | TyKind::Media(..)
-            | TyKind::List(..)
-            | TyKind::Map { .. }
-            | TyKind::Future(..)
-            | TyKind::Type { .. }
-            | TyKind::Resource { .. }
-            | TyKind::PromptAst { .. }
+        InferTy::Class(..)
+            | InferTy::Enum(..)
+            | InferTy::Int { .. }
+            | InferTy::Bigint { .. }
+            | InferTy::Float { .. }
+            | InferTy::String { .. }
+            | InferTy::Bool { .. }
+            | InferTy::Null { .. }
+            | InferTy::Uint8Array { .. }
+            | InferTy::Media(..)
+            | InferTy::List(..)
+            | InferTy::Map { .. }
+            | InferTy::Future(..)
+            | InferTy::Type { .. }
+            | InferTy::Resource { .. }
+            | InferTy::PromptAst { .. }
     )
 }
 
@@ -390,9 +390,9 @@ pub(crate) fn is_concrete_receiver(ty: &Ty) -> bool {
 /// blocks and mounted export rows.
 #[derive(Clone, PartialEq)]
 pub struct MountedImplFacts {
-    pub interface: InterfaceRef,
+    pub interface: InferInterface,
     pub for_ty_pattern: Ty,
-    pub generic_params: Vec<(ParamTy, Vec<InterfaceRef>)>,
+    pub generic_params: Vec<(ParamTy, Vec<InferInterface>)>,
     pub associated_types: Vec<(Name, Ty)>,
 }
 
@@ -425,7 +425,7 @@ pub enum ResolvedImplFacts<'db> {
 }
 
 impl ResolvedImplFacts<'_> {
-    pub fn interface(&self) -> &InterfaceRef {
+    pub fn interface(&self) -> &InferInterface {
         match self {
             Self::Source(facts) => &facts.interface,
             Self::Mounted(facts) => &facts.interface,
@@ -441,7 +441,7 @@ impl ResolvedImplFacts<'_> {
         }
     }
 
-    pub fn generic_params(&self) -> &[(ParamTy, Vec<InterfaceRef>)] {
+    pub fn generic_params(&self) -> &[(ParamTy, Vec<InferInterface>)] {
         match self {
             Self::Source(facts) => &facts.generic_params,
             Self::Mounted(facts) => &facts.generic_params,
@@ -533,7 +533,7 @@ impl ResolvedImpl<'_> {
     /// block-level `type X = ...` bindings and defaults resolve
     /// per-member (`resolved_pin`); [`Self::implemented_view`] is the
     /// complete spelling.
-    pub fn implemented(&self) -> InterfaceRef {
+    pub fn implemented(&self) -> InferInterface {
         realized(self.facts.interface(), &self.bindings)
     }
 
@@ -542,7 +542,11 @@ impl ResolvedImpl<'_> {
     /// resolved through the same ladder projection uses (header pin,
     /// block-level binding, realized default) - the spelling runtime
     /// dispatch keys on.
-    pub fn implemented_view(&self, db: &dyn baml_compiler2_ppir::Db, self_ty: &Ty) -> InterfaceRef {
+    pub fn implemented_view(
+        &self,
+        db: &dyn baml_compiler2_ppir::Db,
+        self_ty: &Ty,
+    ) -> InferInterface {
         let header = self.implemented();
         let declared: Vec<baml_type::Name> = {
             let package =
@@ -573,7 +577,7 @@ impl ResolvedImpl<'_> {
             .into_iter()
             .filter_map(|member| resolved_pin(db, self, self_ty, &member).map(|pin| (member, pin)))
             .collect();
-        InterfaceRef::new(header.name.clone(), header.generics, associated_types)
+        InferInterface::new(header.name.clone(), header.generics, associated_types)
     }
 }
 
@@ -645,7 +649,7 @@ pub(crate) fn resolved_pin(
 /// BAML the written reference itself fixes omitted defaulted members.
 pub(crate) fn realized_assoc_default(
     db: &dyn baml_compiler2_ppir::Db,
-    target: &InterfaceRef,
+    target: &InferInterface,
     self_ty: &Ty,
     member: &Name,
 ) -> Option<Ty> {
@@ -680,7 +684,7 @@ pub(crate) fn realized_assoc_default(
 /// still-symbolic projection is provable against.
 pub(crate) fn realized_assoc_bound(
     db: &dyn baml_compiler2_ppir::Db,
-    target: &InterfaceRef,
+    target: &InferInterface,
     self_ty: &Ty,
     member: &Name,
 ) -> Option<Ty> {
@@ -697,7 +701,7 @@ pub(crate) fn realized_assoc_bound(
             .as_ref()?;
         let instantiation =
             mounted_interface_instantiation(target, self_ty, generic_params, associated_types)?;
-        let bound_ty = Ty::intern(TyKind::Interface(
+        let bound_ty = Ty::intern(InferTy::Interface(
             bound.name.clone(),
             bound.generics.iter().map(Ty::from_plain).collect(),
             bound
@@ -722,7 +726,7 @@ pub(crate) fn realized_assoc_bound(
 /// diagnostic is S17's).
 fn assoc_realization_env<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    target: &InterfaceRef,
+    target: &InferInterface,
 ) -> Option<(
     baml_compiler2_hir::loc::InterfaceLoc<'db>,
     &'db baml_compiler2_ppir::item_data::InterfaceData<'db>,
@@ -741,7 +745,7 @@ fn assoc_realization_env<'db>(
 }
 
 pub(crate) fn mounted_interface_instantiation(
-    target: &InterfaceRef,
+    target: &InferInterface,
     self_ty: &Ty,
     generic_params: &[ParamTy],
     associated_types: &[crate::package_interface::ExportedAssociatedType],
@@ -758,7 +762,7 @@ pub(crate) fn mounted_interface_instantiation(
             .find(|(name, _)| name == &assoc.name)
             .map(|(_, ty)| ty.clone())
             .unwrap_or_else(|| {
-                Ty::intern(TyKind::AssociatedTypeProjection {
+                Ty::intern(InferTy::AssociatedTypeProjection {
                     base: self_ty.clone(),
                     interface: target.clone(),
                     member: assoc.name.clone(),
@@ -874,7 +878,7 @@ fn derived_impl_allows(
         return true;
     }
     let normalized = baml_type::normalize::normalize_interned(concrete, &AliasOnlyFacts::new(db));
-    matches!(normalized.kind(), TyKind::Class(..))
+    matches!(normalized.kind(), InferTy::Class(..))
 }
 
 #[salsa::interned]
@@ -922,7 +926,7 @@ fn impls_for_type_cached<'db>(
                 .map(|(param, _)| param.clone())
                 .collect();
             // Bare-blanket guard, as in `match_impl_head`.
-            if let TyKind::TypeVar(param, _) = facts.for_ty_pattern().kind()
+            if let InferTy::TypeVar(param, _) = facts.for_ty_pattern().kind()
                 && params.contains(param)
                 && !is_concrete_receiver(concrete)
             {
@@ -1067,13 +1071,13 @@ fn exported_impl_facts(row: &crate::package_interface::ExportedImpl) -> MountedI
                 .get(index)
                 .into_iter()
                 .flatten()
-                .map(InterfaceRef::from_constraint)
+                .map(InferInterface::from_constraint)
                 .collect();
             (param.clone(), bounds)
         })
         .collect();
     MountedImplFacts {
-        interface: InterfaceRef::from_constraint(&row.interface),
+        interface: InferInterface::from_constraint(&row.interface),
         for_ty_pattern: Ty::from_plain(&row.for_ty_pattern),
         generic_params,
         associated_types: row
@@ -1154,7 +1158,7 @@ pub(crate) fn all_impl_facts(db: &dyn baml_compiler2_ppir::Db) -> Vec<&ImplFacts
 pub fn implements_interface(
     db: &dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
-    interface: &InterfaceRef,
+    interface: &InferInterface,
 ) -> bool {
     resolve_impl(db, concrete, interface).is_some()
 }
@@ -1164,7 +1168,7 @@ pub fn implements_interface(
 pub fn resolve_impl<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
-    interface: &InterfaceRef,
+    interface: &InferInterface,
 ) -> Option<ResolvedImpl<'db>> {
     // RIGID vars (skolems) are legal in goals: rustc proves
     // `Arr<T>: Iter<T>` inside a generic body by matching impls with
@@ -1179,7 +1183,7 @@ pub fn resolve_impl<'db>(
     // A literal-typed value implements what its base primitive does
     // (the receiver-class rule applied to impl goals): `1` proves
     // `GrptChild<int>` through `implements GrptChild<int> for int`.
-    if let TyKind::Literal(literal, _, attr) = concrete.kind() {
+    if let InferTy::Literal(literal, _, attr) = concrete.kind() {
         let widened = Ty::intern(crate::infer::literal_base(literal, attr.clone()));
         return resolve_impl(db, &widened, interface);
     }
@@ -1199,9 +1203,9 @@ fn is_realized(ty: &Ty) -> bool {
 fn resolve_within_depth<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
-    interface: &InterfaceRef,
+    interface: &InferInterface,
     depth: u32,
-    in_progress: &mut Vec<(Ty, InterfaceRef)>,
+    in_progress: &mut Vec<(Ty, InferInterface)>,
 ) -> Option<ResolvedImpl<'db>> {
     // CYCLE DETECTION (rustc's obligation-stack shape): a goal already
     // being resolved on this path has no finite proof - inductive
@@ -1248,7 +1252,7 @@ fn resolve_within_depth<'db>(
 fn search_roots<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
-    interface: &InterfaceRef,
+    interface: &InferInterface,
 ) -> Vec<PackageId<'db>> {
     let mut names: Vec<Name> = vec![interface.name.package().clone()];
     collect_packages(concrete, &mut names);
@@ -1265,28 +1269,28 @@ fn search_roots<'db>(
 
 fn collect_packages(ty: &Ty, out: &mut Vec<Name>) {
     match ty.kind() {
-        TyKind::Class(qtn, ..)
-        | TyKind::Interface(qtn, ..)
-        | TyKind::Enum(qtn, _)
-        | TyKind::EnumVariant(qtn, ..)
-        | TyKind::TypeAlias(qtn, _) => out.push(qtn.package().clone()),
+        InferTy::Class(qtn, ..)
+        | InferTy::Interface(qtn, ..)
+        | InferTy::Enum(qtn, _)
+        | InferTy::EnumVariant(qtn, ..)
+        | InferTy::TypeAlias(qtn, _) => out.push(qtn.package().clone()),
         _ => {}
     }
     // Primitives and structural types live in the stdlib package.
     if matches!(
         ty.kind(),
-        TyKind::Int { .. }
-            | TyKind::Bigint { .. }
-            | TyKind::Float { .. }
-            | TyKind::String { .. }
-            | TyKind::Bool { .. }
-            | TyKind::Null { .. }
-            | TyKind::Uint8Array { .. }
-            | TyKind::Media(..)
-            | TyKind::List(..)
-            | TyKind::Map { .. }
-            | TyKind::Future(..)
-            | TyKind::Literal(..)
+        InferTy::Int { .. }
+            | InferTy::Bigint { .. }
+            | InferTy::Float { .. }
+            | InferTy::String { .. }
+            | InferTy::Bool { .. }
+            | InferTy::Null { .. }
+            | InferTy::Uint8Array { .. }
+            | InferTy::Media(..)
+            | InferTy::List(..)
+            | InferTy::Map { .. }
+            | InferTy::Future(..)
+            | InferTy::Literal(..)
     ) {
         out.push(Name::new("baml"));
     }
@@ -1304,7 +1308,7 @@ fn match_impl_head(
     db: &dyn baml_compiler2_ppir::Db,
     facts: &ResolvedImplFacts<'_>,
     concrete: &Ty,
-    interface: &InterfaceRef,
+    interface: &InferInterface,
     eq: &AliasOnlyFacts<'_>,
 ) -> Option<FxHashMap<ParamTy, Ty>> {
     if facts.interface().name != interface.name
@@ -1314,7 +1318,7 @@ fn match_impl_head(
     }
     // Bare-blanket guard: `implement<T> I for T` applies only to
     // concrete receivers - never existentials, unions, or vars.
-    if let TyKind::TypeVar(param, _) = facts.for_ty_pattern().kind()
+    if let InferTy::TypeVar(param, _) = facts.for_ty_pattern().kind()
         && facts.generic_params().iter().any(|(p, _)| p == param)
         && !is_concrete_receiver(concrete)
     {
@@ -1397,7 +1401,7 @@ pub(crate) fn reduce_ground_projections(
         ty.kind()
             .map_children(|child| reduce_ground_projections(db, child, fuel)),
     );
-    if let TyKind::AssociatedTypeProjection {
+    if let InferTy::AssociatedTypeProjection {
         base,
         interface,
         member,
@@ -1437,7 +1441,7 @@ fn match_pattern(
     bindings: &mut FxHashMap<ParamTy, Ty>,
     eq: &AliasOnlyFacts<'_>,
 ) -> bool {
-    if let TyKind::TypeVar(param, _) = pattern.kind()
+    if let InferTy::TypeVar(param, _) = pattern.kind()
         && params.contains(param)
     {
         return match bindings.get(param) {
@@ -1461,7 +1465,7 @@ fn match_pattern(
         }
     }
     match (pattern.kind(), target.kind()) {
-        (TyKind::Class(a, a_args, _), TyKind::Class(b, b_args, _)) => {
+        (InferTy::Class(a, a_args, _), InferTy::Class(b, b_args, _)) => {
             a == b
                 && a_args.len() == b_args.len()
                 && a_args
@@ -1469,7 +1473,7 @@ fn match_pattern(
                     .zip(b_args.iter())
                     .all(|(p, t)| match_pattern(p, t, params, bindings, eq))
         }
-        (TyKind::Interface(a, a_args, a_pins, _), TyKind::Interface(b, b_args, b_pins, _)) => {
+        (InferTy::Interface(a, a_args, a_pins, _), InferTy::Interface(b, b_args, b_pins, _)) => {
             a == b
                 && a_args.len() == b_args.len()
                 && a_args
@@ -1485,33 +1489,33 @@ fn match_pattern(
                     })
                 })
         }
-        (TyKind::List(p, _), TyKind::List(t, _)) => match_pattern(p, t, params, bindings, eq),
+        (InferTy::List(p, _), InferTy::List(t, _)) => match_pattern(p, t, params, bindings, eq),
         (
-            TyKind::Map {
+            InferTy::Map {
                 key: pk, value: pv, ..
             },
-            TyKind::Map {
+            InferTy::Map {
                 key: tk, value: tv, ..
             },
         ) => {
             match_pattern(pk, tk, params, bindings, eq)
                 && match_pattern(pv, tv, params, bindings, eq)
         }
-        (TyKind::Future(pv, pe, _), TyKind::Future(tv, te, _)) => {
+        (InferTy::Future(pv, pe, _), InferTy::Future(tv, te, _)) => {
             match_pattern(pv, tv, params, bindings, eq)
                 && match_pattern(pe, te, params, bindings, eq)
         }
-        (TyKind::Union(p_members, _), TyKind::Union(t_members, _)) => {
+        (InferTy::Union(p_members, _), InferTy::Union(t_members, _)) => {
             match_union_members(p_members, t_members, params, bindings, eq)
         }
         (
-            TyKind::Function {
+            InferTy::Function {
                 params: pp,
                 ret: pr,
                 throws: pt,
                 ..
             },
-            TyKind::Function {
+            InferTy::Function {
                 params: tp,
                 ret: tr,
                 throws: tt,
@@ -1527,12 +1531,12 @@ fn match_pattern(
         }
         // Widenings: a literal target matches its base primitive; an
         // enum-variant target matches its enum.
-        (TyKind::Int { .. }, TyKind::Literal(baml_type::Literal::Int(_), ..))
-        | (TyKind::Bigint { .. }, TyKind::Literal(baml_type::Literal::Bigint(_), ..))
-        | (TyKind::Float { .. }, TyKind::Literal(baml_type::Literal::Float(_), ..))
-        | (TyKind::String { .. }, TyKind::Literal(baml_type::Literal::String(_), ..))
-        | (TyKind::Bool { .. }, TyKind::Literal(baml_type::Literal::Bool(_), ..)) => true,
-        (TyKind::Enum(p, _), TyKind::EnumVariant(t, ..)) => p == t,
+        (InferTy::Int { .. }, InferTy::Literal(baml_type::Literal::Int(_), ..))
+        | (InferTy::Bigint { .. }, InferTy::Literal(baml_type::Literal::Bigint(_), ..))
+        | (InferTy::Float { .. }, InferTy::Literal(baml_type::Literal::Float(_), ..))
+        | (InferTy::String { .. }, InferTy::Literal(baml_type::Literal::String(_), ..))
+        | (InferTy::Bool { .. }, InferTy::Literal(baml_type::Literal::Bool(_), ..)) => true,
+        (InferTy::Enum(p, _), InferTy::EnumVariant(t, ..)) => p == t,
         _ => false,
     }
 }
@@ -1593,7 +1597,7 @@ fn pattern_fully_bound(
     bindings: &FxHashMap<ParamTy, Ty>,
 ) -> bool {
     fn walk(ty: &Ty, params: &[ParamTy], bindings: &FxHashMap<ParamTy, Ty>, out: &mut bool) {
-        if let TyKind::TypeVar(param, _) = ty.kind()
+        if let InferTy::TypeVar(param, _) = ty.kind()
             && params.contains(param)
             && !bindings.contains_key(param)
         {
@@ -1614,10 +1618,10 @@ fn pattern_fully_bound(
 /// kept, generics and pins substituted - the one spelling of the
 /// five hand-copied blocks this replaces.
 pub(crate) fn realized(
-    reference: &InterfaceRef,
+    reference: &InferInterface,
     bindings: &FxHashMap<ParamTy, Ty>,
-) -> InterfaceRef {
-    InterfaceRef::new(
+) -> InferInterface {
+    InferInterface::new(
         reference.name.clone(),
         reference
             .generics
@@ -1640,7 +1644,7 @@ pub fn substitute_bindings(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
     if !ty.has_typevar() {
         return ty.clone();
     }
-    if let TyKind::TypeVar(param, _) = ty.kind()
+    if let InferTy::TypeVar(param, _) = ty.kind()
         && let Some(bound) = bindings.get(param)
     {
         return bound.clone();
@@ -1659,7 +1663,7 @@ fn bounds_hold(
     facts: &ResolvedImplFacts<'_>,
     bindings: &FxHashMap<ParamTy, Ty>,
     depth: u32,
-    in_progress: &mut Vec<(Ty, InterfaceRef)>,
+    in_progress: &mut Vec<(Ty, InferInterface)>,
 ) -> bool {
     for (param, bounds) in facts.generic_params() {
         let Some(actual) = bindings.get(param) else {
@@ -1686,10 +1690,10 @@ fn bounds_hold(
 /// re-prepended it; spelled once here.
 pub(crate) fn requires_heads(
     db: &dyn baml_compiler2_ppir::Db,
-    root: &InterfaceRef,
+    root: &InferInterface,
     self_ty: &Ty,
     fuel: u32,
-) -> Vec<InterfaceRef> {
+) -> Vec<InferInterface> {
     let mut heads = vec![root.clone()];
     heads.extend(direct_requires_closure(db, root, self_ty, fuel));
     heads
@@ -1704,8 +1708,8 @@ pub(crate) fn requires_heads(
 /// replaces (unification stays only in obligation CONFIRMATION, which
 /// commits variables).
 pub(crate) fn head_matches(
-    have: &InterfaceRef,
-    want: &InterfaceRef,
+    have: &InferInterface,
+    want: &InferInterface,
     eq: &AliasOnlyFacts<'_>,
 ) -> bool {
     use baml_type::normalize::equivalent_interned;
@@ -1730,10 +1734,10 @@ pub(crate) fn head_matches(
 /// root implements every required interface (the requires contract).
 pub fn direct_requires_closure(
     db: &dyn baml_compiler2_ppir::Db,
-    root: &InterfaceRef,
+    root: &InferInterface,
     self_ty: &Ty,
     fuel: u32,
-) -> Vec<InterfaceRef> {
+) -> Vec<InferInterface> {
     let mut out = Vec::new();
     let mut queue = vec![root.clone()];
     let mut budget = fuel;
@@ -1758,9 +1762,9 @@ pub fn direct_requires_closure(
 /// instantiation.
 fn direct_requires(
     db: &dyn baml_compiler2_ppir::Db,
-    of: &InterfaceRef,
+    of: &InferInterface,
     self_ty: &Ty,
-) -> Vec<InterfaceRef> {
+) -> Vec<InferInterface> {
     if let Some(crate::package_interface::ExportedType::Interface {
         generic_params,
         associated_types,
@@ -1775,9 +1779,9 @@ fn direct_requires(
         };
         return requires
             .iter()
-            .map(InterfaceRef::from_constraint)
+            .map(InferInterface::from_constraint)
             .map(|required| {
-                InterfaceRef::new(
+                InferInterface::new(
                     required.name.clone(),
                     required
                         .generics
@@ -1809,14 +1813,14 @@ fn direct_requires(
     data.requires
         .iter()
         .filter_map(|&required| {
-            let target = InterfaceRef::of_ty(&interned_ty(&crate::lower::reject_holes(
+            let target = InferInterface::of_ty(&interned_ty(&crate::lower::reject_holes(
                 &ctx.lower_type_ref_at(
                     &data.type_refs,
                     required,
                     crate::lower::TypePosition::ConstraintHead,
                 ),
             )))?;
-            Some(InterfaceRef::new(
+            Some(InferInterface::new(
                 target.name.clone(),
                 target
                     .generics
@@ -1844,8 +1848,8 @@ fn direct_requires(
 /// by name + args; pins are outputs, not part of the relation).
 pub fn interface_requires(
     db: &dyn baml_compiler2_ppir::Db,
-    sub: &InterfaceRef,
-    sup: &InterfaceRef,
+    sub: &InferInterface,
+    sup: &InferInterface,
     self_ty: &Ty,
     fuel: u32,
 ) -> bool {
@@ -1854,11 +1858,11 @@ pub fn interface_requires(
 
 fn interface_requires_inner(
     db: &dyn baml_compiler2_ppir::Db,
-    sub: &InterfaceRef,
-    sup: &InterfaceRef,
+    sub: &InferInterface,
+    sup: &InferInterface,
     self_ty: &Ty,
     fuel: u32,
-    visited: &mut Vec<InterfaceRef>,
+    visited: &mut Vec<InferInterface>,
 ) -> bool {
     if fuel == 0 {
         return false;

@@ -400,7 +400,7 @@ impl ExportedType {
     deprecated,
     reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
 )]
-fn plain_interface(reference: &baml_type::interned::InterfaceRef) -> baml_type::Interface {
+fn plain_interface(reference: &baml_type::interned::InferInterface) -> baml_type::Interface {
     baml_type::Interface::new(
         reference.name.clone(),
         reference
@@ -418,7 +418,7 @@ fn plain_interface(reference: &baml_type::interned::InterfaceRef) -> baml_type::
 
 fn plain_bounds(
     params: &[ParamTy],
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
 ) -> Vec<Vec<baml_type::Interface>> {
     params
         .iter()
@@ -772,13 +772,13 @@ fn lower_interface_export<'db>(
         .with_frame(frame.clone())
         .with_bounds(bounds.clone());
 
-    let self_ty = baml_type::interned::Ty::intern(baml_type::interned::TyKind::TypeVar(
+    let self_ty = baml_type::interned::Ty::intern(baml_type::interned::InferTy::TypeVar(
         self_param.clone(),
         TyAttr::default(),
     ));
     let mut requires_refs = Vec::new();
     for &required in &data.requires {
-        let Some(root) = baml_type::interned::InterfaceRef::of_ty(&crate::impls::interned_ty(
+        let Some(root) = baml_type::interned::InferInterface::of_ty(&crate::impls::interned_ty(
             &crate::lower::reject_holes(&ctx.lower_type_ref_at(
                 &data.type_refs,
                 required,
@@ -804,7 +804,7 @@ fn lower_interface_export<'db>(
         .map(|assoc| ExportedAssociatedType {
             name: assoc.name.clone(),
             bound: assoc.bound.and_then(|bound| {
-                baml_type::interned::InterfaceRef::of_ty(&crate::impls::interned_ty(
+                baml_type::interned::InferInterface::of_ty(&crate::impls::interned_ty(
                     &crate::lower::reject_holes(&ctx.lower_type_ref_at(
                         &data.type_refs,
                         bound,

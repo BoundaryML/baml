@@ -809,39 +809,67 @@ pub(crate) fn with_clone_bounds(generics: &Generics) -> Generics {
     bounded
 }
 
-/// The idents to rewrite when generating for `target`: the master ident becomes
-/// `target`, and each satellite name becomes `target`'s satellite.
-fn replacements(family: &Family, target: &Ident) -> HashMap<String, Ident> {
+/// The rewrite plan when generating for `target`: the master ident becomes
+/// `target`, each satellite name becomes `target`'s satellite, and idents in
+/// *member-path position* are exempt (see [`Replacements::guards`]).
+struct Replacements {
+    map: HashMap<String, Ident>,
+    /// Idents that open a member path (`Ty::`, `Self::`, any member name).
+    /// An ident directly after `<guard>::` names a *variant or associated
+    /// item* of that member, not a top-level type — `Ty::Interface` is the
+    /// existential variant, which merely shares its name with the `Interface`
+    /// satellite — so it is never rewritten, even when it collides with a
+    /// satellite name.
+    guards: std::collections::HashSet<String>,
+}
+
+fn replacements(family: &Family, target: &Ident) -> Replacements {
     let mut map = HashMap::new();
     map.insert(family.master_ident.to_string(), target.clone());
     for sat in &family.satellites {
         map.insert(sat.name.to_string(), satellite_name_for(target, &sat.name));
     }
-    map
+    let mut guards: std::collections::HashSet<String> =
+        family.members.iter().map(|m| m.name.to_string()).collect();
+    guards.insert(family.master_ident.to_string());
+    guards.insert("Self".to_string());
+    Replacements { map, guards }
 }
 
-/// Walk `tokens`, replacing any [`Ident`] found in `map`; recurse into groups.
-fn replace_idents(tokens: TokenStream, map: &HashMap<String, Ident>) -> TokenStream {
-    tokens
-        .into_iter()
-        .map(|tt| match tt {
+/// Walk `tokens`, replacing any [`Ident`] found in the map — except in
+/// member-path position (directly after `<guard>::`) — recursing into groups.
+/// A path cannot straddle a group boundary, so per-group tracking suffices.
+fn replace_idents(tokens: TokenStream, rep: &Replacements) -> TokenStream {
+    let tokens: Vec<TokenTree> = tokens.into_iter().collect();
+    let mut out = Vec::with_capacity(tokens.len());
+    for (i, tt) in tokens.iter().enumerate() {
+        let mapped = match tt {
             TokenTree::Group(g) => {
-                let inner = replace_idents(g.stream(), map);
+                let inner = replace_idents(g.stream(), rep);
                 let mut replaced = Group::new(g.delimiter(), inner);
                 replaced.set_span(g.span());
                 TokenTree::Group(replaced)
             }
-            TokenTree::Ident(id) => match map.get(&id.to_string()) {
-                Some(rep) => {
-                    let mut rep = rep.clone();
-                    rep.set_span(id.span());
-                    TokenTree::Ident(rep)
+            TokenTree::Ident(id) => {
+                let guarded = i >= 3
+                    && matches!(&tokens[i - 1], TokenTree::Punct(p) if p.as_char() == ':')
+                    && matches!(&tokens[i - 2], TokenTree::Punct(p) if p.as_char() == ':')
+                    && matches!(&tokens[i - 3], TokenTree::Ident(prev)
+                        if rep.guards.contains(&prev.to_string()));
+                match (guarded, rep.map.get(&id.to_string())) {
+                    (false, Some(target)) => {
+                        let mut target = target.clone();
+                        target.set_span(id.span());
+                        TokenTree::Ident(target)
+                    }
+                    (true, _) | (false, None) => TokenTree::Ident(id.clone()),
                 }
-                None => TokenTree::Ident(id),
-            },
-            other => other,
-        })
-        .collect()
+            }
+            other => other.clone(),
+        };
+        out.push(mapped);
+    }
+    out.into_iter().collect()
 }
 
 /// `RuntimeTy` + `FunctionParamTy` → `RuntimeFunctionParamTy`; the master `Ty`

@@ -18,7 +18,7 @@
 //! ACI-equality cases (reordered/var-bearing unions in invariant positions)
 //! are the deferred-with-budget class that arrives with `Sub` constraints.
 
-use baml_type::interned::{InferVar, Ty, TyKind, for_each_child};
+use baml_type::interned::{InferTy, InferVar, Ty, for_each_child};
 use ena::unify as ut;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -208,7 +208,7 @@ impl InferenceTable {
     pub fn shallow_resolve(&mut self, ty: &Ty) -> Ty {
         let mut ty = ty.clone();
         loop {
-            let TyKind::Infer { var, .. } = ty.kind() else {
+            let InferTy::InferVar { var, .. } = ty.kind() else {
                 return ty;
             };
             match self.vars.probe_value(VarKey(*var)) {
@@ -245,13 +245,13 @@ impl InferenceTable {
             return Ok(());
         }
         // Error unifies with everything: a diagnostic was already emitted.
-        if matches!(left.kind(), TyKind::Error { .. })
-            || matches!(right.kind(), TyKind::Error { .. })
+        if matches!(left.kind(), InferTy::Error { .. })
+            || matches!(right.kind(), InferTy::Error { .. })
         {
             return Ok(());
         }
         match (left.kind(), right.kind()) {
-            (TyKind::Infer { var: a, .. }, TyKind::Infer { var: b, .. }) => {
+            (InferTy::InferVar { var: a, .. }, InferTy::InferVar { var: b, .. }) => {
                 let root_a = self.vars.find(VarKey(*a)).0.index();
                 let root_b = self.vars.find(VarKey(*b)).0.index();
                 self.vars.union(VarKey(*a), VarKey(*b));
@@ -267,8 +267,8 @@ impl InferenceTable {
                 }
                 Ok(())
             }
-            (TyKind::Infer { var, .. }, _) => self.bind(*var, &right, &left),
-            (_, TyKind::Infer { var, .. }) => self.bind(*var, &left, &right),
+            (InferTy::InferVar { var, .. }, _) => self.bind(*var, &right, &left),
+            (_, InferTy::InferVar { var, .. }) => self.bind(*var, &left, &right),
             _ => self.unify_kinds(&left, &right),
         }
     }
@@ -398,7 +398,7 @@ impl InferenceTable {
         if !ty.has_infer() {
             return false;
         }
-        if let TyKind::Infer { var, .. } = ty.kind() {
+        if let InferTy::InferVar { var, .. } = ty.kind() {
             if self.vars.unioned(VarKey(*var), root) {
                 return true;
             }
@@ -430,21 +430,21 @@ impl InferenceTable {
             right: right.clone(),
         };
         let pairs: Vec<(Ty, Ty)> = match (left.kind(), right.kind()) {
-            (TyKind::Class(ln, la, lat), TyKind::Class(rn, ra, rat))
+            (InferTy::Class(ln, la, lat), InferTy::Class(rn, ra, rat))
                 if ln == rn && la.len() == ra.len() && lat == rat =>
             {
                 la.iter().cloned().zip(ra.iter().cloned()).collect()
             }
-            (TyKind::List(li, lat), TyKind::List(ri, rat)) if lat == rat => {
+            (InferTy::List(li, lat), InferTy::List(ri, rat)) if lat == rat => {
                 vec![(li.clone(), ri.clone())]
             }
             (
-                TyKind::Map {
+                InferTy::Map {
                     key: lk,
                     value: lv,
                     attr: lat,
                 },
-                TyKind::Map {
+                InferTy::Map {
                     key: rk,
                     value: rv,
                     attr: rat,
@@ -452,17 +452,17 @@ impl InferenceTable {
             ) if lat == rat => {
                 vec![(lk.clone(), rk.clone()), (lv.clone(), rv.clone())]
             }
-            (TyKind::Future(lv, le, lat), TyKind::Future(rv, re, rat)) if lat == rat => {
+            (InferTy::Future(lv, le, lat), InferTy::Future(rv, re, rat)) if lat == rat => {
                 vec![(lv.clone(), rv.clone()), (le.clone(), re.clone())]
             }
-            (TyKind::Union(lm, lat), TyKind::Union(rm, rat))
+            (InferTy::Union(lm, lat), InferTy::Union(rm, rat))
                 if lm.len() == rm.len() && lat == rat =>
             {
                 // Positional; the ACI (reorder/absorb) equality class defers
                 // to the budgeted machinery that lands with Sub constraints.
                 lm.iter().cloned().zip(rm.iter().cloned()).collect()
             }
-            (TyKind::Interface(ln, la, lassoc, lat), TyKind::Interface(rn, ra, rassoc, rat))
+            (InferTy::Interface(ln, la, lassoc, lat), InferTy::Interface(rn, ra, rassoc, rat))
                 if ln == rn
                     && la.len() == ra.len()
                     && lassoc.len() == rassoc.len()
@@ -484,13 +484,13 @@ impl InferenceTable {
                     .collect()
             }
             (
-                TyKind::Function {
+                InferTy::Function {
                     params: lp,
                     ret: lr,
                     throws: le,
                     attr: lat,
                 },
-                TyKind::Function {
+                InferTy::Function {
                     params: rp,
                     ret: rr,
                     throws: re,
@@ -633,7 +633,7 @@ mod tests {
 
     fn class(name: &str, args: impl IntoIterator<Item = Ty>) -> Ty {
         use baml_type::{Name, TypeName};
-        Ty::intern(TyKind::Class(
+        Ty::intern(InferTy::Class(
             TypeName::local(Name::new(name)),
             args.into_iter().collect(),
             TyAttr::default(),
@@ -641,7 +641,7 @@ mod tests {
     }
 
     fn map(key: Ty, value: Ty) -> Ty {
-        Ty::intern(TyKind::Map {
+        Ty::intern(InferTy::Map {
             key,
             value,
             attr: TyAttr::default(),
@@ -649,11 +649,11 @@ mod tests {
     }
 
     fn func(params: impl IntoIterator<Item = Ty>, ret: Ty, throws: Ty) -> Ty {
-        use baml_type::interned::FunctionParam;
-        Ty::intern(TyKind::Function {
+        use baml_type::interned::InferFunctionParamTy;
+        Ty::intern(InferTy::Function {
             params: params
                 .into_iter()
-                .map(|ty| FunctionParam::required(None, ty))
+                .map(|ty| InferFunctionParamTy::required(None, ty))
                 .collect(),
             ret,
             throws,
