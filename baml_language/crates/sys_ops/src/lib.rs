@@ -1881,6 +1881,92 @@ impl io::IoNamespaceSys for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
+
+    fn is_alive(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _pid: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process-id".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    // `baml.sys.platform` declares `throws never`; every real platform
+    // produces a token, so the fallback reports the missing host resource as
+    // a `baml.panics.HostUnavailable` panic, mirroring `pid`.
+    fn platform(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "platform".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassSysLinux for DefaultIoOps {
+    fn terminate(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _linux: io::owned::sys::Linux,
+        _pid: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn signal_group(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _linux: io::owned::sys::Linux,
+        _pgid: i64,
+        _sig: BexExternalValue,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassSysMacOs for DefaultIoOps {
+    fn terminate(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _macos: io::owned::sys::MacOs,
+        _pid: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn signal_group(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _macos: io::owned::sys::MacOs,
+        _pgid: i64,
+        _sig: BexExternalValue,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
 }
 
 impl io::IoClassGlobGlob for DefaultIoOps {
@@ -2669,9 +2755,21 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_sys_pid = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_sys_pid(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_is_alive = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_is_alive(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_platform = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_platform(heap, permit, args, ctx, call_id)
             })
         };
         self

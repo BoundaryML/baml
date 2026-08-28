@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use js_sys::{Function, Promise, Reflect, Uint8Array};
-use sys_ops::io::{self, IoNamespaceSys};
+use sys_ops::io::{self, AsBexExternalValue, IoNamespaceSys};
 use sys_types::{
     BexExternalValue, BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic,
     VmRustFnError,
@@ -202,6 +202,69 @@ impl io::IoClassSysProcess for WasmSys {
     }
 }
 
+/// Marker placed in the `_handle` of the `baml.sys.Browser` capability token
+/// returned by `platform()`. It carries no state — its presence is what makes
+/// the token class unconstructible from BAML code.
+struct WasmPlatformToken;
+
+impl io::IoClassSysLinux for WasmSys {
+    fn terminate(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _linux: io::owned::sys::Linux,
+        _pid: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Signalling processes by ID is not supported on this platform".to_string(),
+        })
+    }
+
+    fn signal_group(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _linux: io::owned::sys::Linux,
+        _pgid: i64,
+        _sig: BexExternalValue,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Signalling process groups is not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassSysMacOs for WasmSys {
+    fn terminate(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _macos: io::owned::sys::MacOs,
+        _pid: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Signalling processes by ID is not supported on this platform".to_string(),
+        })
+    }
+
+    fn signal_group(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _macos: io::owned::sys::MacOs,
+        _pgid: i64,
+        _sig: BexExternalValue,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Signalling process groups is not supported on this platform".to_string(),
+        })
+    }
+}
+
 impl IoNamespaceSys for WasmSys {
     fn collect_garbage(
         &self,
@@ -337,6 +400,35 @@ impl IoNamespaceSys for WasmSys {
                 message: "the host JavaScript environment does not provide process.pid".to_string(),
             }),
         }
+    }
+
+    fn is_alive(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _pid: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process-id".to_string(),
+            message: "Probing processes by ID is not supported on this platform".to_string(),
+        })
+    }
+
+    fn platform(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        // Browser hosts get the `Browser` capability token, which narrows to
+        // no further capabilities.
+        SysOpOutput::ok(
+            io::owned::sys::Browser {
+                _handle: Arc::new(WasmPlatformToken),
+            }
+            .into_bex_external_value(),
+        )
     }
 }
 

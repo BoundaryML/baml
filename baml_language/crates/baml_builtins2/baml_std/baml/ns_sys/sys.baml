@@ -251,3 +251,19 @@ function argv() -> string[] throws never {
 function pid() -> int throws never {
     $rust_io_function
 }
+
+/// Returns `true` if a process with the given OS process ID currently exists.
+///
+/// Unix probes with `kill(pid, 0)`: `ESRCH` (no such process) reports
+/// `false`, while a live process — including one this process lacks
+/// permission to signal (`EPERM`) — reports `true`. Windows opens and polls
+/// the process handle; access denied also means the process exists.
+///
+/// The result is a snapshot: the process may exit immediately after the
+/// probe, and a reaped-zombie PID may already read as dead.
+///
+/// Throws `root.errors.Io` when `pid` is not positive or the OS probe fails
+/// for a reason other than "no such process".
+function is_alive(pid: int) -> bool throws root.errors.Io {
+    $rust_io_function
+}

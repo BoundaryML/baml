@@ -8,7 +8,8 @@ use std::sync::{Arc, OnceLock};
 
 use bex_heap::{BexExternalValue, BexHeap};
 use sys_ops::io::{
-    self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError, owned,
+    self, AsBexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic,
+    VmRustFnError, owned,
 };
 
 const MAX_READ_CHUNK: usize = 64 * 1024;
@@ -1577,6 +1578,115 @@ impl io::IoClassSysProcess for NativeSysOps {
     }
 }
 
+/// Marker placed in the `_handle` of the platform capability tokens
+/// (`baml.sys.Linux`/`MacOs`/`Windows`/`Browser`). It carries no state — its
+/// presence is what makes the token classes unconstructible from BAML code,
+/// so a capability cannot be forged for another platform.
+struct PlatformToken;
+
+/// The capability token for this host, backing `baml.sys.platform()`.
+///
+/// Unixes other than Linux and macOS also hand out the `Linux` token: they
+/// share the same POSIX `kill(2)` signalling surface, and the `Unix`
+/// capability — not the concrete class — gates those operations.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn platform_token() -> BexExternalValue {
+    owned::sys::Linux {
+        _handle: Arc::new(PlatformToken),
+    }
+    .into_bex_external_value()
+}
+
+/// The capability token for macOS hosts, backing `baml.sys.platform()`.
+#[cfg(target_os = "macos")]
+fn platform_token() -> BexExternalValue {
+    owned::sys::MacOs {
+        _handle: Arc::new(PlatformToken),
+    }
+    .into_bex_external_value()
+}
+
+/// The capability token for Windows hosts, backing `baml.sys.platform()`.
+#[cfg(windows)]
+fn platform_token() -> BexExternalValue {
+    owned::sys::Windows {
+        _handle: Arc::new(PlatformToken),
+    }
+    .into_bex_external_value()
+}
+
+/// Fallback capability token for hosts with no process-control surface,
+/// backing `baml.sys.platform()`.
+#[cfg(not(any(unix, windows)))]
+fn platform_token() -> BexExternalValue {
+    owned::sys::Browser {
+        _handle: Arc::new(PlatformToken),
+    }
+    .into_bex_external_value()
+}
+
+impl io::IoClassSysLinux for NativeSysOps {
+    fn terminate(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _linux: owned::sys::Linux,
+        pid: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        match terminate_process_by_pid(pid) {
+            Ok(()) => SysOpOutput::ok(()),
+            Err(error) => SysOpOutput::err(error),
+        }
+    }
+
+    fn signal_group(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _linux: owned::sys::Linux,
+        pgid: i64,
+        sig: BexExternalValue,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        match signal_process_group(pgid, &sig) {
+            Ok(()) => SysOpOutput::ok(()),
+            Err(error) => SysOpOutput::err(error),
+        }
+    }
+}
+
+impl io::IoClassSysMacOs for NativeSysOps {
+    fn terminate(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _macos: owned::sys::MacOs,
+        pid: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        match terminate_process_by_pid(pid) {
+            Ok(()) => SysOpOutput::ok(()),
+            Err(error) => SysOpOutput::err(error),
+        }
+    }
+
+    fn signal_group(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _macos: owned::sys::MacOs,
+        pgid: i64,
+        sig: BexExternalValue,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        match signal_process_group(pgid, &sig) {
+            Ok(()) => SysOpOutput::ok(()),
+            Err(error) => SysOpOutput::err(error),
+        }
+    }
+}
+
 /// Shared helper: apply `ProcessOptions` to a `tokio::process::Command`, run
 /// it, and collect its output. Both `exec()` and `shell()` use this.
 async fn run_process(
@@ -1853,6 +1963,239 @@ impl io::IoNamespaceSys for NativeSysOps {
         // for, so the widening into BAML's i63 `int` is always exact.
         SysOpOutput::ok(i64::from(std::process::id()))
     }
+
+    fn is_alive(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        pid: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        #[cfg(any(unix, windows))]
+        match probe_process_alive(pid) {
+            Ok(alive) => SysOpOutput::ok(alive),
+            Err(error) => SysOpOutput::err(error),
+        }
+        #[cfg(not(any(unix, windows)))]
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process-id".to_string(),
+            message: "Probing processes by ID is not supported on this platform".to_string(),
+        })
+    }
+
+    fn platform(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        SysOpOutput::ok(platform_token())
+    }
+}
+
+/// Validate a BAML `int` as a positive OS process ID. `0` and negative
+/// values have process-group semantics in `kill(2)` — passing them through
+/// could signal unrelated processes — so they are rejected before any
+/// syscall, as is anything that does not fit the platform's pid type.
+#[cfg(unix)]
+fn validate_pid(pid: i64) -> Result<i32, VmBamlError> {
+    match i32::try_from(pid) {
+        Ok(raw_pid) if raw_pid > 0 => Ok(raw_pid),
+        _ => Err(VmBamlError::Io {
+            message: format!("Invalid process ID {pid}"),
+        }),
+    }
+}
+
+/// Validate a BAML `int` as a positive Windows process ID.
+#[cfg(windows)]
+fn validate_pid(pid: i64) -> Result<u32, VmBamlError> {
+    match u32::try_from(pid) {
+        Ok(raw_pid) if raw_pid > 0 => Ok(raw_pid),
+        _ => Err(VmBamlError::Io {
+            message: format!("Invalid process ID {pid}"),
+        }),
+    }
+}
+
+/// Liveness probe backing `baml.sys.is_alive`: `kill(pid, 0)` performs error
+/// checking without delivering a signal. `ESRCH` means no such process;
+/// `EPERM` means the process exists but may not be signalled.
+#[cfg(unix)]
+#[allow(unsafe_code)]
+fn probe_process_alive(pid: i64) -> Result<bool, VmBamlError> {
+    let raw_pid = validate_pid(pid)?;
+    // SAFETY: `kill` takes plain scalar arguments; signal `0` delivers
+    // nothing, so this only probes the validated pid.
+    let result = unsafe { libc::kill(raw_pid, 0) };
+    if result == 0 {
+        Ok(true)
+    } else {
+        match std::io::Error::last_os_error().raw_os_error() {
+            Some(libc::ESRCH) => Ok(false),
+            Some(libc::EPERM) => Ok(true),
+            _ => Err(VmBamlError::Io {
+                message: format!(
+                    "Failed to probe process {pid}: {}",
+                    std::io::Error::last_os_error()
+                ),
+            }),
+        }
+    }
+}
+
+/// Liveness probe backing `baml.sys.is_alive`: open the process and poll its
+/// handle. `OpenProcess` fails with `ERROR_INVALID_PARAMETER` when no such
+/// process exists; access denied means it exists but cannot be inspected.
+#[cfg(windows)]
+#[allow(unsafe_code)]
+fn probe_process_alive(pid: i64) -> Result<bool, VmBamlError> {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, WaitForSingleObject,
+    };
+
+    let raw_pid = validate_pid(pid)?;
+    // SAFETY: all handles are checked for validity, and `handle` is closed
+    // exactly once before returning.
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, raw_pid);
+        if handle.is_null() {
+            return classify_open_process_error(pid, std::io::Error::last_os_error());
+        }
+        let wait_result = WaitForSingleObject(handle, 0);
+        let error = std::io::Error::last_os_error();
+        CloseHandle(handle);
+        classify_process_wait(pid, wait_result, error)
+    }
+}
+
+#[cfg(windows)]
+fn classify_open_process_error(pid: i64, error: std::io::Error) -> Result<bool, VmBamlError> {
+    use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER};
+
+    match error
+        .raw_os_error()
+        .and_then(|code| u32::try_from(code).ok())
+    {
+        Some(ERROR_INVALID_PARAMETER) => Ok(false),
+        Some(ERROR_ACCESS_DENIED) => Ok(true),
+        _ => Err(VmBamlError::Io {
+            message: format!("Failed to open process {pid}: {error}"),
+        }),
+    }
+}
+
+#[cfg(windows)]
+fn classify_process_wait(
+    pid: i64,
+    wait_result: u32,
+    error: std::io::Error,
+) -> Result<bool, VmBamlError> {
+    use windows_sys::Win32::Foundation::{WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT};
+
+    match wait_result {
+        WAIT_TIMEOUT => Ok(true),
+        WAIT_OBJECT_0 => Ok(false),
+        WAIT_FAILED => Err(VmBamlError::Io {
+            message: format!("Failed to query process {pid}: {error}"),
+        }),
+        other => Err(VmBamlError::Io {
+            message: format!("Unexpected wait result {other} for process {pid}"),
+        }),
+    }
+}
+
+/// Map a `baml.sys.Signal` value to its POSIX signal number.
+#[cfg(unix)]
+fn signal_number(sig: &BexExternalValue) -> Result<i32, VmBamlError> {
+    match sig {
+        BexExternalValue::Variant { variant_name, .. } => match variant_name.as_str() {
+            "Terminate" => Ok(libc::SIGTERM),
+            "Interrupt" => Ok(libc::SIGINT),
+            "Kill" => Ok(libc::SIGKILL),
+            "Hangup" => Ok(libc::SIGHUP),
+            other => Err(VmBamlError::Io {
+                message: format!("Unknown baml.sys.Signal variant '{other}'"),
+            }),
+        },
+        other => Err(VmBamlError::Io {
+            message: format!(
+                "signal_group sig must be a baml.sys.Signal, got {}",
+                other.type_name()
+            ),
+        }),
+    }
+}
+
+/// Send `SIGTERM` to an arbitrary process by OS process ID. Backs
+/// `Unix.terminate`; `std` can only signal a live `Child` handle, not a pid.
+#[cfg(unix)]
+#[allow(unsafe_code)]
+fn terminate_process_by_pid(pid: i64) -> Result<(), VmBamlError> {
+    let raw_pid = validate_pid(pid)?;
+    // SAFETY: `kill` takes plain scalar arguments; `raw_pid` is validated
+    // above, so this can only target the single requested process.
+    let result = unsafe { libc::kill(raw_pid, libc::SIGTERM) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(VmBamlError::Io {
+            message: format!(
+                "Failed to terminate process {pid}: {}",
+                std::io::Error::last_os_error()
+            ),
+        })
+    }
+}
+
+/// Non-Unix hosts never hand out a `Unix` capability, so this is only
+/// reachable by dispatching a stale token across runtimes.
+#[cfg(not(unix))]
+fn terminate_process_by_pid(pid: i64) -> Result<(), VmBamlError> {
+    let _ = pid;
+    Err(VmBamlError::Unsupported {
+        message: "baml.sys.Unix.terminate is only supported on Unix platforms".to_string(),
+    })
+}
+
+/// Send a signal to every process in a Unix process group
+/// (`kill(-pgid, sig)`). Backs `Unix.signal_group`.
+#[cfg(unix)]
+#[allow(unsafe_code)]
+fn signal_process_group(pgid: i64, sig: &BexExternalValue) -> Result<(), VmBamlError> {
+    let raw_pgid = match i32::try_from(pgid) {
+        Ok(raw_pgid) if raw_pgid > 0 => raw_pgid,
+        _ => {
+            return Err(VmBamlError::Io {
+                message: format!("Invalid process group ID {pgid}"),
+            });
+        }
+    };
+    let signo = signal_number(sig)?;
+    // SAFETY: `kill` takes plain scalar arguments; `raw_pgid` is validated
+    // positive above, so `-raw_pgid` targets exactly the requested group.
+    let result = unsafe { libc::kill(-raw_pgid, signo) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(VmBamlError::Io {
+            message: format!(
+                "Failed to signal process group {pgid}: {}",
+                std::io::Error::last_os_error()
+            ),
+        })
+    }
+}
+
+/// Non-Unix hosts never hand out a `Unix` capability, so this is only
+/// reachable by dispatching a stale token across runtimes.
+#[cfg(not(unix))]
+fn signal_process_group(pgid: i64, sig: &BexExternalValue) -> Result<(), VmBamlError> {
+    let _ = (pgid, sig);
+    Err(VmBamlError::Unsupported {
+        message: "baml.sys.Unix.signal_group is only supported on Unix platforms".to_string(),
+    })
 }
 
 fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError> {
@@ -3549,3 +3892,83 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
 // state + SetOnce + cancel token) and are dispatched via the native-call
 // path (`$rust_function` in `ns_future/future.baml`), not through sys-ops.
 // See `bex_vm::package_baml` for the trait impl.
+
+#[cfg(test)]
+mod process_control_tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_pid_enforces_unix_pid_range() {
+        assert_eq!(validate_pid(1).unwrap(), 1);
+        assert_eq!(validate_pid(i64::from(i32::MAX)).unwrap(), i32::MAX);
+        for pid in [0, -1, i64::MAX, i64::from(u32::MAX) + 1] {
+            assert!(matches!(validate_pid(pid), Err(VmBamlError::Io { .. })));
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn validate_pid_enforces_windows_pid_range() {
+        assert_eq!(validate_pid(1).unwrap(), 1);
+        assert_eq!(validate_pid(i64::from(u32::MAX)).unwrap(), u32::MAX);
+        for pid in [0, -1, i64::MAX, i64::from(u32::MAX) + 1] {
+            assert!(matches!(validate_pid(pid), Err(VmBamlError::Io { .. })));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn signal_number_maps_all_known_variants_and_rejects_unknown_values() {
+        let signal = |variant_name: &str| BexExternalValue::Variant {
+            enum_name: "baml.sys.Signal".to_string(),
+            variant_name: variant_name.to_string(),
+        };
+
+        assert_eq!(signal_number(&signal("Terminate")).unwrap(), libc::SIGTERM);
+        assert_eq!(signal_number(&signal("Interrupt")).unwrap(), libc::SIGINT);
+        assert_eq!(signal_number(&signal("Kill")).unwrap(), libc::SIGKILL);
+        assert_eq!(signal_number(&signal("Hangup")).unwrap(), libc::SIGHUP);
+        assert!(matches!(
+            signal_number(&signal("Unknown")),
+            Err(VmBamlError::Io { .. })
+        ));
+        assert!(matches!(
+            signal_number(&BexExternalValue::Null),
+            Err(VmBamlError::Io { .. })
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_open_process_errors_preserve_liveness_contract() {
+        use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER};
+
+        let os_error = |code| {
+            std::io::Error::from_raw_os_error(i32::try_from(code).expect("Win32 error fits i32"))
+        };
+        assert!(!classify_open_process_error(42, os_error(ERROR_INVALID_PARAMETER)).unwrap());
+        assert!(classify_open_process_error(42, os_error(ERROR_ACCESS_DENIED)).unwrap());
+        assert!(matches!(
+            classify_open_process_error(42, os_error(1234)),
+            Err(VmBamlError::Io { .. })
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_wait_result_distinguishes_running_exited_and_failed() {
+        use windows_sys::Win32::Foundation::{WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT};
+
+        let no_error = std::io::Error::from_raw_os_error(0);
+        assert!(classify_process_wait(42, WAIT_TIMEOUT, no_error).unwrap());
+        assert!(
+            !classify_process_wait(42, WAIT_OBJECT_0, std::io::Error::from_raw_os_error(0))
+                .unwrap()
+        );
+        assert!(matches!(
+            classify_process_wait(42, WAIT_FAILED, std::io::Error::from_raw_os_error(1234)),
+            Err(VmBamlError::Io { .. })
+        ));
+    }
+}

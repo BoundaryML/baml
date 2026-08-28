@@ -77,6 +77,18 @@ tokio-tungstenite = { workspace = true, optional = true, features = [
 tracing = { workspace = true }
 walkdir = { workspace = true }
 
+# `baml.sys.is_alive` and the `baml.sys.Unix` capability methods signal
+# processes by pid; std can only signal a live `Child` handle.
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+# `baml.sys.is_alive` uses OpenProcess + WaitForSingleObject on Windows.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_System_Threading",
+] }
+
 [lints]
 workspace = true
 

@@ -633,3 +633,207 @@ async fn start_process_stderr_modes_without_pipe() {
 
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
+
+// === platform() capability token / is_alive / Unix signalling tests ===
+
+/// `baml.sys.platform()` hands out exactly one platform capability: a native
+/// host is either Unix (`unix()` non-null, `windows()` null) or Windows (the
+/// reverse).
+#[tokio::test]
+async fn platform_capability_shape() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool {
+                let p = baml.sys.platform();
+                let has_unix = match (p.unix()) {
+                    let u: baml.sys.Unix => true,
+                    null => false,
+                };
+                let has_windows = match (p.windows()) {
+                    let w: baml.sys.Windows => true,
+                    null => false,
+                };
+                has_unix != has_windows
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// Matching `baml.sys.platform()` against `baml.sys.Unix` yields the
+/// capability whose `terminate` (SIGTERM) lets `wait()` observe signal 15,
+/// and `baml.sys.is_alive` tracks the child across the call: alive before,
+/// dead once `wait()` has reaped it. The child prints its own pid (`$$`,
+/// kept across `exec`) so the test can signal it by pid without any
+/// handle-to-pid API.
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn is_alive_and_terminate_by_pid() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process("sh", ["-c", "echo $$; exec sleep 30"], null);
+                defer { process.close() }
+
+                let pid_text = match (process.stdout.lines().next()) {
+                    let line: string => line,
+                    baml.iter.Done => "0",
+                };
+                let pid = baml.json.from_string<int>(pid_text) catch_all (e) {
+                    _ => 0,
+                };
+                if (pid <= 0 || !baml.sys.is_alive(pid)) {
+                    return false;
+                }
+                match (baml.sys.platform()) {
+                    let u: baml.sys.Unix => u.terminate(pid),
+                    _ => { return false; },
+                }
+                let exit = process.wait();
+                // After wait() reaps the child, the pid reads as dead.
+                if (baml.sys.is_alive(pid)) {
+                    return false;
+                }
+                match (exit.signal) {
+                    let signal: string => signal == "15",
+                    null => false,
+                }
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// `baml.sys.is_alive` always reports true for the current process, on every
+/// platform.
+#[tokio::test]
+async fn is_alive_reports_self() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io {
+                baml.sys.is_alive(baml.sys.pid())
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// Windows variant of the liveness probe: a live child handle is unsignalled,
+/// and once killed its handle becomes signalled, so it reads as dead even if
+/// the process object has not been fully torn down yet.
+#[tokio::test]
+#[cfg(target_os = "windows")]
+async fn is_alive_tracks_child_lifetime() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "powershell",
+                    ["-NoProfile", "-Command", "$PID; Start-Sleep -Seconds 30"],
+                    null,
+                );
+                defer { process.close() }
+
+                let pid_text = match (process.stdout.lines().next()) {
+                    let line: string => line,
+                    baml.iter.Done => "0",
+                };
+                let pid = baml.json.from_string<int>(pid_text) catch_all (e) {
+                    _ => 0,
+                };
+                if (pid <= 0 || !baml.sys.is_alive(pid)) {
+                    return false;
+                }
+                process.kill();
+                process.wait();
+                !baml.sys.is_alive(pid)
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// `Unix.signal_group` signals every process in a process group at once.
+/// `setsid` runs the child as leader of a brand-new session (and process
+/// group), so the pid it prints is also its pgid; a freshly spawned child is
+/// never a process-group leader, so `setsid` execs directly without forking
+/// and `wait()` observes the SIGKILL'd child itself.
+///
+/// Linux-only: `setsid(1)` ships with util-linux; macOS has no equivalent
+/// command.
+#[tokio::test]
+#[cfg(target_os = "linux")]
+async fn signal_group_takes_down_process_group() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "setsid",
+                    ["sh", "-c", "echo $$; exec sleep 30"],
+                    null,
+                );
+                defer { process.close() }
+
+                let pgid_text = match (process.stdout.lines().next()) {
+                    let line: string => line,
+                    baml.iter.Done => "0",
+                };
+                let pgid = baml.json.from_string<int>(pgid_text) catch_all (e) {
+                    _ => 0,
+                };
+                if (pgid <= 0 || !baml.sys.is_alive(pgid)) {
+                    return false;
+                }
+                match (baml.sys.platform()) {
+                    let u: baml.sys.Unix => u.signal_group(pgid, baml.sys.Signal.Kill),
+                    _ => { return false; },
+                }
+                let exit = process.wait();
+                match (exit.signal) {
+                    let signal: string => signal == "9",
+                    null => false,
+                }
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// Non-positive pids/pgids are rejected before any syscall: `0` and negative
+/// values have process-group semantics in `kill(2)` and must never reach the
+/// kernel.
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn signal_functions_reject_non_positive_ids() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io {
+                match (baml.sys.platform()) {
+                    let u: baml.sys.Unix => {
+                        u.terminate(0) catch (e) {
+                            let io: baml.errors.Io => { },
+                            _ => { return false; },
+                        };
+                        u.signal_group(-1, baml.sys.Signal.Terminate) catch (e) {
+                            let io: baml.errors.Io => { },
+                            _ => { return false; },
+                        };
+                        baml.sys.is_alive(0) catch (e) {
+                            let io: baml.errors.Io => { return true; },
+                            _ => { return false; },
+                        };
+                        false
+                    },
+                    _ => false,
+                }
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}

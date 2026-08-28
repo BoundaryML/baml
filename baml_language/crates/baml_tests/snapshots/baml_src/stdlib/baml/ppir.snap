@@ -1907,6 +1907,55 @@ function baml.spawn.set_limit(self: ?, limit: int) -> void  [builtin]
 --- captures ---
 lambda (params) in options: captures [group, cancel, detach]
 
+--- <builtin>/baml/ns_sys/platform.baml ---
+class baml.sys.Browser {
+  _handle: $rust_type
+}
+class baml.sys.Browser$stream {
+  _handle: $rust_type
+}
+class baml.sys.Linux {
+  _handle: $rust_type
+}
+class baml.sys.Linux$stream {
+  _handle: $rust_type
+}
+class baml.sys.MacOs {
+  _handle: $rust_type
+}
+class baml.sys.MacOs$stream {
+  _handle: $rust_type
+}
+class baml.sys.Windows {
+  _handle: $rust_type
+}
+class baml.sys.Windows$stream {
+  _handle: $rust_type
+}
+enum baml.sys.Signal {Terminate, Interrupt, Kill, Hangup}
+function baml.sys.platform() -> Platform  [builtin]
+function baml.sys.signal_group(self: ?, pgid: int, sig: baml.sys.Signal) -> null  [missing]
+function baml.sys.signal_group(self: ?, pgid: int, sig: baml.sys.Signal) -> null  [builtin]
+function baml.sys.signal_group(self: ?, pgid: int, sig: baml.sys.Signal) -> null  [builtin]
+function baml.sys.terminate(self: ?, pid: int) -> null  [missing]
+function baml.sys.terminate(self: ?, pid: int) -> null  [builtin]
+function baml.sys.terminate(self: ?, pid: int) -> null  [builtin]
+function baml.sys.unix(self: ?) -> Unix?  [expr] {
+  {  } null
+}
+function baml.sys.unix(self: ?) -> Unix?  [expr] {
+  {  } self
+}
+function baml.sys.unix(self: ?) -> Unix?  [expr] {
+  {  } self
+}
+function baml.sys.windows(self: ?) -> baml.sys.Windows?  [expr] {
+  {  } null
+}
+function baml.sys.windows(self: ?) -> baml.sys.Windows?  [expr] {
+  {  } self
+}
+
 --- <builtin>/baml/ns_sys/sys.baml ---
 class baml.sys.Process {
   _handle: $rust_type
@@ -1984,6 +2033,7 @@ function baml.sys.collect_garbage() -> null  [builtin]
 function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.exit(code: int) -> never  [builtin]
 function baml.sys.flush(self: ?) -> void  [builtin]
+function baml.sys.is_alive(pid: int) -> bool  [builtin]
 function baml.sys.iter(self: ?) -> root.iter.Iterator<Item = string, Error = root.errors.Io>  [expr] {
   {  } self
 }
