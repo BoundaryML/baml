@@ -1828,7 +1828,7 @@ impl io::IoNamespaceSys for NativeSysOps {
                     loop {
                         match kill_rx.changed().await {
                             Ok(()) if *kill_rx.borrow() => return,
-                            Ok(()) => {},
+                            Ok(()) => {}
                             Err(_) if detached => std::future::pending::<()>().await,
                             Err(_) => return,
                         }

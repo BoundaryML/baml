@@ -1934,6 +1934,7 @@ class baml.sys.ProcessOptions {
   timeout_ms: int?
   stdin: string?
   stderr: baml.sys.StderrMode?
+  detached: bool?
 }
 class baml.sys.ProcessOptions$stream {
   cwd: string | null
@@ -1941,6 +1942,7 @@ class baml.sys.ProcessOptions$stream {
   timeout_ms: int | null
   stdin: string | null
   stderr: baml.sys.StderrMode | null
+  detached: bool | null
 }
 class baml.sys.ReadPipe {
   _pipe: $rust_type

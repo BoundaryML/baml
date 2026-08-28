@@ -6815,7 +6815,7 @@ fn ai.mcp.McpConnection.connect(name: string, command: string, args: string[], t
     }
 
     bb2: {
-        _8 = baml.sys.ProcessOptions { const null, const null, copy _4, const null, const null };
+        _8 = baml.sys.ProcessOptions { const null, const null, copy _4, const null, const null, const null };
         _6 = sys_op const fn baml.sys.start_process(copy _2, copy _3, copy _8) -> bb3 unwind bb9;
     }
 
@@ -6862,7 +6862,7 @@ fn ai.mcp.McpConnection.connect(name: string, command: string, args: string[], t
 
     bb11: {
         _10 = const "mcp/" + copy _11;
-        _16 = load_type(baml.errors.Io);
+        _16 = load_type(baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Unsupported);
         _15 = call const fn baml.String.from<copy _16>(copy _7) -> [bb12];
     }
 
