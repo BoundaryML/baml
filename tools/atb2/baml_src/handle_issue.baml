@@ -28,7 +28,7 @@ enum HandleMode {
 }
 
 // ==================== Pipeline ====================
-
+//#handle_issue(issue: Issue, mode: HandleMode = HandleMode.Live, update: bool = false) -> Issue
 function handle_issue(
     issue: Issue,
     mode: HandleMode = HandleMode.Live,
@@ -592,11 +592,20 @@ function open_sandbox(issue: Issue, update: bool) -> Sandbox {
 /// branch unless kept for a human), then checks the cache is untouched.
 function close_sandbox(sb: Sandbox, keep_branch: bool) -> null {
     let repo = cache_repo();
-    git(repo, ["worktree", "remove", "--force", sb.worktree]);
+    let removed = git(repo, ["worktree", "remove", "--force", sb.worktree]);
     git(repo, ["worktree", "prune"]);
     if (baml.fs.exists(sb.worktree)) {
-        baml.fs.remove_dir_all(sb.worktree) catch (_) {
-            _ => null,
+        // git refused (or the tree was already unregistered): delete it outright
+        let rm = run(Cmd { program: "rm", args: ["-rf", sb.worktree], cwd: atb2_home(), timeout_ms: 600000 });
+        if (baml.fs.exists(sb.worktree)) {
+            log.warn(
+                {
+                    "sandbox": sb.worktree,
+                    "warning": "worktree not removed",
+                    "git": tail(removed.stderr, 2),
+                    "rm": tail(rm.stderr, 2),
+                },
+            );
         };
     };
     if (!keep_branch) {
@@ -697,17 +706,28 @@ function run_claude(
     timeout_s: int,
     transcript_path: string,
 ) -> AgentRun {
+    // The CLI writes its stream straight to the transcript file, so the
+    // record survives when the process is killed at the budget (exec
+    // returns nothing on a timeout).
+    let env = sandbox_env(false);
+    env.set("ATB2_TRANSCRIPT", transcript_path);
     let r = run_with(
         Cmd {
-            program: "claude",
-            args: claude_args(prompt, tools),
+            program: "sh",
+            args: ["-c", "exec \"$@\" > \"$ATB2_TRANSCRIPT\" 2>&1", "atb2", "claude"].concat(
+                claude_args(prompt, tools),
+            ),
             cwd: cwd,
             timeout_ms: timeout_s * 1000,
         },
-        sandbox_env(false),
+        env,
     );
-    baml.fs.write(transcript_path, r.stdout);
-    let parsed = parse_stream(r.stdout);
+    let transcript = if (baml.fs.exists(transcript_path)) {
+        baml.fs.read(transcript_path)
+    } else {
+        ""
+    };
+    let parsed = parse_stream(transcript);
     AgentRun {
         text: parsed.text,
         num_turns: parsed.num_turns,
@@ -1615,6 +1635,32 @@ testset "handle_issue" {
                 && a.includes("--tools"),
         );
         assert.equal(a.at(a.length() - 1) ?? "", "Read,Edit,Write,Glob,Grep,Bash");
+    }
+
+    test "the claude process writes its own transcript" {
+        let out = baml.sys.exec(
+            "sh",
+            [
+                "-c",
+                "exec \"$@\" > \"$ATB2_TRANSCRIPT\" 2>&1",
+                "atb2",
+                "echo",
+                "{\"type\":\"result\",\"num_turns\":3,\"result\":\"ok\"}",
+            ],
+            baml.sys.ProcessOptions {
+                cwd: null,
+                env: {
+                    "PATH": baml.env.get("PATH") ?? "/bin:/usr/bin",
+                    "ATB2_TRANSCRIPT": "/tmp/atb2-transcript-test.jsonl",
+                },
+                timeout_ms: 10000,
+                stdin: null,
+                keep_stdin_open: null,
+            },
+        );
+        assert.equal(out.exit_code, 0);
+        assert.equal(parse_stream(baml.fs.read("/tmp/atb2-transcript-test.jsonl")).num_turns, 3);
+        baml.fs.remove("/tmp/atb2-transcript-test.jsonl");
     }
 
     test "known-flaky nextest failures are subtracted" {
