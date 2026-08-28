@@ -1537,11 +1537,45 @@ pub(crate) fn class_method_sigs(
     db: &dyn baml_compiler2_ppir::Db,
     class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
 ) -> Vec<MethodSig> {
+    collect_class_methods_impl(db, class_loc)
+        .into_iter()
+        .map(|m| MethodSig {
+            name: m.name,
+            signature: m.signature,
+            is_instance: m.is_instance,
+        })
+        .collect()
+}
+
+/// A method gathered from a class (inherent or implements-block), before
+/// projecting into [`MethodSig`] (hover) or describe's `MethodRef`s.
+pub(crate) struct CollectedMethod {
+    pub(crate) name: String,
+    pub(crate) signature: String,
+    pub(crate) docstring: Option<String>,
+    pub(crate) file: SourceFile,
+    pub(crate) file_path: String,
+    pub(crate) item_range: TextRange,
+    pub(crate) is_instance: bool,
+}
+
+/// Collect a class's method surface (resolved canonical signatures) —
+/// inherent methods in source order, then each implements-block's methods
+/// (post-erasure, methods live on their blocks: `MethodOwner::Impl`) —
+/// skipping language-internal plumbing. THE shared spine for
+/// [`class_method_sigs`] (hover) and describe's `collect_class_methods`.
+pub(crate) fn collect_class_methods_impl(
+    db: &dyn baml_compiler2_ppir::Db,
+    class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
+) -> Vec<CollectedMethod> {
     use baml_compiler2_hir_ty::package_interface::ExportedType;
 
     let file = class_loc.file(db);
     let class_data = item_data::class_data(db, class_loc);
 
+    // Resolved param/return/throws types come from the package interface,
+    // which lowers class methods 1:1 with `class_data.methods` (same order,
+    // including auto-derived entries), so positional indices line up.
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
     let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
@@ -1554,27 +1588,88 @@ pub(crate) fn class_method_sigs(
             | ExportedType::TypeAlias { .. } => None,
         });
 
-    let mut out = Vec::new();
-    for (idx, &method_loc) in class_data.methods.iter().enumerate() {
-        let method = item_data::function_data(db, method_loc);
-        if method.metadata.is_language_internal {
-            continue;
-        }
-        let is_instance = method
-            .params
-            .first()
-            .is_some_and(|p| p.name.as_str() == "self");
-        let signature = resolved_function_sig_parts(
-            db,
-            method_loc,
-            exported.and_then(|methods| exported_method(methods, idx, &method.name)),
-        )
-        .render(db, file, method_sig_style());
-        out.push(MethodSig {
-            name: method.name.as_str().to_string(),
+    let file_path = file.path(db).display().to_string();
+    let collect = |method_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
+                   ef: Option<&ExportedFunction>,
+                   out: &mut Vec<CollectedMethod>| {
+        let m = item_data::function_data(db, method_loc);
+        let is_instance = m.params.first().is_some_and(|p| p.name.as_str() == "self");
+        let signature =
+            resolved_function_sig_parts(db, method_loc, ef).render(db, file, method_sig_style());
+        let docstring = m
+            .docstring
+            .as_ref()
+            .map(|d| d.lines().next().unwrap_or("").to_string());
+        out.push(CollectedMethod {
+            name: m.name.as_str().to_string(),
             signature,
+            docstring,
+            file,
+            file_path: file_path.clone(),
+            item_range: item_data::function_source_map(db, method_loc).span,
             is_instance,
         });
+    };
+
+    let mut out = Vec::new();
+    for (idx, &method_loc) in class_data.methods.iter().enumerate() {
+        let m = item_data::function_data(db, method_loc);
+        if m.metadata.is_language_internal {
+            continue;
+        }
+        let ef = exported.and_then(|ms| exported_method(ms, idx, &m.name));
+        collect(method_loc, ef, &mut out);
+    }
+    for (method_loc, ef) in class_impl_methods(db, class_loc) {
+        collect(method_loc, ef, &mut out);
+    }
+    out
+}
+
+/// A class's implements-block methods, each paired with its resolved
+/// exported descriptor from the package interface's IMPL rows — the
+/// impl-side counterpart of the class methods' positional export pairing.
+/// The row is found by its coherence identity (interface instantiation +
+/// for-target), which covers in-body and merged out-of-body blocks alike;
+/// a `None` descriptor (mid-edit skew, unresolved header) falls back to
+/// written spellings at the renderer.
+pub(crate) fn class_impl_methods<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
+) -> Vec<(
+    baml_compiler2_hir::loc::FunctionLoc<'db>,
+    Option<&'db ExportedFunction>,
+)> {
+    let file = class_loc.file(db);
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package);
+    let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
+
+    let mut out = Vec::new();
+    for &block in item_data::class_impls(db, class_loc) {
+        let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).resolved();
+        let row = facts.and_then(|facts| {
+            let for_ty = facts.for_ty_pattern.to_plain();
+            iface.impls.iter().find(|row| {
+                row.interface.name == facts.interface.name
+                    && row.for_ty_pattern == for_ty
+                    && row.interface.generics.len() == facts.interface.generics.len()
+                    && row
+                        .interface
+                        .generics
+                        .iter()
+                        .zip(facts.interface.generics.iter())
+                        .all(|(exported, fact)| *exported == fact.to_plain())
+            })
+        });
+        for &method_loc in &item_data::impl_block_data(db, block).methods {
+            let method = item_data::function_data(db, method_loc);
+            if method.metadata.is_language_internal {
+                continue;
+            }
+            let ef = row.and_then(|row| row.methods.iter().find(|ef| ef.name == method.name));
+            out.push((method_loc, ef));
+        }
     }
     out
 }

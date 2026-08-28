@@ -10,4 +10,7 @@ class IntDecoder {
     }
 }
 
+methods:
+  function decode(self, raw: string) -> int throws never  interfaces.baml:10-12
+
 references (0):

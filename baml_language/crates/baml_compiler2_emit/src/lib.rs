@@ -936,15 +936,32 @@ fn build_packages<'db>(
                 &impl_params,
                 resolved,
             );
+            // Fail closed on a bound the LOWERING dropped: the uniform bound
+            // surface (`impl_generic_bounds`) keeps only bounds that lower
+            // to interfaces — E0145 / unresolved-name diagnostics own the
+            // rest — so a declared/lowered count mismatch means the declared
+            // rule is NARROWER than anything bakeable. Baking without the
+            // bound WIDENS the rule (a rule narrowed by two bounds must stay
+            // narrowed by both); dropping the whole rule loses a dispatch,
+            // which is recoverable — over-matching is not. Fires only on
+            // programs that already carry diagnostics and never reach a
+            // runnable artifact.
+            let (declared_generics, _) =
+                baml_compiler2_ppir::item_data::impl_declared_generics(db, impl_loc);
+            let declared_bound_count: usize =
+                declared_generics.iter().map(|g| g.bounds.len()).sum();
+            let lowered_bound_count: usize = impl_params
+                .iter()
+                .map(|param| impl_bounds.get(param).map_or(0, Vec::len))
+                .sum();
+            if lowered_bound_count != declared_bound_count {
+                continue;
+            }
             // Each declared param's bound conjunction, in frame order — the
             // same uniform surface, converted through the same
-            // `split_interface` road as the target. Fail closed on a bound
-            // that does not split: baking the rule without one WIDENS it (a
-            // rule narrowed by two bounds must stay narrowed by both), so the
-            // whole rule is dropped — losing a dispatch is recoverable,
-            // over-matching is not. E0145 rejected non-interface bounds
-            // upstream, so this fires only on programs that already carry
-            // diagnostics and never reach a runnable artifact.
+            // `split_interface` road as the target. The Option-collect is a
+            // second belt on the same law (a bound that does not split drops
+            // the rule); with the arity gate above it should never fire.
             let generic_param_bounds: Option<Vec<Vec<InterfaceBound>>> = impl_params
                 .iter()
                 .map(|param| {

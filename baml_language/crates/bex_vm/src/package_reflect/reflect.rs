@@ -804,18 +804,30 @@ impl BamlClassPackage for PackageReflectImpl {
             .collect();
         let mut objects = Vec::with_capacity(plan.program.objects.len());
         for (index, object) in plan.program.objects.iter().enumerate() {
-            let external = external_objects.get(&index).and_then(|symbol| {
-                if matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn) {
-                    return None;
-                }
-                vm.packages.object_by_name(&symbol.fq_name).or_else(|| {
+            // A plan-declared external MUST resolve (generic functions are
+            // the carve-out: their value objects re-intern locally). The
+            // import planner only mints a symbol for a name the compile
+            // could see, so a miss is link skew — grafting the linker's
+            // `"<runtime-import>"` placeholder as a live object would
+            // surface later as an inscrutable error at first use.
+            if let Some(symbol) = external_objects.get(&index)
+                && !matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn)
+            {
+                let resolved = vm.packages.object_by_name(&symbol.fq_name).or_else(|| {
                     // Alias-qualified names — a dependency's own exports and
                     // its mount surface — resolve through the dependency.
                     let (alias, local) = symbol.fq_name.split_once('.')?;
                     dependency_object(vm, *dependencies.get(alias)?, local)
-                })
-            });
-            if let Some(ptr) = external {
+                });
+                let Some(ptr) = resolved else {
+                    return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                        message: format!(
+                            "Package link could not resolve object `{}`",
+                            symbol.fq_name
+                        ),
+                    })
+                    .into();
+                };
                 objects.push(ptr);
                 continue;
             }
@@ -902,8 +914,12 @@ impl BamlClassPackage for PackageReflectImpl {
             .collect();
         let mut globals = Vec::with_capacity(plan.program.globals.len());
         for (index, value) in plan.program.globals.iter().enumerate() {
-            let external = external_globals.get(&index).and_then(|symbol| {
-                vm.packages
+            // Same law as the object lane: a plan-declared external global
+            // MUST resolve — falling through would materialize the plan's
+            // placeholder const as a silent `null` global.
+            if let Some(symbol) = external_globals.get(&index) {
+                let resolved = vm
+                    .packages
                     .global_by_name(&symbol.fq_name)
                     .map(|index| vm.globals.get(vm.proof(), index))
                     .or_else(|| {
@@ -925,15 +941,22 @@ impl BamlClassPackage for PackageReflectImpl {
                                 .global_by_name(&format!("{canonical}.{local}"))?;
                             Some(vm.globals.get(vm.proof(), index))
                         }
+                    });
+                let Some(value) = resolved else {
+                    return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                        message: format!(
+                            "Package link could not resolve global `{}`",
+                            symbol.fq_name
+                        ),
                     })
-            });
-            let value = if let Some(value) = external {
-                value
-            } else {
-                match value {
-                    bex_vm_types::ConstValue::Float(value) => Value::object(vm.alloc_float(*value)),
-                    other => other.to_value(|index| objects[index.raw()]),
-                }
+                    .into();
+                };
+                globals.push(AtomicValueSlot::new(value));
+                continue;
+            }
+            let value = match value {
+                bex_vm_types::ConstValue::Float(value) => Value::object(vm.alloc_float(*value)),
+                other => other.to_value(|index| objects[index.raw()]),
             };
             globals.push(AtomicValueSlot::new(value));
         }
@@ -1824,22 +1847,29 @@ fn graft_session_submission(
     let mut objects = Vec::with_capacity(plan.program.objects.len());
     let mut owned = Vec::new();
     for (index, object) in plan.program.objects.iter().enumerate() {
-        let external = external_objects.get(&index).and_then(|symbol| {
-            (!matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn))
-                .then(|| {
-                    existing_objects.get(&symbol.fq_name).copied().or_else(|| {
-                        session_external_object(vm, package_ptr, &dependencies, &symbol.fq_name)
-                    })
+        // A plan-declared external MUST resolve (generic functions are the
+        // carve-out: their value objects re-intern locally) — the same law
+        // the global loop above already enforces. Falling through would
+        // graft the linker's `"<runtime-import>"` placeholder as a live
+        // object.
+        if let Some(symbol) = external_objects.get(&index)
+            && !matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn)
+        {
+            let pointer = existing_objects
+                .get(&symbol.fq_name)
+                .copied()
+                .or_else(|| {
+                    session_external_object(vm, package_ptr, &dependencies, &symbol.fq_name)
                 })
-                .flatten()
-        });
-        if let Some(pointer) = external {
+                .ok_or_else(|| VmBamlError::InvalidArgument {
+                    message: format!("Session link could not resolve object `{}`", symbol.fq_name),
+                })?;
             objects.push(pointer);
-        } else {
-            let pointer = vm.alloc(object.clone());
-            objects.push(pointer);
-            owned.push(pointer);
+            continue;
         }
+        let pointer = vm.alloc(object.clone());
+        objects.push(pointer);
+        owned.push(pointer);
     }
     // Runtime identities are generative: remint before anything reads a
     // declaration's tag (`allocate_runtime_declaration_types` builds this

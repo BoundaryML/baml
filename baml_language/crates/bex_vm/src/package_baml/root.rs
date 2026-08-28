@@ -281,12 +281,18 @@ impl BamlPackageBaml for PackageBamlImpl {
 /// Whether `value`'s runtime type carries a `baml.ToString` override.
 /// Shares `make_to_string_callee`'s rule resolution (so the two agree on every
 /// value kind) but allocates nothing on the VM heap, so it is safe to call
-/// during the allocation-free pre-order collection pass.
-fn has_to_string_override(vm: &BexVm, value: Value) -> bool {
-    matches!(
-        super::shim_rule_method(vm, value, "ToString", "to_string"),
-        Ok(Some(resolved)) if !resolved.is_default
-    )
+/// during the allocation-free pre-order collection pass. A resolver error
+/// PROPAGATES (`shim_rule_method`'s own contract: never a silent structural
+/// fallback) — swallowing it here would let the collection pass disagree
+/// with the dispatch pass.
+fn has_to_string_override(
+    vm: &BexVm,
+    value: Value,
+) -> Result<bool, crate::errors::VmInternalError> {
+    Ok(matches!(
+        super::shim_rule_method(vm, value, "ToString", "to_string")?,
+        Some(resolved) if !resolved.is_default
+    ))
 }
 
 /// Pre-order DFS collecting, by heap pointer and in render order, every
@@ -297,13 +303,17 @@ fn has_to_string_override(vm: &BexVm, value: Value) -> bool {
 /// the two stay index-aligned. (Like the structural renderer, this does not
 /// guard against reference cycles — recursive *data* would already loop in the
 /// pre-existing walker; recursive *types* such as trees are acyclic.)
-pub(super) fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>) {
+pub(super) fn collect_to_string_overrides(
+    vm: &BexVm,
+    value: Value,
+    out: &mut Vec<HeapPtr>,
+) -> Result<(), crate::errors::VmInternalError> {
     let ValueKind::Object(ptr) = value.kind() else {
-        return;
+        return Ok(());
     };
-    if has_to_string_override(vm, value) {
+    if has_to_string_override(vm, value)? {
         out.push(ptr);
-        return;
+        return Ok(());
     }
     // Snapshot children (owned), dropping the heap borrow / container lock before
     // recursing - same discipline as `render_to_sink`'s `DisplaySnap`. The
@@ -316,8 +326,9 @@ pub(super) fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Ve
         _ => Vec::new(),
     };
     for v in children {
-        collect_to_string_overrides(vm, v, out);
+        collect_to_string_overrides(vm, v, out)?;
     }
+    Ok(())
 }
 
 /// Entry point shared by `_to_string_default` and `_to_string_shim`. Collects the
@@ -330,7 +341,9 @@ pub(crate) fn render_to_string_honoring_overrides(
     value: Value,
 ) -> NativeCallResult {
     let mut pending: Vec<HeapPtr> = Vec::new();
-    collect_to_string_overrides(vm, value, &mut pending);
+    if let Err(e) = collect_to_string_overrides(vm, value, &mut pending) {
+        return NativeCallResult::Error(e.into());
+    }
 
     let Some(&first_ptr) = pending.first() else {
         return render_done(vm, value, &pending, &[]);

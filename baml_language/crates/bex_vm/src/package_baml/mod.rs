@@ -392,27 +392,35 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 bex_vm_types::FunctionKind::NativeUnresolved => {
                     // Dispatch through the dedicated `native_key` (minted by
                     // emit for `$rust_function` bodies), never the display
-                    // name. Only VM-owned packages resolve here; functions
+                    // name. Every `NativeUnresolved` function IS such a body,
+                    // and emit keys every one — an UNKEYED body can never
+                    // resolve, so it fails here at load instead of crashing
+                    // `NativeUnresolved` at first call.
+                    let Some(key) = function.native_key.as_deref() else {
+                        return Err(VmInternalError::MissingNativeFunction {
+                            name: function.name.clone(),
+                        });
+                    };
+                    // Only VM-owned packages resolve here; keyed functions
                     // from other stdlib packages (assert, testing, …) stay
                     // unresolved for a future implementation to wire up.
-                    let owner = function.native_key.as_deref().and_then(|key| {
-                        VM_NATIVE_PACKAGES
-                            .iter()
-                            .find(|(prefix, _)| key.starts_with(prefix))
-                            .map(|(_, resolve)| (key, resolve))
-                    });
+                    let owner = VM_NATIVE_PACKAGES
+                        .iter()
+                        .find(|(prefix, _)| key.starts_with(prefix))
+                        .map(|(_, resolve)| resolve);
                     match owner {
-                        Some((key, resolve)) => match resolve(key) {
+                        Some(resolve) => match resolve(key) {
                             Some(native_function) => {
                                 bex_vm_types::FunctionKind::Native(native_function as *const ())
                             }
                             // A VM-owned key with no native is a build error,
                             // not a deferral: the package's generated trait
                             // requires an implementation for every
-                            // `$rust_function` it declares.
+                            // `$rust_function` it declares. Report the KEY —
+                            // it is what the generated dispatch matched on.
                             None => {
                                 return Err(VmInternalError::MissingNativeFunction {
-                                    name: function.name.clone(),
+                                    name: key.to_string(),
                                 });
                             }
                         },

@@ -1780,7 +1780,13 @@ impl CacheContext {
             CompiledUnits::None => {
                 // Every cached compile assembles units alongside the program;
                 // reaching a cache store without them is a programmer error.
+                // The compile itself succeeded, so release builds degrade to
+                // an uncached run — the file's convention for store failures
+                // — but LOUDLY on the debug channel, never silently.
                 debug_assert!(false, "cached compile stored without assembled units");
+                cache_debug(format_args!(
+                    "cache store skipped: compile produced no assembled units"
+                ));
                 return Ok(());
             }
         };

@@ -100,7 +100,9 @@ use crate::{
 /// (pass 2), then renders structurally splicing in the override results (pass 3).
 pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) -> NativeCallResult {
     let mut pending: Vec<HeapPtr> = Vec::new();
-    collect_to_json_overrides(vm, value, &mut pending);
+    if let Err(e) = collect_to_json_overrides(vm, value, &mut pending) {
+        return NativeCallResult::Error(e.into());
+    }
 
     let Some(&first_ptr) = pending.first() else {
         return render_to_json_done(vm, value, &pending, &[]);
@@ -125,11 +127,14 @@ pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) ->
 /// Shares `make_to_json_callee`'s rule resolution but allocates
 /// nothing on the VM heap, so it is safe during the allocation-free pre-order
 /// collection.
-fn has_to_json_override(vm: &BexVm, value: Value) -> bool {
-    matches!(
-        super::shim_rule_method(vm, value, "ToJson", "to_json"),
-        Ok(Some(resolved)) if !resolved.is_default
-    )
+/// A resolver error PROPAGATES (`shim_rule_method`'s own contract: never a
+/// silent structural fallback) — swallowing it here would let the
+/// collection pass disagree with the dispatch pass.
+fn has_to_json_override(vm: &BexVm, value: Value) -> Result<bool, VmInternalError> {
+    Ok(matches!(
+        super::shim_rule_method(vm, value, "ToJson", "to_json")?,
+        Some(resolved) if !resolved.is_default
+    ))
 }
 
 /// Pre-order DFS collecting, by heap pointer and in render order, every
@@ -140,13 +145,17 @@ fn has_to_json_override(vm: &BexVm, value: Value) -> bool {
 /// map values, then instance fields) so the two stay index-aligned. A media
 /// instance is treated as a leaf, matching `render_to_serde`, which emits its
 /// tagged form without descending into the opaque `_data` field.
-fn collect_to_json_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>) {
+fn collect_to_json_overrides(
+    vm: &BexVm,
+    value: Value,
+    out: &mut Vec<HeapPtr>,
+) -> Result<(), VmInternalError> {
     let ValueKind::Object(ptr) = value.kind() else {
-        return;
+        return Ok(());
     };
-    if has_to_json_override(vm, value) {
+    if has_to_json_override(vm, value)? {
         out.push(ptr);
-        return;
+        return Ok(());
     }
     // Snapshot children (owned), dropping the heap borrow before recursing.
     let children: Vec<Value> = match vm.get_object(ptr) {
@@ -165,8 +174,9 @@ fn collect_to_json_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>) {
         _ => Vec::new(),
     };
     for v in children {
-        collect_to_json_overrides(vm, v, out);
+        collect_to_json_overrides(vm, v, out)?;
     }
+    Ok(())
 }
 
 /// Whether `inst`'s class is one of the builtin media classes.
