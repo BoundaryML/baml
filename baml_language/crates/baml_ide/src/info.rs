@@ -850,7 +850,7 @@ fn method_owner_path(
         MethodOwner::Impl(block) => {
             // `impl_facts` is `None` when the block's header does not resolve
             // to an interface — honest absence beats a wrong owner.
-            let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).as_ref()?;
+            let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).resolved()?;
             Some(render::display_owner_ty(&facts.for_ty_pattern.to_plain()))
         }
     }
@@ -931,7 +931,7 @@ fn generic_type_parameter_info_at(
                 ),
                 Some(item_data::MethodOwner::Impl(block)) => {
                     let subject = baml_compiler2_hir_ty::impls::impl_facts(db, block)
-                        .as_ref()
+                        .resolved()
                         .map(|facts| render::display_owner_ty(&facts.for_ty_pattern.to_plain()));
                     match subject {
                         Some(subject) => format!("method {}.{}", subject, data.name.as_str()),
@@ -959,7 +959,7 @@ fn generic_type_parameter_info_at(
         };
         if let Some(declared) = generics.iter().find(|param| &param.name == name) {
             let subject = baml_compiler2_hir_ty::impls::impl_facts(db, *impl_loc)
-                .as_ref()
+                .resolved()
                 .map_or_else(
                     || "implements".to_string(),
                     |facts| {

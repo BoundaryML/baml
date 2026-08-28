@@ -743,52 +743,6 @@ pub fn impl_data_source_map<'db>(
     }
 }
 
-/// Collect every `Ty::TypeVar` name in `ty` (at any depth) into `out` — used to
-/// decide which impl generic params the for-type / interface args determine (E0135).
-fn collect_type_var_names(ty: &Ty, out: &mut Vec<ParamTy>) {
-    match ty {
-        Ty::TypeVar(name, _) => out.push(name.clone()),
-        Ty::List(inner, _) => {
-            collect_type_var_names(inner, out);
-        }
-        Ty::Map { key, value, .. } => {
-            collect_type_var_names(key, out);
-            collect_type_var_names(value, out);
-        }
-        Ty::Future(value, error, _) => {
-            collect_type_var_names(value, out);
-            collect_type_var_names(error, out);
-        }
-        Ty::Union(tys, _) | Ty::Class(_, tys, _) => {
-            for t in tys {
-                collect_type_var_names(t, out);
-            }
-        }
-        Ty::Interface(_, args, bindings, _) => {
-            for t in args {
-                collect_type_var_names(t, out);
-            }
-            for (_, t) in bindings {
-                collect_type_var_names(t, out);
-            }
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            for p in params {
-                collect_type_var_names(&p.ty, out);
-            }
-            collect_type_var_names(ret, out);
-            collect_type_var_names(throws, out);
-        }
-        Ty::AssociatedTypeProjection { base, .. } => collect_type_var_names(base, out),
-        _ => {}
-    }
-}
-
 // ── The normalized interface-method signature (TIR's `InterfaceMethodSpec`) ──
 
 /// One type slot in a method signature — a written type, or one of the two
@@ -1206,19 +1160,17 @@ pub fn validate_impl_signatures<'db>(
                 ImplDiagnosticLocation::ForTarget,
             ));
         }
-        // E0135: every declared generic param must be determined by the for-type
-        // or interface args.
-        let mut determined = Vec::new();
-        collect_type_var_names(&data.for_ty_pattern, &mut determined);
-        for arg in &data.interface_args {
-            collect_type_var_names(arg, &mut determined);
-        }
-        for (name, _) in &data.generic_params {
-            if !determined.contains(name) {
+        // E0135: every declared generic param must be determined by the
+        // for-type or interface args. The list comes from the header's ONE
+        // validity decision (`impl_facts`), which also POISONS the impl —
+        // an undetermined param means the impl resolves nowhere, so the
+        // diagnostic and the unresolvability can never drift.
+        if let crate::impls::ImplHeaderResolution::Poisoned { unconstrained } =
+            crate::impls::impl_facts(db, impl_loc)
+        {
+            for name in unconstrained {
                 diags.push((
-                    TirTypeError::UnconstrainedImplTypeParam {
-                        name: name.name().clone(),
-                    },
+                    TirTypeError::UnconstrainedImplTypeParam { name: name.clone() },
                     ImplDiagnosticLocation::Bound,
                 ));
             }

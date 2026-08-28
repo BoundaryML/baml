@@ -22,6 +22,7 @@
 //                                         dynamic for an existential arg
 //                                         (object-safety rules)
 //   13   value-position shim              rule frame realized by the shim
+//   14   `default.<field>()` field call   value road (view read) + indirect
 //
 // Rows 1-5 all dispatch open-world (every interface-mediated call is a
 // virtual call): a concrete receiver's TIR resolution still CARRIES the
@@ -211,6 +212,32 @@ function row13_shim_to_string() -> string throws never {
     `${f}`
 }
 
+// Row 14: `default.<field>()` — the member after `default.` is a
+// FUNCTION-TYPED FIELD, not a method, so the bypass road declines (there is
+// no default body to reference) and lowering falls through to the value
+// road: `default.formatter` reads `self` viewed at the declaring interface,
+// and the call is an ordinary indirect call of the field's value.
+interface Formatting {
+    formatter: (int) -> string throws never
+    function present(self) -> string throws never {
+        "presented " + self.formatter(1)
+    }
+}
+
+class Card {
+    formatter: (int) -> string throws never
+    implements Formatting {
+        function present(self) -> string throws never {
+            "card " + default.formatter(7)
+        }
+    }
+}
+
+function row14_default_field_call() -> string throws never {
+    let c = Card { formatter: (n: int) -> string { "num " + n.to_string() } };
+    c.present()
+}
+
 test "row1 static call reaches a provided method" {
     assert.equal(row1_static_provided(), "loud")
 }
@@ -264,4 +291,8 @@ test "row12 interface-qualified calls infer Self from the argument" {
 
 test "row13 interpolation renders through the provided to_string" {
     assert.equal(row13_shim_to_string(), "<fancy>")
+}
+
+test "row14 default.<field>() calls the field value through the view" {
+    assert.equal(row14_default_field_call(), "card num 7")
 }

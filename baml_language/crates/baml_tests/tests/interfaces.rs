@@ -6876,6 +6876,76 @@ fn union_ruling_mixed_inherent_and_impl_arm_is_rejected() {
     );
 }
 
+/// An impl declaring a PHANTOM generic param — one bound by neither the
+/// `for` type nor the interface (`U` here; E0135 diagnoses the header
+/// without rejecting the block) — must fail CLOSED at method resolution:
+/// the candidate cannot realize its impl frame, so it is skipped and a call
+/// through it surfaces next to the header diagnostic. Previously the
+/// candidate was admitted and the unbound frame slot ICE'd inference
+/// ("matched impl left generic unbound").
+#[test]
+fn phantom_impl_param_call_is_diagnosed_not_ice() {
+    let errors = collect_compile_errors(
+        r#"
+        interface PhantomMarker {
+            function tag(self) -> int throws never
+        }
+        class PhantomBin<T> {
+            value: T
+        }
+        implements<T, U> PhantomMarker for PhantomBin<T> {
+            function tag(self) -> int { return 1 }
+        }
+        function use_marker(b: PhantomBin<int>) -> int {
+            return b.tag()
+        }
+        function main() -> int {
+            return use_marker(PhantomBin { value: 3 })
+        }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0135]")),
+        "phantom impl param must be diagnosed at the impl header; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// The bare type-qualified impl tier cannot tell a method turbofish from
+/// hoisted receiver args (`PickBin.pick<int>()` vs `PickBin<int>.pick()` —
+/// one written channel), so it hands the written args to the CLASS frame and
+/// leaves the method's own generics to inference. When nothing solves them
+/// that must be a hard "cannot infer" diagnostic — previously the fresh var
+/// silently finalized to Error and ICE'd runtime lowering ("'Error' is not
+/// a valid 'RuntimeTy'"). The `(C<..> as I).m<..>()` qualified spelling
+/// remains the way to write the own args explicitly.
+#[test]
+fn stolen_turbofish_on_generic_class_impl_static_is_diagnosed_not_ice() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Picker {
+            function pick<X>() -> int throws never
+        }
+        class PickBin<T> {
+            value: T
+            implements Picker {
+                function pick<X>() -> int { return 7 }
+            }
+        }
+        function main() -> int {
+            return PickBin.pick<int>()
+        }
+        "#,
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("cannot infer type parameter")),
+        "unsolved own generic behind a consumed type-arg channel must be diagnosed; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PR #3638 review follow-ups: extra union cases surfaced by CodeRabbit/Cursor on
 // the F1–F17 fix branch. Each reproduced a real bug before the follow-up fix.

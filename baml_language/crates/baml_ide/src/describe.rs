@@ -1275,7 +1275,7 @@ fn collect_interface_impls(
     baml_compiler2_hir_ty::impls::impls_naming_interface(db, iface_loc)
         .iter()
         .filter_map(|&block| {
-            let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).as_ref()?;
+            let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).resolved()?;
             let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
             let file = block.file(db);
             let source_map = baml_compiler2_ppir::item_data::impl_block_source_map(db, block);

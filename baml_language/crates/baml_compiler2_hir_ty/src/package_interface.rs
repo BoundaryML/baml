@@ -1063,7 +1063,7 @@ fn exported_impls<'db>(
 
     let mut rows = Vec::new();
     for &block in crate::impls::package_impl_locs(db, pkg_id) {
-        let Some(facts) = crate::impls::impl_facts(db, block) else {
+        let Some(facts) = crate::impls::impl_facts(db, block).resolved() else {
             continue;
         };
         let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);

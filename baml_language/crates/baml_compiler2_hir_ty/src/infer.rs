@@ -6786,13 +6786,36 @@ impl<'db> InferenceContext<'db> {
                 }
             });
         }
-        instantiation.extend(self.own_instantiation_with_bounds(
+        let own_args = self.own_instantiation_with_bounds(
             own,
             own_params,
             member,
             &bounds,
             crate::lower::TypePosition::Existential,
-        ));
+        );
+        if matches!(own, OwnArgs::Fresh) {
+            // Same discipline as the `Self` and pinned slots: a fresh own
+            // generic nothing solves is a hard error, never an Error type
+            // reaching emission. This lane is reachable from a CALL too —
+            // a consumed type-arg channel (`Bin<int>.pick()`, and equally
+            // the turbofish spelling `Bin.pick<int>()`, which the channel
+            // cannot distinguish from it) hands the written args to the
+            // CLASS frame and leaves the member's own generics with no
+            // written source at all.
+            for (param, arg) in own_params.iter().zip(&own_args) {
+                // Synthetic effect params are elaboration's, never spelled,
+                // and legitimately default when unconstrained.
+                if baml_type::is_synthetic_effect_param(param.name()) {
+                    continue;
+                }
+                self.pending_diags.push(PendingDiag::UninferredCtorParam {
+                    expr: anchor,
+                    var: arg.clone(),
+                    name: param.name().clone(),
+                });
+            }
+        }
+        instantiation.extend(own_args);
         match own {
             OwnArgs::Call(call) => {
                 instantiation = self.write_call_type_args(call, &instantiation, 0);
@@ -12455,8 +12478,9 @@ fn same_head_constructor(source: &Ty, target: &Ty) -> bool {
 /// (`Type.method`) keep the full signature; there the receiver arrives
 /// as the written first argument. Non-methods pass through untouched.
 /// Whether `param` occurs anywhere inside `ty` (the phantom-param test
-/// for constructor inference slots).
-fn ty_mentions_param(ty: &Ty, param: &baml_type::ParamTy) -> bool {
+/// for constructor inference slots, and for `impl_facts`' poisoned-header
+/// gate).
+pub(crate) fn ty_mentions_param(ty: &Ty, param: &baml_type::ParamTy) -> bool {
     fn walk(ty: &Ty, param: &baml_type::ParamTy, found: &mut bool) {
         if *found {
             return;

@@ -454,8 +454,28 @@ struct InterfaceBodyStore<'a, 'db> {
 }
 
 impl<'db> InterfaceBodyStore<'_, 'db> {
-    /// The pooled object of `loc`'s compiled body.
+    /// The pooled object of `loc`'s compiled body — `None` when this emit
+    /// did not pool one. A `ReusedClean` placement answers `None` here BY
+    /// TYPE: its placeholder index is past the pool, so writing it into an
+    /// object operand (the default backfill) would dangle — the clean unit
+    /// already carries the real operand.
     fn interface_body(
+        &self,
+        loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    ) -> Option<ObjectIndex> {
+        self.placements
+            .get(&loc)
+            .and_then(|placement| placement.pooled_object())
+            .map(ObjectIndex::from_raw)
+    }
+
+    /// The index that REFERENCES `loc`'s body in rule-table position: the
+    /// pooled object, or a `ReusedClean` placement's past-the-pool
+    /// placeholder. Placeholders are valid here — decompose skips rules
+    /// whose provided bodies are Stage-6 placeholders (the cached unit
+    /// carries them) — but must never reach object-operand position; use
+    /// [`Self::interface_body`] there.
+    fn interface_body_reference(
         &self,
         loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     ) -> Option<ObjectIndex> {
@@ -968,7 +988,7 @@ fn build_packages<'db>(
                 // method (losing a dispatch, never adding a wrong one). The
                 // stdlib only uses those bodies on free functions, so this is
                 // unreachable today; the debug_assert pins the convention.
-                let Some(fqn) = interface_bodies.interface_body(m) else {
+                let Some(fqn) = interface_bodies.interface_body_reference(m) else {
                     debug_assert!(
                         matches!(
                             function_body(db, m).as_ref(),
@@ -3114,15 +3134,28 @@ enum PlacedFunction {
 }
 
 impl PlacedFunction {
-    /// The index this emit uses to REFERENCE the function in object-operand
-    /// position (rule tables, operand/name reversal): the pooled object, or
-    /// the clean placeholder standing in for one.
+    /// The index this emit uses to REFERENCE the function (rule tables,
+    /// operand/name reversal): the pooled object, or the clean placeholder
+    /// standing in for one. A placeholder must never be written into a
+    /// pooled object's operands — use [`Self::pooled_object`] there.
     fn reference_object(self) -> usize {
         match self {
             PlacedFunction::Live { object, .. } | PlacedFunction::Spliced { object, .. } => object,
             PlacedFunction::ReusedClean {
                 placeholder_object, ..
             } => placeholder_object,
+        }
+    }
+
+    /// The object this emit POOLED for the function — `None` for a
+    /// `ReusedClean` placement, whose placeholder index is past the pool
+    /// and valid only in reference position.
+    fn pooled_object(self) -> Option<usize> {
+        match self {
+            PlacedFunction::Live { object, .. } | PlacedFunction::Spliced { object, .. } => {
+                Some(object)
+            }
+            PlacedFunction::ReusedClean { .. } => None,
         }
     }
 

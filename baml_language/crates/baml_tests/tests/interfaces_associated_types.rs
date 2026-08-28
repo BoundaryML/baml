@@ -4061,3 +4061,46 @@ fn interface_default_method_self_referencing_bound_is_rejected() {
         "E0145",
     );
 }
+
+/// The call-site half of the shifted-bounds-cursor regression (the
+/// accepted-program half — the bound reaching the default body — lives in
+/// the corpus: `ns_interfaces_associated_types`,
+/// "own_generic_bound_after_associated_type_reaches_default_body"): with
+/// the bound keyed off `X`, a call whose `X` does not implement the bound
+/// was wrongly ACCEPTED (soundness hole). A compile ERROR cannot ride the
+/// corpus, so the rejection is pinned here.
+#[test]
+fn own_generic_bound_after_associated_type_still_rejects_at_call() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Tagged {
+            function tag_of(self) -> string throws never
+        }
+        interface Tallier {
+            type Marker
+            function tally<X extends Tagged, Y>(self, a: X, extra: Y) -> string throws never {
+                return a.tag_of()
+            }
+        }
+        class Blank {
+            x: int
+        }
+        class Sums {
+            implements Tallier {
+                type Marker = int
+            }
+        }
+        function bad_call(s: Sums, b: Blank) -> string {
+            return s.tally(b, 2)
+        }
+        function main() -> string {
+            return bad_call(Sums {}, Blank { x: 1 })
+        }
+        "#,
+    );
+    assert!(
+        !errors.is_empty(),
+        "a call whose `X` violates the bound must be rejected even with an \
+         associated type declared before the method"
+    );
+}

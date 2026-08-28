@@ -96,30 +96,76 @@ pub struct ImplFacts<'db> {
     pub methods: Vec<baml_compiler2_hir::loc::FunctionLoc<'db>>,
 }
 
-// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for ImplFacts<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+/// A PartialEq-driven whole-value `salsa::Update` for a `'db`-carrying
+/// type. Salsa's own `update_fallback` has these exact semantics but is
+/// `'static`-gated, and the field-wise derive requires every field type to
+/// implement `Update` — `baml_type`'s types don't (it has no salsa
+/// dependency) — so compare-and-overwrite of the whole value is the
+/// correct impl, written once.
+macro_rules! partial_eq_salsa_update {
+    ($ty:ident) => {
+        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned;
+        // `PartialEq` decides whether consumers see a change.
         #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
+        unsafe impl salsa::Update for $ty<'_> {
+            unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+                #[allow(unsafe_code)]
+                unsafe {
+                    let changed = *old_pointer != new_value;
+                    if changed {
+                        std::ptr::drop_in_place(old_pointer);
+                        std::ptr::write(old_pointer, new_value);
+                    }
+                    changed
+                }
             }
-            changed
+        }
+    };
+}
+
+partial_eq_salsa_update!(ImplFacts);
+
+/// One impl block's header resolution — THE single decision point for
+/// header validity. The resolution substrate reads it through
+/// [`Self::resolved`]; the E0135 diagnostic renders [`Self::Poisoned`]'s
+/// very list — so the two can never drift.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImplHeaderResolution<'db> {
+    /// The header does not resolve to an interface (S17's diagnostic).
+    Unresolved,
+    /// The header resolves, but declares generic params that neither the
+    /// for-target nor the interface arguments determine — listed in frame
+    /// order. The facts are deliberately NOT constructed: a poisoned impl
+    /// is unresolvable everywhere by construction, since no consumer has
+    /// anything to match on. Associated-type pins are OUTPUTS of a match,
+    /// never inputs, so they do not determine a param (Rust's E0207 rule).
+    /// An in-class block can never poison — its frame is the class's, and
+    /// `class_self_ty` applies every param.
+    Poisoned {
+        unconstrained: Vec<Name>,
+    },
+    Resolved(ImplFacts<'db>),
+}
+
+impl<'db> ImplHeaderResolution<'db> {
+    /// The facts, when the header resolved cleanly.
+    pub fn resolved(&self) -> Option<&ImplFacts<'db>> {
+        match self {
+            Self::Resolved(facts) => Some(facts),
+            Self::Unresolved | Self::Poisoned { .. } => None,
         }
     }
 }
 
-/// The resolution-relevant facts of one impl block, or `None` when its
-/// header does not resolve to an interface (the diagnostic is S17's).
+partial_eq_salsa_update!(ImplHeaderResolution);
+
+/// The resolution-relevant facts of one impl block, behind the header's
+/// validity decision ([`ImplHeaderResolution`]).
 #[salsa::tracked(returns(ref))]
 pub fn impl_facts<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     block: ImplLoc<'db>,
-) -> Option<ImplFacts<'db>> {
+) -> ImplHeaderResolution<'db> {
     use baml_compiler2_ppir::item_data::ImplSubjectData;
     let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
     let file = block.file(db);
@@ -197,11 +243,32 @@ pub fn impl_facts<'db>(
     let ctx = crate::lower::lower_ctx_for_file(db, file)
         .with_frame(params.clone())
         .with_bounds(bounds_map);
-    let interface = InterfaceRef::of_ty(&ctx.lower_type_ref_at(
+    let Some(interface) = InterfaceRef::of_ty(&ctx.lower_type_ref_at(
         &data.type_refs,
         data.interface_target,
         crate::lower::TypePosition::ConstraintHead,
-    ))?;
+    )) else {
+        return ImplHeaderResolution::Unresolved;
+    };
+    // A declared generic param that neither the for-target nor the
+    // implemented interface's arguments determine leaves a frame slot no
+    // match can ever bind: the header is POISONED (see
+    // [`ImplHeaderResolution::Poisoned`]) and the impl resolves nowhere.
+    // E0135 renders this very list (`validate_impl_signatures`).
+    let unconstrained: Vec<Name> = params
+        .iter()
+        .filter(|param| {
+            !crate::infer::ty_mentions_param(&for_ty_pattern, param)
+                && !interface
+                    .generics
+                    .iter()
+                    .any(|arg| crate::infer::ty_mentions_param(arg, param))
+        })
+        .map(|param| param.name().clone())
+        .collect();
+    if !unconstrained.is_empty() {
+        return ImplHeaderResolution::Poisoned { unconstrained };
+    }
     let associated_types = data
         .associated_type_bindings
         .iter()
@@ -215,7 +282,7 @@ pub fn impl_facts<'db>(
         })
         .collect();
 
-    Some(ImplFacts {
+    ImplHeaderResolution::Resolved(ImplFacts {
         interface,
         for_ty_pattern,
         generic_params: params.into_iter().zip(param_bounds).collect(),
@@ -269,7 +336,7 @@ pub fn impls_naming_interface<'db>(
     let mut out = Vec::new();
     for &package in all_packages(db) {
         for &block in package_impl_locs(db, package) {
-            let Some(facts) = impl_facts(db, block).as_ref() else {
+            let Some(facts) = impl_facts(db, block).resolved() else {
                 continue;
             };
             if facts.interface.name == target {
@@ -788,7 +855,7 @@ pub fn impls_for_type<'db>(
         .map(|cached| match &cached.origin {
             CachedResolvedImplOrigin::Source { block } => {
                 let facts = impl_facts(db, *block)
-                    .as_ref()
+                    .resolved()
                     .expect("cached source impl remains well formed");
                 ResolvedImpl {
                     origin: ResolvedImplOrigin::Source {
@@ -948,6 +1015,16 @@ fn impls_for_type_cached<'db>(
             {
                 continue;
             }
+            // Every accepted candidate binds its FULL declared frame:
+            // `impl_facts` poisons a phantom-param header at resolution
+            // (E0135's impls never produce facts), and the guard above
+            // skipped candidates whose params only the interface goal could
+            // bind. Pinned because `realized_impl_frame` realizes the frame
+            // with `unreachable!` on an absent binding.
+            debug_assert!(
+                params.iter().all(|param| bindings.contains_key(param)),
+                "accepted impl candidate left a declared generic unbound"
+            );
             let origin = match (origin, facts) {
                 (ResolvedImplOrigin::Source { block, .. }, ResolvedImplFacts::Source(_)) => {
                     CachedResolvedImplOrigin::Source { block }
@@ -996,7 +1073,7 @@ fn package_impl_candidates<'db>(
     let source = package_impl_locs(db, package)
         .iter()
         .filter_map(move |&block| {
-            let facts = impl_facts(db, block).as_ref()?;
+            let facts = impl_facts(db, block).resolved()?;
             Some((
                 ResolvedImplOrigin::Source {
                     block,
@@ -1108,7 +1185,7 @@ pub(crate) fn impl_candidates<'db>(
     for name in names {
         let package = PackageId::new(db, name);
         for &block in package_impl_locs(db, package) {
-            if let Some(facts) = impl_facts(db, block)
+            if let Some(facts) = impl_facts(db, block).resolved()
                 && facts.interface.name == *interface_name
             {
                 out.push(facts);
@@ -1126,7 +1203,7 @@ pub(crate) fn all_impl_facts(db: &dyn baml_compiler2_ppir::Db) -> Vec<&ImplFacts
     let mut out = Vec::new();
     for &package in all_packages(db) {
         for &block in package_impl_locs(db, package) {
-            if let Some(facts) = impl_facts(db, block) {
+            if let Some(facts) = impl_facts(db, block).resolved() {
                 out.push(facts);
             }
         }

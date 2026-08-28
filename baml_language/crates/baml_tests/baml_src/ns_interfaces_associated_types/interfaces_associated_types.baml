@@ -834,3 +834,41 @@ function srab_main() -> string {
 test "self_referential_associated_bound_compiles_and_runs" {
     assert.equal(srab_main(), "leaf")
 }
+
+// ── Own-generic bounds keyed past associated types ───────────────────────────
+// An interface method's frame is [Self, iface params..] — associated types
+// are NOT slots — so a bound on an own generic declared AFTER an associated
+// type must key to that own generic. Regression: a shifted bounds cursor
+// keyed `X`'s bound onto `Y` (dropping the tail), so the default body lost
+// the bound its own signature declared and `a.tag_of()` failed to resolve.
+
+interface OgbTagged {
+    function tag_of(self) -> string throws never
+}
+
+interface OgbTallier {
+    type Marker
+    function tally<X extends OgbTagged, Y>(self, a: X, extra: Y) -> string throws never {
+        return a.tag_of()
+    }
+}
+
+class OgbCard {
+    implements OgbTagged {
+        function tag_of(self) -> string throws never { return "card" }
+    }
+}
+
+class OgbSums {
+    implements OgbTallier {
+        type Marker = int;
+    }
+}
+
+function ogb_main(s: OgbSums, c: OgbCard) -> string {
+    return s.tally(c, 1)
+}
+
+test "own_generic_bound_after_associated_type_reaches_default_body" {
+    assert.equal(ogb_main(OgbSums {}, OgbCard {}), "card")
+}

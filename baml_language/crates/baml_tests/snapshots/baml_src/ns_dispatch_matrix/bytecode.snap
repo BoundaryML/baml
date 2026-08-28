@@ -93,12 +93,31 @@ function dispatch_matrix.$init_test_ns_dispatch_matrix_dispatch_matrix(registry:
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row14 default.<field>() calls the field value through the view"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
 
 function dispatch_matrix.<(int as user.dispatch_matrix.Speaker)>.speak(self: int) -> string {
     load_const "int"
+    return
+}
+
+function dispatch_matrix.<(user.dispatch_matrix.Card as user.dispatch_matrix.Formatting)>.present(self: dispatch_matrix.Card) -> string {
+    load_const 7
+    load_var self
+    load_field .formatter
+    call_indirect
+    store_var _2
+    load_const "card "
+    load_var _2
+    bin_op +
     return
 }
 
@@ -140,6 +159,19 @@ function dispatch_matrix.<(user.dispatch_matrix.Wrapping as user.dispatch_matrix
 
 function dispatch_matrix.Counter.start() -> int {
     load_const 0
+    return
+}
+
+function dispatch_matrix.Formatting.present(self: dispatch_matrix.Formatting) -> string {
+    load_var self
+    load_const 1
+    load_type dispatch_matrix.Formatting
+    load_const "formatter"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _2
+    load_const "presented "
+    load_var _2
+    bin_op +
     return
 }
 
@@ -214,6 +246,17 @@ function dispatch_matrix.row13_shim_to_string() -> string {
     load_type dispatch_matrix.Fancy
     alloc_instance user.dispatch_matrix.Fancy
     call baml.String.from
+    return
+}
+
+function dispatch_matrix.row14_default_field_call() -> string {
+    make_closure .<lambda(row14_default_field_call, 0)>, 0
+    init_instance user.dispatch_matrix.Card .formatter
+    load_type dispatch_matrix.Formatting
+    load_const "present"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 

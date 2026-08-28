@@ -1074,6 +1074,14 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                 return method_item_ref(db, class_loc, func_loc);
             }
             Some(MethodOwner::Interface(iface_loc)) => {
+                // NOTE: an `ItemRef::InterfaceBody` for a REQUIRED method is
+                // a valid NAME (change-propagation and display renderers
+                // spell every declaration through here) but resolves to no
+                // slot or object — only default-BODIED methods are compiled.
+                // CALLEE positions must therefore gate on
+                // `function_has_body` before minting one (the `default.`
+                // bypass and default-adoption do); emit's slot resolution
+                // panics loudly on any that slips through.
                 return ItemRef::InterfaceBody(Box::new(crate::InterfaceBodyRef {
                     package: pkg_info.package.clone(),
                     namespace: pkg_info.namespace_path,
@@ -8719,24 +8727,28 @@ impl<'db> LoweringContext<'db> {
                 target.target,
                 pkg_items,
                 &current_pkg.namespace_path,
-            ) {
-                let method_name = segments[1].clone();
+            )
                 // The callee IS the interface's default body: reference it by
-                // its declaration (`ItemRef::InterfaceBody`), the only key a body has.
-                let Some(default_loc) =
+                // its declaration (`ItemRef::InterfaceBody`), the only key a
+                // body has. Restricted to DEFAULT-BODIED methods, mirroring
+                // TIR's `default_member`: a declared FIELD (possibly
+                // function-typed and called through the view) and a bodyless
+                // required method have no default body to reference, so the
+                // call FALLS THROUGH to ordinary lowering — the value road
+                // reads `default.<member>` as `self` viewed at the declaring
+                // interface — instead of silently dropping the call with its
+                // destination unassigned.
+                && let Some(default_loc) =
                     baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc)
                         .methods
                         .iter()
                         .copied()
                         .find(|&loc| {
                             baml_compiler2_ppir::item_data::function_data(self.db, loc).name
-                                == method_name
+                                == segments[1]
+                                && baml_compiler2_ppir::item_data::function_has_body(self.db, loc)
                         })
-                else {
-                    // TIR already rejected a `default.` call naming no such
-                    // method; nothing sound to lower here.
-                    return;
-                };
+            {
                 let item_ref = def_to_item_ref(self.db, Definition::Function(default_loc));
                 let callee_op = Operand::Constant(Constant::Function(item_ref));
                 let Some(&self_local) = self.locals.get(&Name::new("self")) else {

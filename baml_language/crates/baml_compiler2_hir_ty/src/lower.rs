@@ -1911,11 +1911,12 @@ pub fn function_generic_bounds<'db>(
         }
         Some(MethodOwner::Interface(interface)) => {
             let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
-            // The shared interface param env (`Self` bound, param bounds,
-            // associated-slot bounds), keyed by the same frame-prefix
-            // identities this function's frame starts with.
+            // The shared interface param env (`Self` bound, param bounds),
+            // keyed by the same frame-prefix identities this function's
+            // frame starts with: `[Self, params..]` — associated types are
+            // not frame slots.
             out.extend(interface_scope_bounds(db, interface));
-            for _ in 0..(1 + data.generic_params.len() + data.associated_types.len()) {
+            for _ in 0..=data.generic_params.len() {
                 frame_iter.next();
             }
         }

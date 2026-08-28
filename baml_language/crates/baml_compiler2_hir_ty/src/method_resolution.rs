@@ -656,7 +656,15 @@ fn lookup_impl_member<'db>(
                         // Only the declarer narrows to the matched impl.
                         member.declarer = match member.declarer {
                             MemberDeclarer::VirtualMethod { interface, method } => {
-                                if let Some(block) = resolved.source_block() {
+                                // Adoption requires a default BODY: an
+                                // INCOMPLETE impl (required method not
+                                // provided — already diagnosed) must keep the
+                                // virtual declarer rather than adopt the bare
+                                // signature, which has no compiled body an
+                                // `ItemRef::InterfaceBody` could reference.
+                                if let Some(block) = resolved.source_block()
+                                    && baml_compiler2_ppir::item_data::function_has_body(db, method)
+                                {
                                     // The default's frame: `[Self = receiver,
                                     // iface args..]` — associated types are
                                     // not slots.
