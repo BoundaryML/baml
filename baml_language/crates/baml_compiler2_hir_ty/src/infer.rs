@@ -60,6 +60,18 @@ fn is_unit(ty: &Ty) -> bool {
     matches!(ty.kind(), TyKind::Void { .. } | TyKind::Null { .. })
 }
 
+/// Whether an object slot initialized to `null` satisfies this type. Weak
+/// aliases and solved inference variables must be resolved by the caller
+/// before asking; an unconstrained type parameter is deliberately false
+/// because it is not guaranteed to admit `null` for every instantiation.
+fn type_admits_null(ty: &Ty) -> bool {
+    match ty.kind() {
+        TyKind::Null { .. } => true,
+        TyKind::Union(members, _) => members.iter().any(type_admits_null),
+        _ => false,
+    }
+}
+
 /// The function type at a callback root: `ty` itself, or the sole non-null
 /// member of an optional callback — `((v: int) -> int)?` lowers to
 /// `(...) | null`.
@@ -939,6 +951,13 @@ enum PendingDiag<'db> {
         declared: Vec<baml_type::Name>,
         name: baml_type::Name,
         shorthand: bool,
+    },
+    /// A constructor without a spread omitted fields whose resolved types do
+    /// not admit `null`.
+    MissingRequiredObjectFields {
+        object: ExprId,
+        class_name: baml_type::QualifiedTypeName,
+        field_names: Vec<baml_type::Name>,
     },
     /// The call-site `$id` side channel's three rules: the value must be
     /// `boundary.LocalId`, at most one `$id` per call, and it must be the
@@ -8567,6 +8586,46 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    /// Shared completeness check for local and mounted class constructors.
+    /// A valid spread has the exact class type and therefore supplies every
+    /// slot; without one, each omitted slot must admit its `null` initializer.
+    fn report_missing_required_object_fields(
+        &mut self,
+        object: ExprId,
+        class_name: &baml_type::QualifiedTypeName,
+        field_types: &[(baml_type::Name, Ty)],
+        instantiation: &[Ty],
+        fields: &[ObjectExprField],
+        has_spread: bool,
+    ) {
+        if has_spread {
+            return;
+        }
+
+        let mut missing = Vec::new();
+        for (name, field_ty) in field_types {
+            if fields.iter().any(|field| field.name == *name) {
+                continue;
+            }
+            let field_ty = substitute_params(field_ty, instantiation);
+            let resolved = self.structurally_resolve(&field_ty);
+            // An error sentinel means the declaration's rule is unknown, not
+            // that the field is non-nullable. Its source diagnostic is the
+            // actionable error; continue checking independently valid slots.
+            if !resolved.has_error() && !type_admits_null(&resolved) {
+                missing.push(name.clone());
+            }
+        }
+        if !missing.is_empty() {
+            self.pending_diags
+                .push(PendingDiag::MissingRequiredObjectFields {
+                    object,
+                    class_name: class_name.clone(),
+                    field_names: missing,
+                });
+        }
+    }
+
     /// Object-constructor typing: resolve the class, instantiate its
     /// generics (explicit args or fresh vars - `Box<_> { .. }` holes are
     /// vars too), check each written field against its substituted type.
@@ -8751,6 +8810,14 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
+        self.report_missing_required_object_fields(
+            object,
+            &class_name,
+            &field_types,
+            &instantiation,
+            fields,
+            !spreads.is_empty(),
+        );
         let short = type_name.0.last().expect("type paths are never empty");
         let object_ty = Ty::intern(TyKind::Class(
             self.lower.qualify_definition(
@@ -8887,6 +8954,14 @@ impl<'db> InferenceContext<'db> {
                 });
             }
         }
+        self.report_missing_required_object_fields(
+            object,
+            &class_name,
+            &field_types,
+            &instantiation,
+            fields,
+            !spreads.is_empty(),
+        );
         let object_ty = Ty::intern(TyKind::Class(
             class_name,
             instantiation.into_boxed_slice(),
@@ -11363,6 +11438,22 @@ impl<'db> InferenceContext<'db> {
                             error,
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::ObjectFieldName(object, value),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::MissingRequiredObjectFields {
+                        object,
+                        class_name,
+                        field_names,
+                    } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::MissingRequiredClassFields {
+                                class_name,
+                                field_names,
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Expr(object),
                             related: Vec::new(),
                         });
                         continue;

@@ -1825,6 +1825,7 @@ fn tir_type_error_to_diagnostic_id(
             DiagnosticId::NoSuchField
         }
         TirTypeError::UnknownClassPropertyShorthand { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::MissingRequiredClassFields { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnresolvedName { .. } | TirTypeError::UnresolvedPropertyShorthand { .. } => {
             DiagnosticId::UnknownVariable
         }

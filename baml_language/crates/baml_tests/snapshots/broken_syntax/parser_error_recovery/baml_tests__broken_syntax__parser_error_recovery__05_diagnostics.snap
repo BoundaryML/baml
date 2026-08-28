@@ -104,14 +104,6 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0002
 
   × unresolved type: str
-   ╭─[partial_input.baml:1:1]
- 1 │ // Test parser recovery with partial/incomplete input
-   · ▲
-   ╰────
-
-  [type] E0002
-
-  × unresolved type: str
    ╭─[partial_input.baml:3:10]
  3 │   field1 str  // Incomplete type name
    ·          ───
@@ -189,14 +181,6 @@ source: crates/baml_tests/src/generated_tests.rs
     · ┬
     · ╰── expected `top-level declaration`, found `'}'`
     ╰────
-
-  [type] E0002
-
-  × unresolved type: closed
-   ╭─[unclosed_string.baml:1:1]
- 1 │ class Test {
-   · ▲
-   ╰────
 
   [parse] E0010
 

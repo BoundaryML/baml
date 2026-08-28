@@ -1,0 +1,50 @@
+name: Product metrics Slack report
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+      timezone: America/Los_Angeles
+  workflow_dispatch: {}
+
+concurrency:
+  group: product-metrics-slack-report
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: Capture and send dashboard
+    runs-on: ubuntu-latest
+    environment: boundary-tools-prod
+    timeout-minutes: 10
+    env:
+      PRODUCT_METRICS_DASHBOARD_URL: https://boundary-product-metrics.fly.dev/
+      SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
+      SLACK_CHANNEL_ID: C03KV1PJ6EM
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node2
+
+      - name: Install Chromium
+        run: pnpm --filter app-product-metrics exec playwright install --with-deps chromium
+        working-directory: typescript2
+
+      - name: Capture dashboard and send Slack report
+        env:
+          PRODUCT_METRICS_SCREENSHOT_PATH: ${{ runner.temp }}/product-metrics-dashboard.png
+        run: pnpm --filter app-product-metrics report:slack
+        working-directory: typescript2
+
+      - name: Upload screenshot when delivery fails
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: product-metrics-dashboard
+          path: ${{ runner.temp }}/product-metrics-dashboard.png
+          if-no-files-found: ignore
+          retention-days: 7

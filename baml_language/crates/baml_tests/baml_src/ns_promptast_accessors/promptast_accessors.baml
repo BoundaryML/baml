@@ -15,7 +15,7 @@
 // `Context` — the shared fixture every accessor test evaluates against.
 function paa_render_ast() -> ai.Prompt {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }
-    let ctx = ai.Context { client: cc, tags: {} }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) }
     let render = prompt`${role("system")}You are helpful.${role("user")}Hi World!`
     render(ctx)
 }
@@ -68,7 +68,7 @@ test "messages_expose_role_and_content" {
 // helper's declared return type type-checking.
 function paa_single_message_fn() -> ai.PromptMessage[] {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
-    let ctx = ai.Context { client: cc, tags: {} }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) }
     let render = prompt`Just a system prompt.`
     render(ctx).messages()
 }
@@ -86,7 +86,7 @@ test "messages_yields_promptmessage_instances" {
 // carried none must read as an empty map (never null).
 function pa_message_metadata_survives_assembly() -> string {
     let cc = ai.ContextClient { name: "c", provider: "anthropic", default_role: "user", allowed_roles: ["system", "user"] };
-    let ctx = ai.Context { client: cc, tags: {} };
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) };
     let cached = ai.Role { name: "system", metadata: { "cache_control": { "type": "ephemeral" } } };
     let render = prompt`${cached}Long shared preamble.${role("user")}Hi World!`;
     let out: string[] = [];
@@ -107,7 +107,7 @@ test "message_metadata_survives_prompt_assembly" {
 // structural part, interleaved with the surrounding text runs.
 function pa_message_parts_preserve_media() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] };
-    let ctx = ai.Context { client: cc, tags: {} };
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) };
     let img = image.from_url("https://example.com/photo.png", "image/png");
     let sound = audio.from_url("https://example.com/sound.mp3", "audio/mpeg");
     let movie = video.from_url("https://example.com/movie.mp4", "video/mp4");

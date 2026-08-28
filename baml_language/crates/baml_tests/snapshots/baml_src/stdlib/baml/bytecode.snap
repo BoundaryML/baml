@@ -6481,8 +6481,9 @@ function baml.time.<(baml.time.Instant as baml.ToJson)>.to_json(self: baml.time.
   L1:
     load_var _
     load_field .0
+    store_var_load_var message
     load_const ""
-    load_const null
+    load_var message
     init_instance baml.json.JsonSerializationError .message, .path, .reason
     throw
 
@@ -6596,8 +6597,9 @@ function baml.time.<(baml.time.PlainDate as baml.ToJson)>.to_json(self: baml.tim
   L1:
     load_var _
     load_field .0
+    store_var_load_var message
     load_const ""
-    load_const null
+    load_var message
     init_instance baml.json.JsonSerializationError .message, .path, .reason
     throw
 
@@ -6681,8 +6683,9 @@ function baml.time.<(baml.time.PlainDateTime as baml.ToJson)>.to_json(self: baml
   L1:
     load_var _
     load_field .0
+    store_var_load_var message
     load_const ""
-    load_const null
+    load_var message
     init_instance baml.json.JsonSerializationError .message, .path, .reason
     throw
 
@@ -6896,26 +6899,32 @@ function baml.time.<(baml.time.ZonedDateTime as baml.ToJson)>.to_json(self: baml
   L3:
     load_var _
     load_field .0
+    store_var_load_var message
     load_const ""
-    load_const null
+    load_var message
     init_instance baml.json.JsonSerializationError .message, .path, .reason
     throw
 
   L4:
-    load_const "unknown timezone: "
     load_var _
     load_field .0
+    store_var timezone
+    load_const "unknown timezone: "
+    load_var timezone
     bin_op +
     load_const ""
-    load_const null
+    load_const "unknown timezone: "
+    load_var timezone
+    bin_op +
     init_instance baml.json.JsonSerializationError .message, .path, .reason
     throw
 
   L5:
     load_var _
     load_field .0
+    store_var_load_var message
     load_const ""
-    load_const null
+    load_var message
     init_instance baml.json.JsonSerializationError .message, .path, .reason
     throw
 
