@@ -2639,9 +2639,12 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
     alloc_array 0
     load_type string
     alloc_array 0
-    load_const null
-    load_const null
-    load_const null
+    load_type int
+    alloc_array 0
+    load_type int
+    alloc_array 0
+    load_type int
+    alloc_array 0
     init_instance testing.LeafIdentities .passed, .failed, .tolerated, .passed_ms, .failed_ms, .tolerated_ms
     store_var identities
     jump L11

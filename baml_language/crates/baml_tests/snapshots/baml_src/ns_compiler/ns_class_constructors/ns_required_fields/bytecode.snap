@@ -1,0 +1,84 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function compiler.class_constructors.required_fields.$init_test_ns_compiler_ns_class_constructors_ns_required_fields_completeness(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.compiler.class_constructors.required_fields"
+    load_const "aggregates omitted fields in declaration order"
+    make_closure .<lambda($init_test_ns_compiler_ns_class_constructors_ns_required_fields_completeness, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.class_constructors.required_fields"
+    load_const "unknown requires a value but accepts explicit null"
+    make_closure .<lambda($init_test_ns_compiler_ns_class_constructors_ns_required_fields_completeness, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.class_constructors.required_fields"
+    load_const "an unresolved field type throws only its primary diagnostic"
+    make_closure .<lambda($init_test_ns_compiler_ns_class_constructors_ns_required_fields_completeness, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.class_constructors.required_fields"
+    load_const "an unresolved field type preserves genuine missing-field diagnostics"
+    make_closure .<lambda($init_test_ns_compiler_ns_class_constructors_ns_required_fields_completeness, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.class_constructors.required_fields"
+    load_const "generic substitution controls whether omission is allowed"
+    make_closure .<lambda($init_test_ns_compiler_ns_class_constructors_ns_required_fields_completeness, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.class_constructors.required_fields"
+    load_const "rigid generic parameters require explicit values"
+    make_closure .<lambda($init_test_ns_compiler_ns_class_constructors_ns_required_fields_completeness, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.class_constructors.required_fields"
+    load_const "alias resolution controls whether omission is allowed"
+    make_closure .<lambda($init_test_ns_compiler_ns_class_constructors_ns_required_fields_completeness, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.class_constructors.required_fields"
+    load_const "only unions admitting null may be omitted"
+    make_closure .<lambda($init_test_ns_compiler_ns_class_constructors_ns_required_fields_completeness, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.class_constructors.required_fields"
+    load_const "an exact class spread supplies omitted fields"
+    make_closure .<lambda($init_test_ns_compiler_ns_class_constructors_ns_required_fields_completeness, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.class_constructors.required_fields"
+    load_const "mounted classes use the same completeness rule"
+    make_closure .<lambda($init_test_ns_compiler_ns_class_constructors_ns_required_fields_completeness, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.class_constructors.required_fields"
+    load_const "multiple rejected constructors match multiple diagnostics"
+    make_closure .<lambda($init_test_ns_compiler_ns_class_constructors_ns_required_fields_completeness, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
