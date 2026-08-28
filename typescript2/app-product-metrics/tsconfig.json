@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"]
+  },
+  "extends": "../tsconfig.base.json",
+  "include": ["src/**/*.ts"]
+}
