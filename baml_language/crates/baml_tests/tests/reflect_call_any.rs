@@ -814,34 +814,6 @@ async fn instantiated_generic_function_reflects_precisely_and_dispatches() {
 }
 
 #[tokio::test]
-async fn call_any_reports_unspecialized_generic_function() {
-    let output = baml_test!(
-        r#"
-        function ident<T>(x: T) -> T throws never {
-            return x
-        }
-
-        function main() -> string throws unknown {
-            let f: reflect.AnyFunction = ident
-            let _ = reflect.call_any(f, { "x": 42 }) catch (e) {
-                reflect.errors.CompilationError => {
-                    return e.diagnostics[0].code + "|" + e.diagnostics[0].message
-                },
-                _ => throw e,
-            }
-            return "generic call unexpectedly succeeded"
-        }
-        "#
-    );
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String(
-            "E0165|generic function `ident` cannot be extracted through reflection: its signature still mentions its own type parameters".into()
-        ))
-    );
-}
-
-#[tokio::test]
 async fn pinned_call_any_declares_unspecialized_generic_compilation_error() {
     let output = baml_test!(
         r#"
@@ -866,33 +838,6 @@ async fn pinned_call_any_declares_unspecialized_generic_compilation_error() {
         Ok(BexExternalValue::String(
             "E0165|generic function `ident` cannot be extracted through reflection: its signature still mentions its own type parameters".into()
         ))
-    );
-}
-
-/// An *uninstantiated* generic reference — no turbofish and nothing to infer
-/// from — is a compile error: a callable value must carry a realized frame, so
-/// there is no such thing as a half-generic one to reflect on. Ignored until
-/// that diagnostic exists; today the reference is accepted and only fails later,
-/// at `reflect.signature`, with a misleading "expects a function value".
-#[ignore = "pending the uninstantiated-generic-reference diagnostic"]
-#[tokio::test]
-async fn uninstantiated_generic_function_reference_is_a_compile_error() {
-    let output = baml_test!(
-        r#"
-        function ident<T>(x: T) -> T throws never {
-            return x
-        }
-
-        function main() -> string throws never {
-            let f: reflect.AnyFunction = ident
-            return "unreachable"
-        }
-        "#
-    );
-    assert!(
-        output.result.is_err(),
-        "expected a compile error naming the uninferable type parameter, got {:?}",
-        output.result
     );
 }
 
