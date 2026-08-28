@@ -53,6 +53,6 @@ echo "setup_database: infisical linked (project $project, env $env); FEEDBACK_SU
 case "${1:-}" in
     --check) exit 0 ;;
     --)      shift; cd "$here" && exec "$@" ;;
-    "")      cd "$here" && exec baml test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::organize_issue::*" ;;
+    "")      cd "$here" && exec baml test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::difficulty_estimate::*" -i "root::organize_issue::*" ;;
     *)       die "unknown argument: $1 (use --check, or -- <cmd>)" ;;
 esac

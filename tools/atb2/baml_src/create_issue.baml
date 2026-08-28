@@ -374,6 +374,9 @@ function format_files(files: map<string, string>) -> string {
 //   issue_enrichment given feedback and the reference repro, does write_issue
 //                    produce the issue a maintainer wants? LLM-judged
 //                    similarity against the reference issue (>= 0.7).
+//   difficulty_estimate given the reference issue, does estimate_difficulty
+//                    land on the maintainer's difficulty? Exact match, one
+//                    test per issue.
 //
 // The dataset lives in Supabase (triage_issues / triage_feedback, see
 // eval/supabase/schema.sql): feedback is what agent sessions passed to
@@ -381,7 +384,7 @@ function format_files(files: map<string, string>) -> string {
 // (repro_source = github) and are LLM-authored otherwise (generated).
 // FEEDBACK_SUPABASE_URL + FEEDBACK_SUPABASE_KEY (anon, read-only) select it; without them the
 // testsets have no tests.
-//   baml test -i "root::repro_match::*" -i "root::issue_enrichment::*"
+//   baml test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::difficulty_estimate::*"
 
 /// The issue as the pipeline should write it: IssueDraft's shape with the
 /// full set of good repros, minimal first.
@@ -391,6 +394,8 @@ class ReferenceIssue {
     subsystem: Subsystem,
     resolution_plan: string?,
     repros: Repro[],
+    /// How much work the fix is, as a maintainer would gauge it.
+    difficulty: Difficulty,
 }
 
 /// A row of triage_issues.
@@ -602,6 +607,45 @@ testset "issue_enrichment" with testing.PassRate(0.8) {
                     },
                 );
                 assert.is_true(j.similarity >= 0.7);
+            }
+        }
+    };
+}
+
+/// The reference issue as an Issue, so pipeline stages can be run on it.
+function reference_as_issue(number: int, r: ReferenceIssue) -> Issue {
+    Issue {
+        id: "GH-" + number.to_string(),
+        title: r.title,
+        description: r.description,
+        shepherd: null,
+        subsystem: r.subsystem,
+        repros: r.repros,
+        version: "unknown",
+        feedback_ids: [],
+        status: Open { state: "open" },
+        comments: [],
+        resolution_plan: r.resolution_plan,
+        difficulty: null,
+    }
+}
+
+testset "difficulty_estimate" with testing.PassRate(0.8) {
+    if (supabase_configured()) {
+        let issues = load_issues();
+        for (let key in issues.keys()) {
+            test ("#" + key) {
+                let issue = issues.get(key) ?? baml.sys.panic("no triage_issues row for #" + key);
+                let estimate = estimate_difficulty(reference_as_issue(issue.number, issue.reference_issue));
+                log.info(
+                    {
+                        "issue": key,
+                        "expected": issue.reference_issue.difficulty.to_string(),
+                        "got": estimate.difficulty.to_string(),
+                        "rationale": estimate.rationale,
+                    },
+                );
+                assert.equal(estimate.difficulty, issue.reference_issue.difficulty);
             }
         }
     };
