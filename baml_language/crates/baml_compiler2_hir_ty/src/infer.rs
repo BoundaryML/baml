@@ -66,7 +66,7 @@ fn is_unit(ty: &Ty) -> bool {
 /// because it is not guaranteed to admit `null` for every instantiation.
 fn type_admits_null(ty: &Ty) -> bool {
     match ty.kind() {
-        TyKind::Null { .. } | TyKind::Unknown { .. } => true,
+        TyKind::Null { .. } => true,
         TyKind::Union(members, _) => members.iter().any(type_admits_null),
         _ => false,
     }

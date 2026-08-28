@@ -90,12 +90,24 @@ test "optional substituted generic omission is a valid control" {
     )
 }
 
-test "unknown field remains omittable because it admits null" {
+test "unknown field must be supplied explicitly" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
+            `
+                class Holder { value: unknown }
+                function run() -> string { baml.json.to_string(Holder {}) }
+            `,
+            ["class `Holder` is missing required field", "`value`"],
+        ),
+    )
+}
+
+test "unknown field accepts explicit null" {
     assert.equal(
         RunCompiledConstructor(
             `
                 class Holder { value: unknown }
-                function run() -> string { baml.json.to_string(Holder {}) }
+                function run() -> string { baml.json.to_string(Holder { value: null }) }
             `,
         ),
         "{\"value\":null}",
