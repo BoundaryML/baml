@@ -256,8 +256,8 @@ function pid() -> int throws never {
 ///
 /// Unix probes with `kill(pid, 0)`: `ESRCH` (no such process) reports
 /// `false`, while a live process — including one this process lacks
-/// permission to signal (`EPERM`) — reports `true`. Windows opens the
-/// process and reports `true` while its exit code is `STILL_ACTIVE`.
+/// permission to signal (`EPERM`) — reports `true`. Windows opens and polls
+/// the process handle; access denied also means the process exists.
 ///
 /// The result is a snapshot: the process may exit immediately after the
 /// probe, and a reaped-zombie PID may already read as dead.

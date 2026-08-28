@@ -6124,6 +6124,38 @@ function baml.spawn.options(group: baml.spawn.TaskGroup | null, cancel: baml.spa
     return
 }
 
+function baml.sys.Linux.Platform.unix(self: baml.sys.Linux) -> baml.sys.Unix | null {
+    load_var self
+    return
+}
+
+function baml.sys.Linux.Unix.signal_group(self: baml.sys.Linux, pgid: int, sig: baml.sys.Signal) -> null {
+}
+
+function baml.sys.Linux.Unix.terminate(self: baml.sys.Linux, pid: int) -> null {
+}
+
+function baml.sys.MacOs.Platform.unix(self: baml.sys.MacOs) -> baml.sys.Unix | null {
+    load_var self
+    return
+}
+
+function baml.sys.MacOs.Unix.signal_group(self: baml.sys.MacOs, pgid: int, sig: baml.sys.Signal) -> null {
+}
+
+function baml.sys.MacOs.Unix.terminate(self: baml.sys.MacOs, pid: int) -> null {
+}
+
+function baml.sys.Platform.unix(self: baml.sys.Platform) -> baml.sys.Unix | null {
+    load_const null
+    return
+}
+
+function baml.sys.Platform.windows(self: baml.sys.Platform) -> baml.sys.Windows | null {
+    load_const null
+    return
+}
+
 function baml.sys.Process.close(self: baml.sys.Process) -> null {
 }
 
@@ -6278,6 +6310,11 @@ function baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool {
     return
 }
 
+function baml.sys.Windows.Platform.windows(self: baml.sys.Windows) -> baml.sys.Windows | null {
+    load_var self
+    return
+}
+
 function baml.sys.WritePipe.close(self: baml.sys.WritePipe) -> void {
 }
 
@@ -6336,10 +6373,16 @@ function baml.sys.exec(program: string, args: string[] | null, options: baml.sys
 function baml.sys.exit(code: int) -> never {
 }
 
+function baml.sys.is_alive(pid: int) -> bool {
+}
+
 function baml.sys.panic(message: string) -> never {
 }
 
 function baml.sys.pid() -> int {
+}
+
+function baml.sys.platform() -> baml.sys.Platform {
 }
 
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions | null) -> baml.sys.ShellOutput {

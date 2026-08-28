@@ -676,7 +676,11 @@ async fn is_alive_and_terminate_by_pid() {
                 let process = baml.sys.start_process("sh", ["-c", "echo $$; exec sleep 30"], null);
                 defer { process.close() }
 
-                let pid = baml.json.from_string<int>(process.stdout.lines().next() ?? "0") catch_all (e) {
+                let pid_text = match (process.stdout.lines().next()) {
+                    let line: string => line,
+                    baml.iter.Done => "0",
+                };
+                let pid = baml.json.from_string<int>(pid_text) catch_all (e) {
                     _ => 0,
                 };
                 if (pid <= 0 || !baml.sys.is_alive(pid)) {
@@ -733,7 +737,11 @@ async fn is_alive_tracks_child_lifetime() {
                 );
                 defer { process.close() }
 
-                let pid = baml.json.from_string<int>(process.stdout.lines().next() ?? "0") catch_all (e) {
+                let pid_text = match (process.stdout.lines().next()) {
+                    let line: string => line,
+                    baml.iter.Done => "0",
+                };
+                let pid = baml.json.from_string<int>(pid_text) catch_all (e) {
                     _ => 0,
                 };
                 if (pid <= 0 || !baml.sys.is_alive(pid)) {
@@ -770,7 +778,11 @@ async fn signal_group_takes_down_process_group() {
                 );
                 defer { process.close() }
 
-                let pgid = baml.json.from_string<int>(process.stdout.lines().next() ?? "0") catch_all (e) {
+                let pgid_text = match (process.stdout.lines().next()) {
+                    let line: string => line,
+                    baml.iter.Done => "0",
+                };
+                let pgid = baml.json.from_string<int>(pgid_text) catch_all (e) {
                     _ => 0,
                 };
                 if (pgid <= 0 || !baml.sys.is_alive(pgid)) {

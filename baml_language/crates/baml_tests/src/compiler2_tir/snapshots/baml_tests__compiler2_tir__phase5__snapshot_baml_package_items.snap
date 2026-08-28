@@ -288,21 +288,30 @@ namespace baml.spawn:
   class TaskGroup { methods: [new, cancel, set_limit, limit, name, active_count, queued_count] }
   function options<T, E>
 namespace baml.sys:
+  class Browser { methods: [] }
+  class Linux { methods: [unix, terminate, signal_group] }
+  class MacOs { methods: [unix, terminate, signal_group] }
+  type Platform
   class Process { methods: [wait, kill, close] }
   class ProcessExit { methods: [ok] }
   class ProcessOptions { methods: [] }
   class ReadPipe { methods: [close, lines, read] }
   class ReadPipeLines { methods: [iter, next] }
   class ShellOutput { methods: [ok] }
+  enum Signal
   enum StderrMode
+  type Unix
+  class Windows { methods: [windows] }
   class WritePipe { methods: [close, write_some, flush] }
   function _strip_carriage_return
   function argv
   function collect_garbage
   function exec
   function exit
+  function is_alive
   function panic
   function pid
+  function platform
   function shell
   function sleep
   function start_process
