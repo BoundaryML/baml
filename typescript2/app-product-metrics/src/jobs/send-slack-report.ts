@@ -21,8 +21,11 @@ interface EmbeddedDashboardLayout {
 const primaryPanelTitles = [
   'CLI invocations — daily',
   'CLI weekly cohort retention',
-  'CLI new users — daily',
-  'CLI existing users — daily',
+  'CLI 7DAU — daily',
+  'CLI 30DAU — daily',
+  'CLI new users (7d period)',
+  'CLI retained users (7d period)',
+  'CLI resurrected users (7d period)',
 ];
 
 export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
