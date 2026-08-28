@@ -76,8 +76,12 @@ async function lumaEvents(): Promise<{
   do {
     const parameters = new URLSearchParams({
       access: 'manage',
-      after: new Date(windowStart.getTime() - 24 * 60 * 60 * 1000).toISOString(),
-      before: new Date(retrievedAt.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+      after: new Date(
+        windowStart.getTime() - 24 * 60 * 60 * 1000,
+      ).toISOString(),
+      before: new Date(
+        retrievedAt.getTime() + 24 * 60 * 60 * 1000,
+      ).toISOString(),
       pagination_limit: '100',
       sort_column: 'start_at',
       sort_direction: 'asc',
@@ -266,7 +270,10 @@ for (const event of luma.events) {
   const directory = `eap/${event.start_at.slice(0, 10)}-${event.id}`;
   instanceResponses.push({
     endpoint,
-    file: await jsonFile(`${directory}/meeting-${id}-instances.json`, instancesBody),
+    file: await jsonFile(
+      `${directory}/meeting-${id}-instances.json`,
+      instancesBody,
+    ),
     zoomMeetingId: id,
   });
   const eventTimestamp = new Date(event.start_at).getTime();
@@ -316,7 +323,10 @@ const manifest = {
   },
   zoom: {
     apiBase: zoomApiBase,
-    grantedScopes: String(tokenBody.scope ?? '').split(' ').filter(Boolean).sort(),
+    grantedScopes: String(tokenBody.scope ?? '')
+      .split(' ')
+      .filter(Boolean)
+      .sort(),
     sheepCouncilRecurringMeetingId: zoomMeetingIdSheepCouncil,
   },
 };
@@ -324,7 +334,8 @@ await jsonFile('manifest.json', manifest);
 console.log(
   JSON.stringify({
     captureCount: captures.length,
-    eapCaptureCount: captures.filter((capture) => capture.category === 'eap').length,
+    eapCaptureCount: captures.filter((capture) => capture.category === 'eap')
+      .length,
     outputRoot,
     retrievedAt: retrievedAt.toISOString(),
     sheepCouncilCaptureCount: captures.filter(

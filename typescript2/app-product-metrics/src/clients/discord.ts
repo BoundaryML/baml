@@ -71,7 +71,10 @@ async function loadGuildMemberCounts(
     totalMemberCount += members.length;
     for (const member of members) {
       const roles = member.roles;
-      if (!Array.isArray(roles) || !roles.every((role) => typeof role === 'string')) {
+      if (
+        !Array.isArray(roles) ||
+        !roles.every((role) => typeof role === 'string')
+      ) {
         throw new Error('Discord returned invalid guild member roles');
       }
       if (roles.includes(config.sheepCouncilRoleId)) {
@@ -115,7 +118,9 @@ export async function loadDiscordCommunityMetrics(
   }
   const guildId = stringField(guild, 'id');
   if (guildId !== config.guildId) {
-    throw new Error(`Discord invite resolved to unexpected guild ID: ${guildId}`);
+    throw new Error(
+      `Discord invite resolved to unexpected guild ID: ${guildId}`,
+    );
   }
   const memberCounts = await loadGuildMemberCounts(config, fetchImpl);
   return {

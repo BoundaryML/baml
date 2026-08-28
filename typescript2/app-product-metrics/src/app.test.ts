@@ -57,7 +57,10 @@ test('renders weekly database metrics in the four requested Plotly panels', () =
   assert.match(html, /"y":\[null\]/);
   assert.equal((html.match(/<iframe/g) ?? []).length, 2);
   assert.match(html, /<iframe[^>]*title="PLG CLI Metrics"[^>]*height="1450"/);
-  assert.match(html, /<iframe[^>]*title="PLG Website Metrics"[^>]*height="720"/);
+  assert.match(
+    html,
+    /<iframe[^>]*title="PLG Website Metrics"[^>]*height="720"/,
+  );
   assert.equal(
     (
       html.match(
@@ -88,5 +91,11 @@ test('renders only the four most recent weeks in chronological order', () => {
     'Aug 31 - Sep 7',
   ];
   for (const label of labels) assert.match(html, new RegExp(label));
-  assert.ok(labels.every((label, index) => index === 0 || html.indexOf(labels[index - 1] ?? '') < html.indexOf(label)));
+  assert.ok(
+    labels.every(
+      (label, index) =>
+        index === 0 ||
+        html.indexOf(labels[index - 1] ?? '') < html.indexOf(label),
+    ),
+  );
 });

@@ -1,4 +1,4 @@
-import { runHogQl, type PostHogConfig } from '../src/clients/posthog.js';
+import { type PostHogConfig, runHogQl } from '../src/clients/posthog.js';
 import { database, disconnectDatabase } from '../src/database.js';
 import type { PrismaClient } from '../src/generated/prisma/client.js';
 import { PlgWeeklyMetricRawType } from '../src/generated/prisma/enums.js';
@@ -24,9 +24,7 @@ function required(name: string): string {
 
 const posthogConfig: PostHogConfig = {
   host: process.env.POSTHOG_HOST ?? 'https://us.posthog.com',
-  personalApiKey: required(
-    'POSTHOG_BOUNDARY_PRODUCT_METRICS_PERSONAL_API_KEY',
-  ),
+  personalApiKey: required('POSTHOG_BOUNDARY_PRODUCT_METRICS_PERSONAL_API_KEY'),
   projectId: required('POSTHOG_BOUNDARY_PRODUCT_METRICS_PROJECT_ID'),
 };
 

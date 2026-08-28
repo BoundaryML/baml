@@ -42,7 +42,10 @@ function jsonForInlineScript(value: unknown): string {
 
 export function renderDashboard(rows: WeeklyMetricChartRow[]): string {
   const recentRows = [...rows]
-    .sort((left, right) => left.weekStartDate.getTime() - right.weekStartDate.getTime())
+    .sort(
+      (left, right) =>
+        left.weekStartDate.getTime() - right.weekStartDate.getTime(),
+    )
     .slice(-4);
   const weeks = recentRows.map((row) => weekRangeLabel(row.weekStartDate));
   const panels: ChartPanel[] = [

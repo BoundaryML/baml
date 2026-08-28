@@ -27,7 +27,11 @@ function issueCreatedAt(issue: Record<string, unknown>): string {
 
 function issueAuthorId(issue: Record<string, unknown>): string | undefined {
   if (issue.user === null) return undefined;
-  if (!issue.user || typeof issue.user !== 'object' || Array.isArray(issue.user)) {
+  if (
+    !issue.user ||
+    typeof issue.user !== 'object' ||
+    Array.isArray(issue.user)
+  ) {
     throw new Error('GitHub returned an issue with an invalid user');
   }
   const id = (issue.user as Record<string, unknown>).id;
@@ -57,9 +61,7 @@ export async function loadDistinctGithubIssueAuthors(
       {
         headers: {
           Accept: 'application/vnd.github+json',
-          ...(config.token
-            ? { Authorization: `Bearer ${config.token}` }
-            : {}),
+          ...(config.token ? { Authorization: `Bearer ${config.token}` } : {}),
           'User-Agent': 'Boundary product metrics',
           'X-GitHub-Api-Version': '2022-11-28',
         },

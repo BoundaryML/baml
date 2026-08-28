@@ -26,9 +26,7 @@ import {
   recentClosedWeeks,
   type WeeklyCliMetrics,
 } from './report.js';
-import {
-  currentWeeklySnapshotPeriod,
-} from './snapshot.js';
+import { currentWeeklySnapshotPeriod } from './snapshot.js';
 
 const port = Number(process.env.PORT ?? '3000');
 const botToken = process.env.SLACK_BOUNDARY_BOT_TOKEN ?? '';
