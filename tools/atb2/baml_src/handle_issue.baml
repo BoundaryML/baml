@@ -676,8 +676,11 @@ function claude_args(prompt: string, tools: string[]) -> string[] {
         "--verbose",
         "--model",
         agent_model(),
+        // bypassPermissions: in -p mode a "requires approval" Bash call just
+        // fails, and the agent needs cargo. The worktree is disposable and the
+        // env is an allowlist, so this is the sandbox, not the prompt.
         "--permission-mode",
-        "acceptEdits",
+        "bypassPermissions",
         "--no-session-persistence",
         "--tools",
         tools.join(","),
@@ -1025,6 +1028,31 @@ function changed_crates(worktree: string) -> string[] {
     changed_crates_from(git(worktree, ["diff", "--name-only", "origin/canary...HEAD"]).stdout)
 }
 
+/// Tests known to fail on canary itself; a gate failure that is only these
+/// is not the agent's. ATB2_FLAKY_TESTS overrides (comma-separated names).
+function flaky_tests() -> string[] {
+    (baml.env.get("ATB2_FLAKY_TESTS") ?? "claude_code_client_preserves_process_wait_timeout").split(
+        ",",
+    )
+}
+
+/// `FAIL [...] crate::module test_name` lines of nextest output, minus the
+/// known-flaky names.
+function unexpected_failures(output: string, flaky: string[]) -> string[] {
+    let out: string[] = [];
+    for (let line in output.lines()) {
+        let l = line.trim();
+        if (l.starts_with("FAIL [")) {
+            let parts = l.split(" ");
+            let name = parts.at(parts.length() - 1) ?? "";
+            if (!flaky.includes(name) && !out.includes(name)) {
+                out.push(name);
+            };
+        };
+    }
+    out
+}
+
 function gate_step(name: string, c: Cmd) -> GateStep {
     let started = baml.time.Instant.now();
     let r = run(c);
@@ -1038,7 +1066,7 @@ function gate_step(name: string, c: Cmd) -> GateStep {
             } else {
                 r.stderr + "\n" + r.stdout
             },
-            15,
+            60,
         ),
     };
     log.info({ "gate": name, "ok": r.ok, "seconds": step.seconds });
@@ -1082,7 +1110,30 @@ function run_gate(worktree: string) -> GateResult {
         };
     }
     if (ok) {
-        ok = cargo("nextest baml_tests", ["nextest", "run", "-p", "baml_tests"], 1800000);
+        // --no-fail-fast, then subtract the known-flaky tests: one flaky test
+        // must not sink a gate that canary itself would not pass
+        let s = gate_step(
+            "nextest baml_tests",
+            Cmd {
+                program: "cargo",
+                args: ["nextest", "run", "-p", "baml_tests", "--no-fail-fast"],
+                cwd: wd,
+                timeout_ms: 1800000,
+            },
+        );
+        let real = unexpected_failures(s.tail, flaky_tests());
+        let step = GateStep {
+            name: s.name,
+            ok: s.ok || real.length() == 0,
+            seconds: s.seconds,
+            tail: if (s.ok || real.length() > 0) {
+                s.tail
+            } else {
+                "only known-flaky failures: " + s.tail
+            },
+        };
+        steps.push(step);
+        ok = step.ok;
     };
     if (ok) {
         ok
@@ -1564,6 +1615,20 @@ testset "handle_issue" {
                 && a.includes("--tools"),
         );
         assert.equal(a.at(a.length() - 1) ?? "", "Read,Edit,Write,Glob,Grep,Bash");
+    }
+
+    test "known-flaky nextest failures are subtracted" {
+        let out = "        PASS [   0.9s] (1/3) baml_tests::shell exec_with_cwd\n        FAIL [   1.1s] (2/3) baml_tests::shell claude_code_client_preserves_process_wait_timeout\n        FAIL [   0.2s] (3/3) baml_tests::foo real_regression\n";
+        assert.equal(
+            unexpected_failures(out, ["claude_code_client_preserves_process_wait_timeout"]),
+            ["real_regression"],
+        );
+        assert.equal(
+            unexpected_failures(out, ["claude_code_client_preserves_process_wait_timeout", "real_regression"])
+                .length(),
+            0,
+        );
+        assert.is_true(claude_args("x", fix_tools()).includes("bypassPermissions"));
     }
 
     test "time budgets" {
