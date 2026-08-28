@@ -34,136 +34,82 @@ function handle_issue(
     mode: HandleMode = HandleMode.Live,
     update: bool = false,
 ) -> Issue {
+    //# skip: not ready (not gauged / not open / already handled)
     let skip = handle_ready(issue, update);
     if (skip != null) {
         log.info({ "issue": issue.id, "skipped": skip });
         return issue;
     };
     let difficulty = issue.difficulty ?? baml.sys.panic("handle_issue: gauge_issue first (" + issue.id + ")");
-    //# still broken? 
+    //# is it still broken on canary HEAD?
+    // canary is fetched and its baml-cli rebuilt (seconds when warm) so the
+    // repros are checked against what a PR would actually land on
+    ensure_cache();
+    build_canary_cli();
     if (!still_broken(issue)) {
-        log.info({ "issue": issue.id, "kind": "already_fixed", "toolchain": toolchain_version() });
+        //## already fixed: nothing to do
+        log.info({ "issue": issue.id, "kind": "already_fixed", "checked_with": check_cli() });
         return issue;
     };
-    //# ensure cache
-    ensure_cache();
-    //# create sandbox
+    //# open a worktree on a fresh branch
     let sb = open_sandbox(issue, update);
     let keep_branch = false;
     defer {
-        //#close sandvix
+        //## always: tear the sandbox down
         close_sandbox(sb, keep_branch);
     }
-    //# get budget
-    let budget = time_budget_s(difficulty);
     let started = baml.time.Instant.now();
-    //#if the difficulty is hard
-    if (difficulty == Difficulty.Hard) {
-        //# run agent design
-        let d = run_agent_design(sb, issue, budget);
-        if (d == null) {
-            //# if the design is null, write the stopped outcome
-            write_outcome(sb, stopped_outcome(sb, started));
-            return issue;
-        };
-        //# render the design doc
-        let doc = render_design_doc(d ?? baml.sys.panic("unreachable"));
-        //# write final outcome
-        write_outcome(
-            sb,
-            HandleOutcome {
-                kind: "hard",
-                branch: sb.branch,
-                pr: null,
-                turns: read_turns(sb),
-                seconds: elapsed_s(started),
-                timed_out: false,
-                gate: null,
-                report: null,
-                design_doc: doc,
-            },
-        );
-        return with_design_doc(issue, doc);
-    };
-    //#if the difficulty is easy or medium
-    //# get the latest warm build
-    warm_build(sb);
-    //# run the agent fix
-    let report = run_agent_fix(sb, issue, budget);
-    if (report == null) {
-        keep_branch = mode == HandleMode.Live;
+    //# design pass: investigate, propose the fix, write the plan (read-only)
+    let design = run_agent_design(sb, issue, design_budget_s(difficulty));
+    if (design == null) {
+        //## stop: the design agent produced nothing
         write_outcome(sb, stopped_outcome(sb, started));
         return issue;
     };
-    //# if the report is null, write the stopped outcome
-    let fix = report ?? baml.sys.panic("unreachable");
-    //# checkpoint the uncommitted changes
-    checkpoint_uncommitted(sb);
-    //# run the gate
-    let gate = run_gate(sb.worktree);
-    //# read the turns
-    let turns = read_turns(sb);
-    //# get the seconds
-    let seconds = elapsed_s(started);
-    //# if the gate failed, write the gate failed outcome
-    if (!gate.ok) {
-        keep_branch = mode == HandleMode.Live;
-        write_outcome(
-            sb,
-            HandleOutcome {
-                kind: "gate_failed",
-                branch: sb.branch,
-                pr: null,
-                turns: turns,
-                seconds: seconds,
-                timed_out: false,
-                gate: gate,
-                report: fix,
-                design_doc: null,
-            },
-        );
-        return issue;
+    let doc = render_design_doc(design ?? baml.sys.panic("unreachable"));
+    baml.fs.write(sb.run_dir + "/design.md", doc);
+    if (difficulty == Difficulty.Hard) {
+        //## hard: hand the design doc to the shepherd, no code change
+        write_outcome(sb, outcome(sb, "hard", null, started, null, null, doc));
+        return with_design_doc(issue, doc);
     };
-    //# create the draft PR
-    let draft = PrDraft { title: pr_title(issue), body: pr_body(issue, fix, gate, turns, seconds) };
+    //# fix pass: implement the plan, encode the repros as tests
+    warm_build(sb);
+    let report = run_agent_fix(sb, issue, doc, time_budget_s(difficulty));
+    if (report == null) {
+        //## stop: the fix agent ran out of budget or reported nothing
+        keep_branch = mode == HandleMode.Live;
+        write_outcome(sb, stopped_outcome(sb, started));
+        return with_design_doc(issue, doc);
+    };
+    let fix = report ?? baml.sys.panic("unreachable");
+    //# re-run the gate ourselves (the agent's own claim is never trusted)
+    checkpoint_uncommitted(sb);
+    let gate = run_gate(sb.worktree);
+    if (!gate.ok) {
+        //## stop: gate failed — branch kept for a human in Live mode
+        keep_branch = mode == HandleMode.Live;
+        write_outcome(sb, outcome(sb, "gate_failed", null, started, gate, fix, doc));
+        return with_design_doc(issue, doc);
+    };
+    //# write the PR body
+    let draft = PrDraft {
+        title: pr_title(issue),
+        body: pr_body(issue, fix, gate, read_turns(sb), elapsed_s(started)),
+    };
     baml.fs.write(sb.run_dir + "/pr_body.md", draft.body);
     if (mode == HandleMode.DryRun) {
-        write_outcome(
-            sb,
-            HandleOutcome {
-                kind: "fixed",
-                branch: sb.branch,
-                pr: null,
-                turns: turns,
-                seconds: seconds,
-                timed_out: false,
-                gate: gate,
-                report: fix,
-                design_doc: null,
-            },
-        );
-        return issue;
+        //## dry run: stop before the push (what the evals run)
+        write_outcome(sb, outcome(sb, "fixed", null, started, gate, fix, doc));
+        return with_design_doc(issue, doc);
     };
-    //# push and open the PR
+    //# push the branch and open the draft PR
     let pr = push_and_open_pr(sb, draft);
-    //# write the final outcome
-    write_outcome(
-        sb,
-        HandleOutcome {
-            kind: "fixed",
-            branch: sb.branch,
-            pr: pr,
-            turns: turns,
-            seconds: seconds,
-            timed_out: false,
-            gate: gate,
-            report: fix,
-            design_doc: null,
-        },
+    write_outcome(sb, outcome(sb, "fixed", pr, started, gate, fix, doc));
+    log.info(
+        { "issue": issue.id, "pr": pr, "turns": read_turns(sb), "seconds": elapsed_s(started) },
     );
-    log.info({ "issue": issue.id, "pr": pr, "turns": turns, "seconds": seconds });
-    //# with the status
-    with_status(issue, InProgress { state: "in_progress", pr: pr })
+    with_status(with_design_doc(issue, doc), InProgress { state: "in_progress", pr: pr })
 }
 
 /// Why the stage would not run on this issue; null means go.
@@ -219,6 +165,7 @@ function check_cli() -> string {
 
 /// Write the repro to a scratch project and run it with check_cli().
 function check_on_canary(r: Repro, n: int) -> Verdict {
+    //# write the repro to a scratch project
     let dir = atb2_home() + "/repro-check/" + baml.id.new();
     baml.fs.mkdir(dir + "/baml_src", baml.fs.MkdirOptions { recursive: true });
     defer {
@@ -246,6 +193,7 @@ function check_on_canary(r: Repro, n: int) -> Verdict {
     if (v != null) {
         env.set("BAML_VERSION", v ?? "");
     };
+    //# run it with canary's baml-cli (check, or run for should_evaluate_to)
     let evaluate = match (r.expectation) {
         let e: ShouldEvaluateTo => true,
         _ => false,
@@ -256,6 +204,7 @@ function check_on_canary(r: Repro, n: int) -> Verdict {
         ["check"]
     };
     let out = run_with(Cmd { program: check_cli(), args: args, cwd: dir, timeout_ms: 180000 }, env);
+    //# map exit code + diagnostics to a verdict
     let verdict = verdict_from_check(r.expectation, out.exit_code, out.stdout, out.stderr);
     log.info(
         {
@@ -389,8 +338,16 @@ function repo_slug() -> string {
     baml.env.get("ATB2_REPO") ?? "BoundaryML/baml"
 }
 
-/// Seconds the agent gets. Also the process timeout: the CLI is killed at
-/// the budget, which is what "did not finish in budget" means in the eval.
+/// Seconds the design pass gets (read-only investigation + plan).
+function design_budget_s(d: Difficulty) -> int {
+    match (d) {
+        Difficulty.Hard => 1800,
+        _ => 900,
+    }
+}
+
+/// Seconds the fix agent gets. Also the process timeout: the CLI is killed
+/// at the budget, which is what "did not finish in budget" means in the eval.
 function time_budget_s(d: Difficulty) -> int {
     match (d) {
         Difficulty.Trivial => 1800,
@@ -624,6 +581,7 @@ function ensure_cache() -> null {
         //# config the git extensions
         git(repo, ["config", "extensions.worktreeConfig", "true"]);
     };
+    //# fetch canary (retried: parallel tests share the cache)
     let tries = 0;
     //# while the tries are less than 3
     while (tries < 3) {
@@ -632,6 +590,9 @@ function ensure_cache() -> null {
         let f = git(repo, ["fetch", "--prune", "origin", "canary"]);
         //# if the fetch is ok, return null
         if (f.ok) {
+            //## the cache checkout tracks canary HEAD, so build_canary_cli builds it
+            git(repo, ["checkout", "-q", "canary"]);
+            git(repo, ["reset", "-q", "--hard", "origin/canary"]);
             return null;
         };
         //# sleep for 5 seconds
@@ -715,6 +676,7 @@ function open_sandbox(issue: Issue, update: bool) -> Sandbox {
 /// branch unless kept for a human), then checks the cache is untouched.
 function close_sandbox(sb: Sandbox, keep_branch: bool) -> null {
     let repo = cache_repo();
+    //# remove the worktree
     let removed = git(repo, ["worktree", "remove", "--force", sb.worktree]);
     git(repo, ["worktree", "prune"]);
     if (baml.fs.exists(sb.worktree)) {
@@ -731,14 +693,17 @@ function close_sandbox(sb: Sandbox, keep_branch: bool) -> null {
             );
         };
     };
+    //# delete the local branch unless a human should pick it up
     if (!keep_branch) {
         git(repo, ["branch", "-D", sb.branch]);
     };
+    //# keep the run dir as the audit trail (ATB2_KEEP_RUNS=0 deletes it)
     if ((baml.env.get("ATB2_KEEP_RUNS") ?? "1") == "0") {
         baml.fs.remove_dir_all(sb.run_dir) catch (_) {
             _ => null,
         };
     };
+    //# verify the cache repo is untouched
     if (!cache_is_clean(sb)) {
         log.warn(
             { "sandbox": sb.worktree, "warning": "cache repo is not clean after close_sandbox" },
@@ -751,6 +716,29 @@ function cache_is_clean(sb: Sandbox) -> bool {
     let status = git(cache_repo(), ["status", "--porcelain"]);
     let list = git(cache_repo(), ["worktree", "list", "--porcelain"]);
     status.ok && status.stdout.trim().length() == 0 && !list.stdout.includes(sb.worktree)
+}
+
+/// canary's own baml-cli, rebuilt from the cache checkout after each fetch,
+/// so the repro pre-check and the gate both speak for canary HEAD. Seconds
+/// when the shared target is warm.
+function build_canary_cli() -> null {
+    let b = run(
+        Cmd {
+            program: "cargo",
+            args: ["build", "-p", "baml_cli", "--bin", "baml-cli"],
+            cwd: cache_repo() + "/baml_language",
+            timeout_ms: 2400000,
+        },
+    );
+    if (!b.ok) {
+        log.warn(
+            {
+                "build_canary_cli": "failed; the repro check falls back to the installed toolchain",
+                "tail": tail(b.stderr, 3),
+            },
+        );
+    };
+    null
 }
 
 /// A first `cargo build` on a cold target dir costs 10-30 minutes; do it
@@ -829,6 +817,7 @@ function run_claude(
     timeout_s: int,
     transcript_path: string,
 ) -> AgentRun {
+    //# the CLI writes its stream straight to the transcript file
     // The CLI writes its stream straight to the transcript file, so the
     // record survives when the process is killed at the budget (exec
     // returns nothing on a timeout).
@@ -845,6 +834,7 @@ function run_claude(
         },
         env,
     );
+    //# read the result event back: reply text + turn count
     let transcript = if (baml.fs.exists(transcript_path)) {
         baml.fs.read(transcript_path)
     } else {
@@ -899,12 +889,16 @@ function parse_stream(transcript: string) -> AgentRun {
     }
 }
 
+/// Turns across both passes (design.jsonl + fix.jsonl).
 function read_turns(sb: Sandbox) -> int {
-    let path = sb.run_dir + "/transcript.jsonl";
-    if (!baml.fs.exists(path)) {
-        return 0;
-    };
-    parse_stream(baml.fs.read(path)).num_turns
+    let total = 0;
+    for (let name in ["design.jsonl", "fix.jsonl"]) {
+        let path = sb.run_dir + "/" + name;
+        if (baml.fs.exists(path)) {
+            total += parse_stream(baml.fs.read(path)).num_turns;
+        };
+    }
+    total
 }
 
 function elapsed_s(started: baml.time.Instant) -> int {
@@ -977,12 +971,19 @@ class FixReport {
     blockers: string?,
 }
 
-function implement_fix(issue: Issue, branch: string, test_route: string) -> FixReport {
+function implement_fix(
+    issue: Issue,
+    branch: string,
+    test_route: string,
+    plan: string,
+) -> FixReport {
     client: Handle
     prompt: `
         ${sandbox_rules(branch)}
 
-        Fix this issue in the BAML toolchain.
+        Fix this issue in the BAML toolchain. A read-only design pass has already investigated
+        it and written the plan below; follow the plan unless the code proves it wrong, and if
+        you deviate, say so in \`summary\`.
 
         Title: ${issue.title}
         Subsystem: ${issue.subsystem.to_string()}
@@ -994,6 +995,9 @@ function implement_fix(issue: Issue, branch: string, test_route: string) -> FixR
 
         Repros (${issue.repros.length().to_string()}):
         ${issue.repros.map((r: Repro) -> string { format_repro(r) }).join("\n\n")}
+
+        The plan from the design pass:
+        ${plan}
 
         How to work:
         1. Reproduce FIRST. Turn every repro above into a test before touching the fix, placed
@@ -1058,9 +1062,11 @@ function test_route(issue: Issue) -> string {
     routes.join("; and ")
 }
 
-function run_agent_fix(sb: Sandbox, issue: Issue, timeout_s: int) -> FixReport? {
-    let prompt = implement_fix$render_prompt(issue, sb.branch, test_route(issue)).text();
-    let session = run_claude(sb.worktree, prompt, fix_tools(), timeout_s, sb.run_dir + "/transcript.jsonl");
+function run_agent_fix(sb: Sandbox, issue: Issue, plan: string, timeout_s: int) -> FixReport? {
+    //# render the prompt: rules + ticket + repros + the design pass's plan
+    let prompt = implement_fix$render_prompt(issue, sb.branch, test_route(issue), plan).text();
+    //# one Claude Code session with its own tools, killed at the budget
+    let session = run_claude(sb.worktree, prompt, fix_tools(), timeout_s, sb.run_dir + "/fix.jsonl");
     if (session.timed_out || session.exit_code != 0 || session.text.length() == 0) {
         log.warn(
             {
@@ -1100,9 +1106,11 @@ function write_design_doc(issue: Issue, branch: string) -> DesignDoc {
         ${sandbox_rules(branch)}
         This is a READ-ONLY investigation: do not change any file.
 
-        This issue was rated Hard — design work, a cross-subsystem change, or an unknown root cause.
-        Investigate the repository and write the suggested fix and design doc a maintainer would
-        hand to an engineer (or their agent). Cite file paths and line ranges you actually read.
+        Investigate the repository and write the suggested fix and the plan a maintainer would
+        hand to an engineer (or their agent): where the defect lives, what to change, which tests
+        to add and where. Cite file paths and line ranges you actually read. If the issue turns
+        out to be already fixed on this branch, say so plainly and make the plan "add the missing
+        regression test".
 
         Title: ${issue.title}
         Subsystem: ${issue.subsystem.to_string()}
@@ -1128,8 +1136,10 @@ function render_design_doc(d: DesignDoc) -> string {
 }
 
 function run_agent_design(sb: Sandbox, issue: Issue, timeout_s: int) -> DesignDoc? {
+    //# render the prompt: rules + ticket + repros, read-only
     let prompt = write_design_doc$render_prompt(issue, sb.branch).text();
-    let session = run_claude(sb.worktree, prompt, design_tools(), timeout_s, sb.run_dir + "/transcript.jsonl");
+    //# one Claude Code session, read-only tools, killed at the budget
+    let session = run_claude(sb.worktree, prompt, design_tools(), timeout_s, sb.run_dir + "/design.jsonl");
     if (session.timed_out || session.exit_code != 0 || session.text.length() == 0) {
         log.warn(
             {
@@ -1242,6 +1252,7 @@ function gate_step(name: string, c: Cmd) -> GateStep {
 
 function run_gate(worktree: string) -> GateResult {
     let wd = worktree + "/baml_language";
+    //# which crates did the agent touch?
     let crates = changed_crates(worktree);
     let steps: GateStep[] = [];
     let cargo = (name: string, args: string[], timeout_ms: int) -> bool {
@@ -1249,6 +1260,7 @@ function run_gate(worktree: string) -> GateResult {
         steps.push(s);
         s.ok
     };
+    //# fmt
     let ok = cargo(
         "fmt",
         [
@@ -1271,12 +1283,14 @@ function run_gate(worktree: string) -> GateResult {
                 2400000,
             );
     };
+    //# unit tests of each changed crate
     for (let crate in crates) {
         if (ok && crate != "baml_tests") {
             ok = cargo("cargo test --lib -p " + crate, ["test", "--lib", "-p", crate], 1800000);
         };
     }
     if (ok) {
+        //## nextest on baml_tests (known-flaky failures subtracted)
         // --no-fail-fast, then subtract the known-flaky tests: one flaky test
         // must not sink a gate that canary itself would not pass
         let s = gate_step(
@@ -1303,6 +1317,7 @@ function run_gate(worktree: string) -> GateResult {
         ok = step.ok;
     };
     if (ok) {
+        //## insta: snapshots must be settled
         // insta re-runs the crate to refresh snapshots; test verdicts were
         // already taken by the nextest step above, so this step gates on
         // snapshot state only (the tree-clean check below catches churn)
@@ -1322,6 +1337,7 @@ function run_gate(worktree: string) -> GateResult {
         ok = snapshots_settled;
     };
     if (ok) {
+        //## the tree must be clean after --accept
         // --accept must not have produced unreviewed snapshot churn
         let status = git(worktree, ["status", "--porcelain"]);
         let clean = status.stdout.trim().length() == 0;
@@ -1331,6 +1347,7 @@ function run_gate(worktree: string) -> GateResult {
         ok = clean;
     };
     if (ok) {
+        //## build baml-cli and run the BAML corpus with it
         ok = cargo("build baml-cli", ["build", "-p", "baml_cli", "--bin", "baml-cli"], 1200000);
     };
     if (ok) {
@@ -1497,6 +1514,7 @@ function passed_count(output: string) -> string? {
 /// Live only. Lifts the worktree's push guard, pushes, and opens a draft
 /// PR — or updates the existing PR for the branch.
 function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
+    //# lift the push guard and push the branch
     let env = sandbox_env(true);
     // pushurl is multi-valued, so it cannot be overridden with -c; the
     // no_push guard is removed here, and only here, for this one push
@@ -1513,6 +1531,7 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
     if (!push.ok) {
         baml.sys.panic("push failed: " + tail(push.stderr, 5));
     };
+    //# update the existing PR for this branch, if there is one
     let body_path = sb.run_dir + "/pr_body.md";
     let existing = run_with(
         Cmd {
@@ -1545,6 +1564,7 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
         );
         return existing.stdout.trim();
     };
+    //# otherwise open a draft PR
     let created = run_with(
         Cmd {
             program: "gh",
@@ -1588,15 +1608,43 @@ class HandleOutcome {
     design_doc: string?,
 }
 
+function outcome(
+    sb: Sandbox,
+    kind: "fixed" | "hard" | "gate_failed" | "agent_stopped",
+    pr: string?,
+    started: baml.time.Instant,
+    gate: GateResult?,
+    report: FixReport?,
+    doc: string?,
+) -> HandleOutcome {
+    HandleOutcome {
+        kind: kind,
+        branch: sb.branch,
+        pr: pr,
+        turns: read_turns(sb),
+        seconds: elapsed_s(started),
+        timed_out: false,
+        gate: gate,
+        report: report,
+        design_doc: doc,
+    }
+}
+
+/// An agent pass ended without a result: budget exhausted (no `result`
+/// event in its transcript) or an unparseable reply.
 function stopped_outcome(sb: Sandbox, started: baml.time.Instant) -> HandleOutcome {
-    let path = sb.run_dir + "/transcript.jsonl";
+    let last = if (baml.fs.exists(sb.run_dir + "/fix.jsonl")) {
+        sb.run_dir + "/fix.jsonl"
+    } else {
+        sb.run_dir + "/design.jsonl"
+    };
     HandleOutcome {
         kind: "agent_stopped",
         branch: sb.branch,
         pr: null,
         turns: read_turns(sb),
         seconds: elapsed_s(started),
-        timed_out: baml.fs.exists(path) && !baml.fs.read(path).includes("\"type\":\"result\""),
+        timed_out: baml.fs.exists(last) && !baml.fs.read(last).includes("\"type\":\"result\""),
         gate: null,
         report: null,
         design_doc: null,
