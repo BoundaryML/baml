@@ -31,8 +31,7 @@ function default_shepherds() -> string[] {
 /// GitHub logins of the engineers who own a subsystem, most active first,
 /// then the defaults.
 function shepherds_for(subsystem: Subsystem) -> string[] {
-    // annotated: an empty-array arm next to string[] arms crashes the 0.17.0
-    // checker when the binding's type is inferred (#4468-style ICE)
+    //# ranked owners per subsystem (from merged PRs)
     let owners: string[] = match (subsystem) {
         Subsystem.Syntax => ["aaronvg", "codeshaunted", "2kai2kai2"],
         Subsystem.Compiler => ["codeshaunted", "antoniosarosi", "2kai2kai2"],
@@ -41,6 +40,7 @@ function shepherds_for(subsystem: Subsystem) -> string[] {
         Subsystem.Tooling => ["sxlijin", "codeshaunted", "2kai2kai2"],
         Subsystem.Unknown => [],
     };
+    //# the founders close every list
     owners.concat(default_shepherds())
 }
 
@@ -52,9 +52,11 @@ function shepherd_for(subsystem: Subsystem) -> string {
 /// Route an issue to the shepherd of its subsystem. Idempotent: an issue
 /// that already has a shepherd keeps it.
 function organize_issue(issue: Issue) -> Issue {
+    //# keep an existing shepherd
     if (issue.shepherd != null) {
         return issue;
     };
+    //# route by subsystem to the most active owner
     let shepherd = shepherd_for(issue.subsystem);
     log.info({ "issue": issue.id, "subsystem": issue.subsystem.to_string(), "shepherd": shepherd });
     Issue {
