@@ -43,6 +43,13 @@ const nativePanelTitles = [
 
 const dashboardSettleTimeMs = 20_000;
 
+export function dashboardReportText(
+  dashboardUrl: string,
+  date: string,
+): string {
+  return `<${new URL(dashboardUrl).href}|Product metrics dashboard> · ${date}`;
+}
+
 export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -210,6 +217,6 @@ export async function sendSlackDashboardReport(
       filename: `product-metrics-dashboard-${date}.png`,
       title: `Product metrics dashboard · ${date}`,
     },
-    text: `Product metrics dashboard · ${date}`,
+    text: dashboardReportText(config.dashboardUrl, date),
   });
 }
