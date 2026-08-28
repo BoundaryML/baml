@@ -172,16 +172,62 @@ function handle_ready(issue: Issue, update: bool) -> string? {
 /// True unless EVERY repro comes back Fixed on this toolchain. Inconclusive
 /// (needs a human, or a command the in-process check cannot verify) counts
 /// as still broken — the agent gets to look.
+///
+/// Each repro is first compiled in a SUBPROCESS: a repro that crashes the
+/// compiler (#4468, #4587 ...) would otherwise take this process down with
+/// it, and a crash is the strongest possible "still broken".
 function still_broken(issue: Issue) -> bool {
     if (issue.repros.length() == 0) {
         return true;
     };
+    let i = 0;
     for (let r in issue.repros) {
+        i += 1;
+        if (compiler_crashes_on(r, i)) {
+            return true;
+        };
         if (run_repro(r).verdict != Verdict.Fixed) {
             return true;
         };
     }
     false
+}
+
+/// `baml check` on the repro's files in a scratch dir, out of process.
+/// True when the toolchain itself dies (signal / panic), which is exactly
+/// the case the in-process check cannot survive.
+function compiler_crashes_on(r: Repro, n: int) -> bool {
+    let dir = atb2_home() + "/repro-check/" + baml.id.new();
+    baml.fs.mkdir(dir + "/baml_src", baml.fs.MkdirOptions { recursive: true });
+    defer {
+        baml.fs.remove_dir_all(dir) catch (_) {
+            _ => null,
+        };
+    }
+    baml.fs.write(dir + "/baml.toml", "[package]\nname = \"repro" + n.to_string() + "\"\n");
+    for (let name in r.files.keys()) {
+        baml.fs.write(dir + "/baml_src/" + name, r.files.get(name) ?? "");
+    }
+    let env = sandbox_env(false);
+    let v = baml.env.get("BAML_VERSION");
+    if (v != null) {
+        env.set("BAML_VERSION", v ?? "");
+    };
+    let out = run_with(Cmd { program: "baml", args: ["check"], cwd: dir, timeout_ms: 120000 }, env);
+    let crashed = out.exit_code >= 128
+        || out.exit_code == 124
+        || out.stderr.includes("panicked at")
+        || out.stderr.includes("internal error");
+    if (crashed) {
+        log.info(
+            {
+                "repro_check": "compiler crashed",
+                "exit_code": out.exit_code,
+                "tail": tail(out.stderr, 3),
+            },
+        );
+    };
+    crashed
 }
 
 function with_status(issue: Issue, status: IssueStatus) -> Issue {
