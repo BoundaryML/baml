@@ -91,24 +91,22 @@ use sha2::{Digest, Sha256};
 /// carrying one in a persisted throw fact would now fail to decode instead of
 /// silently landing on whatever occupies the slot later.
 ///
-/// Version 11: interface bodies became anonymous-but-slotted. `Function`
-/// gained `is_interface_body` + `native_key` (wire fields), and `Program`
-/// gained `body_indices` while `function_indices` / `function_global_indices`
-/// stopped carrying impl-block methods and interface default bodies.
-///
-/// Version 12: impl-rule method tables became PROVIDED-ONLY (an adopted
-/// interface default resolves at dispatch through the interface's
-/// `default_fn`, never through a baked row), rule fragments moved onto their
-/// declaring unit, `ProgramMethodImplFrag` dropped its `fqn` string for the
-/// body's code-bucket offset in that unit, and `Program::body_indices` was
-/// deleted outright. A body has no name-keyed coordinates on the PROGRAM
-/// wire — its spelling survives only as the `CompilationUnit`'s
-/// link-internal export/import key; compile boundaries read coordinates
-/// from the declaration-keyed placement registry, with a Pass-1 slot replay
-/// only at the stdlib-splice boundary. One version covers all of these:
-/// they landed on one branch, and a bump only matters against a format
-/// canary has shipped.
-pub const FORMAT_VERSION: u32 = 12;
+/// Version 11: the interface-dispatch rework, described as one net change
+/// against the format canary shipped (a bump only matters against that;
+/// intermediate shapes that never left the branch are not versions).
+/// Interface bodies became anonymous-but-slotted: `Function` gained
+/// `is_interface_body` + `native_key` (wire fields), and `function_indices` /
+/// `function_global_indices` stopped carrying impl-block methods and
+/// interface default bodies. Impl-rule method tables became PROVIDED-ONLY
+/// (an adopted interface default resolves at dispatch through the
+/// interface's `default_fn`, never through a baked row), rule fragments
+/// moved onto their declaring unit, and `ProgramMethodImplFrag` carries the
+/// body's code-bucket offset in that unit rather than a name. A body has no
+/// name-keyed coordinates on the PROGRAM wire — its spelling survives only
+/// as the `CompilationUnit`'s link-internal export/import key; compile
+/// boundaries read coordinates from the declaration-keyed placement
+/// registry, with a Pass-1 slot replay only at the stdlib-splice boundary.
+pub const FORMAT_VERSION: u32 = 11;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
