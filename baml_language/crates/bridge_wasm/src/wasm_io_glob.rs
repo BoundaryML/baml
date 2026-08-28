@@ -10,11 +10,14 @@
 //! - `Glob.matches(path)` — pure-Rust glob matching via the compiled
 //!   `GlobPattern` from the handle.
 
-use std::sync::Arc;
+use std::{
+    any::{Any as _, TypeId},
+    sync::Arc,
+};
 
 use sys_glob::GlobPattern;
 use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, owned};
-use sys_types::BexHeap;
+use sys_types::{BexHeap, VmInternalError};
 
 use crate::{send_wrapper::SendWrapper, wasm_vfs::WasmVfs};
 
@@ -42,12 +45,13 @@ impl WasmIoGlob {
 
 type GlobHandle = GlobPattern;
 
-fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmBamlError> {
+fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmInternalError> {
     glob._handle
         .clone()
         .downcast::<GlobHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid glob handle type".into(),
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<GlobHandle>(),
+            got: glob._handle.type_id(),
         })
 }
 
@@ -64,7 +68,7 @@ impl io::IoNamespaceGlob for WasmIoGlob {
                 let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(compiled);
                 SysOpOutput::ok(owned::glob::Glob { _handle: handle })
             }
-            Err(e) => SysOpOutput::err(VmBamlError::InvalidArgument { message: e }),
+            Err(e) => SysOpOutput::err(VmBamlError::ParseError { message: e }),
         }
     }
 }
@@ -88,7 +92,10 @@ impl io::IoClassGlobGlob for WasmIoGlob {
         };
         let scan_args = match ScanArgs::from_root(&root) {
             Ok(args) => args,
-            Err(e) => return SysOpOutput::err(VmBamlError::InvalidArgument { message: e }),
+            // `root` is declared `string | ScanOptions`, so a value of any
+            // other shape means the wire value disagrees with the declared
+            // parameter type.
+            Err(e) => return SysOpOutput::err(VmInternalError::BridgeFailure { message: e }),
         };
 
         let mut scanned_paths = Vec::new();

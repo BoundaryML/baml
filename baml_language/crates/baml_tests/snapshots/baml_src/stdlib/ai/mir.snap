@@ -10069,7 +10069,7 @@ fn ai.wire.send_as(req: baml.http.Request, provider: string, request_timeout_ms:
     }
 
     bb15: {
-        _19 = load_type(baml.errors.Io);
+        _19 = load_type(baml.errors.InvalidArgument | baml.errors.Io);
         _18 = call const fn baml.String.from<copy _19>(copy _10) -> [bb16];
     }
 
@@ -10340,7 +10340,7 @@ fn ai.wire.send_as_with_wire(req: baml.http.Request, provider: string, client_na
     }
 
     bb30: {
-        _23 = load_type(baml.errors.Io);
+        _23 = load_type(baml.errors.InvalidArgument | baml.errors.Io);
         _22 = call const fn baml.String.from<copy _23>(copy _14) -> [bb31];
     }
 

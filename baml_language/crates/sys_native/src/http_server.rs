@@ -12,7 +12,7 @@
 //! [`HttpBody`] used by both client (`fetch`/`send`) and server responses.
 
 use std::{
-    any::Any,
+    any::{Any, TypeId},
     convert::Infallible,
     pin::Pin,
     sync::{
@@ -34,7 +34,10 @@ use hyper::{
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use indexmap::IndexMap;
 use sys_ops::io::{SysOpOutput, VmBamlError, owned};
-use sys_types::{AsBexExternalValue, BexExternalValue, CancellationToken, Handle, VmSpawner};
+use sys_types::{
+    AsBexExternalValue, BexExternalValue, CancellationToken, Handle, VmInternalError,
+    VmRustFnError, VmSpawner,
+};
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::{TcpListener, TcpStream},
@@ -184,11 +187,12 @@ impl HttpBody {
 /// Downcast a `$rust_type` body field to [`HttpBody`].
 pub(crate) fn downcast_body(
     body: &Arc<dyn Any + Send + Sync>,
-) -> Result<Arc<HttpBody>, VmBamlError> {
+) -> Result<Arc<HttpBody>, VmInternalError> {
     body.clone()
         .downcast::<HttpBody>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "invalid HTTP response body handle".to_string(),
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<HttpBody>(),
+            got: body.type_id(),
         })
 }
 
@@ -246,23 +250,27 @@ impl AsyncWrite for MaybeTlsStream {
 /// Build a `tokio_rustls` acceptor from a parsed `TlsConfig` and the server's
 /// protocol flags (which drive ALPN advertisement).
 fn build_acceptor(
-    cfg: owned::http::TlsConfig,
+    cfg: &owned::http::TlsConfig,
     allow_http1: bool,
     allow_http2: bool,
-) -> Result<TlsAcceptor, VmBamlError> {
+) -> Result<TlsAcceptor, VmRustFnError> {
     crate::ensure_rustls_crypto_provider();
 
     let certs = cfg
         ._certificate
+        .clone()
         .downcast::<Vec<CertificateDer<'static>>>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "invalid TLS certificate handle".to_string(),
+        .map_err(|certificate| VmInternalError::RustTypeError {
+            expected: TypeId::of::<Vec<CertificateDer<'static>>>(),
+            got: certificate.type_id(),
         })?;
     let key = cfg
         ._private_key
+        .clone()
         .downcast::<PrivateKeyDer<'static>>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "invalid TLS private key handle".to_string(),
+        .map_err(|private_key| VmInternalError::RustTypeError {
+            expected: TypeId::of::<PrivateKeyDer<'static>>(),
+            got: private_key.type_id(),
         })?;
 
     let tls13_only: [&'static rustls::SupportedProtocolVersion; 1] = [&rustls::version::TLS13];
@@ -302,13 +310,16 @@ struct ServerState {
     serving: AtomicBool,
 }
 
-fn downcast_server_state(server: &owned::http::Server) -> Result<Arc<ServerState>, VmBamlError> {
+fn downcast_server_state(
+    server: &owned::http::Server,
+) -> Result<Arc<ServerState>, VmInternalError> {
     server
         ._state
         .clone()
         .downcast::<ServerState>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "invalid HTTP server handle".to_string(),
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<ServerState>(),
+            got: server._state.type_id(),
         })
 }
 
@@ -403,7 +414,7 @@ pub(crate) fn serve(
             Some(cfg) => {
                 let handshake_timeout = timeout_from_nanos(&cfg._handshake_timeout_nanos);
                 Some((
-                    build_acceptor(cfg, allow_http1, allow_http2)?,
+                    build_acceptor(&cfg, allow_http1, allow_http2)?,
                     handshake_timeout,
                 ))
             }
@@ -652,11 +663,14 @@ fn is_reserved_response_header(name: &HeaderName) -> bool {
 }
 
 /// Turn the handler's `Response` (a `BexExternalValue`) into a hyper response.
-async fn wire_response(value: BexExternalValue) -> Result<HyperResponse<WireBody>, VmBamlError> {
-    let response =
-        owned::http::Response::from_external(value).map_err(|e| VmBamlError::DevOther {
-            message: format!("handler returned an invalid Response: {e}"),
-        })?;
+async fn wire_response(value: BexExternalValue) -> Result<HyperResponse<WireBody>, VmRustFnError> {
+    // The handler's return type is `baml.http.Response`, so a value that does
+    // not decode as one is an engine/bridge inconsistency, not a handler error.
+    let response = owned::http::Response::from_external(value).map_err(|e| {
+        VmInternalError::BridgeFailure {
+            message: format!("HTTP handler return value did not decode as a Response: {e}"),
+        }
+    })?;
     // A status outside the valid HTTP range (or u16) is a handler bug; fail
     // closed with 500 rather than silently serving 200.
     let status = u16::try_from(response.status_code)

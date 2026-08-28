@@ -25,12 +25,19 @@ class Glob {
     }
 
     /// Returns `true` if `path` matches this glob pattern.
-    function matches(self, path: string) -> bool throws root.errors.Io {
+    ///
+    /// Pure pattern matching against the already-compiled pattern — it touches
+    /// no filesystem, so there is nothing for it to throw.
+    function matches(self, path: string) -> bool throws never {
         $rust_io_function
     }
 }
 
 /// Compiles a glob `pattern` and returns a `Glob` object for scanning or matching.
-function new(pattern: string) -> Glob throws root.errors.Io {
+///
+/// # Throws
+///
+/// - `ParseError` if `pattern` is not a well-formed glob.
+function new(pattern: string) -> Glob throws root.errors.ParseError {
     $rust_io_function
 }

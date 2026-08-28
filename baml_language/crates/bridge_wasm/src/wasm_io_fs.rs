@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use js_sys::Uint8Array;
 use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, owned};
-use sys_types::{BexHeap, VmPanic};
+use sys_types::{BexHeap, VmInternalError, VmPanic};
 
 use crate::{send_wrapper::SendWrapper, wasm_vfs::WasmVfs};
 
@@ -400,7 +400,7 @@ impl io::IoNamespaceFs for WasmIoFs {
     ) -> SysOpOutput<i64> {
         let data = content.into_bytes();
         let Ok(len) = i64::try_from(data.len()) else {
-            return SysOpOutput::err(VmBamlError::InvalidArgument {
+            return SysOpOutput::err(VmInternalError::BridgeFailure {
                 message: format!("write size {} exceeds i64::MAX", data.len()),
             });
         };
@@ -422,7 +422,7 @@ impl io::IoNamespaceFs for WasmIoFs {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
         let Ok(len) = i64::try_from(content.len()) else {
-            return SysOpOutput::err(VmBamlError::InvalidArgument {
+            return SysOpOutput::err(VmInternalError::BridgeFailure {
                 message: format!("write size {} exceeds i64::MAX", content.len()),
             });
         };
@@ -454,8 +454,12 @@ impl io::IoNamespaceFs for WasmIoFs {
                         match serde_wasm_bindgen::from_value(v) {
                             Ok(e) => e,
                             Err(e) => {
-                                return SysOpOutput::err(VmBamlError::ParseError {
-                                    message: format!("readDirEntries returned invalid entry: {e}"),
+                                return SysOpOutput::err(VmPanic::HostContractViolation {
+                                    message: format!(
+                                        "readDirEntries returned an invalid entry: {e}"
+                                    ),
+                                    class_name: None,
+                                    language: None,
                                 });
                             }
                         };
@@ -476,8 +480,10 @@ impl io::IoNamespaceFs for WasmIoFs {
                 let mut entries = Vec::with_capacity(arr.length() as usize);
                 for v in arr.iter() {
                     let Some(name) = v.as_string() else {
-                        return SysOpOutput::err(VmBamlError::DevOther {
-                            message: "readDir entry is not a string".into(),
+                        return SysOpOutput::err(VmPanic::HostContractViolation {
+                            message: "readDir returned an entry that is not a string".to_string(),
+                            class_name: None,
+                            language: None,
                         });
                     };
                     // Legacy readDir doesn't expose type info. Probe metadata

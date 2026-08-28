@@ -9368,7 +9368,7 @@ function ai.wire.send_as(req: baml.http.Request, provider: string, request_timeo
   L4:
     load_var e
     throw_if_panic
-    load_type baml.errors.Io
+    load_type baml.errors.InvalidArgument | baml.errors.Io
     load_var e
     call baml.String.from
     call ai.wire.redact_url_secrets
@@ -9497,7 +9497,7 @@ function ai.wire.send_as_with_wire(req: baml.http.Request, provider: string, cli
   L5:
     load_var e
     throw_if_panic
-    load_type baml.errors.Io
+    load_type baml.errors.InvalidArgument | baml.errors.Io
     load_var e
     call baml.String.from
     call ai.wire.redact_url_secrets

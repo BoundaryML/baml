@@ -107,7 +107,7 @@ pub mod sap;
 /// so without it a namespaced LLM function fails to resolve. Returns the
 /// full `ResolveOutcome` (rather than collapsing to `Option`) so callers
 /// can distinguish ambiguity from a true not-found in their error
-/// messages: both still abort the sysop as a `DevOther`, but the
+/// messages: both still abort the sysop as an `InvalidArgument`, but the
 /// distinction matters for diagnosing synthesis / name-resolution bugs.
 fn lookup_llm_function<'a>(
     function_name: &str,
@@ -121,29 +121,32 @@ fn lookup_llm_function<'a>(
 fn llm_function_lookup_error(
     function_name: &str,
     outcome: &sys_types::ResolveOutcome<'_, LlmFunctionInfo>,
-) -> VmBamlError {
+) -> VmRustFnError {
     match outcome {
         sys_types::ResolveOutcome::Found(_, _) => {
             // Unreachable in practice — caller only invokes this on a miss.
-            // We still produce a coherent message rather than panicking so
+            // We still produce a coherent error rather than panicking so
             // a future refactor can't accidentally trip on this.
-            VmBamlError::DevOther {
+            VmInternalError::BridgeFailure {
                 message: format!(
-                    "internal: llm_function_lookup_error called with a Found \
+                    "llm_function_lookup_error called with a Found \
                      outcome for `{function_name}`"
                 ),
             }
+            .into()
         }
-        sys_types::ResolveOutcome::NotFound => VmBamlError::DevOther {
+        sys_types::ResolveOutcome::NotFound => VmBamlError::InvalidArgument {
             message: format!("LLM function not found: {function_name}"),
-        },
-        sys_types::ResolveOutcome::Ambiguous => VmBamlError::DevOther {
+        }
+        .into(),
+        sys_types::ResolveOutcome::Ambiguous => VmBamlError::InvalidArgument {
             message: format!(
                 "LLM function name `{function_name}` is ambiguous: two or more \
                  namespaced functions end with `.{function_name}`. Pass a fully \
                  qualified name (e.g. `<pkg>.<ns>.{function_name}`) to disambiguate."
             ),
-        },
+        }
+        .into(),
     }
 }
 
@@ -163,8 +166,12 @@ impl<T> io::IoClassSapParseCache for T {
             match ::bex_sap::CompiledSapModel::from_sys_op_context(ctx, target, stream_target) {
                 Ok(compiled) => compiled,
                 Err(e) => {
-                    return SysOpOutput::err(VmBamlError::InvalidArgument {
-                        message: e.to_string(),
+                    // `ParseCache.new` declares `throws never`, and the type
+                    // arguments that reach it come from the caller's own
+                    // `parse<T>` — a `T` schema-aligned parsing cannot model is
+                    // a program bug, not a recoverable condition, so it panics.
+                    return SysOpOutput::err(VmPanic::UserPanic {
+                        message: format!("schema-aligned parsing cannot model this type: {e}"),
                     });
                 }
             };
@@ -748,10 +755,15 @@ fn output_format_option_value(value: io::BexExternalValue) -> io::BexExternalVal
     }
 }
 
-fn invalid_output_format_option(name: &str, value: &io::BexExternalValue) -> VmBamlError {
-    VmBamlError::DevOther {
+/// The `output_format` options are declared as literal unions in
+/// `ai/context.baml`, so the type checker already rejects every value this
+/// would report. Reaching it means the wire value disagrees with the declared
+/// parameter type — an engine inconsistency, not a caller error.
+fn invalid_output_format_option(name: &str, value: &io::BexExternalValue) -> VmRustFnError {
+    VmInternalError::BridgeFailure {
         message: format!("invalid internal value for output_format option `{name}`: {value:?}"),
     }
+    .into()
 }
 
 fn is_output_format_default(value: &io::BexExternalValue) -> bool {
@@ -768,7 +780,7 @@ fn output_format_string_setting(
     name: &str,
     value: io::BexExternalValue,
     null_is_never: bool,
-) -> Result<crate::output_format::RenderSetting<String>, VmBamlError> {
+) -> Result<crate::output_format::RenderSetting<String>, VmRustFnError> {
     use crate::output_format::RenderSetting;
 
     let value = output_format_option_value(value);
@@ -784,7 +796,7 @@ fn output_format_string_setting(
 fn output_format_bool_setting(
     name: &str,
     value: io::BexExternalValue,
-) -> Result<crate::output_format::RenderSetting<bool>, VmBamlError> {
+) -> Result<crate::output_format::RenderSetting<bool>, VmRustFnError> {
     use crate::output_format::RenderSetting;
 
     let value = output_format_option_value(value);
@@ -797,7 +809,7 @@ fn output_format_bool_setting(
 
 fn output_format_hoist_classes(
     value: io::BexExternalValue,
-) -> Result<crate::output_format::HoistClasses, VmBamlError> {
+) -> Result<crate::output_format::HoistClasses, VmRustFnError> {
     use crate::output_format::HoistClasses;
 
     let value = output_format_option_value(value);
@@ -820,7 +832,7 @@ fn output_format_hoist_classes(
 
 fn output_format_map_style(
     value: io::BexExternalValue,
-) -> Result<crate::output_format::MapStyle, VmBamlError> {
+) -> Result<crate::output_format::MapStyle, VmRustFnError> {
     use crate::output_format::MapStyle;
 
     let value = output_format_option_value(value);
@@ -849,7 +861,7 @@ pub fn render_output_format_with_op(
     map_style: io::BexExternalValue,
     render_null_as: io::BexExternalValue,
 ) -> SysOpOutput<String> {
-    let options: Result<crate::output_format::RenderOptions, VmBamlError> = (|| {
+    let options: Result<crate::output_format::RenderOptions, VmRustFnError> = (|| {
         Ok(crate::output_format::RenderOptions {
             prefix: output_format_string_setting("prefix", prefix, true)?,
             or_splitter: output_format_string_setting("or_splitter", or_splitter, false)?,
@@ -915,9 +927,10 @@ impl<T> io::IoNamespaceSap for T {
         _type_arg_1: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        let Ok(sap) = cache._data.downcast::<crate::sap::SapParseCache>() else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Invalid ParseCache: expected SapParseCache".into(),
+        let Ok(sap) = cache._data.clone().downcast::<crate::sap::SapParseCache>() else {
+            return SysOpOutput::err(VmInternalError::RustTypeError {
+                expected: std::any::TypeId::of::<crate::sap::SapParseCache>(),
+                got: cache._data.type_id(),
             });
         };
         SysOpOutput::Ready(
@@ -935,9 +948,10 @@ impl<T> io::IoNamespaceSap for T {
         _type_arg_1: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        let Ok(sap) = cache._data.downcast::<crate::sap::SapParseCache>() else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Invalid ParseCache: expected SapParseCache".into(),
+        let Ok(sap) = cache._data.clone().downcast::<crate::sap::SapParseCache>() else {
+            return SysOpOutput::err(VmInternalError::RustTypeError {
+                expected: std::any::TypeId::of::<crate::sap::SapParseCache>(),
+                got: cache._data.type_id(),
             });
         };
         let result = match crate::sap::execute_sap_parse_partial(&json, &sap, ctx) {
@@ -2826,7 +2840,8 @@ use ::bex_heap::{BexExternalValue, BexHeap};
 use ::std::sync::Arc;
 // Re-export io::SysOps as the primary SysOps type.
 use ::sys_types::{
-    CallId, LlmFunctionInfo, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError,
+    CallId, LlmFunctionInfo, SysOpContext, SysOpOutput, VmBamlError, VmInternalError, VmPanic,
+    VmRustFnError,
 };
 pub use io::SysOps;
 
