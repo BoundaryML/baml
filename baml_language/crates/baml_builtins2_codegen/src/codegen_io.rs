@@ -16,7 +16,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 use crate::{
-    rust_ident::rust_field_ident,
+    rust_ident::{rust_class_type_ident, rust_field_ident},
     types::{BamlType, NativeBuiltin, NativeClassDef, Receiver},
 };
 
@@ -272,7 +272,7 @@ fn owned_rust_type(
             if let Some(ns) = class_ns_map.get(name.as_str()) {
                 let owned = &paths.owned;
                 let ns_ident = format_ident!("{}", ns);
-                let name_ident = format_ident!("{}", name);
+                let name_ident = rust_class_type_ident(name);
                 quote! { #owned::#ns_ident::#name_ident }
             } else {
                 match name.as_str() {
@@ -453,7 +453,7 @@ fn external_to_typed_expr(
             let ns = &class_ns_map[name.as_str()];
             let owned = &paths.owned;
             let ns_ident = format_ident!("{}", ns);
-            let name_ident = format_ident!("{}", name);
+            let name_ident = rust_class_type_ident(name);
             quote! { #owned::#ns_ident::#name_ident::from_external(#val_expr) }
         }
         BamlType::Uint8Array => quote! {
@@ -660,7 +660,7 @@ fn clean_rust_type(
             if let Some(ns) = class_ns_map.get(name.as_str()) {
                 let owned = &paths.owned;
                 let ns_ident = format_ident!("{}", ns);
-                let name_ident = format_ident!("{}", name);
+                let name_ident = rust_class_type_ident(name);
                 quote! { #owned::#ns_ident::#name_ident }
             } else {
                 match name.as_str() {
@@ -733,7 +733,7 @@ fn glue_extract_expr(
             if let Some(ns) = class_ns_map.get(name.as_str()) {
                 let view = &paths.view;
                 let ns_ident = format_ident!("{}", ns);
-                let name_ident = format_ident!("{}", name);
+                let name_ident = rust_class_type_ident(name);
                 quote! {
                     #arg_ident.as_builtin_class::<#view::#ns_ident::#name_ident>(heap.as_ref(), permit)?.into_owned(heap.as_ref(), permit)?
                 }
@@ -784,7 +784,11 @@ fn ns_trait_ident(ns_key: &str) -> syn::Ident {
 }
 
 fn class_trait_ident(ns_key: &str, class: &str) -> syn::Ident {
-    format_ident!("IoClass{}{}", pascal_case_key(ns_key), class)
+    format_ident!(
+        "IoClass{}{}",
+        pascal_case_key(ns_key),
+        rust_class_type_ident(class)
+    )
 }
 
 /// Whether the clean trait method and glue thread an *extracted* receiver value
@@ -1051,7 +1055,7 @@ fn emit_view_struct(
     ns: &str,
     paths: &CodegenPaths,
 ) -> TokenStream {
-    let name_ident = format_ident!("{}", cd.name);
+    let name_ident = rust_class_type_ident(&cd.name);
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
     let source_comment = format!("Generated from `{}`", cd.source_file);
 
@@ -1143,7 +1147,7 @@ fn emit_view_struct(
 /// A class is non-defaultable if it directly contains a `$rust_type` field,
 /// or if any of its fields transitively references a non-defaultable class.
 ///
-/// Both a fully-qualified name (for example `baml.sap.ParseCache`) and its
+/// Both a fully-qualified name (for example `baml.sap._ParseCache`) and its
 /// short name are stored, because field type references may use
 /// either form depending on whether the path was single- or multi-segment.
 fn compute_non_defaultable_classes(
@@ -1254,7 +1258,7 @@ fn emit_owned_struct(
     paths: &CodegenPaths,
     non_defaultable: &std::collections::HashSet<String>,
 ) -> TokenStream {
-    let name_ident = format_ident!("{}", cd.name);
+    let name_ident = rust_class_type_ident(&cd.name);
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
     let source_comment = format!("Generated from `{}`", cd.source_file);
 
@@ -1387,19 +1391,16 @@ fn emit_class_traits(
 /// slots on the operand stack: class-level generics are part of the instance
 /// type and are not threaded as extra stack args.
 ///
+/// This must stay in lockstep with the compiler's
+/// `synthetic_type_arg_count_for_sys_op`, which counts a function's own
+/// `generic_params` — so a *static* method on a generic class receives no type
+/// args at all today. See `baml.sap._new_parse_cache` for why such a
+/// constructor has to be a free function for now.
+///
 /// For free functions (no receiver), every generic is function-level, so this
 /// just returns `generics.len()`.
 fn fn_only_generic_count(builtin: &NativeBuiltin) -> usize {
-    let class_generics: &[String] = builtin
-        .receiver
-        .as_ref()
-        .map(|r| r.class_generics.as_slice())
-        .unwrap_or(&[]);
-    builtin
-        .generics
-        .iter()
-        .filter(|g| !class_generics.contains(g))
-        .count()
+    builtin.generics.len()
 }
 
 fn emit_one_class_trait(
@@ -1426,7 +1427,7 @@ fn emit_one_class_trait(
             let ret_ty = clean_rust_type(&m.return_type, class_ns_map, paths);
             let owned = &paths.owned;
             let ns_ident = format_ident!("{}", ns);
-            let class_ident = format_ident!("{}", class_name);
+            let class_ident = rust_class_type_ident(class_name);
             let Some(receiver) = &m.receiver else {
                 return quote! {
                     compile_error!(concat!("missing receiver for method ", stringify!(#method_ident)));
@@ -1537,7 +1538,7 @@ fn emit_glue_method(
 
     let view = &paths.view;
     let ns_ident = format_ident!("{}", ns);
-    let class_ident = format_ident!("{}", class_name);
+    let class_ident = rust_class_type_ident(class_name);
 
     // Arg extraction lets
     let arg_self = if !consumes_self_slot(receiver) {
@@ -1868,7 +1869,7 @@ fn emit_into_result_call(
             if let Some(ns) = class_ns_map.get(name.as_str()) {
                 let owned = &paths.owned;
                 let ns_ident = format_ident!("{}", ns);
-                let name_ident = format_ident!("{}", name);
+                let name_ident = rust_class_type_ident(name);
                 return quote! {
                     #call_expr
                         .into_result_mapped(SysOp::#variant_ident, |v| {
@@ -2344,7 +2345,7 @@ fn emit_runtime_io_handles(
 
             let owned = &paths.owned;
             let ns_ident = format_ident!("{}", ns);
-            let class_ident = format_ident!("{}", class_name);
+            let class_ident = rust_class_type_ident(class_name);
             let owned_ty = quote! { #owned::#ns_ident::#class_ident };
 
             handles.push(quote! {
@@ -2801,7 +2802,7 @@ fn emit_result_conversion_for_ty(
                 if let Some(ns) = class_ns_map.get(name.as_str()) {
                     let owned = &paths.owned;
                     let ns_ident = format_ident!("{}", ns);
-                    let name_ident = format_ident!("{}", name);
+                    let name_ident = rust_class_type_ident(name);
                     quote! {
                         #owned::#ns_ident::#name_ident::from_external(__val)
                             .map_err(|e| RuntimeIoError::Other(format!("{e:?}")))

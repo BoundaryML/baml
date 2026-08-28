@@ -9159,7 +9159,7 @@ impl<'db> LoweringContext<'db> {
                     _ => self.tir_expr_type(self.expr_metadata_key(*base)).is_some(),
                 };
                 // Check if the resolved method expects a `self` receiver.
-                // Static methods (e.g. ParseCache.new) have no `self` param
+                // Static methods (e.g. _ParseCache._new) have no `self` param
                 // and must not get the class reference prepended as an argument.
                 let method_takes_self = {
                     self.tir_resolution(self.expr_metadata_key(callee))
@@ -10179,7 +10179,7 @@ impl LoweringContext<'_> {
         // args synthesized by PPIR companions reference `*$stream` classes
         // (e.g. `parse<Payload$stream | null, Payload>`), which only exist in
         // the PPIR-expanded item universe. Resolving against HIR's original
-        // items lowered them to `Unknown` → `Void` and broke `ParseCache.new`
+        // items lowered them to `Unknown` → `Void` and broke `_ParseCache._new`
         // at runtime.
         let pkg_items = baml_compiler2_ppir::package_items(self.db, pkg_id);
         lower_expr_in_scope(
@@ -16114,15 +16114,23 @@ fn lower_function_impl<'db>(
             // from the stack.
             let extra_arity = if matches!(kind, BuiltinKind::Io) {
                 // For IO builtins (`$rust_io_function`), the compiler injects
-                // one synthetic trailing value-arg slot for each *function-level*
-                // generic type parameter.  Class-level generics (from the
-                // enclosing class definition) do NOT generate extra slots —
-                // `baml_builtins2_codegen` only adds type-arg params for
-                // function-level generics.  We therefore only count the
-                // function's own generic_params here.
+                // one synthetic trailing value-arg slot per generic type
+                // parameter the call site threads. That is the function's own
+                // generics *plus*, for a method on a generic class, the
+                // enclosing class's: the call path prepends the receiver's
+                // class type args (see `receiver_class_type_arg_operands`), so
+                // they occupy real operand slots and must be counted here or
+                // `ScheduleFuture` drains the wrong window off the stack.
+                //
+                // Must stay in lockstep with `baml_builtins2_codegen`'s
+                // `fn_only_generic_count`, which decides how many type-arg
+                // slots the generated glue reads back.
                 baml_compiler2_ppir::item_data::function_data(db, func_loc)
                     .generic_params
                     .len()
+                    + baml_compiler2_ppir::item_data::enclosing_type_generic_param_count(
+                        db, func_loc,
+                    )
             } else {
                 0
             };

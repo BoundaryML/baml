@@ -8616,9 +8616,9 @@ fn ai.stream.Stream.next(self: ai.stream.Stream) -> ai.stream.Done | TStream {
     let _6: string // s
     let _7: string
     let _8: string
-    let _9: baml.sap.NoYield | TStream // parsed
-    let _10: string
-    let _11: baml.sap.ParseCache<TStream, TFinal>
+    let _9: baml.sap._NoYield | TStream // parsed
+    let _10: (baml.sap._ParseCache<TStream, TFinal>, string) -> baml.sap._NoYield | TStream throws baml.errors.LlmClient
+    let _11: string
     let _12: reflect.Type
     let _13: reflect.Type
     let _14: bool
@@ -8656,15 +8656,15 @@ fn ai.stream.Stream.next(self: ai.stream.Stream) -> ai.stream.Done | TStream {
         _7 = copy _1.2;
         _8 = copy _6;
         _1.2 = copy _7 + copy _8;
-        _10 = copy _1.2;
-        _11 = copy _1.1;
+        _10 = copy _1.1;
+        _11 = copy _1.2;
         _12 = load_type(#0);
         _13 = load_type(#1);
-        _9 = sys_op const fn baml.sap.__parse_partial(copy _10, copy _11, copy _12, copy _13) -> bb7;
+        _9 = sys_op const fn baml.sap._ParseCache._parse_partial(copy _10, copy _11, copy _12, copy _13) -> bb7;
     }
 
     bb7: {
-        _14 = is_type(copy _9, baml.sap.NoYield);
+        _14 = is_type(copy _9, baml.sap._NoYield);
         branch copy _14 -> [bb1, bb8];
     }
 
@@ -8702,8 +8702,8 @@ fn ai.stream.Stream.final(self: ai.stream.Stream) -> TFinal {
     let _7: string // s
     let _8: string
     let _9: string
-    let _10: string
-    let _11: baml.sap.ParseCache<TStream, TFinal>
+    let _10: (baml.sap._ParseCache<TStream, TFinal>, string) -> TFinal throws baml.errors.LlmClient
+    let _11: string
     let _12: reflect.Type
     let _13: reflect.Type
 
@@ -8718,11 +8718,11 @@ fn ai.stream.Stream.final(self: ai.stream.Stream) -> TFinal {
     }
 
     bb2: {
-        _10 = copy _1.2;
-        _11 = copy _1.1;
+        _10 = copy _1.1;
+        _11 = copy _1.2;
         _12 = load_type(#0);
         _13 = load_type(#1);
-        _0 = sys_op const fn baml.sap.__parse_final(copy _10, copy _11, copy _12, copy _13) -> bb3;
+        _0 = sys_op const fn baml.sap._ParseCache._parse_final(copy _10, copy _11, copy _12, copy _13) -> bb3;
     }
 
     bb3: {
@@ -8805,7 +8805,7 @@ fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.S
     let _47: reflect.Type
     let _48: reflect.Type
     let _49: () -> string | null throws baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
-    let _50: baml.sap.ParseCache<TStream, TFinal>
+    let _50: baml.sap._ParseCache<TStream, TFinal>
     let _51: reflect.Type
     let _52: reflect.Type
 
@@ -8934,7 +8934,7 @@ fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.S
         _49 = make_closure lambda[0]<2 type_args>(copy _40, copy _30, copy _28, copy _26);
         _51 = load_type(#0);
         _52 = load_type(#1);
-        _50 = call const fn baml.sap.__new_parse_cache<copy _51, copy _52>() -> [bb24];
+        _50 = sys_op const fn baml.sap._new_parse_cache(copy _51, copy _52) -> bb24;
     }
 
     bb24: {

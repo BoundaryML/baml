@@ -8813,65 +8813,32 @@ fn baml.random.ChaCha20.Rng.random = builtin(vm)
 
 fn baml.random.ChaCha20.Rng.random_int = builtin(vm)
 
-fn baml.sap.ParseCache.new = builtin(io)
+fn baml.sap._ParseCache._parse_final = builtin(io)
 
-fn baml.sap.__new_parse_cache() -> baml.sap.ParseCache<TStream, TFinal> {
-    // Locals:
-    let _0: baml.sap.ParseCache<TStream, TFinal> // _0 // return
-    let _1: baml.sap.ParseCache<TStream, TFinal> // cache
-    let _2: reflect.Type
-    let _3: reflect.Type
+fn baml.sap._ParseCache._parse_partial = builtin(io)
 
-    bb0: {
-        _2 = load_type(#0);
-        goto -> bb1;
-    }
-
-    bb1: {
-        _3 = load_type(#1);
-        goto -> bb2;
-    }
-
-    bb2: {
-        _1 = sys_op const fn baml.sap.ParseCache.new(copy _2, copy _3) -> bb3;
-    }
-
-    bb3: {
-        _0 = copy _1;
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn baml.sap.__parse_final = builtin(io)
-
-fn baml.sap.__parse_partial = builtin(io)
+fn baml.sap._new_parse_cache = builtin(io)
 
 fn baml.sap.parse(text: string) -> T {
     // Locals:
     let _0: T // _0 // return
     let _1: string // text // param
-    let _2: baml.sap.ParseCache<T, T> // cache
+    let _2: baml.sap._ParseCache<T, T> // cache
     let _3: reflect.Type
     let _4: reflect.Type
-    let _5: baml.sap.ParseCache<T, T>
+    let _5: reflect.Type
     let _6: reflect.Type
-    let _7: reflect.Type
 
     bb0: {
         _3 = load_type(#0);
         _4 = load_type(#0);
-        _2 = call const fn baml.sap.__new_parse_cache<copy _3, copy _4>() -> [bb1];
+        _2 = sys_op const fn baml.sap._new_parse_cache(copy _3, copy _4) -> bb1;
     }
 
     bb1: {
-        _5 = copy _2;
+        _5 = load_type(#0);
         _6 = load_type(#0);
-        _7 = load_type(#0);
-        _0 = sys_op const fn baml.sap.__parse_final(copy _1, copy _5, copy _6, copy _7) -> bb2;
+        _0 = sys_op const fn baml.sap._ParseCache._parse_final(copy _2, copy _1, copy _5, copy _6) -> bb2;
     }
 
     bb2: {
@@ -8884,23 +8851,15 @@ fn baml.sap.parse_type(t: reflect.Type, text: string) -> unknown {
     let _0: unknown // _0 // return
     let _1: reflect.Type // t // param
     let _2: string // text // param
-    let _3: baml.sap.ParseCache<unknown, unknown> // cache
-    let _4: baml.sap.ParseCache<unknown, unknown>
-    let _5: reflect.Type
-    let _6: reflect.Type
+    let _3: reflect.Type
 
     bb0: {
-        _3 = sys_op const fn baml.sap.ParseCache.new(copy _1, copy _1) -> bb1;
+        bind_type(0, [Copy(Local(Local(1)))]);
+        _3 = load_type(#0);
+        _0 = call const fn baml.sap.parse<copy _3>(copy _2) -> [bb1];
     }
 
     bb1: {
-        _4 = copy _3;
-        _5 = load_type(unknown);
-        _6 = load_type(unknown);
-        _0 = sys_op const fn baml.sap.__parse_final(copy _2, copy _4, copy _5, copy _6) -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

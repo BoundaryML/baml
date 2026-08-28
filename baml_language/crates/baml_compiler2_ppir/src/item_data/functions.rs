@@ -51,6 +51,22 @@ pub struct FunctionSourceMap {
     pub param_spans: Vec<TextRange>,
 }
 
+/// How many generic parameters the function's enclosing type contributes.
+///
+/// Zero for a free function, and for a method whose generics live on an
+/// out-of-body `implements` block. A method on a generic class reports the
+/// class's, which callers thread as type-arg operands alongside the function's
+/// own — see the IO-builtin arity in `baml_compiler2_mir`.
+#[salsa::tracked]
+pub fn enclosing_type_generic_param_count<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> usize {
+    crate::file_item_tree(db, function.file(db))
+        .enclosing_type_generic_params(function.id(db))
+        .len()
+}
+
 /// Semantic data for one function signature. Span-free — see the module docs.
 #[salsa::tracked(returns(ref))]
 pub fn function_data<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> FunctionData {

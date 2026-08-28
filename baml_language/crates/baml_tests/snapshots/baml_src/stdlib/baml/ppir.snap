@@ -1822,27 +1822,24 @@ function baml.random.random_int(self: ?) -> int  [builtin]
 function baml.random.random_int(self: ?) -> int  [builtin]
 
 --- <builtin>/baml/ns_sap/sap.baml ---
-class baml.sap.NoYield {
+class baml.sap._NoYield {
 }
-class baml.sap.NoYield$stream {
+class baml.sap._NoYield$stream {
 }
-class baml.sap.ParseCache {
+class baml.sap._ParseCache {
   _data: $rust_type
 }
-class baml.sap.ParseCache$stream {
+class baml.sap._ParseCache$stream {
   _data: $rust_type
 }
-function baml.sap.__new_parse_cache() -> baml.sap.ParseCache<TStream, TFinal>  [expr] {
-  { let cache: baml.sap.ParseCache<TStream, TFinal> = ParseCache.new(reflect.Type.of(), reflect.Type.of()) } cache
-}
-function baml.sap.__parse_final(json: string, cache: baml.sap.ParseCache<TStream, TFinal>) -> TFinal  [builtin]
-function baml.sap.__parse_partial(json: string, cache: baml.sap.ParseCache<TStream, TFinal>) -> TStream | baml.sap.NoYield  [builtin]
-function baml.sap.new(t_stream: reflect.Type, t_final: reflect.Type) -> baml.sap.ParseCache<TStream, TFinal>  [builtin]
+function baml.sap._new_parse_cache() -> baml.sap._ParseCache<TStream, TFinal>  [builtin]
+function baml.sap._parse_final(self: ?, json: string) -> TFinal  [builtin]
+function baml.sap._parse_partial(self: ?, json: string) -> TStream | baml.sap._NoYield  [builtin]
 function baml.sap.parse(text: string) -> T  [expr] {
-  { let cache = __new_parse_cache() } __parse_final(text, cache)
+  { let cache = _new_parse_cache() } cache._parse_final(text)
 }
 function baml.sap.parse_type(t: reflect.Type, text: string) -> unknown  [expr] {
-  { let cache: baml.sap.ParseCache<unknown, unknown> = ParseCache.new(t, t) } __parse_final(text, cache)
+  { type T = unreflect(t) } parse(text)
 }
 
 --- <builtin>/baml/ns_spawn/spawn.baml ---

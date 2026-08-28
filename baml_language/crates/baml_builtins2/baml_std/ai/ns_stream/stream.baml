@@ -474,7 +474,7 @@ class TurnStream {
 // its FQN across FFI so host bridges do not need to hardcode a namespace.
 class Stream<TStream, TFinal> {
     _next_text: () -> string? throws root.errors.InvokeError,
-    _cache: baml.sap.ParseCache<TStream, TFinal>,
+    _cache: baml.sap._ParseCache<TStream, TFinal>,
     _text: string,
     _finished: bool,
 
@@ -491,9 +491,9 @@ class Stream<TStream, TFinal> {
                 },
                 let s: string => {
                     self._text = self._text + s;
-                    let parsed: TStream | baml.sap.NoYield = baml.sap.__parse_partial<TStream, TFinal>(self._text, self._cache);
+                    let parsed: TStream | baml.sap._NoYield = self._cache._parse_partial(self._text);
                     match (parsed) {
-                        baml.sap.NoYield => {},
+                        baml.sap._NoYield => {},
                         let p: TStream => {
                             return p;
                         },
@@ -516,7 +516,7 @@ class Stream<TStream, TFinal> {
                 },
             }
         }
-        baml.sap.__parse_final<TStream, TFinal>(self._text, self._cache)
+        self._cache._parse_final(self._text)
     }
 }
 
@@ -606,7 +606,7 @@ function from_spec<TStream, TFinal>(
                 _ => throw root.errors.normalize(e),
             }
         },
-        _cache: baml.sap.__new_parse_cache<TStream, TFinal>(),
+        _cache: baml.sap._new_parse_cache<TStream, TFinal>(),
         _text: "",
         _finished: false,
     }

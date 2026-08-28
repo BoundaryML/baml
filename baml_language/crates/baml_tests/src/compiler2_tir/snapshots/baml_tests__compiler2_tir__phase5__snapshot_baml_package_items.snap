@@ -270,11 +270,9 @@ namespace baml.random:
   class SystemRandom { methods: [get, random, random_int] }
   class Xoshiro256PlusPlus { methods: [new, _new, random, random_int] }
 namespace baml.sap:
-  class NoYield { methods: [] }
-  class ParseCache<TStream, TFinal> { methods: [new] }
-  function __new_parse_cache<TStream, TFinal>
-  function __parse_final<TStream, TFinal>
-  function __parse_partial<TStream, TFinal>
+  class _NoYield { methods: [] }
+  class _ParseCache<TStream, TFinal> { methods: [_parse_final, _parse_partial] }
+  function _new_parse_cache<TStream, TFinal>
   function parse<T>
   function parse_type
 namespace baml.spawn:

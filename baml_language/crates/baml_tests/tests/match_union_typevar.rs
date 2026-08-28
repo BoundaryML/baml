@@ -90,7 +90,7 @@ fn typevar_arm_first_leaves_concrete_arms_reachable() {
 }
 
 /// A `TypeVar` union beside a concrete *class* sibling — the real streaming
-/// `TStream | NoYield` shape — must also compile, including the
+/// `TStream | _NoYield` shape — must also compile, including the
 /// `let p: T | Concrete` binding form whose natural type is itself a union
 /// carrying the `TypeVar` (this was the regression the naive fix introduced).
 #[test]

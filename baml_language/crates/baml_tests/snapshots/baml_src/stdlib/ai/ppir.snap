@@ -713,13 +713,13 @@ class ai.stream.SseEvent$stream {
 }
 class ai.stream.Stream {
   _next_text: () -> string? throws root.errors.InvokeError
-  _cache: baml.sap.ParseCache<TStream, TFinal>
+  _cache: baml.sap._ParseCache<TStream, TFinal>
   _text: string
   _finished: bool
 }
 class ai.stream.Stream$stream {
   _next_text: unknown
-  _cache: baml.sap.ParseCache$stream<TStream, TFinal> | null
+  _cache: baml.sap._ParseCache$stream<TStream, TFinal> | null
   _text: string | null
   _finished: bool | null
 }
@@ -805,7 +805,7 @@ function ai.stream.decode_sse_batch(batch: string) -> ai.stream.SseEvent[]  [exp
   {  } baml.json.from_string(batch)
 }
 function ai.stream.final(self: ?) -> TFinal  [expr] {
-  { while Not self._finished {  } match (self._next_text()) { null => { self._finished = true }, s: string => { self._text = self._text Add s } } } baml.sap.__parse_final(self._text, self._cache)
+  { while Not self._finished {  } match (self._next_text()) { null => { self._finished = true }, s: string => { self._text = self._text Add s } } } self._cache._parse_final(self._text)
 }
 function ai.stream.final_turn(self: ?) -> root.ModelTurn  [expr] {
   { while true { match (self.next()) { d: ai.stream.Done => { break }, _ => null } }; self._check_terminal(); let usage: root.events.Usage? = if (self._input_tokens Ne null Or self._output_tokens Ne null) {  } root.events.Usage { input_tokens: self._input_tokens NullCoalesce 0, output_tokens: self._output_tokens NullCoalesce 0, cached_input_tokens: null, reasoning_tokens: null } else {  } null; if let call: root.events.LLMCall = self._wire_call {  } if (call.timing.duration_ms Eq null) {  } if let started: baml.time.Instant = self._call_started { call.timing.duration_ms = started.elapsed().to_milliseconds() } } root.ModelTurn { content: [root.content.Text { text: self._text }], stop_reason: self._stop_reason NullCoalesce root.content.StopReason.Complete, usage: usage, calls: self._calls }
@@ -817,7 +817,7 @@ function ai.stream.from_event_source(next_event: ai.stream.EventSource) -> ai.st
   {  } ai.stream.TurnStream { _event_source: next_event, _sse: null, _decode: null, _chunks: [], _cursor: 0, _pending: [], _pcursor: 0, _text: "", _stop_reason: null, _input_tokens: null, _output_tokens: null, _done: false, _require_terminal: null, _saw_terminal: false, _calls: [], _wire_call: null, _call_started: null, _ttft_from: null, _capture_sse: false }
 }
 function ai.stream.from_spec(spec: root.FunctionSpec<TFinal>, client: StreamingClient? = null, on_event: (root.events.Event) -> void? = null) -> ai.stream.Stream<TStream, TFinal>  [expr] {
-  { if (Not spec.tools().is_empty()) { throw baml.errors.InvalidArgument { message: `...` } }; let selected: StreamingClient = match (client) { s: StreamingClient => s, null => {  } match (spec.default_client) { s: StreamingClient => s, _ => { throw root.errors.StreamingUnsupported { client_id: spec.default_client.id() } } } }; let provider = match (selected) { c: root.Client => c.id() }; let emit = root.events.guard(on_event); let settled = false; if let cb: (root.events.Event) -> void throws never = emit { cb(root.events.RunStarted { spec_name: spec.name(), arguments: spec.arguments() }) }; let turns = selected.invoke_stream(root.ModelTurnInput { prompt: spec.prompt_template, journal: root.Journal.new(spec), toolbox: spec.tools(), output_type: spec.output_type() }) } ai.stream.Stream { _next_text: () -> { {  } match (turns.next()) { d: ai.stream.Done => { if (Not settled) { settled = true } if let cb: (root.events.Event) -> void throws never = emit { let turn = turns.final_turn(); cb(root.events.AssistantMessage { content: turn.content, client_id: provider }); if let u: root.events.Usage = turn.usage { cb(u) }; for call in turn.calls { cb(call) } } } null, batch: string[] => batch.join("") } catch_all (e) { _ => throw root.errors.normalize(e) } }, _cache: baml.sap.__new_parse_cache(), _text: "", _finished: false }
+  { if (Not spec.tools().is_empty()) { throw baml.errors.InvalidArgument { message: `...` } }; let selected: StreamingClient = match (client) { s: StreamingClient => s, null => {  } match (spec.default_client) { s: StreamingClient => s, _ => { throw root.errors.StreamingUnsupported { client_id: spec.default_client.id() } } } }; let provider = match (selected) { c: root.Client => c.id() }; let emit = root.events.guard(on_event); let settled = false; if let cb: (root.events.Event) -> void throws never = emit { cb(root.events.RunStarted { spec_name: spec.name(), arguments: spec.arguments() }) }; let turns = selected.invoke_stream(root.ModelTurnInput { prompt: spec.prompt_template, journal: root.Journal.new(spec), toolbox: spec.tools(), output_type: spec.output_type() }) } ai.stream.Stream { _next_text: () -> { {  } match (turns.next()) { d: ai.stream.Done => { if (Not settled) { settled = true } if let cb: (root.events.Event) -> void throws never = emit { let turn = turns.final_turn(); cb(root.events.AssistantMessage { content: turn.content, client_id: provider }); if let u: root.events.Usage = turn.usage { cb(u) }; for call in turn.calls { cb(call) } } } null, batch: string[] => batch.join("") } catch_all (e) { _ => throw root.errors.normalize(e) } }, _cache: baml.sap._new_parse_cache(), _text: "", _finished: false }
 }
 function ai.stream.from_sse(sse: baml.http.SseStream, decode: (string) -> ai.stream.StreamEvent[] throws root.errors.InvokeError, require_terminal: string? = null) -> ai.stream.TurnStream  [expr] {
   {  } ai.stream.TurnStream { _event_source: null, _sse: sse, _decode: decode, _chunks: [], _cursor: 0, _pending: [], _pcursor: 0, _text: "", _stop_reason: null, _input_tokens: null, _output_tokens: null, _done: false, _require_terminal: require_terminal, _saw_terminal: false, _calls: [], _wire_call: null, _call_started: null, _ttft_from: null, _capture_sse: false }
@@ -827,7 +827,7 @@ function ai.stream.next(self: ?) -> string[] | ai.stream.Done  [expr] {
   { let ready: string[] = []; while true { if (self._done) { return ai.stream.Done {  } }; while self._pcursor Lt self._pending.length() { let e = self._pending.at(self._pcursor); self._pcursor Add= 1; match (e) { d: ai.stream.TextDelta => { self._stamp_first_delta(); self._text = `...`; ready.push(d.text) } null, m: ai.stream.TurnMeta => { if let s: root.content.StopReason = m.stop_reason { self._stop_reason = s }; if let i: int = m.input_tokens { self._input_tokens = i }; if let o: int = m.output_tokens { self._output_tokens = o } } null, d: ai.stream.TurnDone => { self._saw_terminal = true; self._finish(); if (ready.length() Gt 0) { return ready }; return ai.stream.Done {  } }, null => null } }; if (ready.length() Gt 0) { return ready }; if let source: ai.stream.EventSource = self._event_source { match (source()) { event: ai.stream.StreamEvent => { self._pending.push(event) } null, done: ai.stream.Done => { self._finish(); return done } }; continue }; match (self._sse) { sse: baml.http.SseStream => { match (sse.next()) { null => { self._finish(); self._check_terminal(); return ai.stream.Done {  } }, batch: string => { self._capture_batch(batch); if let decode: (string) -> ai.stream.StreamEvent[] throws root.errors.InvokeError = self._decode { for e in decode(batch) { self._pending.push(e) } } null else {  } null } null } } null, null => {  } match (self._chunks.at(self._cursor)) { c: string => { self._stamp_first_delta(); self._cursor Add= 1; self._text = `...`; return [c] }, null => { self._finish(); return ai.stream.Done {  } } } } } } baml.sys.panic("unreachable")
 }
 function ai.stream.next(self: ?) -> TStream | ai.stream.Done  [expr] {
-  { while true { if (self._finished) { return ai.stream.Done {  } } } match (self._next_text()) { null => { self._finished = true; return ai.stream.Done {  } }, s: string => { self._text = self._text Add s; let parsed: TStream | baml.sap.NoYield = baml.sap.__parse_partial(self._text, self._cache) } match (parsed) { baml.sap.NoYield => {  }, p: TStream => { return p } } } } baml.sys.panic("unreachable")
+  { while true { if (self._finished) { return ai.stream.Done {  } } } match (self._next_text()) { null => { self._finished = true; return ai.stream.Done {  } }, s: string => { self._text = self._text Add s; let parsed: TStream | baml.sap._NoYield = self._cache._parse_partial(self._text) } match (parsed) { baml.sap._NoYield => {  }, p: TStream => { return p } } } } baml.sys.panic("unreachable")
 }
 
 --- captures ---

@@ -150,37 +150,9 @@ fn llm_function_lookup_error(
     }
 }
 
-/// Blanket impl — `ParseCache.new()` creates a SAP cache from a type descriptor.
-/// Parameter order follows the BAML decl (`new(streaming, target)` — stream
-/// type first, mirroring `ParseCache<TStream, TFinal>`).
-impl<T> io::IoClassSapParseCache for T {
-    fn new(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        stream_target: ::sys_types::SapTy,
-        target: ::sys_types::SapTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sap::ParseCache> {
-        let compiled =
-            match ::bex_sap::CompiledSapModel::from_sys_op_context(ctx, target, stream_target) {
-                Ok(compiled) => compiled,
-                Err(e) => {
-                    // `ParseCache.new` declares `throws never`, and the type
-                    // arguments that reach it come from the caller's own
-                    // `parse<T>` — a `T` schema-aligned parsing cannot model is
-                    // a program bug, not a recoverable condition, so it panics.
-                    return SysOpOutput::err(VmPanic::UserPanic {
-                        message: format!("schema-aligned parsing cannot model this type: {e}"),
-                    });
-                }
-            };
-        let sap = crate::sap::SapParseCache::new(compiled);
-        let data: std::sync::Arc<dyn std::any::Any + Send + Sync> = std::sync::Arc::new(sap);
-        SysOpOutput::ok(io::owned::sap::ParseCache { _data: data })
-    }
-}
-
+/// Blanket impl — schema-aligned parsing, backing both public `baml.sap.parse`
+/// and incremental `ai.stream.Stream` parsing.
+///
 impl<T> io::IoClassAiOutputFormat for T {
     #[allow(clippy::too_many_arguments)]
     fn _render(
@@ -914,15 +886,18 @@ pub fn get_return_type_op(
     SysOpOutput::ok(info.return_type.clone())
 }
 
-/// Schema-aligned parsing operations back both public `baml.sap.parse` and
-/// incremental `ai.stream.Stream` parsing.
-impl<T> io::IoNamespaceSap for T {
-    fn __parse_final(
+/// Blanket impl — schema-aligned parsing, backing both public `baml.sap.parse`
+/// and incremental `ai.stream.Stream` parsing. All three are free functions
+/// (see `ns_sap/sap.baml`), so each carries its own `TStream`/`TFinal`
+/// type-arg operands; the cache already holds the compiled model, so the
+/// two parse entry points ignore theirs.
+impl<T> io::IoClassSapParseCache for T {
+    fn _parse_final(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        json: String,
         cache: io::owned::sap::ParseCache,
+        json: String,
         _type_arg_0: ::sys_types::SapTy,
         _type_arg_1: ::sys_types::SapTy,
         ctx: &SysOpContext,
@@ -938,12 +913,12 @@ impl<T> io::IoNamespaceSap for T {
         )
     }
 
-    fn __parse_partial(
+    fn _parse_partial(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        json: String,
         cache: io::owned::sap::ParseCache,
+        json: String,
         _type_arg_0: ::sys_types::SapTy,
         _type_arg_1: ::sys_types::SapTy,
         ctx: &SysOpContext,
@@ -957,12 +932,40 @@ impl<T> io::IoNamespaceSap for T {
         let result = match crate::sap::execute_sap_parse_partial(&json, &sap, ctx) {
             Ok(Some(value)) => Ok(value),
             Ok(None) => Ok(BexExternalValue::instance(
-                "baml.sap.NoYield",
+                "baml.sap._NoYield",
                 ::indexmap::IndexMap::new(),
             )),
             Err(e) => Err(VmRustFnError::from(e)),
         };
         SysOpOutput::Ready(result)
+    }
+}
+
+impl<T> io::IoNamespaceSap for T {
+    fn _new_parse_cache(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        stream_target: ::sys_types::SapTy,
+        target: ::sys_types::SapTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sap::ParseCache> {
+        let compiled =
+            match ::bex_sap::CompiledSapModel::from_sys_op_context(ctx, target, stream_target) {
+                Ok(compiled) => compiled,
+                Err(e) => {
+                    // `_new_parse_cache` declares `throws never`, and the type
+                    // arguments that reach it come from the caller's own
+                    // `parse<T>` — a `T` schema-aligned parsing cannot model is
+                    // a program bug, not a recoverable condition, so it panics.
+                    return SysOpOutput::err(VmPanic::UserPanic {
+                        message: format!("schema-aligned parsing cannot model this type: {e}"),
+                    });
+                }
+            };
+        let sap = crate::sap::SapParseCache::new(compiled);
+        let data: std::sync::Arc<dyn std::any::Any + Send + Sync> = std::sync::Arc::new(sap);
+        SysOpOutput::ok(io::owned::sap::ParseCache { _data: data })
     }
 }
 

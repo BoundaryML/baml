@@ -231,7 +231,7 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.csv.CsvSkip"
         | "baml.csv.CsvHeaders"
         | "ai.OutputFormat"
-        | "baml.sap.ParseCache"
+        | "baml.sap._ParseCache"
         | "baml.errors.HostCallable"
         | "ai.PromptMessage"
         | AI_STREAM_STREAM

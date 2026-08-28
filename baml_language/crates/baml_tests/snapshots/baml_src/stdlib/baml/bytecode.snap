@@ -6021,42 +6021,32 @@ function baml.root.ops.Add<string>$for$string.add(self: string, rhs: string) -> 
     return
 }
 
-function baml.sap.ParseCache.new(t_stream: reflect.Type, t_final: reflect.Type) -> baml.sap.ParseCache<#0, #1> {
+function baml.sap._ParseCache._parse_final(self: baml.sap._ParseCache<#0, #1>, json: string) -> #1 {
 }
 
-function baml.sap.__new_parse_cache() -> baml.sap.ParseCache<#0, #1> {
-    load_type #0
-    load_type #1
-    sys_op baml.sap.ParseCache.new
-    return
+function baml.sap._ParseCache._parse_partial(self: baml.sap._ParseCache<#0, #1>, json: string) -> #0 | baml.sap._NoYield {
 }
 
-function baml.sap.__parse_final(json: string, cache: baml.sap.ParseCache<#0, #1>) -> #1 {
-}
-
-function baml.sap.__parse_partial(json: string, cache: baml.sap.ParseCache<#0, #1>) -> #0 | baml.sap.NoYield {
+function baml.sap._new_parse_cache() -> baml.sap._ParseCache<#0, #1> {
 }
 
 function baml.sap.parse(text: string) -> #0 {
     load_type #0
     load_type #0
-    call baml.sap.__new_parse_cache
-    store_var cache
-    load_var2 1 2
+    sys_op baml.sap._new_parse_cache
+    load_var text
     load_type #0
     load_type #0
-    sys_op baml.sap.__parse_final
+    sys_op baml.sap._ParseCache._parse_final
     return
 }
 
 function baml.sap.parse_type(t: reflect.Type, text: string) -> unknown {
-    load_var2 1 1
-    sys_op baml.sap.ParseCache.new
-    store_var cache
-    load_var2 2 3
-    load_type unknown
-    load_type unknown
-    sys_op baml.sap.__parse_final
+    load_var t
+    bind_type 0
+    load_type #0
+    load_var text
+    call baml.sap.parse
     return
 }
 

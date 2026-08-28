@@ -7082,12 +7082,12 @@ function ai.stream.Stream.final(self: ai.stream.Stream<#0, #1>) -> #1 {
 
   L1:
     load_var self
-    load_field ._text
-    load_var self
     load_field ._cache
+    load_var self
+    load_field ._text
     load_type #0
     load_type #1
-    sys_op baml.sap.__parse_final
+    sys_op baml.sap._ParseCache._parse_final
     return
 
   L2:
@@ -7151,15 +7151,15 @@ function ai.stream.Stream.next(self: ai.stream.Stream<#0, #1>) -> #0 | ai.stream
     bin_op +
     store_field ._text
     load_var self
-    load_field ._text
-    load_var self
     load_field ._cache
+    load_var self
+    load_field ._text
     load_type #0
     load_type #1
-    sys_op baml.sap.__parse_partial
+    sys_op baml.sap._ParseCache._parse_partial
     store_var parsed
     load_var parsed
-    is_type baml.sap.NoYield
+    is_type baml.sap._NoYield
     pop_jump_if_false L5
     jump L0
 
@@ -8111,7 +8111,7 @@ function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.Stream
     store_deref ?15
     load_type #0
     load_type #1
-    call baml.sap.__new_parse_cache
+    sys_op baml.sap._new_parse_cache
     store_var _50
     load_type #0
     load_type #1
