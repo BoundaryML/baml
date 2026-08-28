@@ -14,6 +14,11 @@
 #   tools/atb2/setup_database.sh --check    # only verify infisical + secrets
 #   tools/atb2/setup_database.sh -- <cmd>   # run <cmd> with the secrets, e.g.
 #   tools/atb2/setup_database.sh -- baml test -i "root::repro_match::*"
+#
+# The handle_issue evals (fix_in_budget, design_doc) run real agent sessions
+# for tens of minutes each and are opt-in; select issues with ATB2_ISSUES:
+#   ATB2_ISSUES=4587 tools/atb2/setup_database.sh -- baml test -i "root::fix_in_budget::*"
+# Live handle_issue runs also need `gh auth status` to succeed.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -63,6 +68,6 @@ echo "setup_database: infisical linked (env $env); FEEDBACK_SUPABASE_URL and FEE
 case "${1:-}" in
     --check) exit 0 ;;
     --)      shift; cd "$here" && exec "$@" ;;
-    "")      cd "$here" && exec baml test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::difficulty_estimate::*" -i "root::organize_issue::*" ;;
+    "")      cd "$here" && exec baml test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::difficulty_estimate::*" -i "root::organize_issue::*" -i "root::gauge_issue::*" -i "root::handle_issue::*" ;;
     *)       die "unknown argument: $1 (use --check, or -- <cmd>)" ;;
 esac

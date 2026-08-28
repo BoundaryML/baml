@@ -96,6 +96,7 @@ function with_difficulty(issue: Issue, difficulty: Difficulty) -> Issue {
         comments: issue.comments,
         resolution_plan: issue.resolution_plan,
         difficulty: difficulty,
+        design_doc: issue.design_doc,
     }
 }
 

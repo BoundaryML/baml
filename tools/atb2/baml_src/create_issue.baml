@@ -31,6 +31,7 @@ function create_issue(fb: Feedback) -> Issue? {
         comments: [],
         resolution_plan: draft.resolution_plan,
         difficulty: null,
+        design_doc: null,
     }
 }
 
@@ -409,6 +410,11 @@ class IssueRow {
     /// Input tokens a repro must contain to exercise the same defect.
     keywords: string[],
     reference_issue: ReferenceIssue,
+    /// handle_issue eval: seconds the agent gets to land a fix (Easy 1800,
+    /// Medium 3600); null for Hard issues.
+    time_budget_s: int?,
+    /// Hard only: the reference suggested fix + design doc.
+    design_doc: string?,
 }
 
 /// A row of triage_feedback — a Feedback with its author flattened.
@@ -627,6 +633,7 @@ function reference_as_issue(number: int, r: ReferenceIssue) -> Issue {
         comments: [],
         resolution_plan: r.resolution_plan,
         difficulty: null,
+        design_doc: null,
     }
 }
 

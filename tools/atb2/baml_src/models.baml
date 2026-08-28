@@ -87,6 +87,8 @@ class Open {
 
 class InProgress {
     state: "in_progress",
+    /// The draft PR the agent opened; null when a human took the issue.
+    pr: string?,
 }
 
 class Rejected {
@@ -132,4 +134,7 @@ class Issue {
     resolution_plan: string?,
     /// Null until gauged (gauge_issue).
     difficulty: Difficulty?,
+    /// Hard issues only: suggested fix + design doc for the shepherd to hand
+    /// to their own agent. Null until handle_issue runs the Hard path.
+    design_doc: string?,
 }
