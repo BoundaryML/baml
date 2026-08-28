@@ -1,10 +1,13 @@
 //! `PyFunction` — top-level factory binding.
 
+use std::collections::BTreeMap;
+
 use baml_codegen_types::{FunctionArgumentDefault, Ty};
 
-/// Async/sync marker carried by factory bindings. Each BAML
-/// `Function` (and each of its companions) fans out into one sync
-/// and one async binding.
+use crate::names::BindingRole;
+
+/// Async/sync marker carried by factory bindings. Each host projection fans
+/// out into one sync and one async binding.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SyncAsync {
     Sync,
@@ -13,34 +16,29 @@ pub(crate) enum SyncAsync {
 
 /// Top-level factory binding. Renders as a `__define_function(...)`
 /// three-arg call per 09b §3 / 09b2 §2. One `PyFunction` per emitted
-/// line — sync and async are distinct stubs that share their FQN and
-/// `param_names` (the call-time positional parameter names, sourced
-/// from `Function.arguments` for free functions and from each
-/// companion's own `arguments` for companions).
+/// line — sync and async are distinct stubs that share the authored FQN and
+/// `param_names`.
 pub(crate) struct PyFunction {
-    /// Python identifier. Sync form = BAML bare name verbatim;
-    /// async form = `<bare>_async`. Companion forms (`foo_stream`,
-    /// `foo__build_request`, …) are also `PyFunction` stubs.
+    /// Collision-allocated Python identifier for a direct, spec, or stream
+    /// role. The async role conventionally ends in `_async`.
     pub(crate) py_name: String,
-    /// FQN passed as the first arg to `__define_function`. For free
-    /// functions this is `"<pkg>.<ns>.<bare>"`; for companions it
-    /// carries the `$<suffix>` tail (`"…$stream"`, `"…$build_request"`).
+    /// Authored FQN passed to `__define_function` for every role.
     pub(crate) baml_fqn: String,
     /// `Sync` or `Async` — selects the mode literal in the call.
     pub(crate) mode: SyncAsync,
-    /// Inline parameter-name list passed as the third arg. Sourced
-    /// from `Function.arguments[i].name` for free functions and from
-    /// the inner companion's `arguments` for companions; never from
-    /// the parent for companion bindings.
+    /// Host projection being invoked. The renderer passes this explicitly to
+    /// `define_function`; `baml_fqn` always remains the authored declaration.
+    pub(crate) role: BindingRole,
+    /// Inline host parameter-name list passed to the factory.
     pub(crate) param_names: Vec<String>,
+    /// Raw BAML parameter names matching `param_names`.
+    pub(crate) wire_param_names: Vec<String>,
     /// Default metadata matching `param_names`. `None` means the
     /// parameter is required/positional-compatible; `Some` means it is
     /// defaulted and therefore keyword-only in generated Python.
     pub(crate) arg_defaults: Vec<Option<FunctionArgumentDefault>>,
-    /// Parameter types in the same order as `param_names`. Used only
-    /// by `.pyi` rendering; the `.py` factory binding doesn't reference
-    /// types. For companions, these are the companion's own parameter
-    /// types — never the parent's.
+    /// Parameter types in the same order as `param_names`. Used only by
+    /// `.pyi` rendering; the `.py` factory binding doesn't reference types.
     pub(crate) arg_tys: Vec<Ty>,
     /// Return type, used only by `.pyi` rendering. The async-ness lives
     /// in the `def` keyword (per 12d §3.4); this `Ty` is identical for
@@ -50,6 +48,10 @@ pub(crate) struct PyFunction {
     /// functions. Surfaces only in `.pyi` rendering — the `.py` factory
     /// binding is type-erased.
     pub(crate) generic_params: Vec<String>,
+    /// Raw BAML TypeVar names matching `generic_params`.
+    pub(crate) wire_generic_params: Vec<String>,
+    /// Raw TypeVar spelling -> projected Python spelling for annotations.
+    pub(crate) type_var_names: BTreeMap<String, String>,
     /// Joined `///` doc-comment lines from the BAML function declaration.
     /// Surfaced only by `.pyi` rendering as a `"""..."""` body so
     /// `__doc__` resolves at runtime.

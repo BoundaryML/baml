@@ -34,6 +34,42 @@ cmake -DFETCHCONTENT_SOURCE_DIR_PROTOBUF=/path/to/protobuf-31.1 \
 
 Requirements: CMake 3.16+, clang/gcc/MSVC with C++17 or later.
 
+## Bound specs and streaming
+
+An authored LLM function exposes its ordinary call plus a bound spec. The
+spec owns prompt rendering, request building, parsing, and calls. Streaming
+uses the flat host shortcut backed by the compiler-private `Fn@stream` entry:
+
+```cpp
+auto spec = baml_sdk::lorem::Extract_spec(input);
+auto prompt = spec.prompt();
+auto request =
+    spec.build_request<baml_sdk::baml::http::Request>();
+
+// This invokes the compiler-private Extract@stream projection.
+auto stream = baml_sdk::lorem::Extract_stream(input);
+for (;;) {
+  auto item = stream.next();
+  if (item.done()) break;
+  const auto& partial = item.value();
+  // Consume the typed partial value.
+}
+auto result = stream.final_();
+```
+
+`FunctionSpec<Final>` carries the bound recipe's output type, while
+`Stream<Partial, Final>` retains the PPIR partial and final types. PPIR's
+partial-output models are generated under
+`baml_sdk::stream_types`; their `$stream` spelling is only a BAML wire type
+identity. No callable `$spec`, `$stream`, `$parse`, `$render_prompt`, or
+`$build_request` declarations are generated.
+
+The flat C++ stream shortcut has synchronous and asynchronous forms and sends
+the authored function FQN with the Stream boundary operation. The C++ surface
+currently uses the private stream projection's client and callback defaults;
+explicit `client` / `on_event` controls await host representations for
+streaming-client interfaces and optional callbacks.
+
 ## Runtime resolution
 
 At the first BAML call the bridge locates the shared runtime

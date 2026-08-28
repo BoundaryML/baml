@@ -3,38 +3,14 @@ source: crates/baml_tests/src/corpus.rs
 ---
 === PPIR ===
 function user.fixtures.comment_in_type.CommentAfterArrow(client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
-  ai.Agent.new(client = client, on_event = on_event).run(CommentAfterArrow$spec()).value
+  ai.Agent.new(client = client, on_event = on_event).run(ai.FunctionSpec { spec_name: "CommentAfterArrow", args: map {  }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "test";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }).value
 }
-function user.fixtures.comment_in_type.CommentAfterArrow$build_request(client: ai.Client? = null) -> baml.http.Request  [expr] {
-  CommentAfterArrow$spec().build_request(override_client = client)
-}
-function user.fixtures.comment_in_type.CommentAfterArrow$parse(json: string) -> string  [expr] {
-  baml.sap.parse(json)
-}
-function user.fixtures.comment_in_type.CommentAfterArrow$render_prompt() -> ai.Prompt  [expr] {
-  CommentAfterArrow$spec().prompt()
-}
-function user.fixtures.comment_in_type.CommentAfterArrow$spec() -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "CommentAfterArrow", args: map {  }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "test";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }
-}
-function user.fixtures.comment_in_type.CommentAfterArrow$stream(client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(CommentAfterArrow$spec(), client = client, on_event = on_event)
+function user.fixtures.comment_in_type.CommentAfterArrow@stream(client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(ai.FunctionSpec { spec_name: "CommentAfterArrow", args: map {  }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "test";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }, client = client, on_event = on_event)
 }
 function user.fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
-  ai.Agent.new(client = client, on_event = on_event).run(FunctionWithComments$spec(a, b)).value
+  ai.Agent.new(client = client, on_event = on_event).run(ai.FunctionSpec { spec_name: "FunctionWithComments", args: map { "a": a, "b": b }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "test";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }).value
 }
-function user.fixtures.comment_in_type.FunctionWithComments$build_request(a: string, b: int, client: ai.Client? = null) -> baml.http.Request  [expr] {
-  FunctionWithComments$spec(a, b).build_request(override_client = client)
-}
-function user.fixtures.comment_in_type.FunctionWithComments$parse(json: string) -> string  [expr] {
-  baml.sap.parse(json)
-}
-function user.fixtures.comment_in_type.FunctionWithComments$render_prompt(a: string, b: int) -> ai.Prompt  [expr] {
-  FunctionWithComments$spec(a, b).prompt()
-}
-function user.fixtures.comment_in_type.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "FunctionWithComments", args: map { "a": a, "b": b }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "test";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }
-}
-function user.fixtures.comment_in_type.FunctionWithComments$stream(a: string, b: int, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(FunctionWithComments$spec(a, b), client = client, on_event = on_event)
+function user.fixtures.comment_in_type.FunctionWithComments@stream(a: string, b: int, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(ai.FunctionSpec { spec_name: "FunctionWithComments", args: map { "a": a, "b": b }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "test";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }, client = client, on_event = on_event)
 }

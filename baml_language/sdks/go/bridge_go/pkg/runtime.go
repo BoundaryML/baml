@@ -14,6 +14,21 @@ type BamlRuntime struct {
 	ptr unsafe.Pointer
 }
 
+// FunctionOperation selects a semantic projection of an authored BAML
+// function. Direct is zero so callers using an older encoder keep the existing
+// behavior when the protobuf field is absent.
+type FunctionOperation int32
+
+const (
+	FunctionOperationDirect FunctionOperation = iota
+	FunctionOperationSpec
+	FunctionOperationStream
+)
+
+func (operation FunctionOperation) valid() bool {
+	return operation >= FunctionOperationDirect && operation <= FunctionOperationStream
+}
+
 // NewRuntime creates a BAML runtime from virtual filesystem source files.
 func NewRuntime(rootPath string, files map[string]string) (*BamlRuntime, error) {
 	if files == nil {
@@ -37,9 +52,16 @@ func Version() string {
 
 // CallFunction calls a BAML function asynchronously and returns the decoded Go result.
 func (rt *BamlRuntime) CallFunction(ctx context.Context, name string, args map[string]any) (any, error) {
+	return rt.CallFunctionOperation(ctx, name, FunctionOperationDirect, args)
+}
+
+// CallFunctionOperation calls a semantic projection on the original authored
+// function name. The operation is carried separately on the wire; no `$...`
+// companion name is constructed.
+func (rt *BamlRuntime) CallFunctionOperation(ctx context.Context, name string, operation FunctionOperation, args map[string]any) (any, error) {
 	callbackID, ch := createUniqueID()
 
-	encodedArgs, err := encodeCallArgs(args, name, uint64(callbackID))
+	encodedArgs, err := encodeCallArgsWithOperation(args, name, uint64(callbackID), operation)
 	if err != nil {
 		deleteCallback(callbackID)
 		return nil, fmt.Errorf("encoding args: %w", err)

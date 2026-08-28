@@ -14,6 +14,9 @@ function fixtures.testset_vibes_nested.$init_test_ns_fixtures_ns_testset_vibes_n
 }
 
 function fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> fixtures.testset_vibes_nested.Sentiment {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -38,66 +41,15 @@ function fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: a
     load_var on_event
     call ai.Agent.new
     store_var _7
-    load_var text
-    call user.fixtures.testset_vibes_nested.ClassifySentiment$spec
-    store_var _9
-    load_type fixtures.testset_vibes_nested.Sentiment
-    load_var2 5 6
-    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
-    load_field .value
-    return
-}
-
-function fixtures.testset_vibes_nested.ClassifySentiment$build_request(text: string, client: ai.Client | null) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const null
-    store_var client
-
-  L0:
-    load_var text
-    call user.fixtures.testset_vibes_nested.ClassifySentiment$spec
-    store_var _4
-    load_type fixtures.testset_vibes_nested.Sentiment
-    load_var2 3 2
-    call ai.FunctionSpec.build_request
-    return
-}
-
-function fixtures.testset_vibes_nested.ClassifySentiment$parse(json: string) -> fixtures.testset_vibes_nested.Sentiment {
-    load_type fixtures.testset_vibes_nested.Sentiment
-    load_var json
-    call baml.sap.parse
-    return
-}
-
-function fixtures.testset_vibes_nested.ClassifySentiment$render_prompt(text: string) -> ai.Prompt {
-    load_var text
-    call user.fixtures.testset_vibes_nested.ClassifySentiment$spec
-    store_var _2
-    load_type fixtures.testset_vibes_nested.Sentiment
-    load_var _2
-    call ai.FunctionSpec.prompt
-    return
-}
-
-function fixtures.testset_vibes_nested.ClassifySentiment$spec(text: string) -> ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment> {
-    load_var ?1
-    make_cell
-    store_var ?1
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _12
     load_global user.fixtures.testset_vibes_nested.GPT4o
     call ai.clients.resolve
-    store_var _6
+    store_var _14
+    load_type fixtures.testset_vibes_nested.Sentiment
+    load_var _7
     load_const "ClassifySentiment"
     load_deref ?1
     load_const "text"
@@ -105,42 +57,23 @@ function fixtures.testset_vibes_nested.ClassifySentiment$spec(text: string) -> a
     load_type unknown
     alloc_map 1
     load_var text
-    make_closure .<lambda(ClassifySentiment$spec, 0)>, 1
-    load_var2 2 3
+    make_closure .<lambda(ClassifySentiment, 0)>, 1
+    load_var2 6 7
     load_type fixtures.testset_vibes_nested.Sentiment
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
-    return
-}
-
-function fixtures.testset_vibes_nested.ClassifySentiment$stream(text: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<fixtures.testset_vibes_nested.Sentiment$stream | null, fixtures.testset_vibes_nested.Sentiment> {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const null
-    store_var client
-
-  L0:
-    load_var on_event
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L1
-    load_const null
-    store_var on_event
-
-  L1:
-    load_var text
-    call user.fixtures.testset_vibes_nested.ClassifySentiment$spec
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
     store_var _6
-    load_type fixtures.testset_vibes_nested.Sentiment$stream | null
-    load_type fixtures.testset_vibes_nested.Sentiment
-    load_var2 4 2
-    load_var on_event
-    call ai.stream.from_spec
+    load_var _6
+    load_field .value
     return
 }
 
 function fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -165,11 +98,26 @@ function fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: 
     load_var on_event
     call ai.Agent.new
     store_var _7
-    load_var text
-    call user.fixtures.testset_vibes_nested.ClassifySentiment2$spec
-    store_var _9
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _12
+    load_global user.fixtures.testset_vibes_nested.GPT4o
+    call ai.clients.resolve
+    store_var _14
     load_type string
-    load_var2 5 6
+    load_var _7
+    load_const "ClassifySentiment2"
+    load_deref ?1
+    load_const "text"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var text
+    make_closure .<lambda(ClassifySentiment2, 0)>, 1
+    load_var2 6 7
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
@@ -179,67 +127,10 @@ function fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: 
     return
 }
 
-function fixtures.testset_vibes_nested.ClassifySentiment2$build_request(text: string, client: ai.Client | null) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const null
-    store_var client
-
-  L0:
-    load_var text
-    call user.fixtures.testset_vibes_nested.ClassifySentiment2$spec
-    store_var _4
-    load_type string
-    load_var2 3 2
-    call ai.FunctionSpec.build_request
-    return
-}
-
-function fixtures.testset_vibes_nested.ClassifySentiment2$parse(json: string) -> string {
-    load_type string
-    load_var json
-    call baml.sap.parse
-    return
-}
-
-function fixtures.testset_vibes_nested.ClassifySentiment2$render_prompt(text: string) -> ai.Prompt {
-    load_var text
-    call user.fixtures.testset_vibes_nested.ClassifySentiment2$spec
-    store_var _2
-    load_type string
-    load_var _2
-    call ai.FunctionSpec.prompt
-    return
-}
-
-function fixtures.testset_vibes_nested.ClassifySentiment2$spec(text: string) -> ai.FunctionSpec<string> {
+function fixtures.testset_vibes_nested.ClassifySentiment2@stream(text: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var ?1
     make_cell
     store_var ?1
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _4
-    load_global user.fixtures.testset_vibes_nested.GPT4o
-    call ai.clients.resolve
-    store_var _6
-    load_const "ClassifySentiment2"
-    load_deref ?1
-    load_const "text"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_var text
-    make_closure .<lambda(ClassifySentiment2$spec, 0)>, 1
-    load_var2 2 3
-    load_type string
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
-    return
-}
-
-function fixtures.testset_vibes_nested.ClassifySentiment2$stream(text: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -256,13 +147,72 @@ function fixtures.testset_vibes_nested.ClassifySentiment2$stream(text: string, c
     store_var on_event
 
   L1:
-    load_var text
-    call user.fixtures.testset_vibes_nested.ClassifySentiment2$spec
-    store_var _6
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _9
+    load_global user.fixtures.testset_vibes_nested.GPT4o
+    call ai.clients.resolve
+    store_var _11
     load_type string | null
     load_type string
-    load_var2 4 2
+    load_const "ClassifySentiment2"
+    load_deref ?1
+    load_const "text"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var text
+    make_closure .<lambda(ClassifySentiment2@stream, 0)>, 1
+    load_var2 4 5
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    load_var2 2 3
+    call ai.stream.from_spec
+    return
+}
+
+function fixtures.testset_vibes_nested.ClassifySentiment@stream(text: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<fixtures.testset_vibes_nested.Sentiment$stream | null, fixtures.testset_vibes_nested.Sentiment> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
     load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _9
+    load_global user.fixtures.testset_vibes_nested.GPT4o
+    call ai.clients.resolve
+    store_var _11
+    load_type fixtures.testset_vibes_nested.Sentiment$stream | null
+    load_type fixtures.testset_vibes_nested.Sentiment
+    load_const "ClassifySentiment"
+    load_deref ?1
+    load_const "text"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var text
+    make_closure .<lambda(ClassifySentiment@stream, 0)>, 1
+    load_var2 4 5
+    load_type fixtures.testset_vibes_nested.Sentiment
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    load_var2 2 3
     call ai.stream.from_spec
     return
 }
@@ -297,6 +247,12 @@ function fixtures.testset_vibes_nested.Foo() -> string | image {
 }
 
 function fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string[] {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -321,69 +277,15 @@ function fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, 
     load_var on_event
     call ai.Agent.new
     store_var _8
-    load_var2 1 2
-    call user.fixtures.testset_vibes_nested.GenerateTests$spec
-    store_var _10
-    load_type string[]
-    load_var2 6 7
-    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=1
-    store_var _7
-    load_var _7
-    load_field .value
-    return
-}
-
-function fixtures.testset_vibes_nested.GenerateTests$build_request(count: int, topic: string, client: ai.Client | null) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const null
-    store_var client
-
-  L0:
-    load_var2 1 2
-    call user.fixtures.testset_vibes_nested.GenerateTests$spec
-    store_var _5
-    load_type string[]
-    load_var2 4 3
-    call ai.FunctionSpec.build_request
-    return
-}
-
-function fixtures.testset_vibes_nested.GenerateTests$parse(json: string) -> string[] {
-    load_type string[]
-    load_var json
-    call baml.sap.parse
-    return
-}
-
-function fixtures.testset_vibes_nested.GenerateTests$render_prompt(count: int, topic: string) -> ai.Prompt {
-    load_var2 1 2
-    call user.fixtures.testset_vibes_nested.GenerateTests$spec
-    store_var _3
-    load_type string[]
-    load_var _3
-    call ai.FunctionSpec.prompt
-    return
-}
-
-function fixtures.testset_vibes_nested.GenerateTests$spec(count: int, topic: string) -> ai.FunctionSpec<string[]> {
-    load_var ?1
-    make_cell
-    store_var ?1
-    load_var ?2
-    make_cell
-    store_var ?2
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _5
+    store_var _13
     load_global user.fixtures.testset_vibes_nested.GPT4o
     call ai.clients.resolve
-    store_var _7
+    store_var _15
+    load_type string[]
+    load_var _8
     load_const "GenerateTests"
     load_deref ?1
     load_deref ?2
@@ -393,14 +295,26 @@ function fixtures.testset_vibes_nested.GenerateTests$spec(count: int, topic: str
     load_type unknown
     alloc_map 2
     load_var2 1 2
-    make_closure .<lambda(GenerateTests$spec, 0)>, 2
-    load_var2 3 4
+    make_closure .<lambda(GenerateTests, 0)>, 2
+    load_var2 7 8
     load_type string[]
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _7
+    load_var _7
+    load_field .value
     return
 }
 
-function fixtures.testset_vibes_nested.GenerateTests$stream(count: int, topic: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string[], string[]> {
+function fixtures.testset_vibes_nested.GenerateTests@stream(count: int, topic: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string[], string[]> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -417,13 +331,29 @@ function fixtures.testset_vibes_nested.GenerateTests$stream(count: int, topic: s
     store_var on_event
 
   L1:
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _10
+    load_global user.fixtures.testset_vibes_nested.GPT4o
+    call ai.clients.resolve
+    store_var _12
+    load_type string[]
+    load_type string[]
+    load_const "GenerateTests"
+    load_deref ?1
+    load_deref ?2
+    load_const "count"
+    load_const "topic"
+    load_type string
+    load_type unknown
+    alloc_map 2
     load_var2 1 2
-    call user.fixtures.testset_vibes_nested.GenerateTests$spec
-    store_var _7
+    make_closure .<lambda(GenerateTests@stream, 0)>, 2
+    load_var2 5 6
     load_type string[]
-    load_type string[]
-    load_var2 5 3
-    load_var on_event
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    load_var2 3 4
     call ai.stream.from_spec
     return
 }

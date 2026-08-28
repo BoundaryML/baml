@@ -3,42 +3,20 @@ source: crates/baml_tests/src/corpus.rs
 ---
 === PPIR ===
 function user.fixtures.o1_allowed_roles.AskGpt4o(question: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
-  ai.Agent.new(client = client, on_event = on_event).run(AskGpt4o$spec(question)).value
+  ai.Agent.new(client = client, on_event = on_event).run(ai.FunctionSpec { spec_name: "AskGpt4o", args: map { "question": question }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } question);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Gpt4oClient) }).value
 }
-function user.fixtures.o1_allowed_roles.AskGpt4o$build_request(question: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
-  AskGpt4o$spec(question).build_request(override_client = client)
-}
-function user.fixtures.o1_allowed_roles.AskGpt4o$parse(json: string) -> string  [expr] {
-  baml.sap.parse(json)
-}
-function user.fixtures.o1_allowed_roles.AskGpt4o$render_prompt(question: string) -> ai.Prompt  [expr] {
-  AskGpt4o$spec(question).prompt()
-}
-function user.fixtures.o1_allowed_roles.AskGpt4o$spec(question: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "AskGpt4o", args: map { "question": question }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } question);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Gpt4oClient) }
-}
-function user.fixtures.o1_allowed_roles.AskGpt4o$stream(question: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(AskGpt4o$spec(question), client = client, on_event = on_event)
+function user.fixtures.o1_allowed_roles.AskGpt4o@stream(question: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(ai.FunctionSpec { spec_name: "AskGpt4o", args: map { "question": question }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } question);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Gpt4oClient) }, client = client, on_event = on_event)
 }
 function user.fixtures.o1_allowed_roles.AskO1(question: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
-  ai.Agent.new(client = client, on_event = on_event).run(AskO1$spec(question)).value
+  ai.Agent.new(client = client, on_event = on_event).run(ai.FunctionSpec { spec_name: "AskO1", args: map { "question": question }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } question);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(O1Client) }).value
 }
-function user.fixtures.o1_allowed_roles.AskO1$build_request(question: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
-  AskO1$spec(question).build_request(override_client = client)
-}
-function user.fixtures.o1_allowed_roles.AskO1$parse(json: string) -> string  [expr] {
-  baml.sap.parse(json)
-}
-function user.fixtures.o1_allowed_roles.AskO1$render_prompt(question: string) -> ai.Prompt  [expr] {
-  AskO1$spec(question).prompt()
-}
-function user.fixtures.o1_allowed_roles.AskO1$spec(question: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "AskO1", args: map { "question": question }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } question);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(O1Client) }
-}
-function user.fixtures.o1_allowed_roles.AskO1$stream(question: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(AskO1$spec(question), client = client, on_event = on_event)
+function user.fixtures.o1_allowed_roles.AskO1@stream(question: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(ai.FunctionSpec { spec_name: "AskO1", args: map { "question": question }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } question);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(O1Client) }, client = client, on_event = on_event)
 }
 
 --- captures ---
-lambda ( __spec_output_format) in AskO1$spec: captures [question]
-lambda ( __spec_output_format) in AskGpt4o$spec: captures [question]
+lambda ( __spec_output_format) in AskO1: captures [question]
+lambda ( __spec_output_format) in AskO1: captures [question]
+lambda ( __spec_output_format) in AskGpt4o: captures [question]
+lambda ( __spec_output_format) in AskGpt4o: captures [question]

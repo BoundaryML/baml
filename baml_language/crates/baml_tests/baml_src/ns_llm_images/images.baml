@@ -1002,7 +1002,7 @@ test "gateway_images_default_endpoint" {
 // ─── streaming is unsupported, and says so ───────────────────────────────────
 
 function _stream_openai_images() -> string {
-    let final_value = ai.stream.from_spec<image | null, image>(ImagesDraw@spec("a lamp")).final();
+    let final_value = ImagesDraw@stream("a lamp").final();
     `streamed:${final_value}`
 }
 
@@ -1018,7 +1018,7 @@ test "openai_images_streaming_unsupported" {
 }
 
 function _stream_gateway_images() -> string {
-    let final_value = ai.stream.from_spec<image | null, image>(GatewayDraw@spec("a lamp")).final();
+    let final_value = GatewayDraw@stream("a lamp").final();
     `streamed:${final_value}`
 }
 

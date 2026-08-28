@@ -21,7 +21,6 @@ use crate::{
         LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, TemplateStringDef,
         TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
     },
-    companions::expand_companions,
     lower_expr_body, lower_type_expr,
 };
 
@@ -115,9 +114,7 @@ fn lower_file_with_path_and_test_owner_impl(
         match child.kind() {
             baml_compiler_syntax::SyntaxKind::FUNCTION_DEF => {
                 if let Some(func) = lower_function(&child, &mut diags, &mut env_var_refs) {
-                    let companions = expand_companions(&func);
                     items.push(Item::Function(func));
-                    items.extend(companions.into_iter().map(Item::Function));
                 }
             }
             baml_compiler_syntax::SyntaxKind::CLASS_DEF => {
@@ -440,10 +437,10 @@ fn lower_function(
             .collect();
         let param_names: Vec<Name> = user_params.iter().map(|p| p.name.clone()).collect();
 
-        // Build and stash the `$spec` companion body while the CST prompt
-        // literal is in hand (read back by `companions::llm_spec`). Skipped
-        // when the prompt or client is unusable — the migration diagnostics
-        // above are the authoritative errors then.
+        // Build and stash the function-owned spec recipe while the CST prompt
+        // literal is in hand. Skipped when the prompt or client is unusable —
+        // the migration diagnostics above are the authoritative errors then.
+        let mut direct_body = None;
         if let (Some(prompt), Some(client_spec)) = (&prompt_literal, client_spec) {
             let tools_value = tools_value_element(&llm);
             let (spec_body, spec_sm, mut spec_diags, mut spec_env_refs) =
@@ -458,31 +455,21 @@ fn lower_function(
                 );
             diags.append(&mut spec_diags);
             env_var_refs.append(&mut spec_env_refs);
-            llm_body_def
-                .companion_bodies
-                .push(("spec".to_string(), (spec_body, spec_sm)));
+            llm_body_def.spec_body = Some((spec_body.clone(), spec_sm.clone()));
+            direct_body = Some(lower_expr_body::synthesize_spec_agent_run_body(
+                spec_body,
+                spec_sm,
+                llm_body_def.span,
+            ));
         }
 
         // Every LLM function runs the ai Agent loop; `client: ai.Client? =
         // null` is the compiler-injected per-call override. When the spec
         // could not be synthesized (migration diagnostics fired), the body is
-        // omitted so the missing `<Fn>$spec` reference never cascades.
+        // omitted so an unusable spec recipe never cascades.
         append_spec_client_param(&mut params, &mut defaults, llm_body_def.span);
         append_spec_on_event_param(&mut params, &mut defaults, llm_body_def.span);
-        let body = if llm_body_def
-            .companion_bodies
-            .iter()
-            .any(|(t, _)| t == "spec")
-        {
-            let (expr_body, source_map) = lower_expr_body::synthesize_spec_agent_run_body(
-                name.as_str(),
-                &user_params,
-                &generic_params
-                    .iter()
-                    .map(|param| param.name.clone())
-                    .collect::<Vec<_>>(),
-                llm_body_def.span,
-            );
+        let body = if let Some((expr_body, source_map)) = direct_body {
             Some(FunctionBodyDef::Expr(expr_body, source_map))
         } else {
             None
@@ -833,7 +820,7 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
     LlmBodyDef {
         client,
         // Filled in by the LLM-function branch once param names are known.
-        companion_bodies: Vec::new(),
+        spec_body: None,
         // Filled in by the LLM-function branch from the prompt literal.
         prompt_spans: None,
         has_tools: llm_tools_present(llm_body),
@@ -1121,10 +1108,6 @@ fn lower_class(
     let methods = class
         .methods()
         .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
-        .flat_map(|func| {
-            let companions = expand_companions(&func);
-            std::iter::once(func).chain(companions)
-        })
         .collect();
 
     let implements = class

@@ -62,7 +62,7 @@ pub(crate) fn type_path(name: &Name, analysis: &Analysis) -> TokenStream {
     let routed = routing::route(name).segments;
     let segments = analysis.renamed(&routed);
     let mods = segments.iter().map(|seg| idents::ident(seg));
-    let type_ident = idents::ident(name.name().as_str());
+    let type_ident = idents::ident(name.bare_name());
     quote! { crate::#(#mods::)*#type_ident }
 }
 
@@ -164,6 +164,19 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             }
         }
         Ty::Class(name, args, _) => {
+            let builtin = name.to_string();
+            if builtin == "ai.FunctionSpec" && args.len() == 1 {
+                let output = translate_inner(&args[0], ctx, true)?;
+                return Ok(quote! { ::baml_bridge::FunctionSpec<#output> });
+            }
+            if builtin == "ai.stream.Stream" && args.len() == 2 {
+                let partial = translate_inner(&args[0], ctx, true)?;
+                let output = translate_inner(&args[1], ctx, true)?;
+                return Ok(quote! { ::baml_bridge::Stream<#partial, #output> });
+            }
+            if builtin == "ai.Prompt" && args.is_empty() {
+                return Ok(quote! { ::baml_bridge::Prompt });
+            }
             // The builtin opaque host-error class is the Rust surface of an
             // opaque host throw: it maps to `baml_bridge::HostCallable` (the
             // erased default), not an emitted class — it never appears in the

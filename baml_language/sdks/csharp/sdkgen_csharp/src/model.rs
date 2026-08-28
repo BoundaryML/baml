@@ -1,19 +1,15 @@
 //! C#-owned callable projection over Canary's generator-facing symbol pool.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use baml_base::Name as BaseName;
-use baml_codegen_types::{Class, Name, Symbol, SymbolPool};
+use baml_codegen_types::{Name, Symbol, SymbolPool};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum CallableVariant {
-    Execute,
-    RenderPrompt,
-    BuildRequest,
-    BuildRequestStream,
+    Direct,
+    Spec,
     Stream,
-    Parse,
-    ParseStream,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -94,16 +90,7 @@ impl RuntimeCallableIdentities {
 
 impl CodegenModel {
     pub(crate) fn from_symbol_pool(pool: &SymbolPool) -> Self {
-        let symbols = pool
-            .iter()
-            .map(|(name, symbol)| {
-                let symbol = match symbol {
-                    Symbol::Class(class) => Symbol::Class(reclassify_companion_methods(class)),
-                    other => other.clone(),
-                };
-                (name.clone(), symbol)
-            })
-            .collect::<SymbolPool>();
+        let symbols = pool.clone();
         let mut callables = HashMap::new();
         for (name, symbol) in &symbols {
             match symbol {
@@ -150,177 +137,26 @@ impl CodegenModel {
     }
 }
 
-fn reclassify_companion_methods(class: &Class) -> Class {
-    let instance_families = class
-        .instance_methods
-        .iter()
-        .filter_map(|method| {
-            let (family, variant) = callable_parts(&method.name);
-            (variant == CallableVariant::Execute).then_some(family)
-        })
-        .collect::<HashSet<_>>();
-    let static_families = class
-        .static_methods
-        .iter()
-        .filter_map(|method| {
-            let (family, variant) = callable_parts(&method.name);
-            (variant == CallableVariant::Execute).then_some(family)
-        })
-        .collect::<HashSet<_>>();
-    let mut static_methods = Vec::new();
-    let mut instance_methods = Vec::new();
-    for (was_static, method) in class
-        .static_methods
-        .iter()
-        .map(|method| (true, method))
-        .chain(class.instance_methods.iter().map(|method| (false, method)))
-    {
-        let (family, _) = callable_parts(&method.name);
-        let is_instance = instance_families.contains(&family)
-            || (!static_families.contains(&family) && !was_static);
-        if is_instance {
-            instance_methods.push(method.clone());
-        } else {
-            static_methods.push(method.clone());
-        }
-    }
-    Class {
-        name: class.name.clone(),
-        generic_params: class.generic_params.clone(),
-        docstring: class.docstring.clone(),
-        properties: class.properties.clone(),
-        static_methods,
-        instance_methods,
-        origin: class.origin.clone(),
-    }
-}
-
 fn identity(name: &BaseName, receiver: Option<CallableReceiver>) -> CallableIdentity {
-    let (family_name, variant) = callable_parts(name);
     CallableIdentity {
-        family_name,
+        family_name: name.clone(),
         wire_name: name.clone(),
-        variant,
+        variant: CallableVariant::Direct,
         receiver,
     }
 }
 
-fn callable_parts(name: &BaseName) -> (BaseName, CallableVariant) {
-    const SUFFIXES: [(&str, CallableVariant); 6] = [
-        ("$build_request_stream", CallableVariant::BuildRequestStream),
-        ("$render_prompt", CallableVariant::RenderPrompt),
-        ("$build_request", CallableVariant::BuildRequest),
-        ("$parse_stream", CallableVariant::ParseStream),
-        ("$stream", CallableVariant::Stream),
-        ("$parse", CallableVariant::Parse),
-    ];
-    for (suffix, variant) in SUFFIXES {
-        if let Some(family) = name.as_str().strip_suffix(suffix) {
-            return (BaseName::new(family), variant);
-        }
-    }
-    (name.clone(), CallableVariant::Execute)
-}
-
 #[cfg(test)]
 mod tests {
-    use baml_base::TyAttr;
-    use baml_codegen_types::{Function, Origin, Ty};
-
     use super::*;
 
-    fn method(name: &str) -> Function {
-        Function {
-            name: BaseName::new(name),
-            generic_params: Vec::new(),
-            docstring: None,
-            arguments: Vec::new(),
-            return_type: Ty::String {
-                attr: TyAttr::default(),
-            },
-            throws: None,
-            watchers: Vec::new(),
-            origin: Origin {
-                source_file_path: "fixture.baml".to_string(),
-                span_start: 0,
-            },
-        }
-    }
-
-    fn class(static_methods: &[&str], instance_methods: &[&str]) -> Class {
-        Class {
-            name: Name::new(BaseName::new("test"), Vec::new(), BaseName::new("Fixture")),
-            generic_params: Vec::new(),
-            docstring: None,
-            properties: Vec::new(),
-            static_methods: static_methods.iter().map(|name| method(name)).collect(),
-            instance_methods: instance_methods.iter().map(|name| method(name)).collect(),
-            origin: Origin {
-                source_file_path: "fixture.baml".to_string(),
-                span_start: 0,
-            },
-        }
-    }
-
-    fn method_names(methods: &[Function]) -> Vec<&str> {
-        methods.iter().map(|method| method.name.as_str()).collect()
-    }
-
     #[test]
-    fn companion_suffixes_are_interpreted_inside_the_csharp_generator() {
-        assert_eq!(
-            callable_parts(&BaseName::new("Extract$build_request_stream")),
-            (
-                BaseName::new("Extract"),
-                CallableVariant::BuildRequestStream
-            )
-        );
-        assert_eq!(
-            callable_parts(&BaseName::new("Extract")),
-            (BaseName::new("Extract"), CallableVariant::Execute)
-        );
-    }
-
-    #[test]
-    fn static_execute_reclassifies_instance_only_companions_as_static() {
-        let class = reclassify_companion_methods(&class(
-            &["Extract"],
-            &["Extract$render_prompt", "Extract$parse"],
-        ));
-
-        assert_eq!(
-            method_names(&class.static_methods),
-            ["Extract", "Extract$render_prompt", "Extract$parse"]
-        );
-        assert!(class.instance_methods.is_empty());
-    }
-
-    #[test]
-    fn instance_execute_reclassifies_static_only_companions_as_instance() {
-        let class = reclassify_companion_methods(&class(
-            &["Extract$build_request", "Extract$stream"],
-            &["Extract"],
-        ));
-
-        assert!(class.static_methods.is_empty());
-        assert_eq!(
-            method_names(&class.instance_methods),
-            ["Extract$build_request", "Extract$stream", "Extract"]
-        );
-    }
-
-    #[test]
-    fn orphan_companions_preserve_their_original_method_kind() {
-        let class = reclassify_companion_methods(&class(
-            &["StaticOnly$parse"],
-            &["InstanceOnly$render_prompt"],
-        ));
-
-        assert_eq!(method_names(&class.static_methods), ["StaticOnly$parse"]);
-        assert_eq!(
-            method_names(&class.instance_methods),
-            ["InstanceOnly$render_prompt"]
-        );
+    fn authored_names_are_not_interpreted_as_companions() {
+        let name = BaseName::new("Extract$stream");
+        let identity = identity(&name, None);
+        assert_eq!(identity.family_name, name);
+        assert_eq!(identity.wire_name, name);
+        assert_eq!(identity.variant, CallableVariant::Direct);
     }
 
     #[test]

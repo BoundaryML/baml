@@ -57,6 +57,72 @@ using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
 string requestCountFile = Environment.GetEnvironmentVariable("BAML_CSHARP_REPLAY_COUNT_FILE")
     ?? throw new InvalidOperationException("native child request-count file is missing");
 
+const string PngBase64 = "iVBORw0KGgo=";
+BamlImage image = BamlImage.FromBase64(PngBase64, "image/png");
+BamlFunctionSpec<string> mediaSpec = Functions.InspectMediaSpec(image);
+Require(
+    mediaSpec.Name().Contains("InspectMedia", StringComparison.Ordinal),
+    "FunctionSpec.name did not preserve the authored function identity");
+Require(
+    mediaSpec.ClientId().Length != 0,
+    "FunctionSpec.client_id returned an empty client identity");
+Require(
+    mediaSpec.OutputType().Descriptor.Kind == BamlTypeDescriptorKind.String,
+    "FunctionSpec reflected output type changed");
+IReadOnlyDictionary<string, BamlValue> boundArguments = mediaSpec.Arguments();
+Require(
+    boundArguments.Count == 1
+        && boundArguments["photo"].As<BamlImage>().TryGetBytes(
+            out ReadOnlyMemory<byte> argumentBytes,
+            out string? argumentMediaType)
+        && Convert.ToBase64String(argumentBytes.Span) == PngBase64
+        && argumentMediaType == "image/png",
+    "FunctionSpec.arguments did not preserve its bound media value");
+Require(
+    mediaSpec.Parse("\"parsed\"") == "parsed",
+    "FunctionSpec.parse did not decode through the final output codec");
+Require(
+    mediaSpec.Tools().Kind == BamlValueKind.Class,
+    "FunctionSpec.tools did not return its canonical toolbox value");
+
+BamlPrompt prompt = mediaSpec.Prompt();
+string promptText = prompt.Text();
+Require(
+    prompt.Text() == promptText
+        && promptText.Contains("Describe this image:", StringComparison.Ordinal),
+    "portable Prompt.text was not repeatable");
+IReadOnlyList<BamlPromptMessage> firstMessages = prompt.Messages();
+IReadOnlyList<BamlPromptMessage> secondMessages = prompt.Messages();
+Require(
+    firstMessages.Count == 1
+        && secondMessages.Count == 1
+        && firstMessages[0].Role == "user"
+        && firstMessages[0].Parts.Count == 2
+        && firstMessages[0].Parts[0].As<string>()
+            .Contains("Describe this image:", StringComparison.Ordinal),
+    "portable Prompt.messages did not preserve its structural message");
+BamlImage promptImage = firstMessages[0].Parts[1].As<BamlImage>();
+Require(
+    promptImage.TryGetBytes(
+        out ReadOnlyMemory<byte> promptBytes,
+        out string? promptMediaType)
+        && Convert.ToBase64String(promptBytes.Span) == PngBase64
+        && promptMediaType == "image/png"
+        && secondMessages[0].Parts[1].As<BamlImage>().Equals(promptImage),
+    "portable Prompt.messages consumed or changed its media part");
+Require(
+    mediaSpec.Prompt().Text() == promptText,
+    "rendering a second Prompt consumed the FunctionSpec or first Prompt");
+
+Baml.Http.Request request = mediaSpec.BuildRequest().As<Baml.Http.Request>();
+Require(
+    request.Method == "POST"
+        && request.Body.Contains(
+            "data:image/png;base64," + PngBase64,
+            StringComparison.Ordinal)
+        && mediaSpec.BuildRequest().As<Baml.Http.Request>().Body == request.Body,
+    "FunctionSpec.build_request did not preserve the reusable prompt media");
+
 int requestsBefore = ReplayRequestCount();
 BamlStream<string?, string> finalOnly = Functions.DeterministicStream("final-only");
 Require(

@@ -447,6 +447,24 @@ public final class BamlFfi {
             BamlType returnDesc,
             BamlCallContext ctx,
             BamlTypes typeArgs) {
+        return callSyncOperation(
+                fqn,
+                names,
+                args,
+                returnDesc,
+                ctx,
+                typeArgs,
+                BamlFunctionOperation.DIRECT);
+    }
+
+    public static Object callSyncOperation(
+            String fqn,
+            String[] names,
+            Object[] args,
+            BamlType returnDesc,
+            BamlCallContext ctx,
+            BamlTypes typeArgs,
+            BamlFunctionOperation operation) {
         long callId = newCallId();
         if (ctx != null) {
             ctx.attach(callId);
@@ -454,7 +472,7 @@ public final class BamlFfi {
         try {
             byte[] request =
                     ProtoWriter.encodeNamedCallFunctionArgs(
-                            fqn, names, args, callId, typeArgs);
+                            fqn, names, args, callId, typeArgs, operation);
             byte[] response = nativeCallSync(request);
             return decodeResult(response, returnDesc);
         } finally {
@@ -527,6 +545,24 @@ public final class BamlFfi {
             BamlType returnDesc,
             BamlCallContext ctx,
             BamlTypes typeArgs) {
+        return callAsyncOperation(
+                fqn,
+                names,
+                args,
+                returnDesc,
+                ctx,
+                typeArgs,
+                BamlFunctionOperation.DIRECT);
+    }
+
+    public static CompletableFuture<Object> callAsyncOperation(
+            String fqn,
+            String[] names,
+            Object[] args,
+            BamlType returnDesc,
+            BamlCallContext ctx,
+            BamlTypes typeArgs,
+            BamlFunctionOperation operation) {
         long callId = newCallId();
         CompletableFuture<byte[]> raw = new CompletableFuture<>();
         PENDING.put(callId, raw);
@@ -537,7 +573,7 @@ public final class BamlFfi {
         try {
             byte[] request =
                     ProtoWriter.encodeNamedCallFunctionArgs(
-                            fqn, names, args, callId, typeArgs);
+                            fqn, names, args, callId, typeArgs, operation);
             nativeCallAsync(callId, request);
         } catch (Throwable t) {
             // Arg-encode / JNI-glue failure before the engine took ownership of

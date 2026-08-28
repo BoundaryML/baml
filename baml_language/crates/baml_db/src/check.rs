@@ -1828,6 +1828,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::UnresolvedName { .. } | TirTypeError::UnresolvedPropertyShorthand { .. } => {
             DiagnosticId::UnknownVariable
         }
+        TirTypeError::FunctionProjectionUnavailable { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
             runtime_type::computed_generic_argument_requires_unreflect(name.as_str()).id
         }

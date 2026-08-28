@@ -4,19 +4,21 @@
 //! emitter-internal `MethodKind` that drives the `staticmethod(...)`
 //! wrap in `render_method_binding`.
 
+use std::collections::BTreeMap;
+
 use baml_codegen_types::{FunctionArgumentDefault, Ty};
 
-use crate::emit::function::SyncAsync;
+use crate::{emit::function::SyncAsync, names::BindingRole};
 
 pub(crate) struct PyMethodBinding {
-    /// Python identifier as it appears on the LHS of the binding. Sync
-    /// form is the bare method name; async form has `_async` appended.
-    /// Companion forms (`<m>_stream`, `<m>__build_request`) follow the
-    /// same shape as free-function companions.
+    /// Collision-allocated Python identifier for the method's direct, spec,
+    /// or stream role. The async role conventionally ends in `_async`.
     pub(crate) py_name: String,
     /// FQN passed as the first arg to the factory call.
     pub(crate) baml_fqn: String,
     pub(crate) mode: SyncAsync,
+    /// Direct/spec/stream host projection plus sync/async execution mode.
+    pub(crate) role: BindingRole,
     /// Source arguments before the first defaulted parameter. Instance-method
     /// receiver `self` is not included here.
     pub(crate) required_args: Vec<RequiredArg>,
@@ -33,6 +35,10 @@ pub(crate) struct PyMethodBinding {
     /// methods. Surfaces only in `.pyi` rendering — the `.py` factory
     /// binding is type-erased.
     pub(crate) generic_params: Vec<String>,
+    /// Raw BAML TypeVar names matching `generic_params`.
+    pub(crate) wire_generic_params: Vec<String>,
+    /// Raw method TypeVar spelling -> projected Python spelling.
+    pub(crate) type_var_names: BTreeMap<String, String>,
     /// Joined `///` doc-comment lines from the BAML method declaration.
     /// Surfaced only by `.pyi` rendering as a `"""..."""` body, since
     /// `.py` factory bindings have no meaningful body.
@@ -46,13 +52,19 @@ pub(crate) struct PyMethodBinding {
 
 #[derive(Clone)]
 pub(crate) struct RequiredArg {
+    /// Projected Python parameter name.
     pub(crate) name: String,
+    /// Raw BAML parameter name sent to the engine.
+    pub(crate) wire_name: String,
     pub(crate) ty: Ty,
 }
 
 #[derive(Clone)]
 pub(crate) struct OptionalArg {
+    /// Projected Python parameter name.
     pub(crate) name: String,
+    /// Raw BAML parameter name sent to the engine.
+    pub(crate) wire_name: String,
     pub(crate) ty: Ty,
     pub(crate) default: FunctionArgumentDefault,
 }
@@ -75,6 +87,20 @@ impl PyMethodBinding {
         self.optional_args
             .iter()
             .map(|arg| arg.name.clone())
+            .collect()
+    }
+
+    pub(crate) fn param_aliases(&self) -> Vec<(String, String)> {
+        self.required_args
+            .iter()
+            .map(|arg| (&arg.name, &arg.wire_name))
+            .chain(
+                self.optional_args
+                    .iter()
+                    .map(|arg| (&arg.name, &arg.wire_name)),
+            )
+            .filter(|(host, wire)| host != wire)
+            .map(|(host, wire)| (host.clone(), wire.clone()))
             .collect()
     }
 

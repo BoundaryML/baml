@@ -13,7 +13,7 @@ import {
     cancelFunctionCall as nativeCancelFunctionCall,
     newFunctionCall as nativeNewFunctionCall,
 } from './native.js';
-import { encodeCallArgs, decodeCallResult } from './proto.js';
+import { encodeCallArgs, decodeCallResult, type FunctionOperation } from './proto.js';
 import { installFlushOnExit } from './exit_hook.js';
 import { wrapNativeError } from './errors.js';
 import { attachCallContext } from './call_context.js';
@@ -36,13 +36,20 @@ export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 // Stream wrapper. Exported as `BamlStream`; codegen aliases it as `Stream`.
 export { BamlStream } from './stream.js';
-export { encodeCallArgs, decodeCallResult } from './proto.js';
+export { BamlFunctionSpec } from './function_spec.js';
+export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from './function_spec.js';
+export { BamlPrompt, encodeCallArgs, decodeCallResult } from './proto.js';
+export type {
+    BamlPromptCallOptions,
+    BamlPromptMessage,
+    FunctionOperation,
+} from './proto.js';
 export { CtxManager } from './ctx_manager.js';
 // Codegen support: typemap + placeholder sentinel + free runtime initializer.
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 // Callable factories the generated SDK emits for every BAML function/method.
 export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
-export type { GenericParams } from './define_function.js';
+export type { FunctionProjection, GenericParams } from './define_function.js';
 // Generic-type spelling for `$types` bindings on generic classes / calls.
 export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
 export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor, BamlInterfaceToken } from './wire_ty.js';
@@ -148,13 +155,14 @@ export function callFunctionSync(
     ctx?: HostSpanManager,
     collectors?: Collector[],
     callCtx?: BamlCallContext,
+    operation: FunctionOperation = 'direct',
 ): FunctionResult {
     // Encode in sync mode so a host callable in the kwargs fast-fails
     // with a clear error instead of registering a tsfn and then hanging —
     // the sync path blocks the Node main thread on a tokio `block_on`,
     // starving libuv so the dispatch could never run.
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId, functionName });
+    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId, functionName, operation });
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
@@ -182,9 +190,10 @@ export async function callFunction(
     ctx?: HostSpanManager,
     collectors?: Collector[],
     callCtx?: BamlCallContext,
+    operation: FunctionOperation = 'direct',
 ): Promise<FunctionResult> {
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { callId, functionName });
+    const argsProto = encodeCallArgs(kwargs, { callId, functionName, operation });
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`

@@ -102,6 +102,14 @@ pub(crate) trait PullSink {
         ntypeargs: usize,
     ) -> Result<(), Self::Error>;
 
+    /// Build the dedicated source `Fn@spec<T>` callable. This is deliberately
+    /// not a mode on `make_generic_function`.
+    fn make_spec_function(
+        &mut self,
+        item: &baml_compiler2_mir::ItemRef,
+        ntypeargs: usize,
+    ) -> Result<(), Self::Error>;
+
     /// Specialize a runtime callable *value* (`g<int>`): the callable and
     /// `ntypeargs` `Object::Type` values are already on the stack (pushed by
     /// preceding `load_type` calls and the value operand); emit
@@ -486,6 +494,15 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
                 sink.load_type(template)?;
             }
             sink.make_generic_function(item, type_arg_templates.len())
+        }
+        Rvalue::MakeSpecFunction {
+            item,
+            type_arg_templates,
+        } => {
+            for template in type_arg_templates {
+                sink.load_type(template)?;
+            }
+            sink.make_spec_function(item, type_arg_templates.len())
         }
         Rvalue::MakeGenericFunctionFromValue {
             value,

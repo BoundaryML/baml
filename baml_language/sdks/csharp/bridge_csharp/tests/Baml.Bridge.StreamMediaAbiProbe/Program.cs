@@ -697,15 +697,18 @@ internal static class Program
     private static async Task<NativeHandle> StartStreamAsync(
         NativeBridge bridge)
     {
+        CallFunctionArgs streamArguments = Arguments(
+            ("text", new InboundValue
+            {
+                StringValue = "ignored-by-replay-server",
+            }));
+        streamArguments.Operation = FunctionOperation.Stream;
         BamlOutboundValue value = RequireOk(
             await bridge.CallAsync(
-                    "user.lorem.stream_e2e_extract$stream",
-                    Arguments(
-                        ("text", new InboundValue
-                        {
-                            StringValue = "ignored-by-replay-server",
-                        })))
+                    "user.lorem.stream_e2e_extract",
+                    streamArguments)
                 .ConfigureAwait(false));
+
         if (value.ValueCase
             != BamlOutboundValue.ValueOneofCase.HandleValue)
         {
@@ -714,12 +717,21 @@ internal static class Program
         }
 
         BamlOutboundHandle handle = value.HandleValue;
+        BamlTy? partialType = handle.Ty?.ClassTy?.TypeArgs.ElementAtOrDefault(0);
+        BamlTy? finalType = handle.Ty?.ClassTy?.TypeArgs.ElementAtOrDefault(1);
         if ((int)handle.HandleType != TaggedStreamHandleType
             || handle.Ty?.TyCase != BamlTy.TyOneofCase.ClassTy
             || !StringComparer.Ordinal.Equals(
                 handle.Ty.ClassTy.Name,
                 StreamClassName)
-            || handle.Ty.ClassTy.TypeArgs.Count != 2)
+            || handle.Ty.ClassTy.TypeArgs.Count != 2
+            || partialType?.TyCase != BamlTy.TyOneofCase.Optional
+            || partialType.Optional.Inner?.TyCase != BamlTy.TyOneofCase.Primitive
+            || partialType.Optional.Inner.Primitive.Kind
+                != BamlTyPrimitiveKind.BamlTyPrimitiveString
+            || finalType?.TyCase != BamlTy.TyOneofCase.Primitive
+            || finalType.Primitive.Kind
+                != BamlTyPrimitiveKind.BamlTyPrimitiveString)
         {
             throw new InvalidDataException(
                 $"stream handle descriptor was invalid: {handle}");
@@ -1459,13 +1471,7 @@ internal static class Program
             return handle;
         }
 
-        InboundClassValue media = new()
-        {
-            ClassTy = new BamlTyClass
-            {
-                Name = MediaClassName(mediaCase),
-            },
-        };
+        InboundClassValue media = new();
         media.Fields.Add(
             new InboundMapEntry
             {
@@ -1474,6 +1480,13 @@ internal static class Program
             });
         return new InboundValue
         {
+            ValueType = new BamlTy
+            {
+                ClassTy = new BamlTyClass
+                {
+                    Name = MediaClassName(mediaCase),
+                },
+            },
             ClassValue = media,
         };
     }

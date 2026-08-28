@@ -723,6 +723,21 @@ fn runtime_ty_is_int_only(ty: &RuntimeTy) -> bool {
     }
 }
 
+/// Whether every value of `ty` has a discriminant belonging to `enum_name`.
+///
+/// `Rvalue::Discriminant` requires an enum value. Nullable and mixed-enum
+/// scrutinees must use the comparison chain so non-matching values can reach
+/// the wildcard arm instead of being read as variants.
+fn runtime_ty_is_enum_only(ty: &RuntimeTy, enum_name: &TypeName) -> bool {
+    match ty {
+        RuntimeTy::Enum(name, _) | RuntimeTy::EnumVariant(name, _, _) => name == enum_name,
+        RuntimeTy::Union(members, _) => members
+            .iter()
+            .all(|member| runtime_ty_is_enum_only(member, enum_name)),
+        _ => false,
+    }
+}
+
 /// Convert a TIR pattern type into a complete [`TyTemplate`], failing closed
 /// when a type variable has no runtime frame slot.
 fn tir2_to_pattern_template(
@@ -1772,9 +1787,14 @@ struct LoweringContext<'db> {
     file: baml_base::SourceFile,
     func_loc: Option<FunctionLoc<'db>>,
     source_param_scope: Option<FileScopeId>,
-    /// Raw function name from the item tree (e.g. `"Foo$render_prompt"`).
-    /// Used to disambiguate companion scopes that share the same span.
+    /// Raw authored function name from the item tree.
+    /// Used to disambiguate attached bodies that share the same span.
     scope_func_name: Option<Name>,
+
+    /// A private attached body may have a return type different from the
+    /// authored function signature. The LLM spec recipe uses its inferred
+    /// `ai.FunctionSpec<...>` type here while sharing the function's params.
+    return_ty_override: Option<RuntimeTy>,
 
     // Schema maps built from PackageItems.
     // class_fields and class_type_tags are keyed by TypeName (name + module_path)
@@ -2403,6 +2423,7 @@ impl<'db> LoweringContext<'db> {
             func_loc: Some(func_loc),
             source_param_scope: Some(func_scope_id),
             scope_func_name: Some(func_data.name.clone()),
+            return_ty_override: None,
             class_fields: &pkg_data.class_fields,
             class_field_types: &pkg_data.class_field_types,
             enum_variants: &pkg_data.enum_variants,
@@ -2420,6 +2441,35 @@ impl<'db> LoweringContext<'db> {
             chain_null_exits: Vec::new(),
             opt,
         }
+    }
+
+    fn new_for_llm_spec(
+        db: &'db dyn crate::Db,
+        func_loc: FunctionLoc<'db>,
+        expr_body: AstExprBody,
+        source_map: Option<AstSourceMap>,
+        opt: crate::OptLevel,
+    ) -> Self {
+        let root_expr = expr_body.root_expr;
+        let arity = baml_compiler2_ppir::function_signature(db, func_loc)
+            .params
+            .iter()
+            .filter(|param| !matches!(param.name.as_str(), "client" | "on_event"))
+            .count();
+        let mut ctx = Self::new(db, func_loc, expr_body, source_map, opt);
+        let scope = ctx.current_scope;
+        ctx.current_metadata_scope = MetadataScope::LlmSpec(scope);
+        ctx.builder = MirBuilder::new(Name::new("<llm spec recipe>"), arity);
+        if let Some(root) = root_expr
+            && let Some(tir_ty) = ctx
+                .tables
+                .for_scope(MetadataScope::LlmSpec(scope))
+                .expr_type(root)
+                .cloned()
+        {
+            ctx.return_ty_override = Some(ctx.convert_tir_ty_for_runtime(&tir_ty));
+        }
+        ctx
     }
 
     /// Create a lowering context for a top-level let binding.
@@ -2486,6 +2536,7 @@ impl<'db> LoweringContext<'db> {
             func_loc: None,
             source_param_scope: None,
             scope_func_name: Some(let_name),
+            return_ty_override: None,
             class_fields: &pkg_data.class_fields,
             class_field_types: &pkg_data.class_field_types,
             enum_variants: &pkg_data.enum_variants,
@@ -4328,13 +4379,14 @@ impl<'db> LoweringContext<'db> {
         let pkg_id = PackageId::new(self.db, pkg_info.package);
         let pkg_items = package_items(self.db, pkg_id);
 
-        let ret_ty = sig
-            .return_type
-            .as_ref()
-            .map(|te| self.lower_signature_runtime_ty(te, pkg_items, &pkg_info.namespace_path))
-            .unwrap_or(RuntimeTy::Null {
-                attr: TyAttr::default(),
-            });
+        let ret_ty = self.return_ty_override.take().unwrap_or_else(|| {
+            sig.return_type
+                .as_ref()
+                .map(|te| self.lower_signature_runtime_ty(te, pkg_items, &pkg_info.namespace_path))
+                .unwrap_or(RuntimeTy::Null {
+                    attr: TyAttr::default(),
+                })
+        });
         let ret = self
             .builder
             .declare_local(Some(Name::new("_0")), ret_ty, None);
@@ -4719,10 +4771,8 @@ impl<'db> LoweringContext<'db> {
         let lambda_scope_id: FileScopeId = if let Some(ref sm) = self.source_map {
             let lambda_span = sm.expr_span(expr_id);
             let index = file_semantic_index(self.db, self.file);
-            // Two functions can carry a lambda at the *same* source span — an
-            // LLM function and its synthesized companions all share the parent's
-            // ranges (e.g. the `$spec` companion's prompt closure vs the
-            // parent's prompt-tag closure). A bare range match would pick
+            // An authored LLM body and its private spec recipe can carry a
+            // lambda at the same source span. A bare range match would pick
             // whichever lambda scope appears first in the file, binding this
             // lambda to the *other* function's captures. Disambiguate by
             // preferring the lambda scope nested within the function currently
@@ -5365,13 +5415,9 @@ impl LoweringContext<'_> {
         let lambda_scope_id: FileScopeId = if let Some(ref sm) = self.source_map {
             let span = sm.expr_span(expr_id);
             let index = file_semantic_index(self.db, self.file);
-            // Two functions can carry a tagged template at the *same* source
-            // span — notably a new-mode LLM function and its `$stream`
-            // companion, both synthesized from the one `prompt`…`` at
-            // `llm_body_def.span`. A bare range match would pick whichever
-            // lambda scope appears first in the file (the oneshot body's),
-            // binding the companion's `${param}` interps to the *other*
-            // function's captures. Disambiguate by preferring the lambda scope
+            // An authored LLM body and its private spec recipe can carry a
+            // tagged template at the same source span. A bare range match would
+            // pick whichever lambda scope appears first in the file. Disambiguate by preferring the lambda scope
             // nested within the function currently being lowered; fall back to
             // the first range match.
             let found = index
@@ -5900,6 +5946,24 @@ impl LoweringContext<'_> {
 
             AstExpr::Path(segments) => {
                 self.lower_path_expr(expr_id, &segments, dest);
+            }
+
+            AstExpr::FunctionProjection { projection, .. } => {
+                let item = self
+                    .tir_resolution(self.expr_metadata_key(expr_id))
+                    .and_then(|resolution| resolution_to_item_ref(self.db, resolution))
+                    .expect("typed function projection resolves to an authored function");
+                match projection {
+                    baml_compiler2_ast::FunctionProjection::Spec => {
+                        self.builder.assign(
+                            dest,
+                            Rvalue::MakeSpecFunction {
+                                item,
+                                type_arg_templates: Vec::new(),
+                            },
+                        );
+                    }
+                }
             }
 
             AstExpr::If {
@@ -9129,8 +9193,63 @@ impl<'db> LoweringContext<'db> {
         // If the base is a real value (not a package namespace), prepend it as self.
         let mut receiver_base_for_class_type_args: Option<AstExprId> = None;
         let mut receiver_path_tir_ty: Option<Tir2Ty> = None;
-        let (callee_operand, arg_operands) = if let AstExpr::MemberAccess { base, .. } = callee_expr
-        {
+        // A direct `Fn@spec<T>(...)` is an indirect call through a closure, so
+        // its call-site type arguments must be captured by that closure rather
+        // than prepended as operands for `CallIndirect` (which has no
+        // `ntypeargs` field). Value-position `Fn@spec<T>` already takes this
+        // route through `lower_generic_apply`.
+        let spec_projection_captures_call_type_args = matches!(
+            callee_expr,
+            AstExpr::FunctionProjection {
+                projection: baml_compiler2_ast::FunctionProjection::Spec,
+                ..
+            }
+        );
+        let (callee_operand, arg_operands) = if spec_projection_captures_call_type_args {
+            let item = self
+                .tir_resolution(self.expr_metadata_key(callee))
+                .and_then(|resolution| resolution_to_item_ref(self.db, resolution))
+                .expect("typed function projection resolves to an authored function");
+            let type_arg_templates = self.planned_spec_call_type_arg_templates(expr_id);
+            let temp = self.builder.temp(self.expr_ty(callee));
+            self.builder.assign(
+                Place::local(temp),
+                Rvalue::MakeSpecFunction {
+                    item,
+                    type_arg_templates,
+                },
+            );
+            let mut arg_operands = self.lower_call_arg_operands(expr_id, args);
+            if let AstExpr::FunctionProjection { path, .. } = callee_expr
+                && self
+                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .is_some_and(|resolution| {
+                        matches!(resolution, MemberResolution::BoundMethod { .. })
+                    })
+            {
+                let receiver_segments = &path[..path.len() - 1];
+                let receiver = if receiver_segments.len() == 1 {
+                    self.place_for_path(callee, &receiver_segments[0])
+                        .or_else(|| {
+                            self.load_top_level_let_root(callee, &receiver_segments[0])
+                                .map(Place::local)
+                        })
+                        .map_or_else(|| Operand::Constant(Constant::Null), Operand::Copy)
+                } else {
+                    let receiver_ty = self.expr_ty(callee);
+                    let receiver_local = self.builder.temp(receiver_ty);
+                    self.lower_multi_segment_path_as_field_chain(
+                        callee,
+                        receiver_segments,
+                        Place::local(receiver_local),
+                    );
+                    Operand::Copy(Place::local(receiver_local))
+                };
+                arg_operands.insert(0, receiver);
+            }
+            (Operand::Copy(Place::local(temp)), arg_operands)
+        } else if let AstExpr::MemberAccess { base, .. } = callee_expr {
             if self
                 .tir_resolution(self.expr_metadata_key(callee))
                 .is_some_and(|r| {
@@ -9458,8 +9577,11 @@ impl<'db> LoweringContext<'db> {
         // represented by ordinary `type` value params.
         let sys_op_type_arg_count = self.sys_op_synthetic_type_arg_count(callee);
         let is_sys_op = sys_op_type_arg_count.is_some();
-        let call_type_arg_operands =
-            self.lower_call_type_args(expr_id, true, sys_op_type_arg_count);
+        let call_type_arg_operands = if spec_projection_captures_call_type_args {
+            Vec::new()
+        } else {
+            self.lower_call_type_args(expr_id, true, sys_op_type_arg_count)
+        };
 
         // ── Prepend receiver's class-level type args ─────────────────────────
         // For `b.describe()` where `b: Box<int>`, the method `describe` is compiled
@@ -10175,9 +10297,8 @@ impl LoweringContext<'_> {
     fn lower_type_arg_to_tir(&self, type_arg: &AstTypeExpr, generic_params: &[ParamTy]) -> Tir2Ty {
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = PackageId::new(self.db, pkg_info.package);
-        // The canonical (PPIR-merged) package items, NOT HIR's: explicit type
-        // args synthesized by PPIR companions reference `*$stream` classes
-        // (e.g. `parse<Payload$stream | null, Payload>`), which only exist in
+        // The canonical (PPIR-merged) package items, NOT HIR's: operation and
+        // stdlib type args can reference `*$stream` classes, which only exist in
         // the PPIR-expanded item universe. Resolving against HIR's original
         // items lowered them to `Unknown` → `Void` and broke `ParseCache.new`
         // at runtime.
@@ -10440,6 +10561,41 @@ impl LoweringContext<'_> {
         }
     }
 
+    /// Materialize the callable-owned generic frame for a direct
+    /// `Fn@spec<T>(...)` call. The resulting templates are consumed by
+    /// `MakeSpecFunction`; the subsequent indirect call carries value
+    /// arguments only.
+    fn planned_spec_call_type_arg_templates(&mut self, call_expr_id: AstExprId) -> Vec<TyTemplate> {
+        let Some(plan) = self
+            .tir_call_plan(self.expr_metadata_key(call_expr_id))
+            .cloned()
+        else {
+            return Vec::new();
+        };
+
+        // Written slots need the inference plan's occurrence/runtime-binding
+        // information, exactly like a value-position `Fn@spec<T>` generic
+        // apply. Passing an empty syntax fallback is safe because this branch
+        // is entered only when the plan has authoritative slots.
+        if !plan.slots.is_empty() {
+            return self.planned_generic_apply_type_arg_templates(call_expr_id, &[]);
+        }
+        if plan.explicit {
+            return Vec::new();
+        }
+
+        // The private spec entry has the authored function's complete generic
+        // frame, including a class-method owner prefix. Retain every inferred
+        // slot as a template so the projection closure captures that frame
+        // before CallIndirect.
+        let caller_generic_params = self.enclosing_generic_params();
+        plan.type_args
+            .iter()
+            .map(|ty| ty.clone().widen_fresh())
+            .map(|ty| self.inferred_ty_to_template(&ty, &caller_generic_params))
+            .collect()
+    }
+
     fn lower_call_type_args(
         &mut self,
         call_expr_id: AstExprId,
@@ -10556,12 +10712,12 @@ impl LoweringContext<'_> {
         })
     }
 
-    /// Lower `foo<int>` (a `GenericApply` value). If the base resolves to a
-    /// function `ItemRef` and all type args are fully concrete, emit a pooled,
-    /// interned `Constant::GenericFunction` (pointer-stable; seeds
-    /// `frame.type_args` when called). Otherwise fall back to lowering the base
-    /// value with type args erased — for exotic bases (bound methods, lambdas)
-    /// or param-dependent args (`foo<T>` inside a generic function).
+    /// Lower `foo<int>` (a `GenericApply` value). An ordinary function with
+    /// fully concrete arguments becomes a pooled `Constant::GenericFunction`;
+    /// a `Fn@spec<T>` projection always uses `MakeSpecFunction`, which resolves
+    /// the attached private recipe into a zero-capture closure. Frame-dependent
+    /// ordinary functions use `MakeGenericFunction`, while non-item bases use
+    /// `MakeGenericFunctionFromValue`.
     fn lower_generic_apply(
         &mut self,
         expr_id: AstExprId,
@@ -10569,6 +10725,10 @@ impl LoweringContext<'_> {
         type_args: &[AstTypeExpr],
         dest: Place,
     ) {
+        let projection = match &self.body.exprs[base] {
+            AstExpr::FunctionProjection { projection, .. } => Some(*projection),
+            _ => None,
+        };
         let Some(item) = self.try_resolve_generic_apply_base(base) else {
             // Non-`ItemRef` base (a local/captured generic function value):
             // there is no function global to pool, so specialize the *runtime
@@ -10587,7 +10747,20 @@ impl LoweringContext<'_> {
             return;
         };
         let templates = self.planned_generic_apply_type_arg_templates(expr_id, type_args);
-        if templates.iter().all(TyTemplate::is_fully_concrete) {
+        if projection == Some(baml_compiler2_ast::FunctionProjection::Spec) {
+            // A source projection is never a pooled generic-function constant.
+            // Materialize its private spec recipe as an ordinary zero-capture
+            // closure at runtime, for concrete and frame-dependent type args
+            // alike. This keeps the common GenericFunction representation
+            // completely projection-free.
+            self.builder.assign(
+                dest,
+                Rvalue::MakeSpecFunction {
+                    item,
+                    type_arg_templates: templates,
+                },
+            );
+        } else if templates.iter().all(TyTemplate::is_fully_concrete) {
             // Concrete args → pooled, interned compile-time constant
             // (pointer-stable identity). Each template is fully concrete, so it
             // narrows directly to a `RealizedTy` — the value the runtime carries.
@@ -13837,6 +14010,16 @@ impl LoweringContext<'_> {
             return false;
         }
 
+        // Discriminant extraction is only valid when every value admitted by
+        // the scrutinee belongs to this enum. For nullable or mixed-enum
+        // scrutinees, fall back to the comparison chain so `_` can receive the
+        // non-matching value.
+        if let Some(SwitchKind::EnumDiscriminant(enum_name)) = &switch_kind
+            && !runtime_ty_is_enum_only(&self.builder.local_ty(scrutinee), enum_name)
+        {
+            return false;
+        }
+
         // TypeTag switches only pay off at 4+ arms (JumpTable). For fewer arms
         // the sequential `is_type` chain is more compact because the if-else
         // chain adds copy/pop stack management overhead per arm.
@@ -16081,6 +16264,31 @@ pub fn lower_function<'db>(
     opt: crate::OptLevel,
 ) -> MirFunction {
     lower_function_impl(db, func_loc, opt)
+}
+
+/// Lower the private, non-symbol spec recipe attached to an authored LLM
+/// function. The returned MIR shares the authored parameter/generic frame but
+/// has the recipe's inferred `ai.FunctionSpec<...>` return type. Callers must
+/// pool it privately and attach its object index to the authored function;
+/// it must never be registered as a global declaration.
+pub fn lower_llm_spec_function<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: FunctionLoc<'db>,
+    opt: crate::OptLevel,
+) -> Option<MirFunction> {
+    let body = baml_compiler2_ppir::llm_spec_body(db, func_loc);
+    let source_map = baml_compiler2_ppir::llm_spec_body_source_map(db, func_loc);
+    let FunctionBody::Expr(expr_body) = body.as_ref() else {
+        return None;
+    };
+    let mut ctx =
+        LoweringContext::new_for_llm_spec(db, func_loc, expr_body.clone(), source_map, opt);
+    let mut mir = ctx.lower_function_body();
+    mir.item_ref = def_to_item_ref(
+        db,
+        baml_compiler2_hir::contributions::Definition::Function(func_loc),
+    );
+    Some(mir)
 }
 
 fn lower_function_impl<'db>(

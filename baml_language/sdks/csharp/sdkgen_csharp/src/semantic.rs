@@ -20,10 +20,10 @@ use baml_codegen_types::{
 };
 use sha2::{Digest, Sha256};
 
-#[cfg(test)]
-use crate::model::CallableIdentity;
 use crate::{
-    model::{CallableKey, CallableVariant, CodegenModel, RuntimeCallableIdentities},
+    model::{
+        CallableIdentity, CallableKey, CallableVariant, CodegenModel, RuntimeCallableIdentities,
+    },
     names::{
         BamlFqn, BamlWireName, CSharpNameKind, CSharpNameOrigin, CSharpNameRequest, CSharpNames,
         CSharpScope, CSharpVisibility, callable_source_identity,
@@ -100,7 +100,7 @@ struct FunctionSpec<'a> {
     method_request: CSharpNameRequest,
     async_request: CSharpNameRequest,
     cancellation_request: CSharpNameRequest,
-    field_request: CSharpNameRequest,
+    field_request: Option<CSharpNameRequest>,
     locals: CallableLocalRequests,
     arguments: Vec<ArgumentSpec<'a>>,
 }
@@ -142,7 +142,7 @@ struct MethodSpec<'a> {
     method_request: CSharpNameRequest,
     async_request: CSharpNameRequest,
     cancellation_request: CSharpNameRequest,
-    function_field_request: CSharpNameRequest,
+    function_field_request: Option<CSharpNameRequest>,
     receiver_field_request: Option<CSharpNameRequest>,
     locals: CallableLocalRequests,
     arguments: Vec<ArgumentSpec<'a>>,
@@ -167,10 +167,31 @@ struct VariantSpec<'a> {
 }
 
 fn is_stream_callable_variant(variant: CallableVariant) -> bool {
-    matches!(
-        variant,
-        CallableVariant::Stream | CallableVariant::ParseStream
-    )
+    variant == CallableVariant::Stream
+}
+
+fn projected_callable_argument_ty(variant: CallableVariant, argument: &FunctionArgument) -> Ty {
+    if variant == CallableVariant::Stream
+        && argument.name.as_str() == "client"
+        && matches!(
+            &argument.ty,
+            Ty::Union(members, _)
+                if members.iter().any(|member| matches!(
+                    member,
+                    Ty::Interface(name, ..)
+                        if name.to_string() == "ai.stream.StreamingClient"
+                ))
+        )
+    {
+        // C# does not expose generated interface existentials. Preserve the
+        // exact runtime value supplied by the caller through BamlValue; the
+        // private `@stream` function performs the actual witness check.
+        Ty::Unknown {
+            attr: TyAttr::EMPTY,
+        }
+    } else {
+        argument.ty.clone()
+    }
 }
 
 struct EnumSpec<'a> {
@@ -192,7 +213,8 @@ enum BuiltinProjection {
     StructuralClass,
     StructuralEnum,
     Resource,
-    OpaqueHandle,
+    FunctionSpec,
+    Prompt,
     UnsupportedInternal,
 }
 
@@ -226,7 +248,8 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.net.TcpStream"
         | "baml.net.TcpListener"
         | "baml.net.UdpSocket" => Some(BuiltinProjection::Resource),
-        "ai.Prompt" => Some(BuiltinProjection::OpaqueHandle),
+        "ai.FunctionSpec" => Some(BuiltinProjection::FunctionSpec),
+        "ai.Prompt" => Some(BuiltinProjection::Prompt),
         "baml.csv.CsvNeedData"
         | "baml.csv.CsvSkip"
         | "baml.csv.CsvHeaders"
@@ -245,7 +268,8 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
 
 fn builtin_type_source(name: &Name) -> Option<&'static str> {
     match builtin_projection(name)? {
-        BuiltinProjection::OpaqueHandle => Some("global::Baml.BamlHandle"),
+        BuiltinProjection::FunctionSpec => Some("global::Baml.BamlFunctionSpec"),
+        BuiltinProjection::Prompt => Some("global::Baml.BamlPrompt"),
         BuiltinProjection::Resource => None,
         BuiltinProjection::StructuralClass
         | BuiltinProjection::StructuralEnum
@@ -289,7 +313,11 @@ fn is_public_resource_stdlib_function(name: &Name) -> bool {
 fn is_runtime_class_projection(name: &Name) -> bool {
     matches!(
         builtin_projection(name),
-        Some(BuiltinProjection::Resource | BuiltinProjection::OpaqueHandle)
+        Some(
+            BuiltinProjection::Resource
+                | BuiltinProjection::FunctionSpec
+                | BuiltinProjection::Prompt
+        )
     )
 }
 
@@ -477,7 +505,6 @@ fn generate_program_inner(
             function.method_request.clone(),
             function.async_request.clone(),
             function.cancellation_request.clone(),
-            function.field_request.clone(),
             function.locals.function_request.clone(),
             function.locals.arguments_request.clone(),
             function.locals.host_context_request.clone(),
@@ -486,6 +513,7 @@ fn generate_program_inner(
             function.locals.host_invocation_arguments_request.clone(),
             function.locals.host_invocation_cancellation_request.clone(),
         ]);
+        requests.extend(function.field_request.iter().cloned());
         requests.extend(function.locals.type_requests.iter().cloned());
         requests.extend(function.locals.binding_requests.iter().cloned());
         for parameter in &function.generic_params {
@@ -524,7 +552,6 @@ fn generate_program_inner(
                 method.method_request.clone(),
                 method.async_request.clone(),
                 method.cancellation_request.clone(),
-                method.function_field_request.clone(),
                 method.locals.function_request.clone(),
                 method.locals.arguments_request.clone(),
                 method.locals.host_context_request.clone(),
@@ -533,6 +560,7 @@ fn generate_program_inner(
                 method.locals.host_invocation_arguments_request.clone(),
                 method.locals.host_invocation_cancellation_request.clone(),
             ]);
+            requests.extend(method.function_field_request.iter().cloned());
             requests.extend(method.locals.type_requests.iter().cloned());
             requests.extend(method.locals.binding_requests.iter().cloned());
             if let Some(receiver) = &method.receiver_field_request {
@@ -720,7 +748,7 @@ impl RenderContext<'_> {
                     .map(str::to_string)
                     .unwrap_or_else(|| self.nominal_source(name, true));
                 if arguments.is_empty()
-                    || builtin_projection(name) == Some(BuiltinProjection::OpaqueHandle)
+                    || builtin_projection(name) == Some(BuiltinProjection::Prompt)
                 {
                     nominal
                 } else {
@@ -791,7 +819,7 @@ impl RenderContext<'_> {
             Ty::TypeAlias(name, _) => self.type_source_for(self.alias_target(name), parameters),
             Ty::Class(name, arguments, _) if !arguments.is_empty() => {
                 if let Some(source) = builtin_type_source(name) {
-                    if builtin_projection(name) == Some(BuiltinProjection::OpaqueHandle) {
+                    if builtin_projection(name) == Some(BuiltinProjection::Prompt) {
                         source.to_string()
                     } else {
                         format!(
@@ -1148,50 +1176,9 @@ fn collect_methods<'a>(
                 wire_name: method.name.clone(),
             }
         };
-        let identity = model.callable(&key).ok_or_else(|| {
+        let authored_identity = model.callable(&key).ok_or_else(|| {
             CSharpGenerationError::MissingCallable(format!("{owner}.{}", method.name))
         })?;
-        let (result, stream_partial) = if is_stream_callable_variant(identity.variant) {
-            let Ty::Class(stream_name, stream_types, _) = &method.return_type else {
-                return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{owner}.{}` must return {AI_STREAM_STREAM}<TPartial, TFinal>",
-                    method.name
-                )));
-            };
-            if stream_name.to_string() != AI_STREAM_STREAM || stream_types.len() != 2 {
-                return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{owner}.{}` must return exact {AI_STREAM_STREAM}<TPartial, TFinal>",
-                    method.name
-                )));
-            }
-            (stream_types[1].clone(), Some(stream_types[0].clone()))
-        } else {
-            (
-                project_resource_method_result(owner, class, method, &method.return_type),
-                None,
-            )
-        };
-        let result_support = require_supported_type(
-            &result,
-            model,
-            &format!("result of method `{owner}.{}`", method.name),
-        );
-        result_support?;
-        if owner.package().as_str() == "user" {
-            require_unambiguous_csharp_unions(
-                &result,
-                model,
-                &format!("result of method `{owner}.{}`", method.name),
-            )?;
-        }
-        if let Some(partial) = &stream_partial {
-            let partial_support = require_supported_type(
-                partial,
-                model,
-                &format!("partial result of method `{owner}.{}`", method.name),
-            );
-            partial_support?;
-        }
         let argument_support: Result<(), CSharpGenerationError> =
             method.arguments.iter().try_for_each(|argument| {
                 let path = format!(
@@ -1206,153 +1193,232 @@ fn collect_methods<'a>(
             });
         argument_support?;
         let owner_fqn = BamlFqn::symbol(owner);
-        let callable_fqn = owner_fqn.member(&method.name);
-        let mut type_params = if is_static {
-            Vec::new()
-        } else {
-            class_params.to_vec()
-        };
-        for parameter in &method.generic_params {
-            let shadows_class = class
-                .generic_params
-                .iter()
-                .any(|class_parameter| class_parameter == parameter);
-            type_params.push(GenericParamSpec {
-                name: parameter,
-                request: source_request(
-                    callable_fqn.member(parameter),
-                    BamlWireName::Key(parameter.clone()),
-                    if shadows_class {
-                        format!("{}Method", parameter.as_str())
-                    } else {
-                        parameter.as_str().to_string()
-                    },
-                    CSharpNameKind::TypeParameter,
-                    CSharpScope::Callable(callable_fqn.clone()),
-                ),
-                field_request: helper_request(
-                    &generated_program_fqn(),
-                    &format!(
-                        "{}_{}_{}_type_parameter",
-                        method_helper_owner(owner),
-                        callable_source_identity(identity),
-                        parameter
-                    ),
-                ),
-            });
-        }
-        for parameter in type_params
-            .iter_mut()
-            .take(if is_static { 0 } else { class_params.len() })
-        {
-            parameter.field_request = helper_request(
-                &generated_program_fqn(),
-                &format!(
-                    "{}_{}_{}_class_type_parameter",
-                    method_helper_owner(owner),
-                    callable_source_identity(identity),
-                    parameter.name
-                ),
-            );
-        }
-
-        let method_request = if identity.variant == CallableVariant::Execute {
-            source_request(
-                callable_fqn.clone(),
-                BamlWireName::Key(identity.family_name.clone()),
-                callable_source_identity(identity),
-                CSharpNameKind::Function,
-                CSharpScope::Type(owner_fqn.clone()),
-            )
-        } else {
-            CSharpNameRequest::new(
-                callable_fqn.clone(),
-                BamlWireName::Key(identity.wire_name.clone()),
-                callable_source_identity(identity),
-                CSharpNameKind::Function,
-                CSharpVisibility::Public,
-                CSharpNameOrigin::CompilerGenerated,
-                CSharpScope::Type(owner_fqn.clone()),
-            )
-        };
-        let async_request = generated_request(
-            callable_fqn.member(&BaseName::new("$async")),
-            format!("{}_async", callable_source_identity(identity)),
-            CSharpNameKind::Function,
-            CSharpScope::Type(owner_fqn.clone()),
-        );
-        let cancellation_request = generated_request(
-            callable_fqn.member(&BaseName::new("$cancellation")),
-            "cancellation_token",
-            CSharpNameKind::Parameter,
-            CSharpScope::Callable(callable_fqn.clone()),
-        );
-        let function_field_request = helper_request(
-            &generated_program_fqn(),
-            &format!(
-                "{}_{}_function",
-                method_helper_owner(owner),
-                callable_source_identity(identity)
-            ),
-        );
-        let receiver_field_request = (!is_static).then(|| {
-            helper_request(
-                &generated_program_fqn(),
-                &format!(
-                    "{}_{}_self_argument",
-                    method_helper_owner(owner),
-                    callable_source_identity(identity)
-                ),
-            )
-        });
-        let mut arguments = Vec::new();
-        for argument in &method.arguments {
-            arguments.push(ArgumentSpec {
-                argument,
-                ty: argument.ty.clone(),
-                optional: argument.default.is_some(),
-                parameter_request: source_request(
-                    callable_fqn.member(&argument.name),
-                    BamlWireName::Key(argument.name.clone()),
-                    argument.name.as_str(),
-                    CSharpNameKind::Parameter,
-                    CSharpScope::Callable(callable_fqn.clone()),
-                ),
-                field_request: helper_request(
-                    &generated_program_fqn(),
-                    &format!(
-                        "{}_{}_{}_argument",
-                        method_helper_owner(owner),
-                        callable_source_identity(identity),
-                        argument.name
-                    ),
-                ),
-            });
-        }
-        let type_param_count = type_params.len();
         let wire_identity = match runtime_identities {
             Some(runtime) => runtime
-                .method_identity(owner, &identity.wire_name)
+                .method_identity(owner, &authored_identity.wire_name)
                 .map_err(CSharpGenerationError::MissingCallable)?,
-            None => format!("{owner}.{}", identity.wire_name),
+            None => format!("{owner}.{}", authored_identity.wire_name),
         };
-        methods.push(MethodSpec {
-            method,
-            wire_identity,
-            is_static,
-            variant: identity.variant,
-            result,
-            stream_partial,
-            type_params,
-            method_type_param_count: method.generic_params.len(),
-            method_request,
-            async_request,
-            cancellation_request,
-            function_field_request,
-            receiver_field_request,
-            locals: callable_local_requests(&callable_fqn, type_param_count),
-            arguments,
-        });
+        let mut projections = vec![(
+            CallableVariant::Direct,
+            project_resource_method_result(owner, class, method, &method.return_type),
+            None,
+            method.arguments.iter().collect::<Vec<_>>(),
+        )];
+        if let Some(spec) = &method.operations.spec {
+            projections.push((
+                CallableVariant::Spec,
+                spec.return_type.clone(),
+                None,
+                method
+                    .arguments
+                    .iter()
+                    .filter(|argument| !argument.injected)
+                    .collect(),
+            ));
+        }
+        if let Some(stream) = &method.operations.stream {
+            projections.push((
+                CallableVariant::Stream,
+                method.return_type.clone(),
+                Some(stream.partial_type.clone()),
+                method
+                    .arguments
+                    .iter()
+                    .filter(|argument| !argument.injected)
+                    .chain(stream.control_arguments.iter())
+                    .collect(),
+            ));
+        }
+
+        for (variant, result, stream_partial, projection_arguments) in projections {
+            require_supported_type(
+                &result,
+                model,
+                &format!("{variant:?} result of method `{owner}.{}`", method.name),
+            )?;
+            if owner.package().as_str() == "user" {
+                require_unambiguous_csharp_unions(
+                    &result,
+                    model,
+                    &format!("{variant:?} result of method `{owner}.{}`", method.name),
+                )?;
+            }
+            if let Some(partial) = &stream_partial {
+                require_supported_type(
+                    partial,
+                    model,
+                    &format!("partial result of method `{owner}.{}`", method.name),
+                )?;
+            }
+            for argument in &projection_arguments {
+                let projected_ty = projected_callable_argument_ty(variant, argument);
+                require_supported_argument_type(
+                    &projected_ty,
+                    model,
+                    &format!(
+                        "{variant:?} argument `{}` of method `{owner}.{}`",
+                        argument.name, method.name
+                    ),
+                )?;
+            }
+
+            let identity = CallableIdentity {
+                family_name: authored_identity.family_name.clone(),
+                wire_name: authored_identity.wire_name.clone(),
+                variant,
+                receiver: authored_identity.receiver.clone(),
+            };
+            let authored_fqn = owner_fqn.member(&method.name);
+            let callable_fqn = match variant {
+                CallableVariant::Direct => authored_fqn.clone(),
+                CallableVariant::Spec => authored_fqn.member(&BaseName::new("@spec")),
+                CallableVariant::Stream => authored_fqn.member(&BaseName::new("@stream")),
+            };
+            let mut type_params = if is_static {
+                Vec::new()
+            } else {
+                class_params.to_vec()
+            };
+            for parameter in &method.generic_params {
+                let shadows_class = class
+                    .generic_params
+                    .iter()
+                    .any(|class_parameter| class_parameter == parameter);
+                type_params.push(GenericParamSpec {
+                    name: parameter,
+                    request: source_request(
+                        callable_fqn.member(parameter),
+                        BamlWireName::Key(parameter.clone()),
+                        if shadows_class {
+                            format!("{}Method", parameter.as_str())
+                        } else {
+                            parameter.as_str().to_string()
+                        },
+                        CSharpNameKind::TypeParameter,
+                        CSharpScope::Callable(callable_fqn.clone()),
+                    ),
+                    field_request: helper_request(
+                        &generated_program_fqn(),
+                        &format!(
+                            "{}_{}_{}_type_parameter",
+                            method_helper_owner(owner),
+                            callable_source_identity(&identity),
+                            parameter
+                        ),
+                    ),
+                });
+            }
+            for parameter in
+                type_params
+                    .iter_mut()
+                    .take(if is_static { 0 } else { class_params.len() })
+            {
+                parameter.field_request = helper_request(
+                    &generated_program_fqn(),
+                    &format!(
+                        "{}_{}_{}_class_type_parameter",
+                        method_helper_owner(owner),
+                        callable_source_identity(&identity),
+                        parameter.name
+                    ),
+                );
+            }
+
+            let method_request = if variant == CallableVariant::Direct {
+                source_request(
+                    callable_fqn.clone(),
+                    BamlWireName::Key(identity.family_name.clone()),
+                    callable_source_identity(&identity),
+                    CSharpNameKind::Function,
+                    CSharpScope::Type(owner_fqn.clone()),
+                )
+            } else {
+                CSharpNameRequest::new(
+                    callable_fqn.clone(),
+                    BamlWireName::Key(identity.wire_name.clone()),
+                    callable_source_identity(&identity),
+                    CSharpNameKind::Function,
+                    CSharpVisibility::Public,
+                    CSharpNameOrigin::CompilerGenerated,
+                    CSharpScope::Type(owner_fqn.clone()),
+                )
+            };
+            let async_request = generated_request(
+                callable_fqn.member(&BaseName::new("$async")),
+                format!("{}_async", callable_source_identity(&identity)),
+                CSharpNameKind::Function,
+                CSharpScope::Type(owner_fqn.clone()),
+            );
+            let cancellation_request = generated_request(
+                callable_fqn.member(&BaseName::new("$cancellation")),
+                "cancellation_token",
+                CSharpNameKind::Parameter,
+                CSharpScope::Callable(callable_fqn.clone()),
+            );
+            let function_field_request = Some({
+                helper_request(
+                    &generated_program_fqn(),
+                    &format!(
+                        "{}_{}_function",
+                        method_helper_owner(owner),
+                        callable_source_identity(&identity)
+                    ),
+                )
+            });
+            let receiver_field_request = (!is_static).then(|| {
+                helper_request(
+                    &generated_program_fqn(),
+                    &format!(
+                        "{}_{}_self_argument",
+                        method_helper_owner(owner),
+                        callable_source_identity(&identity)
+                    ),
+                )
+            });
+            let arguments = projection_arguments
+                .into_iter()
+                .map(|argument| ArgumentSpec {
+                    argument,
+                    ty: projected_callable_argument_ty(variant, argument),
+                    optional: argument.default.is_some(),
+                    parameter_request: source_request(
+                        callable_fqn.member(&argument.name),
+                        BamlWireName::Key(argument.name.clone()),
+                        argument.name.as_str(),
+                        CSharpNameKind::Parameter,
+                        CSharpScope::Callable(callable_fqn.clone()),
+                    ),
+                    field_request: helper_request(
+                        &generated_program_fqn(),
+                        &format!(
+                            "{}_{}_{}_argument",
+                            method_helper_owner(owner),
+                            callable_source_identity(&identity),
+                            argument.name
+                        ),
+                    ),
+                })
+                .collect::<Vec<_>>();
+            let type_param_count = type_params.len();
+            methods.push(MethodSpec {
+                method,
+                wire_identity: wire_identity.clone(),
+                is_static,
+                variant,
+                result,
+                stream_partial,
+                type_params,
+                method_type_param_count: method.generic_params.len(),
+                method_request,
+                async_request,
+                cancellation_request,
+                function_field_request,
+                receiver_field_request,
+                locals: callable_local_requests(&callable_fqn, type_param_count),
+                arguments,
+            });
+        }
     }
     methods.sort_by(|left, right| {
         left.method
@@ -1366,6 +1432,7 @@ fn collect_methods<'a>(
                     .cmp(&right.method.origin.span_start),
             )
             .then(left.method.name.cmp(&right.method.name))
+            .then(left.variant.cmp(&right.variant))
     });
     Ok(methods)
 }
@@ -1458,35 +1525,13 @@ fn collect_functions<'a>(
         let Symbol::Function(function) = symbol else {
             continue;
         };
-        let identity = model
+        let authored_identity = model
             .callable(&CallableKey::Free(name.clone()))
             .ok_or_else(|| CSharpGenerationError::MissingCallable(name.to_string()))?;
-        if identity.receiver.is_some() {
+        if authored_identity.receiver.is_some() {
             return Err(CSharpGenerationError::Unsupported(format!(
                 "C# generation expected a free function without a receiver for `{name}`"
             )));
-        }
-        let (result, stream_partial) = if is_stream_callable_variant(identity.variant) {
-            let Ty::Class(stream_name, stream_types, _) = &function.return_type else {
-                return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{name}` must return {AI_STREAM_STREAM}<TPartial, TFinal>"
-                )));
-            };
-            if stream_name.to_string() != AI_STREAM_STREAM || stream_types.len() != 2 {
-                return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{name}` must return exact {AI_STREAM_STREAM}<TPartial, TFinal>"
-                )));
-            }
-            (stream_types[1].clone(), Some(stream_types[0].clone()))
-        } else {
-            (function.return_type.clone(), None)
-        };
-        require_supported_type(&result, model, &format!("result of `{name}`"))?;
-        if name.package().as_str() == "user" {
-            require_unambiguous_csharp_unions(&result, model, &format!("result of `{name}`"))?;
-        }
-        if let Some(partial) = &stream_partial {
-            require_supported_type(partial, model, &format!("partial result of `{name}`"))?;
         }
         let argument_support: Result<(), CSharpGenerationError> =
             function.arguments.iter().try_for_each(|argument| {
@@ -1515,103 +1560,171 @@ fn collect_functions<'a>(
             CSharpNameKind::FileStem,
             CSharpScope::Type(holder_fqn.clone()),
         );
-        let callable_fqn = BamlFqn::symbol(name);
-        let method_request = if identity.variant != CallableVariant::Execute {
-            CSharpNameRequest::new(
-                callable_fqn.clone(),
-                BamlWireName::Symbol(name.clone()),
-                callable_source_identity(identity),
+        let mut projections = vec![(
+            CallableVariant::Direct,
+            function.return_type.clone(),
+            None,
+            function.arguments.iter().collect::<Vec<_>>(),
+        )];
+        if let Some(spec) = &function.operations.spec {
+            projections.push((
+                CallableVariant::Spec,
+                spec.return_type.clone(),
+                None,
+                function
+                    .arguments
+                    .iter()
+                    .filter(|argument| !argument.injected)
+                    .collect(),
+            ));
+        }
+        if let Some(stream) = &function.operations.stream {
+            projections.push((
+                CallableVariant::Stream,
+                function.return_type.clone(),
+                Some(stream.partial_type.clone()),
+                function
+                    .arguments
+                    .iter()
+                    .filter(|argument| !argument.injected)
+                    .chain(stream.control_arguments.iter())
+                    .collect(),
+            ));
+        }
+
+        let authored_fqn = BamlFqn::symbol(name);
+        for (variant, result, stream_partial, projection_arguments) in projections {
+            require_supported_type(&result, model, &format!("{variant:?} result of `{name}`"))?;
+            if name.package().as_str() == "user" {
+                require_unambiguous_csharp_unions(
+                    &result,
+                    model,
+                    &format!("{variant:?} result of `{name}`"),
+                )?;
+            }
+            if let Some(partial) = &stream_partial {
+                require_supported_type(partial, model, &format!("partial result of `{name}`"))?;
+            }
+            for argument in &projection_arguments {
+                let projected_ty = projected_callable_argument_ty(variant, argument);
+                require_supported_argument_type(
+                    &projected_ty,
+                    model,
+                    &format!("{variant:?} argument `{}` of `{name}`", argument.name),
+                )?;
+            }
+
+            let identity = CallableIdentity {
+                family_name: authored_identity.family_name.clone(),
+                wire_name: authored_identity.wire_name.clone(),
+                variant,
+                receiver: None,
+            };
+            let callable_fqn = match variant {
+                CallableVariant::Direct => authored_fqn.clone(),
+                CallableVariant::Spec => authored_fqn.member(&BaseName::new("@spec")),
+                CallableVariant::Stream => authored_fqn.member(&BaseName::new("@stream")),
+            };
+            let method_request = if variant == CallableVariant::Direct {
+                source_request(
+                    callable_fqn.clone(),
+                    BamlWireName::Symbol(name.clone()),
+                    callable_source_identity(&identity),
+                    CSharpNameKind::Function,
+                    CSharpScope::Type(holder_fqn.clone()),
+                )
+            } else {
+                CSharpNameRequest::new(
+                    callable_fqn.clone(),
+                    BamlWireName::Symbol(name.clone()),
+                    callable_source_identity(&identity),
+                    CSharpNameKind::Function,
+                    CSharpVisibility::Public,
+                    CSharpNameOrigin::CompilerGenerated,
+                    CSharpScope::Type(holder_fqn.clone()),
+                )
+            };
+            let async_request = generated_request(
+                callable_fqn.member(&BaseName::new("$async")),
+                format!("{}_async", callable_source_identity(&identity)),
                 CSharpNameKind::Function,
-                CSharpVisibility::Public,
-                CSharpNameOrigin::CompilerGenerated,
                 CSharpScope::Type(holder_fqn.clone()),
-            )
-        } else {
-            source_request(
-                callable_fqn.clone(),
-                BamlWireName::Symbol(name.clone()),
-                callable_source_identity(identity),
-                CSharpNameKind::Function,
-                CSharpScope::Type(holder_fqn.clone()),
-            )
-        };
-        let async_request = generated_request(
-            callable_fqn.member(&BaseName::new("$async")),
-            format!("{}_async", callable_source_identity(identity)),
-            CSharpNameKind::Function,
-            CSharpScope::Type(holder_fqn),
-        );
-        let cancellation_request = generated_request(
-            callable_fqn.member(&BaseName::new("$cancellation")),
-            "cancellation_token",
-            CSharpNameKind::Parameter,
-            CSharpScope::Callable(callable_fqn.clone()),
-        );
-        let helper_family = if stdlib_resource_function {
-            format!(
-                "{}_{}",
-                helper_identity(name),
-                callable_source_identity(identity)
-            )
-        } else {
-            callable_source_identity(identity).clone()
-        };
-        let field_request = helper_request(program_fqn, &format!("{helper_family}_function"));
-        let generic_params = function
-            .generic_params
-            .iter()
-            .map(|parameter| GenericParamSpec {
-                name: parameter,
-                request: source_request(
-                    callable_fqn.member(parameter),
-                    BamlWireName::Key(parameter.clone()),
-                    parameter.as_str(),
-                    CSharpNameKind::TypeParameter,
-                    CSharpScope::Callable(callable_fqn.clone()),
-                ),
-                field_request: helper_request(
-                    program_fqn,
-                    &format!("{helper_family}_{parameter}_type_parameter"),
-                ),
-            })
-            .collect::<Vec<_>>();
-        let mut arguments = Vec::new();
-        for argument in &function.arguments {
-            arguments.push(ArgumentSpec {
-                argument,
-                ty: argument.ty.clone(),
-                optional: argument.default.is_some(),
-                parameter_request: source_request(
-                    callable_fqn.member(&argument.name),
-                    BamlWireName::Key(argument.name.clone()),
-                    argument.name.as_str(),
-                    CSharpNameKind::Parameter,
-                    CSharpScope::Callable(callable_fqn.clone()),
-                ),
-                field_request: helper_request(
-                    program_fqn,
-                    &format!("{}_{}_argument", helper_family, argument.name),
-                ),
+            );
+            let cancellation_request = generated_request(
+                callable_fqn.member(&BaseName::new("$cancellation")),
+                "cancellation_token",
+                CSharpNameKind::Parameter,
+                CSharpScope::Callable(callable_fqn.clone()),
+            );
+            let helper_family = if stdlib_resource_function {
+                format!(
+                    "{}_{}",
+                    helper_identity(name),
+                    callable_source_identity(&identity)
+                )
+            } else {
+                callable_source_identity(&identity)
+            };
+            let field_request = Some(helper_request(
+                program_fqn,
+                &format!("{helper_family}_function"),
+            ));
+            let generic_params = function
+                .generic_params
+                .iter()
+                .map(|parameter| GenericParamSpec {
+                    name: parameter,
+                    request: source_request(
+                        callable_fqn.member(parameter),
+                        BamlWireName::Key(parameter.clone()),
+                        parameter.as_str(),
+                        CSharpNameKind::TypeParameter,
+                        CSharpScope::Callable(callable_fqn.clone()),
+                    ),
+                    field_request: helper_request(
+                        program_fqn,
+                        &format!("{helper_family}_{parameter}_type_parameter"),
+                    ),
+                })
+                .collect::<Vec<_>>();
+            let arguments = projection_arguments
+                .into_iter()
+                .map(|argument| ArgumentSpec {
+                    argument,
+                    ty: projected_callable_argument_ty(variant, argument),
+                    optional: argument.default.is_some(),
+                    parameter_request: source_request(
+                        callable_fqn.member(&argument.name),
+                        BamlWireName::Key(argument.name.clone()),
+                        argument.name.as_str(),
+                        CSharpNameKind::Parameter,
+                        CSharpScope::Callable(callable_fqn.clone()),
+                    ),
+                    field_request: helper_request(
+                        program_fqn,
+                        &format!("{}_{}_argument", helper_family, argument.name),
+                    ),
+                })
+                .collect::<Vec<_>>();
+            let generic_param_count = generic_params.len();
+            functions.push(FunctionSpec {
+                name,
+                wire_identity: name.to_string(),
+                variant,
+                result,
+                stream_partial,
+                generic_params,
+                namespace_requests: namespace_requests.clone(),
+                holder_request: holder_request.clone(),
+                file_request: file_request.clone(),
+                method_request,
+                async_request,
+                cancellation_request,
+                field_request,
+                locals: callable_local_requests(&callable_fqn, generic_param_count),
+                arguments,
             });
         }
-        let generic_param_count = generic_params.len();
-        functions.push(FunctionSpec {
-            name,
-            wire_identity: name.to_string(),
-            variant: identity.variant,
-            result,
-            stream_partial,
-            generic_params,
-            namespace_requests,
-            holder_request,
-            file_request,
-            method_request,
-            async_request,
-            cancellation_request,
-            field_request,
-            locals: callable_local_requests(&callable_fqn, generic_param_count),
-            arguments,
-        });
     }
     Ok(functions)
 }
@@ -2064,7 +2177,7 @@ fn is_canonical_generic_binding(ty: &Ty) -> bool {
         | Ty::Enum(..) => true,
         Ty::Class(name, arguments, _) => {
             (is_resource_projection(name) && !arguments.iter().any(contains_type_var))
-                || (builtin_projection(name) != Some(BuiltinProjection::OpaqueHandle)
+                || (builtin_projection(name) != Some(BuiltinProjection::Prompt)
                     && arguments.is_empty())
         }
         _ => false,
@@ -2218,6 +2331,13 @@ fn collect_type_closure(
                 )?;
             }
         }
+        Ty::Class(name, arguments, _)
+            if builtin_projection(name) == Some(BuiltinProjection::FunctionSpec) =>
+        {
+            for argument in arguments {
+                collect_type_closure(argument, model, types)?;
+            }
+        }
         Ty::Class(name, _, _) if is_runtime_class_projection(name) => {}
         Ty::Class(name, arguments, _) => {
             let Some(Symbol::Class(class)) = model.symbols.get(name) else {
@@ -2310,13 +2430,12 @@ fn render_functions(
         &helper_request(&generated_program_fqn(), "Instance"),
     )
     .source();
-    let deferred_instance = allocated(render.names, deferred_instance_request).source();
+    let _deferred_instance = allocated(render.names, deferred_instance_request).source();
     for function in functions {
         let result = render.type_source_for(&function.result, &function.generic_params);
         let method = allocated(render.names, &function.method_request).source();
         let async_method = allocated(render.names, &function.async_request).source();
         let cancellation = allocated(render.names, &function.cancellation_request).source();
-        let function_field = allocated(render.names, &function.field_request).source();
         let bound_function = allocated(render.names, &function.locals.function_request).source();
         let arguments = allocated(render.names, &function.locals.arguments_request).source();
         let type_parameters = if function.generic_params.is_empty() {
@@ -2356,6 +2475,14 @@ fn render_functions(
             "global::System.Threading.CancellationToken {cancellation} = default"
         ));
         let parameters = parameters.join(",\n        ");
+        let function_field = allocated(
+            render.names,
+            function
+                .field_request
+                .as_ref()
+                .expect("callable projections carry a registry token"),
+        )
+        .source();
         let builder = if function.generic_params.is_empty() {
             render_argument_builder(render, function, &program)
         } else {
@@ -2378,7 +2505,7 @@ fn render_functions(
                 bound_function.to_string()
             };
             source.push_str(&format!(
-                "    public static global::Baml.BamlStream<{partial_source}, {result}> {method}{type_parameters}(\n        {parameters})\n    {{\n{builder}        return global::Baml.Generated.V1.BamlGeneratedContract.CreateStream(\n            {program}.{deferred_instance},\n            {callable},\n            {partial_type},\n            {arguments}.Build(),\n            {partial_option},\n            {cancellation});\n    }}\n\n",
+                "    public static global::Baml.BamlStream<{partial_source}, {result}> {method}{type_parameters}(\n        {parameters})\n    {{\n{builder}        return global::Baml.Generated.V1.BamlGeneratedContract.CreateStream(\n            {program}.{_deferred_instance},\n            {callable},\n            {partial_type},\n            {arguments}.Build(),\n            {partial_option},\n            {cancellation});\n    }}\n\n",
                 partial_option = csharp_string(&render.wire_option_name(partial)),
             ));
             continue;
@@ -2410,7 +2537,14 @@ fn render_generic_argument_builder(
     program: &str,
 ) -> String {
     let result = render.type_source_for(&function.result, &function.generic_params);
-    let function_field = allocated(render.names, &function.field_request).source();
+    let function_field = allocated(
+        render.names,
+        function
+            .field_request
+            .as_ref()
+            .expect("direct/spec functions carry a registry token"),
+    )
+    .source();
     let bound_function = allocated(render.names, &function.locals.function_request).source();
     let arguments = allocated(render.names, &function.locals.arguments_request).source();
     let mut body = String::new();
@@ -2612,7 +2746,14 @@ fn render_argument_builder(
     function: &FunctionSpec<'_>,
     program: &str,
 ) -> String {
-    let function_field = allocated(render.names, &function.field_request).source();
+    let function_field = allocated(
+        render.names,
+        function
+            .field_request
+            .as_ref()
+            .expect("direct/spec functions carry a registry token"),
+    )
+    .source();
     let arguments = allocated(render.names, &function.locals.arguments_request).source();
     let mut body = format!(
         "        global::Baml.Generated.V1.BamlGeneratedArgumentsBuilder<{}> {arguments} =\n            {program}.Registry.CreateArgumentsBuilder({program}.{function_field});\n",
@@ -3008,7 +3149,14 @@ fn render_method_argument_builder(
     program: &str,
 ) -> String {
     let result = render.type_source_for(&method.result, &method.type_params);
-    let function_field = allocated(render.names, &method.function_field_request).source();
+    let function_field = allocated(
+        render.names,
+        method
+            .function_field_request
+            .as_ref()
+            .expect("direct/spec methods carry a registry token"),
+    )
+    .source();
     let bound_function = allocated(render.names, &method.locals.function_request).source();
     let arguments = allocated(render.names, &method.locals.arguments_request).source();
     let mut body = String::new();
@@ -3228,16 +3376,19 @@ fn render_program(
         ));
     }
     for function in functions {
+        let Some(field_request) = function.field_request.as_ref() else {
+            continue;
+        };
         if function.generic_params.is_empty() {
             source.push_str(&format!(
                 "    internal static readonly global::Baml.Generated.V1.BamlGeneratedFunction<{}> {};\n",
                 render.type_source(&function.result),
-                allocated(render.names, &function.field_request).source(),
+                allocated(render.names, field_request).source(),
             ));
         } else {
             source.push_str(&format!(
                 "    internal static readonly global::Baml.Generated.V1.BamlGeneratedGenericFunction {};\n",
-                allocated(render.names, &function.field_request).source(),
+                allocated(render.names, field_request).source(),
             ));
             for parameter in &function.generic_params {
                 source.push_str(&format!(
@@ -3264,9 +3415,12 @@ fn render_program(
     }
     for class in render.classes {
         for method in &class.methods {
+            let Some(function_field_request) = method.function_field_request.as_ref() else {
+                continue;
+            };
             source.push_str(&format!(
                 "    internal static readonly global::Baml.Generated.V1.BamlGeneratedGenericFunction {};\n",
-                allocated(render.names, &method.function_field_request).source(),
+                allocated(render.names, function_field_request).source(),
             ));
             for parameter in &method.type_params {
                 source.push_str(&format!(
@@ -3308,15 +3462,18 @@ fn render_program(
         }
     }
     for function in functions {
-        let variant = if is_stream_callable_variant(function.variant) {
-            "stream"
-        } else {
-            "call"
+        let Some(field_request) = function.field_request.as_ref() else {
+            continue;
+        };
+        let variant = match function.variant {
+            CallableVariant::Direct => "direct",
+            CallableVariant::Spec => "spec",
+            CallableVariant::Stream => "stream",
         };
         if function.generic_params.is_empty() {
             source.push_str(&format!(
                 "        {function_field} = builder.DeclareFunction(\n            {identity},\n            {variant},\n            {result_field});\n",
-                function_field = allocated(render.names, &function.field_request).source(),
+                function_field = allocated(render.names, field_request).source(),
                 identity = csharp_string(&function.wire_identity),
                 variant = csharp_string(variant),
                 result_field = render.type_field(&function.result),
@@ -3324,7 +3481,7 @@ fn render_program(
         } else {
             source.push_str(&format!(
                 "        {function_field} = builder.DeclareGenericFunction(\n            {identity},\n            {variant});\n",
-                function_field = allocated(render.names, &function.field_request).source(),
+                function_field = allocated(render.names, field_request).source(),
                 identity = csharp_string(&function.wire_identity),
                 variant = csharp_string(variant),
             ));
@@ -3332,7 +3489,7 @@ fn render_program(
                 source.push_str(&format!(
                     "        {parameter_field} = builder.DeclareTypeParameter(\n            {function_field},\n            {wire});\n",
                     parameter_field = allocated(render.names, &parameter.field_request).source(),
-                    function_field = allocated(render.names, &function.field_request).source(),
+                    function_field = allocated(render.names, field_request).source(),
                     wire = csharp_string(parameter.name.as_str()),
                 ));
             }
@@ -3342,7 +3499,7 @@ fn render_program(
                 source.push_str(&format!(
                     "        {argument_field} = builder.DeclareArgument(\n            {function_field},\n            {wire},\n            {type_field},\n            optional: {optional});\n",
                     argument_field = allocated(render.names, &argument.field_request).source(),
-                    function_field = allocated(render.names, &function.field_request).source(),
+                    function_field = allocated(render.names, field_request).source(),
                     wire = csharp_string(argument.argument.name.as_str()),
                     type_field = render.type_field(&argument.ty),
                     optional = argument.optional,
@@ -3351,7 +3508,7 @@ fn render_program(
                 source.push_str(&format!(
                     "        {argument_field} = builder.DeclareGenericArgument(\n            {function_field},\n            {wire},\n            optional: {optional});\n",
                     argument_field = allocated(render.names, &argument.field_request).source(),
-                    function_field = allocated(render.names, &function.field_request).source(),
+                    function_field = allocated(render.names, field_request).source(),
                     wire = csharp_string(argument.argument.name.as_str()),
                     optional = argument.optional,
                 ));
@@ -3360,11 +3517,14 @@ fn render_program(
     }
     for class in render.classes {
         for method in &class.methods {
-            let function_field = allocated(render.names, &method.function_field_request).source();
-            let variant = if is_stream_callable_variant(method.variant) {
-                "stream"
-            } else {
-                "call"
+            let Some(function_field_request) = method.function_field_request.as_ref() else {
+                continue;
+            };
+            let function_field = allocated(render.names, function_field_request).source();
+            let variant = match method.variant {
+                CallableVariant::Direct => "direct",
+                CallableVariant::Spec => "spec",
+                CallableVariant::Stream => "stream",
             };
             source.push_str(&format!(
                 "        {function_field} = builder.DeclareGenericFunction(\n            {identity},\n            {variant});\n",
@@ -3701,14 +3861,29 @@ fn render_builtin_codec(render: &RenderContext<'_>, ty: &Ty, name: &Name) -> (St
                 decode,
             )
         }
-        BuiltinProjection::OpaqueHandle => {
+        BuiltinProjection::FunctionSpec => {
+            let Ty::Class(_, arguments, _) = ty else {
+                unreachable!("FunctionSpec projection is a nominal class")
+            };
+            let [final_type] = arguments.as_slice() else {
+                unreachable!("FunctionSpec projection has one final type argument")
+            };
             let identity = csharp_string(&name.to_string());
             let metadata = byte_array_source(&render.wire_metadata(ty));
             (
-                format!("            return context.Handle(value, {identity}, {metadata});\n"),
-                format!("            return context.ReadHandle(value, {identity}, {metadata});\n"),
+                format!(
+                    "            return context.FunctionSpec(value, {identity}, {metadata});\n"
+                ),
+                format!(
+                    "            return context.ReadFunctionSpec(value, {identity}, {metadata}, {});\n",
+                    render.type_field(final_type),
+                ),
             )
         }
+        BuiltinProjection::Prompt => (
+            "            return context.Prompt(value);\n".to_string(),
+            "            return context.ReadPrompt(value);\n".to_string(),
+        ),
         BuiltinProjection::UnsupportedInternal => {
             unreachable!("unsupported builtins are rejected before rendering")
         }
@@ -4891,6 +5066,7 @@ mod tests {
             return_type: Ty::Unknown {
                 attr: TyAttr::EMPTY,
             },
+            operations: Default::default(),
             throws: None,
             watchers: vec![],
             origin: baml_codegen_types::Origin {
@@ -4906,7 +5082,7 @@ mod tests {
             CallableIdentity {
                 family_name: wire_name.clone(),
                 wire_name,
-                variant: CallableVariant::Execute,
+                variant: CallableVariant::Direct,
                 receiver: None,
             },
         );
@@ -4953,6 +5129,7 @@ mod tests {
                 docstring: None,
                 arguments: vec![],
                 return_type: callable,
+                operations: Default::default(),
                 throws: None,
                 watchers: vec![],
                 origin: baml_codegen_types::Origin {
@@ -4991,7 +5168,7 @@ mod tests {
                 CallableIdentity {
                     family_name: wire.clone(),
                     wire_name: wire,
-                    variant: CallableVariant::Execute,
+                    variant: CallableVariant::Direct,
                     receiver: None,
                 },
             );
@@ -5073,6 +5250,7 @@ mod tests {
                 default: None,
             }],
             return_type: envelope_ty,
+            operations: Default::default(),
             throws: None,
             watchers: vec![],
             origin: origin(),
@@ -5161,7 +5339,7 @@ mod tests {
             CallableIdentity {
                 family_name: BaseName::new("Echo"),
                 wire_name: BaseName::new("Echo"),
-                variant: CallableVariant::Execute,
+                variant: CallableVariant::Direct,
                 receiver: None,
             },
         );
@@ -5182,29 +5360,99 @@ mod tests {
 
     fn stream_contract_source() -> String {
         let namespace = vec![BaseName::new("stream_contract")];
-        let execute_name = Name::new(
-            BaseName::new("user"),
-            namespace.clone(),
-            BaseName::new("Echo"),
-        );
+        let function_name = Name::new(BaseName::new("user"), namespace, BaseName::new("Echo"));
+        let function_spec_name =
+            Name::new(BaseName::new("ai"), vec![], BaseName::new("FunctionSpec"));
         let stream_name = Name::new(
-            BaseName::new("user"),
-            namespace,
-            BaseName::new("Echo$stream"),
+            BaseName::new("ai"),
+            vec![BaseName::new("stream")],
+            BaseName::new("Stream"),
         );
-        let argument = || FunctionArgument {
+        let argument = FunctionArgument {
             injected: false,
             name: BaseName::new("prompt"),
             docstring: None,
             ty: primitive_string(),
             default: None,
         };
-        let function = |name: BaseName, return_type: Ty| baml_codegen_types::Function {
-            name,
+        let function = baml_codegen_types::Function {
+            name: BaseName::new("Echo"),
             generic_params: vec![],
             docstring: None,
-            arguments: vec![argument()],
-            return_type,
+            arguments: vec![argument],
+            return_type: primitive_string(),
+            operations: baml_codegen_types::FunctionOperations {
+                spec: Some(baml_codegen_types::SpecOperation {
+                    return_type: Ty::Class(
+                        function_spec_name.clone(),
+                        vec![primitive_string()],
+                        TyAttr::EMPTY,
+                    ),
+                }),
+                stream: Some(baml_codegen_types::StreamOperation {
+                    return_type: Ty::Class(
+                        stream_name,
+                        vec![primitive_string(), primitive_string()],
+                        TyAttr::EMPTY,
+                    ),
+                    partial_type: primitive_string(),
+                    item_type: primitive_string(),
+                    control_arguments: vec![
+                        FunctionArgument {
+                            injected: true,
+                            name: BaseName::new("client"),
+                            docstring: None,
+                            ty: Ty::Union(
+                                vec![
+                                    Ty::Interface(
+                                        Name::new(
+                                            BaseName::new("ai"),
+                                            vec![BaseName::new("stream")],
+                                            BaseName::new("StreamingClient"),
+                                        ),
+                                        vec![],
+                                        vec![],
+                                        TyAttr::EMPTY,
+                                    ),
+                                    Ty::Null {
+                                        attr: TyAttr::EMPTY,
+                                    },
+                                ],
+                                TyAttr::EMPTY,
+                            ),
+                            default: Some(baml_codegen_types::FunctionArgumentDefault::Null),
+                        },
+                        FunctionArgument {
+                            injected: true,
+                            name: BaseName::new("on_event"),
+                            docstring: None,
+                            ty: Ty::Union(
+                                vec![
+                                    Ty::Function {
+                                        params: vec![baml_codegen_types::CallableParam {
+                                            name: None,
+                                            ty: primitive_string(),
+                                            mode: baml_codegen_types::CodegenFunctionParamMode::Required,
+                                        }],
+                                        ret: Box::new(Ty::Void {
+                                            attr: TyAttr::EMPTY,
+                                        }),
+                                        throws: Box::new(Ty::Never {
+                                            attr: TyAttr::EMPTY,
+                                        }),
+                                        attr: TyAttr::EMPTY,
+                                    },
+                                    Ty::Null {
+                                        attr: TyAttr::EMPTY,
+                                    },
+                                ],
+                                TyAttr::EMPTY,
+                            ),
+                            default: Some(baml_codegen_types::FunctionArgumentDefault::Null),
+                        },
+                    ],
+                }),
+            },
             throws: None,
             watchers: vec![],
             origin: baml_codegen_types::Origin {
@@ -5213,41 +5461,18 @@ mod tests {
             },
         };
         let mut symbols = HashMap::new();
+        symbols.insert(function_name.clone(), Symbol::Function(function));
         symbols.insert(
-            execute_name.clone(),
-            Symbol::Function(function(BaseName::new("Echo"), primitive_string())),
-        );
-        symbols.insert(
-            stream_name.clone(),
-            Symbol::Function(function(
-                BaseName::new("Echo$stream"),
-                Ty::Class(
-                    Name::new(
-                        BaseName::new("ai"),
-                        vec![BaseName::new("stream")],
-                        BaseName::new("Stream"),
-                    ),
-                    vec![primitive_string(), primitive_string()],
-                    TyAttr::EMPTY,
-                ),
-            )),
+            function_spec_name.clone(),
+            builtin_class(function_spec_name, vec![BaseName::new("Final")]),
         );
         let mut callables = HashMap::new();
         callables.insert(
-            CallableKey::Free(execute_name),
+            CallableKey::Free(function_name),
             CallableIdentity {
                 family_name: BaseName::new("Echo"),
                 wire_name: BaseName::new("Echo"),
-                variant: CallableVariant::Execute,
-                receiver: None,
-            },
-        );
-        callables.insert(
-            CallableKey::Free(stream_name),
-            CallableIdentity {
-                family_name: BaseName::new("Echo"),
-                wire_name: BaseName::new("Echo$stream"),
-                variant: CallableVariant::Stream,
+                variant: CallableVariant::Direct,
                 receiver: None,
             },
         );
@@ -5258,7 +5483,7 @@ mod tests {
             "0.0.0-test",
             "stream-contract",
         )
-        .expect("the stream companion should generate");
+        .expect("structured Spec/Stream operations should generate");
         tree.files
             .iter()
             .map(|file| String::from_utf8_lossy(&file.contents))
@@ -5354,6 +5579,7 @@ mod tests {
                 },
             ],
             return_type: Ty::Class(datagram_name.clone(), vec![], TyAttr::EMPTY),
+            operations: Default::default(),
             throws: None,
             watchers: vec![],
             origin: baml_codegen_types::Origin {
@@ -5453,7 +5679,7 @@ mod tests {
             CallableIdentity {
                 family_name: BaseName::new("Echo"),
                 wire_name: BaseName::new("Echo"),
-                variant: CallableVariant::Execute,
+                variant: CallableVariant::Direct,
                 receiver: None,
             },
         );
@@ -5465,102 +5691,6 @@ mod tests {
             "stdlib-structural-contract",
         )
         .expect("public stdlib structural projections should generate");
-        tree.files
-            .iter()
-            .map(|file| String::from_utf8_lossy(&file.contents))
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    fn modular_companion_source() -> String {
-        let namespace = vec![BaseName::new("modular_contract")];
-        let prompt_name = Name::new(BaseName::new("ai"), vec![], BaseName::new("Prompt"));
-        let sse_name = Name::new(
-            BaseName::new("baml"),
-            vec![BaseName::new("http")],
-            BaseName::new("SseStream"),
-        );
-        let stream_name = Name::new(
-            BaseName::new("ai"),
-            vec![BaseName::new("stream")],
-            BaseName::new("Stream"),
-        );
-        let companions = [
-            (
-                "$render_prompt",
-                CallableVariant::RenderPrompt,
-                vec![("input", primitive_string())],
-                Ty::Class(prompt_name.clone(), vec![], TyAttr::EMPTY),
-            ),
-            (
-                "$parse",
-                CallableVariant::Parse,
-                vec![("response", primitive_string())],
-                primitive_string(),
-            ),
-            (
-                "$parse_stream",
-                CallableVariant::ParseStream,
-                vec![("sse", Ty::Class(sse_name.clone(), vec![], TyAttr::EMPTY))],
-                Ty::Class(
-                    stream_name,
-                    vec![primitive_string(), primitive_string()],
-                    TyAttr::EMPTY,
-                ),
-            ),
-        ];
-        let mut symbols = HashMap::new();
-        let mut callables = HashMap::new();
-        for (index, (suffix, variant, arguments, return_type)) in companions.into_iter().enumerate()
-        {
-            let wire_name = BaseName::new(format!("Extract{suffix}"));
-            let name = Name::new(BaseName::new("user"), namespace.clone(), wire_name.clone());
-            symbols.insert(
-                name.clone(),
-                Symbol::Function(baml_codegen_types::Function {
-                    name: wire_name.clone(),
-                    generic_params: vec![],
-                    docstring: None,
-                    arguments: arguments
-                        .into_iter()
-                        .map(|(name, ty)| FunctionArgument {
-                            injected: false,
-                            name: BaseName::new(name),
-                            docstring: None,
-                            ty,
-                            default: None,
-                        })
-                        .collect(),
-                    return_type,
-                    throws: None,
-                    watchers: vec![],
-                    origin: baml_codegen_types::Origin {
-                        source_file_path: "modular_contract.baml".to_string(),
-                        span_start: u32::try_from(index)
-                            .expect("the fixed companion fixture count fits in u32"),
-                    },
-                }),
-            );
-            callables.insert(
-                CallableKey::Free(name),
-                CallableIdentity {
-                    family_name: BaseName::new("Extract"),
-                    wire_name,
-                    variant,
-                    receiver: None,
-                },
-            );
-        }
-        symbols.insert(prompt_name.clone(), builtin_class(prompt_name, vec![]));
-        symbols.insert(sse_name.clone(), builtin_class(sse_name, vec![]));
-        let tree = generate_program(
-            &CodegenModel { symbols, callables },
-            &[1, 2, 3],
-            "0.0.0-test",
-            "0.0.0-test",
-            "modular-contract",
-        )
-        .expect("all compiler-declared modular companions should generate");
         tree.files
             .iter()
             .map(|file| String::from_utf8_lossy(&file.contents))
@@ -5612,6 +5742,7 @@ mod tests {
                 default: None,
             }],
             return_type: primitive_string(),
+            operations: Default::default(),
             throws: None,
             watchers: vec![],
             origin: baml_codegen_types::Origin {
@@ -5627,7 +5758,7 @@ mod tests {
             CallableIdentity {
                 family_name: BaseName::new("UseCallback"),
                 wire_name: BaseName::new("UseCallback"),
-                variant: CallableVariant::Execute,
+                variant: CallableVariant::Direct,
                 receiver: None,
             },
         );
@@ -5689,6 +5820,7 @@ mod tests {
                 },
             ],
             return_type: type_r,
+            operations: Default::default(),
             throws: None,
             watchers: vec![],
             origin: baml_codegen_types::Origin {
@@ -5704,7 +5836,7 @@ mod tests {
             CallableIdentity {
                 family_name: BaseName::new("Apply"),
                 wire_name: BaseName::new("Apply"),
-                variant: CallableVariant::Execute,
+                variant: CallableVariant::Direct,
                 receiver: None,
             },
         );
@@ -5751,6 +5883,7 @@ mod tests {
                 default: None,
             }],
             return_type: nullable_bytes,
+            operations: Default::default(),
             throws: None,
             watchers: vec![],
             origin: baml_codegen_types::Origin {
@@ -5766,7 +5899,7 @@ mod tests {
             CallableIdentity {
                 family_name: BaseName::new("Echo"),
                 wire_name: BaseName::new("Echo"),
-                variant: CallableVariant::Execute,
+                variant: CallableVariant::Direct,
                 receiver: None,
             },
         );
@@ -5857,6 +5990,7 @@ mod tests {
             docstring: None,
             arguments: vec![],
             return_type: partial_type,
+            operations: Default::default(),
             throws: None,
             watchers: vec![],
             origin: baml_codegen_types::Origin {
@@ -5873,7 +6007,7 @@ mod tests {
             CallableIdentity {
                 family_name: BaseName::new("Ping"),
                 wire_name: BaseName::new("Ping"),
-                variant: CallableVariant::Execute,
+                variant: CallableVariant::Direct,
                 receiver: None,
             },
         );
@@ -5961,6 +6095,7 @@ mod tests {
                     default: None,
                 }],
                 return_type: union,
+                operations: Default::default(),
                 throws: None,
                 watchers: vec![],
                 origin: baml_codegen_types::Origin {
@@ -5976,7 +6111,7 @@ mod tests {
                 CallableIdentity {
                     family_name: BaseName::new("RoundTrip"),
                     wire_name: BaseName::new("RoundTrip"),
-                    variant: CallableVariant::Execute,
+                    variant: CallableVariant::Direct,
                     receiver: None,
                 },
             );
@@ -6075,7 +6210,7 @@ mod tests {
     }
 
     #[test]
-    fn free_function_stream_companion_emits_one_cold_stream_method() {
+    fn free_function_operations_emit_spec_and_flat_stream_projection() {
         let source = stream_contract_source();
         assert_eq!(
             source
@@ -6086,28 +6221,19 @@ mod tests {
         assert!(!source.contains("EchoStreamAsync"));
         assert!(source.contains("public static string Echo("));
         assert!(source.contains("Task<string> EchoAsync("));
-        assert!(source.contains("\"user.stream_contract.Echo$stream\""));
+        assert!(source.contains("public static global::Baml.BamlFunctionSpec<string> EchoSpec("));
+        assert!(source.contains("Task<global::Baml.BamlFunctionSpec<string>> EchoSpecAsync("));
+        assert!(!source.contains("$spec"));
+        assert!(!source.contains("\"user.stream_contract.Echo$stream\""));
+        assert!(!source.contains("$stream"));
+        assert!(source.contains("\"spec\""));
         assert!(source.contains("\"stream\""));
         assert!(source.contains("BamlGeneratedContract.CreateStream("));
-        assert!(source.contains(".DeferredProgram,"));
+        assert!(source.contains("BamlOptional<global::Baml.BamlValue> client"));
+        assert!(source.contains("onEvent"));
+        assert!(!source.contains(").Stream("));
         assert!(source.contains("global::Baml.BamlStream<string, string>"));
         assert!(!source.contains("BamlGeneratedCodec<global::Baml.BamlStream"));
-    }
-
-    #[test]
-    fn compiler_declared_modular_companions_emit_exact_public_surfaces() {
-        let source = modular_companion_source();
-        assert!(source.contains("public static global::Baml.BamlHandle ExtractRenderPrompt("));
-        assert!(source.contains("Task<global::Baml.BamlHandle> ExtractRenderPromptAsync("));
-        assert!(source.contains("public static string ExtractParseResponse("));
-        assert!(source.contains("Task<string> ExtractParseResponseAsync("));
-        assert!(source.contains(
-            "public static global::Baml.BamlStream<string, string> ExtractParseStreamResponse("
-        ));
-        assert!(!source.contains("ExtractParseStreamResponseAsync"));
-        assert!(source.contains("\"user.modular_contract.Extract$render_prompt\""));
-        assert!(source.contains("\"user.modular_contract.Extract$parse\""));
-        assert!(source.contains("\"user.modular_contract.Extract$parse_stream\""));
     }
 
     #[test]
@@ -6433,6 +6559,8 @@ mod tests {
             vec![BaseName::new("only_methods")],
             BaseName::new("Counter"),
         );
+        let function_spec_name =
+            Name::new(BaseName::new("ai"), vec![], BaseName::new("FunctionSpec"));
         let method_name = BaseName::new("new");
         let method = baml_codegen_types::Function {
             name: method_name.clone(),
@@ -6446,42 +6574,37 @@ mod tests {
                 default: None,
             }],
             return_type: Ty::Class(owner.clone(), vec![], TyAttr::EMPTY),
+            operations: baml_codegen_types::FunctionOperations {
+                spec: Some(baml_codegen_types::SpecOperation {
+                    return_type: Ty::Class(
+                        function_spec_name.clone(),
+                        vec![Ty::Class(owner.clone(), vec![], TyAttr::EMPTY)],
+                        TyAttr::EMPTY,
+                    ),
+                }),
+                stream: Some(baml_codegen_types::StreamOperation {
+                    return_type: Ty::Class(
+                        Name::new(
+                            BaseName::new("ai"),
+                            vec![BaseName::new("stream")],
+                            BaseName::new("Stream"),
+                        ),
+                        vec![
+                            primitive_int(),
+                            Ty::Class(owner.clone(), vec![], TyAttr::EMPTY),
+                        ],
+                        TyAttr::EMPTY,
+                    ),
+                    partial_type: primitive_int(),
+                    item_type: primitive_int(),
+                    control_arguments: vec![],
+                }),
+            },
             throws: None,
             watchers: vec![],
             origin: baml_codegen_types::Origin {
                 source_file_path: "only_methods.baml".to_string(),
                 span_start: 20,
-            },
-        };
-        let stream_method_name = BaseName::new("new$stream");
-        let stream_method = baml_codegen_types::Function {
-            name: stream_method_name.clone(),
-            generic_params: vec![],
-            docstring: None,
-            arguments: vec![FunctionArgument {
-                injected: false,
-                name: BaseName::new("value"),
-                docstring: None,
-                ty: primitive_int(),
-                default: None,
-            }],
-            return_type: Ty::Class(
-                Name::new(
-                    BaseName::new("ai"),
-                    vec![BaseName::new("stream")],
-                    BaseName::new("Stream"),
-                ),
-                vec![
-                    primitive_int(),
-                    Ty::Class(owner.clone(), vec![], TyAttr::EMPTY),
-                ],
-                TyAttr::EMPTY,
-            ),
-            throws: None,
-            watchers: vec![],
-            origin: baml_codegen_types::Origin {
-                source_file_path: "only_methods.baml".to_string(),
-                span_start: 21,
             },
         };
         let class = Class {
@@ -6493,7 +6616,7 @@ mod tests {
                 docstring: None,
                 ty: primitive_int(),
             }],
-            static_methods: vec![method, stream_method],
+            static_methods: vec![method],
             instance_methods: vec![],
             origin: baml_codegen_types::Origin {
                 source_file_path: "only_methods.baml".to_string(),
@@ -6502,6 +6625,10 @@ mod tests {
         };
         let mut symbols = HashMap::new();
         symbols.insert(owner.clone(), Symbol::Class(class));
+        symbols.insert(
+            function_spec_name.clone(),
+            builtin_class(function_spec_name, vec![BaseName::new("Final")]),
+        );
         let mut callables = HashMap::new();
         callables.insert(
             CallableKey::StaticMethod {
@@ -6511,19 +6638,7 @@ mod tests {
             CallableIdentity {
                 family_name: method_name.clone(),
                 wire_name: method_name,
-                variant: CallableVariant::Execute,
-                receiver: None,
-            },
-        );
-        callables.insert(
-            CallableKey::StaticMethod {
-                owner,
-                wire_name: stream_method_name.clone(),
-            },
-            CallableIdentity {
-                family_name: BaseName::new("new"),
-                wire_name: stream_method_name,
-                variant: CallableVariant::Stream,
+                variant: CallableVariant::Direct,
                 receiver: None,
             },
         );
@@ -6548,6 +6663,9 @@ mod tests {
             "public static global::Baml.BamlStream<long, global::OnlyMethods.Counter> NewStream("
         ));
         assert!(!source.contains("NewStreamAsync"));
-        assert!(source.contains("\"user.only_methods.Counter.new$stream\""));
+        assert!(!source.contains("\"user.only_methods.Counter.new$stream\""));
+        assert!(source.contains("NewSpec("));
+        assert!(source.contains("BamlGeneratedContract.CreateStream("));
+        assert!(!source.contains(".Stream("));
     }
 }

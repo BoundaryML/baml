@@ -290,6 +290,74 @@ fn generate_valid_project_returns_zero_exit_code() {
 }
 
 #[test]
+fn generate_reports_identifier_renames_in_normal_verbose_and_quiet_modes() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "enum Choice {\n  None\n}\n\nfunction pick() -> Choice { Choice.None }\n",
+    );
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.py]\n\
+         output_type = \"python/pydantic\"\n\
+         output_dir = \"generated\"\n\
+         naming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
+
+    let normal = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert!(
+        normal.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&normal.stderr)
+    );
+    let normal_stderr = String::from_utf8_lossy(&normal.stderr);
+    assert!(
+        normal_stderr.contains("1 identifier rename →"),
+        "{normal_stderr}"
+    );
+    assert!(
+        !normal_stderr.contains("Renamed enum variant"),
+        "{normal_stderr}"
+    );
+
+    let verbose = run_baml_cli(built, tmp.path(), &["generate", "--from", ".", "--verbose"]);
+    assert!(
+        verbose.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&verbose.stderr)
+    );
+    let verbose_stderr = String::from_utf8_lossy(&verbose.stderr);
+    assert!(
+        verbose_stderr.contains("1 identifier rename →"),
+        "{verbose_stderr}"
+    );
+    assert!(
+        verbose_stderr
+            .contains("Renamed enum variant `user.Choice.None`: `None` → `None_` (Python keyword)"),
+        "{verbose_stderr}"
+    );
+
+    let quiet = run_baml_cli(built, tmp.path(), &["generate", "--from", ".", "--quiet"]);
+    assert!(
+        quiet.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&quiet.stderr)
+    );
+    let quiet_stderr = String::from_utf8_lossy(&quiet.stderr);
+    assert!(
+        !quiet_stderr.contains("identifier rename"),
+        "{quiet_stderr}"
+    );
+    assert!(
+        !quiet_stderr.contains("Renamed enum variant"),
+        "{quiet_stderr}"
+    );
+}
+
+#[test]
 fn generate_rust_language_naming_convention_returns_diagnostic() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();

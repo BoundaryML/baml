@@ -1206,7 +1206,14 @@ impl BamlClassPackage for PackageReflectImpl {
             Object::Package(package) => package.functions.get(&local).copied(),
             _ => None,
         };
-        if function.is_none() {
+        let Some(function) = function else {
+            return Ok(None);
+        };
+        if matches!(
+            vm.get_object(function),
+            Object::Function(function)
+                if function.origin == bex_vm_types::FunctionOrigin::Internal
+        ) {
             return Ok(None);
         }
         let Some(function_value) = package_function_value(vm, package_ptr, &local) else {
@@ -1317,7 +1324,22 @@ impl BamlClassPackage for PackageReflectImpl {
         let Object::Package(package) = vm.get_object(ptr) else {
             return IndexMap::new();
         };
-        let functions = package.functions.keys().cloned().collect::<Vec<_>>();
+        let functions = package
+            .functions
+            .iter()
+            .map(|(name, &function)| (name.clone(), function))
+            .collect::<Vec<_>>();
+        let functions = functions
+            .into_iter()
+            .filter(|(_, function)| {
+                !matches!(
+                    vm.get_object(*function),
+                    Object::Function(function)
+                        if function.origin == bex_vm_types::FunctionOrigin::Internal
+                )
+            })
+            .map(|(name, _)| name)
+            .collect::<Vec<_>>();
         functions
             .into_iter()
             .filter_map(|name| {

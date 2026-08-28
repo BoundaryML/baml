@@ -15,20 +15,19 @@ pub use bex::{Bex, BexCallTraceResult};
 // hosts that manage engine lifecycles (the LSP server's and the browser's
 // playground runtimes): the blessed seam stays this crate rather than a
 // direct `bex_engine`/`bex_vm_types` dependency.
-pub use bex_engine::BexCallResult;
 pub use bex_engine::{
-    BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
-    InboundUnionAmbiguityPolicy, UnhandledSpawnError, UnhandledSpawnErrorHandler,
-    is_cancelled_engine_error,
+    BexCallResult, BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext,
+    FunctionCallContextBuilder, FunctionOperation, InboundUnionAmbiguityPolicy,
+    UnhandledSpawnError, UnhandledSpawnErrorHandler, is_cancelled_engine_error,
     logger::{TraceLogDrainReport, TraceLogMetadata, TraceLogger},
     register_inbound_union_ambiguity_policy,
 };
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, DynWitnessDef, Handle, HostReleaseFn, HostReturnTypeError,
     HostValueArc, HostValueKind, MediaKind, PortableClassDef, PortableClassFieldDef,
-    PortableEnumDef, PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeTy, TyAttr,
-    TypeDefRef, host_release_dispatch, runtime_ty_structurally_equal, selected_arm_equal,
-    try_convert_rust_data, validate_host_return,
+    PortableEnumDef, PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeTy,
+    TaggedHeapHandleKind, TyAttr, TypeDefRef, host_release_dispatch, runtime_ty_structurally_equal,
+    selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
 pub use bex_vm_types::Program;
 use indexmap::IndexMap;

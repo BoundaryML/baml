@@ -26,10 +26,23 @@ function fixtures.comment_in_type.CommentAfterArrow(client: ai.Client | null, on
     load_var on_event
     call ai.Agent.new
     store_var _6
-    call user.fixtures.comment_in_type.CommentAfterArrow$spec
-    store_var _8
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _11
+    load_global user.fixtures.comment_in_type.TestClient
+    call ai.clients.resolve
+    store_var _13
     load_type string
-    load_var2 4 5
+    load_var _6
+    load_const "CommentAfterArrow"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(CommentAfterArrow, 0)>, 0
+    load_var2 5 6
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
@@ -39,59 +52,7 @@ function fixtures.comment_in_type.CommentAfterArrow(client: ai.Client | null, on
     return
 }
 
-function fixtures.comment_in_type.CommentAfterArrow$build_request(client: ai.Client | null) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const null
-    store_var client
-
-  L0:
-    call user.fixtures.comment_in_type.CommentAfterArrow$spec
-    store_var _3
-    load_type string
-    load_var2 2 1
-    call ai.FunctionSpec.build_request
-    return
-}
-
-function fixtures.comment_in_type.CommentAfterArrow$parse(json: string) -> string {
-    load_type string
-    load_var json
-    call baml.sap.parse
-    return
-}
-
-function fixtures.comment_in_type.CommentAfterArrow$render_prompt() -> ai.Prompt {
-    call user.fixtures.comment_in_type.CommentAfterArrow$spec
-    store_var _1
-    load_type string
-    load_var _1
-    call ai.FunctionSpec.prompt
-    return
-}
-
-function fixtures.comment_in_type.CommentAfterArrow$spec() -> ai.FunctionSpec<string> {
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _3
-    load_global user.fixtures.comment_in_type.TestClient
-    call ai.clients.resolve
-    store_var _5
-    load_const "CommentAfterArrow"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    make_closure .<lambda(CommentAfterArrow$spec, 0)>, 0
-    load_var2 1 2
-    load_type string
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
-    return
-}
-
-function fixtures.comment_in_type.CommentAfterArrow$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function fixtures.comment_in_type.CommentAfterArrow@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -108,12 +69,24 @@ function fixtures.comment_in_type.CommentAfterArrow$stream(client: ai.stream.Str
     store_var on_event
 
   L1:
-    call user.fixtures.comment_in_type.CommentAfterArrow$spec
-    store_var _5
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _8
+    load_global user.fixtures.comment_in_type.TestClient
+    call ai.clients.resolve
+    store_var _10
     load_type string | null
     load_type string
-    load_var2 3 1
-    load_var on_event
+    load_const "CommentAfterArrow"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(CommentAfterArrow@stream, 0)>, 0
+    load_var2 3 4
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    load_var2 1 2
     call ai.stream.from_spec
     return
 }
@@ -143,11 +116,26 @@ function fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client
     load_var on_event
     call ai.Agent.new
     store_var _8
-    load_var2 1 2
-    call user.fixtures.comment_in_type.FunctionWithComments$spec
-    store_var _10
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _13
+    load_global user.fixtures.comment_in_type.TestClient
+    call ai.clients.resolve
+    store_var _15
     load_type string
-    load_var2 6 7
+    load_var _8
+    load_const "FunctionWithComments"
+    load_var2 1 2
+    load_const "a"
+    load_const "b"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    make_closure .<lambda(FunctionWithComments, 0)>, 0
+    load_var2 7 8
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
@@ -157,64 +145,7 @@ function fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client
     return
 }
 
-function fixtures.comment_in_type.FunctionWithComments$build_request(a: string, b: int, client: ai.Client | null) -> baml.http.Request {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const null
-    store_var client
-
-  L0:
-    load_var2 1 2
-    call user.fixtures.comment_in_type.FunctionWithComments$spec
-    store_var _5
-    load_type string
-    load_var2 4 3
-    call ai.FunctionSpec.build_request
-    return
-}
-
-function fixtures.comment_in_type.FunctionWithComments$parse(json: string) -> string {
-    load_type string
-    load_var json
-    call baml.sap.parse
-    return
-}
-
-function fixtures.comment_in_type.FunctionWithComments$render_prompt(a: string, b: int) -> ai.Prompt {
-    load_var2 1 2
-    call user.fixtures.comment_in_type.FunctionWithComments$spec
-    store_var _3
-    load_type string
-    load_var _3
-    call ai.FunctionSpec.prompt
-    return
-}
-
-function fixtures.comment_in_type.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string> {
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _5
-    load_global user.fixtures.comment_in_type.TestClient
-    call ai.clients.resolve
-    store_var _7
-    load_const "FunctionWithComments"
-    load_var2 1 2
-    load_const "a"
-    load_const "b"
-    load_type string
-    load_type unknown
-    alloc_map 2
-    make_closure .<lambda(FunctionWithComments$spec, 0)>, 0
-    load_var2 3 4
-    load_type string
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
-    return
-}
-
-function fixtures.comment_in_type.FunctionWithComments$stream(a: string, b: int, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function fixtures.comment_in_type.FunctionWithComments@stream(a: string, b: int, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -231,13 +162,27 @@ function fixtures.comment_in_type.FunctionWithComments$stream(a: string, b: int,
     store_var on_event
 
   L1:
-    load_var2 1 2
-    call user.fixtures.comment_in_type.FunctionWithComments$spec
-    store_var _7
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _10
+    load_global user.fixtures.comment_in_type.TestClient
+    call ai.clients.resolve
+    store_var _12
     load_type string | null
     load_type string
-    load_var2 5 3
-    load_var on_event
+    load_const "FunctionWithComments"
+    load_var2 1 2
+    load_const "a"
+    load_const "b"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    make_closure .<lambda(FunctionWithComments@stream, 0)>, 0
+    load_var2 5 6
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    load_var2 3 4
     call ai.stream.from_spec
     return
 }

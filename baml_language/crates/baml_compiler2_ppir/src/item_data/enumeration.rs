@@ -8,7 +8,9 @@
 //! deterministic (the `ItemTree`'s maps are `FxHashMap`s and are not). Sorting by
 //! position is safe *here* — the result is a set of `Loc`s, which are
 //! position-independent, so moving an item around in the file does not change
-//! this query's value unless it actually reorders declarations.
+//! this query's value unless it actually reorders declarations. Synthetic
+//! `*$stream` type declarations carry offset 0; function projections never
+//! enter these lists as declarations.
 
 use baml_base::SourceFile;
 use baml_compiler2_hir::loc::{
@@ -17,8 +19,8 @@ use baml_compiler2_hir::loc::{
 };
 
 /// Declare an enumeration query: `file_<plural>(file) -> Vec<XLoc>`, ordered by
-/// source position. Synthetic `*$stream` companions carry no source span, so they
-/// sort first (at offset 0); user-declared items follow in source order.
+/// source position. Synthetic `*$stream` type declarations carry no source span,
+/// so they sort first (at offset 0); user-declared items follow in source order.
 macro_rules! file_items {
     ($(#[$meta:meta])* $name:ident, $map:ident, $loc:ident) => {
         $(#[$meta])*
@@ -27,7 +29,7 @@ macro_rules! file_items {
             let item_tree = crate::file_item_tree(db, file);
             let mut items: Vec<_> = item_tree.$map.iter().collect();
             // Source position, then a stable tiebreaker for items that share an
-            // offset: synthetic `*$stream` companions all sit at offset 0, and
+            // offset: synthetic `*$stream` types all sit at offset 0, and
             // `$map` is an `FxHashMap` (nondeterministic iteration), so ties must
             // be broken by a position-independent key — otherwise this query's
             // value (and its early-cutoff) would be unstable across rebuilds.
@@ -47,13 +49,13 @@ macro_rules! file_items {
 }
 
 file_items!(
-    /// Every class in `file`, in source order (synthetic `*$stream` companions first).
+    /// Every class in `file`, in source order (synthetic `*$stream` types first).
     file_classes,
     classes,
     ClassLoc
 );
 file_items!(
-    /// Every function in `file`, in source order (synthetic companions first). Includes methods.
+    /// Every authored function in `file`, in source order. Includes methods.
     file_functions,
     functions,
     FunctionLoc
@@ -71,7 +73,7 @@ file_items!(
     InterfaceLoc
 );
 file_items!(
-    /// Every type alias in `file`, in source order (synthetic `*$stream` companions first).
+    /// Every type alias in `file`, in source order (synthetic `*$stream` types first).
     file_type_aliases,
     type_aliases,
     TypeAliasLoc

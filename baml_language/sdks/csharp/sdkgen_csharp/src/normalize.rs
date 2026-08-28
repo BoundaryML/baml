@@ -2,7 +2,7 @@
 
 use baml_codegen_types::{
     Class, ClassProperty, CodegenFunctionParamMode, Enum, EnumVariant, Function, FunctionArgument,
-    Symbol, Ty, TypeAlias,
+    FunctionOperations, SpecOperation, StreamOperation, Symbol, Ty, TypeAlias,
 };
 
 use crate::model::CodegenModel;
@@ -102,6 +102,35 @@ fn normalize_function(function: &Function) -> Function {
             })
             .collect(),
         return_type: normalize_ty(&function.return_type),
+        operations: FunctionOperations {
+            spec: function
+                .operations
+                .spec
+                .as_ref()
+                .map(|operation| SpecOperation {
+                    return_type: normalize_ty(&operation.return_type),
+                }),
+            stream: function
+                .operations
+                .stream
+                .as_ref()
+                .map(|operation| StreamOperation {
+                    return_type: normalize_ty(&operation.return_type),
+                    partial_type: normalize_ty(&operation.partial_type),
+                    item_type: normalize_ty(&operation.item_type),
+                    control_arguments: operation
+                        .control_arguments
+                        .iter()
+                        .map(|argument| FunctionArgument {
+                            injected: argument.injected,
+                            name: argument.name.clone(),
+                            docstring: argument.docstring.clone(),
+                            ty: normalize_ty(&argument.ty),
+                            default: argument.default.clone(),
+                        })
+                        .collect(),
+                }),
+        },
         throws: function.throws.as_ref().map(normalize_ty),
         watchers: function
             .watchers

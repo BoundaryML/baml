@@ -24,7 +24,7 @@
 use crate::{
     GlobalIndex, ObjectIndex,
     bytecode::{ClassInitPlan, Instruction},
-    types::{ConstValue, Function},
+    types::{ConstValue, Function, FunctionMeta},
 };
 
 /// A mutable reference to one cross-function index operand.
@@ -60,7 +60,8 @@ macro_rules! visit_bytecode_index_operands {
             | I::MakeBoundMethod(slot)
             | I::Call { callee: slot, .. }
             | I::CallWithRuntimeId { callee: slot, .. }
-            | I::MakeGenericFunction { function: slot, .. } => {
+            | I::MakeGenericFunction { function: slot, .. }
+            | I::MakeSpecFunction { function: slot, .. } => {
                 $visit($operand::Global(slot));
             }
             // ── object-pool operands ─────────────────────────────────────
@@ -192,6 +193,9 @@ pub fn visit_index_operands(function: &mut Function, mut visit: impl FnMut(Index
         visit,
         IndexOperand
     );
+    if let Some(FunctionMeta::Llm { spec_entry, .. }) = &mut function.body_meta {
+        visit(IndexOperand::Object(spec_entry));
+    }
 }
 
 /// Read every cross-function index operand without cloning the function.
@@ -200,13 +204,17 @@ pub fn visit_index_operands_ref(
     function: &Function,
     mut visit: impl FnMut(IndexOperandRef<'_>),
 ) -> bool {
-    visit_bytecode_index_operands!(
+    let bakes_type_layout = visit_bytecode_index_operands!(
         &function.bytecode.instructions,
         &function.bytecode.constants,
         &function.bytecode.class_init_plans,
         visit,
         IndexOperandRef
-    )
+    );
+    if let Some(FunctionMeta::Llm { spec_entry, .. }) = &function.body_meta {
+        visit(IndexOperandRef::Object(spec_entry));
+    }
+    bakes_type_layout
 }
 
 /// Visit every cross-function index operand in a pool `object`.

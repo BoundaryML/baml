@@ -105,7 +105,7 @@ mod tests {
             baml_artifact::decode::<PackageInterface>(ArtifactKind::PackageInterface, &legacy),
             Err(baml_artifact::Error::Incompatible {
                 artifact_format: 1,
-                runtime_format: 2,
+                runtime_format: baml_artifact::FORMAT_VERSION,
                 ..
             })
         ));
@@ -157,5 +157,132 @@ mod tests {
                     == baml_compiler2_ppir::item_data::function_scope(&db, func_loc)
             );
         }
+    }
+
+    #[test]
+    fn llm_stream_projection_is_internal_and_source_callable() {
+        let mut db = ProjectDatabase::new();
+        db.workspace(std::path::Path::new("."));
+        let file = db.file(
+            "stream.baml",
+            r#"
+class Box<T> {
+    value T
+}
+
+class Runner {
+    prefix string
+
+    function Ask(self, text: string) -> string {
+        client: "openai/gpt-4o-mini"
+        prompt: `${self.prefix}: ${text}`
+    }
+
+    function StaticAsk(text: string) -> string {
+        client: "openai/gpt-4o-mini"
+        prompt: `${text}`
+    }
+}
+
+function Ask<T>(text: string, tone: string = "plain") -> Box<T> {
+    client: "openai/gpt-4o-mini"
+    prompt: `answer ${text} in a ${tone} tone`
+}
+
+function Dollar$Ask(text: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${text}`
+}
+
+function Start(text: string) -> ai.stream.Stream<Box$stream<int>?, Box<int>> {
+    Ask@stream<int>(text)
+}
+
+function StartDollar(text: string) -> ai.stream.Stream<string?, string> {
+    Dollar$Ask@stream(text)
+}
+
+function StartBound(runner: Runner, text: string) -> ai.stream.Stream<string?, string> {
+    runner.Ask@stream(text)
+}
+
+function StartQualified(text: string) -> ai.stream.Stream<string?, string> {
+    Runner.StaticAsk@stream(text)
+}
+
+function BoundSpec(runner: Runner, text: string) -> ai.FunctionSpec<string> {
+    runner.Ask@spec(text)
+}
+
+function StaticSpec(text: string) -> ai.FunctionSpec<string> {
+    Runner.StaticAsk@spec(text)
+}
+"#,
+        );
+
+        let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
+        assert!(
+            diagnostics.is_empty(),
+            "source `Fn@stream` must resolve to the private PPIR entry: {diagnostics:#?}"
+        );
+
+        let package =
+            baml_compiler2_ppir::package_items(&db, PackageId::new(&db, Name::new("user")));
+        let root = package
+            .namespaces
+            .get(&Vec::new())
+            .expect("user root namespace");
+        assert!(root.values.contains_key(&Name::new("Ask")));
+        assert!(root.values.contains_key(&Name::new("Ask@stream")));
+        assert!(root.values.contains_key(&Name::new("Dollar$Ask")));
+        assert!(root.values.contains_key(&Name::new("Dollar$Ask@stream")));
+        assert!(root.types.contains_key(&Name::new("Box$stream")));
+
+        let expansion = baml_compiler2_ppir::ppir_expansion_items(&db, file);
+        let stream = expansion
+            .items(&db)
+            .iter()
+            .find_map(|item| match item {
+                baml_compiler2_ast::ast::Item::Function(function)
+                    if function.name.as_str() == "Ask@stream" =>
+                {
+                    Some(function)
+                }
+                _ => None,
+            })
+            .expect("PPIR must synthesize the private stream function");
+        let authored_ast = baml_compiler2_hir::file_ast(&db, file);
+        let authored = authored_ast
+            .items
+            .iter()
+            .find_map(|item| match item {
+                baml_compiler2_ast::ast::Item::Function(function)
+                    if function.name.as_str() == "Ask" =>
+                {
+                    Some(function)
+                }
+                _ => None,
+            })
+            .expect("authored LLM function");
+
+        assert_eq!(stream.generic_params, authored.generic_params);
+        assert_eq!(stream.defaults, authored.defaults);
+        assert_eq!(
+            stream.is_tagged_template_tag,
+            authored.is_tagged_template_tag
+        );
+        assert_eq!(
+            stream.metadata.origin,
+            baml_compiler2_ast::ast::FunctionOrigin::Companion
+        );
+        assert!(stream.metadata.is_language_internal);
+        assert_eq!(
+            stream
+                .params
+                .iter()
+                .map(|param| param.name.as_str())
+                .collect::<Vec<_>>(),
+            ["text", "tone", "client", "on_event"]
+        );
     }
 }

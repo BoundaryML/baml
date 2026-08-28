@@ -90,7 +90,10 @@ use sha2::{Digest, Sha256};
 /// sentinel (29). The slots are tombstoned rather than reused, so a 9 image
 /// carrying one in a persisted throw fact would now fail to decode instead of
 /// silently landing on whatever occupies the slot later.
-pub const FORMAT_VERSION: u32 = 10;
+///
+/// Version 11: `FunctionMeta::Llm` gained the private `spec_entry` object
+/// reference and explicit operation-capability flags.
+pub const FORMAT_VERSION: u32 = 11;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -791,6 +794,14 @@ pub fn rel_path(root: &Path, path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn format_version_covers_llm_operation_metadata() {
+        assert_eq!(
+            FORMAT_VERSION, 11,
+            "FunctionMeta::Llm spec_entry/capabilities changed the Program wire layout"
+        );
+    }
 
     fn dummy_inputs<'a>(files: &'a [(String, &'a str)]) -> KeyInputs<'a> {
         KeyInputs {

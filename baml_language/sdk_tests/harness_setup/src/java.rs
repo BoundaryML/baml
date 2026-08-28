@@ -94,9 +94,9 @@ const GREEN_JAVAC_FIXTURES: &[&str] = &[
 /// also be a green-javac fixture (the `test` task compiles the test sources
 /// first). `llm_functions` qualifies: its suite is fully deterministic offline
 /// with no live keys — the streaming tests run against the in-process replay
-/// server (keyless SSE recordings) and the `$build_request` tests set their
-/// api-key env vars through the native `BridgeEnv` setenv shim, so nothing hits
-/// the network. `docstrings_etc` also qualifies trivially: its suite only reads
+/// server (keyless SSE recordings), while FunctionSpec prompt/parse coverage is
+/// offline, so nothing hits the network. `docstrings_etc` also qualifies
+/// trivially: its suite only reads
 /// the generated `.java` source and asserts the rolled-up `Attributes:` /
 /// `Members:` Javadoc (the JVM analog of Python's `inspect.getdoc`), making no
 /// engine calls at all. (Serialize each fixture's javac+junit gates via a

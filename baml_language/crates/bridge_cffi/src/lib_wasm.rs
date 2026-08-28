@@ -7,8 +7,8 @@ use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
 use prost::Message;
 
 use crate::{
-    BridgeError, call_and_encode, call_handle_and_encode, error_to_outbound,
-    function_call_context_builder,
+    BridgeError, call_handle_operation_and_encode, call_operation_and_encode,
+    decode_function_operation, error_to_outbound, function_call_context_builder,
 };
 
 thread_local! {
@@ -36,6 +36,7 @@ pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
 struct DecodedCall {
     runtime: Arc<dyn Bex>,
     target: bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget,
+    operation: bex_project::FunctionOperation,
     args: BexArgs,
     context: bex_project::FunctionCallContext,
 }
@@ -48,6 +49,7 @@ fn decode_call(encoded_args: &[u8]) -> Result<DecodedCall, BridgeError> {
         return Err(BridgeError::InvalidCallId);
     }
     let target = call.call_target.ok_or(BridgeError::MissingCallTarget)?;
+    let operation = decode_function_operation(call.operation)?;
     if matches!(target, CallTarget::FunctionHandle(_)) && !call.type_args.is_empty() {
         return Err(BridgeError::FunctionHandleTypeArgs);
     }
@@ -60,6 +62,7 @@ fn decode_call(encoded_args: &[u8]) -> Result<DecodedCall, BridgeError> {
     Ok(DecodedCall {
         runtime: crate::get_runtime()?,
         target,
+        operation,
         args: kwargs.into(),
         context,
     })
@@ -74,10 +77,24 @@ pub async fn call_function_in_wasm(encoded_args: &[u8]) -> Vec<u8> {
     };
     match call.target {
         CallTarget::FunctionName(function_name) => {
-            call_and_encode(call.runtime, function_name, call.args, call.context).await
+            call_operation_and_encode(
+                call.runtime,
+                function_name,
+                call.operation,
+                call.args,
+                call.context,
+            )
+            .await
         }
         CallTarget::FunctionHandle(handle_key) => {
-            call_handle_and_encode(call.runtime, handle_key, call.args, call.context).await
+            call_handle_operation_and_encode(
+                call.runtime,
+                handle_key,
+                call.operation,
+                call.args,
+                call.context,
+            )
+            .await
         }
     }
 }

@@ -57,18 +57,20 @@ namespace baml_bridge {
 namespace cffi {
 namespace v1 {
 PROTOBUF_CONSTINIT const uint32_t BamlHandleType_internal_data_[] = {
-    196608u, 32u, 16380u, };
+    196608u, 32u, 65532u, };
 static ::google::protobuf::internal::ExplicitlyConstructed<::std::string>
-    BamlHandleType_strings[15] = {};
+    BamlHandleType_strings[17] = {};
 
 static const char BamlHandleType_names[] = {
     "ADT_COLLECTOR"
+    "ADT_FUNCTION_SPEC"
     "ADT_MEDIA_AUDIO"
     "ADT_MEDIA_GENERIC"
     "ADT_MEDIA_IMAGE"
     "ADT_MEDIA_PDF"
     "ADT_MEDIA_VIDEO"
     "ADT_PROMPT_AST"
+    "ADT_RUNTIME_VALUE"
     "ADT_TAGGED_HEAP_HANDLE"
     "ADT_TYPE"
     "FUNCTION_REF"
@@ -81,56 +83,60 @@ static const char BamlHandleType_names[] = {
 
 static const ::google::protobuf::internal::EnumEntry BamlHandleType_entries[] = {
     {{&BamlHandleType_names[0], 13}, 12},
-    {{&BamlHandleType_names[13], 15}, 7},
-    {{&BamlHandleType_names[28], 17}, 10},
-    {{&BamlHandleType_names[45], 15}, 6},
-    {{&BamlHandleType_names[60], 13}, 9},
-    {{&BamlHandleType_names[73], 15}, 8},
-    {{&BamlHandleType_names[88], 14}, 11},
-    {{&BamlHandleType_names[102], 22}, 14},
-    {{&BamlHandleType_names[124], 8}, 13},
-    {{&BamlHandleType_names[132], 12}, 5},
-    {{&BamlHandleType_names[144], 18}, 0},
-    {{&BamlHandleType_names[162], 19}, 15},
-    {{&BamlHandleType_names[181], 17}, 16},
-    {{&BamlHandleType_names[198], 17}, 2},
-    {{&BamlHandleType_names[215], 18}, 1},
+    {{&BamlHandleType_names[13], 17}, 17},
+    {{&BamlHandleType_names[30], 15}, 7},
+    {{&BamlHandleType_names[45], 17}, 10},
+    {{&BamlHandleType_names[62], 15}, 6},
+    {{&BamlHandleType_names[77], 13}, 9},
+    {{&BamlHandleType_names[90], 15}, 8},
+    {{&BamlHandleType_names[105], 14}, 11},
+    {{&BamlHandleType_names[119], 17}, 18},
+    {{&BamlHandleType_names[136], 22}, 14},
+    {{&BamlHandleType_names[158], 8}, 13},
+    {{&BamlHandleType_names[166], 12}, 5},
+    {{&BamlHandleType_names[178], 18}, 0},
+    {{&BamlHandleType_names[196], 19}, 15},
+    {{&BamlHandleType_names[215], 17}, 16},
+    {{&BamlHandleType_names[232], 17}, 2},
+    {{&BamlHandleType_names[249], 18}, 1},
 };
 
 static const int BamlHandleType_entries_by_number[] = {
-    10,  // 0 -> HANDLE_UNSPECIFIED
-    14,  // 1 -> UNTAGGED_RUST_DATA
-    13,  // 2 -> UNTAGGED_BEX_HEAP
-    9,  // 5 -> FUNCTION_REF
-    3,  // 6 -> ADT_MEDIA_IMAGE
-    1,  // 7 -> ADT_MEDIA_AUDIO
-    5,  // 8 -> ADT_MEDIA_VIDEO
-    4,  // 9 -> ADT_MEDIA_PDF
-    2,  // 10 -> ADT_MEDIA_GENERIC
-    6,  // 11 -> ADT_PROMPT_AST
+    12,  // 0 -> HANDLE_UNSPECIFIED
+    16,  // 1 -> UNTAGGED_RUST_DATA
+    15,  // 2 -> UNTAGGED_BEX_HEAP
+    11,  // 5 -> FUNCTION_REF
+    4,  // 6 -> ADT_MEDIA_IMAGE
+    2,  // 7 -> ADT_MEDIA_AUDIO
+    6,  // 8 -> ADT_MEDIA_VIDEO
+    5,  // 9 -> ADT_MEDIA_PDF
+    3,  // 10 -> ADT_MEDIA_GENERIC
+    7,  // 11 -> ADT_PROMPT_AST
     0,  // 12 -> ADT_COLLECTOR
-    8,  // 13 -> ADT_TYPE
-    7,  // 14 -> ADT_TAGGED_HEAP_HANDLE
-    11,  // 15 -> HOST_VALUE_CALLABLE
-    12,  // 16 -> HOST_VALUE_OPAQUE
+    10,  // 13 -> ADT_TYPE
+    9,  // 14 -> ADT_TAGGED_HEAP_HANDLE
+    13,  // 15 -> HOST_VALUE_CALLABLE
+    14,  // 16 -> HOST_VALUE_OPAQUE
+    1,  // 17 -> ADT_FUNCTION_SPEC
+    8,  // 18 -> ADT_RUNTIME_VALUE
 };
 
 const ::std::string& BamlHandleType_Name(BamlHandleType value) {
   static const bool kDummy = ::google::protobuf::internal::InitializeEnumStrings(
-      BamlHandleType_entries, BamlHandleType_entries_by_number, 15,
+      BamlHandleType_entries, BamlHandleType_entries_by_number, 17,
       BamlHandleType_strings);
   (void)kDummy;
 
   int idx = ::google::protobuf::internal::LookUpEnumName(BamlHandleType_entries,
                                   BamlHandleType_entries_by_number,
-                                  15, value);
+                                  17, value);
   return idx == -1 ? ::google::protobuf::internal::GetEmptyString() : BamlHandleType_strings[idx].get();
 }
 
 bool BamlHandleType_Parse(::absl::string_view name, BamlHandleType* PROTOBUF_NONNULL value) {
   int int_value;
   bool success = ::google::protobuf::internal::LookUpEnumValue(
-      BamlHandleType_entries, 15, name, &int_value);
+      BamlHandleType_entries, 17, name, &int_value);
   if (success) {
     *value = static_cast<BamlHandleType>(int_value);
   }

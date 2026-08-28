@@ -364,7 +364,11 @@ fn variant_name(arm: &Ty) -> Option<String> {
         Ty::Class(name, _, _)
         | Ty::Enum(name, _)
         | Ty::EnumVariant(name, _, _)
-        | Ty::TypeAlias(name, _) => Some(name.name().as_str().to_string()),
+        | Ty::TypeAlias(name, _) => Some(if name.is_stream() {
+            format!("{}Stream", name.bare_name())
+        } else {
+            name.bare_name().to_string()
+        }),
         // A `TypeVar` arm's variant is named after the type parameter
         // (`T | string` → `TOrString { T(T), String(String) }`).
         Ty::TypeVar(var, _) => Some(var.as_str().to_string()),

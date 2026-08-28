@@ -886,26 +886,22 @@ function plain(x: int) -> int { x }
     }
 
     #[test]
-    fn extraction_is_skipped_for_sub_functions_and_non_user_origins() {
+    fn private_stream_projection_is_absent_from_param_schema_listing() {
         let db = db_with(&[("main.baml", LLM_FIXTURE)]);
         let listing = list_functions_with_metadata(&db);
-        let skipped: Vec<_> = listing
-            .functions
-            .iter()
-            .filter(|f| {
-                f.is_sub_function || f.origin != crate::symbols::FunctionOrigin::UserDefined
-            })
-            .collect();
-        assert!(
-            !skipped.is_empty(),
-            "fixture should produce companion/internal functions"
+        assert_eq!(
+            listing
+                .functions
+                .iter()
+                .map(|function| function.name.as_str())
+                .collect::<Vec<_>>(),
+            ["extract", "plain"],
+            "compiler-private `Fn@stream` must not enter the authored function listing"
         );
-        for function in skipped {
-            assert!(
-                function.params.is_none(),
-                "expected no schema for {}",
-                function.name
-            );
-        }
+        assert!(listing.functions.iter().all(|function| {
+            !function.is_sub_function
+                && function.origin == crate::symbols::FunctionOrigin::UserDefined
+                && function.params.is_some()
+        }));
     }
 }

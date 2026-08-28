@@ -11,7 +11,7 @@ use std::{collections::HashMap, ffi::CString};
 
 use prost::Message as _;
 
-use crate::{BamlValue, Error, SdkError, capi, completion, decode, wire};
+use crate::{BamlValue, CallOptions, Error, SdkError, capi, completion, decode, wire};
 
 /// Initialize (or replace) the process-global runtime from the
 /// borsh-encoded bytecode a generated SDK embeds.
@@ -86,16 +86,40 @@ pub fn invoke_sync<R: BamlValue, E: BamlValue>(
     kwargs: Vec<wire::InboundMapEntry>,
     type_args: Vec<wire::BamlTyArg>,
 ) -> Result<R, Error<E>> {
+    invoke_operation_sync(fqn, kwargs, type_args, wire::FunctionOperation::Direct)
+}
+
+/// Execute a semantic projection of an authored function declaration.
+/// Generated `Fn_spec` bindings use `Spec`; ordinary calls use `Direct`.
+pub fn invoke_operation_sync<R: BamlValue, E: BamlValue>(
+    fqn: &str,
+    kwargs: Vec<wire::InboundMapEntry>,
+    type_args: Vec<wire::BamlTyArg>,
+    operation: wire::FunctionOperation,
+) -> Result<R, Error<E>> {
     if tokio::runtime::Handle::try_current().is_ok() {
         return Err(Error::CalledSyncFromAsync);
     }
-    let receiver = dispatch(fqn, kwargs, type_args).map_err(Error::Sdk)?;
+    let receiver = dispatch(fqn, kwargs, type_args, operation).map_err(Error::Sdk)?;
     // Blocks until the engine delivers the result envelope via the callback.
     // There is no timeout: the engine is contracted to complete every call
     // (success, thrown error, or panic). A caller-facing timeout/cancellation
     // path lands with the cancellation feature (`cancel_function_call`).
     let bytes = receiver.wait_blocking();
     decode::decode_result(&bytes)
+}
+
+/// Execute a projection while appending host-representable control arguments
+/// to its authored kwargs. Generated `Fn_stream_with` bindings use this path.
+pub fn invoke_operation_sync_with_options<R: BamlValue, E: BamlValue>(
+    fqn: &str,
+    mut kwargs: Vec<wire::InboundMapEntry>,
+    type_args: Vec<wire::BamlTyArg>,
+    operation: wire::FunctionOperation,
+    options: CallOptions,
+) -> Result<R, Error<E>> {
+    options.append_to(&mut kwargs);
+    invoke_operation_sync(fqn, kwargs, type_args, operation)
 }
 
 /// Execute a BAML function call asynchronously.
@@ -108,9 +132,29 @@ pub async fn invoke<R: BamlValue, E: BamlValue>(
     kwargs: Vec<wire::InboundMapEntry>,
     type_args: Vec<wire::BamlTyArg>,
 ) -> Result<R, Error<E>> {
-    let receiver = dispatch(fqn, kwargs, type_args).map_err(Error::Sdk)?;
+    invoke_operation(fqn, kwargs, type_args, wire::FunctionOperation::Direct).await
+}
+
+pub async fn invoke_operation<R: BamlValue, E: BamlValue>(
+    fqn: &str,
+    kwargs: Vec<wire::InboundMapEntry>,
+    type_args: Vec<wire::BamlTyArg>,
+    operation: wire::FunctionOperation,
+) -> Result<R, Error<E>> {
+    let receiver = dispatch(fqn, kwargs, type_args, operation).map_err(Error::Sdk)?;
     let bytes = receiver.wait().await;
     decode::decode_result(&bytes)
+}
+
+pub async fn invoke_operation_with_options<R: BamlValue, E: BamlValue>(
+    fqn: &str,
+    mut kwargs: Vec<wire::InboundMapEntry>,
+    type_args: Vec<wire::BamlTyArg>,
+    operation: wire::FunctionOperation,
+    options: CallOptions,
+) -> Result<R, Error<E>> {
+    options.append_to(&mut kwargs);
+    invoke_operation(fqn, kwargs, type_args, operation).await
 }
 
 pub fn invoke_handle_sync<R: BamlValue, E: BamlValue>(
@@ -139,6 +183,7 @@ fn dispatch(
     fqn: &str,
     kwargs: Vec<wire::InboundMapEntry>,
     type_args: Vec<wire::BamlTyArg>,
+    operation: wire::FunctionOperation,
 ) -> Result<completion::Receiver, SdkError> {
     let api = capi::api()?;
     let receiver = completion::register(api);
@@ -156,6 +201,7 @@ fn dispatch(
         call_target: Some(wire::call_function_args::CallTarget::FunctionName(
             fqn.to_string(),
         )),
+        operation: operation as i32,
     }
     .encode_to_vec();
     // SAFETY: `args` outlives the call; the engine copies it before returning.
@@ -187,6 +233,7 @@ fn dispatch_handle(
         call_target: Some(wire::call_function_args::CallTarget::FunctionHandle(
             handle_key,
         )),
+        operation: wire::FunctionOperation::Direct as i32,
     }
     .encode_to_vec();
     // SAFETY: `args` remains alive for the synchronous ABI call, which copies

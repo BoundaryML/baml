@@ -591,10 +591,9 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Five conflicts: greet, greet$spec, greet$render_prompt,
-        // greet$build_request, and greet$parse. Each LLM function expands to
-        // AST-level companions, all duplicated across 3 files.
-        assert_eq!(ns.conflicts().len(), 5);
+        // Only the authored function participates in the value namespace.
+        // Its attached private spec recipe creates no companion symbols.
+        assert_eq!(ns.conflicts().len(), 1);
         for conflict in ns.conflicts() {
             assert_eq!(conflict.entries.len(), 3);
         }

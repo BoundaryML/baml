@@ -2,7 +2,7 @@
 //! `_async` binding per BAML callable, both thin wrappers over
 //! `baml_bridge::runtime`.
 
-use baml_codegen_types::{Function, Name};
+use baml_codegen_types::{Function, Name, SpecOperation, StreamOperation};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
@@ -21,6 +21,16 @@ pub(crate) enum Receiver {
     RefSelf,
 }
 
+#[derive(Clone, Copy)]
+enum BindingRole<'a> {
+    Direct,
+    Spec(&'a SpecOperation),
+    Stream {
+        stream: &'a StreamOperation,
+        with_options: bool,
+    },
+}
+
 /// Emit the sync + async bindings for a free function, or a skip warning
 /// when any type in its signature (arguments, return, throws contract)
 /// is not yet representable.
@@ -30,25 +40,55 @@ pub(crate) fn emit(
     ctx: &TyCtx<'_>,
 ) -> Result<TokenStream, SkipWarning> {
     let fqn = name.to_string();
-    if name.name().as_str().contains('$') {
-        return Err(SkipWarning {
-            fqn,
-            reason: "companion functions ($stream, $build_request, …) are not emitted yet"
-                .to_string(),
-        });
-    }
-    // Generic free functions ARE emitted: their `<...>` params become Rust
-    // generics bound by `BamlValue`. TypeVars that appear in positions the
-    // translator can't represent still make the whole function skip, at the
-    // per-type translation site.
-    emit_binding(
+    let mut bindings = vec![emit_binding(
         &fqn,
         name.name().as_str(),
         function,
         Receiver::None,
         &[],
         ctx,
-    )
+        BindingRole::Direct,
+    )?];
+    if let Some(spec) = &function.operations.spec {
+        bindings.push(emit_binding(
+            &fqn,
+            name.name().as_str(),
+            function,
+            Receiver::None,
+            &[],
+            ctx,
+            BindingRole::Spec(spec),
+        )?);
+    }
+    if let Some(stream) = &function.operations.stream {
+        bindings.push(emit_binding(
+            &fqn,
+            name.name().as_str(),
+            function,
+            Receiver::None,
+            &[],
+            ctx,
+            BindingRole::Stream {
+                stream,
+                with_options: false,
+            },
+        )?);
+        if !stream.control_arguments.is_empty() {
+            bindings.push(emit_binding(
+                &fqn,
+                name.name().as_str(),
+                function,
+                Receiver::None,
+                &[],
+                ctx,
+                BindingRole::Stream {
+                    stream,
+                    with_options: true,
+                },
+            )?);
+        }
+    }
+    Ok(quote! { #(#bindings)* })
 }
 
 /// Emit the sync + async bindings for a static or instance method, shaped
@@ -72,14 +112,55 @@ pub(crate) fn emit_method(
 ) -> Result<TokenStream, SkipWarning> {
     let method_name = method.name.as_str();
     let fqn = format!("{class_name}.{method_name}");
-    if method_name.contains('$') {
-        return Err(SkipWarning {
-            fqn,
-            reason: "companion methods ($stream, $build_request, …) are not emitted yet"
-                .to_string(),
-        });
+    let mut bindings = vec![emit_binding(
+        &fqn,
+        method_name,
+        method,
+        receiver,
+        class_params,
+        ctx,
+        BindingRole::Direct,
+    )?];
+    if let Some(spec) = &method.operations.spec {
+        bindings.push(emit_binding(
+            &fqn,
+            method_name,
+            method,
+            receiver,
+            class_params,
+            ctx,
+            BindingRole::Spec(spec),
+        )?);
     }
-    emit_binding(&fqn, method_name, method, receiver, class_params, ctx)
+    if let Some(stream) = &method.operations.stream {
+        bindings.push(emit_binding(
+            &fqn,
+            method_name,
+            method,
+            receiver,
+            class_params,
+            ctx,
+            BindingRole::Stream {
+                stream,
+                with_options: false,
+            },
+        )?);
+        if !stream.control_arguments.is_empty() {
+            bindings.push(emit_binding(
+                &fqn,
+                method_name,
+                method,
+                receiver,
+                class_params,
+                ctx,
+                BindingRole::Stream {
+                    stream,
+                    with_options: true,
+                },
+            )?);
+        }
+    }
+    Ok(quote! { #(#bindings)* })
 }
 
 /// Shared body of [`emit`] / [`emit_method`]: translate the signature and
@@ -91,6 +172,7 @@ fn emit_binding(
     receiver: Receiver,
     class_params: &[String],
     ctx: &TyCtx<'_>,
+    role: BindingRole<'_>,
 ) -> Result<TokenStream, SkipWarning> {
     let skip = |reason: String| SkipWarning {
         fqn: fqn.to_string(),
@@ -139,12 +221,27 @@ fn emit_binding(
         ..*ctx
     };
 
-    let ret = translate_ty::translate(&function.return_type, &gctx)
+    let return_type = match role {
+        BindingRole::Direct => &function.return_type,
+        BindingRole::Spec(spec) => &spec.return_type,
+        BindingRole::Stream { stream, .. } => &stream.return_type,
+    };
+    let ret = translate_ty::translate(return_type, &gctx)
         .map_err(|u| skip(format!("return: {}", u.reason)))?;
-    let throws = match &function.throws {
-        None => quote! { ::core::convert::Infallible },
-        Some(ty) => translate_ty::translate(ty, &gctx)
-            .map_err(|u| skip(format!("throws contract: {}", u.reason)))?,
+    let throws = match role {
+        // Declarative LLM functions expose their provider/agent failures
+        // through an open interface union that Rust cannot translate as a
+        // closed enum. Keep the direct call available and let non-success
+        // envelopes land in `Error::Runtime`; ordinary authored functions
+        // retain their exact typed throws contract.
+        BindingRole::Direct if function.operations.spec.is_none() => match &function.throws {
+            None => quote! { ::core::convert::Infallible },
+            Some(ty) => translate_ty::translate(ty, &gctx)
+                .map_err(|u| skip(format!("throws contract: {}", u.reason)))?,
+        },
+        BindingRole::Direct | BindingRole::Spec(_) | BindingRole::Stream { .. } => {
+            quote! { ::core::convert::Infallible }
+        }
     };
 
     let mut params = Vec::new();
@@ -169,6 +266,9 @@ fn emit_binding(
         });
     }
     for arg in &function.arguments {
+        if arg.injected {
+            continue;
+        }
         let arg_name = arg.name.as_str();
         let param = idents::ident(arg_name);
         // A direct callable parameter (`(…) -> R`) is registered as a host
@@ -249,6 +349,15 @@ fn emit_binding(
             });
         }
     }
+    if matches!(
+        role,
+        BindingRole::Stream {
+            with_options: true,
+            ..
+        }
+    ) {
+        params.push(quote! { options: ::baml_bridge::CallOptions });
+    }
 
     let mut doc_attrs = doc_attrs(function.docstring.as_deref());
     match receiver {
@@ -257,25 +366,47 @@ fn emit_binding(
         Receiver::RefSelf => {
             append_by_value_note(&mut doc_attrs, ByValueSubject::ReceiverAndArguments);
         }
-        Receiver::None if !function.arguments.is_empty() => {
+        Receiver::None if function.arguments.iter().any(|arg| !arg.injected) => {
             append_by_value_note(&mut doc_attrs, ByValueSubject::Arguments);
         }
         Receiver::None => {}
     }
     // The `# Errors` section goes LAST: rustdoc folds everything after a
     // heading into that section, so the prose notes must precede it.
-    append_errors_section(&mut doc_attrs, &raises_names(function.throws.as_ref()));
+    let documented_throws =
+        if matches!(role, BindingRole::Direct) && function.operations.spec.is_none() {
+            raises_names(function.throws.as_ref())
+        } else {
+            Vec::new()
+        };
+    append_errors_section(&mut doc_attrs, &documented_throws);
 
     let self_param = match receiver {
         Receiver::None => TokenStream::new(),
         Receiver::RefSelf => quote! { &self, },
     };
-    let sync_name = idents::ident(binding_name);
-    let async_name = format_ident!("{}_async", idents::dir_segment(binding_name));
+    let projected_name = match role {
+        BindingRole::Direct => binding_name.to_string(),
+        BindingRole::Spec(_) => format!("{binding_name}_spec"),
+        BindingRole::Stream {
+            with_options: false,
+            ..
+        } => format!("{binding_name}_stream"),
+        BindingRole::Stream {
+            with_options: true, ..
+        } => format!("{binding_name}_stream_with"),
+    };
+    let sync_name = idents::ident(&projected_name);
+    let async_name = format_ident!("{}_async", idents::dir_segment(&projected_name));
     let result_ty = quote! { ::std::result::Result<#ret, ::baml_bridge::Error<#throws>> };
     // The receiver counts toward clippy's tally (`self` is one of the
     // `fn_decl` inputs), so it counts here too.
-    let arg_count = function.arguments.len() + usize::from(matches!(receiver, Receiver::RefSelf));
+    let arg_count = function
+        .arguments
+        .iter()
+        .filter(|argument| !argument.injected)
+        .count()
+        + usize::from(matches!(receiver, Receiver::RefSelf));
     let too_many_arguments_attr = if arg_count > 7 {
         quote! { #[allow(clippy::too_many_arguments)] }
     } else {
@@ -332,6 +463,79 @@ fn emit_binding(
         quote! { ::baml_bridge::encode::type_args(::std::vec![#(#entries),*]) }
     };
 
+    let sync_invoke = match role {
+        BindingRole::Direct => quote! {
+            ::baml_bridge::runtime::invoke_sync(
+                #fqn,
+                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
+                #type_args_expr,
+            )
+        },
+        BindingRole::Spec(_) => quote! {
+            ::baml_bridge::runtime::invoke_operation_sync(
+                #fqn,
+                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
+                #type_args_expr,
+                ::baml_bridge::wire::FunctionOperation::Spec,
+            )
+        },
+        BindingRole::Stream { with_options, .. } if with_options => quote! {
+            ::baml_bridge::runtime::invoke_operation_sync_with_options(
+                #fqn,
+                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
+                #type_args_expr,
+                ::baml_bridge::wire::FunctionOperation::Stream,
+                options,
+            )
+        },
+        BindingRole::Stream { .. } => quote! {
+            ::baml_bridge::runtime::invoke_operation_sync(
+                #fqn,
+                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
+                #type_args_expr,
+                ::baml_bridge::wire::FunctionOperation::Stream,
+            )
+        },
+    };
+    let async_invoke = match role {
+        BindingRole::Direct => quote! {
+            ::baml_bridge::runtime::invoke(
+                #fqn,
+                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
+                #type_args_expr,
+            )
+            .await
+        },
+        BindingRole::Spec(_) => quote! {
+            ::baml_bridge::runtime::invoke_operation(
+                #fqn,
+                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
+                #type_args_expr,
+                ::baml_bridge::wire::FunctionOperation::Spec,
+            )
+            .await
+        },
+        BindingRole::Stream { with_options, .. } if with_options => quote! {
+            ::baml_bridge::runtime::invoke_operation_with_options(
+                #fqn,
+                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
+                #type_args_expr,
+                ::baml_bridge::wire::FunctionOperation::Stream,
+                options,
+            )
+            .await
+        },
+        BindingRole::Stream { .. } => quote! {
+            ::baml_bridge::runtime::invoke_operation(
+                #fqn,
+                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
+                #type_args_expr,
+                ::baml_bridge::wire::FunctionOperation::Stream,
+            )
+            .await
+        },
+    };
+
     Ok(quote! {
         #(#doc_attrs)*
         #too_many_arguments_attr
@@ -339,11 +543,7 @@ fn emit_binding(
         pub fn #sync_name #generics_decl (#self_param #(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #(#converts)*
-            ::baml_bridge::runtime::invoke_sync(
-                #fqn,
-                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
-                #type_args_expr,
-            )
+            #sync_invoke
         }
 
         #(#doc_attrs)*
@@ -352,12 +552,7 @@ fn emit_binding(
         pub async fn #async_name #generics_decl (#self_param #(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #(#converts)*
-            ::baml_bridge::runtime::invoke(
-                #fqn,
-                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
-                #type_args_expr,
-            )
-            .await
+            #async_invoke
         }
     })
 }
@@ -393,7 +588,8 @@ fn collect_effect_params(
 ) -> Vec<String> {
     let mut effect_params: Vec<String> = Vec::new();
     for arg in &function.arguments {
-        if arg.default.is_none()
+        if !arg.injected
+            && arg.default.is_none()
             && let Some(baml_codegen_types::Ty::Function { throws, .. }) =
                 crate::effect_rename::callback_root(&arg.ty)
             && let baml_codegen_types::Ty::TypeVar(name, _) = throws.as_ref()

@@ -34,7 +34,7 @@ use std::{
     path::PathBuf,
 };
 
-use baml_base::qualified_name::AI_STREAM_STREAM;
+use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM};
 use baml_codegen_types::{Class, Name, Symbol, SymbolPool, Ty, TypeAlias};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 use base64::Engine as _;
@@ -99,13 +99,7 @@ fn to_source_code_with_optional_metadata(
         if fqn == AI_STREAM_STREAM {
             continue;
         }
-        let mut ns = translate_ty::namespace_for(key);
-        if key.is_stream() && matches!(symbol, Symbol::Function(_)) {
-            // Only `$stream` CLASSES route under stream_types;
-            // `$stream` FUNCTION companions sit beside their parent
-            // (Python's routing rule, mirrored).
-            ns.remove(0);
-        }
+        let ns = translate_ty::namespace_for(key);
         let rendered = match symbol {
             Symbol::Function(function) => {
                 let rendered = render_callable(&key.to_string(), function, FnKind::Free, &ctx);
@@ -120,7 +114,11 @@ fn to_source_code_with_optional_metadata(
                 rendered
             }
             Symbol::Class(class) => {
-                if !ctx.supported_classes.contains(&fqn) {
+                if fqn == AI_FUNCTION_SPEC {
+                    Some("public typealias FunctionSpec<Out> = BamlFunctionSpec<Out>\n".to_string())
+                } else if fqn == "ai.Prompt" {
+                    Some("public typealias Prompt = BamlPrompt\n".to_string())
+                } else if !ctx.supported_classes.contains(&fqn) {
                     skips.push(diagnostics::Skip {
                         fqn: fqn.clone(),
                         kind: "class",
@@ -148,9 +146,9 @@ fn to_source_code_with_optional_metadata(
             }
         };
         let Some(rendered) = rendered else { continue };
-        // Sort key uses the RAW name: bare_name() strips `$stream`, so
-        // a base function and its `$stream` companion would collide in
-        // the decl map and silently overwrite each other.
+        // Sort by the raw declaration name. PPIR `$stream` TYPE names keep
+        // their identity in the stream_types namespace; callable companions
+        // no longer exist in the symbol pool.
         let bare = key.name().as_str().to_string();
         namespaces
             .entry(ns)
@@ -734,6 +732,21 @@ mod tests {
         )
     }
 
+    fn qname(package: &str, namespace: &[&str], bare: &str) -> Name {
+        Name::new(
+            baml_base::Name::new(package),
+            namespace
+                .iter()
+                .map(|segment| baml_base::Name::new(*segment))
+                .collect(),
+            baml_base::Name::new(bare),
+        )
+    }
+
+    fn optional(ty: Ty) -> Ty {
+        union(vec![ty, null()])
+    }
+
     #[test]
     fn translate_ty_primitive_subset() {
         let ctx = TranslateCtx {
@@ -793,5 +806,117 @@ mod tests {
         );
         // map with non-string key — not yet
         assert_eq!(t(&map(int(), int())), None);
+    }
+
+    #[test]
+    fn llm_operations_use_authored_fqn_and_flat_stream_projection() {
+        use baml_codegen_types::{
+            CallableParam, CodegenFunctionParamMode, Function, FunctionArgument,
+            FunctionArgumentDefault, FunctionOperations, Origin, SpecOperation, StreamOperation,
+        };
+
+        let callback = Ty::Function {
+            params: vec![CallableParam {
+                name: None,
+                ty: string(),
+                mode: CodegenFunctionParamMode::Required,
+            }],
+            ret: Box::new(Ty::Void {
+                attr: baml_base::TyAttr::EMPTY,
+            }),
+            throws: Box::new(Ty::Never {
+                attr: baml_base::TyAttr::EMPTY,
+            }),
+            attr: baml_base::TyAttr::EMPTY,
+        };
+        let spec_return = Ty::Class(
+            qname("ai", &[], "FunctionSpec"),
+            vec![string()],
+            baml_base::TyAttr::EMPTY,
+        );
+        let stream_return = Ty::Class(
+            qname("ai", &["stream"], "Stream"),
+            vec![string(), string()],
+            baml_base::TyAttr::EMPTY,
+        );
+        let function = Function {
+            name: baml_base::Name::new("Extract"),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: vec![
+                FunctionArgument {
+                    name: baml_base::Name::new("text"),
+                    docstring: None,
+                    ty: string(),
+                    default: None,
+                    injected: false,
+                },
+                FunctionArgument {
+                    name: baml_base::Name::new("on_event"),
+                    docstring: None,
+                    ty: optional(callback.clone()),
+                    default: Some(FunctionArgumentDefault::Null),
+                    injected: true,
+                },
+            ],
+            return_type: string(),
+            operations: FunctionOperations {
+                spec: Some(SpecOperation {
+                    return_type: spec_return,
+                }),
+                stream: Some(StreamOperation {
+                    return_type: stream_return,
+                    partial_type: string(),
+                    item_type: string(),
+                    control_arguments: vec![
+                        FunctionArgument {
+                            name: baml_base::Name::new("client"),
+                            docstring: None,
+                            ty: optional(Ty::Interface(
+                                qname("ai", &["stream"], "StreamingClient"),
+                                Vec::new(),
+                                Vec::new(),
+                                baml_base::TyAttr::EMPTY,
+                            )),
+                            default: Some(FunctionArgumentDefault::Null),
+                            injected: true,
+                        },
+                        FunctionArgument {
+                            name: baml_base::Name::new("on_event"),
+                            docstring: None,
+                            ty: optional(callback),
+                            default: Some(FunctionArgumentDefault::Null),
+                            injected: true,
+                        },
+                    ],
+                }),
+            },
+            throws: None,
+            watchers: Vec::new(),
+            origin: Origin {
+                source_file_path: "functions.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let key = qname("user", &["lorem"], "Extract");
+        let pool = SymbolPool::from([(key, Symbol::Function(function))]);
+        let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::PreserveCase);
+        let swift = &files[&PathBuf::from("lorem.swift")];
+
+        assert!(swift.contains("func Extract_spec(text: Swift.String)"));
+        assert!(swift.contains("-> BamlFunctionSpec<Swift.String>"));
+        assert!(swift.contains(
+            "callSync(\"user.lorem.Extract\", args: [(\"text\", text)], operation: .spec)"
+        ));
+        assert!(swift.contains("func Extract_stream("));
+        assert!(swift.contains("client: (any BamlEncodable)? = nil"));
+        assert!(swift.contains("on_event: (@Sendable (Swift.String) async throws -> Swift.Void)?"));
+        assert!(swift.contains("args.append((\"client\", client))"));
+        assert!(swift.contains("args.append((\"on_event\", _baml_on_event))"));
+        assert!(swift.contains("-> BamlStream<Swift.String, Swift.String>"));
+        assert!(!swift.contains("$spec"));
+        assert!(!swift.contains("$stream"));
+        assert!(swift.contains("operation: .stream"));
+        assert!(!swift.contains("_spec.stream"));
     }
 }

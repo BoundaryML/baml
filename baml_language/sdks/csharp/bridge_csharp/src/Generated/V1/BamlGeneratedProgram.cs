@@ -3,6 +3,7 @@ using System.ComponentModel;
 using Baml.Cffi;
 using Baml.Proto;
 using Baml.Runtime;
+using BamlBridge.Cffi.V1;
 
 namespace Baml.Generated.V1;
 
@@ -49,7 +50,8 @@ public sealed class BamlGeneratedProgram
             callId => PrimitiveProtocol.EncodeOwnedCallArguments(
                 arguments,
                 callId,
-                nativeState.Api),
+                nativeState.Api,
+                Operation(declaration.Variant)),
             cancellationToken);
         return DecodeResultAsync(
             function.Result,
@@ -82,7 +84,8 @@ public sealed class BamlGeneratedProgram
             callId => PrimitiveProtocol.EncodeOwnedCallArguments(
                 arguments,
                 callId,
-                nativeState.Api),
+                nativeState.Api,
+                Operation(declaration.Variant)),
             cancellationToken);
     }
 
@@ -111,7 +114,8 @@ public sealed class BamlGeneratedProgram
             callId => PrimitiveProtocol.EncodeOwnedCallArguments(
                 arguments,
                 callId,
-                nativeState.Api),
+                nativeState.Api,
+                Operation(declaration.Definition.Variant)),
             cancellationToken);
     }
 
@@ -133,6 +137,26 @@ public sealed class BamlGeneratedProgram
             finalType.Metadata,
             functionIdentity,
             nativeState.Api);
+    }
+
+    internal Task<BamlGeneratedValue> CallRuntimeMethodAsync(
+        string functionIdentity,
+        IReadOnlyList<KeyValuePair<string, BamlGeneratedValue>> arguments,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(functionIdentity);
+        ArgumentNullException.ThrowIfNull(arguments);
+        NativeFunctionCall call = nativeState.Api.StartOwnedFunction(
+            functionIdentity,
+            callId => PrimitiveProtocol.EncodeOwnedHandleArguments(
+                arguments,
+                callId,
+                nativeState.Api),
+            cancellationToken);
+        return DecodeRuntimeMethodResultAsync(
+            functionIdentity,
+            call,
+            cancellationToken);
     }
 
     public TResult Call<TResult>(
@@ -161,7 +185,8 @@ public sealed class BamlGeneratedProgram
             callId => PrimitiveProtocol.EncodeOwnedCallArguments(
                 arguments,
                 callId,
-                nativeState.Api),
+                nativeState.Api,
+                Operation(declaration.Definition.Variant)),
             cancellationToken);
         return DecodeResultAsync(
             declaration.Result,
@@ -206,4 +231,48 @@ public sealed class BamlGeneratedProgram
             HostValueRegistry.Shared.CompleteFunctionCall(call.FunctionCallId);
         }
     }
+
+    private async Task<BamlGeneratedValue> DecodeRuntimeMethodResultAsync(
+        string functionIdentity,
+        NativeFunctionCall call,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            byte[] bytes;
+            try
+            {
+                bytes = await call.Completion.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException error)
+                when (cancellationToken.IsCancellationRequested
+                    && error.CancellationToken == cancellationToken)
+            {
+                throw new BamlOperationCanceledException(
+                    "The BAML call was canceled by the caller.",
+                    BamlCancellationOrigin.Caller,
+                    cancellationToken,
+                    functionIdentity,
+                    trace: null);
+            }
+
+            return PrimitiveProtocol.DecodeCallResult(
+                bytes,
+                functionIdentity,
+                nativeState.Api);
+        }
+        finally
+        {
+            HostValueRegistry.Shared.CompleteFunctionCall(call.FunctionCallId);
+        }
+    }
+
+    private static FunctionOperation Operation(string variant) => variant switch
+    {
+        "direct" or "call" => FunctionOperation.Direct,
+        "spec" => FunctionOperation.Spec,
+        "stream" => FunctionOperation.Stream,
+        _ => throw new InvalidOperationException(
+            $"Generated function token has unsupported semantic operation {variant}."),
+    };
 }

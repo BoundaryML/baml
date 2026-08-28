@@ -5,7 +5,7 @@
 
 use baml_codegen_types::{FunctionArgumentDefault, Ty};
 
-use crate::emit::function::SyncAsync;
+use crate::emit::function::{BindingRole, SyncAsync};
 
 pub(crate) struct TypeScriptMethodBinding {
     /// TS identifier on the LHS of the binding. Sync form is the bare
@@ -14,6 +14,8 @@ pub(crate) struct TypeScriptMethodBinding {
     /// FQN passed as the first arg to the factory call.
     pub(crate) baml_fqn: String,
     pub(crate) mode: SyncAsync,
+    /// Direct/Spec/Stream host projection plus sync/async execution mode.
+    pub(crate) role: BindingRole,
     /// Static vs. instance — drives the Phase 4 binding shape.
     pub(crate) kind: MethodKind,
     /// Source arguments before the first defaulted parameter. Instance-method

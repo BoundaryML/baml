@@ -1,8 +1,8 @@
 // Streaming: the raw text-delta stream of one model turn (TurnStream), the
 // typed partial-value stream returned to BAML and host SDKs (Stream), and the
 // one-turn streaming runner (from_spec). Streaming is a client capability: a
-// client that can stream implements StreamingClient; `Fn$stream` companions
-// call from_spec.
+// client that can stream implements StreamingClient; the compiler-private
+// `Fn@stream` entry binds the authored function's spec and calls from_spec.
 //
 // Phase 1 scope: one model turn, no tool loop. A spec whose toolbox is not
 // empty is rejected with baml.errors.InvalidArgument.
@@ -469,9 +469,9 @@ class TurnStream {
     }
 }
 
-// The typed partial-value stream returned by an LLM function's `$stream`
-// companion. This is the one canonical host-stream class; tagged handles carry
-// its FQN across FFI so host bridges do not need to hardcode a namespace.
+// The typed partial-value stream returned by an LLM function's `@stream`
+// projection. This is the one canonical host-stream class; tagged handles
+// carry its FQN across FFI so host bridges do not need to hardcode a namespace.
 class Stream<TStream, TFinal> {
     _next_text: () -> string? throws root.errors.InvokeError,
     _cache: baml.sap.ParseCache<TStream, TFinal>,
@@ -522,8 +522,9 @@ class Stream<TStream, TFinal> {
 
 // One-turn streaming over a spec: render the spec's prompt exactly as the
 // default runner's first turn would, require a streaming-capable client, and
-// return the typed partial stream. `Fn$stream(...)` desugars to
-// `ai.stream.from_spec<Out$stream, Out>(Fn$spec(...), client)`.
+// return the typed partial stream. PPIR's compiler-private `Fn@stream` entry
+// calls this function with the exact existing `Out$stream` partial schema.
+// Host stream shortcuts select that entry through the Stream bridge operation.
 //
 // Streaming does not run the tool loop yet: a spec with a non-empty toolbox
 // is rejected. The client override is typed as the capability, so passing a

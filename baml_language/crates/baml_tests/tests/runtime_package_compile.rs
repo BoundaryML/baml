@@ -4,14 +4,16 @@ use std::sync::Arc;
 
 use baml_tests::baml_test;
 use bex_engine::{
-    BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder,
+    BexEngine, BexExternalAdt, BexExternalValue, EngineError, FunctionCallContextBuilder,
+    RuntimeTy,
     logger::{TraceLogDrainReport, TraceLogger},
 };
+use bex_external_types::TaggedHeapHandleKind;
 use sys_native::SysOpsExt;
 
 const SCENARIO_SOURCE: &str = r####"
 client TestClient = openai.ResponsesClient.new(
-    model = "unused-network-free-companions",
+    model = "unused-network-free-spec-methods",
     api_key = "unused",
 );
 
@@ -30,7 +32,8 @@ class ExtractedRecord {
   let pkg = reflect.Package.compile({ "schema.baml": source })
   let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
   let document_text = `{"account":"AC-1","amount":42}`
-  let record = Extract$parse<unreflect(record_t.as_type())>(document_text)
+  type RecordOutput = unreflect(record_t.as_type())
+  let record = Extract@spec<RecordOutput>(document_text).parse(document_text)
   json.to_string(record)
 }
 
@@ -39,7 +42,8 @@ function rendered_schema() -> string throws unknown {
     "schema.baml": "class ExtractedRecord { account string amount int }"
   })
   let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
-  Extract$render_prompt<unreflect(record_t.as_type())>("sample document").text()
+  type RecordOutput = unreflect(record_t.as_type())
+  Extract@spec<RecordOutput>("sample document").prompt().text()
 }
 
 function declaration_identity_properties() -> bool throws unknown {
@@ -234,7 +238,7 @@ function Present(value: string) -> string { value }
   functions.get("root.identity") == null && functions.get("root.Present") != null
 }
 
-function generic_function_companion_extraction_is_refused() -> string throws unknown {
+function removed_function_companion_is_absent_from_get_function() -> bool throws unknown {
   let pkg = reflect.Package.compile({
     "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
@@ -246,19 +250,10 @@ function Extract<T>(document: string) -> T {
   prompt: "Extract document"
 }`
   })
-  let extracted = pkg.get_function<(string) -> ai.Prompt>("root.Extract$render_prompt") catch (e) {
-    reflect.errors.CompilationError => {
-      return e.diagnostics[0].code
-    },
-    _ => return "wrong error",
-  } else {
-    return "returned null"
-  }
-  let _ = extracted
-  "did not throw"
+  pkg.get_function<(string) -> ai.Prompt>("root.Extract$render_prompt") == null
 }
 
-function generic_function_companion_is_listed() -> bool throws unknown {
+function removed_function_companion_is_absent_from_listing() -> bool throws unknown {
   let pkg = reflect.Package.compile({
     "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
@@ -270,7 +265,7 @@ function Extract<T>(document: string) -> T {
   prompt: "Extract document"
 }`
   })
-  pkg.functions().get("root.Extract$render_prompt") != null
+  pkg.functions().get("root.Extract$render_prompt") == null
 }
 
 function alias_order_and_reserved_names() -> bool throws unknown {
@@ -574,26 +569,22 @@ async fn function_listing_omits_unspecialized_generics() {
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
-/// #4473 let a generic function's companion through `get_function` because its
-/// declared surface mentions no `T`. B-1582 showed what that value is worth: its
-/// body still materializes `T`, so calling it dies inside `LoadType` as an
-/// internal error no `catch` can see. The companion is still *listed* — see the
-/// test below — but extracting it **by name** still reports the same reflection
-/// limit its parent does: a name lookup has nowhere to put type arguments.
+/// Synthetic function companions no longer enter package reflection. The old
+/// spelling returns null while the authored function remains the only symbol.
 #[tokio::test]
-async fn generic_function_companion_extraction_reports_reflection_limit() {
+async fn removed_function_companion_is_absent_from_get_function() {
     let output = baml_test!(
         baml: SCENARIO_6_SOURCE,
-        entry: "generic_function_companion_extraction_is_refused"
+        entry: "removed_function_companion_is_absent_from_get_function"
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("E0165".into())));
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
 #[tokio::test]
-async fn generic_function_companion_remains_in_function_listing() {
+async fn removed_function_companion_is_absent_from_function_listing() {
     let output = baml_test!(
         baml: SCENARIO_6_SOURCE,
-        entry: "generic_function_companion_is_listed"
+        entry: "removed_function_companion_is_absent_from_listing"
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
@@ -608,4 +599,104 @@ async fn alias_maps_are_order_independent_and_cannot_shadow_stdlib() {
 async fn package_tests_enumerate_invocable_zero_arg_functions() {
     let output = baml_test!(baml: SCENARIO_6_SOURCE, entry: "enumerated_test_runs");
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn runtime_compiled_capability_name_collisions_stay_runtime_values() {
+    let program = baml_db::testing::compile_source(
+        r####"
+function MakeRuntimeCapabilityCollisions() -> unknown[] throws unknown {
+    let package = reflect.Package.compile({
+        "ns_ai/function_spec.baml": `
+class FunctionSpec {
+    marker string
+}
+
+function MakeFunctionSpecCollision() -> unknown {
+    FunctionSpec { marker: "runtime-function-spec" }
+}
+`,
+        "ns_ai/ns_stream/stream.baml": `
+class Stream {
+    marker string
+}
+
+function MakeStreamCollision() -> unknown {
+    Stream { marker: "runtime-stream" }
+}
+`
+    })
+    let make_spec = package.get_function<() -> unknown>(
+        "root.ai.MakeFunctionSpecCollision"
+    ) ?? throw "missing runtime FunctionSpec constructor"
+    let make_stream = package.get_function<() -> unknown>(
+        "root.ai.stream.MakeStreamCollision"
+    ) ?? throw "missing runtime Stream constructor"
+    return [make_spec(), make_stream()]
+}
+
+function EchoRuntimeCapabilityCollision(value: unknown) -> unknown {
+    value
+}
+"####,
+    );
+    let engine = Arc::new(
+        BexEngine::new_with_runtime_compiler(
+            program,
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            bex_project::runtime_compiler(),
+        )
+        .expect("runtime capability collision engine"),
+    );
+    let result = engine
+        .call_function(
+            "user.MakeRuntimeCapabilityCollisions",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("runtime collision constructors");
+    let BexExternalValue::Array { items, .. } = result else {
+        panic!("expected runtime collision array, got {result:?}")
+    };
+
+    for (value, class_name) in items
+        .into_iter()
+        .zip(["user.ai.FunctionSpec", "user.ai.stream.Stream"])
+    {
+        assert!(
+            matches!(
+                &value,
+                BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                    kind: TaggedHeapHandleKind::RuntimeValue,
+                    ty: RuntimeTy::Class(actual, _, _),
+                    ..
+                }) if actual.to_string() == class_name
+            ),
+            "runtime-compiled {class_name} must stay an opaque runtime value: {value:?}",
+        );
+
+        let echoed = engine
+            .call_function(
+                "user.EchoRuntimeCapabilityCollision",
+                vec![value],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .expect("runtime value host pass-back");
+        assert!(
+            matches!(
+                echoed,
+                BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                    kind: TaggedHeapHandleKind::RuntimeValue,
+                    ty: RuntimeTy::Class(ref actual, _, _),
+                    ..
+                }) if actual.to_string() == class_name
+            ),
+            "host pass-back must preserve runtime identity for {class_name}",
+        );
+    }
 }

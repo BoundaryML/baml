@@ -3,41 +3,18 @@ source: crates/baml_tests/src/corpus.rs
 ---
 === PPIR ===
 function user.fixtures.llm_quoted_prompt.BacktickPrompt(topic: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
-  ai.Agent.new(client = client, on_event = on_event).run(BacktickPrompt$spec(topic)).value
+  ai.Agent.new(client = client, on_event = on_event).run(ai.FunctionSpec { spec_name: "BacktickPrompt", args: map { "topic": topic }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Write one sentenc...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } topic);  __tt_cur =  __tt_cur Add ".\nAn escaped mark...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format());  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(QuotedPromptClient) }).value
 }
-function user.fixtures.llm_quoted_prompt.BacktickPrompt$build_request(topic: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
-  BacktickPrompt$spec(topic).build_request(override_client = client)
-}
-function user.fixtures.llm_quoted_prompt.BacktickPrompt$parse(json: string) -> string  [expr] {
-  baml.sap.parse(json)
-}
-function user.fixtures.llm_quoted_prompt.BacktickPrompt$render_prompt(topic: string) -> ai.Prompt  [expr] {
-  BacktickPrompt$spec(topic).prompt()
-}
-function user.fixtures.llm_quoted_prompt.BacktickPrompt$spec(topic: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "BacktickPrompt", args: map { "topic": topic }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Write one sentenc...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } topic);  __tt_cur =  __tt_cur Add ".\nAn escaped mark...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format());  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(QuotedPromptClient) }
-}
-function user.fixtures.llm_quoted_prompt.BacktickPrompt$stream(topic: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(BacktickPrompt$spec(topic), client = client, on_event = on_event)
+function user.fixtures.llm_quoted_prompt.BacktickPrompt@stream(topic: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(ai.FunctionSpec { spec_name: "BacktickPrompt", args: map { "topic": topic }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Write one sentenc...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } topic);  __tt_cur =  __tt_cur Add ".\nAn escaped mark...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format());  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(QuotedPromptClient) }, client = client, on_event = on_event)
 }
 function user.fixtures.llm_quoted_prompt.QuotedPrompt(topic: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
-  ai.Agent.new(client = client, on_event = on_event).run(QuotedPrompt$spec(topic)).value
+  ai.Agent.new(client = client, on_event = on_event).run(ai.FunctionSpec { spec_name: "QuotedPrompt", args: map { "topic": topic }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Write one sentenc...";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(QuotedPromptClient) }).value
 }
-function user.fixtures.llm_quoted_prompt.QuotedPrompt$build_request(topic: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
-  QuotedPrompt$spec(topic).build_request(override_client = client)
-}
-function user.fixtures.llm_quoted_prompt.QuotedPrompt$parse(json: string) -> string  [expr] {
-  baml.sap.parse(json)
-}
-function user.fixtures.llm_quoted_prompt.QuotedPrompt$render_prompt(topic: string) -> ai.Prompt  [expr] {
-  QuotedPrompt$spec(topic).prompt()
-}
-function user.fixtures.llm_quoted_prompt.QuotedPrompt$spec(topic: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "QuotedPrompt", args: map { "topic": topic }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Write one sentenc...";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(QuotedPromptClient) }
-}
-function user.fixtures.llm_quoted_prompt.QuotedPrompt$stream(topic: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(QuotedPrompt$spec(topic), client = client, on_event = on_event)
+function user.fixtures.llm_quoted_prompt.QuotedPrompt@stream(topic: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(ai.FunctionSpec { spec_name: "QuotedPrompt", args: map { "topic": topic }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Write one sentenc...";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(QuotedPromptClient) }, client = client, on_event = on_event)
 }
 
 --- captures ---
-lambda ( __spec_output_format) in BacktickPrompt$spec: captures [topic]
+lambda ( __spec_output_format) in BacktickPrompt: captures [topic]
+lambda ( __spec_output_format) in BacktickPrompt: captures [topic]

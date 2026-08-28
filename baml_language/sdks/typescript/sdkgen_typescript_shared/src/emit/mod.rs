@@ -2,8 +2,9 @@
 //!
 //! These types describe what the emitter will render to TypeScript, as
 //! opposed to `baml_codegen_types` which describes BAML-side input
-//! symbols. The fan-out logic (sync + async per callable, companion
-//! suffix rules) is a verbatim port of `sdkgen_python_pydantic2/src/emit/mod.rs`.
+//! symbols. Authored callables fan out through their structured Direct, Spec,
+//! and Stream operation metadata; generated sibling names are allocated inside
+//! their TypeScript scope.
 
 pub(crate) mod class;
 pub(crate) mod enum_;
@@ -12,13 +13,15 @@ pub(crate) mod method;
 pub(crate) mod type_alias;
 pub(crate) mod typemap_file;
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use baml_codegen_types::{FunctionArgument, Name, Symbol, SymbolPool, Ty};
 
 use crate::{
     emit::{
         class::{TypeScriptClass, TypeScriptClassProperty},
         enum_::{TypeScriptEnum, TypeScriptEnumVariant},
-        function::{SyncAsync, TypeScriptFunction},
+        function::{BindingRole, SyncAsync, TypeScriptFunction},
         method::{MethodKind, OptionalArg, RequiredArg, TypeScriptMethodBinding},
         type_alias::TypeScriptTypeAlias,
     },
@@ -37,6 +40,38 @@ pub(crate) enum EmittedSymbol {
 /// derived from a `Symbol`'s `Origin`.
 pub(crate) type SortKey = (String, u32);
 
+/// Allocate generated callable projections inside one TypeScript sibling
+/// scope. Authored names are reserved up front and always keep their exact
+/// spelling; a generated collision gains trailing `$` characters until it is
+/// unique. `$` is a legal identifier character and keeps the public
+/// `<name>$stream` spelling recognizable when that exact name is occupied.
+#[derive(Default)]
+struct BindingNameAllocator {
+    used: BTreeSet<String>,
+}
+
+impl BindingNameAllocator {
+    fn reserve(&mut self, name: impl Into<String>) {
+        self.used.insert(name.into());
+    }
+
+    fn allocate_derived(&mut self, mut preferred: String) -> String {
+        while !self.used.insert(preferred.clone()) {
+            preferred.push('$');
+        }
+        preferred
+    }
+
+    fn binding_name(&mut self, role: BindingRole, authored_name: &str) -> String {
+        let preferred = role.binding_name(authored_name);
+        if role == BindingRole::DirectSync {
+            preferred
+        } else {
+            self.allocate_derived(preferred)
+        }
+    }
+}
+
 /// Walk every `(Name, Symbol)` in the pool and build the
 /// `(LeafPath, EmittedSymbol, SortKey)` triples that drive emission.
 /// Function symbols fan out into sync + async bindings; all other
@@ -47,14 +82,35 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
     let mut entries: Vec<(&Name, &Symbol)> = pool.iter().collect();
     entries.sort_by_key(|e| e.0);
 
+    // A derived function binding must not steal the exact name of any authored
+    // sibling, even when that sibling appears later in source/name order.
+    let mut binding_names: BTreeMap<LeafPath, BindingNameAllocator> = BTreeMap::new();
+    for (key, _) in &entries {
+        let leaf = route(key);
+        binding_names
+            .entry(leaf.clone())
+            .or_default()
+            .reserve(key.name().as_str());
+        // Child namespaces are sibling exports in each ancestor leaf. A
+        // generated projection must not shadow one; exact authored function ↔
+        // child collisions remain handled by Object.assign in the renderer.
+        for (index, child) in leaf.segments.iter().enumerate() {
+            binding_names
+                .entry(LeafPath {
+                    segments: leaf.segments[..index].to_vec(),
+                })
+                .or_default()
+                .reserve(child.clone());
+        }
+    }
+
     let mut out: Vec<(LeafPath, EmittedSymbol, SortKey)> = Vec::new();
 
     for (key, symbol) in entries {
         let leaf = route(key);
-        // spec2: preserve the BAML name verbatim — `$` is a valid TS
-        // identifier char, so a `$stream` companion class is emitted as
-        // e.g. `Resume$stream` (not stripped to `Resume`). Non-stream
-        // symbols are unaffected (their name carries no `$stream`).
+        // Preserve BAML type names verbatim. PPIR partial-output classes keep
+        // their `$stream` suffix; function projections are expanded from
+        // `Function.operations` below and do not exist as suffixed symbols.
         let bare = key.name().as_str().to_string();
 
         match symbol {
@@ -70,10 +126,20 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                     })
                     .collect();
                 let class_fqn_root = key.to_string();
-                let static_methods =
-                    expand_methods(&c.static_methods, &class_fqn_root, MethodKind::Static);
-                let instance_methods =
-                    expand_methods(&c.instance_methods, &class_fqn_root, MethodKind::Instance);
+                let static_methods = expand_methods(
+                    &c.static_methods,
+                    &class_fqn_root,
+                    MethodKind::Static,
+                    std::iter::empty(),
+                );
+                let instance_methods = expand_methods(
+                    &c.instance_methods,
+                    &class_fqn_root,
+                    MethodKind::Instance,
+                    c.properties
+                        .iter()
+                        .map(|property| property.name.as_str().to_string()),
+                );
                 let generic_params = c
                     .generic_params
                     .iter()
@@ -130,7 +196,10 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
             }
             Symbol::Function(f) => {
                 let sort_key = origin_key(&f.origin);
-                expand_function(&leaf, key, f, &sort_key, &mut out);
+                let names = binding_names
+                    .get_mut(&leaf)
+                    .expect("every symbol leaf has a binding-name scope");
+                expand_function(&leaf, key, f, &sort_key, names, &mut out);
             }
         }
     }
@@ -138,19 +207,18 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
     out
 }
 
-/// Fan out a `Symbol::Function` into its sync and async bindings.
-/// Companions arrive as their own pool entries (keyed on the suffixed
-/// name) and flow through this same path; they share the parent's span
-/// so `group_and_sort` keeps them contiguous within the leaf.
+/// Fan out an authored `Symbol::Function` into its available flat host
+/// projections. Every projection keeps the same authored FQN.
 fn expand_function(
     leaf: &LeafPath,
     key: &Name,
     f: &baml_codegen_types::Function,
     sort_key: &SortKey,
+    names: &mut BindingNameAllocator,
     out: &mut Vec<(LeafPath, EmittedSymbol, SortKey)>,
 ) {
     let fqn_root = key.to_string();
-    let bare = bare_callable_name(key.name().as_str());
+    let bare = key.name().as_str().to_string();
     let func_generic_params: Vec<String> = f
         .generic_params
         .iter()
@@ -158,30 +226,91 @@ fn expand_function(
         .collect();
     let func_docstring = f.docstring.clone();
     let raises_names = collect_raises_names(f.throws.as_ref());
-    expand_callable(
-        &bare,
-        &fqn_root,
-        &f.arguments,
-        &f.return_type,
-        |name, fqn, mode, params, arg_tys, arg_defaults, return_ty| {
-            out.push((
-                leaf.clone(),
-                EmittedSymbol::Function(TypeScriptFunction {
-                    name,
-                    baml_fqn: fqn,
-                    mode,
-                    param_names: params,
-                    arg_tys,
-                    arg_defaults,
-                    return_ty,
-                    generic_params: func_generic_params.clone(),
-                    docstring: func_docstring.clone(),
-                    raises_names: raises_names.clone(),
-                }),
-                sort_key.clone(),
-            ));
-        },
-    );
+    for (role, return_ty) in operation_bindings(f) {
+        let arguments = arguments_for_role(f, role);
+        let params = arguments
+            .iter()
+            .map(|argument| argument.name.as_str().to_string())
+            .collect();
+        let arg_tys = arguments
+            .iter()
+            .map(|argument| argument.ty.clone())
+            .collect();
+        let arg_defaults = arguments
+            .iter()
+            .map(|argument| argument.default.clone())
+            .collect();
+        let mode = if role.is_async() {
+            SyncAsync::Async
+        } else {
+            SyncAsync::Sync
+        };
+        out.push((
+            leaf.clone(),
+            EmittedSymbol::Function(TypeScriptFunction {
+                name: names.binding_name(role, &bare),
+                baml_fqn: fqn_root.clone(),
+                mode,
+                role,
+                param_names: params,
+                arg_tys,
+                arg_defaults,
+                return_ty,
+                generic_params: func_generic_params.clone(),
+                docstring: func_docstring.clone(),
+                raises_names: raises_names.clone(),
+            }),
+            sort_key.clone(),
+        ));
+    }
+}
+
+fn operation_bindings(function: &baml_codegen_types::Function) -> Vec<(BindingRole, Ty)> {
+    let mut bindings = vec![
+        (BindingRole::DirectSync, function.return_type.clone()),
+        (BindingRole::DirectAsync, function.return_type.clone()),
+    ];
+    if let Some(spec) = &function.operations.spec {
+        bindings.extend([
+            (BindingRole::SpecSync, spec.return_type.clone()),
+            (BindingRole::SpecAsync, spec.return_type.clone()),
+        ]);
+    }
+    if let Some(stream) = &function.operations.stream {
+        bindings.extend([
+            (BindingRole::StreamSync, stream.return_type.clone()),
+            (BindingRole::StreamAsync, stream.return_type.clone()),
+        ]);
+    }
+    bindings
+}
+
+fn arguments_for_role(
+    function: &baml_codegen_types::Function,
+    role: BindingRole,
+) -> Vec<&FunctionArgument> {
+    match role {
+        BindingRole::DirectSync | BindingRole::DirectAsync => function.arguments.iter().collect(),
+        BindingRole::SpecSync | BindingRole::SpecAsync => function
+            .arguments
+            .iter()
+            .filter(|argument| !argument.injected)
+            .collect(),
+        BindingRole::StreamSync | BindingRole::StreamAsync => function
+            .arguments
+            .iter()
+            .filter(|argument| !argument.injected)
+            .chain(
+                function
+                    .operations
+                    .stream
+                    .as_ref()
+                    .expect("a Stream binding has Stream operation metadata")
+                    .control_arguments
+                    .iter(),
+            )
+            .collect(),
+    }
 }
 
 /// Collect the unqualified leaf names of the thrown types in a `throws`
@@ -211,21 +340,29 @@ fn collect_raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> 
     out
 }
 
-/// Fan out source-declared methods (parents and companions) into one
-/// `TypeScriptMethodBinding` per emitted line. Methods are sorted by `(file,
-/// span, name)` so a parent and its companions cluster together.
+/// Fan out source-declared methods into all available operation bindings.
+/// Methods are sorted by `(file, span, name)`.
 fn expand_methods(
     methods: &[baml_codegen_types::Function],
     class_fqn_root: &str,
     kind: MethodKind,
+    additional_authored_names: impl IntoIterator<Item = String>,
 ) -> Vec<TypeScriptMethodBinding> {
     let mut sorted: Vec<&baml_codegen_types::Function> = methods.iter().collect();
     sorted.sort_by_key(|m| (origin_key(&m.origin), m.name.as_str()));
 
+    let mut names = BindingNameAllocator::default();
+    for method in methods {
+        names.reserve(method.name.as_str());
+    }
+    for name in additional_authored_names {
+        names.reserve(name);
+    }
+
     let mut out: Vec<TypeScriptMethodBinding> = Vec::new();
     for m in sorted {
         let m_name = m.name.as_str();
-        let bare = bare_callable_name(m_name);
+        let bare = m_name.to_string();
         let fqn_root = format!("{class_fqn_root}.{m_name}");
         let method_generic_params: Vec<String> = m
             .generic_params
@@ -234,19 +371,23 @@ fn expand_methods(
             .collect();
         let method_docstring = m.docstring.clone();
         let raises_names = collect_raises_names(m.throws.as_ref());
-        let (required_args, optional_args) = split_arguments(&m.arguments);
-        for (name, mode) in [
-            (bare.clone(), SyncAsync::Sync),
-            (format!("{bare}_async"), SyncAsync::Async),
-        ] {
+        for (role, return_ty) in operation_bindings(m) {
+            let arguments = arguments_for_role(m, role);
+            let (required_args, optional_args) = split_arguments(&arguments);
+            let mode = if role.is_async() {
+                SyncAsync::Async
+            } else {
+                SyncAsync::Sync
+            };
             out.push(TypeScriptMethodBinding {
-                name,
+                name: names.binding_name(role, &bare),
                 baml_fqn: fqn_root.clone(),
                 mode,
+                role,
                 kind,
-                required_args: required_args.clone(),
-                optional_args: optional_args.clone(),
-                return_ty: m.return_type.clone(),
+                required_args,
+                optional_args,
+                return_ty,
                 generic_params: method_generic_params.clone(),
                 docstring: method_docstring.clone(),
                 raises_names: raises_names.clone(),
@@ -256,7 +397,7 @@ fn expand_methods(
     out
 }
 
-fn split_arguments(arguments: &[FunctionArgument]) -> (Vec<RequiredArg>, Vec<OptionalArg>) {
+fn split_arguments(arguments: &[&FunctionArgument]) -> (Vec<RequiredArg>, Vec<OptionalArg>) {
     let first_optional = arguments
         .iter()
         .position(|arg| arg.default.is_some())
@@ -281,65 +422,6 @@ fn split_arguments(arguments: &[FunctionArgument]) -> (Vec<RequiredArg>, Vec<Opt
             })
             .collect(),
     )
-}
-
-/// The TS-side bare identifier for a callable's BAML name, used as the LHS
-/// of the sync binding (the async sibling appends `_async`).
-///
-/// spec2: the BAML name — including any `$<suffix>` companion marker — is
-/// preserved verbatim, because `$` is a valid TypeScript identifier
-/// character. So `foo` → `foo`, `foo$stream` → `foo$stream`,
-/// `foo$build_request` → `foo$build_request`. (Python must translate these
-/// to `_stream` / `__build_request`; TypeScript does not.)
-fn bare_callable_name(name: &str) -> String {
-    name.to_string()
-}
-
-/// Shared fan-out for free functions. Calls `emit` twice: once for the sync
-/// binding and once for the async binding.
-#[allow(clippy::type_complexity)]
-fn expand_callable<F>(
-    bare: &str,
-    fqn_root: &str,
-    arguments: &[baml_codegen_types::FunctionArgument],
-    return_type: &Ty,
-    mut emit: F,
-) where
-    F: FnMut(
-        String,
-        String,
-        SyncAsync,
-        Vec<String>,
-        Vec<Ty>,
-        Vec<Option<baml_codegen_types::FunctionArgumentDefault>>,
-        Ty,
-    ),
-{
-    let params: Vec<String> = arguments
-        .iter()
-        .map(|a| a.name.as_str().to_string())
-        .collect();
-    let arg_types: Vec<Ty> = arguments.iter().map(|a| a.ty.clone()).collect();
-    let arg_defaults: Vec<Option<baml_codegen_types::FunctionArgumentDefault>> =
-        arguments.iter().map(|a| a.default.clone()).collect();
-    emit(
-        bare.to_string(),
-        fqn_root.to_string(),
-        SyncAsync::Sync,
-        params.clone(),
-        arg_types.clone(),
-        arg_defaults.clone(),
-        return_type.clone(),
-    );
-    emit(
-        format!("{bare}_async"),
-        fqn_root.to_string(),
-        SyncAsync::Async,
-        params,
-        arg_types,
-        arg_defaults,
-        return_type.clone(),
-    );
 }
 
 fn origin_key(origin: &baml_codegen_types::Origin) -> SortKey {

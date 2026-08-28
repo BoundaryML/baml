@@ -1490,6 +1490,18 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
+    fn make_spec_function(
+        &mut self,
+        _item: &baml_compiler2_mir::ItemRef,
+        ntypeargs: usize,
+    ) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(ntypeargs) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
     fn make_generic_function_from_value(&mut self, ntypeargs: usize) -> Result<(), Self::Error> {
         // Pops the callable value plus `ntypeargs` type-arg values, pushes one
         // specialized closure object.

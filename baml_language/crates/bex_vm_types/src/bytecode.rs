@@ -831,6 +831,19 @@ pub enum Instruction {
         ntypeargs: u16,
     },
 
+    /// Create an ordinary zero-capture closure targeting an authored LLM
+    /// function's private spec recipe. The authored function metadata is
+    /// resolved here, and the popped types become the closure's captured type
+    /// arguments. It is never represented as an operation on GenericFunction.
+    ///
+    /// Stack: `[type_args...]` -> `[closure]`
+    MakeSpecFunction {
+        /// Global index of the authored LLM function.
+        function: GlobalIndex,
+        /// Number of `Object::Type` values on the stack to pop into `type_args`.
+        ntypeargs: u16,
+    },
+
     /// Specialize a *runtime callable value* with explicit type arguments
     /// (`g<int>` where `g` is a local/captured function value, not a function
     /// reference resolvable at compile time). Pops the callable value, then
@@ -1123,6 +1136,10 @@ pub enum OpCode {
     // arg count; `Self` type, interface type, and method name come off the
     // stack and the resolved capture-less closure is pushed.
     MakeVirtualFunction,
+
+    // Dedicated authored-function spec projection: u32 function global + u16
+    // ntypeargs. Appended to preserve every existing opcode discriminant.
+    MakeSpecFunction,
 }
 
 impl OpCode {
@@ -1261,7 +1278,8 @@ impl OpCode {
             Self::AllocInstance
             | Self::Call
             | Self::CallWithRuntimeId
-            | Self::MakeGenericFunction => 7,
+            | Self::MakeGenericFunction
+            | Self::MakeSpecFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
             Self::MakeClosure => 9,
@@ -1398,6 +1416,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::JumpTable as u8 => Ok(Self::JumpTable),
             x if x == Self::MakeClosure as u8 => Ok(Self::MakeClosure),
             x if x == Self::MakeGenericFunction as u8 => Ok(Self::MakeGenericFunction),
+            x if x == Self::MakeSpecFunction as u8 => Ok(Self::MakeSpecFunction),
             x if x == Self::MakeGenericFunctionFromValue as u8 => {
                 Ok(Self::MakeGenericFunctionFromValue)
             }
@@ -1542,6 +1561,7 @@ impl std::fmt::Display for OpCode {
             Self::JumpTable => "JUMP_TABLE",
             Self::MakeClosure => "MAKE_CLOSURE",
             Self::MakeGenericFunction => "MAKE_GENERIC_FUNCTION",
+            Self::MakeSpecFunction => "MAKE_SPEC_FUNCTION",
             Self::MakeGenericFunctionFromValue => "MAKE_GENERIC_FUNCTION_FROM_VALUE",
             Self::LoadVar2 => "LOAD_VAR2",
             Self::StoreVar2 => "STORE_VAR2",
@@ -1732,6 +1752,12 @@ impl std::fmt::Display for Instruction {
                 ntypeargs,
             } => {
                 write!(f, "MAKE_GENERIC_FUNCTION {function} ntypeargs={ntypeargs}")
+            }
+            Instruction::MakeSpecFunction {
+                function,
+                ntypeargs,
+            } => {
+                write!(f, "MAKE_SPEC_FUNCTION {function} ntypeargs={ntypeargs}")
             }
             Instruction::MakeGenericFunctionFromValue { ntypeargs } => {
                 write!(f, "MAKE_GENERIC_FUNCTION_FROM_VALUE ntypeargs={ntypeargs}")
@@ -2334,6 +2360,10 @@ impl Bytecode {
                 Instruction::MakeGenericFunction {
                     function,
                     ntypeargs,
+                }
+                | Instruction::MakeSpecFunction {
+                    function,
+                    ntypeargs,
                 } => {
                     code.extend_from_slice(
                         &u32::try_from(function.into_raw())
@@ -2718,6 +2748,7 @@ impl Bytecode {
             Instruction::JumpTable(_) => OpCode::JumpTable,
             Instruction::MakeClosure { .. } => OpCode::MakeClosure,
             Instruction::MakeGenericFunction { .. } => OpCode::MakeGenericFunction,
+            Instruction::MakeSpecFunction { .. } => OpCode::MakeSpecFunction,
             Instruction::MakeGenericFunctionFromValue { .. } => {
                 OpCode::MakeGenericFunctionFromValue
             }
@@ -2799,6 +2830,61 @@ mod compact_tests {
             258,
         );
         assert_eq!(compact.code[10], OpCode::Return as u8);
+    }
+
+    #[test]
+    fn ordinary_generic_function_keeps_the_seven_byte_baseline_layout() {
+        let bc = make_bytecode(
+            vec![Instruction::MakeGenericFunction {
+                function: GlobalIndex::from_raw(0x0102_0304),
+                ntypeargs: 0x0506,
+            }],
+            Vec::new(),
+        );
+        let compact = bc.lower_to_compact();
+        assert_eq!(OpCode::MakeGenericFunction.encoded_size(), 7);
+        assert_eq!(
+            compact.code,
+            [
+                OpCode::MakeGenericFunction as u8,
+                0x04,
+                0x03,
+                0x02,
+                0x01,
+                0x06,
+                0x05
+            ],
+            "ordinary generic functions have no projection/operation byte",
+        );
+    }
+
+    #[test]
+    fn spec_projection_has_a_distinct_seven_byte_opcode() {
+        let bc = make_bytecode(
+            vec![Instruction::MakeSpecFunction {
+                function: GlobalIndex::from_raw(0x0102_0304),
+                ntypeargs: 0x0506,
+            }],
+            Vec::new(),
+        );
+        let compact = bc.lower_to_compact();
+        assert_eq!(OpCode::MakeSpecFunction.encoded_size(), 7);
+        assert_eq!(
+            OpCode::try_from(compact.code[0]),
+            Ok(OpCode::MakeSpecFunction)
+        );
+        assert_eq!(
+            compact.code,
+            [
+                OpCode::MakeSpecFunction as u8,
+                0x04,
+                0x03,
+                0x02,
+                0x01,
+                0x06,
+                0x05
+            ],
+        );
     }
 
     /// A wrong `encoded_size` silently desynchronizes the instruction stream: the

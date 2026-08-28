@@ -15,6 +15,15 @@
 #include "baml_bridge/cffi/v1/baml_outbound.pb.h"
 
 namespace baml {
+
+// Semantic projection of an authored BAML function. The zero value preserves
+// the historical direct-call wire behavior when the protobuf field is absent.
+enum class function_operation : uint8_t {
+  direct = 0,
+  spec = 1,
+  stream = 2,
+};
+
 namespace detail {
 
 namespace pb = ::baml_bridge::cffi::v1;
@@ -88,15 +97,23 @@ class args_encoder {
     write_value(*entry->mutable_value());
   }
 
-  std::string finish(uint64_t call_id, const std::string& function_name) {
+  std::string finish(
+      uint64_t call_id, const std::string& function_name,
+      function_operation operation = function_operation::direct) {
     args_.set_call_id(call_id);
     args_.set_function_name(function_name);
+    args_.set_operation(static_cast<pb::FunctionOperation>(
+        static_cast<int>(operation)));
     return args_.SerializeAsString();
   }
 
-  std::string finish(uint64_t call_id, uint64_t function_handle) {
+  std::string finish(
+      uint64_t call_id, uint64_t function_handle,
+      function_operation operation = function_operation::direct) {
     args_.set_call_id(call_id);
     args_.set_function_handle(function_handle);
+    args_.set_operation(static_cast<pb::FunctionOperation>(
+        static_cast<int>(operation)));
     return args_.SerializeAsString();
   }
 

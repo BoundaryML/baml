@@ -130,7 +130,8 @@ async fn runtime_minted_class_narrows_and_exercises_the_complete_surface() {
                 "fourth": optional_string,
                 "fifth": optional_string,
             })
-            let opaque = Extract$parse<unreflect(runtime_t.as_type())>(
+            type RuntimeOutput = unreflect(runtime_t.as_type())
+            let opaque = Extract@spec<RuntimeOutput>("sample").parse(
                 `{"first":"one","second":"two","third":null,"fourth":"four","fifth":"five"}`,
             )
             let record: reflect.AnyClass = opaque else {

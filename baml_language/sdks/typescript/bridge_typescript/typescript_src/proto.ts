@@ -7,6 +7,7 @@
 import { baml_bridge } from './proto/baml_cffi.js';
 import {
     BamlHandle,
+    BamlCallContext,
     HandleKey,
     BamlImage,
     BamlAudio,
@@ -18,7 +19,9 @@ import {
     getRuntime,
     newFunctionCall,
 } from './native.js';
+import { attachCallContext } from './call_context.js';
 import { BamlStream } from './stream.js';
+import { BamlFunctionSpec } from './function_spec.js';
 import { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, type BamlErrorDetail } from './errors.js';
 import { handleExitPanic } from './platform.js';
 import {
@@ -39,6 +42,7 @@ const CallFunctionArgs = baml_bridge.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_bridge.cffi.v1.BamlOutboundValue;
 const BamlOutboundResult = baml_bridge.cffi.v1.BamlOutboundResult;
 const BamlToHostCall = baml_bridge.cffi.v1.BamlToHostCall;
+const BamlValuePromptAst = baml_bridge.cffi.v1.BamlValuePromptAst;
 const InboundValue = baml_bridge.cffi.v1.InboundValue;
 const InboundClassValue = baml_bridge.cffi.v1.InboundClassValue;
 const InboundMapEntry = baml_bridge.cffi.v1.InboundMapEntry;
@@ -88,6 +92,9 @@ export interface EncodeCallArgsOptions {
     syncMode?: boolean;
     functionName?: string;
     functionHandle?: HandleKey;
+    /** Semantic projection of an authored BAML function. Omitted means the
+     * backwards-compatible direct call (wire value 0). */
+    operation?: FunctionOperation;
     /**
      * Call-level TypeVar bindings for a generic function/method, as
      * `[typeVarName, wireTy]` pairs in De Bruijn order (enclosing class params
@@ -96,6 +103,132 @@ export interface EncodeCallArgsOptions {
      * `type_args` argument. Omitted/empty for non-generic calls.
      */
     typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy | BamlType]>;
+}
+
+export type FunctionOperation = 'direct' | 'spec' | 'stream';
+
+export interface BamlPromptCallOptions {
+    $ctx?: BamlCallContext;
+}
+
+/** Structural view returned by `BamlPrompt.messages()`. */
+export interface BamlPromptMessage {
+    role: string;
+    content: string;
+    parts: unknown[];
+    metadata: Record<string, unknown>;
+}
+
+/**
+ * Portable representation of `ai.Prompt` at the bridge boundary.
+ *
+ * The protobuf payload is copied both in and out so this wrapper never owns an
+ * engine handle and can safely be passed to another runtime. Its helpers
+ * re-enter the canonical `ai.Prompt` methods with a fresh inline copy, so the
+ * same prompt remains reusable across repeated calls and runtimes.
+ */
+export class BamlPrompt {
+    private constructor(private readonly wire: baml_bridge.cffi.v1.IBamlValuePromptAst) {}
+
+    static _fromWire(wire: baml_bridge.cffi.v1.IBamlValuePromptAst): BamlPrompt {
+        return new BamlPrompt(BamlPrompt.cloneWire(wire));
+    }
+
+    _wireCopy(): baml_bridge.cffi.v1.IBamlValuePromptAst {
+        return BamlPrompt.cloneWire(this.wire);
+    }
+
+    /** A detached JSON-compatible view of the canonical prompt tree. */
+    toJSON(): unknown {
+        return BamlValuePromptAst.toObject(
+            BamlValuePromptAst.create(this._wireCopy()),
+            { arrays: true, objects: true },
+        );
+    }
+
+    text(options?: BamlPromptCallOptions): string {
+        return this._callSync('ai.Prompt.text', options) as string;
+    }
+
+    async textAsync(options?: BamlPromptCallOptions): Promise<string> {
+        return await this._callAsync('ai.Prompt.text', options) as string;
+    }
+
+    /** Compatibility with the generated SDK's existing async-method spelling. */
+    async text_async(options?: BamlPromptCallOptions): Promise<string> {
+        return await this.textAsync(options);
+    }
+
+    messages(options?: BamlPromptCallOptions): BamlPromptMessage[] {
+        return this._callSync('ai.Prompt.messages', options) as BamlPromptMessage[];
+    }
+
+    async messagesAsync(options?: BamlPromptCallOptions): Promise<BamlPromptMessage[]> {
+        return await this._callAsync('ai.Prompt.messages', options) as BamlPromptMessage[];
+    }
+
+    /** Compatibility with the generated SDK's existing async-method spelling. */
+    async messages_async(options?: BamlPromptCallOptions): Promise<BamlPromptMessage[]> {
+        return await this.messagesAsync(options);
+    }
+
+    private _callSync(fqn: string, options?: BamlPromptCallOptions): unknown {
+        const callId = BigInt(newFunctionCall());
+        const argsProto = encodeCallArgs(
+            { self: this },
+            { syncMode: true, callId, functionName: fqn },
+        );
+        const callCtxBinding = attachCallContext(options?.$ctx, callId);
+        try {
+            return decodeCallResult(getRuntime().callFunctionSync(argsProto, null, null));
+        } finally {
+            callCtxBinding.detach();
+        }
+    }
+
+    private async _callAsync(fqn: string, options?: BamlPromptCallOptions): Promise<unknown> {
+        const callId = BigInt(newFunctionCall());
+        const argsProto = encodeCallArgs(
+            { self: this },
+            { callId, functionName: fqn },
+        );
+        const callCtxBinding = attachCallContext(options?.$ctx, callId);
+        try {
+            return decodeCallResult(await getRuntime().callFunction(argsProto, null, null));
+        } finally {
+            callCtxBinding.detach();
+        }
+    }
+
+    private static cloneWire(
+        wire: baml_bridge.cffi.v1.IBamlValuePromptAst,
+    ): baml_bridge.cffi.v1.IBamlValuePromptAst {
+        return BamlValuePromptAst.decode(BamlValuePromptAst.encode(wire).finish());
+    }
+}
+
+function wireFunctionOperation(operation: FunctionOperation | undefined): number {
+    switch (operation ?? 'direct') {
+        case 'direct': return 0;
+        case 'spec': return 1;
+        case 'stream': return 2;
+        default: throw new TypeError(`unknown BAML function operation ${JSON.stringify(operation)}`);
+    }
+}
+
+type BamlMediaValue = BamlImage | BamlAudio | BamlVideo | BamlPdf;
+
+function wireMedia(value: BamlMediaValue): baml_bridge.cffi.v1.IBamlValueMedia {
+    const media = value instanceof BamlImage ? 1
+        : value instanceof BamlAudio ? 2
+        : value instanceof BamlPdf ? 3
+        : 4;
+    const mimeType = value.mimeType() ?? undefined;
+    const url = value.url();
+    if (url !== null) return { media, mimeType, url };
+    const file = value.file();
+    if (file !== null) return { media, mimeType, file };
+    return { media, mimeType, base64: value.base64() };
 }
 
 /**
@@ -144,6 +277,8 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
         iv.stringValue = value;
     } else if (value instanceof Uint8Array) {
         iv.uint8arrayValue = value;
+    } else if (value instanceof BamlPrompt) {
+        iv.promptAstValue = value._wireCopy();
     } else if (value instanceof BamlHandle) {
         // A round-tripped host callable arrives as a handle, not a raw
         // function — apply the same sync-path fast-fail so `callFunctionSync`
@@ -162,13 +297,13 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
         // The Rust inbound decoder drains handle-table entries. Send a fresh
         // cloned key so the JS-owned handle remains valid for later calls.
         iv.handle = { key: value._cloneKeyForWire(), handleType: value.handleType };
-    } else if (value instanceof BamlStream) {
-        // Stream wrapper → its inner TaggedHeapHandle. Mirrors the BamlHandle
+    } else if (value instanceof BamlStream || value instanceof BamlFunctionSpec) {
+        // Live capability wrapper → its inner TaggedHeapHandle. Mirrors the BamlHandle
         // branch above: the Rust inbound decoder *drains* the handle-table
         // entry, so send a fresh cloned key — otherwise the engine consumes the
-        // stream's only key and the next `next()`/`final()` call fails with
-        // "Invalid handle key". (`BamlStream._toHandle()` returns the inner
-        // handle without cloning, unlike the media wrappers' `_toHandle`.)
+        // wrapper's only key and the next method call fails with "Invalid
+        // handle key". `_toHandle()` returns the inner handle without cloning,
+        // unlike the media wrappers' `_toHandle()`.
         const h = value._toHandle();
         iv.handle = { key: h._cloneKeyForWire(), handleType: h.handleType };
     } else if (
@@ -177,10 +312,10 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
         || value instanceof BamlVideo
         || value instanceof BamlPdf
     ) {
-        // Stdlib media wrappers → their backing ADT_MEDIA_* handle. `_toHandle`
-        // clones the table row so the wrapper stays usable after encode.
-        const h = value._toHandle();
-        iv.handle = { key: h.key, handleType: h.handleType };
+        // Media is a portable value, not an engine capability. Access the
+        // wrapper's canonical payload and send it inline so another runtime
+        // can reconstruct a fresh stdlib wrapper without handle identity.
+        iv.mediaValue = wireMedia(value);
     } else if (typeof value === 'function') {
         // Host callables cannot work on the synchronous call path —
         // fast-fail before any blocking happens (and before we register a
@@ -324,6 +459,12 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
     if (options.functionName !== undefined && options.functionHandle !== undefined) {
         throw new TypeError('exactly one BAML call target may be set');
     }
+    if (options.operation !== undefined
+        && options.operation !== 'direct'
+        && options.functionName === undefined
+        && options.functionHandle === undefined) {
+        throw new TypeError(`${options.operation} requires a function target`);
+    }
     const ctx: EncodeCtx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
         const entries: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
@@ -343,6 +484,7 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
             typeArgs,
             functionName: options.functionName,
             functionHandle: options.functionHandle,
+            operation: wireFunctionOperation(options.operation),
         });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     } catch (err) {
@@ -459,6 +601,9 @@ function decodeValueHolder(
         if (ht === BamlHandleType.ADT_MEDIA_AUDIO) return BamlAudio._fromHandle(handle);
         if (ht === BamlHandleType.ADT_MEDIA_VIDEO) return BamlVideo._fromHandle(handle);
         if (ht === BamlHandleType.ADT_MEDIA_PDF) return BamlPdf._fromHandle(handle);
+        if (ht === BamlHandleType.ADT_FUNCTION_SPEC) {
+            return BamlFunctionSpec._fromHandle(handle, 'ai.FunctionSpec');
+        }
         if (ht === BamlHandleType.ADT_TAGGED_HEAP_HANDLE) {
             // Dispatch via the typemap: every tagged-heap class self-registers
             // under its engine FQN (codegen emits the entry, e.g.
@@ -474,15 +619,29 @@ function decodeValueHolder(
         // ADT_MEDIA_GENERIC has no typed wrapper — stays a bare BamlHandle.
         return handle;
     }
-    // Inline media / prompt AST are not expected on the Node FFI path — they
-    // travel via `handle_value`. Reject loudly rather than silently collapsing
-    // to null (mirrors bridge_python's proto.py, which raises here).
-    if (holder.mediaValue || holder.promptAstValue) {
-        const which = holder.mediaValue ? 'media_value' : 'prompt_ast_value';
-        throw new BamlError(
-            `BEX emitted ${which} on the FFI path — media/prompt AST are expected ` +
-            `via handle_value, not inline`,
-        );
+    if (holder.mediaValue) {
+        const media = holder.mediaValue;
+        const mimeType = media.mimeType ?? undefined;
+        const construct = <T>(type: {
+            fromUrl(value: string, mimeType?: string): T;
+            fromFile(value: string, mimeType?: string): T;
+            fromBase64(value: string, mimeType?: string): T;
+        }): T => {
+            if (media.url != null) return type.fromUrl(media.url, mimeType);
+            if (media.file != null) return type.fromFile(media.file, mimeType);
+            if (media.base64 != null) return type.fromBase64(media.base64, mimeType);
+            throw new BamlError('decoded media value has no payload');
+        };
+        switch (media.media) {
+            case 1: return construct(BamlImage);
+            case 2: return construct(BamlAudio);
+            case 3: return construct(BamlPdf);
+            case 4: return construct(BamlVideo);
+            default: throw new BamlError(`decoded media value has unsupported kind ${media.media ?? 0}`);
+        }
+    }
+    if (holder.promptAstValue) {
+        return BamlPrompt._fromWire(holder.promptAstValue);
     }
     // Any remaining unset oneof is a legitimate null: an all-default holder is a
     // null BAML result.

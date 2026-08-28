@@ -1,15 +1,54 @@
 //! Integration tests for LLM prompt rendering.
 //!
-//! Tests drive the compiler-generated `<Fn>$render_prompt` companion, which
-//! renders the spec's prompt (with the return type's output format) as a
-//! structural `ai.Prompt`.
+//! Tests drive `Fn@spec(...).prompt()`, which renders the function's attached
+//! recipe (with the return type's output format) as a structural `ai.Prompt`.
 
 use bex_engine::FunctionCallContextBuilder;
+use bex_external_types::BexExternalAdt;
 use bex_heap::BexExternalValue;
 
 mod common;
 
 use common::{EngineProgram, assert_engine_executes};
+
+#[tokio::test]
+async fn portable_prompt_ast_reconstructs_a_reusable_prompt_wrapper() {
+    use std::sync::Arc;
+
+    use baml_builtins2::{PromptAst, PromptAstSimple};
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let snapshot = common::compile_for_engine(
+        r#"
+function ReadPrompt(value: ai.Prompt) -> string {
+    value.text()
+}
+"#,
+    );
+    let engine = Arc::new(
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("engine should initialize"),
+    );
+    let prompt = BexExternalValue::Adt(BexExternalAdt::PromptAst(Arc::new(PromptAst::Message {
+        role: "user".to_string(),
+        content: Arc::new(PromptAstSimple::String("hello".to_string())),
+        metadata: serde_json::Value::Null,
+    })));
+
+    for _ in 0..2 {
+        let result = engine
+            .call_function(
+                "ReadPrompt",
+                vec![prompt.clone()],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .expect("portable prompt should reconstruct as ai.Prompt");
+        assert_eq!(result, BexExternalValue::from("[user]\nhello"));
+    }
+}
 
 #[tokio::test]
 async fn backtick_prompt_interpolates_arguments() -> anyhow::Result<()> {
@@ -21,7 +60,7 @@ function Greet(name: string, age: int) -> string {
 }
 
 function main() -> string {
-    Greet$render_prompt("Alice", 30).text()
+    Greet@spec("Alice", 30).prompt().text()
 }
 "#,
         entry: "main",
@@ -44,7 +83,7 @@ function Answer(question: string) -> string {
 
 function main() -> string {
     let out = ""
-    for (let message in Answer$render_prompt("What is 2+2?").messages()) {
+    for (let message in Answer@spec("What is 2+2?").prompt().messages()) {
         out += message.role + "=" + message.content + ";"
     }
     out
@@ -74,7 +113,7 @@ function Categorize(category: Category) -> string {
 }
 
 function main() -> string {
-    Categorize$render_prompt(Category.SPORTS).text()
+    Categorize@spec(Category.SPORTS).prompt().text()
 }
 "#,
         entry: "main",
@@ -161,7 +200,7 @@ class Person {
     );
 }
 
-/// The `$render_prompt` companion renders the prompt offline as an `ai.Prompt`.
+/// `FunctionSpec.prompt` renders the prompt offline as an `ai.Prompt`.
 /// Provider construction is pure in the ai world (credentials
 /// resolve from the environment at request time), so rendering never needs
 /// an `api_key` env var — the B-626 guarantee, now structural.
@@ -184,7 +223,7 @@ function Extract(raw: string) -> C {
 }
 
 function get_prompt() -> string {
-    Extract$render_prompt("hello").text()
+    Extract@spec("hello").prompt().text()
 }
 "##;
 
@@ -205,7 +244,7 @@ function get_prompt() -> string {
         .expect("render_prompt must succeed offline without any api_key env var");
 
     let BexExternalValue::String(rendered) = result else {
-        panic!("expected $render_prompt to return a string, got {result:?}");
+        panic!("expected spec prompt rendering to return a string, got {result:?}");
     };
     assert!(
         rendered.contains("Extract from hello."),
@@ -218,7 +257,7 @@ function get_prompt() -> string {
 }
 
 /// An inline `"provider/model"` shorthand client renders through
-/// `$render_prompt` exactly like a declared client value.
+/// `FunctionSpec.prompt` exactly like a declared client value.
 #[tokio::test]
 async fn test_render_prompt_with_inline_client_shorthand() {
     use bex_engine::BexEngine;
@@ -231,7 +270,7 @@ function Greet(name: string) -> string {
 }
 
 function get_prompt() -> string {
-    Greet$render_prompt("World").text()
+    Greet@spec("World").prompt().text()
 }
 "##;
 
@@ -249,10 +288,10 @@ function get_prompt() -> string {
             true,
         )
         .await
-        .expect("shorthand-client $render_prompt should succeed offline");
+        .expect("shorthand-client spec prompt should succeed offline");
 
     let BexExternalValue::String(rendered) = result else {
-        panic!("expected $render_prompt to return a string, got {result:?}");
+        panic!("expected spec prompt rendering to return a string, got {result:?}");
     };
     assert!(
         rendered.contains("Hello, World!"),
@@ -284,7 +323,7 @@ function ExtractAny() -> json {
 }
 
 function get_prompt() -> string {
-    ExtractAny$render_prompt().text()
+    ExtractAny@spec().prompt().text()
 }
 "##;
 
@@ -305,7 +344,7 @@ function get_prompt() -> string {
         .expect("failed to render prompt for json return type");
 
     let BexExternalValue::String(rendered) = result else {
-        panic!("expected $render_prompt to return a string, got {result:?}");
+        panic!("expected spec prompt rendering to return a string, got {result:?}");
     };
     assert!(
         rendered.contains("Respond with valid JSON."),

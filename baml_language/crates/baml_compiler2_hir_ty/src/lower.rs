@@ -1361,8 +1361,8 @@ impl<'db> LowerCtx<'db> {
     }
 
     /// Value-namespace resolution, mirroring `LowerCtx::resolve_type`'s
-    /// algorithm over `lookup_value` (functions, clients, lets). No
-    /// `$stream` fallback: companions are functions with their own names.
+    /// algorithm over `lookup_value` (functions, clients, lets). Type-only
+    /// `*$stream` declarations do not participate in this namespace.
     pub fn resolve_value(&self, segments: &[Name]) -> Option<Definition<'db>> {
         let (item, seg_ns) = segments.split_last()?;
         let relative_ns: Vec<Name> = if self.ns_context.is_empty() {
@@ -1557,6 +1557,30 @@ pub fn function_generic_frame<'db>(
     extend_frame(&mut frame, &data.user_generic_params);
     extend_frame(&mut frame, &data.synthetic_effect_params);
     frame
+}
+
+/// The concrete PPIR-generated partial output type for an authored LLM
+/// function's Stream operation. Nominal leaves resolve to their existing
+/// `*$stream` declarations; no function companion or intrinsic type view is
+/// involved.
+pub fn function_stream_output_ty<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+) -> Option<baml_type::Ty> {
+    let (type_expr, sap) = baml_compiler2_ppir::llm_stream_operation_type_expr(db, function)?;
+    let mut refs = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
+    let root = refs.lower(&type_expr);
+    let (store, _) = refs.finish();
+    let ty = lower_ctx_for_file(db, function.file(db))
+        .with_frame(function_generic_frame(db, function))
+        .lower_type_ref(&store, root)
+        .to_plain()
+        .with_attr(TyAttr {
+            sap_parse_without_null: sap.parse_without_null,
+            sap_pending_never: sap.pending_never,
+            sap_in_progress_never: sap.in_progress_never,
+        });
+    Some(ty)
 }
 
 /// The type a class reference denotes, with the builtin bridgings applied

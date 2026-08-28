@@ -73,7 +73,7 @@ ignore = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt", "rt-multi-thread", "time" ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-sys_native = { workspace = true, features = [ "bundle-http" ] }
+sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
 baml_artifact = { workspace = true, features = [ "test-support" ] }
 walkdir = { workspace = true }
 

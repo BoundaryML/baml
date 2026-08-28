@@ -16,18 +16,15 @@ use crate::{
 /// Whether an enumeration of the language surface should skip this
 /// definition as synthesized.
 ///
-/// Two reasons, one rule. A `$`-companion (`Extract$parse`, `Agent$stream`)
-/// has no spelling in source — `$` cannot appear in a written name — so no
-/// position can name one. And companions and auto-derives carry the
-/// docstring of the declaration they shadow, so listing them makes every
-/// original into several near-duplicate rows. Search and completion both
-/// enumerate what a reader can write, so both ask here.
+/// Compiler-owned declarations and PPIR partial-output types have no authored
+/// source spelling. Search and completion enumerate only what a reader can
+/// write, so both ask here.
 pub(crate) fn is_synthesized(
     db: &dyn baml_compiler2_ppir::Db,
     name: &Name,
     def: Definition<'_>,
 ) -> bool {
-    if name.as_str().contains('$') {
+    if !matches!(def, Definition::Function(_)) && name.as_str().ends_with("$stream") {
         return true;
     }
     if let Definition::Function(func) = def {
@@ -150,14 +147,12 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
                     .and_then(|meta| meta.client_name.as_ref())
                     .map(std::string::ToString::to_string);
 
-                // Sub-functions have names with '$' (e.g. MyFunc$render_prompt)
-                let is_sub_function = name.as_str().contains('$');
-
                 let function = function_data(db, *func_loc);
                 let origin: FunctionOrigin = function.metadata.origin.into();
-                // Companions clone parent params verbatim and non-userDefined
-                // functions are hidden by default — extracting schemas for
-                // them only duplicates payload. The UI degrades to raw mode.
+                let is_sub_function = origin == FunctionOrigin::Companion;
+                // Compiler-owned functions are hidden by default; extracting
+                // schemas for them only duplicates payload. The UI degrades
+                // to raw mode.
                 let params = if is_sub_function || origin != FunctionOrigin::UserDefined {
                     None
                 } else {

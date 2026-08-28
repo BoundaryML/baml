@@ -54,7 +54,8 @@ internal static class PrimitiveProtocol
     internal static EncodedCallArguments EncodeOwnedCallArguments<TResult>(
         BamlGeneratedArguments<TResult> arguments,
         ulong callId,
-        NativeApi api)
+        NativeApi api,
+        FunctionOperation operation = FunctionOperation.Direct)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentNullException.ThrowIfNull(api);
@@ -62,7 +63,7 @@ internal static class PrimitiveProtocol
         var ownership = new EncodedCallArguments([]);
         try
         {
-            var call = new CallFunctionArgs { CallId = callId };
+            var call = new CallFunctionArgs { CallId = callId, Operation = operation };
             foreach ((ArgumentDeclaration argument, BamlGeneratedValue value) in arguments.Supplied())
             {
                 call.Kwargs.Add(new InboundMapEntry
@@ -118,7 +119,8 @@ internal static class PrimitiveProtocol
     internal static EncodedCallArguments EncodeOwnedCallArguments<TResult>(
         BamlGeneratedGenericArguments<TResult> arguments,
         ulong callId,
-        NativeApi api)
+        NativeApi api,
+        FunctionOperation operation = FunctionOperation.Direct)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentNullException.ThrowIfNull(api);
@@ -126,7 +128,7 @@ internal static class PrimitiveProtocol
         var ownership = new EncodedCallArguments([]);
         try
         {
-            var call = new CallFunctionArgs { CallId = callId };
+            var call = new CallFunctionArgs { CallId = callId, Operation = operation };
             foreach ((GenericArgumentDeclaration argument, BamlGeneratedValue value) in arguments.Supplied())
             {
                 call.Kwargs.Add(new InboundMapEntry
@@ -605,6 +607,14 @@ internal static class PrimitiveProtocol
                 RequireNativeApi(api, value.Kind),
                 RequireOwnership(ownership, value.Kind),
                 value.ReadMedia()),
+            PrimitiveCarrierKind.Prompt => new InboundValue
+            {
+                PromptAstValue = value.ReadPromptAst(),
+            },
+            PrimitiveCarrierKind.Type => new InboundValue
+            {
+                TyDefValue = value.ReadType().WireCopy(),
+            },
             PrimitiveCarrierKind.Handle => EncodeHandle(
                 value.ReadHandle(),
                 RequireOwnership(ownership, value.Kind)),
@@ -675,6 +685,16 @@ internal static class PrimitiveProtocol
                 DecodeUnion(value.UnionVariantValue, path, ownership, api, budget, depth),
             BamlOutboundValue.ValueOneofCase.MediaValue =>
                 MediaProtocol.DecodeInline(value.MediaValue, path),
+            BamlOutboundValue.ValueOneofCase.PromptAstValue =>
+                BamlGeneratedValue.CreatePromptAst(value.PromptAstValue, path),
+            BamlOutboundValue.ValueOneofCase.TyValue =>
+                BamlGeneratedValue.CreateType(
+                    new global::Baml.BamlType(value.TyValue),
+                    path),
+            BamlOutboundValue.ValueOneofCase.TyDefValue =>
+                BamlGeneratedValue.CreateType(
+                    new global::Baml.BamlType(value.TyDefValue),
+                    path),
             BamlOutboundValue.ValueOneofCase.HandleValue =>
                 DecodeHandle(value.HandleValue, path, ownership, api, budget, depth),
             _ => throw new BamlProtocolException(
@@ -1032,6 +1052,7 @@ internal static class PrimitiveProtocol
             BamlHandleType.UntaggedRustData => "baml.internal.RustData",
             BamlHandleType.UntaggedBexHeap => "baml.internal.HeapValue",
             BamlHandleType.AdtPromptAst => "baml.llm.PromptAst",
+            BamlHandleType.AdtFunctionSpec => "ai.FunctionSpec",
             BamlHandleType.AdtTaggedHeapHandle => TaggedHandleIdentity(wire, path),
             _ => throw new BamlProtocolException(
                 "The native bridge returned an unsupported BAML handle.",
@@ -1042,7 +1063,8 @@ internal static class PrimitiveProtocol
             : wire.Ty.ToByteArray();
         global::Baml.BamlTypeDescriptor descriptor =
             global::Baml.BamlTypeDescriptor.CreateHandle(fqn);
-        if (wire.HandleType == BamlHandleType.AdtTaggedHeapHandle)
+        if (wire.HandleType is BamlHandleType.AdtTaggedHeapHandle
+            or BamlHandleType.AdtFunctionSpec)
         {
             global::Baml.BamlTypeDescriptor encodedType =
                 global::Baml.BamlTypeDescriptor.FromMetadata(metadata);
@@ -1050,8 +1072,8 @@ internal static class PrimitiveProtocol
                 || !StringComparer.Ordinal.Equals(encodedType.Fqn, fqn))
             {
                 throw new BamlProtocolException(
-                    "The native bridge returned contradictory tagged-handle metadata.",
-                    $"Tagged handle {wire.Key} at {path} identified {fqn}, but its descriptor was {encodedType}.");
+                    "The native bridge returned contradictory opaque-handle metadata.",
+                    $"Opaque handle {wire.Key} at {path} identified {fqn}, but its descriptor was {encodedType}.");
             }
 
             descriptor = global::Baml.BamlTypeDescriptor.CreateHandle(

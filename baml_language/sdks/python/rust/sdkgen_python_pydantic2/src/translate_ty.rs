@@ -5,11 +5,17 @@
 //! - `.humanlayer/tasks/clientpython/09b-codegen-rules.md` §6, §9
 //! - `.humanlayer/tasks/clientpython/11e-phaseg3-ty-translator.md`
 
-use baml_base::{Literal, MediaKind, qualified_name::AI_STREAM_STREAM};
+use std::collections::BTreeMap;
+
+use baml_base::{
+    Literal, MediaKind,
+    qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM},
+};
 use baml_codegen_types::{Name, Ty};
 use indexmap::IndexMap;
 
 use crate::{
+    names::PythonNames,
     py_string,
     routing::{LeafPath, route_class_ref},
 };
@@ -44,10 +50,15 @@ pub(crate) struct TranslateCtx {
     /// not valid Python codegen. Its synthesized `Stream$stream` companion is
     /// deliberately excluded: that is a real Pydantic partial-state class.
     pub(crate) type_stream_accessors: bool,
-    /// Stub-only: include the generated terminal marker in the first stream
+    /// Stub-only: include the generated terminal marker in the raw-next stream
     /// type argument so `next()` is typed as `T | Done`. Runtime annotations
     /// keep only `T`; the `.pyi` is the authoritative public typing surface.
     pub(crate) include_stream_done: bool,
+    /// Shared declaration/module projection. Translator-only unit tests may
+    /// leave this unset to exercise the identity fallback.
+    pub(crate) names: Option<std::rc::Rc<PythonNames>>,
+    /// Raw TypeVar spelling -> projected Python spelling in this scope.
+    pub(crate) type_var_names: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,6 +96,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 && let [stream, final_value] = args.as_slice()
             {
                 let stream_type = translate_ty(stream, ctx);
+                let yield_type = translate_stream_yield_ty(stream, ctx);
                 let next_type = if ctx.include_stream_done {
                     let done = if ctx.current_leaf.segments == ["ai", "stream"] {
                         "Done"
@@ -96,12 +108,22 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                     stream_type
                 };
                 return format!(
-                    "_BamlStream[{}, {}]",
+                    "_BamlStream[{}, {}, {}]",
                     next_type,
+                    yield_type,
                     translate_ty(final_value, ctx),
                 );
             }
-            let arg_strs: Vec<String> = args.iter().map(|a| translate_ty(a, ctx)).collect();
+            let arg_strs: Vec<String> = if name.to_string() == AI_FUNCTION_SPEC
+                && let [partial, final_value] = args.as_slice()
+            {
+                vec![
+                    translate_stream_yield_ty(partial, ctx),
+                    translate_ty(final_value, ctx),
+                ]
+            } else {
+                args.iter().map(|a| translate_ty(a, ctx)).collect()
+            };
             render_name_ref_or_self_ref(name, ctx, &arg_strs.join(", "))
         }
         Ty::TypeAlias(name, _) => render_name_ref_or_self_ref(name, ctx, ""),
@@ -113,7 +135,11 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 head
             }
         }
-        Ty::TypeVar(name, _) => name.as_str().to_string(),
+        Ty::TypeVar(name, _) => ctx
+            .type_var_names
+            .get(name.as_str())
+            .cloned()
+            .unwrap_or_else(|| name.as_str().to_string()),
         Ty::List(inner, _) => format!("typing.List[{}]", translate_ty(inner, ctx)),
         Ty::Map { key, value, .. } => {
             format!(
@@ -187,6 +213,33 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
     }
 }
 
+/// Async iteration consumes the raw `next()` protocol: `Done` terminates the
+/// iterator and top-level null partials are skipped. Render the value that can
+/// actually reach the loop body rather than reusing the broader next type.
+fn translate_stream_yield_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
+    match ty {
+        Ty::Null { .. } => "typing.Never".to_string(),
+        Ty::Union(items, _) => {
+            let non_null = items
+                .iter()
+                .filter(|item| !matches!(item, Ty::Null { .. }))
+                .collect::<Vec<_>>();
+            match non_null.as_slice() {
+                [] => "typing.Never".to_string(),
+                [only] => translate_ty(only, ctx),
+                many => format!(
+                    "typing.Union[{}]",
+                    many.iter()
+                        .map(|item| translate_ty(item, ctx))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            }
+        }
+        _ => translate_ty(ty, ctx),
+    }
+}
+
 pub(crate) fn is_ai_stream_type(name: &Name) -> bool {
     name.to_string() == AI_STREAM_STREAM
 }
@@ -208,7 +261,8 @@ fn render_name_ref_or_self_ref(name: &Name, ctx: &TranslateCtx, generic_args: &s
 fn should_quote_self_ref(name: &Name, ctx: &TranslateCtx) -> bool {
     match &ctx.self_ref {
         Some(self_ref) => {
-            route_class_ref(name) == self_ref.routed_leaf && name.bare_name() == self_ref.bare_name
+            routed_leaf(name, ctx) == self_ref.routed_leaf
+                && projected_bare_name(name, ctx) == self_ref.bare_name
         }
         None => false,
     }
@@ -242,12 +296,27 @@ fn media_ref(bare: &str, ctx: &TranslateCtx) -> String {
 }
 
 fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> String {
-    let routed_leaf = route_class_ref(name);
+    let routed_leaf = routed_leaf(name, ctx);
+    let bare_name = projected_bare_name(name, ctx);
     if routed_leaf == ctx.current_leaf || routed_leaf.segments.is_empty() {
-        name.bare_name().to_string()
+        bare_name
     } else {
-        format!("{}.{}", routed_leaf.segments.join("."), name.bare_name())
+        format!("{}.{}", routed_leaf.segments.join("."), bare_name)
     }
+}
+
+fn routed_leaf(name: &Name, ctx: &TranslateCtx) -> LeafPath {
+    ctx.names.as_ref().map_or_else(
+        || route_class_ref(name),
+        |names| names.route_class_ref(name),
+    )
+}
+
+fn projected_bare_name(name: &Name, ctx: &TranslateCtx) -> String {
+    ctx.names.as_ref().map_or_else(
+        || name.bare_name().to_string(),
+        |names| names.symbol(name).into_owned(),
+    )
 }
 
 #[cfg(test)]
@@ -278,6 +347,8 @@ mod tests {
             callback_protocols: None,
             type_stream_accessors: false,
             include_stream_done: false,
+            names: None,
+            type_var_names: BTreeMap::new(),
         }
     }
 
@@ -296,6 +367,8 @@ mod tests {
                 routed_leaf: leaf(self_segments),
                 bare_name: bare_name.to_string(),
             }),
+            names: None,
+            type_var_names: BTreeMap::new(),
         }
     }
 
@@ -317,6 +390,8 @@ mod tests {
                 routed_leaf: leaf(self_segments),
                 bare_name: bare_name.to_string(),
             }),
+            names: None,
+            type_var_names: BTreeMap::new(),
         }
     }
 

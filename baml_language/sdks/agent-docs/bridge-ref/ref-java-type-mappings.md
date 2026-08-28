@@ -45,15 +45,14 @@ Given the same BAML code the Python doc uses:
 // user's package, in namespace `lorem`
 // fully qualified BAML symbol: user.lorem.Resume (root is a reserved pkg name in BAML)
 class Resume
-class Resume$stream  // bamlc-generated companion type; consumed as a regular TIR class
+class Resume$stream  // compiler-produced PPIR partial-output type; consumed as a regular TIR class
 function extract_resume() -> Resume
-function extract_resume$build_request() -> baml.http.Request  // companion, LLM-backed fn
+// LLM operation use inside BAML: extract_resume@spec().build_request()
 
 // user's package, in namespace `ipsum`
 // fully qualified BAML symbol: user.ipsum.Sentiment
 enum Sentiment
 function classify_sentiment() -> Sentiment
-function classify_sentiment$build_request() -> baml.http.Request
 
 // `aws` package, in namespace `s3`   → fully qualified BAML symbol: aws.s3.Bucket
 class Bucket
@@ -84,17 +83,16 @@ methods on a per-namespace `Fns` holder class**; classes/enums are generated typ
             static method  baml_sdk.lorem.Fns.extract_resume()                      -> Resume
             static method  baml_sdk.lorem.Fns.extract_resume_async()                -> CompletableFuture<Resume>
 
-            static method  baml_sdk.lorem.Fns.extract_resume$stream()
-            static method  baml_sdk.lorem.Fns.extract_resume$stream_async()
-
-            static method  baml_sdk.lorem.Fns.extract_resume$build_request()
-            static method  baml_sdk.lorem.Fns.extract_resume$build_request_async()
+            static method  baml_sdk.lorem.Fns.extract_resume_spec()                 -> BamlFunctionSpec<Resume>
+            static method  baml_sdk.lorem.Fns.extract_resume_spec_async()           -> CompletableFuture<BamlFunctionSpec<Resume>>
+            static method  baml_sdk.lorem.Fns.extract_resume_stream()               -> BamlStream<Resume$stream, Resume>
+            static method  baml_sdk.lorem.Fns.extract_resume_stream_async()         -> CompletableFuture<BamlStream<Resume$stream, Resume>>
 
                      enum  baml_sdk.ipsum.Sentiment
             static method  baml_sdk.ipsum.Fns.classify_sentiment()
             static method  baml_sdk.ipsum.Fns.classify_sentiment_async()
-            static method  baml_sdk.ipsum.Fns.classify_sentiment$build_request()
-            static method  baml_sdk.ipsum.Fns.classify_sentiment$build_request_async()
+            static method  baml_sdk.ipsum.Fns.classify_sentiment_spec()
+            static method  baml_sdk.ipsum.Fns.classify_sentiment_spec_async()
 
                           // other package
                     class  baml_sdk.vendor.aws.s3.Bucket
@@ -116,7 +114,7 @@ methods on a per-namespace `Fns` holder class**; classes/enums are generated typ
     instance method       baml_sdk.baml.io.File.close(...)         // self = receiver (required param 0)
     instance method       baml_sdk.baml.io.File.close_async(...)
 
-                          // companion ($stream) types — IN-PACKAGE `$` companions
+                          // compiler-produced PPIR partial-output types — in-package `$stream` names
                     class  baml_sdk.lorem.Resume$stream
                     class  baml_sdk.vendor.aws.s3.Bucket$stream
                     class  baml_sdk.baml.io.File$stream
@@ -131,15 +129,21 @@ Every callable also gets trailing `baml_bridge.BamlCallContext ctx` overloads
 > escapes to `Fns$` on a user-symbol collision) because Java has no module-level free functions.
 > Python emits them as module-level `def` / `async def`.
 
-> ⚠ **Deviation from Python:** `$`-companions keep the BAML name **verbatim** — `$` is a legal
-> Java identifier char — so Java emits `extract_resume$build_request`, `extract_resume$stream`,
-> `Resume$stream`. Python mangles: `$stream` → `_stream`, `$build_request` → `__build_request`.
-> (Same house rule as TS; ref-java-codegen-conventions.md:30–33.)
+> **LLM operation surface:** callable projections do not use `$` names. Java emits flat
+> `<fn>_spec` factories and conditional `<fn>_stream` shortcuts from the
+> compiler-reported operation availability. The operation tag exists only on the
+> host/engine call boundary; it is not stored on the VM function value. The spec
+> factory sends the Spec operation on the authored FQN;
+> the stream shortcut sends the same FQN with the Stream boundary operation, which the
+> engine resolves to PPIR's private ordinary `<fn>@stream`. Prompt rendering, request
+> construction, parsing, and calling are methods on the one-generic `BamlFunctionSpec<TFinal>`.
+> No callable `$spec`, `$stream`, `$parse`, `$render_prompt`, or `$build_request` binding
+> is emitted; PPIR's `$stream` partial-output types remain available to `BamlStream`.
 
-> ⚠ **Deviation from Python (DECIDED 2026-07-17, Option B — TS-aligned):** `$stream` companion **types** are minted **in
+> ⚠ **Deviation from Python (DECIDED 2026-07-17, Option B — TS-aligned):** PPIR `$stream` partial-output **types** are minted **in
 > package** as `baml_sdk.<ns>.<Name>$stream` (fully emitted, registered, relied on by the
 > 102/102 `type_shapes` typemap). Python routes them to a **parallel** `baml_sdk.stream_types.<ns>.<Name>`
-> package — the owner-decided layout (TS emits companions in place and the compiler
+> package — the owner-decided layout (TS emits the partial models in place and the compiler
 > no longer reserves `stream_types`; Python's parallel package is a workaround for
 > `$` being illegal there). The ported stream tests were retargeted accordingly.
 
@@ -148,8 +152,8 @@ Every callable also gets trailing `baml_bridge.BamlCallContext ctx` overloads
 Java SDK codegen consumes the codegen-facing `Ty` (a re-export of `baml_type::CodegenTy`), same
 as Python. The first column names the upstream TIR shape; the second names the codegen variant
 `translate_ty` actually matches. `Ty::Class` / `Ty::Enum` / `Ty::TypeAlias` route to the generated
-`baml_sdk/` leaf via `route()`; `$stream` class references route to the in-package `<Name>$stream`
-companion (see the decided `$stream` deviation above).
+`baml_sdk/` leaf via `route()`; PPIR `$stream` class references route to the in-package
+`<Name>$stream` partial-output model (see the decided `$stream` deviation above).
 
 Column key: **Java @ TopLevel** = field/param/return; **Java @ Boxed** = generic type-arg /
 nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wire-driven).
@@ -326,7 +330,8 @@ Notes:
   in field declaration order, PreserveCase accessor methods (`p.int_field()`), and deep value equality —
   `equals` / `hashCode` handle `byte[]` fields via `Arrays.equals`. `final` is load-bearing: the encoder
   keys its typemap on the exact runtime class, so a user subclass would silently break inbound-encode.
-  All generated value classes — plain, generic, handle-backed, and `$stream` companions — are final
+  All generated value classes — plain, generic, handle-backed, and PPIR `$stream` partial-output
+  models — are final
   (sealed union interfaces and their already-final permitted records are the exception). **POJOs, not
   `record`s** (decided 2026-07-17): deep `byte[]` equality has to be hand-generated regardless, and the
   reified type-args ride a weak-identity side-table rather than a hidden instance field
@@ -356,7 +361,8 @@ Notes:
 - **Free functions → static methods on a per-namespace `Fns` holder** (`baml_sdk.<ns>.Fns.<fn>()`;
   root-namespace on `baml_sdk.Fns`; escapes to `Fns$` on collision). Every callable gets a `_async`
   sibling returning `java.util.concurrent.CompletableFuture<T>`, plus trailing `BamlCallContext`
-  overloads. `$`-companions keep the BAML name verbatim — no `__` / `_stream` mangling.
+  overloads. LLM `Spec` and `Stream` operation projections are flat `_spec` / `_stream`
+  siblings; no synthetic `$...` callable is allocated.
 - **`TypeRegistry.registerClass / registerEnum / registerUnion`** at init map BAML FQN ⇄ generated
   Java class and carry the per-field / per-arm **typed `baml_bridge.BamlType` descriptors** (the
   type-directed decode side-table; a union is keyed structurally by its arm set). Each generated
@@ -436,7 +442,7 @@ discriminator resolved from the per-call handle table.
 | — | `literal_value` (`BamlLiteralValue`) | `decodeLiteral` unwraps to the inner `Long` / `String` / `Boolean` / `BigInteger` / `Double`; envelope discarded. No BEX variant produces this on the FFI path (:352, :376–392) |
 | `Array { element_type, items }` | `list_value` (`BamlValueList`) | `java.util.List` (`ArrayList`), elements recursively decoded (:353, :394) |
 | `Map { key_type, value_type, entries }` | `map_value` (`BamlValueMap`) | `java.util.Map` (`LinkedHashMap`), **String keys**, values recursively decoded (:354, :409) |
-| `Instance { class_name, fields, type_args }` | `class_value` (`BamlValueClass`) | generated class in `baml_sdk/` (or in-package `<Name>$stream` companion), resolved via `TypeRegistry`; `type_args` reify generics (:358) |
+| `Instance { class_name, fields, type_args }` | `class_value` (`BamlValueClass`) | generated class in `baml_sdk/` (including in-package PPIR `<Name>$stream` partial-output models), resolved via `TypeRegistry`; `type_args` reify generics (:358) |
 | `Variant { enum_name, variant_name }` | `enum_value` (`BamlValueEnum`) | generated Java `enum`, resolved via `TypeRegistry` (:359) |
 | `Union { value, metadata }` | `union_variant_value` (`BamlValueUnionVariant`) | **type-directed reconstruction**: `self_type` tokenized to the sorted `\|`-signature, arm picked structurally from the inner value, `TypeRegistry.constructUnion` returns the generated arm record (`Union{n}` arm or recursive-alias sealed record); unregistered signature / unmatched arm → bare decoded inner value; `value_option_name` never trusted (:355, :452–484) |
 | `Handle(Handle)` | `handle_value` (`BamlOutboundHandle` — handle table) | media handle types → typed stdlib class wrapping `BamlHandle` (`Image` / `Audio` / `Video` / `Pdf`, dispatched on `ADT_MEDIA_*`); every other handle type → bare `baml_bridge.BamlHandle` (:360, :109–110) |
@@ -456,9 +462,9 @@ discriminator resolved from the per-call handle table.
 > descriptor + `TypeRegistry` (the Go-like path) — this is the decode-side face of the union
 > deviation above.
 
-> ⚠ **Deviation from Python (`$stream` instance routing):** an `Instance` for a `$stream` companion
+> ⚠ **Deviation from Python (`$stream` instance routing):** an `Instance` for a PPIR `$stream` partial-output model
 > decodes into the **in-package `<Name>$stream`** class, not Python's `baml_sdk.stream_types.*`
-> (decided 2026-07-17: in-package `$stream` companions stay).
+> (decided 2026-07-17: in-package `$stream` partial models stay).
 
 > ⚠ **Deviation from Python (inline media / prompt_ast / ty):** where Python **raises `BamlError`**
 > if it ever sees an inline `media_value` / `prompt_ast_value` (and returns terminal `None` for

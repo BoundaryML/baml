@@ -48,10 +48,15 @@ func (function Function) ParameterNames() []string {
 
 // Call invokes the closure through the native handle table.
 func (function Function) Call(ctx context.Context, args map[string]Input) (Value, error) {
+	return function.CallOperation(ctx, FunctionOperationDirect, args)
+}
+
+// CallOperation invokes a semantic projection of this first-class function.
+func (function Function) CallOperation(ctx context.Context, operation FunctionOperation, args map[string]Input) (Value, error) {
 	if function.key == 0 || function.owner == nil {
 		return Value{}, errors.New("call BAML function: invalid or released function handle")
 	}
-	value, err := callHandle(ctx, function.key, args)
+	value, err := callHandleOperation(ctx, function.key, operation, args)
 	runtime.KeepAlive(function.owner)
 	return value, err
 }

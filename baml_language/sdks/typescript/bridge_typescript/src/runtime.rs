@@ -19,6 +19,7 @@ struct DecodedCallArgs {
     kwargs: bex_project::BexArgs,
     call_id: bex_project::CallId,
     target: bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget,
+    operation: bex_project::FunctionOperation,
     /// Explicit TypeVar bindings for a generic call (`CallFunctionArgs.type_args`),
     /// as a name-keyed map in wire (De Bruijn) order. Seeded into the entry
     /// frame's `type_args` slot. Empty for non-generic calls. Mirrors
@@ -99,17 +100,19 @@ impl BamlRuntime {
         let bytes = match decoded.target {
             bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(
                 function_name,
-            ) => rt.block_on(bridge_cffi::call_and_encode(
+            ) => rt.block_on(bridge_cffi::call_operation_and_encode(
                 runtime,
                 function_name,
+                decoded.operation,
                 decoded.kwargs,
                 call_ctx,
             )),
             bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(
                 handle_key,
-            ) => rt.block_on(bridge_cffi::call_handle_and_encode(
+            ) => rt.block_on(bridge_cffi::call_handle_operation_and_encode(
                 runtime,
                 handle_key,
+                decoded.operation,
                 decoded.kwargs,
                 call_ctx,
             )),
@@ -145,10 +148,22 @@ impl BamlRuntime {
                         .build();
                     match decoded.target {
                         bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(function_name) => {
-                            bridge_cffi::call_and_encode(runtime, function_name, decoded.kwargs, call_ctx).await
+                            bridge_cffi::call_operation_and_encode(
+                                runtime,
+                                function_name,
+                                decoded.operation,
+                                decoded.kwargs,
+                                call_ctx,
+                            ).await
                         }
                         bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(handle_key) => {
-                            bridge_cffi::call_handle_and_encode(runtime, handle_key, decoded.kwargs, call_ctx).await
+                            bridge_cffi::call_handle_operation_and_encode(
+                                runtime,
+                                handle_key,
+                                decoded.operation,
+                                decoded.kwargs,
+                                call_ctx,
+                            ).await
                         }
                     }
                 }
@@ -189,6 +204,7 @@ fn decode_args(
     }
 
     let call_id = bex_project::CallId(args.call_id);
+    let operation = bridge_cffi::decode_function_operation(args.operation)?;
     let target = args
         .call_target
         .ok_or(bridge_cffi::BridgeError::MissingCallTarget)?;
@@ -202,6 +218,7 @@ fn decode_args(
         kwargs: kwargs.into(),
         call_id,
         target,
+        operation,
         type_args: type_args.type_args,
         type_defs: type_args.type_defs,
     })

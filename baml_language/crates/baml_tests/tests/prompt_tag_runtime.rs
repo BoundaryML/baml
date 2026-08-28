@@ -20,13 +20,14 @@ fn test_result(output: TestOutput) -> BexExternalValue {
 
 fn prompt_ast(output: TestOutput) -> Arc<PromptAst> {
     match test_result(output) {
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => ast,
         BexExternalValue::Instance {
             class_name, fields, ..
         } if class_name == "ai.Prompt" => match fields.get("_data") {
             Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
             other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
         },
-        other => panic!("expected a ai.Prompt instance, got {other:?}"),
+        other => panic!("expected a portable ai.Prompt value, got {other:?}"),
     }
 }
 
@@ -69,7 +70,7 @@ fn collect_media_kinds(ast: &PromptAst, out: &mut Vec<baml_base::MediaKind>) {
 }
 
 #[tokio::test]
-async fn llm_render_prompt_companion_preserves_messages() {
+async fn llm_spec_prompt_preserves_messages() {
     let output = baml_test!(
         r#"
 function StructuredGreeting(name: string) -> string {
@@ -78,7 +79,7 @@ function StructuredGreeting(name: string) -> string {
 }
 
 function main() -> ai.Prompt {
-  StructuredGreeting$render_prompt("Ada")
+  StructuredGreeting@spec("Ada").prompt()
 }
 "#
     );
@@ -93,7 +94,7 @@ function main() -> ai.Prompt {
 }
 
 #[tokio::test]
-async fn llm_render_prompt_companion_preserves_media() {
+async fn llm_spec_prompt_preserves_media() {
     let output = baml_test!(
         r#"
 function InspectPhoto(photo: image) -> string {
@@ -102,7 +103,7 @@ function InspectPhoto(photo: image) -> string {
 }
 
 function main() -> ai.Prompt {
-  InspectPhoto$render_prompt(image.from_url("https://example.com/photo.png", "image/png"))
+  InspectPhoto@spec(image.from_url("https://example.com/photo.png", "image/png")).prompt()
 }
 "#
     );

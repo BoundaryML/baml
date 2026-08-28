@@ -1,6 +1,6 @@
-// Tests for parse companion functions ($parse).
+// Tests for `FunctionSpec.parse`.
 //
-// `$parse` is pure parsing, NOT a network call: the LLM client below points at
+// `FunctionSpec.parse` is pure parsing, NOT a network call: the LLM client below points at
 // a dead localhost port and is never contacted. Each test parses `"{}"`
 // against a class whose only field is optional/nullable and asserts the field
 // materializes as `null` (missing optional field is allowed). Since BAML has
@@ -26,7 +26,7 @@ function ParseCompanionsParseOptPayload() -> ParseCompanionsOptPayload {
 }
 
 function parse_companions_missing_optional_fn() -> bool {
-    let parsed = ParseCompanionsParseOptPayload$parse("{}");
+    let parsed = ParseCompanionsParseOptPayload@spec().parse("{}");
     parsed == ParseCompanionsOptPayload { text: null }
 }
 
@@ -52,7 +52,7 @@ function ParseCompanionsParseAliasPayload() -> ParseCompanionsAliasPayload {
 }
 
 function parse_companions_missing_alias_fn() -> bool {
-    let parsed = ParseCompanionsParseAliasPayload$parse("{}");
+    let parsed = ParseCompanionsParseAliasPayload@spec().parse("{}");
     parsed == ParseCompanionsAliasPayload { text: null }
 }
 

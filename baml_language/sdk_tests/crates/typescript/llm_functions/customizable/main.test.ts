@@ -6,21 +6,18 @@
 // SymbolPool → emitter).
 //
 // Scope (subset of 09a-codegen-example-scenario.md):
-// - user.lorem.Resume + ExtractResume (with auto-generated companions)
+// - user.lorem.Resume + ExtractResume (with flat Spec/Stream projections)
 // - user.lorem.StreamingDoc + StreamingExtract
 // - user.ipsum.Sentiment (enum) + ClassifySentiment
-// - lorem leaf hosts `$stream` companion classes beside their base type
+// - lorem leaf hosts PPIR `$stream` partial classes beside their base type
 //   (spec2: `$` is a valid TS identifier char, so no `stream_types/` leaf)
 //
-// The python suite also pins shorthand-client api_key wiring (auth
-// header on `*$build_request`); that's deferred until the nodejs
-// runtime's request-introspection API is settled.
-
 import { describe, it, expect } from "vitest";
 
 import * as bamlSdk from "./baml_sdk/index.js";
 import * as lorem from "./baml_sdk/lorem/index.js";
 import * as ipsum from "./baml_sdk/ipsum/index.js";
+import { Image } from "./baml_sdk/baml/media/index.js";
 import { Resume, StreamingDoc } from "./baml_sdk/lorem/index.js";
 import { Sentiment } from "./baml_sdk/ipsum/index.js";
 
@@ -55,19 +52,17 @@ describe("llm_functions — class shapes", () => {
   });
 });
 
-describe("llm_functions — factory + companion bindings", () => {
+describe("llm_functions — factory + operation bindings", () => {
   it("main_lorem_extract_resume_sync_plus_async_factories_are_callable", () => {
     expect(typeof lorem.ExtractResume).toBe("function");
     expect(typeof lorem.ExtractResume_async).toBe("function");
   });
 
-  it("main_lorem_extract_resume_companion_bindings_exist", () => {
-    // The single-path companion set: $build_request* and $parse_stream
-    // went away with the legacy LLM path.
-    expect(typeof lorem.ExtractResume$render_prompt).toBe("function");
-    expect(typeof lorem.ExtractResume$render_prompt_async).toBe("function");
-    expect(typeof lorem.ExtractResume$parse).toBe("function");
-    expect(typeof lorem.ExtractResume$parse_async).toBe("function");
+  it("main_lorem_extract_resume_exposes_flat_spec_and_stream_bindings", () => {
+    expect(typeof lorem.ExtractResume_spec).toBe("function");
+    expect(typeof lorem.ExtractResume_spec_async).toBe("function");
+    expect(typeof lorem.ExtractResume$stream).toBe("function");
+    expect(typeof lorem.ExtractResume$stream_async).toBe("function");
   });
 
   it("main_lorem_streaming_extract_sync_plus_async_factories_are_callable", () => {
@@ -75,18 +70,78 @@ describe("llm_functions — factory + companion bindings", () => {
     expect(typeof lorem.StreamingExtract_async).toBe("function");
   });
 
-  it("main_lorem_streaming_extract_companion_bindings_exist", () => {
-    // The single-path companion set: $build_request* and $parse_stream
-    // went away with the legacy LLM path.
-    expect(typeof lorem.StreamingExtract$render_prompt).toBe("function");
-    expect(typeof lorem.StreamingExtract$render_prompt_async).toBe("function");
-    expect(typeof lorem.StreamingExtract$parse).toBe("function");
-    expect(typeof lorem.StreamingExtract$parse_async).toBe("function");
+  it("main_lorem_streaming_extract_exposes_flat_spec_and_stream_bindings", () => {
+    expect(typeof lorem.StreamingExtract_spec).toBe("function");
+    expect(typeof lorem.StreamingExtract_spec_async).toBe("function");
+    expect(typeof lorem.StreamingExtract$stream).toBe("function");
+    expect(typeof lorem.StreamingExtract$stream_async).toBe("function");
   });
 
   it("main_ipsum_classify_sentiment_sync_plus_async_factories_are_callable", () => {
     expect(typeof ipsum.ClassifySentiment).toBe("function");
     expect(typeof ipsum.ClassifySentiment_async).toBe("function");
+  });
+
+  it("projects_static_and_instance_llm_methods_without_invoking_a_provider", () => {
+    const probe = new lorem.MethodProjectionProbe({ prefix: "probe" });
+
+    expect(typeof probe.extract).toBe("function");
+    expect(typeof probe.extract_async).toBe("function");
+    expect(typeof probe.extract_spec).toBe("function");
+    expect(typeof probe.extract_spec_async).toBe("function");
+    expect(typeof probe.extract$stream).toBe("function");
+    expect(typeof probe.extract$stream_async).toBe("function");
+
+    expect(typeof lorem.MethodProjectionProbe.summarize).toBe("function");
+    expect(typeof lorem.MethodProjectionProbe.summarize_async).toBe("function");
+    expect(typeof lorem.MethodProjectionProbe.summarize_spec).toBe("function");
+    expect(typeof lorem.MethodProjectionProbe.summarize_spec_async).toBe("function");
+    expect(typeof lorem.MethodProjectionProbe.summarize$stream).toBe("function");
+    expect(typeof lorem.MethodProjectionProbe.summarize$stream_async).toBe("function");
+  });
+});
+
+describe("llm_functions — FunctionSpec", () => {
+  it("constructs_a_live_spec_without_a_synthetic_fqn", () => {
+    const spec = lorem.ExtractResume_spec("Ada Lovelace, ada@example.test");
+    expect(spec.name()).toContain("ExtractResume");
+    expect(spec.arguments()).toEqual({
+      text: "Ada Lovelace, ada@example.test",
+    });
+
+    const parsed = spec.parse('{"name":"Ada Lovelace","email":null}');
+    expect(parsed).toBeInstanceOf(Resume);
+    expect(parsed.name).toBe("Ada Lovelace");
+    expect(parsed.email).toBeNull();
+  });
+
+  it("keeps_a_portable_prompt_reusable_across_engine_reentry", () => {
+    const png = "iVBORw0KGgo=";
+    const spec = lorem.InspectMedia_spec(Image.fromBase64(png, "image/png"));
+    const prompt = spec.prompt();
+
+    const text = prompt.text();
+    expect(prompt.text()).toBe(text);
+
+    const firstMessages = prompt.messages();
+    expect(prompt.text()).toBe(text);
+    const secondMessages = prompt.messages();
+    expect(secondMessages).toEqual(firstMessages);
+    expect(firstMessages).toHaveLength(1);
+    expect(firstMessages[0].role).toBe("user");
+    expect(firstMessages[0].parts[0]).toMatch(/^Describe this image:/);
+
+    const media = firstMessages[0].parts.find((part) => part instanceof Image);
+    expect(media).toBeInstanceOf(Image);
+    if (!(media instanceof Image)) throw new Error("expected a portable image part");
+    expect(media.base64()).toBe(png);
+    expect(media.mimeType()).toBe("image/png");
+
+    // Each helper call re-encodes the owned prompt tree. Rendering a fresh
+    // Prompt from the same live spec must not consume either value.
+    const secondPrompt = spec.prompt();
+    expect(secondPrompt.text()).toBe(text);
+    expect(secondPrompt.messages()[0].parts[1]).toBeInstanceOf(Image);
   });
 });
 

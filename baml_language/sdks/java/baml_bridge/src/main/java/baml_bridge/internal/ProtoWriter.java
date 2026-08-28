@@ -44,6 +44,7 @@ public final class ProtoWriter {
     private static final int CALL_ARGS_TYPE_ARGS = 3;
     private static final int CALL_ARGS_FUNCTION_NAME = 4;
     private static final int CALL_ARGS_FUNCTION_HANDLE = 5;
+    private static final int CALL_ARGS_OPERATION = 6;
 
     // BamlTyArg (one explicit TypeVar binding).
     private static final int TY_ARG_TYPE_VAR = 1;
@@ -66,6 +67,7 @@ public final class ProtoWriter {
     private static final int IV_HANDLE = 10;
     private static final int IV_UINT8ARRAY = 11;
     private static final int IV_BIGINT = 12;
+    private static final int IV_PROMPT_AST = 16;
 
     // BamlHandle (baml_handle.proto): key = 1 (uint64), handle_type = 2 (enum).
     private static final int HANDLE_KEY = 1;
@@ -163,9 +165,28 @@ public final class ProtoWriter {
             Object[] args,
             long callId,
             BamlTypes typeArgs) {
+        return encodeNamedCallFunctionArgs(
+                functionName,
+                names,
+                args,
+                callId,
+                typeArgs,
+                baml_bridge.BamlFunctionOperation.DIRECT);
+    }
+
+    public static byte[] encodeNamedCallFunctionArgs(
+            String functionName,
+            String[] names,
+            Object[] args,
+            long callId,
+            BamlTypes typeArgs,
+            baml_bridge.BamlFunctionOperation operation) {
         WireWriter w = new WireWriter();
         w.writeRawBytes(encodeCallFunctionArgs(names, args, callId, typeArgs));
         w.writeString(CALL_ARGS_FUNCTION_NAME, functionName);
+        if (operation != baml_bridge.BamlFunctionOperation.DIRECT) {
+            w.writeInt64(CALL_ARGS_OPERATION, operation.wireValue());
+        }
         return w.toByteArray();
     }
 
@@ -322,6 +343,10 @@ public final class ProtoWriter {
             // clones the key per the drain contract; the inner handle already
             // carries handle_type = ADT_TAGGED_HEAP_HANDLE.
             return encodeInboundValue(stream.bamlHandle(), contextualType, selectedArm);
+        } else if (value instanceof baml_bridge.BamlFunctionSpec spec) {
+            return encodeInboundValue(spec.bamlHandle(), contextualType, selectedArm);
+        } else if (value instanceof baml_bridge.BamlPrompt prompt) {
+            w.writeMessage(IV_PROMPT_AST, prompt.bamlWireCopy());
         } else if (value instanceof baml_bridge.BamlHandle handle) {
             // A bare engine handle (a $rust_type shell's private field, e.g.
             // baml.fs.File `_handle` / baml.http.Response `_body`): an

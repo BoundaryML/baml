@@ -6277,19 +6277,24 @@ impl<'a> Parser<'a> {
                 }
             } else if op == TokenKind::At
                 && !self.has_newline_ahead()
-                && self
-                    .peek(1)
-                    .is_some_and(|t| t.kind == TokenKind::Word && t.text == "spec")
+                && self.peek(1).is_some_and(|t| {
+                    t.kind == TokenKind::Word && matches!(t.text.as_str(), "spec" | "stream")
+                })
             {
-                // Postfix `@spec` on an LLM function reference: `MyFunc@spec(...)`.
-                // Wraps the base expression in a SPEC_EXPR; AST lowering renames
-                // the path's last segment to the `<name>$spec` companion. The
-                // no-newline guard mirrors the tagged-template rule so an
-                // attribute at the start of the next line is never absorbed.
+                // Postfix projection on an LLM function reference. `@spec`
+                // stays a first-class projection of the authored function;
+                // `@stream` resolves to PPIR's compiler-private stream entry.
+                // The no-newline guard mirrors tagged templates so a next-line
+                // attribute is never absorbed.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
-                self.wrap_events_in_node(lhs_start, SyntaxKind::SPEC_EXPR);
+                let kind = if self.peek(1).is_some_and(|t| t.text == "spec") {
+                    SyntaxKind::SPEC_EXPR
+                } else {
+                    SyntaxKind::STREAM_EXPR
+                };
+                self.wrap_events_in_node(lhs_start, kind);
                 self.bump(); // @
-                self.bump(); // spec
+                self.bump(); // spec / stream
                 self.finish_node();
             } else if op == TokenKind::Dot && self.looks_like_as_projection() {
                 let lhs_start = self.find_previous_expr_start_after(expr_start);

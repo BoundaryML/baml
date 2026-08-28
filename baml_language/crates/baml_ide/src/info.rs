@@ -641,7 +641,7 @@ fn local_target_type_info(
             // types on; the ancestor-scope walk keeps `PatId` lookups inside
             // the use-site's own arena.
             let ty = find_binding_ty_in_scopes(db, index, binding.scope, local.bind_pattern)
-                .map(|ty| render::display_ty_for_file(db, file, &ty))
+                .map(|ty| display_local_ty_for_hover(db, file, &ty))
                 .unwrap_or_else(|| render::PENDING_INFERENCE.to_string());
             Some(TypeInfo::LocalVar {
                 name: local.name.as_str().to_string(),
@@ -651,6 +651,26 @@ fn local_target_type_info(
             })
         }
     }
+}
+
+/// Render an inferred local without exposing compiler-private prompt recipe
+/// carriers. Declarative LLM prompts synthesize `ctx` as `ai.internal.SpecCtx`
+/// so only the output-format handle is stored in the recipe, but the authored
+/// prompt surface remains the public `ai.Context` contract.
+fn display_local_ty_for_hover(
+    db: &dyn baml_compiler2_ppir::Db,
+    file: SourceFile,
+    ty: &baml_type::Ty,
+) -> String {
+    if let baml_type::Ty::Class(qtn, args, _) = ty
+        && args.is_empty()
+        && qtn.package().as_str() == "ai"
+        && qtn.namespace().iter().map(Name::as_str).eq(["internal"])
+        && qtn.name().as_str() == "SpecCtx"
+    {
+        return "ai.Context".to_string();
+    }
+    render::display_ty_for_file(db, file, ty)
 }
 
 fn client_config_key_type_info(token: &SyntaxToken) -> Option<TypeInfo> {
@@ -2437,9 +2457,9 @@ function helpful_turn(username: string, history: string[]) -> string {
 
     #[test]
     fn prompt_ctx_hovers_the_driver_frame_param() {
-        // `ctx` has no binding at the use site — inference injects it from
-        // `ai.prompt`'s `body` callback signature, and hover reads the same
-        // slot.
+        // The private @spec recipe binds `ctx` to `ai.internal.SpecCtx`, but
+        // that storage carrier is not authored API. Hover preserves the
+        // public `ai.Context` prompt contract rather than leaking it.
         let test = CursorTest::new(
             r#"client Terra = openai.ResponsesClient.new(model = "gpt-5.6-terra");
 

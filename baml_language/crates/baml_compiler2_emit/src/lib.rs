@@ -34,6 +34,7 @@ use baml_compiler2_ppir::{
         file_functions, file_interfaces, file_lets, function_data, function_llm_meta,
         impl_block_data, interface_data, method_interface_target,
     },
+    llm_stream_projection_available,
 };
 use baml_type::{ParamTy, RuntimeTy, TyAttr};
 use bex_vm_types::{
@@ -1286,12 +1287,14 @@ fn is_synth_init_name(name: &str) -> bool {
 fn emitted_function_origin(
     fq_name: &str,
     is_builtin_file: bool,
-    origin: baml_compiler2_ast::FunctionOrigin,
+    metadata: baml_compiler2_ast::FunctionMetadata,
 ) -> FunctionOrigin {
-    if is_builtin_file || is_builtin_function_name(fq_name) {
+    if metadata.is_language_internal {
+        FunctionOrigin::Internal
+    } else if is_builtin_file || is_builtin_function_name(fq_name) {
         FunctionOrigin::Builtin
     } else {
-        match origin {
+        match metadata.origin {
             baml_compiler2_ast::FunctionOrigin::UserDefined => FunctionOrigin::UserDefined,
             baml_compiler2_ast::FunctionOrigin::Companion => FunctionOrigin::Companion,
             baml_compiler2_ast::FunctionOrigin::Internal => FunctionOrigin::Internal,
@@ -2524,7 +2527,8 @@ fn tail_generic_dupes_clean(
     prev_units: &[CompilationUnit],
     effective_clean: &HashSet<String>,
 ) -> bool {
-    // (base fn fq name, type args) of every generic value clean files own.
+    // (base fn fq name, type args) of every interned function value clean
+    // files own.
     // `GenericFunction::type_args` is `RealizedTy` (runtime narrowing, #3998).
     let mut clean_keys: Vec<(String, Vec<bex_vm_types::RealizedTy>)> = Vec::new();
     for unit in prev_units {
@@ -2545,19 +2549,21 @@ fn tail_generic_dupes_clean(
     // A tail generic's base is always a function, so it is a tail global import.
     let n_tail_slots = tail.slot_objects.len();
     for obj in &tail.objects {
-        if let Object::GenericFunction(gf) = obj {
-            let base_raw = gf.function.raw();
-            if base_raw < n_tail_slots {
-                continue; // a helper slot is never a generic base
-            }
-            let Some(sym) = tail.global_imports.get(base_raw - n_tail_slots) else {
-                continue;
-            };
-            if clean_keys.iter().any(|(name, args)| {
-                name == &sym.fq_name && args.as_slice() == gf.type_args.as_ref()
-            }) {
-                return true;
-            }
+        let (base_raw, type_args) = match obj {
+            Object::GenericFunction(gf) => (gf.function.raw(), gf.type_args.as_ref()),
+            _ => continue,
+        };
+        if base_raw < n_tail_slots {
+            continue; // a helper slot is never a generic base
+        }
+        let Some(sym) = tail.global_imports.get(base_raw - n_tail_slots) else {
+            continue;
+        };
+        if clean_keys
+            .iter()
+            .any(|(name, args)| name == &sym.fq_name && args.as_slice() == type_args)
+        {
+            return true;
         }
     }
     false
@@ -5039,12 +5045,29 @@ fn emit_functions_serial(
                 }
             };
 
+            let spec_entry = emit_private_llm_spec_entry(
+                db,
+                func_loc,
+                &fq_name,
+                &rel_path,
+                &line_starts,
+                globals,
+                classes,
+                class_object_indices,
+                enum_object_indices,
+                enum_variants,
+                class_fields,
+                cache_pass4,
+                program,
+                opt,
+            );
             attach_function_metadata(
                 db,
                 func_loc,
                 cache_pass4,
                 is_builtin_file,
                 &fq_name,
+                spec_entry,
                 &mut compiled_fn,
             );
             register_compiled_function(
@@ -5364,12 +5387,29 @@ fn emit_functions_parallel(
         let func_loc = FunctionLoc::new(db, item.file, item.local_id);
         let pkg_info = file_package(db, item.file);
         let cache = &alias_caches[&pkg_info.package];
+        let spec_entry = emit_private_llm_spec_entry(
+            db,
+            func_loc,
+            &item.fq_name,
+            &item.source_file,
+            &item.line_starts,
+            globals,
+            classes,
+            class_object_indices,
+            enum_object_indices,
+            enum_variants,
+            class_fields,
+            cache,
+            program,
+            opt,
+        );
         attach_function_metadata(
             db,
             func_loc,
             cache,
             item.is_builtin_file,
             &item.fq_name,
+            spec_entry,
             &mut compiled_fn,
         );
         register_compiled_function(
@@ -5439,7 +5479,7 @@ fn merge_function_fragment(
     let mut index_map: Vec<usize> = Vec::with_capacity(fragment.len());
     let mut appended: Vec<usize> = Vec::with_capacity(fragment.len());
     for obj in fragment {
-        let is_generic_function = match &obj {
+        let interned_generic = match &obj {
             Object::GenericFunction(gf) => {
                 if let Some(existing) = intern.get(gf) {
                     index_map.push(existing);
@@ -5450,10 +5490,10 @@ fn merge_function_fragment(
             _ => false,
         };
         let idx = program.add_object(obj);
-        if is_generic_function {
-            if let Object::GenericFunction(gf) = &program.objects[ObjectIndex::from_raw(idx)] {
-                intern.insert_if_absent(gf, idx);
-            }
+        if interned_generic
+            && let Object::GenericFunction(gf) = &program.objects[ObjectIndex::from_raw(idx)]
+        {
+            intern.insert_if_absent(gf, idx);
         }
         index_map.push(idx);
         appended.push(idx);
@@ -5530,6 +5570,106 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
     })
 }
 
+/// Compile an LLM function's attached spec recipe into a private pooled
+/// function object. The object is reachable only through `FunctionMeta::Llm`;
+/// it is never registered in globals, `function_indices`, or SDK symbols.
+#[allow(clippy::too_many_arguments)]
+fn emit_private_llm_spec_entry(
+    db: &dyn baml_compiler2_mir::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
+    fq_name: &str,
+    source_file: &str,
+    line_starts: &[u32],
+    globals: &HashMap<String, usize>,
+    classes: &HashMap<String, HashMap<String, usize>>,
+    class_object_indices: &HashMap<String, usize>,
+    enum_object_indices: &HashMap<String, usize>,
+    enum_variants: &HashMap<String, HashMap<String, usize>>,
+    class_fields: &ClassFieldSnapshot,
+    cache: &ResolvedAliases,
+    program: &mut Program,
+    opt: OptLevel,
+) -> Option<ObjectIndex> {
+    let mir = baml_compiler2_mir::lower_llm_spec_function(db, func_loc, opt)?;
+    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        return None;
+    };
+    let empty_capture_types = Vec::new();
+    let empty_spawn_capture_indices = HashSet::new();
+    let lambda_info = compile_lambdas_flat(
+        &mir.lambdas,
+        Some(body),
+        &empty_capture_types,
+        &empty_spawn_capture_indices,
+        line_starts,
+        source_file,
+        globals,
+        classes,
+        class_object_indices,
+        enum_object_indices,
+        enum_variants,
+        class_fields,
+        &mut program.objects,
+        0,
+        opt,
+    );
+    let lambda_obj_indices: Vec<usize> = lambda_info.iter().map(|(idx, _)| *idx).collect();
+    let lambda_names: Vec<String> = lambda_info.iter().map(|(_, name)| name.clone()).collect();
+    let ctx = MirCodegenContext {
+        globals,
+        classes,
+        class_object_indices,
+        enum_object_indices,
+        enum_variants,
+        class_fields,
+        objects: &mut program.objects,
+        objects_base: 0,
+        lambda_object_indices: &lambda_obj_indices,
+        lambda_names: &lambda_names,
+        capture_types: &empty_capture_types,
+        spawn_capture_indices: &empty_spawn_capture_indices,
+    };
+    let mut function = compile_mir_function(body, mir.arity, mir.span, line_starts, ctx, opt);
+    let spec_return_type = function.return_type.clone();
+    let defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+    let signature = compute_function_metadata(db, func_loc, &defaults, cache);
+    apply_signature_metadata(&mut function, &signature);
+    let keep_params: Vec<usize> = signature
+        .param_names
+        .iter()
+        .enumerate()
+        .filter_map(|(index, name)| {
+            (!matches!(name.as_str(), "client" | "on_event")).then_some(index)
+        })
+        .collect();
+    function.param_names = keep_params
+        .iter()
+        .map(|&index| signature.param_names[index].clone())
+        .collect();
+    function.param_types = keep_params
+        .iter()
+        .map(|&index| bex_vm_types::anchor_template(&signature.param_types[index]))
+        .collect();
+    function.param_has_default = keep_params
+        .iter()
+        .map(|&index| signature.param_has_default[index])
+        .collect();
+    function.display_param_types = keep_params
+        .iter()
+        .map(|&index| signature.display_param_types[index].clone())
+        .collect();
+    function.arity = keep_params.len();
+    function.return_type = spec_return_type;
+    function.display_return_type = "ai.FunctionSpec".to_string();
+    function.name = format!("<spec recipe for {fq_name}>");
+    function.declared_name = None;
+    function.source_file = source_file.to_string();
+    function.origin = FunctionOrigin::Internal;
+    function.body_meta = None;
+    let index = program.add_object(Object::Function(Box::new(function)));
+    Some(ObjectIndex::from_raw(index))
+}
+
 /// Fill a compiled function's signature, throws, origin, and LLM metadata
 /// from the item tree — the Pass-4 tail shared by the serial and parallel
 /// passes. Every lookup here is a salsa query, so this always runs on the
@@ -5541,6 +5681,7 @@ fn attach_function_metadata<'db>(
     cache: &ResolvedAliases,
     is_builtin_file: bool,
     fq_name: &str,
+    spec_entry: Option<ObjectIndex>,
     compiled_fn: &mut Function,
 ) {
     let func = function_data(db, func_loc);
@@ -5548,21 +5689,35 @@ fn attach_function_metadata<'db>(
     let parameter_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
     let signature_metadata = compute_function_metadata(db, func_loc, &parameter_defaults, cache);
     apply_signature_metadata(compiled_fn, &signature_metadata);
-    compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata.origin);
+    compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata);
 
-    // Set LLM-specific body_meta if this is an LLM function with a client.
+    // Set LLM-specific body_meta whenever this LLM function owns a private
+    // spec entry. `client_name` is only legacy introspection metadata: an
+    // arbitrary valid `client:` expression has no static name, but must still
+    // expose the same Spec/Stream operations as a named client.
     //
-    // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
-    // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
-    // The stream return type is now carried by the synthesized `$stream` companion's
-    // own `return_type` (see ppir's `companion_stream_return_type`), so the old
-    // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
-    // of `ctx.output_format()` should be re-verified against canary's streaming.
+    // PPIR also emits a compiler-private `Fn@stream` ordinary function from
+    // this same recipe. The bridge selects that entry for the host's flat
+    // stream shortcut; it is not encoded in this private spec object.
     if let Some(llm_meta) = function_llm_meta(db, func_loc)
-        && let Some(client) = &llm_meta.client_name
+        && let Some(spec_entry) = spec_entry
     {
         compiled_fn.body_meta = Some(FunctionMeta::Llm {
-            client: client.to_string(),
+            client: llm_meta
+                .client_name
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_default(),
+            spec_entry,
+            capabilities: bex_vm_types::LlmOperationCapabilities {
+                spec: llm_meta.has_spec,
+                stream: llm_stream_projection_available(
+                    &func.name,
+                    llm_meta.has_spec,
+                    llm_meta.has_tools,
+                ),
+                tools: llm_meta.has_tools,
+            },
         });
         compiled_fn.capture = FunctionCaptureProps::disabled()
             .with_auto(CaptureCategory::Input)

@@ -138,7 +138,9 @@ pub mod handle;
 mod identity;
 
 pub use baml_to_host::{
-    call_and_encode, call_handle_and_encode, error_to_outbound, result_to_outbound,
+    call_and_encode, call_and_encode_portable_values, call_handle_and_encode,
+    call_handle_and_encode_portable_values, call_handle_operation_and_encode,
+    call_operation_and_encode, error_to_outbound, result_to_outbound,
     unhandled_spawn_error_to_outbound,
 };
 pub use bridge_ctypes::baml_bridge;
@@ -148,6 +150,23 @@ pub use identity::{
     BridgeInfo, BridgeLanguage, ensure_version_compatible, register_bridge, registered_bridge,
 };
 pub use platform::*;
+
+/// Decode the wire-level operation attached to an authored function call.
+///
+/// Direct deliberately remains protobuf's zero/default value so SDKs built
+/// before operation projections continue to invoke the authored function.
+pub fn decode_function_operation(
+    value: i32,
+) -> Result<bex_project::FunctionOperation, BridgeError> {
+    use bridge_ctypes::baml_bridge::cffi::FunctionOperation as WireOperation;
+
+    match WireOperation::try_from(value) {
+        Ok(WireOperation::Direct) => Ok(bex_project::FunctionOperation::Direct),
+        Ok(WireOperation::Spec) => Ok(bex_project::FunctionOperation::Spec),
+        Ok(WireOperation::Stream) => Ok(bex_project::FunctionOperation::Stream),
+        Err(_) => Err(BridgeError::InvalidFunctionOperation(value)),
+    }
+}
 
 /// Get a clone of the target's global runtime, or error if not initialized.
 pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
@@ -531,5 +550,25 @@ mod generated_metadata_tests {
         .to_string();
         assert!(wrong_toolchain_type.contains("toolchain.version` must be a string"));
         assert!(wrong_toolchain_type.contains("123"));
+    }
+
+    #[test]
+    fn function_operation_wire_values_are_stable_and_validated() {
+        assert_eq!(
+            decode_function_operation(0).unwrap(),
+            bex_project::FunctionOperation::Direct
+        );
+        assert_eq!(
+            decode_function_operation(1).unwrap(),
+            bex_project::FunctionOperation::Spec
+        );
+        assert_eq!(
+            decode_function_operation(2).unwrap(),
+            bex_project::FunctionOperation::Stream
+        );
+        assert!(matches!(
+            decode_function_operation(3),
+            Err(BridgeError::InvalidFunctionOperation(3))
+        ));
     }
 }

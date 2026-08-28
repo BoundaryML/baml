@@ -21,6 +21,9 @@ use text_size::{TextRange, TextSize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ExprMetadataScope {
     Body(FileScopeId),
+    /// The private spec-recipe arena attached to a declarative LLM function.
+    /// It shares the function's lexical scope but not its expression IDs.
+    LlmSpec(FileScopeId),
     ParameterDefault(FileScopeId),
 }
 

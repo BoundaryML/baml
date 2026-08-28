@@ -1,7 +1,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use super::InterfaceBound;
-use crate::{Bytecode, HeapPtr, SysOp, TyTemplate, Value};
+use crate::{Bytecode, HeapPtr, ObjectIndex, SysOp, TyTemplate, Value};
 
 /// Function type.
 ///
@@ -90,10 +90,22 @@ impl BorshDeserialize for FunctionKind {
     }
 }
 
-/// LLM-specific metadata for a function.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct LlmOperationCapabilities {
+    pub spec: bool,
+    pub stream: bool,
+    pub tools: bool,
+}
+
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum FunctionMeta {
-    Llm { client: String },
+    Llm {
+        client: String,
+        /// Private pooled function object that evaluates the attached spec
+        /// recipe. It is deliberately absent from globals and symbol tables.
+        spec_entry: ObjectIndex,
+        capabilities: LlmOperationCapabilities,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]

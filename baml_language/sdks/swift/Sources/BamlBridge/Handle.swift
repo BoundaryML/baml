@@ -46,6 +46,9 @@ extension BamlHandle: Equatable {
 
 extension BamlHandle: BamlEncodable {
     public func _bamlEncode() -> BamlInboundValue {
+        if BamlMedia.isPortableHandle(handleType) {
+            return BamlMedia.encodePortable(self)
+        }
         // Clone a fresh key for the wire; the engine drains it while
         // this instance keeps its own.
         var wireKey: UInt64 = 0
@@ -66,6 +69,9 @@ extension BamlHandle: BamlEncodable {
 extension BamlHandle: BamlDecodable {
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> BamlHandle {
         let raw = value.normalized
+        if case .mediaValue(let media) = raw.value {
+            return try BamlMedia.decodePortable(media)
+        }
         guard case .handleValue(let handle) = raw.value else {
             throw BamlDecodeError.typeMismatch(expected: "handle", got: wireArmName(raw))
         }
@@ -129,8 +135,9 @@ public final class BamlFunctionHandle: @unchecked Sendable {
     }
 
     public func callRaw(
-        args: [(String, (any BamlEncodable)?)]
+        args: [(String, (any BamlEncodable)?)],
+        operation: BamlFunctionOperation = .direct
     ) async throws -> BamlOutboundValue {
-        try await BamlRuntime.shared.callHandleRaw(handle.key, args: args)
+        try await BamlRuntime.shared.callHandleRaw(handle.key, args: args, operation: operation)
     }
 }

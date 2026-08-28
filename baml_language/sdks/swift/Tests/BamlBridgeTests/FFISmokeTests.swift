@@ -32,6 +32,56 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertTrue(decoded.kwargs.first?.value.hasValueType == true)
     }
 
+    func testFunctionOperationUsesAuthoredFQN() throws {
+        let bytes = try encodeCallArgs(
+            [],
+            callId: 8,
+            callTarget: .functionName("user.Extract"),
+            operation: .spec
+        )
+        let decoded = try BamlBridge_Cffi_V1_CallFunctionArgs(serializedBytes: bytes)
+        XCTAssertEqual(decoded.functionName, "user.Extract")
+        XCTAssertFalse(decoded.functionName.contains("$"))
+        XCTAssertEqual(decoded.operation.rawValue, 1)
+
+        let streamBytes = try encodeCallArgs(
+            [],
+            callId: 10,
+            callTarget: .functionName("user.Extract"),
+            operation: .stream
+        )
+        let streamCall = try BamlBridge_Cffi_V1_CallFunctionArgs(serializedBytes: streamBytes)
+        XCTAssertEqual(streamCall.functionName, "user.Extract")
+        XCTAssertEqual(streamCall.operation.rawValue, 2)
+
+        let handleBytes = try encodeCallArgs(
+            [],
+            callId: 9,
+            callTarget: .functionHandle(41),
+            operation: .spec
+        )
+        let handleCall = try BamlBridge_Cffi_V1_CallFunctionArgs(serializedBytes: handleBytes)
+        XCTAssertEqual(handleCall.functionHandle, 41)
+        XCTAssertEqual(handleCall.operation.rawValue, 1)
+    }
+
+    func testPromptPayloadCanBePersistedAndReentered() throws {
+        var simple = BamlBridge_Cffi_V1_BamlValuePromptAstSimple()
+        simple.string = "hello"
+        var tree = BamlBridge_Cffi_V1_BamlValuePromptAst()
+        tree.simple = simple
+        var outbound = BamlBridge_Cffi_V1_BamlOutboundValue()
+        outbound.promptAstValue = tree
+
+        let prompt = try BamlPrompt._bamlDecode(BamlOutboundValue(outbound))
+        let restored = try BamlPrompt(serializedData: prompt.serializedData())
+        let inbound = restored._bamlEncode().raw
+        guard case .promptAstValue(let encoded)? = inbound.value else {
+            return XCTFail("prompt did not use the portable prompt_ast_value arm")
+        }
+        XCTAssertEqual(encoded.simple.string, "hello")
+    }
+
     func testStreamHandleRetainsCarriedClassIdentity() throws {
         var classType = BamlBridge_Cffi_V1_BamlTyClass()
         classType.name = "ai.stream.Stream"

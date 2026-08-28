@@ -6,16 +6,20 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import { BamlRuntime, BamlCallContext, HostSpanManager, Collector as NativeCollector, FunctionLog as NativeFunctionLog, Timing, Usage, LLMCall } from './native.js';
+import { type FunctionOperation } from './proto.js';
 export { BamlRuntime, BamlCallContext, BamlHandle, HostSpanManager, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, flushEvents, } from './native.js';
 export { Timing, Usage, LLMCall } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 export { BamlStream } from './stream.js';
-export { encodeCallArgs, decodeCallResult } from './proto.js';
+export { BamlFunctionSpec } from './function_spec.js';
+export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from './function_spec.js';
+export { BamlPrompt, encodeCallArgs, decodeCallResult } from './proto.js';
+export type { BamlPromptCallOptions, BamlPromptMessage, FunctionOperation, } from './proto.js';
 export { CtxManager } from './ctx_manager.js';
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
-export type { GenericParams } from './define_function.js';
+export type { FunctionProjection, GenericParams } from './define_function.js';
 export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
 export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor, BamlInterfaceToken } from './wire_ty.js';
 /**
@@ -63,6 +67,6 @@ export declare class Collector {
     /** Internal: get native collector for passing to Rust */
     _native(): NativeCollector;
 }
-export declare function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): FunctionResult;
-export declare function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): Promise<FunctionResult>;
+export declare function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext, operation?: FunctionOperation): FunctionResult;
+export declare function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext, operation?: FunctionOperation): Promise<FunctionResult>;
 //# sourceMappingURL=index.d.ts.map

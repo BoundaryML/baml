@@ -16,10 +16,10 @@
 //!
 //! `"baml"` routes under `baml/`, anything else under `vendor/<pkg>/`.
 //!
-//! `$stream` companions do **not** get a separate package: `$` is a
-//! valid Java identifier character, so a stream companion keeps its
-//! `$stream`-suffixed name and is emitted beside its base type in the
-//! same package. Routing is therefore independent of the `$stream`
+//! PPIR `$stream` partial-output classes do **not** get a separate package:
+//! `$` is a valid Java identifier character, so a partial model keeps its
+//! `$stream`-suffixed name and is emitted beside its base type in the same
+//! package. Routing is therefore independent of the `$stream`
 //! suffix and of the symbol kind.
 //!
 //! Unlike TS (where `sanitize_module_segment` is a no-op), Java package
@@ -164,9 +164,8 @@ pub(crate) fn java_identifier(seg: &str) -> String {
 /// Route a pool entry to its package directory (under `baml_sdk/`).
 ///
 /// Routing depends only on the symbol's package + namespace path. The
-/// `$stream` suffix (on companion classes or function companions) does
-/// not influence placement — stream companions live beside their base
-/// type.
+/// A `$stream` suffix on a PPIR partial-output class does not influence
+/// placement: the partial model lives beside its final-output type.
 pub(crate) fn route(name: &Name) -> PackagePath {
     let mut segs: Vec<String> = Vec::new();
 

@@ -21,7 +21,11 @@
 #[cfg(test)]
 use std::path::PathBuf;
 
-use baml_codegen_types::{Name, Symbol};
+use baml_codegen_types::Name;
+
+#[cfg(test)]
+use crate::names::PYTHON_KEYWORDS;
+use crate::names::is_python_keyword;
 
 /// Leaf path under `baml_sdk/`. Empty segments means the root leaf
 /// (i.e. `baml_sdk/__init__.py`).
@@ -49,24 +53,8 @@ impl LeafPath {
     }
 }
 
-/// Route a pool entry to its leaf `__init__.py` path (under `baml_sdk/`).
-///
-/// `$stream` *classes* route to `stream_types/…`; function symbols
-/// (including the function `$stream` and `$parse_stream` companions) route
-/// alongside their parent function regardless of the suffix.
-pub(crate) fn route(name: &Name, symbol: &Symbol) -> LeafPath {
-    route_inner(name, !matches!(symbol, Symbol::Function(_)))
-}
-
 /// Python's hard keywords. A keyword cannot be used in a dotted reference or
 /// relative import, so every routed occurrence receives a trailing `_`.
-const PYTHON_KEYWORDS: &[&str] = &[
-    "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue",
-    "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import",
-    "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while",
-    "with", "yield",
-];
-
 /// Sanitize a path segment so it's a usable Python module identifier.
 ///
 /// In addition to the hard keywords above, a user namespace named `type`
@@ -74,11 +62,21 @@ const PYTHON_KEYWORDS: &[&str] = &[
 /// sibling annotations. Runtime BAML FQNs are built from `Name`, not
 /// `LeafPath`, so routing does not alter them.
 fn sanitize_python_module_segment(seg: &str) -> String {
-    if seg == "type" || PYTHON_KEYWORDS.contains(&seg) {
-        format!("{seg}_")
-    } else {
-        seg.to_string()
+    let mut projected = String::new();
+    for (index, ch) in seg.chars().enumerate() {
+        if ch == '_' || ch.is_alphanumeric() && (index > 0 || ch.is_alphabetic()) {
+            projected.push(ch);
+        } else {
+            projected.push('_');
+        }
     }
+    if projected.is_empty() {
+        projected.push('_');
+    }
+    if projected == "type" || is_python_keyword(&projected) {
+        projected.push('_');
+    }
+    projected
 }
 
 /// Route a `Name` referenced from a type position (`Ty::Class`,
@@ -90,6 +88,15 @@ pub(crate) fn route_class_ref(name: &Name) -> LeafPath {
 }
 
 fn route_inner(name: &Name, honor_stream_suffix: bool) -> LeafPath {
+    LeafPath {
+        segments: raw_route_segments(name, honor_stream_suffix)
+            .into_iter()
+            .map(|segment| sanitize_python_module_segment(&segment))
+            .collect(),
+    }
+}
+
+pub(crate) fn raw_route_segments(name: &Name, honor_stream_suffix: bool) -> Vec<String> {
     let mut segs: Vec<String> = Vec::new();
 
     if honor_stream_suffix && name.is_stream() {
@@ -103,21 +110,19 @@ fn route_inner(name: &Name, honor_stream_suffix: bool) -> LeafPath {
         "reflect" => segs.push("reflect".to_string()),
         other => {
             segs.push("vendor".to_string());
-            segs.push(sanitize_python_module_segment(other));
+            segs.push(other.to_string());
         }
     }
 
     for seg in name.namespace() {
-        segs.push(sanitize_python_module_segment(seg.as_str()));
+        segs.push(seg.as_str().to_string());
     }
-
-    LeafPath { segments: segs }
+    segs
 }
 
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{Class, Enum, EnumVariant, Function, FunctionArgument, Origin, Ty};
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -130,65 +135,10 @@ mod tests {
         )
     }
 
-    fn origin() -> Origin {
-        Origin {
-            source_file_path: "x.baml".to_string(),
-            span_start: 0,
-        }
-    }
-
-    fn class_sym(n: &Name) -> Symbol {
-        Symbol::Class(Class {
-            name: n.clone(),
-            generic_params: Vec::new(),
-            docstring: None,
-            properties: Vec::new(),
-            static_methods: Vec::new(),
-            instance_methods: Vec::new(),
-            origin: origin(),
-        })
-    }
-
-    fn enum_sym(n: &Name) -> Symbol {
-        Symbol::Enum(Enum {
-            name: n.clone(),
-            docstring: None,
-            variants: vec![EnumVariant {
-                name: BaseName::new("A"),
-                docstring: None,
-                value: "A".to_string(),
-            }],
-            origin: origin(),
-        })
-    }
-
-    fn func_sym() -> Symbol {
-        Symbol::Function(Function {
-            name: BaseName::new("foo"),
-            generic_params: Vec::new(),
-            docstring: None,
-            arguments: vec![FunctionArgument {
-                injected: false,
-                name: BaseName::new("x"),
-                docstring: None,
-                ty: Ty::Int {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
-                default: None,
-            }],
-            return_type: Ty::Int {
-                attr: baml_base::TyAttr::EMPTY,
-            },
-            throws: None,
-            watchers: Vec::new(),
-            origin: origin(),
-        })
-    }
-
     #[test]
     fn user_no_ns_routes_to_root_leaf() {
         let n = name("user", &[], "Foo");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route_inner(&n, true);
         assert!(lp.is_root());
         assert_eq!(lp.init_py(), PathBuf::from("__init__.py"));
     }
@@ -196,7 +146,7 @@ mod tests {
     #[test]
     fn user_with_ns_routes_under_ns() {
         let n = name("user", &["lorem"], "Resume");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route_inner(&n, true);
         assert_eq!(lp.segments, vec!["lorem".to_string()]);
         assert_eq!(lp.init_py(), PathBuf::from("lorem/__init__.py"));
     }
@@ -204,7 +154,7 @@ mod tests {
     #[test]
     fn vendor_routes_under_vendor_pkg() {
         let n = name("aws", &["s3"], "Bucket");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route_inner(&n, true);
         assert_eq!(
             lp.segments,
             vec!["vendor".to_string(), "aws".to_string(), "s3".to_string()]
@@ -215,7 +165,7 @@ mod tests {
     #[test]
     fn baml_routes_under_baml() {
         let n = name("baml", &["http"], "Response");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route_inner(&n, true);
         assert_eq!(lp.segments, vec!["baml".to_string(), "http".to_string()]);
         assert_eq!(lp.init_py(), PathBuf::from("baml/http/__init__.py"));
     }
@@ -223,7 +173,7 @@ mod tests {
     #[test]
     fn ai_routes_under_ai() {
         let n = name("ai", &["stream"], "Stream");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route_inner(&n, true);
         assert_eq!(lp.segments, vec!["ai".to_string(), "stream".to_string()]);
         assert_eq!(lp.init_py(), PathBuf::from("ai/stream/__init__.py"));
     }
@@ -231,7 +181,7 @@ mod tests {
     #[test]
     fn stream_class_prepends_stream_types() {
         let n = name("user", &["lorem"], "Resume$stream");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route_inner(&n, true);
         assert_eq!(
             lp.segments,
             vec!["stream_types".to_string(), "lorem".to_string()]
@@ -241,7 +191,7 @@ mod tests {
     #[test]
     fn stream_class_vendor() {
         let n = name("aws", &["s3"], "Bucket$stream");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route_inner(&n, true);
         assert_eq!(
             lp.segments,
             vec![
@@ -256,7 +206,7 @@ mod tests {
     #[test]
     fn stream_class_baml() {
         let n = name("baml", &["http"], "Response$stream");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route_inner(&n, true);
         assert_eq!(
             lp.segments,
             vec![
@@ -270,7 +220,7 @@ mod tests {
     #[test]
     fn stream_class_user_no_ns_routes_to_stream_root_leaf() {
         let n = name("user", &[], "Foo$stream");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route_inner(&n, true);
         assert_eq!(lp.segments, vec!["stream_types".to_string()]);
         assert_eq!(lp.init_py(), PathBuf::from("stream_types/__init__.py"));
     }
@@ -278,24 +228,8 @@ mod tests {
     #[test]
     fn user_deeper_ns() {
         let n = name("user", &["a", "b"], "Thing");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route_inner(&n, true);
         assert_eq!(lp.segments, vec!["a".to_string(), "b".to_string()]);
-    }
-
-    #[test]
-    fn function_stream_companion_routes_alongside_parent() {
-        // `extract$stream` is a function-level companion (not a class).
-        // It must NOT be routed under `stream_types/`.
-        let n = name("user", &["lorem"], "extract$stream");
-        let lp = route(&n, &func_sym());
-        assert_eq!(lp.segments, vec!["lorem".to_string()]);
-    }
-
-    #[test]
-    fn function_parse_companion_routes_alongside_parent() {
-        let n = name("user", &["lorem"], "extract$parse");
-        let lp = route(&n, &func_sym());
-        assert_eq!(lp.segments, vec!["lorem".to_string()]);
     }
 
     #[test]
@@ -303,7 +237,7 @@ mod tests {
         // Enums never get a `$stream` companion in the current model;
         // a stream-suffixed enum (defensive) routes by package only.
         let n = name("user", &["lorem"], "Foo");
-        let lp = route(&n, &enum_sym(&n));
+        let lp = route_inner(&n, false);
         assert_eq!(lp.segments, vec!["lorem".to_string()]);
     }
 
@@ -314,7 +248,7 @@ mod tests {
         // leaf renames the segment to `assert_`; the BAML FQN is
         // unaffected because it's built from `Name`, not `LeafPath`.
         let n = name("assert", &[], "is_true");
-        let lp = route(&n, &func_sym());
+        let lp = route_inner(&n, false);
         assert_eq!(
             lp.segments,
             vec!["vendor".to_string(), "assert_".to_string()]
@@ -326,7 +260,7 @@ mod tests {
         // Defense: a namespace path segment named `assert` (today
         // unreachable in user BAML, but cheap to cover) is also renamed.
         let n = name("user", &["assert"], "Foo");
-        let lp = route(&n, &class_sym(&n));
+        let lp = route_inner(&n, true);
         assert_eq!(lp.segments, vec!["assert_".to_string()]);
     }
 
@@ -336,7 +270,7 @@ mod tests {
             let expected = format!("{keyword}_");
 
             let package_name = name(keyword, &[], "Thing");
-            let package_leaf = route(&package_name, &class_sym(&package_name));
+            let package_leaf = route_inner(&package_name, true);
             assert_eq!(
                 package_leaf.segments,
                 vec!["vendor".to_string(), expected.clone()],
@@ -344,7 +278,7 @@ mod tests {
             );
 
             let namespace_name = name("user", &[keyword], "Thing");
-            let namespace_leaf = route(&namespace_name, &class_sym(&namespace_name));
+            let namespace_leaf = route_inner(&namespace_name, true);
             assert_eq!(
                 namespace_leaf.segments,
                 vec![expected],
@@ -359,7 +293,7 @@ mod tests {
         // sibling annotations (pyright reportInvalidTypeForm). The module
         // segment is mangled while the runtime BAML FQN is unaffected.
         let n = name("user", &["type"], "of_value");
-        let lp = route(&n, &func_sym());
+        let lp = route_inner(&n, false);
         assert_eq!(lp.segments, vec!["type_".to_string()]);
     }
 }

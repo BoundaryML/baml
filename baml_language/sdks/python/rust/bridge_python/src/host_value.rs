@@ -57,9 +57,9 @@ use bridge_ctypes::baml_bridge::cffi::{
 };
 use prost::Message;
 use pyo3::{
-    Py, PyAny, PyResult, Python,
+    Bound, Py, PyAny, PyResult, Python,
     prelude::*,
-    types::{PyAnyMethods, PyDict, PyModule, PyTuple},
+    types::{PyAnyMethods, PyDict, PyList, PyModule, PyTuple},
 };
 use pyo3_stub_gen::derive::gen_stub_pyfunction;
 
@@ -434,16 +434,16 @@ fn encode_result_inbound(py: Python<'_>, value: Py<PyAny>) -> PyResult<Vec<u8>> 
     let inbound_pb2 = PyModule::import(py, "baml_bridge.cffi.v1.baml_inbound_pb2")?;
     let proto = PyModule::import(py, "baml_bridge.proto")?;
     let holder = inbound_pb2.getattr("InboundValue")?.call0()?;
-    // Track host callables registered while encoding so we can release them on
-    // failure. A callback nested in the result (e.g. `{"cb": lambda x: x}`)
-    // gets registered in the process-wide table before encoding finishes; if
-    // encoding/serialization then aborts, the engine never receives these
-    // bytes and nothing would release it — a leak. Mirrors the rollback
-    // `encode_call_args` already does for the argument path.
+    // Track both ownership kinds created while encoding: host callables in the
+    // Python registry and ordinary HANDLE_TABLE keys cloned for wire transfer.
+    // If a later nested value fails, the engine never receives the bytes and
+    // cannot release/drain either kind. Mirrors `encode_call_args`.
     let registered = pyo3::types::PyList::empty(py);
+    let cloned_handles = pyo3::types::PyList::empty(py);
     let kwargs_dict = pyo3::types::PyDict::new(py);
     kwargs_dict.set_item("kwarg_name", "<host-callable result>")?;
     kwargs_dict.set_item("registered", &registered)?;
+    kwargs_dict.set_item("cloned_handles", &cloned_handles)?;
 
     let encoded = (|| -> PyResult<Vec<u8>> {
         proto
@@ -453,13 +453,22 @@ fn encode_result_inbound(py: Python<'_>, value: Py<PyAny>) -> PyResult<Vec<u8>> 
     })();
 
     if encoded.is_err() {
-        for item in registered.iter() {
-            if let Ok(key) = item.extract::<u64>() {
-                release_host_callable(key);
-            }
-        }
+        rollback_failed_encode(&registered, &cloned_handles);
     }
     encoded
+}
+
+fn rollback_failed_encode(registered: &Bound<'_, PyList>, cloned_handles: &Bound<'_, PyList>) {
+    for item in registered.iter() {
+        if let Ok(key) = item.extract::<u64>() {
+            release_host_callable(key);
+        }
+    }
+    for item in cloned_handles.iter() {
+        if let Ok(key) = item.extract::<u64>() {
+            let _ = bridge_cffi::handle::release_handle(key);
+        }
+    }
 }
 
 /// Send a `complete_host_call` success with the given `InboundValue`-encoded
@@ -596,9 +605,11 @@ fn try_encode_baml_error_throw(py: Python<'_>, py_err: &pyo3::PyErr) -> PyResult
     let proto = PyModule::import(py, "baml_bridge.proto")?;
     let holder = inbound_pb2.getattr("InboundValue")?.call0()?;
     let registered = pyo3::types::PyList::empty(py);
+    let cloned_handles = pyo3::types::PyList::empty(py);
     let kwargs_dict = pyo3::types::PyDict::new(py);
     kwargs_dict.set_item("kwarg_name", "<host-callable throw>")?;
     kwargs_dict.set_item("registered", &registered)?;
+    kwargs_dict.set_item("cloned_handles", &cloned_handles)?;
 
     let encoded = (|| -> PyResult<Vec<u8>> {
         proto
@@ -608,11 +619,7 @@ fn try_encode_baml_error_throw(py: Python<'_>, py_err: &pyo3::PyErr) -> PyResult
     })();
 
     if encoded.is_err() {
-        for item in registered.iter() {
-            if let Ok(key) = item.extract::<u64>() {
-                release_host_callable(key);
-            }
-        }
+        rollback_failed_encode(&registered, &cloned_handles);
     }
     encoded.map(Some)
 }

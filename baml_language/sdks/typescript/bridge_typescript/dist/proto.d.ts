@@ -6,7 +6,7 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import { baml_bridge } from './proto/baml_cffi.js';
-import { HandleKey } from './native.js';
+import { BamlCallContext, HandleKey } from './native.js';
 import { BamlType } from './wire_ty.js';
 /**
  * Error thrown when a host callable (a JS `function`) is passed to the
@@ -20,6 +20,9 @@ export interface EncodeCallArgsOptions {
     syncMode?: boolean;
     functionName?: string;
     functionHandle?: HandleKey;
+    /** Semantic projection of an authored BAML function. Omitted means the
+     * backwards-compatible direct call (wire value 0). */
+    operation?: FunctionOperation;
     /**
      * Call-level TypeVar bindings for a generic function/method, as
      * `[typeVarName, wireTy]` pairs in De Bruijn order (enclosing class params
@@ -28,6 +31,44 @@ export interface EncodeCallArgsOptions {
      * `type_args` argument. Omitted/empty for non-generic calls.
      */
     typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy | BamlType]>;
+}
+export type FunctionOperation = 'direct' | 'spec' | 'stream';
+export interface BamlPromptCallOptions {
+    $ctx?: BamlCallContext;
+}
+/** Structural view returned by `BamlPrompt.messages()`. */
+export interface BamlPromptMessage {
+    role: string;
+    content: string;
+    parts: unknown[];
+    metadata: Record<string, unknown>;
+}
+/**
+ * Portable representation of `ai.Prompt` at the bridge boundary.
+ *
+ * The protobuf payload is copied both in and out so this wrapper never owns an
+ * engine handle and can safely be passed to another runtime. Its helpers
+ * re-enter the canonical `ai.Prompt` methods with a fresh inline copy, so the
+ * same prompt remains reusable across repeated calls and runtimes.
+ */
+export declare class BamlPrompt {
+    private readonly wire;
+    private constructor();
+    static _fromWire(wire: baml_bridge.cffi.v1.IBamlValuePromptAst): BamlPrompt;
+    _wireCopy(): baml_bridge.cffi.v1.IBamlValuePromptAst;
+    /** A detached JSON-compatible view of the canonical prompt tree. */
+    toJSON(): unknown;
+    text(options?: BamlPromptCallOptions): string;
+    textAsync(options?: BamlPromptCallOptions): Promise<string>;
+    /** Compatibility with the generated SDK's existing async-method spelling. */
+    text_async(options?: BamlPromptCallOptions): Promise<string>;
+    messages(options?: BamlPromptCallOptions): BamlPromptMessage[];
+    messagesAsync(options?: BamlPromptCallOptions): Promise<BamlPromptMessage[]>;
+    /** Compatibility with the generated SDK's existing async-method spelling. */
+    messages_async(options?: BamlPromptCallOptions): Promise<BamlPromptMessage[]>;
+    private _callSync;
+    private _callAsync;
+    private static cloneWire;
 }
 /**
  * Encode kwargs into `CallFunctionArgs` bytes.

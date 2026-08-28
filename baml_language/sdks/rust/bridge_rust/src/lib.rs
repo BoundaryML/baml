@@ -21,6 +21,7 @@ mod function;
 pub mod host_value;
 pub mod loader;
 pub mod runtime;
+mod spec;
 #[cfg(test)]
 pub(crate) mod test_support;
 mod version;
@@ -31,6 +32,7 @@ pub use baml_value::{BamlMapKey, BamlValue, OptionalArg};
 pub use error::{DecodeError, Error, SdkError};
 pub use function::{BamlFunction, FunctionArgs};
 pub use host_value::{HostCallable, HostCallback, HostParam};
+pub use spec::{CallOptions, FunctionSpec, Prompt, Stream};
 // reexports
 pub use indexmap::IndexMap;
 pub use num_bigint::BigInt;

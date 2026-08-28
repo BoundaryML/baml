@@ -1,6 +1,8 @@
 from baml_bridge.cffi.v1 import baml_handle_pb2 as _baml_handle_pb2
+from baml_bridge.cffi.v1 import baml_outbound_pb2 as _baml_outbound_pb2
 from baml_bridge.cffi.v1 import baml_type_pb2 as _baml_type_pb2
 from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
@@ -8,8 +10,17 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class FunctionOperation(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    FUNCTION_OPERATION_DIRECT: _ClassVar[FunctionOperation]
+    FUNCTION_OPERATION_SPEC: _ClassVar[FunctionOperation]
+    FUNCTION_OPERATION_STREAM: _ClassVar[FunctionOperation]
+FUNCTION_OPERATION_DIRECT: FunctionOperation
+FUNCTION_OPERATION_SPEC: FunctionOperation
+FUNCTION_OPERATION_STREAM: FunctionOperation
+
 class InboundValue(_message.Message):
-    __slots__ = ("value_type", "string_value", "int_value", "float_value", "bool_value", "list_value", "map_value", "class_value", "enum_value", "handle", "uint8array_value", "bigint_value", "ty_value", "ty_def_value")
+    __slots__ = ("value_type", "string_value", "int_value", "float_value", "bool_value", "list_value", "map_value", "class_value", "enum_value", "handle", "uint8array_value", "bigint_value", "ty_value", "ty_def_value", "media_value", "prompt_ast_value")
     VALUE_TYPE_FIELD_NUMBER: _ClassVar[int]
     STRING_VALUE_FIELD_NUMBER: _ClassVar[int]
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -24,6 +35,8 @@ class InboundValue(_message.Message):
     BIGINT_VALUE_FIELD_NUMBER: _ClassVar[int]
     TY_VALUE_FIELD_NUMBER: _ClassVar[int]
     TY_DEF_VALUE_FIELD_NUMBER: _ClassVar[int]
+    MEDIA_VALUE_FIELD_NUMBER: _ClassVar[int]
+    PROMPT_AST_VALUE_FIELD_NUMBER: _ClassVar[int]
     value_type: _baml_type_pb2.BamlTy
     string_value: str
     int_value: int
@@ -38,7 +51,9 @@ class InboundValue(_message.Message):
     bigint_value: str
     ty_value: _baml_type_pb2.BamlTy
     ty_def_value: _baml_type_pb2.BamlTyDef
-    def __init__(self, value_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., list_value: _Optional[_Union[InboundListValue, _Mapping]] = ..., map_value: _Optional[_Union[InboundMapValue, _Mapping]] = ..., class_value: _Optional[_Union[InboundClassValue, _Mapping]] = ..., enum_value: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., handle: _Optional[_Union[_baml_handle_pb2.BamlHandle, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ..., ty_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., ty_def_value: _Optional[_Union[_baml_type_pb2.BamlTyDef, _Mapping]] = ...) -> None: ...
+    media_value: _baml_outbound_pb2.BamlValueMedia
+    prompt_ast_value: _baml_outbound_pb2.BamlValuePromptAst
+    def __init__(self, value_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., list_value: _Optional[_Union[InboundListValue, _Mapping]] = ..., map_value: _Optional[_Union[InboundMapValue, _Mapping]] = ..., class_value: _Optional[_Union[InboundClassValue, _Mapping]] = ..., enum_value: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., handle: _Optional[_Union[_baml_handle_pb2.BamlHandle, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ..., ty_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., ty_def_value: _Optional[_Union[_baml_type_pb2.BamlTyDef, _Mapping]] = ..., media_value: _Optional[_Union[_baml_outbound_pb2.BamlValueMedia, _Mapping]] = ..., prompt_ast_value: _Optional[_Union[_baml_outbound_pb2.BamlValuePromptAst, _Mapping]] = ...) -> None: ...
 
 class InboundListValue(_message.Message):
     __slots__ = ("values",)
@@ -91,18 +106,20 @@ class BamlTyArg(_message.Message):
     def __init__(self, type_var: _Optional[str] = ..., type_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., type_definition: _Optional[_Union[_baml_type_pb2.BamlTyDef, _Mapping]] = ...) -> None: ...
 
 class CallFunctionArgs(_message.Message):
-    __slots__ = ("kwargs", "call_id", "type_args", "function_name", "function_handle")
+    __slots__ = ("kwargs", "call_id", "type_args", "function_name", "function_handle", "operation")
     KWARGS_FIELD_NUMBER: _ClassVar[int]
     CALL_ID_FIELD_NUMBER: _ClassVar[int]
     TYPE_ARGS_FIELD_NUMBER: _ClassVar[int]
     FUNCTION_NAME_FIELD_NUMBER: _ClassVar[int]
     FUNCTION_HANDLE_FIELD_NUMBER: _ClassVar[int]
+    OPERATION_FIELD_NUMBER: _ClassVar[int]
     kwargs: _containers.RepeatedCompositeFieldContainer[InboundMapEntry]
     call_id: int
     type_args: _containers.RepeatedCompositeFieldContainer[BamlTyArg]
     function_name: str
     function_handle: int
-    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., call_id: _Optional[int] = ..., type_args: _Optional[_Iterable[_Union[BamlTyArg, _Mapping]]] = ..., function_name: _Optional[str] = ..., function_handle: _Optional[int] = ...) -> None: ...
+    operation: FunctionOperation
+    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., call_id: _Optional[int] = ..., type_args: _Optional[_Iterable[_Union[BamlTyArg, _Mapping]]] = ..., function_name: _Optional[str] = ..., function_handle: _Optional[int] = ..., operation: _Optional[_Union[FunctionOperation, str]] = ...) -> None: ...
 
 class CallAck(_message.Message):
     __slots__ = ("error",)

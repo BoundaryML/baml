@@ -195,6 +195,49 @@ func TestCallRejectsNULInFunctionNameBeforeRuntimeInitialization(t *testing.T) {
 	}
 }
 
+func TestNamedCallTargetCarriesOperationWithoutRewritingFunctionName(t *testing.T) {
+	target := namedCallTarget("user.Extract", FunctionOperationStream)
+	payload, transaction, err := encodeCallForDispatchWithTargetAndTypeArgs(41, nil, nil, target)
+	if transaction != nil {
+		defer transaction.rollback()
+	}
+	if err != nil {
+		t.Fatalf("encode call: %v", err)
+	}
+	var call cffi.CallFunctionArgs
+	if err := proto.Unmarshal(payload, &call); err != nil {
+		t.Fatalf("decode call: %v", err)
+	}
+	if got := call.GetFunctionName(); got != "user.Extract" {
+		t.Fatalf("function target = %q, want authored FQN", got)
+	}
+	if got := call.GetOperation(); got != cffi.FunctionOperation_FUNCTION_OPERATION_STREAM {
+		t.Fatalf("operation = %s, want stream", got)
+	}
+}
+
+func TestFunctionHandleTargetCarriesOperation(t *testing.T) {
+	payload, transaction, err := encodeCallForDispatchWithTargetAndTypeArgs(
+		42,
+		nil,
+		nil,
+		handleCallTarget(99, FunctionOperationSpec),
+	)
+	if transaction != nil {
+		defer transaction.rollback()
+	}
+	if err != nil {
+		t.Fatalf("encode call: %v", err)
+	}
+	var call cffi.CallFunctionArgs
+	if err := proto.Unmarshal(payload, &call); err != nil {
+		t.Fatalf("decode call: %v", err)
+	}
+	if call.GetFunctionHandle() != 99 || call.GetOperation() != cffi.FunctionOperation_FUNCTION_OPERATION_SPEC {
+		t.Fatalf("handle operation = %d / %s", call.GetFunctionHandle(), call.GetOperation())
+	}
+}
+
 func TestUnhandledSpawnError(t *testing.T) {
 	t.Run("unhandled_spawn_error_uses_host_default", func(t *testing.T) {
 		payload, err := proto.Marshal(&cffi.BamlOutboundResult{

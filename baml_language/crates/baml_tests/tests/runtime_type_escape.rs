@@ -2,13 +2,14 @@
 //! only while the runtime type stays out of the expression's published type.
 //!
 //! The parameter an inline `unreflect(...)` introduces is rigid for exactly
-//! one call. A type that IS that parameter (`parse<T>(..) -> T`) is fine —
-//! the value carries its own runtime tag and nothing static claims more than
-//! `unknown`. A type that EMBEDS it (`Wrapper<T>`, `T[]`, a constructed
-//! `Agent<T>`) is not: the published type would keep naming a parameter that
-//! no longer exists, and every later dispatch re-derives its arguments from
-//! that type. Those spellings are refused with E0168, which suggests the
-//! lexical `type Out = unreflect(v)` binding that does outlive a call.
+//! one call. A type that IS that parameter can still be occurrence-erased on
+//! an ordinary call, but `Fn@spec<T>(...)` first publishes a `FunctionSpec<T>`
+//! receiver. Therefore every runtime type used
+//! through `@spec` must be named, even when `.parse()` or `.prompt()` consumes
+//! that receiver immediately. Types that embed the parameter (`Wrapper<T>`,
+//! `T[]`, a constructed `Agent<T>`) also escape. These spellings are refused
+//! with E0168, which suggests the lexical `type Out = unreflect(v)` binding
+//! that does outlive a call.
 //!
 //! A call publishes three things, and the rule reads the same in all three:
 //! the RESULT it returns, the ERROR its `throws` clause hands the caller —
@@ -650,14 +651,15 @@ function main(t: reflect.Type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1)
 
 // ── Accepted: occurrence-typed values, declared erasure, the lexical form ───
 
-/// `parse<T>(..) -> T` is the shape the whole dynamic path is built on: the
-/// result is a VALUE typed by the parameter's occurrence (`unknown`), and its
-/// runtime class travels with the value. Widely used in tests and demos; it
-/// must keep working.
+/// `parse<T>(..) -> T` is the shape the whole dynamic path is built on. The
+/// spec still carries `T`, so the runtime type must be named first; the parsed
+/// VALUE is then typed by the parameter's occurrence (`unknown`) and carries
+/// its runtime class with it.
 #[test]
-fn a_result_that_is_the_parameter_stays_legal() {
-    assert_accepted(&format!(
-        r##"
+fn spec_parse_requires_a_named_runtime_type_even_when_the_result_is_erased() {
+    let scenario = |bind: &str, slot: &str| {
+        format!(
+            r##"
         {PROBE_CLIENT}
 
         function Extract<T>(document: string) -> T {{
@@ -666,18 +668,24 @@ fn a_result_that_is_the_parameter_stays_legal() {
         }}
 
         function main(t: reflect.Type, document: string) -> unknown throws unknown {{
-            Extract$parse<unreflect(t)>(document)
+            {bind}
+            Extract@spec<{slot}>(document).parse(document)
         }}
         "##
-    ));
+        )
+    };
+
+    assert_single_escape(&scenario("", "unreflect(t)"));
+    assert_accepted(&scenario("type Output = unreflect(t)", "Output"));
 }
 
-/// A companion whose result never mentions the parameter consumes the runtime
-/// type entirely inside the call.
+/// A prompt result does not mention the parameter, but its FunctionSpec receiver
+/// still does. Naming the runtime type makes that receiver lifetime explicit.
 #[test]
-fn a_result_that_never_mentions_the_parameter_stays_legal() {
-    assert_accepted(&format!(
-        r##"
+fn spec_prompt_requires_a_named_runtime_type_even_when_the_result_omits_it() {
+    let scenario = |bind: &str, slot: &str| {
+        format!(
+            r##"
         {PROBE_CLIENT}
 
         function Extract<T>(document: string) -> T {{
@@ -686,10 +694,45 @@ fn a_result_that_never_mentions_the_parameter_stays_legal() {
         }}
 
         function main(t: reflect.Type, document: string) -> string throws unknown {{
-            Extract$render_prompt<unreflect(t)>(document).text()
+            {bind}
+            Extract@spec<{slot}>(document).prompt().text()
         }}
         "##
-    ));
+        )
+    };
+
+    assert_single_escape(&scenario("", "unreflect(t)"));
+    assert_accepted(&scenario("type Output = unreflect(t)", "Output"));
+}
+
+/// A runtime atom nested inside an otherwise static type argument is carried
+/// by the projected FunctionSpec just like a whole-slot runtime type. The
+/// escape check must inspect the instantiated projection, not only the
+/// authored `-> T` signature.
+#[test]
+fn spec_projection_rejects_nested_inline_runtime_types() {
+    let scenario = |bind: &str, slot: &str| {
+        format!(
+            r##"
+        {PROBE_CLIENT}
+
+        class Envelope<T> {{ value T }}
+
+        function Extract<T>() -> T {{
+            client: DefaultClient
+            prompt: `${{ctx.output_format()}}`
+        }}
+
+        function main(t: reflect.Type) -> string throws unknown {{
+            {bind}
+            Extract@spec<Envelope<{slot}>>().prompt().text()
+        }}
+        "##
+        )
+    };
+
+    assert_single_escape(&scenario("", "unreflect(t)"));
+    assert_accepted(&scenario("type Output = unreflect(t)", "Output"));
 }
 
 /// Declared erasure is the author's contract: `-> Wrapper<unknown>` promises
@@ -917,14 +960,12 @@ function main(t: reflect.Type, flag: bool) -> unknown throws unknown {
     );
 }
 
-/// A streaming call publishes `T` as a stream of partials, so the result rule
-/// already refuses it — on top of the older guard that says a streaming call
-/// carries no runtime type arguments at all. Both refusals are the same
-/// answer; the shape is pinned so it cannot quietly become neither.
+/// A stream publishes `T` as partial/final state, so an inline runtime type
+/// cannot outlive this expression. Named runtime types remain supported.
 #[test]
-fn a_streaming_call_with_an_inline_runtime_type_is_refused_twice() {
-    assert_error_codes(
-        &format!(
+fn a_streaming_call_with_an_inline_runtime_type_is_refused() {
+    let scenario = |bind: &str, slot: &str| {
+        format!(
             r##"
         {PROBE_CLIENT}
 
@@ -934,12 +975,15 @@ fn a_streaming_call_with_an_inline_runtime_type_is_refused_twice() {
         }}
 
         function main(t: reflect.Type, document: string) -> unknown throws unknown {{
-            Extract$stream<unreflect(t)>(document)
+            {bind}
+            Extract@stream<{slot}>(document)
         }}
         "##
-        ),
-        &["E0010", "E0168"],
-    );
+        )
+    };
+
+    assert_error_codes(&scenario("", "unreflect(t)"), &["E0168"]);
+    assert_accepted(&scenario("type Output = unreflect(t)", "Output"));
 }
 
 /// There is no postfix `!` to transport anything through: BAML has no non-null

@@ -43,7 +43,7 @@ pub(crate) fn render_type_alias(
         return None;
     }
     let target = translate_ty(&alias.resolves_to, ctx)?;
-    // `$stream` companion aliases strip the suffix like companion
+    // PPIR partial aliases strip the `$stream` suffix like partial
     // classes do (they route under stream_types, so no collision).
     let name = escape_ident(key.bare_name());
     Some(format!("public typealias {name} = {target}\n"))
@@ -106,7 +106,7 @@ pub(crate) fn render_class(
     fields: &[RenderedField],
     methods: &[String],
 ) -> String {
-    // `$stream` companion classes strip the suffix (they route under
+    // PPIR partial classes strip the `$stream` suffix (they route under
     // the stream_types namespace, so no collision with the base type).
     let name = escape_ident(key.bare_name());
     let fqn = key.to_string();
@@ -261,6 +261,13 @@ pub(crate) enum FnKind {
     Instance,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum CallProjection {
+    Direct,
+    Spec,
+    Stream,
+}
+
 /// Render one callable as a sync + async pair, or `None` if any part
 /// of its signature is outside the supported subset. `fqn` for a
 /// method is `<class FQN>.<method name>`.
@@ -269,6 +276,59 @@ pub(crate) fn render_callable(
     function: &Function,
     kind: FnKind,
     ctx: &TranslateCtx,
+) -> Option<String> {
+    // Synthetic `$...` callable companions are no longer part of the symbol
+    // model. If an older pool reaches this generator, omit those declarations
+    // instead of reviving them as underscore-renamed Swift APIs.
+    if function.name.as_str().contains('$') {
+        return None;
+    }
+
+    let mut out = render_callable_projection(fqn, function, kind, ctx, CallProjection::Direct)?;
+
+    if let Some(spec) = &function.operations.spec {
+        let mut projected = function.clone();
+        projected.name = baml_base::Name::new(format!("{}_spec", function.name.as_str()));
+        projected.arguments.retain(|argument| !argument.injected);
+        projected.return_type = spec.return_type.clone();
+        projected.operations = baml_codegen_types::FunctionOperations::DIRECT;
+        if let Some(rendered) =
+            render_callable_projection(fqn, &projected, kind, ctx, CallProjection::Spec)
+        {
+            out.push_str(&rendered);
+        }
+    }
+
+    if let Some(stream) = &function.operations.stream {
+        // Match the former `$stream` companion closely: expose one ordinary
+        // callable returning `Stream<Partial, Final>`, with authored arguments
+        // followed by the compiler-private stream controls. The bridge alone
+        // projects the raw authored FQN to its attached `@stream` entry.
+        let mut projected = function.clone();
+        projected.name = baml_base::Name::new(format!("{}_stream", function.name.as_str()));
+        projected.arguments.retain(|argument| !argument.injected);
+        projected
+            .arguments
+            .extend(stream.control_arguments.iter().cloned());
+        projected.return_type = stream.return_type.clone();
+        projected.operations = baml_codegen_types::FunctionOperations::DIRECT;
+        if let Some(rendered) =
+            render_callable_projection(fqn, &projected, kind, ctx, CallProjection::Stream)
+        {
+            out.push_str(&rendered);
+        }
+    }
+
+    Some(out)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_callable_projection(
+    fqn: &str,
+    function: &Function,
+    kind: FnKind,
+    ctx: &TranslateCtx,
+    projection: CallProjection,
 ) -> Option<String> {
     // Items before statements (clippy::items_after_statements).
     enum Param {
@@ -287,17 +347,26 @@ pub(crate) fn render_callable(
             ty: String,
             wrapper: String,
         },
+        /// Optional host callback (the standard `on_event` control).
+        OptionalCallable {
+            name: String,
+            ty: String,
+            wrapper: String,
+        },
+        /// Optional compiler-owned interface value, such as a streaming
+        /// client. The concrete generated implementation still conforms to
+        /// `BamlEncodable`; Swift has no generated interface existential.
+        ErasedOptional {
+            name: String,
+        },
+        /// Fallback for a compiler-owned callback whose event payload is not
+        /// representable as a generated Swift type.
+        ErasedHostCallable {
+            name: String,
+        },
     }
 
-    let raw_name = function.name.as_str();
-    // `$` is not a Swift identifier character. Companion names map it
-    // to `_`: `classify$stream` → `classify_stream`, `$build_request`
-    // → `_build_request`, `$parse$stream` → `_parse_stream`. The wire
-    // FQN keeps the `$` names verbatim. A `$stream` companion is an
-    // ordinary function whose return type is `ai.stream.Stream<P, F>`
-    // (→ BamlStream) — no special streaming emission exists.
-    let bare: String = raw_name.replace('$', "_");
-    let bare = bare.as_str();
+    let bare = function.name.as_str();
 
     // Generic functions/methods: emit a Swift generic signature when
     // every TypeVar appears in a required-parameter position — the
@@ -333,10 +402,25 @@ pub(crate) fn render_callable(
     for arg in &function.arguments {
         let name = escape_ident(arg.name.as_str());
         if arg.default.is_some() {
-            params.push(Param::Optional {
-                name,
-                inner: translate_optional_arg_inner(&arg.ty, ctx)?,
-            });
+            if let Some((cparams, ret)) = nullable_function(&arg.ty) {
+                if let Some((ty, wrapper)) =
+                    render_optional_callable_param(&name, cparams, ret, ctx)
+                {
+                    params.push(Param::OptionalCallable { name, ty, wrapper });
+                } else if arg.injected {
+                    params.push(Param::ErasedHostCallable { name });
+                } else {
+                    return None;
+                }
+            } else if arg.injected && nullable_interface(&arg.ty) {
+                params.push(Param::ErasedOptional { name });
+            } else {
+                match translate_optional_arg_inner(&arg.ty, ctx) {
+                    Some(inner) => params.push(Param::Optional { name, inner }),
+                    None if arg.injected => {}
+                    None => return None,
+                }
+            }
         } else if let Ty::Function {
             params: cparams,
             ret,
@@ -346,10 +430,11 @@ pub(crate) fn render_callable(
             let (ty, wrapper) = render_callable_param(&name, cparams, ret, ctx)?;
             params.push(Param::Callable { name, ty, wrapper });
         } else {
-            params.push(Param::Required {
-                name,
-                ty: translate_ty(&arg.ty, ctx)?,
-            });
+            match translate_ty(&arg.ty, ctx) {
+                Some(ty) => params.push(Param::Required { name, ty }),
+                None if arg.injected => {}
+                None => return None,
+            }
         }
     }
 
@@ -380,6 +465,15 @@ pub(crate) fn render_callable(
                 format!("{name}: BamlOptional<{inner}> = .unset")
             }
             Param::Callable { name, ty, .. } => format!("{name}: {ty}"),
+            Param::OptionalCallable { name, ty, .. } => {
+                format!("{name}: ({ty})? = nil")
+            }
+            Param::ErasedOptional { name } => {
+                format!("{name}: (any BamlEncodable)? = nil")
+            }
+            Param::ErasedHostCallable { name } => {
+                format!("{name}: BamlHostCallable? = nil")
+            }
         })
         .collect::<Vec<_>>()
         .join(", ");
@@ -398,14 +492,28 @@ pub(crate) fn render_callable(
             name.trim_matches('`'),
             name.trim_matches('`')
         )),
-        Param::Optional { .. } => None,
+        Param::Optional { .. }
+        | Param::OptionalCallable { .. }
+        | Param::ErasedOptional { .. }
+        | Param::ErasedHostCallable { .. } => None,
     }));
     let required_pairs = required_pair_list.join(", ");
-    let has_optionals = params.iter().any(|p| matches!(p, Param::Optional { .. }));
+    let has_optionals = params.iter().any(|p| {
+        matches!(
+            p,
+            Param::Optional { .. }
+                | Param::OptionalCallable { .. }
+                | Param::ErasedOptional { .. }
+                | Param::ErasedHostCallable { .. }
+        )
+    });
     let mut args_setup = String::new();
     for p in &params {
-        if let Param::Callable { wrapper, .. } = p {
-            args_setup.push_str(wrapper);
+        match p {
+            Param::Callable { wrapper, .. } | Param::OptionalCallable { wrapper, .. } => {
+                args_setup.push_str(wrapper);
+            }
+            _ => {}
         }
     }
     if has_optionals {
@@ -414,12 +522,36 @@ pub(crate) fn render_callable(
             "\tvar args: [(Swift.String, (any BamlEncodable)?)] = [{required_pairs}]"
         );
         for p in &params {
-            if let Param::Optional { name, .. } = p {
-                let _ = writeln!(
-                    args_setup,
-                    "\t{name}._appendIfSet(\"{}\", to: &args)",
-                    name.trim_matches('`')
-                );
+            match p {
+                Param::Optional { name, .. } => {
+                    let _ = writeln!(
+                        args_setup,
+                        "\t{name}._appendIfSet(\"{}\", to: &args)",
+                        name.trim_matches('`')
+                    );
+                }
+                Param::OptionalCallable { name, .. } => {
+                    let bare = name.trim_matches('`');
+                    let _ = writeln!(
+                        args_setup,
+                        "\tif let _baml_{bare} {{ args.append((\"{bare}\", _baml_{bare})) }}"
+                    );
+                }
+                Param::ErasedOptional { name } => {
+                    let bare = name.trim_matches('`');
+                    let _ = writeln!(
+                        args_setup,
+                        "\tif let {name} {{ args.append((\"{bare}\", {name})) }}"
+                    );
+                }
+                Param::ErasedHostCallable { name } => {
+                    let bare = name.trim_matches('`');
+                    let _ = writeln!(
+                        args_setup,
+                        "\tif let {name} {{ args.append((\"{bare}\", {name})) }}"
+                    );
+                }
+                _ => {}
             }
         }
     }
@@ -455,6 +587,12 @@ pub(crate) fn render_callable(
     } else {
         "static "
     };
+
+    let operation_arg = match projection {
+        CallProjection::Direct => "",
+        CallProjection::Spec => ", operation: .spec",
+        CallProjection::Stream => ", operation: .stream",
+    };
     match &ret {
         Some(ret_ty) => {
             if let Some((_, closure)) = &returned_callable {
@@ -462,13 +600,13 @@ pub(crate) fn render_callable(
                     out,
                     "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\tlet _raw = try BamlRuntime.shared.callRawSync(\"{fqn}\", args: {args_expr})\n\
+                     {args_setup}\tlet _raw = try BamlRuntime.shared.callRawSync(\"{fqn}\", args: {args_expr}{operation_arg})\n\
                      \tlet _function = try BamlFunctionHandle.decode(_raw)\n\
                      {closure}\n\
                      }}\n\n\
                      {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\tlet _raw = try await BamlRuntime.shared.callRaw(\"{fqn}\", args: {args_expr})\n\
+                     {args_setup}\tlet _raw = try await BamlRuntime.shared.callRaw(\"{fqn}\", args: {args_expr}{operation_arg})\n\
                      \tlet _function = try BamlFunctionHandle.decode(_raw)\n\
                      {closure}\n\
                      }}\n"
@@ -478,11 +616,11 @@ pub(crate) fn render_callable(
                     out,
                     "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr})\n\
+                     {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr}{operation_arg})\n\
                      }}\n\n\
                      {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr})\n\
+                     {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr}{operation_arg})\n\
                      }}\n"
                 );
             }
@@ -492,11 +630,11 @@ pub(crate) fn render_callable(
                 out,
                 "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws {{\n\
                  \t_ = Baml._initialized\n\
-                 {args_setup}\ttry BamlRuntime.shared.callSyncVoid(\"{fqn}\", args: {args_expr})\n\
+                 {args_setup}\ttry BamlRuntime.shared.callSyncVoid(\"{fqn}\", args: {args_expr}{operation_arg})\n\
                  }}\n\n\
                  {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws {{\n\
                  \t_ = Baml._initialized\n\
-                 {args_setup}\ttry await BamlRuntime.shared.callVoid(\"{fqn}\", args: {args_expr})\n\
+                 {args_setup}\ttry await BamlRuntime.shared.callVoid(\"{fqn}\", args: {args_expr}{operation_arg})\n\
                  }}\n"
             );
         }
@@ -717,6 +855,90 @@ fn render_callable_param(
     );
     let wrapper =
         format!("\tlet _baml_{bare} = BamlHostCallable {{ _args in\n\t\t{wrapper_body}\n\t}}\n");
+    Some((closure_ty, wrapper))
+}
+
+/// The callable payload of `Callable?`, used for injected callback controls.
+fn nullable_function(ty: &Ty) -> Option<(&[baml_codegen_types::CallableParam], &Ty)> {
+    let Ty::Union(members, _) = ty else {
+        return None;
+    };
+    let mut callable = None;
+    for member in members {
+        match member {
+            Ty::Null { .. } => {}
+            Ty::Function { params, ret, .. } if callable.is_none() => {
+                callable = Some((params.as_slice(), ret.as_ref()));
+            }
+            _ => return None,
+        }
+    }
+    callable
+}
+
+fn nullable_interface(ty: &Ty) -> bool {
+    let Ty::Union(members, _) = ty else {
+        return false;
+    };
+    let mut saw_interface = false;
+    let mut saw_null = false;
+    for member in members {
+        match member {
+            Ty::Null { .. } => saw_null = true,
+            Ty::Interface(..) if !saw_interface => saw_interface = true,
+            _ => return false,
+        }
+    }
+    saw_interface && saw_null
+}
+
+fn render_optional_callable_param(
+    name: &str,
+    cparams: &[baml_codegen_types::CallableParam],
+    ret: &Ty,
+    ctx: &TranslateCtx,
+) -> Option<(String, String)> {
+    let bare = name.trim_matches('`');
+    let mut sig_parts = Vec::new();
+    let mut invoke_args = Vec::new();
+    let mut positional = 0usize;
+    for cp in cparams {
+        match cp.mode {
+            baml_codegen_types::CodegenFunctionParamMode::Required => {
+                sig_parts.push(translate_ty(&cp.ty, ctx)?);
+                invoke_args.push(format!("try _args.required({positional})"));
+                positional += 1;
+            }
+            baml_codegen_types::CodegenFunctionParamMode::Optional => {
+                let inner = translate_optional_arg_inner(&cp.ty, ctx)?;
+                sig_parts.push(format!("BamlOptional<{inner}>"));
+                let arg_name = cp.name.as_ref()?.as_str();
+                invoke_args.push(format!("try _args.optional(\"{arg_name}\")"));
+            }
+        }
+    }
+    let invoke = invoke_args.join(", ");
+    let (ret_ty, wrapper_body) = match ret {
+        Ty::Void { .. } | Ty::Never { .. } => (
+            "Swift.Void".to_string(),
+            format!("try await _callback({invoke})\n\t\t\treturn BamlNull()._bamlEncode()"),
+        ),
+        other => (
+            translate_ty(other, ctx)?,
+            format!("return try await _callback({invoke})._bamlEncode()"),
+        ),
+    };
+    let closure_ty = format!(
+        "@Sendable ({}) async throws -> {ret_ty}",
+        sig_parts.join(", ")
+    );
+    let wrapper = format!(
+        "\tlet _baml_{bare}: BamlHostCallable? = {name}.map {{ _callback in\n\
+         \t\tBamlHostCallable {{ _args in\n\
+         \t\t\t{wrapper_body}\n\
+         \t\t}}\n\
+         \t}}\n"
+    );
     Some((closure_ty, wrapper))
 }
 

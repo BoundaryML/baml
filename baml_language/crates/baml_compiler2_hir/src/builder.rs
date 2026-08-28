@@ -373,6 +373,19 @@ impl<'db> SemanticIndexBuilder<'db> {
         debug_assert_eq!(popped, Some(metadata_scope));
     }
 
+    /// Walk the private LLM spec arena in the authored function's lexical
+    /// scope while keeping its arena-local expression IDs disjoint from the
+    /// authored direct body.
+    fn walk_llm_spec_body(&mut self, body: &ast::ExprBody, source_map: &ast::AstSourceMap) {
+        let metadata_scope = ExprMetadataScope::LlmSpec(self.current_scope_id());
+        self.expr_metadata_scope_stack.push(metadata_scope);
+        if let Some(root_expr) = body.root_expr {
+            self.walk_expr(root_expr, body, source_map, false);
+        }
+        let popped = self.expr_metadata_scope_stack.pop();
+        debug_assert_eq!(popped, Some(metadata_scope));
+    }
+
     /// Takes the parameter list and default arena separately so it serves both
     /// declared functions and lambdas, which no longer share a type.
     fn walk_parameter_defaults(&mut self, params: &[ast::Param], defaults: &ast::FunctionDefaults) {
@@ -765,7 +778,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.walk_expr(*base, body, source_map, true);
                 self.walk_expr(*index, body, source_map, true);
             }
-            ast::Expr::Path(segments) => {
+            ast::Expr::Path(segments) | ast::Expr::FunctionProjection { path: segments, .. } => {
                 if let Some(root) = segments.first() {
                     let use_scope = self.current_scope_id();
                     let use_offset = source_map.expr_span(expr_id).start();
@@ -1432,6 +1445,11 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         if let Some(ast::FunctionBodyDef::Expr(ref body, ref source_map)) = f.body {
             self.walk_expr_body(body, source_map);
+        }
+        if let Some(ast::DeclarativeMeta::Llm(llm)) = &f.declarative_meta
+            && let Some((body, source_map)) = &llm.spec_body
+        {
+            self.walk_llm_spec_body(body, source_map);
         }
 
         self.pop_scope();

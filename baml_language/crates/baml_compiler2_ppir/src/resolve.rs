@@ -54,8 +54,8 @@ pub fn resolve_name_at<'db>(
     resolve_name_at_in_scope(db, file, at_offset, name, None)
 }
 
-/// Like [`resolve_name_at`], but disambiguates companion functions that
-/// share a span by requiring the scope name to match `scope_name`.
+/// Like [`resolve_name_at`], but disambiguates nested scopes that share a span
+/// by requiring the scope name to match `scope_name`.
 pub fn resolve_name_at_in_scope<'db>(
     db: &'db dyn crate::Db,
     file: SourceFile,

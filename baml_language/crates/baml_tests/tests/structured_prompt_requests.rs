@@ -45,7 +45,7 @@ function Shape() -> string {
 function main() -> string {
   let expected = env.VERTEX_PROJECT_ID.get_or_panic()
   let input = ai.ModelTurnInput {
-    prompt: Shape$spec().prompt_template,
+    prompt: Shape@spec().prompt_template,
     journal: ai.Journal { log: [] },
     toolbox: ai.tools.Toolbox.new([]),
     output_type: reflect.Type.of<string>(),

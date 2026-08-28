@@ -13401,11 +13401,81 @@ fn .<lambda(prompt, 0)>(ctx: ai.Context) -> ai.Prompt {
     }
 }
 
-fn ai.FunctionSpec.build_request(self: ai.FunctionSpec, override_client: null | ai.Client) -> baml.http.Request {
+fn ai.FunctionSpec.call(self: ai.FunctionSpec, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> Out {
+    // Locals:
+    let _0: Out // _0 // return
+    let _1: ai.FunctionSpec // self // param
+    let _2: null | ai.Client // client // param
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.RunResult<Out>
+    let _7: ai.Agent
+    let _8: reflect.Type
+    let _9: reflect.Type
+
+    bb0: {
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _8 = load_type(unknown);
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3) -> [bb5];
+    }
+
+    bb5: {
+        _9 = load_type(#0);
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _9>(copy _7, copy _1) -> [bb6];
+    }
+
+    bb6: {
+        _0 = copy _6.0;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn ai.FunctionSpec.parse(self: ai.FunctionSpec, json: string) -> Out {
+    // Locals:
+    let _0: Out // _0 // return
+    let _1: ai.FunctionSpec // self // param
+    let _2: string // json // param
+    let _3: reflect.Type
+
+    bb0: {
+        _3 = load_type(#0);
+        _0 = call const fn baml.sap.parse<copy _3>(copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn ai.FunctionSpec.build_request(self: ai.FunctionSpec, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: ai.FunctionSpec // self // param
-    let _2: null | ai.Client // override_client // param
+    let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.Client // selected
     let _5: ai.Client
@@ -13561,6 +13631,22 @@ fn ai.FunctionSpec.tools(self: ai.FunctionSpec) -> ai.tools.Toolbox {
     bb0: {
         _0 = copy _1.3;
         goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn ai.FunctionSpec.client_id(self: ai.FunctionSpec) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: ai.FunctionSpec // self // param
+    let _2: ai.Client
+
+    bb0: {
+        _2 = copy _1.4;
+        _0 = virtual_call id as ai.Client(copy _2) -> [bb1];
     }
 
     bb1: {

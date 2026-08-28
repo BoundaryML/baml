@@ -25,6 +25,13 @@ import (
 // for the life of the process. To avoid that, we track every key registered
 // during this encode and unregister them all if any kwarg fails.
 func encodeCallArgs(kwargs map[string]any, functionName string, callID uint64) ([]byte, error) {
+	return encodeCallArgsWithOperation(kwargs, functionName, callID, FunctionOperationDirect)
+}
+
+func encodeCallArgsWithOperation(kwargs map[string]any, functionName string, callID uint64, operation FunctionOperation) ([]byte, error) {
+	if !operation.valid() {
+		return nil, fmt.Errorf("unknown BAML function operation %d", operation)
+	}
 	var registered []uint64
 	entries, err := encodeKwargs(kwargs, &registered)
 	if err != nil {
@@ -35,6 +42,7 @@ func encodeCallArgs(kwargs map[string]any, functionName string, callID uint64) (
 		Kwargs:     entries,
 		CallId:     callID,
 		CallTarget: &pb.CallFunctionArgs_FunctionName{FunctionName: functionName},
+		Operation:  pb.FunctionOperation(operation),
 	}
 	out, err := proto.Marshal(call)
 	if err != nil {
@@ -94,6 +102,20 @@ func goToInboundValueTracking(v any, registered *[]uint64) (*pb.InboundValue, er
 		return &pb.InboundValue{Value: &pb.InboundValue_BoolValue{BoolValue: val}}, nil
 	case []byte:
 		return &pb.InboundValue{Value: &pb.InboundValue_Uint8ArrayValue{Uint8ArrayValue: val}}, nil
+	case *pb.BamlValueMedia:
+		if val == nil {
+			return &pb.InboundValue{}, nil
+		}
+		return &pb.InboundValue{Value: &pb.InboundValue_MediaValue{
+			MediaValue: proto.Clone(val).(*pb.BamlValueMedia),
+		}}, nil
+	case *pb.BamlValuePromptAst:
+		if val == nil {
+			return &pb.InboundValue{}, nil
+		}
+		return &pb.InboundValue{Value: &pb.InboundValue_PromptAstValue{
+			PromptAstValue: proto.Clone(val).(*pb.BamlValuePromptAst),
+		}}, nil
 	case []any:
 		var items []*pb.InboundValue
 		for _, item := range val {
@@ -322,6 +344,16 @@ func outboundToGo(val *pb.BamlOutboundValue) (any, error) {
 			Key:        v.HandleValue.Key,
 			HandleType: int32(v.HandleValue.HandleType),
 		}, nil
+	case *pb.BamlOutboundValue_MediaValue:
+		if v.MediaValue == nil {
+			return (*pb.BamlValueMedia)(nil), nil
+		}
+		return proto.Clone(v.MediaValue).(*pb.BamlValueMedia), nil
+	case *pb.BamlOutboundValue_PromptAstValue:
+		if v.PromptAstValue == nil {
+			return (*pb.BamlValuePromptAst)(nil), nil
+		}
+		return proto.Clone(v.PromptAstValue).(*pb.BamlValuePromptAst), nil
 	case *pb.BamlOutboundValue_LiteralValue:
 		lit := v.LiteralValue
 		switch l := lit.Literal.(type) {

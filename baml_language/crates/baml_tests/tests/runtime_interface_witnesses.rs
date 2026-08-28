@@ -89,8 +89,9 @@ async fn scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves() {
                 "favorite_editor": reflect.Type.of<string>(),
             }, implementations = [anchor_impl])
 
-            let prompt = ExtractPerson$render_prompt<unreflect(person_t.as_type())>("sample").text()
-            let person: PersonAnchor = ExtractPerson$parse<unreflect(person_t.as_type())>(
+            type RuntimePerson = unreflect(person_t.as_type())
+            let prompt = ExtractPerson@spec<RuntimePerson>("sample").prompt().text()
+            let person: PersonAnchor = ExtractPerson@spec<RuntimePerson>("sample").parse(
                 `{"name":"Ada","contact_email":"ada@example.com","favorite_editor":"vim"}`
             )
             let runtime_leaf = reflect.class.get_field<string>(person, "favorite_editor")
@@ -140,7 +141,10 @@ async fn bounded_unreflect_fails_before_rendering() {
         function main() -> string {
             // If rendering ran first this empty enum would produce E0159.
             let not_a_person = reflect.enum.new("NoPerson", [])
-            let result = ExtractPerson$render_prompt<unreflect(not_a_person)>() catch (e) {
+            let result = {
+                type InvalidPerson = unreflect(not_a_person)
+                ExtractPerson@spec<InvalidPerson>().prompt()
+            } catch (e) {
                 reflect.errors.CompilationError => {
                     e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 }
@@ -290,12 +294,14 @@ async fn equivalent_witnessed_definitions_render_and_parse_identically() {
                 "name": reflect.Type.of<string>(),
                 "email": reflect.Type.of<string>(),
             }, implementations = [witness])
-            let left_prompt = ExtractPerson$render_prompt<unreflect(left.as_type())>().text()
-            let right_prompt = ExtractPerson$render_prompt<unreflect(right.as_type())>().text()
-            let l: PersonAnchor = ExtractPerson$parse<unreflect(left.as_type())>(
+            type LeftPerson = unreflect(left.as_type())
+            type RightPerson = unreflect(right.as_type())
+            let left_prompt = ExtractPerson@spec<LeftPerson>().prompt().text()
+            let right_prompt = ExtractPerson@spec<RightPerson>().prompt().text()
+            let l: PersonAnchor = ExtractPerson@spec<LeftPerson>().parse(
                 `{"name":"Ada","email":"ada@example.com"}`
             )
-            let r: PersonAnchor = ExtractPerson$parse<unreflect(right.as_type())>(
+            let r: PersonAnchor = ExtractPerson@spec<RightPerson>().parse(
                 `{"name":"Ada","email":"ada@example.com"}`
             )
             return left != right
@@ -336,7 +342,7 @@ async fn open_interface_occurrence_fails_at_render_boundary() {
         }
 
         function main() -> string {
-            let rendered = ExtractEnvelope$render_prompt() catch (e) {
+            let rendered = ExtractEnvelope@spec().prompt() catch (e) {
                 reflect.errors.CompilationError => {
                     e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 }
@@ -389,7 +395,8 @@ async fn witness_inherits_interface_default_methods() {
                 "name": reflect.Type.of<string>(),
             }, implementations = [witness])
             let is_member = person_t.as_type().implements(reflect.Type.of<Greeter>())
-            let person: Greeter = ExtractGreeter$parse<unreflect(person_t.as_type())>(
+            type RuntimeGreeter = unreflect(person_t.as_type())
+            let person: Greeter = ExtractGreeter@spec<RuntimeGreeter>("").parse(
                 `{"name":"Ada"}`
             )
             // Virtual dispatch on the witnessed value reaches the interface's

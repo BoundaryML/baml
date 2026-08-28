@@ -1108,6 +1108,22 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `GPT4`
+     ╭─[function_decls.baml:454:13]
+ 454 │     client: GPT4
+     ·             ────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+     ╭─[function_decls.baml:465:13]
+ 465 │     client: GPT4
+     ·             ────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
      ╭─[function_decls.baml:465:13]
  465 │     client: GPT4
      ·             ────
@@ -1118,6 +1134,22 @@ source: crates/baml_tests/src/generated_tests.rs
   × unresolved name: `GPT4`
      ╭─[function_decls.baml:482:13]
  482 │     client: GPT4
+     ·             ────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+     ╭─[function_decls.baml:482:13]
+ 482 │     client: GPT4
+     ·             ────
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `GPT4`
+     ╭─[function_decls.baml:489:13]
+ 489 │     client: GPT4
      ·             ────
      ╰────
 

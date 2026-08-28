@@ -64,7 +64,7 @@ Type-shape fixture paths (representative):
 baml_sdk/Baml.java                          # runtime anchor (typemap + bytecode init)
 baml_sdk/Fns.java                           # root-namespace free functions
 baml_sdk/Foo.java
-baml_sdk/Foo$stream.java                    # stream companion, in-package
+baml_sdk/Foo$stream.java                    # PPIR stream partial-output model, in-package
 baml_sdk/inlinedbaml.b64                    # compiled bytecode, base64 resource
 baml_sdk/primitives/Fns.java
 baml_sdk/primitives/Primitives.java
@@ -85,13 +85,13 @@ Function-call fixture paths follow the same pattern
 > Reason: Java has no module-object indirection to lazily populate.
 > `sdkgen_java/src/lib.rs:15-16`.
 
-> ⚠ **Deviation from Python:** `$stream` companions stay **in the base type's
+> ⚠ **Deviation from Python:** PPIR `$stream` partial-output models stay **in the base type's
 > package** with a `$stream`-suffixed name (`Foo$stream`, `primitives/Primitives$stream`),
 > because `$` is a legal Java identifier character. Python cannot use `$` in an
 > identifier, so it emits a **parallel `stream_types/<ns>` package** and routes
 > the `$stream` FQN there via the type map. Reason: keep the BAML name verbatim;
 > no parallel package tree. `sdkgen_java/src/routing.rs:19-23`. (See
-> *Stream Companion Types*.)
+> *Stream Partial-Output Types*.)
 
 > ⚠ **Deviation from Python:** Package/segment names that collide with Java
 > reserved words are escaped with a trailing `$` (`void` → `void$`), not left
@@ -608,17 +608,43 @@ public final class Image implements BamlMedia {
 > (snake_case, `PreserveCase` parity with `test_handles.py`), not the
 > Java-idiomatic `mimeType()`. `baml_sdk/baml/media/Image.java:73`.
 
-**`baml.llm`** is a full generated namespace in Java too, mirroring Python:
-`Client`, `PrimitiveClient`, `Context`, `RetryPolicy`, `StreamAccumulator`,
-`ClientType` (enum), provider option classes, and a `baml/llm/Fns.java` that
-emits `render_prompt`, `build_request`, `build_request_stream`,
-`render_prompt_values`, etc. as ordinary `Fns` bindings (real quoted signatures):
+**LLM function operations** use one opaque spec capability rather than generated
+synthetic functions. For an authored LLM function `extract_resume`, codegen emits
+the authored direct binding, a flat `extract_resume_spec` factory, and—when the
+operation metadata says the function is streamable—a flat `extract_resume_stream`
+shortcut. The spec carries the final type; the stream binding carries the retained
+PPIR partial-output type and the final type:
 
 ```java
-// baml_sdk/baml/llm/Fns.java (excerpt)
-public static baml_sdk.baml.http.Request build_request( … ) { … }
-public static baml_sdk.baml.llm.PromptAst render_prompt( … ) { … }
+// baml_sdk/lorem/Fns.java (conceptual excerpt)
+public static baml_bridge.BamlFunctionSpec<Resume>
+extract_resume_spec(String text) { … }
+
+public static baml_bridge.BamlStream<Resume$stream, Resume>
+extract_resume_stream(String text) { … }
 ```
+
+The factory sends `BamlFunctionOperation.SPEC` on the authored function FQN.
+The stream shortcut sends `BamlFunctionOperation.STREAM` on the same authored
+FQN, forwarding the generated `client` and `on_event` controls; the engine
+resolves that boundary request to PPIR's private ordinary
+`extract_resume@stream`. Prompt rendering, request construction, parsing, and
+direct invocation are methods on the one-generic capability:
+
+```java
+BamlFunctionSpec<Resume> spec = Fns.extract_resume_spec(text);
+BamlPrompt prompt = spec.prompt();
+Object request = spec.build_request();
+Resume parsed = spec.parse(json);
+Resume called = spec.call();
+BamlStream<Resume$stream, Resume> stream =
+    Fns.extract_resume_stream(text, client, onEvent);
+```
+
+`ai.Prompt` maps directly to the runtime-owned `BamlPrompt` host type. It stores
+the portable prompt protobuf payload rather than an engine handle, so repeated
+`text()` and `messages()` calls each re-enter BAML from the same payload. There
+is no generated prompt twin or conversion-only wrapper.
 
 The runtime-owned `Stream` is re-exported: `ai.stream.Stream` resolves to
 `baml_bridge.BamlStream` (`translate_ty.rs:180-186`).
@@ -636,8 +662,9 @@ capability). `baml_bridge/BamlStream.java` is a **real**
 ordinary `BamlFfi.callSync`/`callAsync`. Decode retains the tagged handle's
 concrete `ty.class_ty.name`; the wrapper derives `<FQN>.next` / `<FQN>.final`
 from that identity and passes `this` as the `self` receiver with a **`null`
-(wire-driven) descriptor**. Generated `$stream` companions return
-`baml_bridge.BamlStream<TStream, TFinal>` directly. Exhaustion returns a
+(wire-driven) descriptor**. Generated flat `_stream` shortcuts return
+`baml_bridge.BamlStream<TPartial, TFinal>` through the authored-FQN Stream
+boundary operation and PPIR's private `Fn@stream`. Exhaustion returns a
 runtime-owned `baml_sdk.ai.stream.Done` **value** (no `null`, no exception),
 registered in the typemap under `ai.stream.Done`. Decode maps
 `ADT_TAGGED_HEAP_HANDLE` to `BamlStream.fromHandle` after retaining its class
@@ -646,14 +673,15 @@ contract). `final`/`final_async`
 escape to `get_final`/`get_final_async` (Java reserved word; OWNER decision
 2026-07-18). (See `ref-java-outbound-decoding.md` "Handles" and `ref-java-type-mappings.md`.)
 
-**`build_request`** binding is emitted (quoted above), mirroring Python. The
-`llm_functions` fixture now exercises the deeper `$build_request` round-trip
-end-to-end on keyless replay (`TestStreamingE2e`, `llm_functions` 21/21), so it is
-no longer "codegen-only" — the runtime behavior is verified offline.
+`build_request()` is a method on `BamlFunctionSpec`, not a generated sibling
+function. Likewise, `prompt()`, `parse(...)`, and `call(...)` have one canonical
+implementation on the spec. Streaming uses the flat `_stream` operation binding;
+generated code never fabricates `$spec`, `$stream`, `$parse`, `$render_prompt`,
+or `$build_request` callable names.
 
-## Stream Companion Types
+## Stream Partial-Output Types
 
-Java keeps the compiler-produced `$stream` companion as an **in-package class
+Java keeps the compiler-produced PPIR `$stream` partial output as an **in-package class
 with the `$stream` name kept verbatim** — every optional-widened field boxes:
 
 ```java
@@ -669,7 +697,7 @@ public final class Primitives$stream {
 }
 ```
 
-The type map routes both the base and the companion FQN to their in-package Java
+The type map routes both the base and the partial-output FQN to their in-package Java
 classes (from `Baml.java`):
 
 ```java
@@ -677,12 +705,12 @@ registerClass("user.primitives.Primitives",        "baml_sdk.primitives.Primitiv
 registerClass("user.primitives.Primitives$stream", "baml_sdk.primitives.Primitives$stream", …);
 ```
 
-Generic and recursive companions follow the same in-package convention
+Generic and recursive partial-output models follow the same in-package convention
 (`generics/WrapperMethods$stream.java`, `aliases/RecList$stream.java`). As in
 Python, codegen consumes the compiler-produced `$stream` class shape as a regular
 class; it does not derive a `Partial[T]` transformation at Java codegen time.
 
-> ⚠ **Deviation from Python:** Python puts companions in a **parallel
+> ⚠ **Deviation from Python:** Python puts partial-output models in a **parallel
 > `stream_types/<ns>` package** and names the class the base name (because `$` is
 > not a Python identifier); the type map maps `…$stream` FQN → `stream_types`
 > module. Java keeps `<Name>$stream` **beside its base type** (no parallel tree).

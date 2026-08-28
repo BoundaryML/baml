@@ -34,6 +34,9 @@ struct DecodedCallArgs {
     kwargs: BexArgs,
     call_id: CallId,
     target: bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget,
+    /// Semantic projection of the authored function. Direct is protobuf's
+    /// default so older generated SDKs remain wire-compatible.
+    operation: bex_project::FunctionOperation,
     /// Explicit, named `TypeVar` bindings for a generic call, in De Bruijn
     /// order (empty for non-generic calls). See `CallFunctionArgs.type_args`.
     type_args: IndexMap<String, RuntimeTy>,
@@ -57,6 +60,7 @@ fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::Bridge
     }
 
     let call_id = CallId(args.call_id);
+    let operation = bridge_cffi::decode_function_operation(args.operation)?;
     let target = args
         .call_target
         .ok_or(bridge_cffi::BridgeError::MissingCallTarget)?;
@@ -70,6 +74,7 @@ fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::Bridge
         kwargs: kwargs.into(),
         call_id,
         target,
+        operation,
         type_args: type_args.type_args,
         type_defs: type_args.type_defs,
     })
@@ -104,17 +109,19 @@ fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
     match decoded.target {
         bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(
             function_name,
-        ) => rt.block_on(bridge_cffi::call_and_encode(
+        ) => rt.block_on(bridge_cffi::call_operation_and_encode(
             runtime,
             function_name,
+            decoded.operation,
             decoded.kwargs,
             call_ctx,
         )),
         bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(
             handle_key,
-        ) => rt.block_on(bridge_cffi::call_handle_and_encode(
+        ) => rt.block_on(bridge_cffi::call_handle_operation_and_encode(
             runtime,
             handle_key,
+            decoded.operation,
             decoded.kwargs,
             call_ctx,
         )),
@@ -389,6 +396,7 @@ fn spawn_async_call(call_id: u64, args_proto: Vec<u8>) {
         kwargs,
         call_id: engine_call_id,
         target,
+        operation,
         type_args,
         type_defs,
     } = decoded;
@@ -406,10 +414,10 @@ fn spawn_async_call(call_id: u64, args_proto: Vec<u8>) {
         let inner = tokio::spawn(async move {
             match target {
                 bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(function_name) => {
-                    bridge_cffi::call_and_encode(runtime, function_name, kwargs, call_ctx).await
+                    bridge_cffi::call_operation_and_encode(runtime, function_name, operation, kwargs, call_ctx).await
                 }
                 bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(handle_key) => {
-                    bridge_cffi::call_handle_and_encode(runtime, handle_key, kwargs, call_ctx).await
+                    bridge_cffi::call_handle_operation_and_encode(runtime, handle_key, operation, kwargs, call_ctx).await
                 }
             }
         });
@@ -768,6 +776,32 @@ fn optional_string_to_jstring<'local>(
                 JString::default()
             }
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use prost::Message;
+
+    use super::decode_args;
+
+    #[test]
+    fn call_argument_decoder_preserves_stream_operation() {
+        use bridge_ctypes::baml_bridge::cffi::{
+            CallFunctionArgs, FunctionOperation, call_function_args::CallTarget,
+        };
+
+        let encoded = CallFunctionArgs {
+            kwargs: Vec::new(),
+            call_id: 1,
+            type_args: Vec::new(),
+            operation: FunctionOperation::Stream as i32,
+            call_target: Some(CallTarget::FunctionName("user.Extract".to_string())),
+        }
+        .encode_to_vec();
+
+        let decoded = decode_args(&encoded).expect("decode stream call");
+        assert_eq!(decoded.operation, bex_project::FunctionOperation::Stream);
     }
 }
 

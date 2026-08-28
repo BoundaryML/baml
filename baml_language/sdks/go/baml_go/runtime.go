@@ -299,10 +299,30 @@ type Value struct {
 	owner *resultOwner
 }
 
+// FunctionOperation selects a semantic projection of one authored function.
+// Direct is the zero value for protobuf/backwards compatibility.
+type FunctionOperation int32
+
+const (
+	FunctionOperationDirect FunctionOperation = iota
+	FunctionOperationSpec
+	FunctionOperationStream
+)
+
+func (operation FunctionOperation) valid() bool {
+	return operation >= FunctionOperationDirect && operation <= FunctionOperationStream
+}
+
 // Call invokes one fully-qualified BAML callable and blocks until it returns
 // or the context is cancelled.
 func Call(ctx context.Context, function string, args map[string]Input) (Value, error) {
-	return callWithTypeArgs(ctx, function, args, nil)
+	return callWithTypeArgsOperation(ctx, function, args, nil, FunctionOperationDirect)
+}
+
+// CallOperation invokes a semantic projection on the original authored FQN.
+// Operation dispatch never translates the FQN into a synthetic `$...` name.
+func CallOperation(ctx context.Context, function string, operation FunctionOperation, args map[string]Input) (Value, error) {
+	return callWithTypeArgsOperation(ctx, function, args, nil, operation)
 }
 
 // TypeArgument binds one BAML callable type parameter to a concrete runtime
@@ -362,10 +382,15 @@ func ApplyCallOptions(arguments map[string]Input, defaults []TypeArgument, value
 // bindings. Bindings use structured BAML descriptors so nested classes,
 // containers, and unions retain their complete runtime identity.
 func CallWithTypeArgs(ctx context.Context, function string, args map[string]Input, typeArgs []TypeArgument) (Value, error) {
-	return callWithTypeArgs(ctx, function, args, typeArgs)
+	return callWithTypeArgsOperation(ctx, function, args, typeArgs, FunctionOperationDirect)
 }
 
-func callWithTypeArgs(ctx context.Context, function string, args map[string]Input, typeArgs []TypeArgument) (Value, error) {
+// CallWithTypeArgsOperation is the generic-call form of CallOperation.
+func CallWithTypeArgsOperation(ctx context.Context, function string, operation FunctionOperation, args map[string]Input, typeArgs []TypeArgument) (Value, error) {
+	return callWithTypeArgsOperation(ctx, function, args, typeArgs, operation)
+}
+
+func callWithTypeArgsOperation(ctx context.Context, function string, args map[string]Input, typeArgs []TypeArgument, operation FunctionOperation) (Value, error) {
 	if ctx == nil {
 		return Value{}, errors.New("baml_go.Call: nil context")
 	}
@@ -374,6 +399,9 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	}
 	if strings.IndexByte(function, 0) >= 0 {
 		return Value{}, errors.New("baml_go.Call: function name contains a NUL byte")
+	}
+	if !operation.valid() {
+		return Value{}, fmt.Errorf("baml_go.Call: unknown function operation %d", operation)
 	}
 
 	if err := ensureNativeRuntime(ctx); err != nil {
@@ -392,7 +420,7 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 		engineCallID,
 		args,
 		typeArgs,
-		namedCallTarget(function),
+		namedCallTarget(function, operation),
 	)
 	if err != nil {
 		pendingCalls.Delete(callbackID)
@@ -412,6 +440,10 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 }
 
 func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (Value, error) {
+	return callHandleOperation(ctx, handleKey, FunctionOperationDirect, args)
+}
+
+func callHandleOperation(ctx context.Context, handleKey uint64, operation FunctionOperation, args map[string]Input) (Value, error) {
 	if ctx == nil {
 		return Value{}, errors.New("baml_go.Function.Call: nil context")
 	}
@@ -420,6 +452,9 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (V
 	}
 	if handleKey == 0 {
 		return Value{}, errors.New("baml_go.Function.Call: zero handle")
+	}
+	if !operation.valid() {
+		return Value{}, fmt.Errorf("baml_go.Function.Call: invalid function operation %d", operation)
 	}
 	if err := ensureNativeRuntime(ctx); err != nil {
 		return Value{}, err
@@ -436,7 +471,7 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (V
 		engineCallID,
 		args,
 		nil,
-		handleCallTarget(handleKey),
+		handleCallTarget(handleKey, operation),
 	)
 	if err != nil {
 		pendingCalls.Delete(callbackID)
@@ -508,14 +543,15 @@ func encodeCallForDispatchWithTypeArgs(callID uint64, args map[string]Input, typ
 type callTarget struct {
 	functionName   *string
 	functionHandle *uint64
+	operation      FunctionOperation
 }
 
-func namedCallTarget(name string) *callTarget {
-	return &callTarget{functionName: &name}
+func namedCallTarget(name string, operation FunctionOperation) *callTarget {
+	return &callTarget{functionName: &name, operation: operation}
 }
 
-func handleCallTarget(handle uint64) *callTarget {
-	return &callTarget{functionHandle: &handle}
+func handleCallTarget(handle uint64, operation FunctionOperation) *callTarget {
+	return &callTarget{functionHandle: &handle, operation: operation}
 }
 
 func encodeCallForDispatchWithTargetAndTypeArgs(
@@ -582,6 +618,9 @@ func encodeCallForDispatchWithTargetAndTypeArgs(
 		callArgs.CallTarget = &cffi.CallFunctionArgs_FunctionName{FunctionName: *target.functionName}
 	} else if target != nil && target.functionHandle != nil {
 		callArgs.CallTarget = &cffi.CallFunctionArgs_FunctionHandle{FunctionHandle: *target.functionHandle}
+	}
+	if target != nil {
+		callArgs.Operation = cffi.FunctionOperation(target.operation)
 	}
 	payload, err := proto.Marshal(callArgs)
 	if err != nil {

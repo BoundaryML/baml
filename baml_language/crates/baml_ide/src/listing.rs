@@ -603,11 +603,10 @@ test "identity" {
         assert!(resolve_target(&project.db, pkg_id, internal_name.as_str()).is_none());
     }
 
-    /// The AST-level LLM companions stay visible in listings. `$stream` is
-    /// synthesized in PPIR rather than lowered as an item, so it is
-    /// deliberately absent.
+    /// An LLM function is the sole listed function declaration; operation
+    /// projections are metadata and PPIR partial types remain hidden.
     #[test]
-    fn llm_companions_remain_visible_in_listing() {
+    fn llm_function_listing_has_no_operation_companions() {
         let mut builder = ProjectTest::builder();
         builder.source(
             "functions.baml",
@@ -622,23 +621,27 @@ function summarize(input: string) -> string {
         let pkg_id = sole_workspace_package(&project.db);
         let entries = list_package_items(&project.db, pkg_id);
 
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.item_name.as_str() == "summarize")
+        );
         for name in [
             "summarize$spec",
             "summarize$render_prompt",
             "summarize$parse",
+            "summarize$stream",
+            "summarize@stream",
         ] {
             assert!(
-                entries.iter().any(|entry| entry.item_name.as_str() == name),
-                "expected `{name}` in describe listing; got {:?}",
+                entries.iter().all(|entry| entry.item_name.as_str() != name),
+                "unexpected synthetic function `{name}` in describe listing; got {:?}",
                 entries
                     .iter()
                     .map(|entry| entry.item_name.as_str())
                     .collect::<Vec<_>>()
             );
-            assert!(matches!(
-                resolve_target(&project.db, pkg_id, name),
-                Some(ResolvedTarget::Item(_))
-            ));
+            assert!(resolve_target(&project.db, pkg_id, name).is_none());
         }
     }
 

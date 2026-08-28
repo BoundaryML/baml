@@ -6,25 +6,67 @@
 
 use baml_codegen_types::{FunctionArgumentDefault, Ty};
 
-/// Async/sync marker carried by factory bindings. Each BAML `Function`
-/// (and each of its companions) fans out into one sync and one async
-/// binding.
+/// Async/sync marker carried by factory bindings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SyncAsync {
     Sync,
     Async,
 }
 
+/// One public TypeScript binding projected from an authored BAML function.
+///
+/// The projection is deliberately separate from the authored FQN: Spec and
+/// Stream bindings still dispatch to the original function name. The Stream
+/// binding retains TypeScript's `$stream` spelling while selecting PPIR's
+/// compiler-private `Fn@stream` entry through the bridge Stream operation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BindingRole {
+    DirectSync,
+    DirectAsync,
+    SpecSync,
+    SpecAsync,
+    StreamSync,
+    StreamAsync,
+}
+
+impl BindingRole {
+    pub(crate) const fn is_async(self) -> bool {
+        matches!(
+            self,
+            Self::DirectAsync | Self::SpecAsync | Self::StreamAsync
+        )
+    }
+
+    pub(crate) const fn projection(self) -> &'static str {
+        match self {
+            Self::DirectSync | Self::DirectAsync => "direct",
+            Self::SpecSync | Self::SpecAsync => "spec",
+            Self::StreamSync | Self::StreamAsync => "stream",
+        }
+    }
+
+    pub(crate) fn binding_name(self, direct_name: &str) -> String {
+        match self {
+            Self::DirectSync => direct_name.to_string(),
+            Self::DirectAsync => format!("{direct_name}_async"),
+            Self::SpecSync => format!("{direct_name}_spec"),
+            Self::SpecAsync => format!("{direct_name}_spec_async"),
+            Self::StreamSync => format!("{direct_name}$stream"),
+            Self::StreamAsync => format!("{direct_name}$stream_async"),
+        }
+    }
+}
+
 pub(crate) struct TypeScriptFunction {
-    /// TS identifier. Sync form = BAML name verbatim; async form =
-    /// `<name>_async`. Companion forms keep their `$` suffix verbatim
-    /// (`foo$stream`, `foo$build_request`) and are also `TypeScriptFunction` stubs.
+    /// TS identifier for this flat host projection.
     pub(crate) name: String,
-    /// FQN passed as the first arg to `defineFunction`. Carries the
-    /// `$<suffix>` tail for companions.
+    /// Authored FQN passed as the first arg to `defineFunction`. Projection
+    /// suffixes are never fabricated.
     pub(crate) baml_fqn: String,
     /// `Sync` or `Async`.
     pub(crate) mode: SyncAsync,
+    /// Direct/Spec/Stream host projection plus sync/async execution mode.
+    pub(crate) role: BindingRole,
     /// Inline parameter-name list.
     pub(crate) param_names: Vec<String>,
     /// Parameter types matching `param_names`. Consumed when rendering the

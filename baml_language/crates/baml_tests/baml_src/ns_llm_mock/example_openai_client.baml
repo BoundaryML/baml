@@ -8,13 +8,11 @@
 // at it. Construct the client inside the test function instead and hand it to
 // the runner explicitly:
 //
-//   ai.Agent.new(client = cl).run(Fn@spec(args))        // non-streaming
-//   ai.stream.from_spec<Out$stream, Out>(Fn@spec(args), client = cl)  // streaming
+//   ai.Agent.new(client = cl).run(Fn@spec(args)) // non-streaming
+//   Fn@stream(args, client = cl)                 // streaming
 //
 // which is exactly what a direct `Fn(args)` call desugars to
-// (crates/baml_compiler2_ast/src/lower_expr_body.rs:729, :819). `from_spec`
-// cannot infer its two type parameters from an argument, so they are written
-// out.
+// (crates/baml_compiler2_ast/src/lower_expr_body.rs:729, :819).
 
 function MockEcho(question: string) -> string {
     client: "openai/gpt-4o-mini"
@@ -72,10 +70,7 @@ function example_openai_streaming() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let stream = ai.stream.from_spec<string | null, string>(
-                MockEcho@spec("Say pong."),
-                client = cl,
-            );
+            let stream = MockEcho@stream("Say pong.", client = cl);
             stream.final()
         },
     )

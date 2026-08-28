@@ -1034,7 +1034,7 @@ function Items() -> Item[] { [Item { value: "bound", next: null }] }
             // `~~` and not `|`: `to_baml()` and the LLM schema both spell a
             // union with `|`, so a `|` join could split *inside* a surface and
             // leave the assertions below silently comparing the wrong text.
-            let schema = Render$render_prompt<Item[]>()
+            let schema = Render@spec<Item[]>().prompt()
             `${item_type.to_string()}~~${item_type.to_baml()}~~${schema}~~${diagnostic}`
         }
         "##
@@ -1349,7 +1349,7 @@ class Item { beta int, next Item? }
             type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
             type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
 
-            `${Render$render_prompt<First[]>()}~${Render$render_prompt<Second[]>()}`
+            `${Render@spec<First[]>().prompt()}~${Render@spec<Second[]>().prompt()}`
         }
         "##
     );

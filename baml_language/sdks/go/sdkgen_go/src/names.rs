@@ -18,6 +18,8 @@ use crate::{
     types::{GoFunctionKey, GoFunctionParamMode, GoLiteral, GoTy, GoTypeProjection, GoUnionKey},
 };
 
+const AI_PROMPT_FQN: &str = "ai.Prompt";
+
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct BamlFqn {
     symbol: Name,
@@ -651,7 +653,9 @@ impl GoNames {
                 requests.sort();
                 let collides = requests.len() > 1;
                 for request in requests {
-                    let candidate = if collides {
+                    let canonical_runtime_prompt = matches!(request.kind, GoNameKind::Class)
+                        && request.fqn.symbol.to_string() == AI_PROMPT_FQN;
+                    let candidate = if collides && !canonical_runtime_prompt {
                         base.with_suffix(&short_hash(request))
                     } else {
                         base.clone()
@@ -910,6 +914,14 @@ fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
         GoTy::Json => "Json".into(),
         GoTy::ReflectedType => "Type".into(),
         GoTy::RustType => "RustType".into(),
+        GoTy::FunctionSpec { output } => {
+            format!("FunctionSpec{}", union_type_component(output, names))
+        }
+        GoTy::Stream { partial, final_ } => format!(
+            "Stream{}{}",
+            union_type_component(partial, names),
+            union_type_component(final_, names)
+        ),
         GoTy::TypeVar(name) => format!("TypeVar{}", name.as_str()),
         GoTy::Literal(literal) => literal_component(literal),
         GoTy::Class(name, arguments) => {
@@ -1017,6 +1029,15 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
         GoTy::Json => hash.byte(18),
         GoTy::ReflectedType => hash.byte(19),
         GoTy::RustType => hash.byte(20),
+        GoTy::FunctionSpec { output } => {
+            hash.byte(23);
+            hash_go_ty(hash, output);
+        }
+        GoTy::Stream { partial, final_ } => {
+            hash.byte(24);
+            hash_go_ty(hash, partial);
+            hash_go_ty(hash, final_);
+        }
         GoTy::TypeVar(name) => {
             hash.byte(21);
             hash.component(name.as_str());
@@ -1453,117 +1474,6 @@ mod tests {
             assert_eq!(identifier(projected), expected);
             assert_eq!(projected.wire(), &BamlWireName::Symbol(fqn.symbol.clone()));
         }
-    }
-
-    #[test]
-    fn companion_names_preserve_wire_identity_and_share_package_collision_scope() {
-        let companion = symbol(&["lorem"], "extract_resume$build_request");
-        let user_function = symbol(&["lorem"], "extract_resume_build_request");
-        let names = GoNames::new(
-            &generated_package(),
-            vec![
-                request(
-                    companion.clone(),
-                    GoNameKind::Function,
-                    GoVisibility::Exported,
-                ),
-                request(
-                    user_function.clone(),
-                    GoNameKind::Function,
-                    GoVisibility::Exported,
-                ),
-            ],
-        );
-
-        let companion_name =
-            names.project(&companion, GoNameKind::Function, GoVisibility::Exported);
-        let user_name = names.project(&user_function, GoNameKind::Function, GoVisibility::Exported);
-
-        assert_ne!(identifier(companion_name), identifier(user_name));
-        assert!(identifier(companion_name).starts_with("LoremExtractResumeBuildRequest_"));
-        assert!(identifier(user_name).starts_with("LoremExtractResumeBuildRequest_"));
-        assert_eq!(
-            companion_name.wire(),
-            &BamlWireName::Symbol(companion.symbol.clone())
-        );
-        assert_eq!(
-            companion_name.wire().to_string(),
-            "user.lorem.extract_resume$build_request"
-        );
-    }
-
-    #[test]
-    fn parse_companion_preserves_wire_identity_and_collides_canonically() {
-        let companion = symbol(&["lorem"], "extract_resume$parse");
-        let user_function = symbol(&["lorem"], "extract_resume_parse");
-        let names = GoNames::new(
-            &generated_package(),
-            vec![
-                request(
-                    companion.clone(),
-                    GoNameKind::Function,
-                    GoVisibility::Exported,
-                ),
-                request(
-                    user_function.clone(),
-                    GoNameKind::Function,
-                    GoVisibility::Exported,
-                ),
-            ],
-        );
-
-        let companion_name =
-            names.project(&companion, GoNameKind::Function, GoVisibility::Exported);
-        let user_name = names.project(&user_function, GoNameKind::Function, GoVisibility::Exported);
-
-        assert_ne!(identifier(companion_name), identifier(user_name));
-        assert!(identifier(companion_name).starts_with("LoremExtractResumeParse_"));
-        assert!(identifier(user_name).starts_with("LoremExtractResumeParse_"));
-        assert_eq!(
-            companion_name.wire(),
-            &BamlWireName::Symbol(companion.symbol.clone())
-        );
-        assert_eq!(
-            companion_name.wire().to_string(),
-            "user.lorem.extract_resume$parse"
-        );
-    }
-
-    #[test]
-    fn build_request_stream_companion_preserves_wire_identity_and_collides_canonically() {
-        let companion = symbol(&["lorem"], "extract_resume$build_request_stream");
-        let user_function = symbol(&["lorem"], "extract_resume_build_request_stream");
-        let names = GoNames::new(
-            &generated_package(),
-            vec![
-                request(
-                    companion.clone(),
-                    GoNameKind::Function,
-                    GoVisibility::Exported,
-                ),
-                request(
-                    user_function.clone(),
-                    GoNameKind::Function,
-                    GoVisibility::Exported,
-                ),
-            ],
-        );
-
-        let companion_name =
-            names.project(&companion, GoNameKind::Function, GoVisibility::Exported);
-        let user_name = names.project(&user_function, GoNameKind::Function, GoVisibility::Exported);
-
-        assert_ne!(identifier(companion_name), identifier(user_name));
-        assert!(identifier(companion_name).starts_with("LoremExtractResumeBuildRequestStream_"));
-        assert!(identifier(user_name).starts_with("LoremExtractResumeBuildRequestStream_"));
-        assert_eq!(
-            companion_name.wire(),
-            &BamlWireName::Symbol(companion.symbol.clone())
-        );
-        assert_eq!(
-            companion_name.wire().to_string(),
-            "user.lorem.extract_resume$build_request_stream"
-        );
     }
 
     #[test]

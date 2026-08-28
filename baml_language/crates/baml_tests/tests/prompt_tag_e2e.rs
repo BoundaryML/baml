@@ -3,11 +3,11 @@
 //! Removed with the legacy LLM path (see git history):
 //!   - `backtick_prompt_renders_into_provider_request` — asserted on the wire
 //!     request built by the legacy `call_llm_function` orchestrator; prompt
-//!     rendering is now covered by the `$render_prompt` companion tests in
+//!     rendering is now covered by the `FunctionSpec.prompt` tests in
 //!     `baml_src/ns_prompt_tag_runtime/`.
 //!
-//! The remaining tests exercise the ai-world `$stream` companion against a
-//! local OpenAI Responses API endpoint.
+//! The remaining tests exercise the compiler-private `Fn@stream` projection
+//! against a local OpenAI Responses API endpoint.
 
 #![allow(dead_code)]
 
@@ -105,7 +105,7 @@ async fn backtick_prompt_streams_through_orchestrator() {
         }}
 
         function main() -> string {{
-            let stream = Greet$stream("World");
+            let stream = Greet@stream("World");
             stream.final()
         }}
     "#,
@@ -159,7 +159,7 @@ async fn backtick_streaming_renders_output_format() {
         }}
 
         function main() -> Person {{
-            let s = GetPerson$stream();
+            let s = GetPerson@stream();
             s.final()
         }}
     "#,

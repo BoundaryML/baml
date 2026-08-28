@@ -19,6 +19,18 @@ public struct BamlInboundValue: Sendable {
     }
 }
 
+/// Semantic projection of an authored BAML function. `direct` is raw value
+/// zero so an omitted protobuf field preserves the historical call behavior.
+public enum BamlFunctionOperation: Int, Sendable {
+    case direct = 0
+    case spec = 1
+    case stream = 2
+
+    var wire: BamlBridge_Cffi_V1_FunctionOperation {
+        BamlBridge_Cffi_V1_FunctionOperation(rawValue: rawValue)!
+    }
+}
+
 /// Public, protobuf-independent wrapper around an exact BAML type descriptor.
 /// Generated/static Swift values expose this cheaply from their host type; the
 /// encoder attaches it only at a selected union boundary or for nominal class
@@ -50,6 +62,12 @@ public struct BamlTypeDescriptor: @unchecked Sendable, Equatable {
     public static var bool: BamlTypeDescriptor { primitive(.bamlTyPrimitiveBool) }
     public static var null: BamlTypeDescriptor { primitive(.bamlTyPrimitiveNull) }
     public static var bytes: BamlTypeDescriptor { primitive(.bamlTyPrimitiveBytes) }
+
+    public static var prompt: BamlTypeDescriptor {
+        var ty = BamlBridge_Cffi_V1_BamlTy()
+        ty.promptAst = BamlBridge_Cffi_V1_BamlTyPromptAst()
+        return BamlTypeDescriptor(ty)
+    }
 
     public static func list(_ item: BamlTypeDescriptor) -> BamlTypeDescriptor {
         var list = BamlBridge_Cffi_V1_BamlTyList()
@@ -276,6 +294,16 @@ extension BamlInboundValue {
         typeArguments: [BamlTypeDescriptor?] = [],
         _ fields: [(String, (any BamlEncodable)?)]
     ) -> BamlInboundValue {
+        // Generated media classes contain only `_data: BamlHandle?`. The
+        // handle encoder lowers that field to the canonical media payload;
+        // flatten the wrapper too so media never crosses as class+handle
+        // identity.
+        if fields.count == 1, fields[0].0 == "_data", let data = fields[0].1 {
+            let encoded = data._bamlEncode()
+            if case .mediaValue? = encoded.raw.value {
+                return encoded
+            }
+        }
         var cls = BamlBridge_Cffi_V1_InboundClassValue()
         cls.fields = fields.map { name, value in
             var entry = BamlBridge_Cffi_V1_InboundMapEntry()
@@ -317,12 +345,14 @@ extension BamlIndirect: BamlEncodable where Value: BamlEncodable {
 func encodeCallArgs(
     _ args: [(String, (any BamlEncodable)?)],
     callId: UInt64,
-    callTarget: BamlBridge_Cffi_V1_CallFunctionArgs.OneOf_CallTarget
+    callTarget: BamlBridge_Cffi_V1_CallFunctionArgs.OneOf_CallTarget,
+    operation: BamlFunctionOperation = .direct
 ) throws -> Data {
     precondition(callId != 0, "call_id must be nonzero")
     var msg = BamlBridge_Cffi_V1_CallFunctionArgs()
     msg.callID = callId
     msg.callTarget = callTarget
+    msg.operation = operation.wire
     msg.kwargs = args.map { name, value in
         var entry = BamlBridge_Cffi_V1_InboundMapEntry()
         entry.stringKey = name

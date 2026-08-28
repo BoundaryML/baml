@@ -569,6 +569,7 @@ mod tests {
             return_type: Ty::String {
                 attr: baml_base::TyAttr::EMPTY,
             },
+            operations: Default::default(),
             throws: None,
             watchers: Vec::new(),
             origin: Origin {
@@ -816,6 +817,148 @@ mod tests {
         assert!(lib.contains("pub fn hello_world()"), "{lib}");
         assert!(lib.contains("pub async fn hello_world_async()"), "{lib}");
         assert!(lib.contains(r#""user.hello_world""#), "{lib}");
+    }
+
+    #[test]
+    fn llm_operations_emit_spec_and_stream_without_companion_fqns() {
+        use baml_codegen_types::{
+            FunctionArgumentDefault, FunctionOperations, SpecOperation, StreamOperation,
+        };
+
+        let function_name = name("user", &[], "Extract");
+        let final_name = name("user", &[], "Resume");
+        let partial_name = name("user", &[], "Resume$stream");
+        let spec_name = name("ai", &[], "FunctionSpec");
+        let stream_name = name("ai", &["stream"], "Stream");
+        let done_name = name("ai", &["stream"], "Done");
+        let final_ty = Ty::Class(final_name.clone(), Vec::new(), baml_base::TyAttr::EMPTY);
+        let partial_model = Ty::Class(partial_name.clone(), Vec::new(), baml_base::TyAttr::EMPTY);
+        let partial_ty = Ty::Union(
+            vec![
+                partial_model.clone(),
+                Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
+        let spec_ty = Ty::Class(spec_name, vec![final_ty.clone()], baml_base::TyAttr::EMPTY);
+        let stream_ty = Ty::Class(
+            stream_name,
+            vec![partial_ty.clone(), final_ty.clone()],
+            baml_base::TyAttr::EMPTY,
+        );
+        let mut function = unary_fn(
+            &function_name,
+            Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            final_ty,
+        );
+        // Compiler-owned direct-call controls do not become authored Rust
+        // parameters. Stream controls instead surface through CallOptions.
+        function
+            .arguments
+            .push(baml_codegen_types::FunctionArgument {
+                injected: true,
+                name: baml_base::Name::new("on_event"),
+                docstring: None,
+                ty: Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                default: Some(FunctionArgumentDefault::Null),
+            });
+        function.operations = FunctionOperations {
+            spec: Some(SpecOperation {
+                return_type: spec_ty,
+            }),
+            stream: Some(StreamOperation {
+                return_type: stream_ty,
+                partial_type: partial_ty.clone(),
+                item_type: Ty::Union(
+                    vec![
+                        partial_ty,
+                        Ty::Class(done_name, Vec::new(), baml_base::TyAttr::EMPTY),
+                    ],
+                    baml_base::TyAttr::EMPTY,
+                ),
+                control_arguments: vec![baml_codegen_types::FunctionArgument {
+                    injected: false,
+                    name: baml_base::Name::new("client"),
+                    docstring: None,
+                    ty: Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    default: Some(FunctionArgumentDefault::Null),
+                }],
+            }),
+        };
+        let pool = SymbolPool::from([
+            (
+                final_name.clone(),
+                class_symbol(
+                    &final_name,
+                    vec![baml_codegen_types::ClassProperty {
+                        name: baml_base::Name::new("name"),
+                        docstring: None,
+                        ty: Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                    }],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (
+                partial_name.clone(),
+                class_symbol(
+                    &partial_name,
+                    vec![baml_codegen_types::ClassProperty {
+                        name: baml_base::Name::new("name"),
+                        docstring: None,
+                        ty: Ty::Union(
+                            vec![
+                                Ty::String {
+                                    attr: baml_base::TyAttr::EMPTY,
+                                },
+                                Ty::Null {
+                                    attr: baml_base::TyAttr::EMPTY,
+                                },
+                            ],
+                            baml_base::TyAttr::EMPTY,
+                        ),
+                    }],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (function_name, Symbol::Function(function)),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        assert!(flat.contains("pubfnExtract_spec("), "{lib}");
+        assert!(flat.contains("::baml_bridge::FunctionSpec<"), "{lib}");
+        assert!(
+            flat.contains("::std::option::Option<crate::stream_types::Resume>"),
+            "{lib}"
+        );
+        assert!(flat.contains("FunctionOperation::Spec"), "{lib}");
+        assert!(flat.contains("pubfnExtract_stream("), "{lib}");
+        assert!(flat.contains("FunctionOperation::Stream"), "{lib}");
+        assert!(flat.contains("pubfnExtract_stream_with("), "{lib}");
+        assert!(flat.contains("options:::baml_bridge::CallOptions"), "{lib}");
+        assert!(flat.contains("invoke_operation_sync_with_options"), "{lib}");
+        assert!(!flat.contains("spec.stream"), "{lib}");
+        assert!(!flat.contains("on_event:"), "{lib}");
+        assert!(!lib.contains("Extract$spec"), "{lib}");
+        assert!(!lib.contains("Extract$stream"), "{lib}");
+
+        let partial = text(&generated, "src/stream_types/mod.rs");
+        assert!(partial.contains("pub struct Resume"), "{partial}");
+        assert!(partial.contains(r#""user.Resume$stream""#), "{partial}");
     }
 
     #[test]

@@ -130,6 +130,7 @@ public final class ProtoReader {
     // the runtime-owned BamlStream wrapper (the sole tagged-heap-handle capability
     // today; the typed generics are erased, exactly as in bridge_python).
     private static final int ADT_TAGGED_HEAP_HANDLE = 14;
+    private static final int ADT_FUNCTION_SPEC = 17;
 
     // The single field name a handle-backed media class carries on the wire.
     private static final String MEDIA_DATA_FIELD = "_data";
@@ -563,7 +564,9 @@ public final class ProtoReader {
                 case OV_CLASS -> result = decodeClass(r.readMessage(), lenient);
                 case OV_ENUM -> result = decodeEnum(r.readMessage());
                 case OV_HANDLE -> result = decodeHandle(r.readMessage());
-                case OV_MEDIA, OV_PROMPT_AST, OV_TY -> {
+                case OV_PROMPT_AST -> result = baml_bridge.BamlPrompt.fromWire(r.readBytes());
+                case OV_TY -> result = BamlType.fromWireTy(r.readBytes());
+                case OV_MEDIA -> {
                     if (lenient) {
                         r.skipField(wire);
                         result = null;
@@ -686,6 +689,13 @@ public final class ProtoReader {
                 if (selectedOptionIndex != null) {
                     BamlType rawSelected = selfTypeOptionAt(selfTypeBytes, selectedOptionIndex);
                     if (rawSelected == null) {
+                        // Error values are decoded leniently so a host that cannot
+                        // represent one arm's type metadata still surfaces the
+                        // original thrown value instead of masking it with a
+                        // secondary bridge-decoder failure.
+                        if (lenient) {
+                            return inner;
+                        }
                         throw new BamlError(
                                 "union selected option index " + selectedOptionIndex
                                         + " does not name a representable non-null arm",
@@ -1007,6 +1017,7 @@ public final class ProtoReader {
             // and `.final` from that identity. Java erases the generic args but
             // must not erase the receiver class FQN.
             case ADT_TAGGED_HEAP_HANDLE -> baml_bridge.BamlStream.fromHandle(handle);
+            case ADT_FUNCTION_SPEC -> baml_bridge.BamlFunctionSpec.fromHandle(handle);
             default -> handle;
         };
     }

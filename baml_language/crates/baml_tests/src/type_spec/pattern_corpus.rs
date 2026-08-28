@@ -31,8 +31,8 @@ fn corpus_verdicts(relative_path: &str) -> String {
             continue;
         };
         let data = baml_compiler2_ppir::item_data::function_data(&db, function);
-        // Synthetic $stream companions duplicate their originals.
-        if data.name.as_str().ends_with("$stream") {
+        // Compiler-private `@stream` entries are not authored corpus functions.
+        if data.name.as_str().ends_with("@stream") {
             continue;
         }
         let Some(scope) = baml_compiler2_ppir::body_scope(&db, owner) else {

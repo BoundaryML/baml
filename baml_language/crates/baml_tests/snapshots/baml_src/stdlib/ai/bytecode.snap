@@ -1521,16 +1521,16 @@ function ai.FunctionSpec.arguments(self: ai.FunctionSpec<#0>) -> map<string, unk
     return
 }
 
-function ai.FunctionSpec.build_request(self: ai.FunctionSpec<#0>, override_client: ai.Client | null) -> baml.http.Request {
-    load_var override_client
+function ai.FunctionSpec.build_request(self: ai.FunctionSpec<#0>, client: ai.Client | null) -> baml.http.Request {
+    load_var client
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
     load_const null
-    store_var override_client
+    store_var client
 
   L0:
-    load_var override_client
+    load_var client
     store_var_load_var _5
     load_const null
     cmp_op ==
@@ -1569,6 +1569,53 @@ function ai.FunctionSpec.build_request(self: ai.FunctionSpec<#0>, override_clien
     return
 }
 
+function ai.FunctionSpec.call(self: ai.FunctionSpec<#0>, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> #0 {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_var on_event
+    call ai.Agent.new
+    store_var _7
+    load_type #0
+    load_var2 5 1
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _6
+    load_var _6
+    load_field .value
+    return
+}
+
+function ai.FunctionSpec.client_id(self: ai.FunctionSpec<#0>) -> string {
+    load_var self
+    load_field .default_client
+    load_type ai.Client
+    load_const "id"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
 function ai.FunctionSpec.name(self: ai.FunctionSpec<#0>) -> string {
     load_var self
     load_field .spec_name
@@ -1582,6 +1629,13 @@ function ai.FunctionSpec.output_type(self: ai.FunctionSpec<#0>) -> reflect.Type 
     call ai.internal.validate_output_type
     pop 1
     load_var output_type
+    return
+}
+
+function ai.FunctionSpec.parse(self: ai.FunctionSpec<#0>, json: string) -> #0 {
+    load_type #0
+    load_var json
+    call baml.sap.parse
     return
 }
 

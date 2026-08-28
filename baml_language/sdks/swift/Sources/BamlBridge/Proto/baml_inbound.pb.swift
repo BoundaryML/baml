@@ -28,6 +28,46 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+/// Semantic projection of an authored function declaration. These are runtime
+/// operations, not synthesized `$...` functions or host sync/async modes.
+nonisolated enum BamlBridge_Cffi_V1_FunctionOperation: SwiftProtobuf.Enum, Swift.CaseIterable {
+  typealias RawValue = Int
+  case direct // = 0
+  case spec // = 1
+  case stream // = 2
+  case UNRECOGNIZED(Int)
+
+  init() {
+    self = .direct
+  }
+
+  init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .direct
+    case 1: self = .spec
+    case 2: self = .stream
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  var rawValue: Int {
+    switch self {
+    case .direct: return 0
+    case .spec: return 1
+    case .stream: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  static let allCases: [BamlBridge_Cffi_V1_FunctionOperation] = [
+    .direct,
+    .spec,
+    .stream,
+  ]
+
+}
+
 /// Core value type. `value_type` is a sparse exact-type annotation for this
 /// node, never a copy of the enclosing union. Most values omit it and are
 /// decoded from the declared contextual type plus payload shape. Hosts set it
@@ -159,6 +199,25 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
     set {value = .tyDefValue(newValue)}
   }
 
+  /// Rust-backed values cross as portable data, never as capability handles.
+  /// These message shapes are shared with the outbound side so host-created
+  /// and engine-created values have one canonical representation.
+  var mediaValue: BamlBridge_Cffi_V1_BamlValueMedia {
+    get {
+      if case .mediaValue(let v)? = value {return v}
+      return BamlBridge_Cffi_V1_BamlValueMedia()
+    }
+    set {value = .mediaValue(newValue)}
+  }
+
+  var promptAstValue: BamlBridge_Cffi_V1_BamlValuePromptAst {
+    get {
+      if case .promptAstValue(let v)? = value {return v}
+      return BamlBridge_Cffi_V1_BamlValuePromptAst()
+    }
+    set {value = .promptAstValue(newValue)}
+  }
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   nonisolated enum OneOf_Value: Equatable, Sendable {
@@ -181,6 +240,11 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
     /// must retain runtime-created class/enum schemas; tag 13 remains for
     /// rollout compatibility with structural/static type senders.
     case tyDefValue(BamlBridge_Cffi_V1_BamlTyDef)
+    /// Rust-backed values cross as portable data, never as capability handles.
+    /// These message shapes are shared with the outbound side so host-created
+    /// and engine-created values have one canonical representation.
+    case mediaValue(BamlBridge_Cffi_V1_BamlValueMedia)
+    case promptAstValue(BamlBridge_Cffi_V1_BamlValuePromptAst)
 
   }
 
@@ -379,6 +443,8 @@ nonisolated struct BamlBridge_Cffi_V1_CallFunctionArgs: Sendable {
     set {callTarget = .functionHandle(newValue)}
   }
 
+  var operation: BamlBridge_Cffi_V1_FunctionOperation = .direct
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   nonisolated enum OneOf_CallTarget: Equatable, Sendable {
@@ -422,9 +488,13 @@ nonisolated struct BamlBridge_Cffi_V1_CallAck: Sendable {
 
 fileprivate nonisolated let _protobuf_package = "baml_bridge.cffi.v1"
 
+nonisolated extension BamlBridge_Cffi_V1_FunctionOperation: SwiftProtobuf._ProtoNameProviding {
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0FUNCTION_OPERATION_DIRECT\0\u{1}FUNCTION_OPERATION_SPEC\0\u{1}FUNCTION_OPERATION_STREAM\0")
+}
+
 nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".InboundValue"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}value_type\0\u{3}string_value\0\u{3}int_value\0\u{3}float_value\0\u{3}bool_value\0\u{3}list_value\0\u{3}map_value\0\u{3}class_value\0\u{3}enum_value\0\u{1}handle\0\u{3}uint8array_value\0\u{3}bigint_value\0\u{3}ty_value\0\u{3}ty_def_value\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}value_type\0\u{3}string_value\0\u{3}int_value\0\u{3}float_value\0\u{3}bool_value\0\u{3}list_value\0\u{3}map_value\0\u{3}class_value\0\u{3}enum_value\0\u{1}handle\0\u{3}uint8array_value\0\u{3}bigint_value\0\u{3}ty_value\0\u{3}ty_def_value\0\u{3}media_value\0\u{3}prompt_ast_value\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -572,6 +642,32 @@ nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, Sw
           self.value = .tyDefValue(v)
         }
       }()
+      case 15: try {
+        var v: BamlBridge_Cffi_V1_BamlValueMedia?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .mediaValue(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .mediaValue(v)
+        }
+      }()
+      case 16: try {
+        var v: BamlBridge_Cffi_V1_BamlValuePromptAst?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .promptAstValue(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .promptAstValue(v)
+        }
+      }()
       default: break
       }
     }
@@ -637,6 +733,14 @@ nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, Sw
     case .tyDefValue?: try {
       guard case .tyDefValue(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
+    }()
+    case .mediaValue?: try {
+      guard case .mediaValue(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
+    }()
+    case .promptAstValue?: try {
+      guard case .promptAstValue(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 16)
     }()
     case nil: break
     }
@@ -913,7 +1017,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, Swift
 
 nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".CallFunctionArgs"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kwargs\0\u{3}call_id\0\u{3}type_args\0\u{3}function_name\0\u{3}function_handle\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kwargs\0\u{3}call_id\0\u{3}type_args\0\u{3}function_name\0\u{3}function_handle\0\u{1}operation\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -940,6 +1044,7 @@ nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message
           self.callTarget = .functionHandle(v)
         }
       }()
+      case 6: try { try decoder.decodeSingularEnumField(value: &self.operation) }()
       default: break
       }
     }
@@ -970,6 +1075,9 @@ nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message
     }()
     case nil: break
     }
+    if self.operation != .direct {
+      try visitor.visitSingularEnumField(value: self.operation, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -978,6 +1086,7 @@ nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message
     if lhs.callID != rhs.callID {return false}
     if lhs.typeArgs != rhs.typeArgs {return false}
     if lhs.callTarget != rhs.callTarget {return false}
+    if lhs.operation != rhs.operation {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

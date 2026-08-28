@@ -244,6 +244,26 @@ internal static class BamlGeneratedTypeMetadata
     }
 }
 
+internal sealed class BamlGeneratedFunctionSpecCodec<TFinal>(
+    BamlGeneratedType<TFinal> finalType,
+    byte[] metadata)
+    : IBamlGeneratedCodec<global::Baml.BamlFunctionSpec<TFinal>>
+{
+    public BamlGeneratedValue Encode(
+        BamlGeneratedCodecContext context,
+        global::Baml.BamlFunctionSpec<TFinal> value) =>
+        context.FunctionSpec(value, "ai.FunctionSpec", metadata);
+
+    public global::Baml.BamlFunctionSpec<TFinal> Decode(
+        BamlGeneratedCodecContext context,
+        BamlGeneratedValue value) =>
+        context.ReadFunctionSpec(
+            value,
+            "ai.FunctionSpec",
+            metadata,
+            finalType);
+}
+
 internal sealed class BamlGeneratedNullableValueCodec<T>(BamlGeneratedType<T> inner)
     : IBamlGeneratedCodec<T?>
     where T : struct
