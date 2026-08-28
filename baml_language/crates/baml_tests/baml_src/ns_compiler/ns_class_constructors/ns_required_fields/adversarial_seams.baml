@@ -2,29 +2,39 @@
 // recursive-type, spread, and downstream-operation boundaries. The goal is
 // to distinguish one missing constructor check from unrelated type features.
 
-test "mounted class constructor accepts omitted required field" {
+test "mounted class constructor rejects omitted required field" {
+    assert.is_true(
+        MountedConstructorCaseFailsWith(
+            `class Job { id: int, label: string }`,
+            `function run() -> string { baml.json.to_string(dep.Job { id: 1 }) }`,
+            ["class `dep.Job` is missing required field", "`label`"],
+        ),
+    )
+}
+
+test "mounted generic constructor rejects omitted required field" {
+    assert.is_true(
+        MountedConstructorCaseFailsWith(
+            `class Box<T> { value: T, label: string }`,
+            `function run() -> string { baml.json.to_string(dep.Box<int> { label: "x" }) }`,
+            ["class `dep.Box` is missing required field", "`value`"],
+        ),
+    )
+}
+
+test "mounted nullable field remains omittable" {
     assert.equal(
         RunMountedConstructor(
-            `class Job { id: int, label: string }`,
+            `class Job { id: int, label: string? }`,
             `function run() -> string { baml.json.to_string(dep.Job { id: 1 }) }`,
         ),
         "{\"id\":1,\"label\":null}",
     )
 }
 
-test "mounted generic constructor accepts omitted required field" {
-    assert.equal(
-        RunMountedConstructor(
-            `class Box<T> { value: T, label: string }`,
-            `function run() -> string { baml.json.to_string(dep.Box<int> { label: "x" }) }`,
-        ),
-        "{\"value\":null,\"label\":\"x\"}",
-    )
-}
-
-test "implemented interface does not make class fields complete" {
-    assert.equal(
-        RunCompiledConstructor(
+test "implemented interface does not satisfy omitted class fields" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 interface Labelled { label: string }
                 class Item {
@@ -34,14 +44,14 @@ test "implemented interface does not make class fields complete" {
                 }
                 function run() -> string { baml.json.to_string(Item { label: "present" }) }
             `,
+            ["class `Item` is missing required field", "`count`"],
         ),
-        "{\"label\":\"present\",\"count\":null}",
     )
 }
 
-test "bounded generic field can still be omitted" {
-    assert.equal(
-        RunCompiledConstructor(
+test "bounded generic field remains required" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 interface Named { name: string }
                 class Person {
@@ -51,20 +61,20 @@ test "bounded generic field can still be omitted" {
                 class Box<T extends Named> { value: T }
                 function run() -> string { baml.json.to_string(Box<Person> {}) }
             `,
+            ["class `Box` is missing required field", "`value`"],
         ),
-        "{\"value\":null}",
     )
 }
 
-test "phantom generic does not change missing concrete field" {
-    assert.equal(
-        RunCompiledConstructor(
+test "phantom generic does not make concrete field optional" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Phantom<T> { id: int }
                 function run() -> string { baml.json.to_string(Phantom<string> {}) }
             `,
+            ["class `Phantom` is missing required field", "`id`"],
         ),
-        "{\"id\":null}",
     )
 }
 
@@ -80,45 +90,57 @@ test "optional substituted generic omission is a valid control" {
     )
 }
 
-test "non nullable generic union omission becomes null" {
+test "unknown field remains omittable because it admits null" {
     assert.equal(
         RunCompiledConstructor(
+            `
+                class Holder { value: unknown }
+                function run() -> string { baml.json.to_string(Holder {}) }
+            `,
+        ),
+        "{\"value\":null}",
+    )
+}
+
+test "non nullable generic union remains required" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Box<T> { value: T | string }
                 function run() -> string { baml.json.to_string(Box<int> {}) }
             `,
+            ["class `Box` is missing required field", "`value`"],
         ),
-        "{\"value\":null}",
     )
 }
 
-test "recursive required fields can both be omitted" {
-    assert.equal(
-        RunCompiledConstructor(
+test "recursive required fields are rejected" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Node { value: int, next: Node }
                 function run() -> string { baml.json.to_string(Node {}) }
             `,
+            ["class `Node` is missing required fields", "`value`", "`next`"],
         ),
-        "{\"value\":null,\"next\":null}",
     )
 }
 
-test "never field omission manufactures an impossible object" {
-    assert.equal(
-        RunCompiledConstructor(
+test "never field omission is rejected" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Impossible { value: never }
                 function run() -> string { baml.json.to_string(Impossible {}) }
             `,
+            ["class `Impossible` is missing required field", "`value`"],
         ),
-        "{\"value\":null}",
     )
 }
 
-test "shorthand field does not affect omitted sibling" {
-    assert.equal(
-        RunCompiledConstructor(
+test "shorthand field does not hide omitted sibling" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Job { id: int, label: string }
                 function run() -> string {
@@ -126,28 +148,28 @@ test "shorthand field does not affect omitted sibling" {
                     baml.json.to_string(Job { id })
                 }
             `,
+            ["class `Job` is missing required field", "`label`"],
         ),
-        "{\"id\":7,\"label\":null}",
     )
 }
 
-test "missing values compare equal as null at runtime" {
-    assert.equal(
-        RunCompiledConstructor(
+test "missing values are rejected before equality" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Job { id: int }
                 function run() -> string {
                     if (Job {}.id == Job {}.id) { "equal" } else { "different" }
                 }
             `,
+            ["class `Job` is missing required field", "`id`"],
         ),
-        "equal",
     )
 }
 
-test "runtime null can be observed through is pattern" {
-    assert.equal(
-        RunCompiledConstructor(
+test "missing value is rejected before null pattern" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Job { label: string }
                 function run() -> string {
@@ -155,14 +177,14 @@ test "runtime null can be observed through is pattern" {
                     if (job.label is null) { "null" } else { "string" }
                 }
             `,
+            ["class `Job` is missing required field", "`label`"],
         ),
-        "null",
     )
 }
 
-test "method using missing field still compiles" {
+test "missing field is rejected before method use" {
     assert.is_true(
-        ConstructorCaseCompiles(
+        ConstructorCaseFailsWith(
             `
                 class Job {
                     label: string
@@ -170,6 +192,7 @@ test "method using missing field still compiles" {
                 }
                 function run() -> string { Job {}.display() }
             `,
+            ["class `Job` is missing required field", "`label`"],
         ),
     )
 }

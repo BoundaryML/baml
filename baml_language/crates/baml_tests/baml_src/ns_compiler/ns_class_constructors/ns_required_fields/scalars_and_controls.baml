@@ -1,26 +1,26 @@
 // Scalar fields and compile-time controls.
 
-test "missing scalar fields currently compile to null" {
-    assert.equal(
-        RunCompiledConstructor(
+test "missing scalar fields are rejected together" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Job { id: int, label: string, attempts: int }
                 function run() -> string { baml.json.to_string(Job { id: 1 }) }
             `,
+            ["class `Job` is missing required fields", "`label`", "`attempts`"],
         ),
-        "{\"id\":1,\"label\":null,\"attempts\":null}",
     )
 }
 
-test "empty non generic literal currently compiles to all null" {
-    assert.equal(
-        RunCompiledConstructor(
+test "empty non generic literal reports every required field" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Job { id: int, label: string, attempts: int }
                 function run() -> string { baml.json.to_string(Job {}) }
             `,
+            ["class `Job` is missing required fields", "`id`", "`label`", "`attempts`"],
         ),
-        "{\"id\":null,\"label\":null,\"attempts\":null}",
     )
 }
 
@@ -69,22 +69,22 @@ test "nullable omissions are the valid control" {
     )
 }
 
-test "non nullable union literal and enum fields also become null" {
-    assert.equal(
-        RunCompiledConstructor(
+test "non nullable union literal and enum fields are required" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 enum State { Ready }
                 class Shape { token: "fixed", value: string | int, state: State }
                 function run() -> string { baml.json.to_string(Shape {}) }
             `,
+            ["class `Shape` is missing required fields", "`token`", "`value`", "`state`"],
         ),
-        "{\"token\":null,\"value\":null,\"state\":null}",
     )
 }
 
-test "missing bool takes the true branch" {
-    assert.equal(
-        RunCompiledConstructor(
+test "missing bool is rejected before control flow" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Flag { enabled: bool }
                 function run() -> string {
@@ -92,14 +92,14 @@ test "missing bool takes the true branch" {
                     if (flag.enabled) { "true" } else { "false" }
                 }
             `,
+            ["class `Flag` is missing required field", "`enabled`"],
         ),
-        "true",
     )
 }
 
-test "statically typed arithmetic on a missing int compiles" {
+test "missing int is rejected before arithmetic" {
     assert.is_true(
-        ConstructorCaseCompiles(
+        ConstructorCaseFailsWith(
             `
                 class Job { id: int, attempts: int }
                 function use_attempts() -> int {
@@ -107,6 +107,7 @@ test "statically typed arithmetic on a missing int compiles" {
                     job.attempts + 1
                 }
             `,
+            ["class `Job` is missing required field", "`attempts`"],
         ),
     )
 }

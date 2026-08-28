@@ -167,6 +167,13 @@ pub enum TirTypeError {
         field_name: Name,
         suggestions: Vec<Name>,
     },
+    /// A class constructor omitted fields whose resolved types do not admit
+    /// `null`. Fields whose types include `null` may be omitted because the
+    /// object representation initializes absent slots to `null`.
+    MissingRequiredClassFields {
+        class_name: QualifiedTypeName,
+        field_names: Vec<Name>,
+    },
     /// Sealed reflection-kind values are VM views and cannot be constructed
     /// with an object literal.
     CannotConstructReflectionKind {
@@ -1118,6 +1125,26 @@ impl fmt::Display for TirTypeError {
                         class_name.render_user_facing()
                     )
                 }
+            }
+            TirTypeError::MissingRequiredClassFields {
+                class_name,
+                field_names,
+            } => {
+                let fields = field_names
+                    .iter()
+                    .map(|field| format!("`{field}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(
+                    f,
+                    "class `{}` is missing required {}: {fields}",
+                    class_name.render_user_facing(),
+                    if field_names.len() == 1 {
+                        "field"
+                    } else {
+                        "fields"
+                    }
+                )
             }
             TirTypeError::InvalidMapKeyType { key } => {
                 write!(

@@ -1,52 +1,52 @@
 // Generic constructors: explicit arguments, inferred arguments, multiple
 // parameters, nesting, and nullable controls.
 
-test "explicit concrete generic field becomes null" {
-    assert.equal(
-        RunCompiledConstructor(
+test "explicit concrete generic fields are required" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Box<T> { value: T, label: string }
                 function run() -> string { baml.json.to_string(Box<string> {}) }
             `,
+            ["class `Box` is missing required fields", "`value`", "`label`"],
         ),
-        "{\"value\":null,\"label\":null}",
     )
 }
 
-test "inferred generic sibling field becomes null" {
-    assert.equal(
-        RunCompiledConstructor(
+test "inferred generic sibling field is required" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Pair<T> { left: T, right: T }
                 function run() -> string { baml.json.to_string(Pair { left: "left" }) }
             `,
+            ["class `Pair` is missing required field", "`right`"],
         ),
-        "{\"left\":\"left\",\"right\":null}",
     )
 }
 
-test "second concrete type parameter becomes null" {
-    assert.equal(
-        RunCompiledConstructor(
+test "second concrete type parameter is required" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Two<A, B> { first: A, second: B }
                 function run() -> string { baml.json.to_string(Two<string, int> { first: "first" }) }
             `,
+            ["class `Two` is missing required field", "`second`"],
         ),
-        "{\"first\":\"first\",\"second\":null}",
     )
 }
 
-test "nested generic field becomes null" {
-    assert.equal(
-        RunCompiledConstructor(
+test "nested generic field is required" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Box<T> { value: T }
                 class Envelope<T> { id: int, payload: T }
                 function run() -> string { baml.json.to_string(Envelope<Box<int>> { id: 1 }) }
             `,
+            ["class `Envelope` is missing required field", "`payload`"],
         ),
-        "{\"id\":1,\"payload\":null}",
     )
 }
 
@@ -84,13 +84,14 @@ test "explicit null for concrete generic field is rejected" {
     )
 }
 
-test "omission inside generic function currently compiles" {
+test "omission inside generic function is rejected for all instantiations" {
     assert.is_true(
-        ConstructorCaseCompiles(
+        ConstructorCaseFailsWith(
             `
                 class Box<T> { value: T }
                 function make<T>() -> Box<T> { Box<T> {} }
             `,
+            ["class `Box` is missing required field", "`value`"],
         ),
     )
 }

@@ -15,9 +15,9 @@ test "complete spread initializes every field" {
     )
 }
 
-test "spread propagates null from an already partial instance" {
-    assert.equal(
-        RunCompiledConstructor(
+test "spread cannot rescue an invalid partial source" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Job { id: int, label: string, attempts: int }
                 function run() -> string {
@@ -25,8 +25,8 @@ test "spread propagates null from an already partial instance" {
                     baml.json.to_string(Job { ...partial, label: "filled" })
                 }
             `,
+            ["class `Job` is missing required fields", "`label`", "`attempts`"],
         ),
-        "{\"id\":1,\"label\":\"filled\",\"attempts\":null}",
     )
 }
 
@@ -45,26 +45,26 @@ test "later spread overwrites explicit fields" {
     )
 }
 
-test "omitted middle field keeps declaration order and null slot" {
-    assert.equal(
-        RunCompiledConstructor(
+test "omitted middle field is rejected independent of written order" {
+    assert.is_true(
+        ConstructorCaseFailsWith(
             `
                 class Row { first: string, middle: int, last: bool }
                 function run() -> string { baml.json.to_string(Row { last: false, first: "a" }) }
             `,
+            ["class `Row` is missing required field", "`middle`"],
         ),
-        "{\"first\":\"a\",\"middle\":null,\"last\":false}",
     )
 }
 
-test "cross file constructor has the same missing field behavior" {
-    assert.equal(
-        RunCompiledConstructorFiles(
+test "cross file constructor enforces required fields" {
+    assert.is_true(
+        ConstructorFilesFailWith(
             {
                 "types.baml": `class Job { id: int, label: string, attempts: int }`,
                 "main.baml": `function run() -> string { baml.json.to_string(Job { id: 1 }) }`,
             },
+            ["class `Job` is missing required fields", "`label`", "`attempts`"],
         ),
-        "{\"id\":1,\"label\":null,\"attempts\":null}",
     )
 }
