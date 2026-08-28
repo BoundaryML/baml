@@ -1,0 +1,38 @@
+app = 'boundary-product-metrics'
+primary_region = 'iad'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [[http_service.checks]]
+    grace_period = '10s'
+    interval = '30s'
+    method = 'GET'
+    path = '/healthz'
+    timeout = '5s'
+
+[env]
+  DAILY_EXTERNAL_DATA_SYNC_CRON = '0 5 * * *'
+  DAILY_SNAPSHOT_CRON = '0 6 * * *'
+  DISCORD_GUILD_NAME = 'Baml (by Boundary)'
+  DISCORD_INVITE_CODE = 'yzaTpQ3tdT'
+  GITHUB_ISSUES_OWNER = 'BoundaryML'
+  GITHUB_ISSUES_REPOSITORY = 'baml'
+  LUMA_EVENT_NAME = 'BAML Early Access'
+  SLACK_CHANNEL_ID = 'C07UTQN7N1X'
+  WEEKLY_POST_CRON = '0 9 * * 1'
+  WEEKLY_POST_TIMEZONE = 'America/Los_Angeles'
+  ZOOM_SHEEP_COUNCIL_MEETING_ID = '89180085282'
+
+[[vm]]
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
