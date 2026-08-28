@@ -9,7 +9,7 @@ use bex_vm_types::Object;
 use sys_native::SysOpsExt;
 
 const BASIC_SESSION: &str = r####"
-function main() -> int throws unknown {
+function main() -> int {
   let s = reflect.Session.new()
   s.eval(`let x = 10`)
   s.eval<int>(`x + 1`)
@@ -45,7 +45,7 @@ function fail_cell() -> null throws AppError {
   throw AppError { code: "E42" }
 }
 
-function main() -> null throws unknown {
+function main() -> null {
   let session = reflect.Session.new(packages = { "app": reflect.Package.current() })
   session.eval<null>(`app.fail_cell()`)
 }
@@ -84,7 +84,7 @@ function main() -> null throws unknown {
 async fn session_evaluation_error_preserves_string_cause_for_host() {
     let output = baml_test!(
         r####"
-function main() -> unknown throws unknown {
+function main() -> unknown {
   let session = reflect.Session.new()
   session.eval<unknown>(`throw "cell failed"`)
 }
@@ -112,7 +112,7 @@ function main() -> unknown throws unknown {
 async fn session_compile_artifact_is_consumed_once() {
     let output = baml_test!(
         r####"
-function main() -> bool throws unknown {
+function main() -> bool {
   let session = reflect.Session.new()
   let artifact = session._compile<int>(`1`)
   let first = session._finish<int>(artifact)
@@ -131,7 +131,7 @@ function main() -> bool throws unknown {
 async fn session_finish_refuses_package_compile_artifact() {
     let output = baml_test!(
         r####"
-function main() -> bool throws unknown {
+function main() -> bool {
   let session = reflect.Session.new()
   let artifact = reflect.Package._compile(
     { "main.baml": "function ready() -> bool { true }" },
@@ -152,7 +152,7 @@ function main() -> bool throws unknown {
 async fn session_synthetic_step_names_do_not_collide_with_user_bindings() {
     let output = baml_test!(
         r####"
-function main() -> int throws unknown {
+function main() -> int {
   let session = reflect.Session.new()
   session.eval(`let result = 5`)
   session.eval(`let stmt_1 = 7
@@ -165,7 +165,7 @@ log.info("keep the second generated step")`)
 }
 
 const S11_LIVENESS_PROBE: &str = r#####"
-function escape_one_session_value() -> reflect.Type throws unknown {
+function escape_one_session_value() -> reflect.Type {
   let dependency = reflect.Package.compile({
     "dep.baml": `
       class Mounted {
@@ -187,7 +187,7 @@ function LoadNotes() -> string {
   "raw notes"
 }
 
-function inspect() -> unknown throws unknown {
+function inspect() -> unknown {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
   s.eval(`class Draft { title string, body string }`)
   s.eval(`let draft = Draft { title: "title", body: app.LoadNotes() }`)
@@ -228,17 +228,17 @@ function Validate(n: int) -> int throws ValidationError {
   n
 }
 
-function Wait() -> int throws unknown {
+function Wait() -> int {
   baml.sys.sleep(baml.time.Duration.from_milliseconds(150))
   1
 }
 
-function LongWait() -> int throws unknown {
+function LongWait() -> int {
   baml.sys.sleep(baml.time.Duration.from_milliseconds(5000))
   1
 }
 
-function scenario_7() -> bool throws unknown {
+function scenario_7() -> bool {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
 
   // Submission 1: declarations hoist and execute nothing.
@@ -313,7 +313,7 @@ function scenario_7() -> bool throws unknown {
     continued == 11
 }
 
-function diagnostic_submission_name() -> string throws unknown {
+function diagnostic_submission_name() -> string {
   let s = reflect.Session.new()
   let _ = s.eval(`let bad: MissingType = null`) catch (e) {
     reflect.errors.CompilationError => {
@@ -325,7 +325,7 @@ function diagnostic_submission_name() -> string throws unknown {
   "unexpected success"
 }
 
-function package_current_is_rejected() -> bool throws unknown {
+function package_current_is_rejected() -> bool {
   let s = reflect.Session.new()
   let _ = s.eval(`reflect.Package.current()`) catch (_) {
     reflect.errors.CompilationError => return true,
@@ -334,7 +334,7 @@ function package_current_is_rejected() -> bool throws unknown {
   false
 }
 
-function runtime_and_failed_contracts() -> bool throws unknown {
+function runtime_and_failed_contracts() -> bool {
   let s = reflect.Session.new()
   let string_t = reflect.Type.of<string>()
   let value = s.eval<unreflect(string_t)>(`"ok"`)
@@ -352,7 +352,7 @@ function runtime_and_failed_contracts() -> bool throws unknown {
   reflect.Type.of_value(value) == string_t && rejected && missing
 }
 
-function concurrent_eval_is_busy() -> bool throws unknown {
+function concurrent_eval_is_busy() -> bool {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
   let pending = spawn { s.eval<int>(`app.Wait()`) }
   baml.sys.sleep(baml.time.Duration.from_milliseconds(20))
@@ -364,7 +364,7 @@ function concurrent_eval_is_busy() -> bool throws unknown {
   busy && waited == 1 && s.eval<int>(`2`) == 2
 }
 
-function cancelled_eval_releases_lease_and_preserves_prefix() -> bool throws unknown {
+function cancelled_eval_releases_lease_and_preserves_prefix() -> bool {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
   s.eval(`let baseline = 40`)
   let pending = spawn {
@@ -380,7 +380,7 @@ function cancelled_eval_releases_lease_and_preserves_prefix() -> bool throws unk
   cancelled && s.eval<int>(`baseline + 2`) == 42
 }
 
-function declaration_redefinition_keeps_earlier_resolution() -> bool throws unknown {
+function declaration_redefinition_keeps_earlier_resolution() -> bool {
   let s = reflect.Session.new()
   s.eval(`function Current() -> int { 1 }`)
   s.eval(`let old = () -> { Current() }`)
@@ -388,7 +388,7 @@ function declaration_redefinition_keeps_earlier_resolution() -> bool throws unkn
   s.eval<int>(`old()`) == 1 && s.eval<int>(`Current()`) == 2
 }
 
-function client_declaration_is_lazy() -> bool throws unknown {
+function client_declaration_is_lazy() -> bool {
   let s = reflect.Session.new()
   s.eval(`
     client NeverContacted = openai.ResponsesClient.new(
@@ -400,7 +400,7 @@ function client_declaration_is_lazy() -> bool throws unknown {
   s.eval<int>(`1`) == 1
 }
 
-function runtime_type_binding_persists() -> bool throws unknown {
+function runtime_type_binding_persists() -> bool {
   let s = reflect.Session.new()
   let first = s.eval<bool>(`
     type T = unreflect(reflect.Type.of<string>());
@@ -412,7 +412,7 @@ function runtime_type_binding_persists() -> bool throws unknown {
   first && later && rebound
 }
 
-function session_declarations_are_generative() -> bool throws unknown {
+function session_declarations_are_generative() -> bool {
   let left = reflect.Session.new()
   let right = reflect.Session.new()
   left.eval(`class SameName { value string }`)
@@ -422,7 +422,7 @@ function session_declarations_are_generative() -> bool throws unknown {
   left_type != right_type
 }
 
-function host_dispatch_recovers_session_class_provenance() -> bool throws unknown {
+function host_dispatch_recovers_session_class_provenance() -> bool {
   let s = reflect.Session.new()
   s.eval(`
     class SessionValue {
@@ -438,7 +438,7 @@ function host_dispatch_recovers_session_class_provenance() -> bool throws unknow
   host_dispatch_session_value(value) == "from session"
 }
 
-function perf_500() -> string throws unknown {
+function perf_500() -> string {
   let s = reflect.Session.new()
   let i = 0
   let tenth = 1n
@@ -494,7 +494,7 @@ function GetEnvelope() -> Envelope {
   Envelope { ticket: GetTicket() }
 }
 
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
   let inline = s.eval(`app.GetTicket().subject`)
   s.eval(`let ticket = app.GetTicket()`)
@@ -514,7 +514,7 @@ function main() -> string throws unknown {
 async fn session_compiler_sees_with_types_exports_from_dependencies() {
     let output = baml_test!(
         r####"
-function main() -> bool throws unknown {
+function main() -> bool {
   let mounted = reflect.class.new("MountedTicket", {
     "subject": reflect.Type.of<string>(),
   })
@@ -532,7 +532,7 @@ ticket.subject`) == "visible"
 async fn session_export_alias_preserves_nested_mounted_field_types() {
     let output = baml_test!(
         r####"
-function main() -> string throws unknown {
+function main() -> string {
   let inner = reflect.class.new("MountedInner", {
     "value": reflect.Type.of<string>(),
   })
@@ -639,7 +639,7 @@ async fn host_interface_dispatch_uses_session_class_provenance() {
 async fn mutually_recursive_session_lets_diagnose_without_panicking() {
     let output = baml_test!(
         r##"
-function main() -> bool throws unknown {
+function main() -> bool {
   let s = reflect.Session.new()
   let diagnosed = false
   let _ = s.eval(`
@@ -662,7 +662,7 @@ function main() -> bool throws unknown {
 async fn session_let_named_json_does_not_shadow_json_package_paths() {
     let output = baml_test!(
         r##"
-function main() -> bool throws unknown {
+function main() -> bool {
   let s = reflect.Session.new()
   s.eval(`let json = "local"`)
   let local = s.eval<string>(`json`)
@@ -892,7 +892,7 @@ async fn five_hundred_evals_have_flat_latency_and_bounded_artifacts() {
 /// refuses an `int`-typed one, so this flips from accepted to refused at the
 /// change and cannot pass for an unrelated reason.
 const SESSION_LET_WIDENING: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`let n = 5`)
   let _ = s.eval<5>(`n`) catch (e) {
@@ -914,7 +914,7 @@ function main() -> string throws unknown {
 /// fixed, this test should be re-pointed at a genuinely absent member rather
 /// than deleted.
 const SESSION_LET_WIDENING_MEMBERS: &str = r####"
-function probe(s: reflect.Session, source: string) -> string throws unknown {
+function probe(s: reflect.Session, source: string) -> string {
   let _ = s.eval(source) catch (e) {
     reflect.errors.CompilationError => return e.diagnostics[0].message,
     _ => return "wrong error",
@@ -922,7 +922,7 @@ function probe(s: reflect.Session, source: string) -> string throws unknown {
   "unexpected success"
 }
 
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`let n = 5`)
   s.eval(`let text = "hi"`)
@@ -938,7 +938,7 @@ ${probe(s, `flag.to_string()`)}`
 /// The mirror also holds — a two-arm `true`/`false` match on a `bool` binding
 /// is exhaustive where it used to be a match on the literal `true` alone.
 const SESSION_LET_WIDENING_EXHAUSTIVENESS: &str = r####"
-function probe(s: reflect.Session, source: string) -> string throws unknown {
+function probe(s: reflect.Session, source: string) -> string {
   let _ = s.eval(source) catch (e) {
     reflect.errors.CompilationError => return e.diagnostics[0].message,
     _ => return "wrong error",
@@ -946,7 +946,7 @@ function probe(s: reflect.Session, source: string) -> string throws unknown {
   "accepted"
 }
 
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`let n = 5`)
   s.eval(`let flag = true`)
@@ -959,7 +959,7 @@ ${probe(s, `match (flag) { true => "t", false => "f" }`)}`
 /// committed value is unchanged, rebinding across submissions still works, and
 /// a later submission still reads what the last one wrote.
 const SESSION_LET_REBINDING: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`let n = 5`)
   s.eval(`let text = "hi"`)
@@ -976,7 +976,7 @@ function main() -> string throws unknown {
 /// precise type through `let n: 5 = 5`; a submission is refused before it gets
 /// that far, and that refusal is what this pins.
 const SESSION_LET_ANNOTATION_REJECTED: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   let _ = s.eval(`let n: int = 5`) catch (e) {
     reflect.errors.CompilationError => return e.diagnostics[0].message,
@@ -989,7 +989,7 @@ function main() -> string throws unknown {
 /// Widening removes literal specificity from the BINDING, not from the values
 /// flowing through it: narrowing a widened session binding still works.
 const SESSION_LET_NARROWING: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`let n = 5`)
   s.eval<string>(`if (n is 5) { "narrowed" } else { "wide" }`)
@@ -1006,7 +1006,7 @@ function main() -> string throws unknown {
 /// method, a container method that lowers to a `Call`, the one that lowers to
 /// `Rvalue::Len`, a user class declared in the session, and a reflection handle.
 const SESSION_BINDING_METHOD_CALLS: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`
     class P {
@@ -1031,7 +1031,7 @@ function main() -> string throws unknown {
 /// The same call inside the submission that introduces the binding — the defect
 /// never needed two submissions, so neither does its regression.
 const SESSION_BINDING_METHOD_CALL_SAME_SUBMISSION: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval<string>(`let v = ["a", "b"]
 v.length().to_string()`)
@@ -1041,7 +1041,7 @@ v.length().to_string()`)
 /// The controls that always worked, kept so a future change cannot fix method
 /// dispatch by breaking them: field access on a binding, and indexing one.
 const SESSION_BINDING_FIELD_AND_INDEX: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`class Draft { title string }`)
   s.eval(`let draft = Draft { title: "titled" }`)
@@ -1060,7 +1060,7 @@ client MyClient = openai.ResponsesClient.new(
     base_url = "http://localhost:1234",
 );
 
-function main() -> string throws unknown {
+function main() -> string {
   MyClient.id()
 }
 "####;
@@ -1208,7 +1208,7 @@ fn ordinary_compile_errors(source: &str) -> Vec<String> {
 /// The probe every case below uses: evaluate one submission and hand back its
 /// diagnostic (or `accepted`), so the Rust side can compare.
 const SESSION_ASSIGN_PROBE: &str = r####"
-function probe(s: reflect.Session, source: string) -> string throws unknown {
+function probe(s: reflect.Session, source: string) -> string {
   let _ = s.eval(source) catch (e) {
     reflect.errors.CompilationError => return `${e.diagnostics[0].code}: ${e.diagnostics[0].message}`,
     baml.panics.Panic => return "compiled, panicked at runtime",
@@ -1221,7 +1221,7 @@ function probe(s: reflect.Session, source: string) -> string throws unknown {
 /// The ruling's headline shape: assigning a `string` to an `int` binding is
 /// refused, and the binding still holds what it held.
 const SESSION_ASSIGNMENT_AT_ANOTHER_TYPE: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`let n = 5`)
   let refusal = probe(s, `n = "seven"`)
@@ -1235,7 +1235,7 @@ function main() -> string throws unknown {
 /// that used to reach the VM with a `string` in an `int` binding still sees
 /// the `int`.
 const SESSION_ASSIGNMENT_CRASH_SHAPE: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`let n = 5`)
   let refusal = probe(s, `n = "seven"`)
@@ -1247,7 +1247,7 @@ function main() -> string throws unknown {
 /// Re-declaring is not assigning: `let` at a new type is a new binding, as it
 /// is in ordinary code, and the methods that follow dispatch on the new type.
 const SESSION_LET_SHADOWS_AT_A_NEW_TYPE: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`let n = 5`)
   s.eval(`let n = "seven"`)
@@ -1259,7 +1259,7 @@ function main() -> string throws unknown {
 /// road: legal on the `int` it was declared with, refused once the name has
 /// been re-declared as a `string`.
 const SESSION_COMPOUND_ASSIGNMENT: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`let n = 5`)
   s.eval(`n += 1`)
@@ -1274,7 +1274,7 @@ function main() -> string throws unknown {
 /// — the refusal must be about the binding's type, never about the shape the
 /// rewrite happens to generate.
 const SESSION_COMPOUND_WITH_A_WIDER_OPERAND: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`let n = 5`)
   let accepted = probe(s, `n += 1.5`)
@@ -1291,7 +1291,7 @@ function main() -> string throws unknown {
 /// wrong answer. The submission below is the collision: `let target_1` is
 /// statement 0 and the assignment that reads it is statement 1.
 const SESSION_ASSIGNMENT_NAME_COLLISION: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`let n = 5`)
   s.eval(`let target_1 = 99
@@ -1304,7 +1304,7 @@ n = target_1`)
 /// Values whose spelling could have been broken by wrapping: a map literal, a
 /// template literal, a value that reads the binding it writes.
 const SESSION_ASSIGNMENT_VALUE_SHAPES: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`let m = { "k": 1 }`)
   s.eval(`let text = "hi"`)
@@ -1317,7 +1317,7 @@ function main() -> string throws unknown {
 /// Assignment at the binding's own type is untouched, including the compound
 /// form and a value that reads the binding it writes.
 const SESSION_ASSIGNMENT_AT_THE_SAME_TYPE: &str = r####"
-function main() -> string throws unknown {
+function main() -> string {
   let s = reflect.Session.new()
   s.eval(`let n = 5`)
   s.eval(`let text = "hi"`)
@@ -1337,7 +1337,7 @@ async fn session_assignment_at_another_type_fails_like_ordinary_code() {
     let output = baml_test!(&program);
     let ordinary = ordinary_compile_error(
         r#"
-function main() -> int throws unknown {
+function main() -> int {
     let n = 5
     n = "seven"
     n
@@ -1356,7 +1356,7 @@ async fn the_session_assignment_crash_shape_dies_at_compile_time() {
     let output = baml_test!(&program);
     let ordinary = ordinary_compile_error(
         r#"
-function main() -> int throws unknown {
+function main() -> int {
     let n = 5
     n = "seven"
     n
@@ -1382,7 +1382,7 @@ async fn session_compound_assignments_check_like_ordinary_code() {
     let output = baml_test!(&program);
     let ordinary = ordinary_compile_error(
         r#"
-function main() -> string throws unknown {
+function main() -> string {
     let n = "seven"
     n += 1
     n
@@ -1408,7 +1408,7 @@ function main() -> string throws unknown {
 #[tokio::test]
 async fn a_session_assignment_is_no_stricter_than_ordinary_code() {
     let ordinary = r#"
-function main() -> string throws unknown {
+function main() -> string {
     let n = 5
     n += 1.5
     `${n}`

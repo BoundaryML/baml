@@ -13,7 +13,7 @@ interface Named {
   name Self.Value
 }
 
-function main() -> bool throws unknown {
+function main() -> bool {
   let witness = reflect.interface.implementation<Named<Value = string>>()
     .field("name", class_field = "display_name")
   let original = reflect.class.new("Person", {
@@ -48,7 +48,7 @@ function as_named(value: Person) -> Named<Value = string> {
 async fn same_named_runtime_declarations_are_rejected() {
     let output = baml_test!(
         r###"
-function main() -> bool throws unknown {
+function main() -> bool {
   let first = reflect.class.new("Choice", { "left": reflect.Type.of<string>() })
   let second = reflect.class.new("Choice", { "right": reflect.Type.of<int>() })
   let combined = reflect.union.new([first.as_type(), second.as_type()])
@@ -67,7 +67,7 @@ function main() -> bool throws unknown {
 async fn minted_and_compiled_same_named_declarations_are_rejected() {
     let output = baml_test!(
         r###"
-function main() -> bool throws unknown {
+function main() -> bool {
   let package = reflect.Package.compile({
     "original.baml": "class Choice { compiled string }",
   })
@@ -89,7 +89,7 @@ function main() -> bool throws unknown {
 async fn equivalent_same_named_runtime_declarations_fold_and_round_trip() {
     let output = baml_test!(
         r###"
-function main() -> bool throws unknown {
+function main() -> bool {
   let first = reflect.class.new("Choice", { "value": reflect.Type.of<string>() })
   let second = reflect.class.new("Choice", { "value": reflect.Type.of<string>() })
   let combined = reflect.union.new([first.as_type(), second.as_type()])
@@ -113,7 +113,7 @@ class StaticChild {
   value string
 }
 
-function main() -> bool throws unknown {
+function main() -> bool {
   let holder = reflect.class.new("RuntimeHolder", {
     "child": reflect.Type.of<StaticChild>(),
   })
