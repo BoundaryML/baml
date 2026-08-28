@@ -28,6 +28,21 @@ const primaryPanelTitles = [
   'CLI resurrected users (7d period)',
 ];
 
+const websitePanelTitles = [
+  'Website key page views — weekly',
+  'Website top pages — weekly',
+  'Website traffic sources — weekly',
+];
+
+const nativePanelTitles = [
+  'Total Discord users',
+  'Distinct GitHub issue authors',
+  'Sheep Council',
+  'Early Access Program',
+];
+
+const dashboardSettleTimeMs = 20_000;
+
 export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -44,13 +59,23 @@ export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
         `Dashboard returned HTTP ${dashboardResponse?.status() ?? 'unknown'}`,
       );
     }
-    const nativeChart = indexPage.locator('#weekly-metrics-chart');
+    const nativeChart = indexPage.locator('#weekly-metrics-charts');
     const hasNativeChart = (await nativeChart.count()) > 0;
     if (hasNativeChart) {
-      await nativeChart.locator('.plot-container').waitFor({
+      await nativeChart.locator('.plot-container').first().waitFor({
         state: 'visible',
-        timeout: 30_000,
+        timeout: 60_000,
       });
+      await indexPage.waitForFunction(
+        (titles) => {
+          const chartText =
+            document.querySelector('#weekly-metrics-charts')?.textContent ?? '';
+          return titles.every((title) => chartText.includes(title));
+        },
+        nativePanelTitles,
+        { timeout: 60_000 },
+      );
+      await indexPage.waitForTimeout(dashboardSettleTimeMs);
     }
     const layout = await indexPage.locator('iframe').evaluateAll((elements) =>
       elements.map((element) => {
@@ -119,26 +144,24 @@ export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
               `Embedded dashboard returned HTTP ${response?.status() ?? 'unknown'}`,
             );
           }
-          if (index === 0) {
-            await reportPage.waitForFunction(
-              (titles) => {
-                const bodyText = document.body.innerText;
-                return titles.every((title) => bodyText.includes(title));
-              },
-              primaryPanelTitles,
-              { timeout: 60_000 },
-            );
-          } else {
-            await reportPage
-              .getByText('Made with PostHog', { exact: false })
-              .waitFor({ state: 'visible', timeout: 60_000 });
-          }
-          await reportPage.waitForTimeout(1_000);
+          const expectedTitles =
+            index === 0 ? primaryPanelTitles : websitePanelTitles;
+          await reportPage.waitForFunction(
+            (titles) => {
+              const bodyText = document.body.innerText;
+              return titles.every((title) => bodyText.includes(title));
+            },
+            expectedTitles,
+            { timeout: 60_000 },
+          );
+          await reportPage.waitForTimeout(dashboardSettleTimeMs);
           const screenshot = Buffer.from(
             await reportPage.screenshot({ type: 'png' }),
           );
-          if (index === 0 && (await sharp(screenshot).stats()).entropy < 1) {
-            throw new Error('Primary dashboard screenshot was visually empty');
+          if ((await sharp(screenshot).stats()).entropy < 1) {
+            throw new Error(
+              `PostHog dashboard ${index + 1} screenshot was visually empty`,
+            );
           }
           return { input: screenshot, left: frame.left, top: frame.top };
         } catch (error) {
