@@ -2,82 +2,37 @@
 // type kinds all share the same rule, so this suite tests semantic boundaries
 // instead of enumerating every downstream manifestation of an invalid value.
 
-class RejectedConstructorCase {
-    name: string,
-    source: string,
-    diagnostic: root.compiler.ExactDiagnostic,
-}
-
-testset "required omissions" {
-    let cases: RejectedConstructorCase[] = [
-        RejectedConstructorCase {
-            name: "aggregates fields in declaration order",
-            source: `
+test "aggregates omitted fields in declaration order" {
+    root.compiler.AssertRejected(
+        {
+            "case.baml": `
                 class Job { id: int, label: string, attempts: int }
                 function run() -> Job { Job { id: 1 } }
             `,
-            diagnostic: root.compiler.ExactDiagnostic {
-                code: "E0001",
-                message: "class `Job` is missing required fields: `label`, `attempts`",
-            },
         },
-        RejectedConstructorCase {
-            name: "unknown requires an explicit value",
-            source: `
-                class Holder { value: unknown }
-                function run() -> Holder { Holder {} }
-            `,
-            diagnostic: root.compiler.ExactDiagnostic {
-                code: "E0001",
-                message: "class `Holder` is missing required field: `value`",
-            },
-        },
-        RejectedConstructorCase {
-            name: "concrete generic argument is substituted",
-            source: `
-                class Box<T> { value: T }
-                function run() -> Box<string> { Box<string> {} }
-            `,
-            diagnostic: root.compiler.ExactDiagnostic {
-                code: "E0001",
-                message: "class `Box` is missing required field: `value`",
-            },
-        },
-        RejectedConstructorCase {
-            name: "rigid generic parameter is not assumed nullable",
-            source: `
-                class Box<T> { value: T }
-                function make<T>() -> Box<T> { Box<T> {} }
-            `,
-            diagnostic: root.compiler.ExactDiagnostic {
-                code: "E0001",
-                message: "class `Box` is missing required field: `value`",
-            },
-        },
-    ];
-
-    for (let case in cases) {
-        test case.name {
-            root.compiler.AssertRejected({ "case.baml": case.source }, case.diagnostic)
-        }
-    }
-}
-
-test "nullable union and null fields may be omitted" {
-    root.compiler.AssertCompiles(
-        {
-            "case.baml": `
-                class Omittable { nullable: string?, unit: null }
-                function run() -> Omittable { Omittable {} }
-            `,
+        root.compiler.ExactDiagnostic {
+            code: "E0001",
+            message: "class `Job` is missing required fields: `label`, `attempts`",
         },
     )
 }
 
-test "unknown accepts an explicit null" {
+test "unknown requires a value but accepts explicit null" {
+    root.compiler.AssertRejected(
+        {
+            "omitted.baml": `
+                class Holder { value: unknown }
+                function run() -> Holder { Holder {} }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0001",
+            message: "class `Holder` is missing required field: `value`",
+        },
+    );
     root.compiler.AssertCompiles(
         {
-            "case.baml": `
+            "explicit.baml": `
                 class Holder { value: unknown }
                 function run() -> Holder { Holder { value: null } }
             `,
@@ -85,10 +40,69 @@ test "unknown accepts an explicit null" {
     )
 }
 
-test "nullable alias is resolved before completeness checking" {
+test "generic substitution controls whether omission is allowed" {
+    root.compiler.AssertRejected(
+        {
+            "required.baml": `
+                class Box<T> { value: T }
+                function run() -> Box<string> { Box<string> {} }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0001",
+            message: "class `Box` is missing required field: `value`",
+        },
+    );
     root.compiler.AssertCompiles(
         {
-            "case.baml": `
+            "nullable.baml": `
+                class Box<T> { value: T }
+                function run() -> Box<string?> { Box<string?> {} }
+            `,
+        },
+    )
+}
+
+test "rigid generic parameters require explicit values" {
+    root.compiler.AssertRejected(
+        {
+            "omitted.baml": `
+                class Box<T> { value: T }
+                function make<T>() -> Box<T> { Box<T> {} }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0001",
+            message: "class `Box` is missing required field: `value`",
+        },
+    );
+    root.compiler.AssertCompiles(
+        {
+            "explicit.baml": `
+                class Box<T> { value: T }
+                function make<T>(value: T) -> Box<T> { Box<T> { value } }
+            `,
+        },
+    )
+}
+
+test "alias resolution controls whether omission is allowed" {
+    root.compiler.AssertRejected(
+        {
+            "required.baml": `
+                type Text = string
+                class Holder { value: Text }
+                function run() -> Holder { Holder {} }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0001",
+            message: "class `Holder` is missing required field: `value`",
+        },
+    );
+    root.compiler.AssertCompiles(
+        {
+            "nullable.baml": `
                 type MaybeText = string?
                 class Holder { value: MaybeText }
                 function run() -> Holder { Holder {} }
@@ -97,21 +111,45 @@ test "nullable alias is resolved before completeness checking" {
     )
 }
 
-test "nullable generic argument is substituted" {
+test "only unions admitting null may be omitted" {
+    root.compiler.AssertRejected(
+        {
+            "required.baml": `
+                class Choice { value: string | int }
+                function run() -> Choice { Choice {} }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0001",
+            message: "class `Choice` is missing required field: `value`",
+        },
+    );
     root.compiler.AssertCompiles(
         {
-            "case.baml": `
-                class Box<T> { value: T }
-                function run() -> Box<string?> { Box<string?> {} }
+            "nullable.baml": `
+                class Omittable { nullable: string?, unit: null }
+                function run() -> Omittable { Omittable {} }
             `,
         },
     )
 }
 
-test "complete spread supplies every field" {
+test "an exact class spread supplies omitted fields" {
+    root.compiler.AssertRejected(
+        {
+            "partial.baml": `
+                class Job { id: int, label: string }
+                function run(base: Job) -> Job { Job { id: base.id } }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0001",
+            message: "class `Job` is missing required field: `label`",
+        },
+    );
     root.compiler.AssertCompiles(
         {
-            "case.baml": `
+            "spread.baml": `
                 class Job { id: int, label: string }
                 function run(base: Job) -> Job { Job { ...base } }
             `,
@@ -119,11 +157,11 @@ test "complete spread supplies every field" {
     )
 }
 
-test "mounted required field is rejected" {
+test "mounted classes use the same completeness rule" {
     let dependency = root.compiler.CompileFixturePackage(
         {
             "dependency.baml": `
-                class MountedRequiredFieldsFixture {
+                class MountedFixture {
                     required: string,
                     nullable: string?,
                 }
@@ -132,36 +170,23 @@ test "mounted required field is rejected" {
     );
     root.compiler.AssertRejected(
         {
-            "consumer.baml": `
-                function run() -> dep.MountedRequiredFieldsFixture {
-                    dep.MountedRequiredFieldsFixture {}
+            "omitted.baml": `
+                function run() -> dep.MountedFixture {
+                    dep.MountedFixture {}
                 }
             `,
         },
         root.compiler.ExactDiagnostic {
             code: "E0001",
-            message: "class `dep.MountedRequiredFieldsFixture` is missing required field: `required`",
+            message: "class `dep.MountedFixture` is missing required field: `required`",
         },
         packages = { "dep": dependency },
-    )
-}
-
-test "mounted nullable field may be omitted" {
-    let dependency = root.compiler.CompileFixturePackage(
-        {
-            "dependency.baml": `
-                class MountedRequiredFieldsFixture {
-                    required: string,
-                    nullable: string?,
-                }
-            `,
-        },
     );
     root.compiler.AssertCompiles(
         {
-            "consumer.baml": `
-                function run() -> dep.MountedRequiredFieldsFixture {
-                    dep.MountedRequiredFieldsFixture { required: "set" }
+            "explicit.baml": `
+                function run() -> dep.MountedFixture {
+                    dep.MountedFixture { required: "set" }
                 }
             `,
         },
