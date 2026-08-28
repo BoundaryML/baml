@@ -1,6 +1,11 @@
 interface Read {
     /// Read up to `limit` bytes from the source.
-    /// Returns `null` after EOF. A non-null result is never empty.
+    ///
+    /// Returns `null` after EOF. A non-null result is empty only when `limit`
+    /// is non-positive: `null` is reserved for end of input, so a caller that
+    /// asks for no bytes gets an empty read back rather than an EOF signal.
+    /// Every implementor agrees on this — driving a loop off `read` therefore
+    /// requires a positive limit, as `bytes` and `text` below use.
     function read(self, limit: int) -> uint8array? throws root.errors.Io
 
     /// Consume all remaining bytes through EOF.

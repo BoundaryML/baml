@@ -65,6 +65,15 @@ class File {
     }
 
     implements root.io.Write {
+        /// Writes as much of `data` as the handle accepts and settles it with
+        /// the OS before returning, so a rejected write is reported here
+        /// rather than deferred to a later call. An unbuffered file handle,
+        /// matching `std::fs::File` / `os.File` / `FileOutputStream`.
+        ///
+        /// # Throws
+        ///
+        /// - `Io` if the bytes cannot be written (for example, the file is
+        ///   closed or was opened read-only).
         function write_some(self, data: uint8array) -> int throws root.errors.Io {
             $rust_io_function
         }
@@ -76,6 +85,11 @@ class File {
 
     /// Writes all of `data` to the file at the current cursor position.
     /// Returns the encoded byte count.
+    ///
+    /// # Throws
+    ///
+    /// - `Io` if the data cannot be written (for example, the file is closed
+    ///   or was opened read-only).
     function write(self, data: string | uint8array) -> int throws root.errors.Io {
         self.as<root.io.Write>.write(data)
     }

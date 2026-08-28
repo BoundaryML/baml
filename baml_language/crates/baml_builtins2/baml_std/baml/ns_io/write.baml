@@ -9,6 +9,11 @@ interface Write {
     /// Write all of `data` to the destination.
     /// Strings are encoded as UTF-8.
     /// Returns the number of bytes written.
+    ///
+    /// Like Rust's `write_all`, this does not flush: it is a loop over
+    /// `write_some`, and pushing buffered bytes onward stays the caller's
+    /// separate `flush`. Implementors are expected to make `write_some` report
+    /// its own failures rather than defer them.
     function write(
         self,
         data: string | uint8array,

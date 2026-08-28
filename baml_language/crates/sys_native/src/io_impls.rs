@@ -563,6 +563,15 @@ impl io::IoClassFsFile for NativeSysOps {
             let len = f.write(&data).await.map_err(|e| VmBamlError::Io {
                 message: format!("Failed to write: {e}"),
             })?;
+            // `tokio::fs::File` buffers: `write` copies into its buffer and
+            // dispatches the real write to the blocking pool, so a rejection
+            // (a read-only handle, a full disk) would otherwise surface on a
+            // *later* call or be lost entirely. Settling it here keeps
+            // `write_some` an unbuffered primitive, matching this interface's
+            // other implementors and every other language's raw file handle.
+            f.flush().await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to write: {e}"),
+            })?;
             let len = i64::try_from(len)
                 .unwrap_or_else(|_| unreachable!("There are no systems with this much memory"));
             Ok(len)

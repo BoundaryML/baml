@@ -352,14 +352,14 @@ function fs.$init_test_ns_fs_fs_from_rust(registry: testing.TestCollector) -> nu
     pop 1
     load_var registry
     load_const "root.fs"
-    load_const "fs_file_read_negative_n_errors"
+    load_const "fs_file_read_negative_n_reads_empty"
     make_closure .<lambda($init_test_ns_fs_fs_from_rust, 8)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.fs"
-    load_const "fs_file_read_zero_errors"
+    load_const "fs_file_read_zero_reads_empty"
     make_closure .<lambda($init_test_ns_fs_fs_from_rust, 9)>, 0
     load_const null
     call testing.TestCollector.register_test_at
@@ -763,7 +763,7 @@ function fs.fs_file_read_n_bytes_fn() -> uint8array {
     return
 }
 
-function fs.fs_file_read_negative_n_errors_fn() -> bool {
+function fs.fs_file_read_negative_n_reads_empty_fn() -> uint8array | null {
     load_const "read_negative_n.txt"
     call user.fs.fs_tmp
     store_var path
@@ -778,37 +778,20 @@ function fs.fs_file_read_negative_n_errors_fn() -> bool {
     load_type baml.io.Read
     load_const "read"
     virtual_call nargs=2 ntypeargs=0
-    pop 1
-    jump L2
-    load_var e
-    is_type baml.errors.Io
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var e
-    rethrow
-
-  L1:
-    load_const true
     store_var _0
-    jump L3
-
-  L2:
-    load_const false
-    store_var _0
-
-  L3:
-    load_var path
-    sys_op baml.fs.remove
-    pop 1
-    load_var _0
-    return
+    jump L0
     load_var path
     sys_op baml.fs.remove
     pop 1
     load_var _6
     rethrow
+
+  L0:
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var _0
+    return
 }
 
 function fs.fs_file_read_truncates_at_eof_fn() -> uint8array {
@@ -846,7 +829,7 @@ function fs.fs_file_read_truncates_at_eof_fn() -> uint8array {
     return
 }
 
-function fs.fs_file_read_zero_errors_fn() -> bool {
+function fs.fs_file_read_zero_reads_empty_fn() -> uint8array | null {
     load_const "read_zero.txt"
     call user.fs.fs_tmp
     store_var path
@@ -861,37 +844,20 @@ function fs.fs_file_read_zero_errors_fn() -> bool {
     load_type baml.io.Read
     load_const "read"
     virtual_call nargs=2 ntypeargs=0
-    pop 1
-    jump L2
-    load_var e
-    is_type baml.errors.Io
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var e
-    rethrow
-
-  L1:
-    load_const true
     store_var _0
-    jump L3
-
-  L2:
-    load_const false
-    store_var _0
-
-  L3:
-    load_var path
-    sys_op baml.fs.remove
-    pop 1
-    load_var _0
-    return
+    jump L0
     load_var path
     sys_op baml.fs.remove
     pop 1
     load_var _6
     rethrow
+
+  L0:
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var _0
+    return
 }
 
 function fs.fs_file_rw_seek_and_read_fn() -> string {

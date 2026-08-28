@@ -199,38 +199,31 @@ test "fs_remove_dir_all_on_file_errors" {
 // file.read with a negative length errors (Io)
 // ============================================================================
 
-function fs_file_read_negative_n_errors_fn() -> bool {
+// A non-positive read limit asks for no bytes, which is an empty read rather
+// than an error: `null` is reserved for end-of-file, so returning it here would
+// make "you asked for nothing" indistinguishable from "there is nothing left".
+function fs_file_read_negative_n_reads_empty_fn() -> uint8array? {
     let path = fs_tmp("read_negative_n.txt");
     baml.fs.write(path, "abc");
     let f = baml.fs.open(path, "r");
     defer { baml.fs.remove(path) }
-    {
-        f.read(-1);
-        false
-    } catch (e) {
-        baml.errors.Io => true
-    }
+    f.read(-1)
 }
 
-test "fs_file_read_negative_n_errors" {
-    assert.is_true(fs_file_read_negative_n_errors_fn())
+test "fs_file_read_negative_n_reads_empty" {
+    assert.equal(fs_file_read_negative_n_reads_empty_fn(), b"")
 }
 
-function fs_file_read_zero_errors_fn() -> bool {
+function fs_file_read_zero_reads_empty_fn() -> uint8array? {
     let path = fs_tmp("read_zero.txt");
     baml.fs.write(path, "abc");
     let f = baml.fs.open(path, "r");
     defer { baml.fs.remove(path) }
-    {
-        f.read(0);
-        false
-    } catch (e) {
-        baml.errors.Io => true
-    }
+    f.read(0)
 }
 
-test "fs_file_read_zero_errors" {
-    assert.is_true(fs_file_read_zero_errors_fn())
+test "fs_file_read_zero_reads_empty" {
+    assert.equal(fs_file_read_zero_reads_empty_fn(), b"")
 }
 
 // ============================================================================
