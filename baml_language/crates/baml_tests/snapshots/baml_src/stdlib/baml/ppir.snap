@@ -2130,7 +2130,7 @@ function baml.time.sub(self: ?, other: baml.time.Instant) -> Duration  [expr] {
   {  } Duration { _nanoseconds: self._nanoseconds Sub other._nanoseconds }
 }
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "", reason: message } } }
 }
 function baml.time.to_string(self: ?) -> string  [expr] {
   {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => {  } root.sys.panic("Instant.to_string: " Add message) }
@@ -2165,7 +2165,7 @@ function baml.time.from_json(j: baml.json.json) -> Self  [expr] {
 function baml.time.month(self: ?) -> int  [builtin]
 function baml.time.parse(s: string) -> baml.time.PlainDate  [builtin]
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "", reason: message } } }
 }
 function baml.time.to_plain_datetime(self: ?, time: PlainTime? = null) -> PlainDateTime  [expr] {
   {  } self._to_plain_datetime(time)
@@ -2213,7 +2213,7 @@ function baml.time.sub(self: ?, other: baml.time.PlainDateTime) -> Duration  [ex
   {  } Duration { _nanoseconds: self._nanoseconds Sub other._nanoseconds }
 }
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "", reason: message } } }
 }
 function baml.time.to_plain_date(self: ?) -> PlainDate  [builtin]
 function baml.time.to_plain_time(self: ?) -> PlainTime  [builtin]
@@ -2396,7 +2396,7 @@ function baml.time.to_instant(self: ?) -> Instant  [expr] {
   {  } Instant { _nanoseconds: self._nanoseconds }
 }
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } }, UnknownTimezoneError { timezone: timezone } => { throw baml.json.JsonSerializationError { message: "unknown timezone: " Add timezone, path: "" } }, root.errors.Io { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "", reason: message } }, UnknownTimezoneError { timezone: timezone } => { throw baml.json.JsonSerializationError { message: "unknown timezone: " Add timezone, path: "", reason: "unknown timezone: " Add timezone } }, root.errors.Io { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "", reason: message } } }
 }
 function baml.time.to_plain(self: ?) -> PlainDateTime  [expr] {
   {  } PlainDateTime { _nanoseconds: self._nanoseconds Add self.timezone_offset()._nanoseconds }

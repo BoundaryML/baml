@@ -10028,6 +10028,7 @@ fn baml.time.Instant.baml.ToJson.to_json(self: baml.time.Instant) -> int | float
     let _5: string // message
     let _6: baml.json.JsonSerializationError
     let _7: string
+    let _8: string
 
     bb0: {
         _0 = call const fn baml.time.Instant._to_string_impl(copy _1) -> [bb1, unwind: bb2];
@@ -10050,7 +10051,8 @@ fn baml.time.Instant.baml.ToJson.to_json(self: baml.time.Instant) -> int | float
         _4 = copy _2.0;
         _5 = copy _4;
         _7 = copy _5;
-        _6 = baml.json.JsonSerializationError { copy _7, const "", const null };
+        _8 = copy _5;
+        _6 = baml.json.JsonSerializationError { copy _7, const "", copy _8 };
         throw copy _6;
     }
 }
@@ -10492,6 +10494,7 @@ fn baml.time.PlainDate.baml.ToJson.to_json(self: baml.time.PlainDate) -> int | f
     let _5: string // message
     let _6: baml.json.JsonSerializationError
     let _7: string
+    let _8: string
 
     bb0: {
         _0 = call const fn baml.time.PlainDate._to_string_impl(copy _1) -> [bb1, unwind: bb2];
@@ -10514,7 +10517,8 @@ fn baml.time.PlainDate.baml.ToJson.to_json(self: baml.time.PlainDate) -> int | f
         _4 = copy _2.0;
         _5 = copy _4;
         _7 = copy _5;
-        _6 = baml.json.JsonSerializationError { copy _7, const "", const null };
+        _8 = copy _5;
+        _6 = baml.json.JsonSerializationError { copy _7, const "", copy _8 };
         throw copy _6;
     }
 }
@@ -10968,6 +10972,7 @@ fn baml.time.PlainDateTime.baml.ToJson.to_json(self: baml.time.PlainDateTime) ->
     let _5: string // message
     let _6: baml.json.JsonSerializationError
     let _7: string
+    let _8: string
 
     bb0: {
         _0 = call const fn baml.time.PlainDateTime._to_string_impl(copy _1) -> [bb1, unwind: bb2];
@@ -10990,7 +10995,8 @@ fn baml.time.PlainDateTime.baml.ToJson.to_json(self: baml.time.PlainDateTime) ->
         _4 = copy _2.0;
         _5 = copy _4;
         _7 = copy _5;
-        _6 = baml.json.JsonSerializationError { copy _7, const "", const null };
+        _8 = copy _5;
+        _6 = baml.json.JsonSerializationError { copy _7, const "", copy _8 };
         throw copy _6;
     }
 }
@@ -12411,14 +12417,18 @@ fn baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTime) ->
     let _8: baml.json.JsonSerializationError
     let _9: string
     let _10: string
-    let _11: string // timezone
-    let _12: baml.json.JsonSerializationError
-    let _13: string
+    let _11: string
+    let _12: string // timezone
+    let _13: baml.json.JsonSerializationError
     let _14: string
     let _15: string
-    let _16: string // message
-    let _17: baml.json.JsonSerializationError
+    let _16: string
+    let _17: string
     let _18: string
+    let _19: string // message
+    let _20: baml.json.JsonSerializationError
+    let _21: string
+    let _22: string
 
     bb0: {
         _0 = call const fn baml.time.ZonedDateTime._to_string_impl(copy _1) -> [bb1, unwind: bb2];
@@ -12448,27 +12458,31 @@ fn baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTime) ->
     }
 
     bb6: {
-        _15 = copy _2.0;
-        _16 = copy _15;
-        _18 = copy _16;
-        _17 = baml.json.JsonSerializationError { copy _18, const "", const null };
-        throw copy _17;
+        _18 = copy _2.0;
+        _19 = copy _18;
+        _21 = copy _19;
+        _22 = copy _19;
+        _20 = baml.json.JsonSerializationError { copy _21, const "", copy _22 };
+        throw copy _20;
     }
 
     bb7: {
-        _10 = copy _2.0;
-        _11 = copy _10;
-        _14 = copy _11;
-        _13 = const "unknown timezone: " + copy _14;
-        _12 = baml.json.JsonSerializationError { copy _13, const "", const null };
-        throw copy _12;
+        _11 = copy _2.0;
+        _12 = copy _11;
+        _15 = copy _12;
+        _14 = const "unknown timezone: " + copy _15;
+        _17 = copy _12;
+        _16 = const "unknown timezone: " + copy _17;
+        _13 = baml.json.JsonSerializationError { copy _14, const "", copy _16 };
+        throw copy _13;
     }
 
     bb8: {
         _6 = copy _2.0;
         _7 = copy _6;
         _9 = copy _7;
-        _8 = baml.json.JsonSerializationError { copy _9, const "", const null };
+        _10 = copy _7;
+        _8 = baml.json.JsonSerializationError { copy _9, const "", copy _10 };
         throw copy _8;
     }
 }
