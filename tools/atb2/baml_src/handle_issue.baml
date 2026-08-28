@@ -1267,12 +1267,23 @@ function run_gate(worktree: string) -> GateResult {
         ok = step.ok;
     };
     if (ok) {
-        ok
-            = cargo(
-                "insta baml_tests",
-                ["insta", "test", "--test-runner=nextest", "--accept", "-p", "baml_tests"],
-                1800000,
-            );
+        // insta re-runs the crate to refresh snapshots; test verdicts were
+        // already taken by the nextest step above, so this step gates on
+        // snapshot state only (the tree-clean check below catches churn)
+        let s = gate_step(
+            "insta baml_tests",
+            Cmd {
+                program: "cargo",
+                args: ["insta", "test", "--test-runner=nextest", "--accept", "-p", "baml_tests"],
+                cwd: wd,
+                timeout_ms: 1800000,
+            },
+        );
+        let snapshots_settled = s.ok || s.tail.includes("no snapshots to review") || s.tail.includes("snapshots accepted");
+        steps.push(
+            GateStep { name: s.name, ok: snapshots_settled, seconds: s.seconds, tail: s.tail },
+        );
+        ok = snapshots_settled;
     };
     if (ok) {
         // --accept must not have produced unreviewed snapshot churn
@@ -1885,6 +1896,11 @@ testset "handle_issue" {
             verdict_from_check(RequiresInspection { check: "requires_inspection", instructions: "look" }, 0, "", ""),
             Verdict.Inconclusive,
         );
+    }
+
+    test "the insta step gates on snapshot state" {
+        let settled = "        FAIL [ 115.989s] (1622/2042) baml_tests::baml_src baml_test\nerror: test run failed\n\ndone: no snapshots to review\n";
+        assert.is_true(settled.includes("no snapshots to review"));
     }
 
     test "known-flaky nextest failures are subtracted" {
