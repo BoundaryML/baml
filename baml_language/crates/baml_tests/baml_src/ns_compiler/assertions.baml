@@ -84,7 +84,18 @@ function AssertMultiRejected(
     packages: map<string, reflect.Package> = {},
 ) -> void throws never {
     let actual = CompileDiagnostics(files, packages = packages);
-    assert.equal(actual.length(), expected.length());
+    if (actual.length() != expected.length()) {
+        let rendered = actual.map((diagnostic) -> string {
+            let location = match (diagnostic.span) {
+                null => "<no span>",
+                let span: reflect.Span => `${span.file ?? "<unknown file>"}:${span.start}-${span.end}`,
+            };
+            `[${diagnostic.code}] ${location}: ${diagnostic.message}`
+        });
+        baml.sys.panic(
+            `expected ${expected.length()} compiler diagnostic(s), got ${actual.length()}:\n${rendered.join("\n")}`,
+        )
+    }
     for (let index = 0; index < expected.length(); index += 1) {
         expected[index].assert_matches(actual[index]);
     }

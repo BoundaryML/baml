@@ -40,6 +40,71 @@ test "unknown requires a value but accepts explicit null" {
     )
 }
 
+// A broken declaration should fail for the declaration itself. Whether a
+// constructor writes the poisoned slot is not a second, independently useful
+// error: the compiler cannot know the slot's actual completeness rule until
+// its type resolves.
+test "an unresolved field type throws only its primary diagnostic" {
+    root.compiler.AssertRejected(
+        {
+            "declaration.baml": `
+                class Holder { value: MissingType }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0002",
+            message: "unresolved type: MissingType",
+        },
+    );
+    root.compiler.AssertRejected(
+        {
+            "omitted.baml": `
+                class Holder { value: MissingType }
+                function run() -> Holder { Holder {} }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0002",
+            message: "unresolved type: MissingType",
+        },
+    );
+    root.compiler.AssertRejected(
+        {
+            "explicit.baml": `
+                class Holder { value: MissingType }
+                function run(value: unknown) -> Holder { Holder { value } }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0002",
+            message: "unresolved type: MissingType",
+        },
+    )
+}
+
+// Error recovery remains precise: a poisoned slot does not hide omissions
+// whose declared types are valid and whose requirements are known.
+test "an unresolved field type preserves genuine missing-field diagnostics" {
+    root.compiler.AssertMultiRejected(
+        {
+            "case.baml": `
+                class Holder { poisoned: MissingType, required: string }
+                function run() -> Holder { Holder {} }
+            `,
+        },
+        [
+            root.compiler.ExactDiagnostic {
+                code: "E0002",
+                message: "unresolved type: MissingType",
+            },
+            root.compiler.ExactDiagnostic {
+                code: "E0001",
+                message: "class `Holder` is missing required field: `required`",
+            },
+        ],
+    )
+}
+
 test "generic substitution controls whether omission is allowed" {
     root.compiler.AssertRejected(
         {

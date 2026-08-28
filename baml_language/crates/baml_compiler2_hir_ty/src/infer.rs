@@ -8522,7 +8522,10 @@ impl<'db> InferenceContext<'db> {
             }
             let field_ty = substitute_params(field_ty, instantiation);
             let resolved = self.structurally_resolve(&field_ty);
-            if !type_admits_null(&resolved) {
+            // An error sentinel means the declaration's rule is unknown, not
+            // that the field is non-nullable. Its source diagnostic is the
+            // actionable error; continue checking independently valid slots.
+            if !resolved.has_error() && !type_admits_null(&resolved) {
                 missing.push(name.clone());
             }
         }
