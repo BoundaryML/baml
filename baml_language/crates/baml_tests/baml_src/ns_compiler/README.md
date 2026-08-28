@@ -1,8 +1,10 @@
 # Compiler behavior tests
 
-This namespace contains executable BAML tests for compiler behavior. Tests use
-`reflect.Package.compile` when they need to admit or reject isolated source
-snippets without making the outer `baml_src` project invalid.
+This namespace contains executable BAML tests for compiler behavior. Shared
+assertions in `assertions.baml` use `reflect.Package._compile` to admit or
+reject isolated source snippets without linking or initializing them. Diagnostic
+expectations implement `DiagnosticExpectation`, and `AssertMultiRejected`
+checks ordered groups of diagnostics.
 
 Organize suites by compiler concept and then behavior:
 
