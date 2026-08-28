@@ -21,5 +21,3 @@ That layout produces readable canonical test IDs such as
 
 Do not name namespaces, helpers, or tests after issue IDs. Put issue references
 in focused comments, repro documentation, commit messages, or pull requests.
-Compile-only phase fixtures still belong under `ns_fixtures/`; this hierarchy
-is for tests executed by `baml test`.
