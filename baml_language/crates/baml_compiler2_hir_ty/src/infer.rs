@@ -60,6 +60,18 @@ fn is_unit(ty: &Ty) -> bool {
     matches!(ty.kind(), TyKind::Void { .. } | TyKind::Null { .. })
 }
 
+/// Whether an object slot initialized to `null` satisfies this type. Weak
+/// aliases and solved inference variables must be resolved by the caller
+/// before asking; an unconstrained type parameter is deliberately false
+/// because it is not guaranteed to admit `null` for every instantiation.
+fn type_admits_null(ty: &Ty) -> bool {
+    match ty.kind() {
+        TyKind::Null { .. } => true,
+        TyKind::Union(members, _) => members.iter().any(type_admits_null),
+        _ => false,
+    }
+}
+
 /// The function type at a callback root: `ty` itself, or the sole non-null
 /// member of an optional callback — `((v: int) -> int)?` lowers to
 /// `(...) | null`.
@@ -786,6 +798,21 @@ enum PendingDiag<'db> {
         expected: usize,
         got: usize,
     },
+    GenericFunctionValueNotSpecialized {
+        expr: ExprId,
+        name: baml_type::Name,
+        reference: String,
+        inference_evidence: Vec<Ty>,
+        specialization_args: Option<Vec<Ty>>,
+        unconditional: bool,
+        had_expected_type: bool,
+        generic_params: Vec<baml_type::Name>,
+        binding_name: Option<baml_type::Name>,
+        function_shape: Option<String>,
+        annotation_ty: Option<Ty>,
+        specialization_example_is_safe: bool,
+        specialization_syntax_available: bool,
+    },
     ComputedGenericArgumentRequiresUnreflect {
         expr: ExprId,
         name: baml_type::Name,
@@ -933,6 +960,13 @@ enum PendingDiag<'db> {
         declared: Vec<baml_type::Name>,
         name: baml_type::Name,
         shorthand: bool,
+    },
+    /// A constructor without a spread omitted fields whose resolved types do
+    /// not admit `null`.
+    MissingRequiredObjectFields {
+        object: ExprId,
+        class_name: baml_type::QualifiedTypeName,
+        field_names: Vec<baml_type::Name>,
     },
     /// The call-site `$id` side channel's three rules: the value must be
     /// `boundary.LocalId`, at most one `$id` per call, and it must be the
@@ -1681,6 +1715,11 @@ struct InferenceContext<'db> {
     /// discipline): a failed lookup reports only when no fallback tier
     /// remains - probes increment, the committed frame reports.
     member_probe_depth: u32,
+    /// Nonzero while an optional-call callee is inferred as an ordinary
+    /// expression. Its arguments still provide specialization evidence after
+    /// the callee has been typed, so a generic value diagnostic must remain
+    /// conditional until the whole call has been checked.
+    optional_call_callee_depth: u32,
     /// Depth of pattern lowering where the dead-pattern overlap check
     /// probes SILENTLY: or-pattern alternatives (one alt that can't
     /// match is fine - rustc's rule - only the whole `|` chain failing
@@ -1820,6 +1859,7 @@ impl<'db> InferenceContext<'db> {
             annotation_cache: FxHashMap::default(),
             canonical_cache: baml_type::normalize::InternedCanonicalCache::default(),
             member_probe_depth: 0,
+            optional_call_callee_depth: 0,
             or_probe_depth: 0,
             rest_reject_depth: 0,
             template_params: Vec::new(),
@@ -2259,7 +2299,7 @@ impl<'db> InferenceContext<'db> {
             Expr::ByteStringLiteral(_) => Ty::intern(TyKind::Uint8Array {
                 attr: TyAttr::default(),
             }),
-            Expr::Path(segments) => self.resolve_value_path(expr, segments),
+            Expr::Path(segments) => self.resolve_value_path(body, expr, segments, expected),
             Expr::Index { base, index } => self.infer_index(body, expr, *base, *index, false),
             Expr::Spawn {
                 name,
@@ -2831,7 +2871,9 @@ impl<'db> InferenceContext<'db> {
             }
             Expr::OptionalCall { callee, args } => {
                 self.validate_runtime_type_arg_operands(body, expr);
+                self.optional_call_callee_depth += 1;
                 let callee_ty = self.infer_expr(body, *callee, &Expectation::None);
+                self.optional_call_callee_depth -= 1;
                 self.report_mounted_reserved_call(expr, *callee);
                 self.check_needless_chain(body, expr, *callee, &callee_ty);
                 let nonnull = self.peel_chain_null(&callee_ty);
@@ -2868,6 +2910,7 @@ impl<'db> InferenceContext<'db> {
                 Ty::error()
             }
         };
+        self.report_unspecialized_generic_method_value(body, expr, expected, &ty);
         self.result.type_of_expr.insert(expr, ty.clone());
         ty
     }
@@ -3554,6 +3597,21 @@ impl<'db> InferenceContext<'db> {
     fn sub(&mut self, actual: &Ty, expected: &Ty) -> bool {
         let mut actual = self.table.shallow_resolve(actual);
         let mut expected = self.table.shallow_resolve(expected);
+        // A function-type alias used as contextual type information must
+        // expose its parameter/return slots so they can determine a generic
+        // function value's instantiation (`let f: StringCallback = identity`).
+        // Keep the normalization shape-directed: expanding every alias here
+        // would erase nominal alias identity from unrelated diagnostics.
+        if matches!(actual.kind(), TyKind::Function { .. })
+            && matches!(expected.kind(), TyKind::TypeAlias(..))
+        {
+            expected = self.expand_alias_ty(&expected);
+        }
+        if matches!(actual.kind(), TyKind::TypeAlias(..))
+            && matches!(expected.kind(), TyKind::Function { .. })
+        {
+            actual = self.expand_alias_ty(&actual);
+        }
         // Normalize-then-relate (rustc's FnCtxt normalize-before-unify;
         // r-a's `normalize_projection_ty` during unification): a GROUND
         // projection the oracle can already determine reduces before the
@@ -3633,6 +3691,26 @@ impl<'db> InferenceContext<'db> {
                     ok &= self.sub(&member, &expected);
                 }
                 ok
+            }
+            // A var-carrying value flowing into a GROUND union can use a
+            // single structurally compatible arm as context. This is the
+            // optional-callback case: a function can only inhabit the
+            // function arm of `Callback | null`, so that arm may determine
+            // its generic slots. Multiple compatible arms remain ambiguous
+            // and stay deferred (`Fn<int> | Fn<string>` must not guess).
+            (_, TyKind::Union(members, _)) if actual.has_infer() && !expected.has_infer() => {
+                let targets: Vec<Ty> = members
+                    .iter()
+                    .map(|member| self.expand_alias_ty(member))
+                    .filter(|member| same_head_constructor(&actual, member))
+                    .collect();
+                if let [target] = targets.as_slice() {
+                    let target = target.clone();
+                    return self.sub(&actual, &target);
+                }
+                self.deferred_subs
+                    .push((actual, expected, self.obligation_anchor));
+                true
             }
             // A var-carrying union TARGET: TypeScript's
             // `inferToMultipleTypes`, the union-position inference rule
@@ -6456,14 +6534,133 @@ impl<'db> InferenceContext<'db> {
             .then(|| crate::method_resolution::instantiate_external_signature(&function, &[target]))
     }
 
+    /// Generic methods follow the same realization rule as free functions:
+    /// a bare value needs either explicit type arguments or enough contextual
+    /// function type information to determine them. Direct method calls do not
+    /// reach this path (their call site owns inference), and `GenericApply`
+    /// already carries an explicit specialization.
+    fn report_unspecialized_generic_method_value(
+        &mut self,
+        body: &ExprBody,
+        expr: ExprId,
+        expected: &Expectation,
+        inferred: &Ty,
+    ) {
+        if matches!(body.exprs[expr], Expr::GenericApply { .. }) {
+            return;
+        }
+        let Some(resolution) = self.result.member_resolutions.get(&expr).cloned() else {
+            return;
+        };
+        let reference = body.display_expr(expr);
+        let had_context = expected.only_has_type().is_some() || self.optional_call_callee_depth > 0;
+        let source_method = match resolution {
+            MemberResolution::BoundMethod { func, .. }
+            | MemberResolution::InterfaceConcreteMethod { func, .. } => Some((func, true)),
+            MemberResolution::UnboundMethod { func, .. } => Some((func, false)),
+            MemberResolution::InterfaceVirtualMethod { interface, method } => {
+                baml_compiler2_ppir::item_data::interface_data(self.db, interface)
+                    .methods
+                    .iter()
+                    .copied()
+                    .find(|func| {
+                        baml_compiler2_ppir::item_data::function_data(self.db, *func).name == method
+                    })
+                    .map(|func| (func, true))
+            }
+            MemberResolution::External(external)
+                if !matches!(
+                    external.target,
+                    crate::callable::ExternalCallTarget::Free { .. }
+                ) =>
+            {
+                if external.user_generic_params().next().is_some() {
+                    let generic_params: Vec<_> = external
+                        .user_generic_params()
+                        .map(|(param, _)| param.name().clone())
+                        .collect();
+                    let specialization_example_is_safe = external
+                        .user_generic_params()
+                        .all(|(_, bounds)| bounds.is_empty());
+                    let specialization_syntax_available = matches!(body.exprs[expr], Expr::Path(_));
+                    self.pending_diags
+                        .push(PendingDiag::GenericFunctionValueNotSpecialized {
+                            expr,
+                            name: external.display_name().clone(),
+                            reference,
+                            inference_evidence: vec![inferred.clone()],
+                            specialization_args: None,
+                            unconditional: !had_context,
+                            had_expected_type: had_context,
+                            generic_params,
+                            binding_name: initializer_binding_name(body, expr),
+                            function_shape: None,
+                            annotation_ty: None,
+                            specialization_example_is_safe,
+                            specialization_syntax_available,
+                        });
+                }
+                return;
+            }
+            _ => None,
+        };
+        let Some((method, receiver_is_bound)) = source_method else {
+            return;
+        };
+        let data = baml_compiler2_ppir::item_data::function_data(self.db, method);
+        if data.generic_params.is_empty() {
+            return;
+        }
+        let signature = function_signature(self.db, method);
+        let user_params = function_user_generic_params(self.db, method, signature);
+        let generic_params = user_params
+            .iter()
+            .map(|param| param.name().clone())
+            .collect();
+        let specialization_example_is_safe = data
+            .generic_params
+            .iter()
+            .all(|param| param.bounds.is_empty());
+        let specialization_syntax_available = matches!(body.exprs[expr], Expr::Path(_));
+        let has_phantom_param = user_params
+            .iter()
+            .any(|param| !function_signature_mentions_param(signature, param));
+        self.pending_diags
+            .push(PendingDiag::GenericFunctionValueNotSpecialized {
+                expr,
+                name: data.name.clone(),
+                reference,
+                inference_evidence: vec![inferred.clone()],
+                specialization_args: None,
+                unconditional: !had_context || has_phantom_param,
+                had_expected_type: had_context,
+                generic_params,
+                binding_name: initializer_binding_name(body, expr),
+                function_shape: (!has_phantom_param).then(|| {
+                    generic_function_value_shape(signature, user_params, receiver_is_bound, false)
+                }),
+                annotation_ty: (specialization_example_is_safe && !has_phantom_param)
+                    .then(|| inferred.clone()),
+                specialization_example_is_safe,
+                specialization_syntax_available,
+            });
+    }
+
     /// The one home for value-position path typing (rust-analyzer's
     /// `infer/path.rs` shape): a local/parameter root followed by field
     /// accesses, or a package-level FUNCTION as a first-class value (`let c:
     /// (x: int) -> int throws never = inc;`), instantiated with fresh
-    /// variables per generic param - only a call site's turbofish can spell
-    /// arguments explicitly, and the expectation's bounds resolve them here.
+    /// variables per generic param. A contextual function type may resolve
+    /// those variables; without one, a generic function must be explicitly
+    /// specialized before it can become a value.
     /// Constants and enum variants join as later slices land.
-    fn resolve_value_path(&mut self, expr: ExprId, segments: &[baml_type::Name]) -> Ty {
+    fn resolve_value_path(
+        &mut self,
+        body: &ExprBody,
+        expr: ExprId,
+        segments: &[baml_type::Name],
+        expected: &Expectation,
+    ) -> Ty {
         if segments.len() == 1 && segments[0].as_str() == "$id" {
             return Ty::string();
         }
@@ -6505,16 +6702,73 @@ impl<'db> InferenceContext<'db> {
         if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
             self.lower.resolve_value(segments)
         {
+            let had_context =
+                expected.only_has_type().is_some() || self.optional_call_callee_depth > 0;
             let signature = function_signature(self.db, function);
             let instantiation: Vec<Ty> = signature
                 .generic_params
                 .iter()
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
+            let data = baml_compiler2_ppir::item_data::function_data(self.db, function);
+            if data.generic_params.is_empty() {
+                // Synthetic callback-effect parameters are inference-only;
+                // they do not make an otherwise non-generic function value
+                // require explicit specialization.
+            } else {
+                let user_params = function_user_generic_params(self.db, function, signature);
+                let generic_params = user_params
+                    .iter()
+                    .map(|param| param.name().clone())
+                    .collect();
+                let specialization_example_is_safe = data
+                    .generic_params
+                    .iter()
+                    .all(|param| param.bounds.is_empty());
+                let has_phantom_param = user_params
+                    .iter()
+                    .any(|param| !function_signature_mentions_param(signature, param));
+                let inference_evidence = user_params
+                    .iter()
+                    .filter_map(|param| instantiation.get(param.index() as usize).cloned())
+                    .collect();
+                self.pending_diags
+                    .push(PendingDiag::GenericFunctionValueNotSpecialized {
+                        expr,
+                        name: data.name.clone(),
+                        reference: segments
+                            .iter()
+                            .map(baml_type::Name::as_str)
+                            .collect::<Vec<_>>()
+                            .join("."),
+                        inference_evidence,
+                        specialization_args: Some(
+                            user_params
+                                .iter()
+                                .filter_map(|param| {
+                                    instantiation.get(param.index() as usize).cloned()
+                                })
+                                .collect(),
+                        ),
+                        unconditional: !had_context,
+                        had_expected_type: had_context,
+                        generic_params,
+                        binding_name: initializer_binding_name(body, expr),
+                        function_shape: (!has_phantom_param).then(|| {
+                            generic_function_value_shape(signature, user_params, false, false)
+                        }),
+                        annotation_ty: (specialization_example_is_safe && !has_phantom_param)
+                            .then(|| function_value_ty(signature, &instantiation)),
+                        specialization_example_is_safe,
+                        specialization_syntax_available: true,
+                    });
+            }
             self.write_member_resolution(expr, MemberResolution::Free { func: function });
             return function_value_ty(signature, &instantiation);
         }
         if let Some(function) = self.lower.resolve_exported_value(segments) {
+            let had_context =
+                expected.only_has_type().is_some() || self.optional_call_callee_depth > 0;
             let external = function
                 .external
                 .clone()
@@ -6524,6 +6778,63 @@ impl<'db> InferenceContext<'db> {
                 .iter()
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
+            if external.user_generic_params().next().is_some() {
+                let user_params: Vec<_> = external
+                    .user_generic_params()
+                    .map(|(param, _)| param.clone())
+                    .collect();
+                let generic_params = user_params
+                    .iter()
+                    .map(|param| param.name().clone())
+                    .collect();
+                let specialization_example_is_safe = external
+                    .user_generic_params()
+                    .all(|(_, bounds)| bounds.is_empty());
+                let shape_ty =
+                    external_generic_function_value_ty(&function, &user_params, false, false);
+                let has_phantom_param = user_params
+                    .iter()
+                    .any(|param| !ty_mentions_param(&shape_ty, param));
+                let inference_evidence = external
+                    .user_generic_params()
+                    .filter_map(|(param, _)| instantiation.get(param.index() as usize).cloned())
+                    .collect();
+                self.pending_diags
+                    .push(PendingDiag::GenericFunctionValueNotSpecialized {
+                        expr,
+                        name: function.name.clone(),
+                        reference: segments
+                            .iter()
+                            .map(baml_type::Name::as_str)
+                            .collect::<Vec<_>>()
+                            .join("."),
+                        inference_evidence,
+                        specialization_args: Some(
+                            user_params
+                                .iter()
+                                .filter_map(|param| {
+                                    instantiation.get(param.index() as usize).cloned()
+                                })
+                                .collect(),
+                        ),
+                        unconditional: !had_context,
+                        had_expected_type: had_context,
+                        generic_params,
+                        binding_name: initializer_binding_name(body, expr),
+                        function_shape: (!has_phantom_param)
+                            .then(|| shape_ty.to_plain().to_string()),
+                        annotation_ty: (specialization_example_is_safe && !has_phantom_param).then(
+                            || {
+                                crate::method_resolution::instantiate_external_signature(
+                                    &function,
+                                    &instantiation,
+                                )
+                            },
+                        ),
+                        specialization_example_is_safe,
+                        specialization_syntax_available: true,
+                    });
+            }
             self.write_member_resolution(expr, MemberResolution::External(external));
             return crate::method_resolution::instantiate_external_signature(
                 &function,
@@ -8480,6 +8791,46 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    /// Shared completeness check for local and mounted class constructors.
+    /// A valid spread has the exact class type and therefore supplies every
+    /// slot; without one, each omitted slot must admit its `null` initializer.
+    fn report_missing_required_object_fields(
+        &mut self,
+        object: ExprId,
+        class_name: &baml_type::QualifiedTypeName,
+        field_types: &[(baml_type::Name, Ty)],
+        instantiation: &[Ty],
+        fields: &[ObjectExprField],
+        has_spread: bool,
+    ) {
+        if has_spread {
+            return;
+        }
+
+        let mut missing = Vec::new();
+        for (name, field_ty) in field_types {
+            if fields.iter().any(|field| field.name == *name) {
+                continue;
+            }
+            let field_ty = substitute_params(field_ty, instantiation);
+            let resolved = self.structurally_resolve(&field_ty);
+            // An error sentinel means the declaration's rule is unknown, not
+            // that the field is non-nullable. Its source diagnostic is the
+            // actionable error; continue checking independently valid slots.
+            if !resolved.has_error() && !type_admits_null(&resolved) {
+                missing.push(name.clone());
+            }
+        }
+        if !missing.is_empty() {
+            self.pending_diags
+                .push(PendingDiag::MissingRequiredObjectFields {
+                    object,
+                    class_name: class_name.clone(),
+                    field_names: missing,
+                });
+        }
+    }
+
     /// Object-constructor typing: resolve the class, instantiate its
     /// generics (explicit args or fresh vars - `Box<_> { .. }` holes are
     /// vars too), check each written field against its substituted type.
@@ -8664,6 +9015,14 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
+        self.report_missing_required_object_fields(
+            object,
+            &class_name,
+            &field_types,
+            &instantiation,
+            fields,
+            !spreads.is_empty(),
+        );
         let short = type_name.0.last().expect("type paths are never empty");
         let object_ty = Ty::intern(TyKind::Class(
             self.lower.qualify_definition(
@@ -8800,6 +9159,14 @@ impl<'db> InferenceContext<'db> {
                 });
             }
         }
+        self.report_missing_required_object_fields(
+            object,
+            &class_name,
+            &field_types,
+            &instantiation,
+            fields,
+            !spreads.is_empty(),
+        );
         let object_ty = Ty::intern(TyKind::Class(
             class_name,
             instantiation.into_boxed_slice(),
@@ -10850,6 +11217,64 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::GenericFunctionValueNotSpecialized {
+                        expr,
+                        name,
+                        reference,
+                        inference_evidence,
+                        specialization_args,
+                        unconditional,
+                        had_expected_type,
+                        generic_params,
+                        binding_name,
+                        function_shape,
+                        annotation_ty,
+                        specialization_example_is_safe,
+                        specialization_syntax_available,
+                    } => {
+                        let has_unresolved_user_arg = inference_evidence
+                            .iter()
+                            .any(|arg| self.finalize_ty(arg).has_error());
+                        if !unconditional && !has_unresolved_user_arg {
+                            continue;
+                        }
+                        let specialization_example = if specialization_example_is_safe
+                            && specialization_syntax_available
+                        {
+                            let mut args = Vec::with_capacity(generic_params.len());
+                            if let Some(specialization_args) = specialization_args {
+                                for arg in &specialization_args {
+                                    let finalized = self.finalize_ty(arg);
+                                    args.push(
+                                        diagnostic_example_ty(&finalized).to_plain().to_string(),
+                                    );
+                                }
+                            } else {
+                                args.resize(generic_params.len(), "int".to_string());
+                            }
+                            Some(args.join(", "))
+                        } else {
+                            None
+                        };
+                        let annotation_example = annotation_ty.map(|ty| {
+                            let finalized = self.finalize_ty(&ty);
+                            diagnostic_example_ty(&finalized).to_plain().to_string()
+                        });
+                        (
+                            TirTypeError::GenericFunctionValueNotSpecialized {
+                                name,
+                                reference,
+                                had_expected_type,
+                                generic_params,
+                                binding_name,
+                                function_shape,
+                                annotation_example,
+                                specialization_example,
+                                specialization_syntax_available,
+                            },
+                            expr,
+                        )
+                    }
                     PendingDiag::ComputedGenericArgumentRequiresUnreflect { expr, name } => (
                         TirTypeError::ComputedGenericArgumentRequiresUnreflect { name },
                         expr,
@@ -11271,6 +11696,22 @@ impl<'db> InferenceContext<'db> {
                             error,
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::ObjectFieldName(object, value),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::MissingRequiredObjectFields {
+                        object,
+                        class_name,
+                        field_names,
+                    } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::MissingRequiredClassFields {
+                                class_name,
+                                field_names,
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Expr(object),
                             related: Vec::new(),
                         });
                         continue;
@@ -12395,6 +12836,39 @@ fn ty_mentions_param(ty: &Ty, param: &baml_type::ParamTy) -> bool {
     found
 }
 
+/// The user-written portion of a function's flattened generic frame. Owner
+/// parameters precede it and compiler-created callback-effect parameters
+/// follow it, so neither group should make a function value require explicit
+/// specialization.
+fn function_user_generic_params<'a, 'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    signature: &'a crate::lower::FunctionSignature,
+) -> &'a [baml_type::ParamTy] {
+    let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
+    let end = signature
+        .generic_params
+        .len()
+        .checked_sub(data.synthetic_effect_params.len())
+        .expect("synthetic effect parameters are a suffix of the generic frame");
+    let start = end
+        .checked_sub(data.user_generic_params.len())
+        .expect("user parameters precede synthetic effects in the generic frame");
+    &signature.generic_params[start..end]
+}
+
+fn function_signature_mentions_param(
+    signature: &crate::lower::FunctionSignature,
+    param: &baml_type::ParamTy,
+) -> bool {
+    signature
+        .params
+        .iter()
+        .any(|function_param| ty_mentions_param(&function_param.ty, param))
+        || ty_mentions_param(&signature.ret, param)
+        || ty_mentions_param(&signature.throws, param)
+}
+
 fn external_bounds_map(
     external: &crate::callable::ExternalCallable,
 ) -> FxHashMap<baml_type::ParamTy, Vec<InterfaceRef>> {
@@ -12668,6 +13142,90 @@ fn function_value_ty(signature: &crate::lower::FunctionSignature, instantiation:
         throws: substitute_params(&signature.throws, instantiation),
         attr: TyAttr::default(),
     })
+}
+
+fn generic_function_value_shape(
+    signature: &crate::lower::FunctionSignature,
+    user_params: &[baml_type::ParamTy],
+    receiver_is_bound: bool,
+    concrete_example: bool,
+) -> String {
+    let mut instantiation: Vec<Ty> = signature
+        .generic_params
+        .iter()
+        .map(|param| Ty::intern(TyKind::TypeVar(param.clone(), baml_type::TyAttr::default())))
+        .collect();
+    if concrete_example {
+        for param in user_params {
+            if let Some(slot) = instantiation.get_mut(param.index() as usize) {
+                *slot = Ty::int();
+            }
+        }
+    }
+    let ty = function_value_ty(signature, &instantiation);
+    let ty = if receiver_is_bound {
+        bind_receiver(ty)
+    } else {
+        ty
+    };
+    ty.to_plain().to_string()
+}
+
+fn external_generic_function_value_ty(
+    function: &crate::package_interface::ResolvedFunction,
+    user_params: &[baml_type::ParamTy],
+    receiver_is_bound: bool,
+    concrete_example: bool,
+) -> Ty {
+    let mut instantiation: Vec<Ty> = function
+        .generic_params
+        .iter()
+        .map(|param| Ty::intern(TyKind::TypeVar(param.clone(), baml_type::TyAttr::default())))
+        .collect();
+    if concrete_example {
+        for param in user_params {
+            if let Some(slot) = instantiation.get_mut(param.index() as usize) {
+                *slot = Ty::int();
+            }
+        }
+    }
+    let ty = crate::method_resolution::instantiate_external_signature(function, &instantiation);
+    if receiver_is_bound {
+        bind_receiver(ty)
+    } else {
+        ty
+    }
+}
+
+fn initializer_binding_name(body: &ExprBody, initializer: ExprId) -> Option<baml_type::Name> {
+    body.stmts.iter().find_map(|(_, stmt)| {
+        let Stmt::Let {
+            pattern,
+            initializer: Some(candidate),
+            ..
+        } = stmt
+        else {
+            return None;
+        };
+        if *candidate != initializer {
+            return None;
+        }
+        match &body.patterns[*pattern] {
+            Pattern::Bind { name, .. } => Some(name.clone()),
+            _ => None,
+        }
+    })
+}
+
+/// Turn a finalized, partially inferred type into a concrete diagnostic
+/// example without discarding the slots inference did solve. `int` is only a
+/// placeholder for still-unknown, unbounded slots; bounded generics never use
+/// this example path.
+fn diagnostic_example_ty(ty: &Ty) -> Ty {
+    match ty.kind() {
+        TyKind::Error { .. } | TyKind::Infer { .. } => Ty::int(),
+        kind => Ty::intern(kind.map_children(diagnostic_example_ty)),
+    }
 }
 
 /// Replaces every `Infer` node (unsolved variable or hole) with the Error

@@ -801,7 +801,8 @@ class BrokenConversion {
         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
             throw baml.json.JsonSerializationError {
                 message: "serialize-boom",
-                path: ""
+                path: "",
+                reason: "serialize-boom"
             }
         }
     }
@@ -823,8 +824,8 @@ class BrokenConversion {
         ],
     );
 
-    assert_eq!(output.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains("failed to serialize output"), "{stderr}");
     assert!(stderr.contains("serialize-boom"), "{stderr}");
 }

@@ -322,7 +322,12 @@ impl TestArgs {
         let cached_engine = cached_program.and_then(|program| {
             // Bytecode-cache hit: the Program carries the in-VM test registry,
             // so the database (typecheck, HIR discovery, emit) is skipped.
-            match BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new()) {
+            match BexEngine::new_with_runtime_compiler(
+                program,
+                Arc::new(sys_native::SysOps::native()),
+                Vec::new(),
+                bex_project::runtime_compiler(),
+            ) {
                 Ok(engine) => Some(Arc::new(engine)),
                 Err(error) => {
                     crate::bytecode_cache::cache_debug(format_args!(
@@ -404,10 +409,11 @@ impl TestArgs {
             ));
 
             Arc::new(
-                BexEngine::new(
+                BexEngine::new_with_runtime_compiler(
                     compiled.program,
                     Arc::new(sys_native::SysOps::native()),
                     Vec::new(),
+                    bex_project::runtime_compiler(),
                 )
                 .map_err(|e| anyhow!("failed to create engine: {e:?}"))?,
             )

@@ -1,0 +1,263 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function compiler.AssertCompiles(files: map<string, string>, packages: map<string, reflect.Package>) -> void {
+    load_var packages
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    load_type reflect.Package
+    alloc_map 0
+    store_var packages
+
+  L0:
+    load_var2 1 2
+    call user.compiler.CompileDiagnostics
+    container_len
+    store_var _4
+    load_var _4
+    load_const 0
+    call assert.equal
+    return
+}
+
+function compiler.AssertMultiRejected(files: map<string, string>, expected: compiler.DiagnosticExpectation[], packages: map<string, reflect.Package>) -> void {
+    load_var packages
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    load_type reflect.Package
+    alloc_map 0
+    store_var packages
+
+  L0:
+    load_var2 1 3
+    call user.compiler.CompileDiagnostics
+    store_var actual
+    load_var actual
+    container_len
+    store_var _8
+    load_var expected
+    container_len
+    store_var _9
+    load_var2 5 6
+    cmp_int_op !=
+    pop_jump_if_false L1
+    load_type reflect.Diagnostic
+    load_type string
+    load_type never
+    load_var actual
+    make_closure .<lambda(AssertMultiRejected, 0)>, 0
+    call baml.Array.map
+    store_var rendered
+    load_var expected
+    container_len
+    store_var _21
+    load_type int
+    load_var _21
+    call baml.String.from
+    store_var _20
+    load_var actual
+    container_len
+    store_var _24
+    load_type int
+    load_var _24
+    call baml.String.from
+    store_var _23
+    load_type string
+    load_var rendered
+    load_const "\n"
+    call baml.Array.join
+    store_var _27
+    load_type string
+    load_var _27
+    call baml.String.from
+    store_var _26
+    load_const "expected "
+    load_var _20
+    bin_op +
+    load_const " compiler diagnostic(s), got "
+    bin_op +
+    load_var _23
+    bin_op +
+    load_const ":\n"
+    bin_op +
+    load_var _26
+    bin_op +
+    call baml.sys.panic
+    pop 1
+
+  L1:
+    load_const 0
+    store_var index
+
+  L2:
+    load_var index
+    store_var _32
+    load_var expected
+    container_len
+    store_var _33
+    load_var2 15 16
+    cmp_int_op <
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const null
+    return
+
+  L4:
+    load_var2 2 14
+    load_array_element
+    load_var2 4 14
+    load_array_element
+    load_type compiler.DiagnosticExpectation
+    load_const "assert_matches"
+    virtual_call nargs=2 ntypeargs=0
+    pop 1
+    load_var index
+    load_const 1
+    add_int
+    store_var index
+    jump L2
+}
+
+function compiler.AssertRejected(files: map<string, string>, expected: compiler.DiagnosticExpectation, packages: map<string, reflect.Package>) -> void {
+    load_var packages
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    load_type reflect.Package
+    alloc_map 0
+    store_var packages
+
+  L0:
+    load_var2 1 2
+    load_type compiler.DiagnosticExpectation
+    alloc_array 1
+    load_var packages
+    call user.compiler.AssertMultiRejected
+    return
+}
+
+function compiler.CompileDiagnostics(files: map<string, string>, packages: map<string, reflect.Package>) -> reflect.Diagnostic[] {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var packages
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    load_type reflect.Package
+    alloc_map 0
+    store_var packages
+
+  L0:
+    load_deref ?1
+    load_var packages
+    sys_op reflect.Package._compile
+    store_var artifact
+    jump L3
+    load_var error
+    is_type reflect.errors.CompilationError
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var error
+    rethrow
+
+  L2:
+    load_type reflect.Diagnostic
+    load_type never
+    load_var error
+    load_field .diagnostics
+    load_var files
+    make_closure .<lambda(CompileDiagnostics, 0)>, 1
+    call baml.Array.filter
+    jump L4
+
+  L3:
+    load_type reflect.Diagnostic
+    alloc_array 0
+
+  L4:
+    return
+}
+
+function compiler.CompileFixturePackage(files: map<string, string>, packages: map<string, reflect.Package>) -> reflect.Package {
+    load_var packages
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    load_type reflect.Package
+    alloc_map 0
+    store_var packages
+
+  L0:
+    load_var2 1 2
+    sys_op reflect.Package._compile
+    jump L3
+    load_var error
+    is_type reflect.errors.CompilationError
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var error
+    rethrow
+
+  L2:
+    load_type string
+    load_var error
+    load_field .message
+    call baml.String.from
+    store_var _8
+    load_const "compiler fixture failed to compile: "
+    load_var _8
+    bin_op +
+    call baml.sys.panic
+
+  L3:
+    load_var packages
+    call reflect.Package._finish
+    jump L4
+    load_var error
+    throw_if_panic
+    load_var error
+    call reflect._render_cause
+    store_var _15
+    load_type string
+    load_var _15
+    call baml.String.from
+    store_var _14
+    load_const "compiler fixture failed to initialize: "
+    load_var _14
+    bin_op +
+    call baml.sys.panic
+
+  L4:
+    return
+}
+
+function compiler.ExactDiagnostic.DiagnosticExpectation.assert_matches(self: compiler.ExactDiagnostic, actual: reflect.Diagnostic) -> void {
+    load_var actual
+    load_field .code
+    load_var self
+    load_field .code
+    call assert.equal
+    pop 1
+    load_var actual
+    load_field .message
+    load_var self
+    load_field .message
+    call assert.equal
+    pop 1
+    load_const null
+    return
+}

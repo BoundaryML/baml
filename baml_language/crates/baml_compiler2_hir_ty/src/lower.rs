@@ -2459,11 +2459,18 @@ pub fn class_lowering_diagnostics<'db>(
 ) -> Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> {
     use crate::diagnostics::TirTypeError;
     let data = baml_compiler2_ppir::item_data::class_data(db, class);
+    let source_map = baml_compiler2_ppir::item_data::class_source_map(db, class);
+    // PPIR synthesizes `$stream` companions with an empty declaration span.
+    // Their field types originate in the source class, whose lowering walk
+    // already owns any diagnostics; reporting the clone produces a duplicate
+    // at the synthetic 0..0 range.
+    if source_map.span.is_empty() {
+        return Vec::new();
+    }
     let frame = class_generic_frame(db, class);
     let ctx = lower_ctx_for_file(db, class.file(db))
         .with_frame(frame)
         .with_bounds(class_generic_bounds(db, class));
-    let source_map = baml_compiler2_ppir::item_data::class_source_map(db, class);
     let mut out = Vec::new();
     // Field annotations: every written field type re-lowers with the sink
     // (unresolved names, wrong arg counts - the pre-S17 structural walk)

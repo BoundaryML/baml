@@ -129,7 +129,11 @@ function main() -> ai.Prompt {
     metadata: { "priority": 3 },
   }
   let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["system", "user"] }
-  let ctx = ai.Context { client: cc, tags: {} }
+  let ctx = ai.Context {
+    client: cc,
+    tags: {},
+    _output_format: ai.internal.build_output_format(reflect.Type.of<string>()),
+  }
   let render = prompt`${system}Rules${user}Hello`
   render(ctx)
 }

@@ -287,38 +287,6 @@ function caller() -> string {
     "#);
 }
 
-/// A bare reference to a generic function (`let f = identity`, no type args and
-/// no expected type) is an *unrealized* function value, so it is rejected: a
-/// generic function is a type constructor and must be specialized (`identity<int>`)
-/// or inferable from context before it can be used as a value.
-#[test]
-fn bare_generic_function_ref_rejected() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-function identity<T>(x: T) -> T { x }
-function caller() -> string {
-    let f = identity;
-    f("string")
-}
-"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.identity<T>(x: T) -> T throws never {
-      { : T
-        x : T
-      }
-    }
-    function user.caller() -> string throws never {
-      { : string
-        let f = identity : (x: string) -> string throws never
-        f("string") : string
-      }
-    }
-    "#);
-}
-
 /// Multiple bound type args as a *value*: `pair<int, string>` specializes BOTH
 /// params, yielding the concrete `(a: int, b: string) -> string`.
 #[test]
@@ -516,6 +484,7 @@ function uses() -> int {
         let g = identity : (x: int) -> int throws never
         g(5) : int
       }
+      !! 141..149: generic function `identity` needs concrete type arguments before it can be stored in `g`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the binding name: `let g: (int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument
     }
     ");
 }
