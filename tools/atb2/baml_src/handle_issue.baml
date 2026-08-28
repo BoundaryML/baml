@@ -819,12 +819,32 @@ function sandbox_rules(branch: string) -> string {
         + "- Your final message must be exactly the JSON the output format below asks for, nothing else."
 }
 
+/// One row of the PR's "Behavioral boundaries" table.
+class Boundary {
+    scenario: string,
+    result: string,
+    why: string,
+}
+
+/// The agent's account of the fix, in the shape of the team's PRs
+/// (see BoundaryML/baml#4621): Problem / After this PR / Behavioral
+/// boundaries / where the tests live / what was validated.
 class FixReport {
     /// 2-4 sentences: the root cause and the change made.
     summary: string,
-    /// Markdown for the PR's "## Design" section: what changed and why, the
-    /// files touched, and how the repro is now covered by tests.
-    design: string,
+    /// Markdown for "## Problem": what BAML did wrong, with the minimal
+    /// program that shows it in a fenced ```baml block, and why it was wrong.
+    problem: string,
+    /// Markdown for "## After this PR": the new behavior, quoting the exact
+    /// diagnostic or value the same program now produces, and the fix in
+    /// one or two paragraphs citing the files touched.
+    after: string,
+    /// The "Behavioral boundaries" table: what compiles / is rejected /
+    /// evaluates to what, and why, for the cases around the fix. 3-8 rows.
+    boundaries: Boundary[],
+    /// Markdown for the tests section: where the new tests live (paths),
+    /// what each asserts, and any snapshots refreshed.
+    tests: string,
     /// Paths of the tests that encode the issue's repro(s).
     tests_added: string[],
     files_changed: string[],
@@ -865,6 +885,10 @@ function implement_fix(issue: Issue, branch: string, test_route: string) -> FixR
            If you added a diagnostic fixture or changed diagnostics, also: cargo insta test --test-runner=nextest --accept -p baml_tests
            and commit the .snap changes. Do not run the whole workspace's clippy or nextest.
         4. Commit everything. \`git status --porcelain\` must be empty. Do not push.
+        5. Report in the shape of this team's PRs: \`problem\` (with the repro in a fenced baml code block),
+           \`after\` (quote the exact diagnostic/value the repro now produces; cite files), a
+           \`boundaries\` table of the cases around the fix (compiles / rejected / value, and why),
+           and \`tests\` (paths, what each asserts, snapshots refreshed). Declarative, no hedging.
 
         ${ctx.output_format}
     `
@@ -1235,39 +1259,105 @@ function pr_body(issue: Issue, r: FixReport, g: GateResult, turns: int, seconds:
     } else {
         ""
     };
-    let budget = time_budget_s(issue.difficulty ?? Difficulty.Medium);
+    let rows = r.boundaries
+        .map((b: Boundary) -> string {
+            "| "
+                + b.scenario.replace("|", "\\|")
+                + " | "
+                + b.result.replace("|", "\\|")
+                + " | "
+                + b.why.replace("|", "\\|")
+                + " |"
+        })
+        .join("\n");
+    let boundaries = if (r.boundaries.length() == 0) {
+        ""
+    } else {
+        "## Behavioral boundaries\n\n| Scenario | Result | Why |\n| --- | --- | --- |\n"
+            + rows
+            + "\n\n"
+    };
     fixes
-        + r.summary
-        + "\n\n## Design\n\n"
-        + r.design
-        + "\n\n## Metrics\n\n"
-        + "| | |\n|---|---|\n"
-        + "| difficulty | "
-        + (issue.difficulty ?? Difficulty.Medium).to_string()
-        + " |\n"
-        + "| agent time | "
-        + seconds.to_string()
-        + "s of "
-        + budget.to_string()
-        + "s budget |\n"
-        + "| agent turns | "
+        + "## Problem\n\n"
+        + r.problem.trim()
+        + "\n\n"
+        + "## After this PR\n\n"
+        + r.after.trim()
+        + "\n\n"
+        + boundaries
+        + "## Tests\n\n"
+        + r.tests.trim()
+        + "\n\n"
+        + "## Validation\n\n"
+        + validation_checklist(g)
+        + "\n_Opened by atb2 `handle_issue` ("
+        + (issue.difficulty ?? Difficulty.Medium).to_string().to_lower_case()
+        + ", "
         + turns.to_string()
-        + " |\n"
-        + "| tests added | "
-        + (
-            if (r.tests_added.length() == 0) {
-                "none"
-            } else {
-                r.tests_added.join(", ")
-            }
-        )
-        + " |\n"
-        + "| files changed | "
-        + r.files_changed.length().to_string()
-        + " |\n"
-        + "\n## Gates\n\n"
-        + gate_summary(g)
-        + "\n\n_Opened by atb2 `handle_issue`; the gate above was re-run by the pipeline, not the agent._\n"
+        + " agent turns, "
+        + (seconds / 60).to_string()
+        + " min); the checklist above was run by the pipeline after the agent finished._\n"
+}
+
+/// The gate as a checklist: one line per step, with the pass count when
+/// the tool printed one.
+function validation_checklist(g: GateResult) -> string {
+    g.steps
+        .map((s: GateStep) -> string {
+            let count = passed_count(s.tail);
+            "- ["
+                + (
+                    if (s.ok) {
+                        "x"
+                    } else {
+                        " "
+                    }
+                )
+                + "] `"
+                + s.name
+                + "`"
+                + (
+                    if (count != null) {
+                        ": " + (count ?? "")
+                    } else {
+                        ""
+                    }
+                )
+                + (
+                    if (s.ok) {
+                        ""
+                    } else {
+                        " — FAILED"
+                    }
+                )
+        })
+        .join("\n")
+        + "\n"
+}
+
+/// "N passed" from cargo test / nextest summaries, if present.
+function passed_count(output: string) -> string? {
+    let found: string? = null;
+    for (let line in output.lines()) {
+        let l = line.trim();
+        let i = l.index_of(" passed");
+        if (
+            i != null
+                && (
+                    l.starts_with("test result:")
+                        || l.includes("tests run:")
+                        || l.starts_with("Summary")
+                )
+        ) {
+            let head = l.slice(0, i ?? 0);
+            let words = head.split(" ");
+            let num = words.at(words.length() - 1) ?? "";
+            if (num.length() > 0) {
+                found = num + " passed";
+            };
+        };
+    }
+    found
 }
 
 /// Live only. Lifts the worktree's push guard, pushes, and opens a draft
@@ -1551,7 +1641,16 @@ function sample_gate() -> GateResult {
 function sample_report() -> FixReport {
     FixReport {
         summary: "Guarded the type-ref lookup.",
-        design: "Bounds check in `type_ref.rs:346`.",
+        problem: "A `throws` clause naming an unresolved type panics the compiler:\n\n```baml\nfunction f() -> int throws Nope { 1 }\n```",
+        after: "The same program reports `E0002: unresolved type Nope`. Bounds check in `type_ref.rs:346`.",
+        boundaries: [
+            Boundary {
+                scenario: "`throws Nope`",
+                result: "`E0002`",
+                why: "the type is looked up before lowering",
+            },
+        ],
+        tests: "`crates/baml_tests/projects/diagnostic_errors/unresolved_throws/main.baml` asserts the exact diagnostic.",
         tests_added: ["crates/baml_tests/projects/diagnostic_errors/unresolved_throws/main.baml"],
         files_changed: ["crates/baml_compiler2_hir/src/type_ref.rs"],
         gate_passed: true,
@@ -1721,12 +1820,28 @@ testset "handle_issue" {
         assert.is_true(pr_title(issue).length() <= 72);
         let body = pr_body(issue, sample_report(), sample_gate(), 12, 640);
         assert.is_true(body.starts_with("Fixes #4587"));
-        assert.contains(body, "## Design");
-        assert.contains(body, "## Metrics");
-        assert.contains(body, "| agent turns | 12 |");
-        assert.contains(body, "640s of 1800s budget");
-        assert.contains(body, "## Gates");
-        assert.contains(body, "`clippy` green (400s)");
+        assert.contains(body, "## Problem");
+        assert.contains(body, "## After this PR");
+        assert.contains(body, "| `throws Nope` | `E0002` | the type is looked up before lowering |");
+        assert.contains(body, "## Tests");
+        assert.contains(body, "## Validation");
+        assert.contains(body, "- [x] `clippy`");
+        assert.contains(body, "12 agent turns, 10 min");
+    }
+
+    test "validation counts come from the tool summaries" {
+        assert.equal(
+            passed_count("running 3 tests\ntest result: ok. 46 passed; 0 failed") ?? "",
+            "46 passed",
+        );
+        assert.equal(
+            passed_count(
+                "     Summary [ 183.785s] 1925/2039 tests run: 1924 passed (2 slow), 1 failed, 23 skipped",
+            )
+                ?? "",
+            "1924 passed",
+        );
+        assert.equal(passed_count("nothing here") == null, true);
     }
 
     test "handle_ready reasons" {
@@ -1753,8 +1868,9 @@ testset "handle_issue" {
 
     test "llm replies parse" {
         let r = implement_fix$parse(
-            #"{ "summary": "s", "design": "d", "tests_added": ["a.baml"], "files_changed": ["x.rs"], "gate_passed": true, "blockers": null }"#,
+            #"{ "summary": "s", "problem": "p", "after": "a", "boundaries": [{ "scenario": "x", "result": "compiles", "why": "y" }], "tests": "t", "tests_added": ["a.baml"], "files_changed": ["x.rs"], "gate_passed": true, "blockers": null }"#,
         );
+        assert.equal(r.boundaries.length(), 1);
         assert.equal(r.tests_added.length(), 1);
         let d = write_design_doc$parse(#"{ "suggested_fix": "f", "doc": "## Problem\nx" }"#);
         assert.contains(render_design_doc(d), "## Suggested fix");
