@@ -351,7 +351,8 @@ function sandbox_env(with_gh: bool) -> map<string, string> {
         "CARGO_PROFILE_TEST_OPT_LEVEL": "1",
         "CARGO_INCREMENTAL": "0",
     };
-    for (let k in ["CARGO_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN", "SSH_AUTH_SOCK"]) {
+    // USER + TMPDIR: the Claude Code CLI finds its keychain login through them
+    for (let k in ["USER", "LOGNAME", "TMPDIR", "CARGO_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN", "SSH_AUTH_SOCK"]) {
         let v = baml.env.get(k);
         if (v != null) {
             env.set(k, v ?? "");
