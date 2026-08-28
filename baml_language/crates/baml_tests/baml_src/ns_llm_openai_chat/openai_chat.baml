@@ -438,6 +438,107 @@ test "chat_generic_collapses_text" {
     )
 }
 
+// Regression for #4589. Both provider paths receive the exact same answer;
+// each result retains the reported omitted/present/explicit-null comparison.
+class Issue4589Bbox {
+    x float
+    y float
+    w float
+    h float
+}
+
+class Issue4589Source {
+    doc_id string
+    page int
+    bbox Issue4589Bbox?
+}
+
+class Issue4589Envelope {
+    value string?
+    source Issue4589Source?
+    abstained bool
+    note string?
+}
+
+class Issue4589FourCases {
+    optional_omitted Issue4589Envelope?
+    required_omitted Issue4589Envelope
+    optional_present Issue4589Envelope?
+    optional_explicit_null Issue4589Envelope?
+}
+
+function Issue4589Probe(t: string) -> Issue4589FourCases {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("user")}${t}\n${ctx.output_format()}`
+}
+
+function _issue_4589_answer() -> string {
+    `{"optional_omitted":{"value":"optional-omitted","source":{"doc_id":"d","page":0},"abstained":false},"required_omitted":{"value":"required-omitted","source":{"doc_id":"d","page":0},"abstained":false},"optional_present":{"value":"optional-present","source":{"doc_id":"d","page":0,"bbox":{"x":0.1,"y":0.1,"w":0.1,"h":0.1}},"abstained":false},"optional_explicit_null":{"value":"optional-explicit-null","source":{"doc_id":"d","page":0,"bbox":null},"abstained":false}}`
+}
+
+function _issue_4589_chat_response() -> string {
+    let answer = baml.json.stringify(baml.json.to_json(_issue_4589_answer()));
+    `{"id":"chatcmpl-4589","model":"m","choices":[{"index":0,"message":{"role":"assistant","content":${answer}},"finish_reason":"stop"}]}`
+}
+
+function _issue_4589_responses_response() -> string {
+    let answer = baml.json.stringify(baml.json.to_json(_issue_4589_answer()));
+    `{"id":"resp-4589","model":"m","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":${answer}}]}]}`
+}
+
+function _issue_4589_result_label(path: string, value: Issue4589FourCases) -> string {
+    [
+        path,
+        value.optional_omitted?.value ?? "NULLED",
+        value.required_omitted.value ?? "NULLED",
+        value.optional_present?.value ?? "NULLED",
+        value.optional_explicit_null?.value ?? "NULLED",
+    ].join("|")
+}
+
+function issue_4589_chat_preserves_omitted_nested_optional_class() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_issue_4589_chat_response())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.GenericClient.new(
+                model = "m",
+                base_url = mock.base_url() + "/v1",
+            );
+            let result = ai.Agent.new(client = cl).run(Issue4589Probe@spec("probe")).value;
+            _issue_4589_result_label(mock.last_request().path(), result)
+        },
+    )
+}
+
+test "issue_4589_chat_preserves_omitted_nested_optional_class" {
+    assert.equal(
+        issue_4589_chat_preserves_omitted_nested_optional_class(),
+        "/v1/chat/completions|optional-omitted|required-omitted|optional-present|optional-explicit-null",
+    )
+}
+
+function issue_4589_responses_preserves_omitted_nested_optional_class() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_issue_4589_responses_response())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "m",
+                api_key = "test-key",
+                base_url = mock.base_url() + "/v1",
+            );
+            let result = ai.Agent.new(client = cl).run(Issue4589Probe@spec("probe")).value;
+            _issue_4589_result_label(mock.last_request().path(), result)
+        },
+    )
+}
+
+test "issue_4589_responses_preserves_omitted_nested_optional_class" {
+    assert.equal(
+        issue_4589_responses_preserves_omitted_nested_optional_class(),
+        "/v1/responses|optional-omitted|required-omitted|optional-present|optional-explicit-null",
+    )
+}
+
 function chat_generic_request_timeout_ms() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],
