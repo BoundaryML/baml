@@ -379,7 +379,15 @@ fn open_bad_document_publishes_versioned_diagnostics() {
 /// neither inline nor through the discovery it triggers.
 #[test]
 fn did_open_never_reads_the_opened_file() {
-    let mut h = Harness::new();
+    let io = Arc::new(ManualExecutor::default());
+    let mut h = Harness::with_executors(
+        Executors {
+            requests: Arc::new(ThreadPool::new(2)),
+            diagnostics: Arc::new(ThreadPool::new(2)),
+            io: io.clone(),
+        },
+        None,
+    );
     h.fs.add_project(&h.ws);
     h.fs.write(h.ws.join("main.baml"), "// stale disk copy\n");
     h.fs.write(h.ws.join("other.baml"), "class Other { y int }\n");
@@ -394,6 +402,8 @@ fn did_open_never_reads_the_opened_file() {
         h.fs.reads().is_empty(),
         "didOpen is inline and read nothing"
     );
+    assert_eq!(io.parked(), 1, "didOpen queues one discovery job");
+    io.run_all();
     h.settle();
 
     assert_eq!(
