@@ -10,6 +10,7 @@ client Triage = claude_code.ClaudeCodeClient.new(model = "sonnet", timeout_ms = 
 function create_issue(fb: Feedback) -> Issue? {
     //# 1. distill the feedback into a minimal repro (LLM)
     let repro = create_repro(fb);
+    //# 2. run the repro in-process against this toolchain
     let run = run_repro(repro);
     log.info({ "feedback": fb.id, "verdict": run.verdict.to_string(), "observed": run.observed });
     //# already fixed on this toolchain: stop, no ticket
