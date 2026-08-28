@@ -34,7 +34,7 @@
 
 - Improve LLM response parsing behavior when an optional field is omitted ([#4612](https://github.com/BoundaryML/baml/pull/4612)) - Sam Lijin
 - Make HTTP operations in the playground work again ([#4609](https://github.com/BoundaryML/baml/pull/4609)) - hellovai
-- Preserve errors thrown by code executed by `eval()`([#4583](https://github.com/BoundaryML/baml/pull/4583)) - Antonio Sarosi
+- Preserve errors thrown by code executed by `eval()` ([#4583](https://github.com/BoundaryML/baml/pull/4583)) - Antonio Sarosi
 - Preserve type definition values at runtime, instead of dropping them or passing them around as strings ([#4501](https://github.com/BoundaryML/baml/pull/4501); [#4516](https://github.com/BoundaryML/baml/pull/4516); [#4536](https://github.com/BoundaryML/baml/pull/4536); [#4577](https://github.com/BoundaryML/baml/pull/4577)) - Antonio Sarosi
 - Make `unreflect` safe: define its compile-time and runtime behavior, and emit compiler diagnostics in disallowed scenarios ([#4518](https://github.com/BoundaryML/baml/pull/4518); [#4530](https://github.com/BoundaryML/baml/pull/4530)) - Antonio Sarosi
 - Fix stack-carry compiler optimizations ([#4508](https://github.com/BoundaryML/baml/pull/4508); [#4544](https://github.com/BoundaryML/baml/pull/4544)) - Sam Lijin, Antonio Sarosi
@@ -43,7 +43,7 @@
 - Prevent compiler crashes on `for` loops over joined map union arms and on `Iterable`-bounded generics. ([#4490](https://github.com/BoundaryML/baml/pull/4490)) - Avery Townsend
 - Raise compile errors for empty arrays and maps whose element types cannot be inferred. ([#4573](https://github.com/BoundaryML/baml/pull/4573)) - Avery Townsend
 - Raise compile errors for non-data LLM output schemas instead of crashing or silently erroring. ([#4470](https://github.com/BoundaryML/baml/pull/4470)) - Antonio Sarosi
-- Bring`ctx.output_format()` to feature parity with BAML v0 ([#4567](https://github.com/BoundaryML/baml/pull/4567)) - Avery Townsend
+- Bring `ctx.output_format()` to feature parity with BAML v0 ([#4567](https://github.com/BoundaryML/baml/pull/4567)) - Avery Townsend
 - When mutating an object in a called function or a loop, make sure the mutation persists when exiting the context. ([#4467](https://github.com/BoundaryML/baml/pull/4467)) - Antonio Sarosi
 - Fix `x?.m<T>()` syntax form: thread type args through optional chaining ([#4495](https://github.com/BoundaryML/baml/pull/4495)) - Antonio Sarosi
 - Return a compiler diagnostic when attempting to resolve member variables or call member functions on `unknown`  ([#4466](https://github.com/BoundaryML/baml/pull/4466)) - Antonio Sarosi
