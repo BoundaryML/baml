@@ -13,6 +13,19 @@ use crate::{
     param_schema::{ParamSchema, TypeSchema},
 };
 
+/// Read the canonical PPIR metadata bit for a function definition.
+///
+/// A PPIR-synthesized function can have no corresponding entry in HIR's raw
+/// item tree, so public-surface consumers must not call
+/// `Definition::is_language_internal` on canonical package definitions.
+pub(crate) fn is_language_internal_definition(
+    db: &dyn baml_compiler2_ppir::Db,
+    def: Definition<'_>,
+) -> bool {
+    matches!(def, Definition::Function(function)
+        if function_data(db, function).metadata.is_language_internal)
+}
+
 /// Whether an enumeration of the language surface should skip this
 /// definition as synthesized.
 ///
@@ -139,6 +152,13 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
     let mut types = std::collections::BTreeMap::new();
     for (namespace_path, ns_items) in &pkg.namespaces {
         for (name, defn) in &ns_items.values {
+            // Keep this user-facing enumeration aligned with package listings:
+            // ordinary functions synthesized for compiler use still contribute
+            // to the package namespace, but are not authored declarations.
+            if is_language_internal_definition(db, *defn) {
+                continue;
+            }
+
             if let Definition::Function(func_loc) = defn {
                 let llm_meta = function_llm_meta(db, *func_loc);
                 let is_llm = llm_meta.is_some();

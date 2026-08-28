@@ -21,8 +21,9 @@
 //! Impls are top-level records referenced by id from the items they attach
 //! to — a blanket impl (`implements<T> Concrete for T`) attaches to every
 //! item and must not be duplicated into each. The export set is explicit:
-//! synthetic items (`$stream` companions, `$new` constructors) are listed
-//! and flagged, never silently dropped.
+//! user-facing synthetic items (`$stream` types, `$new` constructors) are
+//! listed and flagged, while language-internal function companions stay out
+//! of the package surface.
 //!
 //! One document covers one package. References may cross packages — a field
 //! type's head, an attached impl declared downstream — and stay
@@ -63,6 +64,8 @@ use baml_type::{
 };
 use serde::Serialize;
 use text_size::TextRange;
+
+use crate::symbols::is_language_internal_definition;
 
 /// Bumped on every breaking change to this schema. Consumers should check it
 /// before reading anything else.
@@ -522,7 +525,7 @@ pub struct FunctionExport {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub docstring: Option<String>,
-    /// `true` for compiler-minted companions (`$`-named) and derives.
+    /// `true` for compiler-minted companions and derives.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub synthetic: bool,
     /// `true` when this entry is an interface default the impl inherited
@@ -695,7 +698,7 @@ pub enum ItemDetail {
 pub struct PackageExport {
     pub format_version: u32,
     pub package: String,
-    /// Every named item, synthetic included, sorted by id.
+    /// Every public named item, user-facing synthetics included, sorted by id.
     pub items: Vec<ItemExport>,
     /// Every impl block declared in this package, sorted by id.
     pub impls: Vec<ImplExport>,
@@ -918,6 +921,9 @@ pub fn export_package<'db>(db: &'db Db, package: PackageId<'db>) -> PackageExpor
         values.sort_by(|(a, _), (b, _)| a.cmp(b));
         named.extend(values);
         for (_, def) in named {
+            if is_language_internal_definition(db, def) {
+                continue;
+            }
             if let Some(item) = export_item(db, def, &impl_index) {
                 items.push(item);
             }
@@ -1048,7 +1054,10 @@ fn function_export(
         declared_by,
         name: name.to_string(),
         docstring: data.docstring.clone(),
-        synthetic: name.as_str().contains('$'),
+        synthetic: !matches!(
+            data.metadata.origin,
+            baml_compiler2_ast::FunctionOrigin::UserDefined
+        ),
         from_default,
         signature: SignatureExport {
             generics: function_generics(db, function)
@@ -1235,6 +1244,11 @@ fn export_item<'db>(
             let mut methods: Vec<FunctionExport> = data
                 .methods
                 .iter()
+                .filter(|&&loc| {
+                    !item_data::function_data(db, loc)
+                        .metadata
+                        .is_language_internal
+                })
                 .map(|&loc| function_export(db, loc, false, None))
                 .collect();
             methods.sort_by(|a, b| a.name.cmp(&b.name));
@@ -1337,9 +1351,16 @@ fn export_item<'db>(
         name: name.to_string(),
         namespace,
         docstring: definition_docstring(db, def).map(str::to_string),
-        // Reliable, not heuristic: `$` cannot appear in a user identifier,
-        // and every compiler-synthesized top-level item is `$`-named.
-        synthetic: name.as_str().contains('$'),
+        // Function provenance distinguishes authored `$` names from public
+        // companions. Synthetic type declarations retain their established
+        // `$` spelling; language-internal functions were filtered above.
+        synthetic: match def {
+            Definition::Function(function) => !matches!(
+                item_data::function_data(db, function).metadata.origin,
+                baml_compiler2_ast::FunctionOrigin::UserDefined
+            ),
+            _ => name.as_str().contains('$'),
+        },
         source: source_export(db, definition_file(db, def), definition_span(db, def)),
         detail,
     })
@@ -1350,6 +1371,7 @@ mod tests {
     use baml_db::ProjectDatabase;
 
     use super::*;
+    use crate::test_support::TestDbExt;
 
     fn make_db() -> ProjectDatabase {
         let mut db = ProjectDatabase::new();
@@ -1474,6 +1496,74 @@ mod tests {
     }
 
     #[test]
+    fn language_internal_llm_companions_are_absent_from_package_export() {
+        let root = std::path::Path::new("/tmp/export_private_llm_companions");
+        let mut db = make_db();
+        db.workspace(root);
+        db.file(
+            &root.join("main.baml"),
+            r#"
+class ExportResult {
+    value string
+}
+
+class ExportRunner {
+    prefix string
+
+    function Ask(self, question: string) -> ExportResult {
+        client: "openai/gpt-4o-mini"
+        prompt: `${self.prefix}: ${question}`
+    }
+
+    function StaticAsk(question: string) -> ExportResult {
+        client: "openai/gpt-4o-mini"
+        prompt: `static: ${question}`
+    }
+}
+
+function Dollar$Ask(question: string) -> ExportResult {
+    client: "openai/gpt-4o-mini"
+    prompt: `${question}`
+}
+"#,
+        );
+
+        let export = export_package(&db, package(&db, "user"));
+        let authored = export
+            .items
+            .iter()
+            .find(|item| item.name == "Dollar$Ask")
+            .expect("authored top-level LLM function is exported");
+        assert!(
+            !authored.synthetic,
+            "an authored `$` name is not a compiler synthetic"
+        );
+        assert!(
+            export
+                .items
+                .iter()
+                .any(|item| item.name == "ExportResult$stream" && item.synthetic),
+            "public PPIR partial-output types remain exported"
+        );
+
+        let runner = export
+            .items
+            .iter()
+            .find(|item| item.name == "ExportRunner")
+            .expect("authored class is exported");
+        let ItemDetail::Class { methods, .. } = &runner.detail else {
+            panic!("ExportRunner must export as a class")
+        };
+        assert!(methods.iter().any(|method| method.name == "Ask"));
+        assert!(methods.iter().any(|method| method.name == "StaticAsk"));
+        assert!(methods.iter().all(|method| !method.name.contains('@')));
+
+        let json = serde_json::to_string(&export).unwrap();
+        assert!(!json.contains("@spec"), "private spec companion leaked");
+        assert!(!json.contains("@stream"), "private stream companion leaked");
+    }
+
+    #[test]
     fn baml_package_export_cross_links() {
         let db = make_db();
         let export = export_package(&db, package(&db, "baml"));
@@ -1579,11 +1669,11 @@ mod tests {
             "Sortable carries SortError"
         );
 
-        // Synthetic companions are present and flagged, never dropped.
+        // Synthetic partial-output types are present and flagged, never dropped.
         assert!(
             items.iter().any(|item| item["synthetic"] == true
                 && item["id"].as_str().unwrap().contains("$stream")),
-            "synthetic $stream companions are listed and flagged"
+            "synthetic $stream types are listed and flagged"
         );
 
         // Docstrings survive.

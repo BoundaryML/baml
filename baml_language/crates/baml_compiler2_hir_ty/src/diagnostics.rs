@@ -133,8 +133,6 @@ pub enum TirTypeError {
     UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
-    /// `@spec` was projected from a declaration that owns no LLM spec recipe.
-    FunctionProjectionUnavailable { name: Name },
     /// A value name was written bare in a generic slot. Runtime-computed
     /// slots require the whole-slot `unreflect(value)` marker.
     ComputedGenericArgumentRequiresUnreflect { name: Name },
@@ -938,12 +936,6 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
-            }
-            TirTypeError::FunctionProjectionUnavailable { name } => {
-                write!(
-                    f,
-                    "`{name}@spec` is only available on an LLM function with a valid spec recipe"
-                )
             }
             TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
                 let diagnostic =

@@ -886,7 +886,7 @@ function plain(x: int) -> int { x }
     }
 
     #[test]
-    fn private_stream_projection_is_absent_from_param_schema_listing() {
+    fn private_llm_companions_are_absent_from_param_schema_listing() {
         let db = db_with(&[("main.baml", LLM_FIXTURE)]);
         let listing = list_functions_with_metadata(&db);
         assert_eq!(
@@ -896,7 +896,7 @@ function plain(x: int) -> int { x }
                 .map(|function| function.name.as_str())
                 .collect::<Vec<_>>(),
             ["extract", "plain"],
-            "compiler-private `Fn@stream` must not enter the authored function listing"
+            "compiler-private `Fn@spec` and `Fn@stream` must not enter the authored function listing"
         );
         assert!(listing.functions.iter().all(|function| {
             !function.is_sub_function

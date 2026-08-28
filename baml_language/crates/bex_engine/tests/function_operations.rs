@@ -67,6 +67,19 @@ const SOURCE: &str = r#"
         Ask@spec
     }
 
+    function AskValue() -> unknown {
+        Ask
+    }
+
+    function BoundAskValue() -> unknown {
+        let runner = SpecRunner { prefix: "boundary-bound" }
+        runner.Ask
+    }
+
+    function StaticAskValue() -> unknown {
+        SpecRunner.StaticAsk
+    }
+
     function AskPromptText(question: string) -> string {
         Ask@spec(question).prompt().text()
     }
@@ -90,6 +103,18 @@ const SOURCE: &str = r#"
 
     function GenericAskParse(raw: string) -> string {
         GenericAsk@spec<string>("schema only").parse(raw)
+    }
+
+    function GenericAskValue() -> unknown {
+        GenericAsk<string>
+    }
+
+    function StringSpecPromptText(spec: ai.FunctionSpec<string>) -> string {
+        spec.prompt().text()
+    }
+
+    function ParseStringSpec(spec: ai.FunctionSpec<string>, raw: string) -> string {
+        spec.parse(raw)
     }
 
     function DynamicGenericAskOutputType() -> string {
@@ -198,6 +223,52 @@ fn operation_args(
         .collect()
 }
 
+async fn returned_callable(
+    engine: &Arc<BexEngine>,
+    function_name: &str,
+) -> bex_external_types::Handle {
+    let returned = engine
+        .call_function(
+            function_name,
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap_or_else(|error| panic!("{function_name} failed: {error}"));
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+        kind: TaggedHeapHandleKind::Callable,
+        heap_handle,
+        ..
+    }) = returned
+    else {
+        panic!("{function_name} must return a callable handle");
+    };
+    heap_handle
+}
+
+async fn callable_spec(
+    engine: &Arc<BexEngine>,
+    value_function: &str,
+    question: &str,
+) -> BexExternalValue {
+    let handle = returned_callable(engine, value_function).await;
+    engine
+        .call_callable_operation_named(
+            handle,
+            FunctionOperation::Spec,
+            indexmap::IndexMap::from([(
+                "question".to_string(),
+                BexExternalValue::String(question.into()),
+            )]),
+            indexmap::IndexMap::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap_or_else(|error| panic!("{value_function} Spec operation failed: {error}"))
+}
+
 #[tokio::test]
 async fn dynamic_client_expression_keeps_source_and_boundary_operations() {
     let engine = engine();
@@ -247,10 +318,27 @@ async fn dynamic_client_expression_keeps_source_and_boundary_operations() {
 }
 
 #[tokio::test]
-async fn operation_entry_comes_from_authored_function_metadata() {
+async fn operation_entries_use_exact_private_companion_names() {
     let engine = engine();
     assert!(!engine.function_exists("Ask$spec"));
     assert!(!engine.function_exists("Ask$stream"));
+    assert!(engine.function_exists("Ask@spec"));
+    assert!(engine.function_exists("Ask@stream"));
+    assert!(engine.function_exists("Dollar$Ask@spec"));
+    assert!(engine.function_exists("Dollar$Ask@stream"));
+    assert!(engine.function_exists("SpecRunner.StaticAsk@spec"));
+    assert!(engine.function_exists("SpecRunner.StaticAsk@stream"));
+
+    let spec_params = engine
+        .function_operation_params("Ask", FunctionOperation::Spec)
+        .expect("spec operation params");
+    assert_eq!(
+        spec_params
+            .iter()
+            .map(|(name, _, _)| *name)
+            .collect::<Vec<_>>(),
+        ["question"]
+    );
 
     let spec = engine
         .call_function_bound_args_operation(
@@ -270,6 +358,24 @@ async fn operation_entry_comes_from_authored_function_metadata() {
         })
     ));
 
+    let static_spec = engine
+        .call_function_bound_args_operation(
+            "SpecRunner.StaticAsk",
+            FunctionOperation::Spec,
+            operation_args(&engine, "SpecRunner.StaticAsk", FunctionOperation::Spec),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("qualified static-method spec operation");
+    assert!(matches!(
+        static_spec,
+        BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+            kind: TaggedHeapHandleKind::FunctionSpec,
+            ..
+        })
+    ));
+
     let stream_params = engine
         .function_operation_params("Ask", FunctionOperation::Stream)
         .expect("stream operation params");
@@ -280,23 +386,35 @@ async fn operation_entry_comes_from_authored_function_metadata() {
             .collect::<Vec<_>>(),
         ["question", "client", "on_event"]
     );
-    assert!(engine.function_exists("Ask@stream"));
-    assert!(engine.function_exists("Dollar$Ask@stream"));
-    assert!(
-        engine.find_user_function("Ask@stream").is_none(),
-        "compiler-private stream entry must not be a CLI/user entry point"
-    );
+    for companion in ["Ask@spec", "Ask@stream"] {
+        assert!(
+            engine.find_user_function(companion).is_none(),
+            "compiler-private companion `{companion}` must not be a CLI/user entry point"
+        );
+    }
     assert!(
         engine
             .user_functions()
             .iter()
-            .all(|function| !function.display_name.ends_with("@stream")),
-        "compiler-private stream entries must not appear in function listings"
+            .all(|function| !function.display_name.ends_with("@spec")
+                && !function.display_name.ends_with("@stream")),
+        "compiler-private companions must not appear in function listings"
+    );
+
+    let dollar_spec_params = engine
+        .function_operation_params("Dollar$Ask", FunctionOperation::Spec)
+        .expect("a legal authored `$` name keeps its Spec operation");
+    assert_eq!(
+        dollar_spec_params
+            .iter()
+            .map(|(name, _, _)| *name)
+            .collect::<Vec<_>>(),
+        ["question"]
     );
 
     let dollar_stream_params = engine
         .function_operation_params("Dollar$Ask", FunctionOperation::Stream)
-        .expect("a legal authored `$` name keeps its stream capability");
+        .expect("a legal authored `$` name keeps its Stream operation");
     assert_eq!(
         dollar_stream_params
             .iter()
@@ -333,7 +451,7 @@ async fn operation_entry_comes_from_authored_function_metadata() {
 }
 
 #[tokio::test]
-async fn returned_spec_projection_keeps_its_operation() {
+async fn returned_spec_companion_callable_invokes_directly() {
     let engine = engine();
     let returned = engine
         .call_function(
@@ -343,7 +461,7 @@ async fn returned_spec_projection_keeps_its_operation() {
             true,
         )
         .await
-        .expect("return projected callable");
+        .expect("return spec companion callable");
     let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
         kind: TaggedHeapHandleKind::Callable,
         heap_handle,
@@ -361,7 +479,7 @@ async fn returned_spec_projection_keeps_its_operation() {
             true,
         )
         .await
-        .expect("projected callable must evaluate the spec recipe");
+        .expect("spec companion callable must invoke directly");
     assert!(matches!(
         spec,
         BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
@@ -372,7 +490,45 @@ async fn returned_spec_projection_keeps_its_operation() {
 }
 
 #[tokio::test]
-async fn source_spec_methods_use_the_attached_recipe() {
+async fn callable_spec_operation_preserves_generic_and_method_context() {
+    let engine = engine();
+
+    for (value_function, question, expected_prompt) in [
+        ("AskValue", "named", "named"),
+        ("BoundAskValue", "method", "boundary-bound: method"),
+        ("StaticAskValue", "static", "static: static"),
+    ] {
+        let spec = callable_spec(&engine, value_function, question).await;
+        let prompt = engine
+            .call_function(
+                "StringSpecPromptText",
+                vec![spec],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .unwrap_or_else(|error| panic!("prompt from {value_function} failed: {error}"));
+        let BexExternalValue::String(prompt) = prompt else {
+            panic!("prompt from {value_function} must be a string");
+        };
+        assert!(prompt.contains(expected_prompt), "{prompt}");
+    }
+
+    let generic = callable_spec(&engine, "GenericAskValue", "generic").await;
+    let parsed = engine
+        .call_function(
+            "ParseStringSpec",
+            vec![generic, BexExternalValue::String("\"typed\"".into())],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("generic callable Spec must preserve the string type argument");
+    assert_eq!(parsed, BexExternalValue::String("typed".into()));
+}
+
+#[tokio::test]
+async fn source_spec_methods_use_the_private_companion() {
     let engine = engine();
     let call = |name: &'static str, value: &'static str| {
         let engine = Arc::clone(&engine);

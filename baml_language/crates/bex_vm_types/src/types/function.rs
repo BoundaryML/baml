@@ -1,7 +1,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use super::InterfaceBound;
-use crate::{Bytecode, HeapPtr, ObjectIndex, SysOp, TyTemplate, Value};
+use crate::{Bytecode, HeapPtr, SysOp, TyTemplate, Value};
 
 /// Function type.
 ///
@@ -90,22 +90,10 @@ impl BorshDeserialize for FunctionKind {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub struct LlmOperationCapabilities {
-    pub spec: bool,
-    pub stream: bool,
-    pub tools: bool,
-}
-
+/// LLM-specific metadata for a function.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum FunctionMeta {
-    Llm {
-        client: String,
-        /// Private pooled function object that evaluates the attached spec
-        /// recipe. It is deliberately absent from globals and symbol tables.
-        spec_entry: ObjectIndex,
-        capabilities: LlmOperationCapabilities,
-    },
+    Llm { client: String },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
@@ -353,27 +341,29 @@ pub struct Closure {
 /// runtime `Self` at bind time). The receiver is inserted as `self` at call time
 /// by `CallIndirect`.
 ///
-/// Like every callable value, a bound method is fully realized: its complete
-/// type environment is curried in at creation via [`Self::type_args`], so the
-/// `CallIndirect` that invokes it carries no type arguments of its own.
+/// The type environment resolved when the method is bound is curried in via
+/// [`Self::type_args`], so `CallIndirect` carries no separate type arguments.
+/// See the field documentation for the ordinary-bound-method limitation around
+/// a later explicit generic application.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
     /// The receiver value (inserted as `self` at call time).
     pub receiver: Value,
-    /// The callee frame's **complete** curried type arguments, in the callee
+    /// The callee frame's canonical curried type arguments, in the callee
     /// frame's De Bruijn order — materialized at bind time and installed as
-    /// `frame.type_args` when the value is invoked by `CallIndirect`, so
-    /// `LoadType(TypeArgRef(N))` / `IsType` inside the body resolve correctly.
+    /// `frame.type_args` when the value is invoked by `CallIndirect`.
     ///
-    /// `MakeBoundMethod` curries `[class generics (→ Self), method fn generics]`
-    /// — the exact vector a direct `receiver.method<…>(…)` call would seed.
-    /// `MakeVirtualBoundMethod` instead curries the resolved impl's realized
-    /// frame — the impl's own generics, or the interface's args + associated
-    /// types for an inherited default (which the receiver's class args cannot
-    /// express, e.g. a blanket `implement<T> I for T[]` bound at `int[]`) —
-    /// followed by any method-level type args from the reference site.
+    /// `MakeBoundMethod` curries the class generics (→ `Self`). A later explicit
+    /// generic application to that ordinary bound value is not yet retained by
+    /// `MakeGenericFunctionFromValue`; that pre-existing limitation is documented
+    /// at the opcode implementation. `MakeVirtualBoundMethod` curries the
+    /// resolved impl's realized frame — the impl's own generics, or the
+    /// interface's args + associated types for an inherited default (which the
+    /// receiver's class args cannot express, e.g. a blanket `implement<T> I for
+    /// T[]` bound at `int[]`) — followed by method-level type args from the
+    /// reference site.
     ///
     /// `RuntimeTy` (not `RealizedTy`) mirrors [`Closure::captured_type_args`]
     /// and [`GenericFunction::type_args`]: these positions should never carry a

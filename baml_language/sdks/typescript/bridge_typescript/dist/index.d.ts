@@ -19,7 +19,7 @@ export type { BamlPromptCallOptions, BamlPromptMessage, FunctionOperation, } fro
 export { CtxManager } from './ctx_manager.js';
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
-export type { FunctionProjection, GenericParams } from './define_function.js';
+export type { GenericParams } from './define_function.js';
 export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
 export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor, BamlInterfaceToken } from './wire_ty.js';
 /**

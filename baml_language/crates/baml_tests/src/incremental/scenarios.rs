@@ -603,9 +603,9 @@ fn editing_a_function_body_preserves_its_signature_data() {
 fn function_scope_index_agrees_with_the_span_join_it_replaces() {
     let mut test_db = IncrementalTestDb::new();
 
-    // Includes a declarative LLM function. Its spec recipe is attached to the
-    // authored function rather than represented by additional declarations, so
-    // every source function must have exactly one unambiguous scope entry.
+    // Includes a declarative LLM function and its compiler-generated private
+    // companions. Every canonical function must have one unambiguous scope
+    // entry even when the companions share the authored declaration's span.
     let file = test_db.db_mut().file(
         "test.baml",
         "function Add(x: int, y: int) -> int {\n  x + y\n}\n\n\
@@ -620,8 +620,8 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
     let functions = baml_compiler2_ppir::item_data::file_functions(db, file);
     assert_eq!(
         functions.len(),
-        4,
-        "fixture should contain four authored functions"
+        6,
+        "fixture should contain four authored functions plus both private LLM companions"
     );
 
     for &loc in functions {

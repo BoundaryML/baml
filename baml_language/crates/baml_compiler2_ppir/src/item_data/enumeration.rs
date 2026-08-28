@@ -9,8 +9,10 @@
 //! position is safe *here* — the result is a set of `Loc`s, which are
 //! position-independent, so moving an item around in the file does not change
 //! this query's value unless it actually reorders declarations. Synthetic
-//! `*$stream` type declarations carry offset 0; function projections never
-//! enter these lists as declarations.
+//! `*$stream` type declarations carry offset 0. Compiler-generated `Fn@spec`
+//! and `Fn@stream` companions are ordinary canonical functions and therefore
+//! enter the function list; public-surface consumers filter their
+//! language-internal metadata.
 
 use baml_base::SourceFile;
 use baml_compiler2_hir::loc::{
@@ -55,7 +57,7 @@ file_items!(
     ClassLoc
 );
 file_items!(
-    /// Every authored function in `file`, in source order. Includes methods.
+    /// Every canonical function in `file`, including methods and private companions.
     file_functions,
     functions,
     FunctionLoc

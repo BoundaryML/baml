@@ -2704,14 +2704,6 @@ impl BexVm {
     #[inline]
     pub fn idx_to_ptr(&self, idx: ObjectIndex) -> HeapPtr {
         let package_ptr = self.current_runtime_package();
-        self.idx_to_ptr_in(package_ptr, idx)
-    }
-
-    /// Resolve an object-pool index in a specific function owner's image.
-    /// This is required for function projections because their private entry
-    /// may be selected before that function has become the current frame.
-    #[inline]
-    fn idx_to_ptr_in(&self, package_ptr: HeapPtr, idx: ObjectIndex) -> HeapPtr {
         if package_ptr.as_ptr().is_null() {
             return self.heap.compile_time_ptr(idx.into_raw());
         }
@@ -2741,47 +2733,6 @@ impl BexVm {
             });
         }
         Ok(authored_ptr)
-    }
-
-    /// Resolve an authored LLM function's private spec entry. Source projections
-    /// use the result as an ordinary closure target; the host bridge uses it for
-    /// its Spec operation without putting projection state on VM callables.
-    pub fn function_spec_target_ptr(
-        &self,
-        authored_ptr: HeapPtr,
-    ) -> Result<HeapPtr, VmInternalError> {
-        let Object::Function(authored) = self.get_object(authored_ptr) else {
-            return Err(VmInternalError::TypeError {
-                expected: FunctionType::Callable.into(),
-                got: ObjectType::of(self.get_object(authored_ptr)).into(),
-            });
-        };
-        let Some(FunctionMeta::Llm {
-            spec_entry,
-            capabilities,
-            ..
-        }) = &authored.body_meta
-        else {
-            return Err(VmInternalError::FunctionSpecUnavailable);
-        };
-        if !capabilities.spec {
-            return Err(VmInternalError::FunctionSpecUnavailable);
-        }
-        let target = self.idx_to_ptr_in(authored.runtime_package, *spec_entry);
-        if !matches!(self.get_object(target), Object::Function(_)) {
-            return Err(VmInternalError::TypeError {
-                expected: FunctionType::Callable.into(),
-                got: ObjectType::of(self.get_object(target)).into(),
-            });
-        }
-        Ok(target)
-    }
-
-    pub fn generic_function_target_ptr(
-        &self,
-        generic: &bex_vm_types::GenericFunction,
-    ) -> Result<HeapPtr, VmInternalError> {
-        self.generic_function_authored_ptr(generic)
     }
 
     /// Helper method to get `HeapPtr` from a Value, with type checking.
@@ -3026,7 +2977,7 @@ impl BexVm {
                 }
             }
             Object::GenericFunction(gf) => {
-                let target = self.generic_function_target_ptr(gf).ok()?;
+                let target = self.generic_function_authored_ptr(gf).ok()?;
                 match self.get_object(target) {
                     Object::Function(f) => {
                         function_callable_signature(self, f, &gf.type_args, false).ok()
@@ -3157,7 +3108,7 @@ impl BexVm {
                 _ => None,
             },
             Object::GenericFunction(generic) => {
-                let target = self.generic_function_target_ptr(generic).ok()?;
+                let target = self.generic_function_authored_ptr(generic).ok()?;
                 match self.get_object(target) {
                     Object::Function(function) => Some((function, &generic.type_args)),
                     _ => None,
@@ -3191,9 +3142,9 @@ impl BexVm {
     /// frame it carries.
     ///
     /// A generic function's declared signature can be free of its own type
-    /// parameters — a projection like `GenericList@spec` can expose a callable
-    /// signature whose body still materializes the parent's type arguments — so signature
-    /// reconstruction succeeds and the value looks ordinary. Its body still
+    /// parameters — a companion like `GenericList@spec` can expose a callable
+    /// signature whose body still materializes the parent's type arguments —
+    /// so signature reconstruction succeeds and the value looks ordinary. Its body still
     /// materializes `T` (the output-format schema, for one), and entering it
     /// with an empty frame fails deep inside `LoadType` as a VM internal error
     /// that no `catch` can see. Reflection asks this question before handing
@@ -3412,7 +3363,7 @@ impl BexVm {
                 // Resolve the underlying function through the global table, as
                 // at call time; its `type_args` are the frame the signature
                 // templates materialize against.
-                let target = self.generic_function_target_ptr(gf).ok()?;
+                let target = self.generic_function_authored_ptr(gf).ok()?;
                 match self.get_object(target) {
                     Object::Function(f) => {
                         function_object_ty(self, f, &gf.type_args, false).ok()?
@@ -3506,7 +3457,9 @@ impl BexVm {
             Object::Function(_) => callable,
             Object::Closure(closure) => closure.function,
             Object::BoundMethod(method) => method.function,
-            Object::GenericFunction(function) => self.generic_function_target_ptr(function).ok()?,
+            Object::GenericFunction(function) => {
+                self.generic_function_authored_ptr(function).ok()?
+            }
             _ => return None,
         };
         matches!(self.get_object(function_object), Object::Function(_))
@@ -3923,8 +3876,8 @@ impl BexVm {
                     effective_type_args = gf.type_args.to_vec();
                     effective_type_values = vec![None; effective_type_args.len()];
                     dispatch_ptr = self
-                        .generic_function_target_ptr(gf)
-                        .expect("generic function projection resolves to a function");
+                        .generic_function_authored_ptr(gf)
+                        .expect("generic function global resolves to a function");
                     match unsafe { dispatch_ptr.get() } {
                         Object::Function(f) => (
                             f.kind,
@@ -4008,7 +3961,7 @@ impl BexVm {
                 _ => None,
             },
             Object::GenericFunction(gf) => {
-                let target = self.generic_function_target_ptr(gf).ok();
+                let target = self.generic_function_authored_ptr(gf).ok();
                 match target.map(|p| unsafe { p.get() }) {
                     Some(Object::Function(f)) => Some(&f.display_type_params),
                     _ => None,
@@ -4683,7 +4636,7 @@ impl BexVm {
                 }
             }
             Object::GenericFunction(gf) => {
-                let func_ptr = self.generic_function_target_ptr(gf)?;
+                let func_ptr = self.generic_function_authored_ptr(gf)?;
                 // SAFETY: function globals hold compile-time Function objects.
                 let func_obj = unsafe { func_ptr.get() };
                 match func_obj {
@@ -5764,7 +5717,7 @@ impl BexVm {
                 // Keep the wrapper ptr as callee identity (so
                 // execute_call_from_locals_offset can extract type_args); resolve
                 // its authored executable target for arity.
-                let func_ptr = self.generic_function_target_ptr(gf)?;
+                let func_ptr = self.generic_function_authored_ptr(gf)?;
                 let func_obj = unsafe { func_ptr.get() };
                 match func_obj {
                     Object::Function(callee_fn) => Ok((callee_ptr, callee_fn.arity)),
@@ -6642,7 +6595,7 @@ impl BexVm {
                 }
             }
             Object::GenericFunction(gf) => {
-                let func_ptr = self.generic_function_target_ptr(gf)?;
+                let func_ptr = self.generic_function_authored_ptr(gf)?;
                 // SAFETY: the function global slot holds a compile-time Function
                 // object whose lifetime spans the whole program.
                 let func_obj: &'static Object = unsafe { func_ptr.get() };
@@ -7364,7 +7317,7 @@ impl BexVm {
                 func_obj.as_function()
             }
             Object::GenericFunction(gf) => {
-                let func_ptr = self.generic_function_target_ptr(gf)?;
+                let func_ptr = self.generic_function_authored_ptr(gf)?;
                 // SAFETY: function globals hold compile-time Function objects.
                 let func_obj: &'static Object = unsafe { func_ptr.get() };
                 func_obj.as_function()
@@ -9606,25 +9559,6 @@ impl BexVm {
                         runtime_package: function.runtime_package,
                     });
                     let ptr = self.tlab.alloc(gf);
-                    self.stack.push(Value::object(ptr));
-                }
-
-                // ── MakeSpecFunction ──────────────────────────────────────────
-                OpCode::MakeSpecFunction => {
-                    let raw = { read_u32_unchecked(code, pc) };
-                    let authored_function = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                    let ntypeargs = { read_u16_unchecked(code, pc) as usize };
-                    let type_args = self.pop_type_args(ntypeargs)?;
-                    let authored = self.load_global_in(function.runtime_package, authored_function);
-                    let authored_ptr =
-                        self.as_object_ptr(authored, FunctionType::Callable.into())?;
-                    let spec_entry = self.function_spec_target_ptr(authored_ptr)?;
-                    let spec = Object::Closure(Closure {
-                        function: spec_entry,
-                        captures: Box::new([]),
-                        captured_type_args: type_args.tys.into_boxed_slice(),
-                    });
-                    let ptr = self.tlab.alloc(spec);
                     self.stack.push(Value::object(ptr));
                 }
 

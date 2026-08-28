@@ -49,7 +49,7 @@ export { CtxManager } from './ctx_manager.js';
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 // Callable factories the generated SDK emits for every BAML function/method.
 export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
-export type { FunctionProjection, GenericParams } from './define_function.js';
+export type { GenericParams } from './define_function.js';
 // Generic-type spelling for `$types` bindings on generic classes / calls.
 export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
 export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor, BamlInterfaceToken } from './wire_ty.js';

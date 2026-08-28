@@ -6281,9 +6281,9 @@ impl<'a> Parser<'a> {
                     t.kind == TokenKind::Word && matches!(t.text.as_str(), "spec" | "stream")
                 })
             {
-                // Postfix projection on an LLM function reference. `@spec`
-                // stays a first-class projection of the authored function;
-                // `@stream` resolves to PPIR's compiler-private stream entry.
+                // Postfix companion selector on an LLM function reference.
+                // AST lowering rewrites both spellings to their ordinary
+                // compiler-private companion names.
                 // The no-newline guard mirrors tagged templates so a next-line
                 // attribute is never absorbed.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);

@@ -235,9 +235,6 @@ pub enum VmInternalError {
     #[error("missing native function: {name}")]
     MissingNativeFunction { name: String },
 
-    #[error("this callable has no function spec projection")]
-    FunctionSpecUnavailable,
-
     #[error("unexpected constant kind: expected a TyTemplate constant at this index")]
     UnexpectedConstantKind,
 

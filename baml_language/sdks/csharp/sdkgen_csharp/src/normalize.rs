@@ -81,7 +81,7 @@ fn normalize_symbol(symbol: &Symbol) -> Symbol {
 /// are never `injected`, whatever their name or shape. Remove this filter
 /// when the events family gets a C# projection.
 fn is_unrepresentable_on_event(argument: &FunctionArgument) -> bool {
-    argument.injected
+    argument.injected && argument.name.as_str() == "on_event"
 }
 
 fn normalize_function(function: &Function) -> Function {
@@ -121,6 +121,7 @@ fn normalize_function(function: &Function) -> Function {
                     control_arguments: operation
                         .control_arguments
                         .iter()
+                        .filter(|argument| !is_unrepresentable_on_event(argument))
                         .map(|argument| FunctionArgument {
                             injected: argument.injected,
                             name: argument.name.clone(),

@@ -92,7 +92,7 @@ export interface EncodeCallArgsOptions {
     syncMode?: boolean;
     functionName?: string;
     functionHandle?: HandleKey;
-    /** Semantic projection of an authored BAML function. Omitted means the
+    /** Bridge operation for an authored BAML function. Omitted means the
      * backwards-compatible direct call (wire value 0). */
     operation?: FunctionOperation;
     /**

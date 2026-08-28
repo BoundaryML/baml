@@ -22,7 +22,7 @@ describe('FunctionOperation wire encoding', () => {
         expect(call.functionName).not.toContain('$');
     });
 
-    it('rejects a projected operation without an authored function target', () => {
+    it('rejects a non-direct operation without an authored function target', () => {
         expect(() => encodeCallArgs({}, { callId: 7n, operation: 'spec' })).toThrow(
             /requires a function target/,
         );

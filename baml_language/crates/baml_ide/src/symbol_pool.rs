@@ -65,7 +65,7 @@ fn function_operations(
     });
     // The flat host stream projection invokes PPIR's compiler-private
     // `Fn@stream` entry through the bridge. It is unavailable whenever the
-    // source function has no spec recipe (even if it is otherwise tool-free).
+    // source function has no spec companion (even if it is otherwise tool-free).
     let function_name = &baml_compiler2_ppir::item_data::function_data(db, function).name;
     let stream = baml_compiler2_ppir::llm_stream_projection_available(
         function_name,
@@ -561,7 +561,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         }
 
         // Top-level functions — methods are skipped via `non_free_function_locs`
-        // so they don't double-emit. Compiler-private projection entries are
+        // so they don't double-emit. Compiler-private companion entries are
         // language-internal and skipped below; their public host operations are
         // attached to the authored function's structured metadata.
         for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, source_file) {
@@ -689,10 +689,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         }
     }
 
-    // Methods land on the owning class's `static_methods` /
-    // `instance_methods` vec. Companion methods sit alongside their parents
-    // in the same vec; span-based ordering at fan-out time keeps them
-    // contiguous.
+    // Authored methods land on the owning class's `static_methods` /
+    // `instance_methods` vec. Private companions were filtered before they
+    // reached `pending_methods`.
     for pm in pending_methods {
         if let Some(cg::Symbol::Class(class)) = pool.get_mut(&pm.parent_key) {
             match pm.kind {

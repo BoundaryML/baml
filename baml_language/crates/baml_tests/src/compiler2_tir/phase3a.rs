@@ -166,9 +166,10 @@ function main(id: boundary.LocalId) -> string {
 #[test]
 fn backtick_llm_function_compiles_to_agent_loop() {
     // Single-path world: a backtick prompt in an LLM function desugars to the
-    // ai Agent loop. The authored function owns a private spec recipe rather
-    // than a second named declaration. The `${name}` interpolation captures
-    // the function parameter inside the spec's prompt closure.
+    // ai Agent loop. Its prompt recipe lives in a private ordinary `@spec`
+    // companion, and the authored direct function delegates to that one
+    // canonical recipe. The `${name}` interpolation captures the function
+    // parameter inside the spec's prompt closure.
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -187,13 +188,13 @@ function Greet(name: string) -> string {
         "backtick LLM function should compile clean, got:\n{tir}"
     );
     assert!(
-        tir.contains("FunctionSpec") && !tir.contains("function user.Greet$"),
-        "the attached spec recipe should build an ai.FunctionSpec without companions, got:\n{tir}"
+        tir.contains("FunctionSpec") && tir.contains("function user.Greet@spec"),
+        "the private ordinary companion should build the ai.FunctionSpec, got:\n{tir}"
     );
 }
 
 #[test]
-fn llm_spec_projection_applies_defaulted_arguments() {
+fn llm_spec_companion_applies_defaulted_arguments() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -214,11 +215,11 @@ function main() -> string {
     let tir = render_tir(&db, file);
     assert!(
         !tir.contains("!!"),
-        "defaulted LLM spec projection should compile without diagnostics:\n{tir}"
+        "defaulted LLM spec companion call should compile without diagnostics:\n{tir}"
     );
     assert!(
-        tir.contains("Greet@spec(\"Ada\")") && !tir.contains("function user.Greet$"),
-        "the first-class projection should remain attached to the authored function:\n{tir}"
+        tir.contains("Greet@spec(\"Ada\")") && tir.contains("function user.Greet@spec"),
+        "the source projection should resolve to the private ordinary companion:\n{tir}"
     );
     assert!(
         tir.contains("ai.Agent.new(client = client, on_event = on_event)")

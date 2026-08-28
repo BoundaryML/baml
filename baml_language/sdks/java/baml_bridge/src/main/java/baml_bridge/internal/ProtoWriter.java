@@ -26,7 +26,8 @@ import java.util.Map;
  * InboundValue oneof: string_value = 2, int_value = 3, float_value = 4,
  *                     bool_value = 5, list_value = 6, map_value = 7,
  *                     class_value = 8, enum_value = 9,
- *                     uint8array_value = 11, bigint_value = 12
+ *                     uint8array_value = 11, bigint_value = 12,
+ *                     media_value = 15
  *                     (handle = 10 / ty_value = 13 are not implemented in this slice)
  * InboundListValue:  values = 1 (repeated InboundValue)
  * InboundMapValue:   entries = 1 (repeated InboundMapEntry)
@@ -67,6 +68,7 @@ public final class ProtoWriter {
     private static final int IV_HANDLE = 10;
     private static final int IV_UINT8ARRAY = 11;
     private static final int IV_BIGINT = 12;
+    private static final int IV_MEDIA = 15;
     private static final int IV_PROMPT_AST = 16;
 
     // BamlHandle (baml_handle.proto): key = 1 (uint64), handle_type = 2 (enum).
@@ -82,9 +84,6 @@ public final class ProtoWriter {
     /** The synthetic BAML class a host-thrown native exception is encoded as. */
     private static final String HOST_CALLABLE_FQN = "baml.errors.HostCallable";
 
-    // The single field name a handle-backed media class carries on the wire.
-    private static final String MEDIA_DATA_FIELD = "_data";
-
     // InboundListValue / InboundMapValue
     private static final int LIST_VALUES = 1;
     private static final int MAP_ENTRIES = 1;
@@ -92,12 +91,17 @@ public final class ProtoWriter {
     // InboundClassValue (field 1 reserved) / BamlTy / BamlTyClass / InboundEnumValue
     private static final int CLASS_FIELDS = 2;
     private static final int TY_CLASS = 2;
-    private static final int TY_MEDIA = 11;
     private static final int TY_CLASS_NAME = 1;
     private static final int TY_CLASS_TYPE_ARGS = 2; // BamlTyClass.type_args (repeated BamlTy)
     private static final int ENUM_NAME = 1;
     private static final int ENUM_VALUE = 2;
-    private static final int TY_MEDIA_KIND = 1;
+
+    // BamlValueMedia
+    private static final int MEDIA_KIND = 1;
+    private static final int MEDIA_MIME_TYPE = 2;
+    private static final int MEDIA_URL = 3;
+    private static final int MEDIA_BASE64 = 4;
+    private static final int MEDIA_FILE = 5;
 
     private static final BigInteger LONG_MIN = BigInteger.valueOf(Long.MIN_VALUE);
     private static final BigInteger LONG_MAX = BigInteger.valueOf(Long.MAX_VALUE);
@@ -326,12 +330,10 @@ public final class ProtoWriter {
             }
             w.writeMessage(IV_ENUM, encodeEnum(ew));
         } else if (value instanceof baml_bridge.BamlMedia media) {
-            // Handle-backed media (baml.media.{Image,Audio,Video,Pdf}): a
-            // class_value whose only field `_data` carries the engine handle,
-            // with the exact media kind on InboundValue.value_type. The
-            // class-shaped payload is only the transport for the `_data` handle.
-            writeMediaType(w, media.bamlFqn());
-            w.writeMessage(IV_CLASS, encodeMediaClass(media));
+            // Media is portable data at the bridge boundary. Copy the native-backed
+            // Java wrapper's canonical URL/file/base64 payload rather than sending
+            // its runtime-local handle to the destination engine context.
+            w.writeMessage(IV_MEDIA, encodeMedia(media));
             alreadyTyped = true;
         } else if (value instanceof baml_bridge.BamlStream stream) {
             // BamlStream (ai.stream.Stream receiver): lifted to a bare
@@ -460,47 +462,36 @@ public final class ProtoWriter {
         value.writeMessage(IV_VALUE_TYPE, ty.toByteArray());
     }
 
-    private static void writeMediaType(WireWriter value, String fqn) {
-        int kind = switch (fqn) {
+    /** Encode the canonical, context-independent {@code BamlValueMedia}. */
+    private static byte[] encodeMedia(baml_bridge.BamlMedia media) {
+        int kind = switch (media.bamlFqn()) {
             case "baml.media.Image" -> 1;
             case "baml.media.Audio" -> 2;
-            case "baml.media.Video" -> 3;
-            case "baml.media.Pdf" -> 4;
-            default -> throw new IllegalArgumentException("unknown BAML media type " + fqn);
+            case "baml.media.Pdf" -> 3;
+            case "baml.media.Video" -> 4;
+            default -> throw new IllegalArgumentException(
+                    "unknown BAML media type " + media.bamlFqn());
         };
-        WireWriter media = new WireWriter();
-        media.writeInt64(TY_MEDIA_KIND, kind);
-        WireWriter ty = new WireWriter();
-        ty.writeMessage(TY_MEDIA, media.toByteArray());
-        value.writeMessage(IV_VALUE_TYPE, ty.toByteArray());
-    }
-
-    /**
-     * Encode a handle-backed media value as an {@code InboundClassValue}: a single
-     * {@code _data} field whose value is an {@code InboundValue.handle}
-     * ({@code BamlHandle{key, handle_type}}). The enclosing
-     * {@code InboundValue.value_type} carries the exact media kind. The key is a
-     * <em>fresh clone</em> so the engine can
-     * {@code drain} its copy on decode while the Java media object keeps its own
-     * row (mirrors {@code bridge_python}'s {@code _clone_key_for_wire}).
-     */
-    private static byte[] encodeMediaClass(baml_bridge.BamlMedia media) {
         baml_bridge.BamlHandle handle = media.bamlHandle();
-        long wireKey = handle.cloneKeyForWire();
-
-        WireWriter handleMsg = new WireWriter();
-        handleMsg.writeInt64(HANDLE_KEY, wireKey);
-        handleMsg.writeInt64(HANDLE_TYPE, handle.handleType());
-
-        WireWriter dataValue = new WireWriter();
-        dataValue.writeMessage(IV_HANDLE, handleMsg.toByteArray());
-
-        WireWriter dataEntry = new WireWriter();
-        dataEntry.writeString(MAP_ENTRY_STRING_KEY, MEDIA_DATA_FIELD);
-        dataEntry.writeMessage(MAP_ENTRY_VALUE, dataValue.toByteArray());
-
         WireWriter w = new WireWriter();
-        w.writeMessage(CLASS_FIELDS, dataEntry.toByteArray());
+        w.writeInt64(MEDIA_KIND, kind);
+        String mimeType = handle.mediaMimeType();
+        if (mimeType != null) {
+            w.writeString(MEDIA_MIME_TYPE, mimeType);
+        }
+        String url = handle.mediaUrl();
+        if (url != null) {
+            w.writeString(MEDIA_URL, url);
+        } else {
+            String file = handle.mediaFile();
+            if (file != null) {
+                w.writeString(MEDIA_FILE, file);
+            } else {
+                // The native accessor returns the media's base64 payload (an empty
+                // string is a valid payload), so this always sets the oneof arm.
+                w.writeString(MEDIA_BASE64, handle.mediaBase64());
+            }
+        }
         return w.toByteArray();
     }
 

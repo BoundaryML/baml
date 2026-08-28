@@ -132,9 +132,9 @@ pub use tokio_util::sync::CancellationToken;
 /// A host-boundary projection of an authored function.
 ///
 /// This is deliberately an engine API rather than part of the VM's callable
-/// representation. Ordinary VM function values always invoke their authored
-/// declaration; source-level projections lower to ordinary closures targeting
-/// their compiler-private entries.
+/// representation. The engine resolves Spec and Stream requests to the private
+/// ordinary `Fn@spec` and `Fn@stream` entries. Source-level `@` syntax uses
+/// ordinary name/member resolution, and VM function values carry no operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FunctionOperation {
     Direct,
@@ -879,14 +879,18 @@ fn unsupported_function_operation(
     function_name: &str,
     operation: FunctionOperation,
 ) -> EngineError {
-    let operation_name = match operation {
-        FunctionOperation::Direct => "direct",
-        FunctionOperation::Spec => "spec",
-        FunctionOperation::Stream => "stream",
-    };
+    let operation_name = function_operation_name(operation);
     EngineError::Other(format!(
         "Function `{function_name}` does not support the `{operation_name}` operation"
     ))
+}
+
+const fn function_operation_name(operation: FunctionOperation) -> &'static str {
+    match operation {
+        FunctionOperation::Direct => "direct",
+        FunctionOperation::Spec => "spec",
+        FunctionOperation::Stream => "stream",
+    }
 }
 
 fn format_vm_internal_error(
@@ -3579,9 +3583,9 @@ impl BexEngine {
         .await
     }
 
-    /// Evaluate one host projection of an authored function. `Spec` enters the
-    /// attached private recipe; `Stream` enters the compiler-private
-    /// `Fn@stream` function while the host continues to name the authored FQN.
+    /// Evaluate one host projection of an authored function. `Spec` and
+    /// `Stream` enter the compiler-private ordinary `Fn@spec` and `Fn@stream`
+    /// functions while the host continues to name the authored FQN.
     pub async fn call_function_bound_args_operation(
         self: &Arc<Self>,
         function_name: &str,
@@ -3675,7 +3679,7 @@ impl BexEngine {
         let declared_param_types: Vec<RuntimeTy> =
             params.iter().map(|(_, ty, _)| (*ty).clone()).collect();
 
-        // Tagged capabilities are live engine values. Resolve them under a
+        // Tagged engine ADTs are live values. Resolve them under a
         // permit before generic inference so receiver bindings come from the
         // heap object's TypeHead/class_type_args, never from host-supplied wire
         // metadata carried alongside the handle.
@@ -3735,7 +3739,7 @@ impl BexEngine {
         // step below mutates `type_args` and is gated on this flag. The
         // (unsubstituted) `return_type` is used; self-receiver substitution does
         // not change whether the callee is generic.
-        let signature_function_name = if operation == FunctionOperation::Stream {
+        let signature_function_name = if operation != FunctionOperation::Direct {
             entry_function.name.as_str()
         } else {
             function_name
@@ -4399,7 +4403,7 @@ impl BexEngine {
     /// Invoke a semantic projection of a live authored function value. For a
     /// generic function or bound method, the original callable supplies the
     /// concrete type arguments and receiver while the entry point is switched
-    /// to the function-owned private spec recipe.
+    /// to the matching compiler-private ordinary companion function.
     pub async fn call_callable_operation_named(
         self: &Arc<Self>,
         handle: bex_external_types::Handle,
@@ -4479,17 +4483,10 @@ impl BexEngine {
                 ),
                 Object::BoundMethod(bm) => {
                     let receiver = bm.receiver;
-                    let class_type_args = receiver
-                        .as_object_ptr()
-                        .and_then(|ptr| match thread.vm.get_object(ptr) {
-                            Object::Instance(inst) => Some(inst.class_type_args.to_vec()),
-                            _ => None,
-                        })
-                        .unwrap_or_default();
                     (
                         bm.function,
                         Some(receiver),
-                        class_type_args,
+                        bm.type_args.to_vec(),
                         Some(bm.function),
                         None,
                     )
@@ -4545,8 +4542,9 @@ impl BexEngine {
             };
 
         // Explicit host projections switch an authored callable's entry point.
-        // Source `Fn@spec` values are already ordinary closures targeting their
-        // recipe, so a default Direct call carries no operation state.
+        // Source `Fn@spec` and `Fn@stream` values already target ordinary
+        // private companion functions, so a default Direct call carries no
+        // operation state.
         if operation != FunctionOperation::Direct {
             let authored_function = func_ptr
                 .ok_or_else(|| unsupported_function_operation("<host callable>", operation))?;
@@ -4554,23 +4552,12 @@ impl BexEngine {
                 Object::Function(function) => function.name.as_str(),
                 _ => "<callable>",
             };
-            let operation_entry = match operation {
-                FunctionOperation::Direct => unreachable!("handled above"),
-                FunctionOperation::Spec => thread
-                    .vm
-                    .function_spec_target_ptr(authored_function)
-                    .map_err(|error| match error {
-                        bex_vm::errors::VmInternalError::FunctionSpecUnavailable => {
-                            unsupported_function_operation(authored_name, operation)
-                        }
-                        error => EngineError::VmInternalError(error),
-                    })?,
-                FunctionOperation::Stream => self.callable_stream_operation_entry(
-                    &thread.vm,
-                    authored_function,
-                    authored_name,
-                )?,
-            };
+            let operation_entry = self.callable_operation_entry(
+                &thread.vm,
+                authored_function,
+                authored_name,
+                operation,
+            )?;
             entry = operation_entry;
             func_ptr = Some(operation_entry);
         }
@@ -4802,7 +4789,7 @@ impl BexEngine {
         // resolves to the actual function's metadata row. The structural
         // `CallFunction` id is stamped independently by the VM from
         // `Function.function_id`.
-        // Lower the closure's captured / bound-method's class type args (held
+        // Lower the closure's captured / bound-method's curried type args (held
         // positionally in De Bruijn order) onto the named `type_args` channel by
         // pairing each with the callee's generic-param name. A lambda has no
         // declared param names, so fall back to the index as a key; the named
@@ -4904,8 +4891,8 @@ impl BexEngine {
     }
 
     /// Select an engine-private entry for a host semantic operation. The host
-    /// always names the authored function; `Spec` follows attached metadata and
-    /// `Stream` resolves the compiler-private ordinary `Fn@stream` global.
+    /// always names the authored function; `Spec` and `Stream` resolve the exact
+    /// compiler-private ordinary `Fn@spec` and `Fn@stream` globals.
     fn function_operation_entry(
         &self,
         authored_function: HeapPtr,
@@ -4921,58 +4908,42 @@ impl BexEngine {
                 message: format!("operation target `{authored_name}` is not a function"),
             });
         };
-        let Some(FunctionMeta::Llm { capabilities, .. }) = &function.body_meta else {
-            return Err(unsupported_function_operation(authored_name, operation));
-        };
-        match operation {
-            FunctionOperation::Direct => unreachable!("returned above"),
-            FunctionOperation::Spec if capabilities.spec => {
-                let Some(FunctionMeta::Llm { spec_entry, .. }) = &function.body_meta else {
-                    unreachable!("LLM metadata matched above")
-                };
-                Ok(self.heap.compile_time_ptr(spec_entry.into_raw()))
-            }
-            FunctionOperation::Stream if capabilities.stream => {
-                let stream_name = format!("{}@stream", function.name);
-                self.resolved_function_names
-                    .get(&stream_name)
-                    .map(|(ptr, _)| *ptr)
-                    .ok_or_else(|| unsupported_function_operation(authored_name, operation))
-            }
-            FunctionOperation::Spec | FunctionOperation::Stream => {
-                Err(unsupported_function_operation(authored_name, operation))
-            }
+        let companion_name = format!("{}@{}", function.name, function_operation_name(operation));
+        let target = self
+            .resolved_function_names
+            .get(&companion_name)
+            .map(|(ptr, _)| *ptr)
+            .ok_or_else(|| unsupported_function_operation(authored_name, operation))?;
+
+        if !matches!(unsafe { target.get() }, Object::Function(_)) {
+            return Err(EngineError::TypeMismatch {
+                message: format!(
+                    "{} operation entry for `{authored_name}` is not a function",
+                    function_operation_name(operation)
+                ),
+            });
         }
+        Ok(target)
     }
 
-    fn callable_stream_operation_entry(
+    fn callable_operation_entry(
         &self,
         vm: &BexVm,
         authored_function: HeapPtr,
         authored_name: &str,
+        operation: FunctionOperation,
     ) -> Result<HeapPtr, EngineError> {
+        debug_assert_ne!(operation, FunctionOperation::Direct);
         let Object::Function(function) = vm.get_object(authored_function) else {
             return Err(EngineError::TypeMismatch {
                 message: format!("operation target `{authored_name}` is not a function"),
             });
         };
-        let Some(FunctionMeta::Llm { capabilities, .. }) = &function.body_meta else {
-            return Err(unsupported_function_operation(
-                authored_name,
-                FunctionOperation::Stream,
-            ));
-        };
-        if !capabilities.stream {
-            return Err(unsupported_function_operation(
-                authored_name,
-                FunctionOperation::Stream,
-            ));
-        }
 
-        let stream_name = format!("{}@stream", function.name);
+        let companion_name = format!("{}@{}", function.name, function_operation_name(operation));
         let target = if function.runtime_package.is_null() {
             self.resolved_function_names
-                .get(&stream_name)
+                .get(&companion_name)
                 .map(|(ptr, _)| *ptr)
         } else {
             let Object::Package(package) = vm.get_object(function.runtime_package) else {
@@ -4983,15 +4954,18 @@ impl BexEngine {
                 });
             };
             package.runtime().and_then(|runtime| {
-                let slot = *runtime.global_names.get(&stream_name)?;
+                let slot = *runtime.global_names.get(&companion_name)?;
                 runtime.load_global(slot)?.as_object_ptr()
             })
         }
-        .ok_or_else(|| unsupported_function_operation(authored_name, FunctionOperation::Stream))?;
+        .ok_or_else(|| unsupported_function_operation(authored_name, operation))?;
 
         if !matches!(vm.get_object(target), Object::Function(_)) {
             return Err(EngineError::TypeMismatch {
-                message: format!("stream operation entry for `{authored_name}` is not a function"),
+                message: format!(
+                    "{} operation entry for `{authored_name}` is not a function",
+                    function_operation_name(operation)
+                ),
             });
         }
         Ok(target)

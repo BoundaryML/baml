@@ -21,6 +21,7 @@ use crate::{
         LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, TemplateStringDef,
         TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
     },
+    companions::expand_companions,
     lower_expr_body, lower_type_expr,
 };
 
@@ -113,8 +114,10 @@ fn lower_file_with_path_and_test_owner_impl(
     for child in root.children() {
         match child.kind() {
             baml_compiler_syntax::SyntaxKind::FUNCTION_DEF => {
-                if let Some(func) = lower_function(&child, &mut diags, &mut env_var_refs) {
+                if let Some(func) = lower_function(&child, &mut diags, &mut env_var_refs, None) {
+                    let companions = expand_companions(&func);
                     items.push(Item::Function(func));
+                    items.extend(companions.into_iter().map(Item::Function));
                 }
             }
             baml_compiler_syntax::SyntaxKind::CLASS_DEF => {
@@ -312,10 +315,17 @@ fn check_missing_type(
 
 // ── Per-item lowering ───────────────────────────────────────────
 
+#[derive(Clone, Copy)]
+struct ClassMethodContext<'a> {
+    name: &'a Name,
+    generic_params: &'a [crate::ast::GenericParam],
+}
+
 fn lower_function(
     node: &SyntaxNode,
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<crate::EnvVarRef>,
+    class_method: Option<ClassMethodContext<'_>>,
 ) -> Option<FunctionDef> {
     let func = ast::FunctionDef::cast(node.clone())?;
     let Some(name_token) = func.name() else {
@@ -437,10 +447,9 @@ fn lower_function(
             .collect();
         let param_names: Vec<Name> = user_params.iter().map(|p| p.name.clone()).collect();
 
-        // Build and stash the function-owned spec recipe while the CST prompt
-        // literal is in hand. Skipped when the prompt or client is unusable —
-        // the migration diagnostics above are the authoritative errors then.
-        let mut direct_body = None;
+        // Build and stage the private ordinary spec companion's body while the
+        // CST prompt literal is in hand. Skipped when the prompt or client is
+        // unusable — the migration diagnostics above are authoritative then.
         if let (Some(prompt), Some(client_spec)) = (&prompt_literal, client_spec) {
             let tools_value = tools_value_element(&llm);
             let (spec_body, spec_sm, mut spec_diags, mut spec_env_refs) =
@@ -455,21 +464,36 @@ fn lower_function(
                 );
             diags.append(&mut spec_diags);
             env_var_refs.append(&mut spec_env_refs);
-            llm_body_def.spec_body = Some((spec_body.clone(), spec_sm.clone()));
-            direct_body = Some(lower_expr_body::synthesize_spec_agent_run_body(
-                spec_body,
-                spec_sm,
-                llm_body_def.span,
-            ));
+            llm_body_def.spec_body = Some((spec_body, spec_sm));
         }
 
         // Every LLM function runs the ai Agent loop; `client: ai.Client? =
         // null` is the compiler-injected per-call override. When the spec
         // could not be synthesized (migration diagnostics fired), the body is
-        // omitted so an unusable spec recipe never cascades.
+        // omitted so the missing private `Fn@spec` companion never cascades.
         append_spec_client_param(&mut params, &mut defaults, llm_body_def.span);
         append_spec_on_event_param(&mut params, &mut defaults, llm_body_def.span);
-        let body = if let Some((expr_body, source_map)) = direct_body {
+        let body = if llm_body_def.spec_body.is_some() {
+            let owner_generic_param_names = class_method
+                .map(|owner| {
+                    owner
+                        .generic_params
+                        .iter()
+                        .map(|param| param.name.clone())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let (expr_body, source_map) = lower_expr_body::synthesize_spec_agent_run_body(
+                name.as_str(),
+                &user_params,
+                &generic_params
+                    .iter()
+                    .map(|param| param.name.clone())
+                    .collect::<Vec<_>>(),
+                class_method.map(|owner| owner.name),
+                &owner_generic_param_names,
+                llm_body_def.span,
+            );
             Some(FunctionBodyDef::Expr(expr_body, source_map))
         } else {
             None
@@ -1026,6 +1050,7 @@ fn lower_class(
 
     let generic_params = extract_generic_params_with_bounds(node, diags);
     let class_name = name_token.text().to_string();
+    let class_name_ident = Name::new(&class_name);
 
     let fields = class
         .fields()
@@ -1107,7 +1132,21 @@ fn lower_class(
 
     let methods = class
         .methods()
-        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
+        .filter_map(|f| {
+            lower_function(
+                f.syntax(),
+                diags,
+                env_var_refs,
+                Some(ClassMethodContext {
+                    name: &class_name_ident,
+                    generic_params: &generic_params,
+                }),
+            )
+        })
+        .flat_map(|function| {
+            let companions = expand_companions(&function);
+            std::iter::once(function).chain(companions)
+        })
         .collect();
 
     let implements = class
@@ -1116,7 +1155,7 @@ fn lower_class(
         .collect();
 
     let mut class_def = crate::ast::ClassDef {
-        name: Name::new(name_token.text()),
+        name: class_name_ident,
         generic_params,
         fields,
         methods,
@@ -1347,7 +1386,7 @@ fn lower_interface(
 
     let default_methods = iface
         .default_methods()
-        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
+        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs, None))
         .collect();
 
     Some(InterfaceDef {
@@ -1556,7 +1595,7 @@ fn lower_implements_block(
 
     let methods = block
         .methods()
-        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
+        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs, None))
         .collect();
 
     Some(ImplementsBlockDef {
@@ -1637,7 +1676,7 @@ fn lower_implements_for(
 
     let methods = imp
         .methods()
-        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
+        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs, None))
         .collect();
 
     Some(ImplementsForDef {

@@ -127,8 +127,9 @@ function EnvRefBadClientFn() -> string {
     prompt: `hi`
 }
 
-// THE TIMING PROOF. The client expression lives in the attached `Fn@spec`
-// companion body, so it runs when the function is CALLED, not during `$init`.
+// THE TIMING PROOF. The client expression lives in the compiler-generated
+// private `Fn@spec` companion body, so it runs when the function is CALLED, not
+// during `$init`.
 // If it ran at `$init`, the throw above would abort this namespace's
 // initialization and take every other test in this file down with it. Instead
 // nothing happens until `@spec()` is invoked here.

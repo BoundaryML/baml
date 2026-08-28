@@ -591,9 +591,9 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Only the authored function participates in the value namespace.
-        // Its attached private spec recipe creates no companion symbols.
-        assert_eq!(ns.conflicts().len(), 1);
+        // The authored function and its private ordinary `@spec` companion
+        // each conflict across the three files.
+        assert_eq!(ns.conflicts().len(), 2);
         for conflict in ns.conflicts() {
             assert_eq!(conflict.entries.len(), 3);
         }

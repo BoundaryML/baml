@@ -138,10 +138,10 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 **Responsibility:** Desugaring. The AST takes the CST and produces a well-formed, semantically-oriented syntax tree. This is where most features live.
 
 **What lives here:**
-- **Attached LLM spec recipes** — An authored LLM function keeps one private, non-symbol recipe body that constructs `ai.FunctionSpec<Out>`. The AST does not manufacture public operation companions; PPIR later adds only the language-internal stream projection.
+- **LLM spec companions** — For each authored LLM function, the AST synthesizes one language-internal ordinary `Fn@spec` companion that constructs `ai.FunctionSpec<Out>`. PPIR later adds the ordinary private `Fn@stream` companion once the expanded partial output type is known.
 - **Client desugaring** — `client<llm>` blocks are desugared into a top-level `Let` binding (the `Client` object) plus an optional `$new` companion function (the `PrimitiveClient` constructor).
 - **Lambda expression bodies** — A lambda's body is lowered into the enclosing function's arena and referenced by `ExprId`; the lambda gets its own scope, not its own arena.
-- **LLM function normalization** — The authored declaration remains a regular function with declarative metadata and a private spec recipe attached. That metadata supplies downstream Direct/Spec/Stream capabilities without fabricating public names.
+- **LLM function normalization** — The authored declaration remains the only public function. Its direct-call body delegates to `Fn@spec`, while both private companions follow ordinary function resolution and compilation. Direct/Spec/Stream selection exists only at the host bridge boundary.
 - **Type expression lowering** — Source-level type syntax is converted to `TypeExpr` nodes.
 - **Config item lowering** — Config block syntax (used in clients, generators, etc.) is lowered to AST expressions.
 
@@ -393,15 +393,17 @@ Shadowing rules are scope-kind-dependent. For example, a match arm can shadow a 
 
 ### LLM Function Projections
 
-An authored LLM function remains one declaration. Its prompt/client recipe is
-stored as a private, non-symbol body attached to that declaration so it can be
-inferred and emitted without manufacturing callable names.
+An authored LLM function remains the only public declaration. AST lowering
+synthesizes one language-internal ordinary `Fn@spec` companion from its
+prompt/client recipe. PPIR separately synthesizes `Fn@stream`, because only
+PPIR knows the expanded partial output type. Neither companion is exposed in
+SDK, IDE listing, package reflection, or other authored-symbol surfaces.
 
-`Fn@spec(args)` is a first-class projection that evaluates the attached recipe
-and returns `ai.FunctionSpec<Out>`. Prompt rendering, HTTP request construction,
-parsing, and direct execution are methods on that bound spec. A spec carries
-the final output type only: it has no partial-output type argument/accessor or
-`stream()` method.
+`Fn@spec(args)` is an ordinary call to that private companion and returns
+`ai.FunctionSpec<Out>`. Prompt rendering, HTTP request construction, parsing,
+and direct execution are methods on that bound spec. A spec carries the final
+output type only: it has no partial-output type argument/accessor or `stream()`
+method.
 
 Streaming is a separate first-class source projection: `Fn@stream(args)`.
 PPIR synthesizes one compiler-private ordinary `Fn@stream` function with the
@@ -412,28 +414,22 @@ language-internal rather than an authored/public symbol. There are no public
 or fabricated `$spec`, `$render_prompt`, `$build_request`, `$parse`, or
 `$stream` BAML functions/runtime FQNs.
 
-The compiler emits a dedicated `MakeSpecFunction` instruction only for this
-source projection. The instruction resolves the authored function's private
-spec entry and materializes it as an ordinary zero-capture closure carrying the
-projected type arguments. No `SpecFunction` object or symbol kind exists.
-Ordinary `GenericFunction` values and `MakeGenericFunction` bytecode remain
-projection-free (`u32 function + u16 ntypeargs`); they do not carry an
-operation tag. Direct/Spec/Stream is a host-boundary request, not a common VM
+Both `@spec` and `@stream` syntax lower by rewriting the terminal callable name
+and then use ordinary path/member resolution, generic application, bound-method
+handling, MIR calls, and `MakeGenericFunction` bytecode. There is no projection
+expression, spec-specific opcode, `SpecFunction` object, or operation tag on VM
+function values. Direct/Spec/Stream is a host-boundary request, not a common VM
 function property.
 
 Host SDKs receive structured Direct/Spec/Stream operation metadata for the
 authored FQN. Flat `Fn_spec` bindings request Spec. Python `Fn_stream` and
 TypeScript `Fn$stream` request Stream while still sending the authored FQN;
-the engine resolves that boundary operation to the private ordinary
-`Fn@stream` entry. The host spellings are not BAML functions or runtime FQNs,
-and the operation enum is never stored on VM generic-function values. PPIR's
-`Out$stream` partial **type** declarations remain: those encode streaming
-completeness/SAP shape and are distinct from the private stream projection.
-
-Because the attached recipe has its own expression arena, semantic metadata
-uses a distinct `LlmSpec` arena key to disambiguate its arena-local `ExprId`
-values from the authored body and parameter defaults. That key is not a
-declaration or namespace symbol.
+the engine resolves those boundary operations to the private ordinary
+`Fn@spec` and `Fn@stream` entries. The host spellings are not public BAML
+functions or runtime FQNs, and the operation enum is never stored on VM
+generic-function values. PPIR's `Out$stream` partial **type** declarations
+remain: those encode streaming completeness/SAP shape and are distinct from
+the private stream companion.
 
 Runtime-created declarations and `unreflect` bindings are constructed only in
 BAML's reflection/typebuilder layer. Host SDKs receive opaque FunctionSpec,

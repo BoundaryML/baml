@@ -95,10 +95,10 @@ function prompt(
     render
 }
 
-// One unit of model work, bound and unrun. `MyFunc@spec(args)` projects the
-// authored LLM function's attached private recipe; it does not name or create
-// another declaration. Streaming is a separate `MyFunc@stream(args)`
-// projection whose return type carries the existing `Out$stream` schema.
+// One unit of model work, bound and unrun. `MyFunc@spec(args)` calls the
+// compiler-generated private ordinary `MyFunc@spec` companion. Streaming calls
+// the separate private ordinary `MyFunc@stream` companion, whose return type
+// carries the existing `Out$stream` schema. Neither companion is public.
 class FunctionSpec<Out> {
     spec_name: string,
     args: map<string, unknown>,

@@ -49,7 +49,6 @@ impl ExprBody {
             | Expr::ByteStringLiteral(_)
             | Expr::Null
             | Expr::Path(_)
-            | Expr::FunctionProjection { .. }
             | Expr::Missing => {}
             Expr::QualifiedPath {
                 qself, interface, ..

@@ -5,6 +5,7 @@ import type {
 } from './generated/baml_bridge/cffi/v1/baml_inbound';
 import {
   CallFunctionArgs,
+  FunctionOperation,
   InboundMapEntry as InboundMapEntryMessage,
 } from './generated/baml_bridge/cffi/v1/baml_inbound';
 import type { BamlSerializable } from './types';
@@ -162,6 +163,7 @@ export function encodeCallArgs(
     // Generic TypeVar bindings (`type_args`) — unused by this playground
     // encoder, which only sends positional kwargs.
     typeArgs: [],
+    operation: FunctionOperation.DIRECT,
   };
 
   return CallFunctionArgs.encode(args).finish();

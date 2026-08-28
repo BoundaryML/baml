@@ -38,8 +38,8 @@ pub struct Function {
 
     /// Host-callable projections of this authored declaration. Direct is
     /// always available; declarative LLM functions additionally expose Spec
-    /// and, when tool-free, Stream. These are capabilities, not suffixed
-    /// companion symbols.
+    /// and, when tool-free, Stream. These are host operations, not additional
+    /// public function symbols.
     pub operations: FunctionOperations,
 
     /// The function's inferred throws contract as a resolved `Ty`, or `None`

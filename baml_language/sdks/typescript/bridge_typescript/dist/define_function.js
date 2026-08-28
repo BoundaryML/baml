@@ -155,14 +155,14 @@ function buildArgs(args, requiredParamNames, optionalParamNames) {
  * that maps positional args to kwargs, encodes, calls the runtime, and decodes.
  * `sync` returns the decoded value; `async` returns a `Promise` of it.
  */
-export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamNames, generics, projection = 'direct') {
+export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamNames, generics, operation = 'direct') {
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
     // A free function / static method binds only its OWN generic params (a
     // generic receiver is never in play here), so `classTypeParams` is unused.
     const typeParams = generics?.typeParams ?? [];
-    if (projection !== 'direct' && projection !== 'spec' && projection !== 'stream') {
-        throw new TypeError(`unknown function projection ${JSON.stringify(projection)}`);
+    if (operation !== 'direct' && operation !== 'spec' && operation !== 'stream') {
+        throw new TypeError(`unknown function operation ${JSON.stringify(operation)}`);
     }
     const isGeneric = typeParams.length > 0;
     // Eagerly reject `$types` on a non-generic call, matching the generic path's
@@ -179,7 +179,7 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
                 callId,
                 typeArgs,
                 functionName: bamlFqn,
-                operation: projection,
+                operation,
             });
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {
@@ -201,7 +201,7 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
                 callId,
                 typeArgs,
                 functionName: bamlFqn,
-                operation: projection,
+                operation,
             });
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {

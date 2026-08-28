@@ -39,6 +39,10 @@ existing expansion of `T` (for example, `Stream<Out$stream, Out>`), so an
 inline runtime occurrence there also requires a scoped alias.
 `FunctionSpec<T>` deliberately has no partial type argument or stream method;
 there is no `StreamPartial` intrinsic in the universal type system.
+Both `@spec` and `@stream` rewrite the terminal callable name and then use
+ordinary path/member resolution and generic application. `FunctionOperation`
+selects these companions only at host bridge boundaries; it is not part of a
+BAML function value or the VM type system.
 
 ## Taxonomy
 

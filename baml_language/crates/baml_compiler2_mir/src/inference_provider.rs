@@ -191,7 +191,6 @@ pub(crate) struct ProviderTables<'db> {
     /// `hir_ty` keys lambdas in the owner arena and defaults as their own
     /// body owner, so every `Body` scope reads the one body table.
     body: ConvertedTables<'db>,
-    spec: ConvertedTables<'db>,
     defaults: ConvertedTables<'db>,
 }
 
@@ -203,7 +202,6 @@ impl<'db> ProviderTables<'db> {
         use baml_compiler2_hir::semantic_index::ExprMetadataScope;
         match scope {
             ExprMetadataScope::Body(_) => &self.body,
-            ExprMetadataScope::LlmSpec(_) => &self.spec,
             ExprMetadataScope::ParameterDefault(_) => &self.defaults,
         }
     }
@@ -258,7 +256,6 @@ impl<'db> ProviderTables<'db> {
     ) -> ProviderTables<'db> {
         ProviderTables {
             body: convert(hir_infer::infer_body(db, BodyOwnerId::Function(function))),
-            spec: convert(hir_infer::infer_body(db, BodyOwnerId::LlmSpec(function))),
             defaults: convert(hir_infer::infer_body(
                 db,
                 BodyOwnerId::ParameterDefaults(function),
@@ -272,7 +269,6 @@ impl<'db> ProviderTables<'db> {
     ) -> ProviderTables<'db> {
         ProviderTables {
             body: convert(hir_infer::infer_body(db, BodyOwnerId::Let(let_binding))),
-            spec: ConvertedTables::default(),
             defaults: ConvertedTables::default(),
         }
     }

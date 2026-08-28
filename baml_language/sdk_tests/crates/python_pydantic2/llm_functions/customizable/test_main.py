@@ -68,6 +68,7 @@ def test_main_extract_resume_factory_bindings():
     assert callable(lorem.ExtractResume_async)
 
 
+# SDK_PARITY_LINT(skip): pins Python and Java flat operation binding spellings
 def test_main_extract_resume_operation_bindings():
     from baml_sdk import lorem
 
@@ -98,6 +99,7 @@ def test_main_streaming_extract_factory_bindings():
     assert callable(lorem.StreamingExtract_async)
 
 
+# SDK_PARITY_LINT(skip): pins Python and Java flat streaming operation binding spellings
 def test_main_streaming_extract_operation_bindings():
     from baml_sdk import lorem
 

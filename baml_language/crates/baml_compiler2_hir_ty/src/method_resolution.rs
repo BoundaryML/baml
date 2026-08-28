@@ -10,9 +10,10 @@
 //! interface members - existential and rigid-bounded receivers through
 //! their bounds (I3), concrete receivers through the impls they match
 //! (I6, the rust-analyzer trait-impl candidate tier) - then fields.
-//! Not yet resolved here (later slices): union receivers, `$stream`
-//! companions, and free-impl method bodies as inference roots (their
-//! member TYPES already resolve through the interface signature).
+//! Not yet resolved here (later slices): union receivers and free-impl method
+//! bodies as inference roots (their member TYPES already resolve through the
+//! interface signature). Private LLM spec/stream companions use this ordinary
+//! method-resolution path after their source projection spelling is lowered.
 
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -991,9 +992,9 @@ pub enum MemberSource {
 /// member is to qualify it, and a completion that hid the name could not
 /// lead anyone there.
 ///
-/// Language-internal members are omitted. That is not presentation: they are
-/// "outside BAML's user-facing language surface" (`FunctionMetadata`), so no
-/// source position can name one.
+/// Language-internal members are omitted from enumeration. Source projection
+/// syntax may lower directly to an exact private LLM companion name, but the
+/// synthetic member itself is not offered as part of the visible member set.
 pub fn member_candidates<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
@@ -1160,9 +1161,10 @@ pub fn type_member_candidates<'db>(
 /// The user-facing methods among a declaration's method list, with their
 /// staticness — the one walk behind every enumeration of what a class or
 /// interface declares, so the value rung and the type rung cannot disagree
-/// about it. Language-internal members are dropped here, once: they are
-/// "outside BAML's user-facing language surface" (`FunctionMetadata`), so no
-/// source position can name one.
+/// about it. Language-internal members are dropped here because they are
+/// outside BAML's user-facing language surface. Source projection lowering can
+/// still resolve an exact private LLM companion through the ordinary lookup
+/// path above; this iterator is only for visible enumeration.
 fn declared_methods<'a, 'db: 'a>(
     db: &'db dyn baml_compiler2_ppir::Db,
     methods: &'a [FunctionLoc<'db>],

@@ -5431,7 +5431,15 @@ mod tests {
                                     Ty::Function {
                                         params: vec![baml_codegen_types::CallableParam {
                                             name: None,
-                                            ty: primitive_string(),
+                                            ty: Ty::Class(
+                                                Name::new(
+                                                    BaseName::new("ai"),
+                                                    vec![BaseName::new("events")],
+                                                    BaseName::new("AssistantMessage"),
+                                                ),
+                                                vec![],
+                                                TyAttr::EMPTY,
+                                            ),
                                             mode: baml_codegen_types::CodegenFunctionParamMode::Required,
                                         }],
                                         ret: Box::new(Ty::Void {
@@ -6230,7 +6238,7 @@ mod tests {
         assert!(source.contains("\"stream\""));
         assert!(source.contains("BamlGeneratedContract.CreateStream("));
         assert!(source.contains("BamlOptional<global::Baml.BamlValue> client"));
-        assert!(source.contains("onEvent"));
+        assert!(!source.contains("onEvent"));
         assert!(!source.contains(").Stream("));
         assert!(source.contains("global::Baml.BamlStream<string, string>"));
         assert!(!source.contains("BamlGeneratedCodec<global::Baml.BamlStream"));

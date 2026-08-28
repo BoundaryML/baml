@@ -190,7 +190,6 @@ fn verify_streaming_surface(fixture: &std::path::Path) {
         "BamlStream<global::CsharpStreaming.StreamEnvelopeStream?, global::CsharpStreaming.StreamEnvelope> StructuredStream(",
         "BamlGeneratedContract.CreateStream(",
         "BamlOptional<global::Baml.BamlValue> client = default",
-        "onEvent",
     ] {
         assert!(
             functions.contains(expected),
@@ -215,6 +214,10 @@ fn verify_streaming_surface(fixture: &std::path::Path) {
     assert!(
         !functions.contains("$stream"),
         "generated public function surface exposed a synthetic $stream binding"
+    );
+    assert!(
+        !functions.contains("onEvent"),
+        "generated C# stream surface exposed the unsupported injected event listener"
     );
     for expected in [
         "\"user.csharp_streaming.Deterministic\",\n            \"direct\"",

@@ -216,8 +216,8 @@ fn make_raw_attr_no_args(name: &str) -> ast::RawAttribute {
 }
 
 /// Whether one authored LLM function owns the compiler-private stream entry.
-/// This predicate is shared by synthesis, emitted bridge capabilities, and SDK
-/// projection metadata so those surfaces cannot advertise different support.
+/// This predicate is shared by companion synthesis and host-operation metadata
+/// so those surfaces cannot advertise different support.
 pub fn llm_stream_projection_available(
     function_name: &Name,
     has_spec: bool,
@@ -228,17 +228,19 @@ pub fn llm_stream_projection_available(
 
 /// Build the compiler-private `Fn@stream` function using the former `$stream`
 /// companion shape: same generics, parameters/defaults, partial expansion,
-/// client override, event callback, and tagged-template metadata. The only
-/// semantic change is that the removed `$spec` call is replaced by the same
-/// attached spec recipe inlined by the authored direct function. The `@` name
-/// and language-internal visibility keep this implementation entry out of SDK
-/// and public symbol surfaces.
-fn synthesize_llm_stream_projection(
+/// client override, event callback, and tagged-template metadata. `Fn@stream`
+/// delegates to the AST-level private ordinary `Fn@spec` companion,
+/// so the spec recipe's implementation lives in one ordinary function. The
+/// `@` name and language-internal visibility keep both entries out of SDK and
+/// public symbol surfaces.
+fn synthesize_llm_stream_companion(
     func: &ast::FunctionDef,
     ctx: &ExpandCtx<'_>,
+    owner_class_name: Option<&Name>,
+    owner_generic_param_names: &[Name],
 ) -> Option<ast::FunctionDef> {
     let ast::DeclarativeMeta::Llm(llm) = func.declarative_meta.as_ref()?;
-    let (spec_body, spec_source_map) = llm.spec_body.as_ref()?.clone();
+    llm.spec_body.as_ref()?;
     if !llm_stream_projection_available(&func.name, true, llm.has_tools) {
         return None;
     }
@@ -282,8 +284,25 @@ fn synthesize_llm_stream_projection(
             param
         })
         .collect();
-    let (body, source_map) =
-        ast::synthesize_spec_stream_body(spec_body, spec_source_map, stream_type_args, func.span);
+    let own_params = func
+        .params
+        .iter()
+        .filter(|param| !matches!(param.name.as_str(), "client" | "on_event"))
+        .cloned()
+        .collect::<Vec<_>>();
+    let (body, source_map) = ast::synthesize_spec_stream_body(
+        func.name.as_str(),
+        &own_params,
+        &func
+            .generic_params
+            .iter()
+            .map(|param| param.name.clone())
+            .collect::<Vec<_>>(),
+        owner_class_name,
+        owner_generic_param_names,
+        stream_type_args,
+        func.span,
+    );
 
     Some(ast::FunctionDef {
         name: Name::new(format!("{}@stream", func.name)),
@@ -462,6 +481,11 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     true
                 });
 
+                let owner_generic_param_names = c
+                    .generic_params
+                    .iter()
+                    .map(|param| param.name.clone())
+                    .collect::<Vec<_>>();
                 let method_streams: Vec<_> = c
                     .methods
                     .iter()
@@ -474,7 +498,12 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                             block_attrs,
                             alias_bodies,
                         };
-                        synthesize_llm_stream_projection(method, &ctx)
+                        synthesize_llm_stream_companion(
+                            method,
+                            &ctx,
+                            Some(&c.name),
+                            &owner_generic_param_names,
+                        )
                     })
                     .collect();
 
@@ -566,8 +595,8 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     block_attrs,
                     alias_bodies,
                 };
-                if let Some(projection) = synthesize_llm_stream_projection(func, &ctx) {
-                    synthetic_items.push(ast::Item::Function(projection));
+                if let Some(companion) = synthesize_llm_stream_companion(func, &ctx, None, &[]) {
+                    synthetic_items.push(ast::Item::Function(companion));
                 }
             }
             _ => {}
@@ -604,7 +633,7 @@ fn file_semantic_index_expanded(db: &dyn Db, file: SourceFile) -> FileSemanticIn
     let mut items = ast_result.items.clone();
 
     // Merge concrete `*$stream` types and compiler-private `@stream`
-    // functions. Method projections arrive in a same-name class fragment and
+    // functions. Method companions arrive in a same-name class fragment and
     // are merged back into their authored class.
     for item in ppir_expansion_items(db, file).items(db).iter().cloned() {
         if let ast::Item::Class(fragment) = &item
@@ -702,40 +731,10 @@ pub fn function_body_source_map<'db>(
     }
 }
 
-/// Private spec recipe attached to a declarative LLM function. This body has
-/// no item-tree declaration and therefore never enters package symbol lookup.
-#[salsa::tracked]
-pub fn llm_spec_body<'db>(
-    db: &'db dyn Db,
-    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
-) -> Arc<baml_compiler2_hir::body::FunctionBody> {
-    let item_tree = file_item_tree(db, function.file(db));
-    let body = item_tree[function.id(db)]
-        .declarative_meta
-        .as_ref()
-        .and_then(|ast::DeclarativeMeta::Llm(llm)| llm.spec_body.as_ref())
-        .map_or(
-            baml_compiler2_hir::body::FunctionBody::Missing,
-            |(body, _)| baml_compiler2_hir::body::FunctionBody::Expr(body.clone()),
-        );
-    Arc::new(body)
-}
-
-pub fn llm_spec_body_source_map<'db>(
-    db: &'db dyn Db,
-    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
-) -> Option<ast::AstSourceMap> {
-    let item_tree = file_item_tree(db, function.file(db));
-    item_tree[function.id(db)]
-        .declarative_meta
-        .as_ref()
-        .and_then(|ast::DeclarativeMeta::Llm(llm)| llm.spec_body.as_ref())
-        .map(|(_, source_map)| source_map.clone())
-}
-
 /// Canonical body for any body owner (rust-analyzer's `DefWithBodyId`
-/// pattern). Function and attached LLM-spec bodies go through PPIR; PPIR never
-/// synthesizes lets, so HIR's `let_body` is canonical for them.
+/// pattern). Functions go through PPIR's item tree so synthetic companions
+/// are found; PPIR never synthesizes lets, so HIR's `let_body` is canonical
+/// for them.
 pub fn body<'db>(
     db: &'db dyn Db,
     owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
@@ -743,7 +742,6 @@ pub fn body<'db>(
     use baml_compiler2_hir::body::{BodyOwnerId, OwnerBody};
     match owner {
         BodyOwnerId::Function(function) => OwnerBody::Function(function_body(db, function)),
-        BodyOwnerId::LlmSpec(function) => OwnerBody::LlmSpec(llm_spec_body(db, function)),
         BodyOwnerId::Let(let_binding) => {
             OwnerBody::Let(baml_compiler2_hir::body::let_body(db, let_binding))
         }
@@ -761,7 +759,6 @@ pub fn body_source_map<'db>(
     use baml_compiler2_hir::body::BodyOwnerId;
     match owner {
         BodyOwnerId::Function(function) => function_body_source_map(db, function),
-        BodyOwnerId::LlmSpec(function) => llm_spec_body_source_map(db, function),
         BodyOwnerId::Let(let_binding) => {
             baml_compiler2_hir::body::let_body_source_map(db, let_binding)
         }
@@ -782,7 +779,6 @@ pub fn body_scope<'db>(
     use baml_compiler2_hir::body::BodyOwnerId;
     match owner {
         BodyOwnerId::Function(function) => item_data::function_scope(db, function),
-        BodyOwnerId::LlmSpec(function) => item_data::function_scope(db, function),
         BodyOwnerId::Let(let_binding) => item_data::let_scope(db, let_binding),
         // Defaults are keyed under the FUNCTION's scope (the semantic
         // index walks them there, `ExprMetadataScope::ParameterDefault`).
@@ -790,8 +786,8 @@ pub fn body_scope<'db>(
     }
 }
 
-/// Every body owner in `file`: authored functions and methods, top-level lets,
-/// then attached LLM spec bodies, each group in source order.
+/// Every body owner in `file`: functions (methods and synthetic companions
+/// included), then top-level lets, each group in source order.
 pub fn file_body_owners(
     db: &dyn Db,
     file: baml_base::SourceFile,
@@ -804,17 +800,7 @@ pub fn file_body_owners(
         .iter()
         .copied()
         .map(Into::into);
-    let specs = item_data::file_functions(db, file)
-        .iter()
-        .copied()
-        .filter(|function| {
-            !matches!(
-                llm_spec_body(db, *function).as_ref(),
-                baml_compiler2_hir::body::FunctionBody::Missing
-            )
-        })
-        .map(baml_compiler2_hir::body::BodyOwnerId::LlmSpec);
-    functions.chain(specs).chain(lets).collect()
+    functions.chain(lets).collect()
 }
 
 /// Canonical per-body type references for a function (rust-analyzer's
@@ -846,12 +832,6 @@ pub fn body_type_ref_spans(
     use baml_compiler2_hir::body::{BodyOwnerId, FunctionBody, LetBody};
     match owner {
         BodyOwnerId::Function(function) => match function_body(db, function).as_ref() {
-            FunctionBody::Expr(expr_body) => {
-                Some(baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).1)
-            }
-            _ => None,
-        },
-        BodyOwnerId::LlmSpec(function) => match llm_spec_body(db, function).as_ref() {
             FunctionBody::Expr(expr_body) => {
                 Some(baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).1)
             }
@@ -900,25 +880,9 @@ pub fn body_type_refs<'db>(
     use baml_compiler2_hir::body::BodyOwnerId;
     match owner {
         BodyOwnerId::Function(function) => function_body_type_refs(db, function),
-        BodyOwnerId::LlmSpec(function) => llm_spec_body_type_refs(db, function),
         BodyOwnerId::Let(let_binding) => let_body_type_refs(db, let_binding),
         BodyOwnerId::ParameterDefaults(function) => parameter_defaults_type_refs(db, function),
     }
-}
-
-#[salsa::tracked]
-pub fn llm_spec_body_type_refs<'db>(
-    db: &'db dyn Db,
-    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
-) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
-    let body = llm_spec_body(db, function);
-    let refs = match body.as_ref() {
-        baml_compiler2_hir::body::FunctionBody::Expr(expr_body) => {
-            baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).0
-        }
-        _ => baml_compiler2_hir::body_type_refs::BodyTypeRefs::default(),
-    };
-    Arc::new(refs)
 }
 
 /// Per-body type references for a function's parameter-default arena.

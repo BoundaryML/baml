@@ -5,7 +5,7 @@ source: crates/baml_tests/src/corpus.rs
 fn user.fixtures.retry_policy.UseRetryClient(input: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: string // input // param [captured]
+    let _1: string // input // param
     let _2: null | ai.Client // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
@@ -14,12 +14,7 @@ fn user.fixtures.retry_policy.UseRetryClient(input: string, client: null | ai.Cl
     let _7: ai.Agent
     let _8: reflect.Type
     let _9: ai.FunctionSpec<string>
-    let _10: map<string, unknown>
-    let _11: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _12: ai.tools.Toolbox
-    let _13: ai.tools.Tool[]
-    let _14: ai.Client
-    let _15: reflect.Type
+    let _10: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -47,34 +42,57 @@ fn user.fixtures.retry_policy.UseRetryClient(input: string, client: null | ai.Cl
     }
 
     bb5: {
-        _10 = { const "input": copy _1 }: map<string, unknown>;
-        _11 = make_closure lambda[0](copy _1);
-        _13 = []: ai.tools.Tool[];
-        _12 = call const fn ai.tools.Toolbox.new(copy _13) -> [bb6];
+        _9 = call const fn user.fixtures.retry_policy.UseRetryClient@spec(copy _1) -> [bb6];
     }
 
     bb6: {
-        _14 = call const fn ai.clients.resolve(const item user.fixtures.retry_policy.MyClient) -> [bb7];
+        _10 = load_type(string);
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _10>(copy _7, copy _9) -> [bb7];
     }
 
     bb7: {
-        _9 = ai.FunctionSpec<string> { const "UseRetryClient", copy _10, copy _11, copy _12, copy _14 };
-        _15 = load_type(string);
-        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _15>(copy _7, copy _9) -> [bb8];
+        _0 = copy _6.0;
+        goto -> bb8;
     }
 
     bb8: {
-        _0 = copy _6.0;
-        goto -> bb9;
+        return;
+    }
+}
+
+fn user.fixtures.retry_policy.UseRetryClient@spec(input: string) -> ai.FunctionSpec<string> {
+    // Locals:
+    let _0: ai.FunctionSpec<string> // _0 // return
+    let _1: string // input // param [captured]
+    let _2: map<string, unknown>
+    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
+    let _6: ai.Client
+
+    bb0: {
+        _2 = { const "input": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0](copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
     }
 
-    bb9: {
+    bb1: {
+        _6 = call const fn ai.clients.resolve(const item user.fixtures.retry_policy.MyClient) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<string> { const "UseRetryClient", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
 
 // lambda[0]
-fn .<lambda(UseRetryClient, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(UseRetryClient@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -161,19 +179,14 @@ fn .<lambda(UseRetryClient, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Pr
 fn user.fixtures.retry_policy.UseRetryClient@stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
-    let _1: string // input // param [captured]
+    let _1: string // input // param
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: ai.FunctionSpec<string>
-    let _7: map<string, unknown>
-    let _8: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _9: ai.tools.Toolbox
-    let _10: ai.tools.Tool[]
-    let _11: ai.Client
-    let _12: reflect.Type
-    let _13: reflect.Type
+    let _7: reflect.Type
+    let _8: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -196,109 +209,16 @@ fn user.fixtures.retry_policy.UseRetryClient@stream(input: string, client: null 
     }
 
     bb4: {
-        _7 = { const "input": copy _1 }: map<string, unknown>;
-        _8 = make_closure lambda[0](copy _1);
-        _10 = []: ai.tools.Tool[];
-        _9 = call const fn ai.tools.Toolbox.new(copy _10) -> [bb5];
+        _6 = call const fn user.fixtures.retry_policy.UseRetryClient@spec(copy _1) -> [bb5];
     }
 
     bb5: {
-        _11 = call const fn ai.clients.resolve(const item user.fixtures.retry_policy.MyClient) -> [bb6];
+        _7 = load_type(string | null);
+        _8 = load_type(string);
+        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _2, copy _3) -> [bb6];
     }
 
     bb6: {
-        _6 = ai.FunctionSpec<string> { const "UseRetryClient", copy _7, copy _8, copy _9, copy _11 };
-        _12 = load_type(string | null);
-        _13 = load_type(string);
-        _0 = call const fn ai.stream.from_spec<copy _12, copy _13>(copy _6, copy _2, copy _3) -> [bb7];
-    }
-
-    bb7: {
         return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(UseRetryClient@stream, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
-    // Locals:
-    let _0: ai.Prompt // _0 // return
-    let _1: ai.OutputFormat //  __spec_output_format // param
-    let _2: unknown //  __prompt_render_err
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: string
-    let _8: int
-    let _9: string[]
-    let _10: string
-    let _11: reflect.Type
-    let _12: int
-    let _13: unknown[]
-    let _14: string
-    let _15: reflect.Type
-    let _16: int
-    let _17: string[]
-    let _18: ""
-    let _19: reflect.Type
-    let _20: string[]
-    let _21: unknown[]
-    let _22: string[]
-    let _23: baml.TaggedString
-    let _24: unknown[]
-    let _25: baml.TaggedString
-    let _26: ai.errors.PromptRenderError
-    let _27: never
-
-    bb0: {
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _7 = copy _6;
-        _6 = copy _7 + const "echo ";
-        _9 = copy _4;
-        _10 = copy _6;
-        _11 = load_type(string);
-        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1, unwind: bb5];
-    }
-
-    bb1: {
-        _6 = const "";
-        _13 = copy _5;
-        _14 = copy capture[0];
-        _15 = load_type(unknown);
-        _12 = call const fn baml.Array.push<copy _15>(copy _13, copy _14) -> [bb2, unwind: bb5];
-    }
-
-    bb2: {
-        _17 = copy _4;
-        _18 = copy _6;
-        _19 = load_type(string);
-        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3, unwind: bb5];
-    }
-
-    bb3: {
-        _20 = copy _4;
-        _21 = copy _5;
-        _3 = baml.TaggedString { copy _20, copy _21 };
-        _23 = copy _3;
-        _22 = copy _23.0;
-        _25 = copy _3;
-        _24 = copy _25.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _22, copy _24) -> [bb4, unwind: bb5];
-    }
-
-    bb4: {
-        return;
-    }
-
-    bb5: {
-        throw_if_panic copy _2 -> bb6;
-    }
-
-    bb6: {
-        _27 = copy _2;
-        _26 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _27 };
-        throw copy _26;
     }
 }

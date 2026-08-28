@@ -512,21 +512,4 @@ mod type_wire_tests {
         };
         assert_eq!(type_value.ty, ty);
     }
-
-    #[test]
-    fn generic_function_round_trips_without_projection_state() {
-        let generic = Object::GenericFunction(GenericFunction {
-            function: crate::GlobalIndex::from_raw(7),
-            type_args: vec![crate::RealizedTy::string()].into_boxed_slice(),
-            runtime_package: crate::HeapPtr::null(),
-        });
-        let encoded = borsh::to_vec(&generic).expect("generic function serializes");
-        let Object::GenericFunction(decoded) =
-            Object::try_from_slice(&encoded).expect("generic function deserializes")
-        else {
-            panic!("generic function changed object kind")
-        };
-        assert_eq!(decoded.function.raw(), 7);
-        assert_eq!(decoded.type_args.as_ref(), [crate::RealizedTy::string()]);
-    }
 }

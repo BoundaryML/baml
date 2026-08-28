@@ -957,15 +957,6 @@ pub enum Rvalue {
         type_arg_templates: Vec<TyTemplate>,
     },
 
-    /// Create the dedicated first-class `Fn@spec<T>` callable. This is kept
-    /// separate from [`Rvalue::MakeGenericFunction`] so ordinary generic
-    /// function values carry no projection state or runtime layout cost.
-    MakeSpecFunction {
-        item: ItemRef,
-        /// One template per type argument; may contain `TypeArgRef(N)`.
-        type_arg_templates: Vec<TyTemplate>,
-    },
-
     /// Specialize a runtime callable *value* with explicit type arguments
     /// (`g<int>` where `g` is a local/captured function value, not a
     /// compile-time-resolvable function reference). The emitter pushes a

@@ -10,7 +10,7 @@ export { BamlFunctionSpec } from "./shared/function_spec.js";
 export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from "./shared/function_spec.js";
 export { BamlTypeMap, getTypeMap, setTypeMap } from "./shared/typemap.js";
 export { defineFunction, defineInstanceFunction, UNSET } from "./shared/define_function.js";
-export type { FunctionProjection, GenericParams } from "./shared/define_function.js";
+export type { GenericParams } from "./shared/define_function.js";
 export { Never, lowerTypeToWireTy } from "./shared/wire_ty.js";
 export { BamlType, reflectType } from "./shared/wire_ty.js";
 export type { BamlClassCtor, BamlInterfaceToken, BamlPrimitiveToken, BamlTypeMetadata, BamlTypeToken } from "./shared/wire_ty.js";

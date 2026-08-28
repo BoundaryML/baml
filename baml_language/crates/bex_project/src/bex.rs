@@ -306,6 +306,10 @@ mod tests {
         let engine = engine();
         assert!(!engine.function_exists("Ask$spec"));
         assert!(!engine.function_exists("Ask$stream"));
+        assert!(engine.function_exists("Ask@spec"));
+        assert!(engine.function_exists("Ask@stream"));
+        assert!(engine.find_user_function("Ask@spec").is_none());
+        assert!(engine.find_user_function("Ask@stream").is_none());
 
         let direct = Bex::call_function_operation(
             Arc::clone(&engine),

@@ -925,9 +925,9 @@ pub(crate) fn template_position_at(
             }
         }
     }
-    // No `Expr::Template` at the cursor: check the attached spec prompt form.
+    // No `Expr::Template` at the cursor: check the synthesized spec companion.
     // An llm function's `prompt:` never becomes a template expression — the
-    // backtick flattens into its private spec recipe ("both lower through the
+    // backtick flattens into its private spec companion body ("both lower through the
     // same prompt`…` tagged template", lower_cst) — but the
     // synthesized prompt lambda opens a scope MARKED `is_template_body`
     // whose range is exactly the literal. Inside it, code regions are the

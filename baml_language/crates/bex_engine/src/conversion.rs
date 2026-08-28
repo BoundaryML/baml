@@ -581,11 +581,7 @@ impl BexEngine {
         };
 
         if let Some(selected) = selected_runtime {
-            return Ok(wrap_selected_union_member(
-                external,
-                declared_type,
-                selected,
-            ));
+            return wrap_selected_union_member(external, declared_type, selected);
         }
         // Wrap in Union if declared type is a union
         maybe_wrap_union(external, declared_type)
@@ -2224,24 +2220,27 @@ fn wrap_selected_union_member(
     value: BexExternalValue,
     declared_type: &RuntimeTy,
     selected: &RuntimeTy,
-) -> BexExternalValue {
+) -> Result<BexExternalValue, EngineError> {
     let RuntimeTy::Union(members, _) = declared_type else {
-        return value;
+        return Ok(value);
     };
     if members.iter().any(RuntimeTy::is_null) {
         if matches!(value, BexExternalValue::Null) {
-            return value;
+            return Ok(value);
         }
         let non_null: Vec<&RuntimeTy> = members.iter().filter(|member| !member.is_null()).collect();
-        if non_null.len() <= 1 {
-            return value;
+        if let [non_null] = non_null.as_slice() {
+            // Optionality itself is untagged, but its sole non-null member may
+            // still be a real (possibly nested/aliased) union. Preserve that
+            // member's selected-arm envelope just like `maybe_wrap_union`.
+            return maybe_wrap_union(value, non_null);
         }
     }
 
-    BexExternalValue::Union {
+    Ok(BexExternalValue::Union {
         value: Box::new(value),
         metadata: UnionMetadata::new(declared_type.clone(), selected.clone()),
-    }
+    })
 }
 
 /// Recover `TypeVar(name) -> concrete` bindings by walking a declared type and
@@ -5919,6 +5918,32 @@ mod union_container_selection_tests {
             BexExternalValue::Adt(BexExternalAdt::Media(ref media))
                 if media.kind == MediaKind::Image
         ));
+    }
+
+    #[test]
+    fn selected_nested_union_inside_optional_retains_inner_envelope() {
+        let inner = RuntimeTy::union([
+            RuntimeTy::int(),
+            RuntimeTy::string(),
+            RuntimeTy::float(),
+            RuntimeTy::bool(),
+        ]);
+        let optional = RuntimeTy::Union(
+            vec![inner.clone(), RuntimeTy::null()],
+            TyAttr::default(),
+        );
+
+        let wrapped = wrap_selected_union_member(
+            BexExternalValue::String("alias".into()),
+            &optional,
+            &inner,
+        )
+        .unwrap();
+        let BexExternalValue::Union { metadata, .. } = wrapped else {
+            panic!("expected the inner union envelope")
+        };
+        assert!(runtime_ty_structurally_equal(&metadata.union_type, &inner));
+        assert_eq!(metadata.selected_option, RuntimeTy::string());
     }
 
     #[test]

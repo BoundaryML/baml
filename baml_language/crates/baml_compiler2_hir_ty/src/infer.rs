@@ -661,10 +661,6 @@ enum PendingDiag<'db> {
         expr: ExprId,
         name: baml_type::Name,
     },
-    FunctionProjectionUnavailable {
-        expr: ExprId,
-        name: baml_type::Name,
-    },
     TopLevelLetCycle {
         expr: ExprId,
     },
@@ -1234,16 +1230,6 @@ fn infer_function_body<'db>(
     infer_body_impl(db, BodyOwnerId::Function(function))
 }
 
-/// The attached LLM spec recipe is inferred independently from the direct
-/// body, but in the authored function's parameter/generic environment.
-#[salsa::tracked(returns(ref), cycle_initial = infer_function_body_cycle_initial)]
-fn infer_llm_spec_body<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
-) -> InferenceResult<'db> {
-    infer_body_impl(db, BodyOwnerId::LlmSpec(function))
-}
-
 /// TRACKED (S2/S3): top-level `let` bodies. Session submissions can retain
 /// mutually recursive lets, so the query has an error-typed cycle seed while
 /// the explicit in-flight set normally diagnoses before Salsa must recover.
@@ -1276,9 +1262,7 @@ pub(crate) fn owner_declared_bounds<'db>(
     owner: BodyOwnerId<'db>,
 ) -> FxHashMap<baml_type::ParamTy, Vec<baml_type::interned::InterfaceRef>> {
     match owner {
-        BodyOwnerId::Function(function)
-        | BodyOwnerId::LlmSpec(function)
-        | BodyOwnerId::ParameterDefaults(function) => {
+        BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
             crate::lower::function_generic_bounds(db, function)
         }
         BodyOwnerId::Let(_) => FxHashMap::default(),
@@ -1331,7 +1315,6 @@ pub fn infer_body<'db>(
 ) -> &'db InferenceResult<'db> {
     match owner {
         BodyOwnerId::Function(function) => infer_function_body(db, function),
-        BodyOwnerId::LlmSpec(function) => infer_llm_spec_body(db, function),
         BodyOwnerId::Let(let_binding) => infer_let_body(db, let_binding),
         BodyOwnerId::ParameterDefaults(function) => infer_parameter_defaults(db, function),
     }
@@ -1378,19 +1361,6 @@ fn infer_body_impl<'db>(
                 data.throws.map(|throws| (&data.type_refs, throws)),
             )
         }
-        BodyOwnerId::LlmSpec(function) => {
-            let signature = function_signature(db, function);
-            (
-                function_generic_frame(db, function),
-                signature
-                    .params
-                    .iter()
-                    .map(|param| param.ty.clone())
-                    .collect(),
-                None,
-                None,
-            )
-        }
         // Defaults type in the FUNCTION's environment (its frame makes
         // `T` in a default resolve; its parameter types are each
         // default's expectation) with no return expectation and no
@@ -1411,9 +1381,7 @@ fn infer_body_impl<'db>(
         BodyOwnerId::Let(_) => (Vec::new(), Vec::new(), None, None),
     };
     let concrete_self = match owner {
-        BodyOwnerId::Function(function)
-        | BodyOwnerId::LlmSpec(function)
-        | BodyOwnerId::ParameterDefaults(function) => {
+        BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
             // BODY-position `Self` is a PLAIN-class-method error (the
             // ratified rule: signatures resolve it, bodies do not);
             // implements-block bodies (Self substitutes to the subject),
@@ -1432,9 +1400,7 @@ fn infer_body_impl<'db>(
         BodyOwnerId::Let(_) => None,
     };
     let impl_target = match owner {
-        BodyOwnerId::Function(function)
-        | BodyOwnerId::LlmSpec(function)
-        | BodyOwnerId::ParameterDefaults(function) => {
+        BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
             crate::lower::owner_impl_target(db, function, &frame)
         }
         BodyOwnerId::Let(_) => None,
@@ -1472,9 +1438,9 @@ fn infer_body_impl<'db>(
     ctx.declared_throws_open = declared_throws_open;
     ctx.body_owner_id = Some(owner);
     ctx.body_owner = match owner {
-        BodyOwnerId::Function(function)
-        | BodyOwnerId::LlmSpec(function)
-        | BodyOwnerId::ParameterDefaults(function) => Some(function),
+        BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
+            Some(function)
+        }
         BodyOwnerId::Let(_) => None,
     };
     ctx.body_owner_id = Some(owner);
@@ -1521,10 +1487,6 @@ fn stable_body_owner_identity(db: &dyn baml_compiler2_ppir::Db, owner: BodyOwner
     match owner {
         BodyOwnerId::Function(function) => {
             write(&[0]);
-            write(&function.id(db).as_u32().to_le_bytes());
-        }
-        BodyOwnerId::LlmSpec(function) => {
-            write(&[3]);
             write(&function.id(db).as_u32().to_le_bytes());
         }
         BodyOwnerId::Let(let_binding) => {
@@ -1894,10 +1856,6 @@ impl<'db> InferenceContext<'db> {
         let scope = self.current_scope?;
         let metadata_scope = if self.defaults_owner && Some(scope) == self.owner_scope {
             ExprMetadataScope::ParameterDefault(scope)
-        } else if matches!(self.body_owner_id, Some(BodyOwnerId::LlmSpec(_)))
-            && Some(scope) == self.owner_scope
-        {
-            ExprMetadataScope::LlmSpec(scope)
         } else {
             ExprMetadataScope::Body(scope)
         };
@@ -2302,9 +2260,6 @@ impl<'db> InferenceContext<'db> {
                 attr: TyAttr::default(),
             }),
             Expr::Path(segments) => self.resolve_value_path(expr, segments),
-            Expr::FunctionProjection { path, projection } => {
-                self.resolve_function_projection(expr, path, *projection, OwnArgs::Fresh)
-            }
             Expr::Index { base, index } => self.infer_index(body, expr, *base, *index, false),
             Expr::Spawn {
                 name,
@@ -5616,35 +5571,6 @@ impl<'db> InferenceContext<'db> {
     /// `method_resolution`; everything else is whatever the expression
     /// infers to.
     fn infer_callee(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) -> (Ty, bool) {
-        // A compiler-owned projection is still a direct reference to the
-        // authored function for generic instantiation. Read the call site's
-        // turbofish here, just like an ordinary function path; inferring the
-        // projection as a standalone value would mint unrelated fresh args
-        // and leave the explicit specialization off the callable carrier.
-        if let Expr::FunctionProjection { path, projection } = &body.exprs[callee] {
-            let path = path.clone();
-            let projection = *projection;
-            let fn_ty =
-                self.resolve_function_projection(callee, &path, projection, OwnArgs::Call(call));
-            self.result.type_of_expr.insert(callee, fn_ty.clone());
-            let bound = self
-                .result
-                .path_resolutions
-                .get(&callee)
-                .and_then(|path| path.segments.last())
-                .and_then(|segment| segment.resolution.as_ref())
-                .is_some_and(|resolution| {
-                    matches!(resolution, MemberResolution::BoundMethod { .. })
-                })
-                || self
-                    .result
-                    .member_resolutions
-                    .get(&callee)
-                    .is_some_and(|resolution| {
-                        matches!(resolution, MemberResolution::BoundMethod { .. })
-                    });
-            return (fn_ty, bound);
-        }
         // A FULLY-qualified direct call (`(Box as Sized).pick(a, b)`): the
         // call site supplies the turbofish, and `self` stays the written
         // first argument (no bound receiver), the UFCS shape.
@@ -6742,176 +6668,6 @@ impl<'db> InferenceContext<'db> {
             }
         }
         Ty::error()
-    }
-
-    /// Type a compiler-owned projection without inventing a declaration name.
-    /// `Fn@spec` resolves `Fn` normally, then replaces only the callable's
-    /// result/effect surface with the attached private spec recipe.
-    fn resolve_function_projection(
-        &mut self,
-        expr: ExprId,
-        segments: &[baml_type::Name],
-        projection: baml_compiler2_ast::FunctionProjection,
-        own: OwnArgs,
-    ) -> Ty {
-        let resolved = if let Some(Definition::Function(function)) =
-            self.lower.resolve_value(segments)
-        {
-            let signature = function_signature(self.db, function);
-            let callee_name = baml_compiler2_ppir::item_data::function_data(self.db, function)
-                .name
-                .clone();
-            let bounds = crate::lower::function_generic_bounds(self.db, function);
-            let mut instantiation = self.own_instantiation_with_bounds(
-                own,
-                &signature.generic_params,
-                &callee_name,
-                &bounds,
-                crate::lower::TypePosition::Existential,
-            );
-            let anchor = match own {
-                OwnArgs::Call(call) => {
-                    instantiation = self.write_call_type_args(call, &instantiation, 0);
-                    self.record_runtime_dependent_arguments(call, signature, false);
-                    call
-                }
-                OwnArgs::Fresh => expr,
-            };
-            self.register_call_bounds(function, &instantiation, anchor);
-            self.write_member_resolution(expr, MemberResolution::Free { func: function });
-            Some((function, instantiation, anchor))
-        } else if let OwnArgs::Call(call) = own
-            && segments.len() >= 2
-        {
-            let source_function = |resolution: &MemberResolution<'db>| match resolution {
-                MemberResolution::Free { func }
-                | MemberResolution::BoundMethod { func, .. }
-                | MemberResolution::UnboundMethod { func, .. }
-                | MemberResolution::InterfaceConcreteMethod { func, .. } => Some(*func),
-                _ => None,
-            };
-
-            let function = if self.path_resolves_locally(expr) {
-                let root = self.infer_path(expr);
-                let (receiver, mut steps) =
-                    self.walk_path_members(expr, root, &segments[1..segments.len() - 1]);
-                let member = segments.last().expect("checked len");
-                let (fn_ty, _, resolution, desugared) =
-                    self.member_callee(call, expr, &receiver, member);
-                if desugared {
-                    self.result.desugared_callees.insert(expr);
-                }
-                steps.push(ResolvedPathSegment {
-                    ty: fn_ty,
-                    resolution: resolution.clone(),
-                });
-                self.write_resolved_path(expr, steps);
-                resolution.as_ref().and_then(source_function)
-            } else {
-                let (prefix, member) = segments.split_at(segments.len() - 1);
-                self.class_static_value(prefix, &member[0], OwnArgs::Call(call), call, Some(expr))
-                    .and_then(|_| self.result.member_resolutions.get(&expr))
-                    .and_then(source_function)
-            };
-            function.map(|function| {
-                let instantiation = self
-                    .result
-                    .call_plans
-                    .get(&call)
-                    .map(|plan| plan.type_args.clone())
-                    .unwrap_or_default();
-                (function, instantiation, call)
-            })
-        } else {
-            None
-        };
-
-        let Some((function, instantiation, anchor)) = resolved else {
-            if !self.path_resolves_locally(expr) {
-                let _ = self.resolve_value_path(expr, segments);
-            }
-            self.pending_diags
-                .push(PendingDiag::FunctionProjectionUnavailable {
-                    expr,
-                    name: baml_type::Name::new(
-                        segments
-                            .iter()
-                            .map(baml_type::Name::as_str)
-                            .collect::<Vec<_>>()
-                            .join("."),
-                    ),
-                });
-            return Ty::error();
-        };
-
-        let Some(llm) = baml_compiler2_ppir::item_data::function_llm_meta(self.db, function) else {
-            self.pending_diags
-                .push(PendingDiag::FunctionProjectionUnavailable {
-                    expr,
-                    name: baml_compiler2_ppir::item_data::function_data(self.db, function)
-                        .name
-                        .clone(),
-                });
-            return Ty::error();
-        };
-        if !llm.has_spec {
-            self.pending_diags
-                .push(PendingDiag::FunctionProjectionUnavailable {
-                    expr,
-                    name: baml_compiler2_ppir::item_data::function_data(self.db, function)
-                        .name
-                        .clone(),
-                });
-            return Ty::error();
-        }
-
-        let signature = function_signature(self.db, function);
-
-        match projection {
-            baml_compiler2_ast::FunctionProjection::Spec => {
-                // Unlike a direct `-> T` call, `@spec<T>` publishes the
-                // specialization inside `FunctionSpec<T>`. Check
-                // the declaration-shaped result first so a whole-slot
-                // `unreflect(value)` cannot be hidden by its occurrence type,
-                // then the instantiated result so nested runtime atoms are
-                // covered as well. A scoped `type T = unreflect(value)` has no
-                // call-local carrier and therefore remains valid.
-                let spec_template = crate::lower::class_ty(
-                    baml_type::TypeName::new(
-                        baml_type::Name::new("ai"),
-                        Vec::new(),
-                        baml_type::Name::new("FunctionSpec"),
-                    ),
-                    vec![signature.ret.clone()],
-                );
-                self.report_runtime_type_escape(anchor, &spec_template, RuntimeTypeEscape::Value);
-                let spec_ty = substitute_params(&spec_template, &instantiation);
-                self.report_runtime_type_escape(anchor, &spec_ty, RuntimeTypeEscape::Value);
-                let spec_inference = infer_body(self.db, BodyOwnerId::LlmSpec(function));
-                let throws = substitute_params(&spec_inference.throws, &instantiation);
-                let params = signature
-                    .params
-                    .iter()
-                    .filter(|param| !matches!(param.name.as_str(), "client" | "on_event"))
-                    .map(|param| baml_type::interned::FunctionParam {
-                        name: Some(param.name.clone()),
-                        ty: substitute_params(&param.ty, &instantiation),
-                        mode: if param.has_default {
-                            baml_type::FunctionParamMode::Optional
-                        } else {
-                            baml_type::FunctionParamMode::Required
-                        },
-                    })
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice();
-                Ty::intern(TyKind::Function {
-                    params,
-                    ret: spec_ty,
-                    throws,
-                    attr: TyAttr::default(),
-                })
-            }
-        }
     }
 
     fn own_instantiation_with_bounds(
@@ -10909,9 +10665,6 @@ impl<'db> InferenceContext<'db> {
                             .unwrap_or(TirTypeError::UnresolvedName { name }),
                         expr,
                     ),
-                    PendingDiag::FunctionProjectionUnavailable { expr, name } => {
-                        (TirTypeError::FunctionProjectionUnavailable { name }, expr)
-                    }
                     PendingDiag::TopLevelLetCycle { expr } => (TirTypeError::CannotInferType, expr),
                     PendingDiag::UnresolvedMember { expr, base, member } => (
                         TirTypeError::UnresolvedMember {

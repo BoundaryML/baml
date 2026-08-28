@@ -114,7 +114,6 @@ pub fn body_evaluated_calls<'db>(
 ) -> &'db [EvaluatedCall<'db>] {
     match owner {
         BodyOwnerId::Function(function) => &function_evaluated_calls(db, function).0,
-        BodyOwnerId::LlmSpec(_) => &[],
         BodyOwnerId::Let(let_binding) => &let_evaluated_calls(db, let_binding).0,
         // Parameter defaults are evaluated per CALL, not at `$init`.
         BodyOwnerId::ParameterDefaults(_) => &[],
@@ -143,7 +142,7 @@ fn evaluated_calls_impl<'db>(
 ) -> EvaluatedCalls<'db> {
     let owner_body = baml_compiler2_ppir::body(db, owner);
     let body: &ExprBody = match &owner_body {
-        OwnerBody::Function(function) | OwnerBody::LlmSpec(function) => match function.as_ref() {
+        OwnerBody::Function(function) => match function.as_ref() {
             FunctionBody::Expr(body) => body,
             // A builtin has no BAML body: its io-ness is a property of the
             // declaration, read by `io_sysop_of` — not an edge.

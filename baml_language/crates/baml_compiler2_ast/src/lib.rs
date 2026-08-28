@@ -9,6 +9,7 @@
 
 pub mod ast;
 pub mod cleanup_guard;
+pub(crate) mod companions;
 pub(crate) mod disambiguate;
 pub mod docstring;
 pub(crate) mod lower_cst;
@@ -462,59 +463,72 @@ mod tests {
     }
 
     #[test]
-    fn stream_projection_preserves_qualified_path_segment_spans() {
-        let source = "function main() -> unknown { alpha.beta.Ask@stream }";
-        let function = first_function(parse_and_lower(source));
-        let Some(FunctionBodyDef::Expr(body, source_map)) = function.body else {
-            panic!("expected expression body")
-        };
-        let (expr, path) = body
-            .exprs
-            .iter()
-            .find_map(|(expr, value)| match value {
-                Expr::Path(path) if path.last().is_some_and(|name| name == "Ask@stream") => {
-                    Some((expr, path))
-                }
-                _ => None,
-            })
-            .expect("qualified @stream path");
-        assert_eq!(
-            path.iter().map(|name| name.as_str()).collect::<Vec<_>>(),
-            ["alpha", "beta", "Ask@stream"]
-        );
-        let spans = source_map
-            .path_segment_spans
-            .get(&expr)
-            .expect("qualified path spans retained");
-        assert_eq!(
-            spans
+    fn function_companion_syntax_preserves_qualified_path_segment_spans() {
+        for projection in ["spec", "stream"] {
+            let source = format!("function main() -> unknown {{ alpha.beta.Ask@{projection} }}");
+            let function = first_function(parse_and_lower(&source));
+            let Some(FunctionBodyDef::Expr(body, source_map)) = function.body else {
+                panic!("expected expression body")
+            };
+            let projected_name = format!("Ask@{projection}");
+            let (expr, path) = body
+                .exprs
                 .iter()
-                .map(|range| &source[usize::from(range.start())..usize::from(range.end())])
-                .collect::<Vec<_>>(),
-            ["alpha", "beta", "Ask"]
-        );
+                .find_map(|(expr, value)| match value {
+                    Expr::Path(path)
+                        if path
+                            .last()
+                            .is_some_and(|name| name.as_str() == projected_name) =>
+                    {
+                        Some((expr, path))
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("qualified @{projection} path"));
+            assert_eq!(
+                path.iter().map(|name| name.as_str()).collect::<Vec<_>>(),
+                ["alpha", "beta", projected_name.as_str()]
+            );
+            let spans = source_map
+                .path_segment_spans
+                .get(&expr)
+                .expect("qualified path spans retained");
+            assert_eq!(
+                spans
+                    .iter()
+                    .map(|range| &source[usize::from(range.start())..usize::from(range.end())])
+                    .collect::<Vec<_>>(),
+                ["alpha", "beta", "Ask"]
+            );
+        }
     }
 
     #[test]
-    fn stream_projection_preserves_complex_receiver_and_member_span() {
-        let source = "function main() -> unknown { factory().Ask@stream(\"hi\") }";
-        let function = first_function(parse_and_lower(source));
-        let Some(FunctionBodyDef::Expr(body, source_map)) = function.body else {
-            panic!("expected expression body")
-        };
-        let expr = body
-            .exprs
-            .iter()
-            .find_map(|(expr, value)| match value {
-                Expr::MemberAccess { member, .. } if member == "Ask@stream" => Some(expr),
-                _ => None,
-            })
-            .expect("receiver @stream member");
-        let range = source_map.member_access_member_span(expr);
-        assert_eq!(
-            &source[usize::from(range.start())..usize::from(range.end())],
-            "Ask"
-        );
+    fn function_companion_syntax_preserves_complex_receiver_and_member_span() {
+        for projection in ["spec", "stream"] {
+            let source =
+                format!("function main() -> unknown {{ factory().Ask@{projection}(\"hi\") }}");
+            let function = first_function(parse_and_lower(&source));
+            let Some(FunctionBodyDef::Expr(body, source_map)) = function.body else {
+                panic!("expected expression body")
+            };
+            let projected_name = format!("Ask@{projection}");
+            let expr = body
+                .exprs
+                .iter()
+                .find_map(|(expr, value)| match value {
+                    Expr::MemberAccess { member, .. } if member.as_str() == projected_name => {
+                        Some(expr)
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("receiver @{projection} member"));
+            let range = source_map.member_access_member_span(expr);
+            assert_eq!(
+                &source[usize::from(range.start())..usize::from(range.end())],
+                "Ask"
+            );
+        }
     }
 
     #[test]

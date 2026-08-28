@@ -8,8 +8,7 @@ pub mod pretty;
 pub use baml_type::ResolvedAliases;
 pub use ir::*;
 pub use lower::{
-    def_to_item_ref, lower_function, lower_let_body, lower_llm_spec_function,
-    resolved_aliases_for_package, tir2_to_template,
+    def_to_item_ref, lower_function, lower_let_body, resolved_aliases_for_package, tir2_to_template,
 };
 
 /// Database trait for compiler2 MIR queries.

@@ -109,6 +109,7 @@ async def _drain_runtime_stream_async_iterable(
     return final_data
 
 
+# SDK_PARITY_LINT(skip): validates Python BamlRuntimeValue identity through the generated sync stream surface
 @replay_server(recording_path="replay_extract_doc")
 def test_dynamic_runtime_stream_identity_and_flat_projection_parity():
     from baml_bridge import BamlFunctionSpec, BamlRuntimeValue
@@ -165,6 +166,7 @@ def test_dynamic_runtime_stream_identity_and_flat_projection_parity():
     assert wrapped_final == flat_data == _EXPECTED_FINAL
 
 
+# SDK_PARITY_LINT(skip): validates Python's generated async-iterable stream surface
 @replay_server(recording_path="replay_extract_doc")
 async def test_dynamic_runtime_stream_is_an_elegant_async_iterable():
     from baml_sdk.lorem import hs7_open_collision_stream_async

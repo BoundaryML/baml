@@ -1052,7 +1052,6 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
         | ast::Expr::ByteStringLiteral(_)
         | ast::Expr::Null
         | ast::Expr::Path(_)
-        | ast::Expr::FunctionProjection { .. }
         // A qualified item reference names a callee but holds no callee
         // EXPRESSION — the enclosing `Call` records the name, exactly as it
         // does for the `Path` spellings of the same reference.

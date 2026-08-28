@@ -5,7 +5,7 @@ source: crates/baml_tests/src/corpus.rs
 fn user.fixtures.llm_image_outputs.GenerateImage(prompt: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> image {
     // Locals:
     let _0: image // _0 // return
-    let _1: string // prompt // param [captured]
+    let _1: string // prompt // param
     let _2: null | ai.Client // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
@@ -14,12 +14,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage(prompt: string, client: null | 
     let _7: ai.Agent
     let _8: reflect.Type
     let _9: ai.FunctionSpec<image>
-    let _10: map<string, unknown>
-    let _11: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _12: ai.tools.Toolbox
-    let _13: ai.tools.Tool[]
-    let _14: openai.ImageClient
-    let _15: reflect.Type
+    let _10: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -47,34 +42,57 @@ fn user.fixtures.llm_image_outputs.GenerateImage(prompt: string, client: null | 
     }
 
     bb5: {
-        _10 = { const "prompt": copy _1 }: map<string, unknown>;
-        _11 = make_closure lambda[0](copy _1);
-        _13 = []: ai.tools.Tool[];
-        _12 = call const fn ai.tools.Toolbox.new(copy _13) -> [bb6];
+        _9 = call const fn user.fixtures.llm_image_outputs.GenerateImage@spec(copy _1) -> [bb6];
     }
 
     bb6: {
-        _14 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb7];
+        _10 = load_type(image);
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _10>(copy _7, copy _9) -> [bb7];
     }
 
     bb7: {
-        _9 = ai.FunctionSpec<image> { const "GenerateImage", copy _10, copy _11, copy _12, copy _14 };
-        _15 = load_type(image);
-        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _15>(copy _7, copy _9) -> [bb8];
+        _0 = copy _6.0;
+        goto -> bb8;
     }
 
     bb8: {
-        _0 = copy _6.0;
-        goto -> bb9;
+        return;
+    }
+}
+
+fn user.fixtures.llm_image_outputs.GenerateImage@spec(prompt: string) -> ai.FunctionSpec<image> {
+    // Locals:
+    let _0: ai.FunctionSpec<image> // _0 // return
+    let _1: string // prompt // param [captured]
+    let _2: map<string, unknown>
+    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
+    let _6: openai.ImageClient
+
+    bb0: {
+        _2 = { const "prompt": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0](copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
     }
 
-    bb9: {
+    bb1: {
+        _6 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<image> { const "GenerateImage", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
 
 // lambda[0]
-fn .<lambda(GenerateImage, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(GenerateImage@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -161,19 +179,14 @@ fn .<lambda(GenerateImage, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Pro
 fn user.fixtures.llm_image_outputs.GenerateImage@stream(prompt: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<image, image> {
     // Locals:
     let _0: ai.stream.Stream<image, image> // _0 // return
-    let _1: string // prompt // param [captured]
+    let _1: string // prompt // param
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: ai.FunctionSpec<image>
-    let _7: map<string, unknown>
-    let _8: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _9: ai.tools.Toolbox
-    let _10: ai.tools.Tool[]
-    let _11: openai.ImageClient
-    let _12: reflect.Type
-    let _13: reflect.Type
+    let _7: reflect.Type
+    let _8: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -196,117 +209,24 @@ fn user.fixtures.llm_image_outputs.GenerateImage@stream(prompt: string, client: 
     }
 
     bb4: {
-        _7 = { const "prompt": copy _1 }: map<string, unknown>;
-        _8 = make_closure lambda[0](copy _1);
-        _10 = []: ai.tools.Tool[];
-        _9 = call const fn ai.tools.Toolbox.new(copy _10) -> [bb5];
+        _6 = call const fn user.fixtures.llm_image_outputs.GenerateImage@spec(copy _1) -> [bb5];
     }
 
     bb5: {
-        _11 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb6];
+        _7 = load_type(image);
+        _8 = load_type(image);
+        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _2, copy _3) -> [bb6];
     }
 
     bb6: {
-        _6 = ai.FunctionSpec<image> { const "GenerateImage", copy _7, copy _8, copy _9, copy _11 };
-        _12 = load_type(image);
-        _13 = load_type(image);
-        _0 = call const fn ai.stream.from_spec<copy _12, copy _13>(copy _6, copy _2, copy _3) -> [bb7];
-    }
-
-    bb7: {
         return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(GenerateImage@stream, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
-    // Locals:
-    let _0: ai.Prompt // _0 // return
-    let _1: ai.OutputFormat //  __spec_output_format // param
-    let _2: unknown //  __prompt_render_err
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: string
-    let _8: int
-    let _9: string[]
-    let _10: string
-    let _11: reflect.Type
-    let _12: int
-    let _13: unknown[]
-    let _14: string
-    let _15: reflect.Type
-    let _16: int
-    let _17: string[]
-    let _18: ""
-    let _19: reflect.Type
-    let _20: string[]
-    let _21: unknown[]
-    let _22: string[]
-    let _23: baml.TaggedString
-    let _24: unknown[]
-    let _25: baml.TaggedString
-    let _26: ai.errors.PromptRenderError
-    let _27: never
-
-    bb0: {
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _7 = copy _6;
-        _6 = copy _7 + const "Generate an image for this prompt:\n";
-        _9 = copy _4;
-        _10 = copy _6;
-        _11 = load_type(string);
-        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1, unwind: bb5];
-    }
-
-    bb1: {
-        _6 = const "";
-        _13 = copy _5;
-        _14 = copy capture[0];
-        _15 = load_type(unknown);
-        _12 = call const fn baml.Array.push<copy _15>(copy _13, copy _14) -> [bb2, unwind: bb5];
-    }
-
-    bb2: {
-        _17 = copy _4;
-        _18 = copy _6;
-        _19 = load_type(string);
-        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3, unwind: bb5];
-    }
-
-    bb3: {
-        _20 = copy _4;
-        _21 = copy _5;
-        _3 = baml.TaggedString { copy _20, copy _21 };
-        _23 = copy _3;
-        _22 = copy _23.0;
-        _25 = copy _3;
-        _24 = copy _25.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _22, copy _24) -> [bb4, unwind: bb5];
-    }
-
-    bb4: {
-        return;
-    }
-
-    bb5: {
-        throw_if_panic copy _2 -> bb6;
-    }
-
-    bb6: {
-        _27 = copy _2;
-        _26 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _27 };
-        throw copy _26;
     }
 }
 
 fn user.fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> image[] {
     // Locals:
     let _0: image[] // _0 // return
-    let _1: string // prompt // param [captured]
+    let _1: string // prompt // param
     let _2: null | ai.Client // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
@@ -315,12 +235,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: null
     let _7: ai.Agent
     let _8: reflect.Type
     let _9: ai.FunctionSpec<image[]>
-    let _10: map<string, unknown>
-    let _11: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _12: ai.tools.Toolbox
-    let _13: ai.tools.Tool[]
-    let _14: openai.ImageClient
-    let _15: reflect.Type
+    let _10: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -348,34 +263,57 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: null
     }
 
     bb5: {
-        _10 = { const "prompt": copy _1 }: map<string, unknown>;
-        _11 = make_closure lambda[0](copy _1);
-        _13 = []: ai.tools.Tool[];
-        _12 = call const fn ai.tools.Toolbox.new(copy _13) -> [bb6];
+        _9 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet@spec(copy _1) -> [bb6];
     }
 
     bb6: {
-        _14 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb7];
+        _10 = load_type(image[]);
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _10>(copy _7, copy _9) -> [bb7];
     }
 
     bb7: {
-        _9 = ai.FunctionSpec<image[]> { const "GenerateImageSet", copy _10, copy _11, copy _12, copy _14 };
-        _15 = load_type(image[]);
-        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _15>(copy _7, copy _9) -> [bb8];
+        _0 = copy _6.0;
+        goto -> bb8;
     }
 
     bb8: {
-        _0 = copy _6.0;
-        goto -> bb9;
+        return;
+    }
+}
+
+fn user.fixtures.llm_image_outputs.GenerateImageSet@spec(prompt: string) -> ai.FunctionSpec<image[]> {
+    // Locals:
+    let _0: ai.FunctionSpec<image[]> // _0 // return
+    let _1: string // prompt // param [captured]
+    let _2: map<string, unknown>
+    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
+    let _6: openai.ImageClient
+
+    bb0: {
+        _2 = { const "prompt": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0](copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
     }
 
-    bb9: {
+    bb1: {
+        _6 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<image[]> { const "GenerateImageSet", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
 
 // lambda[0]
-fn .<lambda(GenerateImageSet, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(GenerateImageSet@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -462,19 +400,14 @@ fn .<lambda(GenerateImageSet, 0)>( __spec_output_format: ai.OutputFormat) -> ai.
 fn user.fixtures.llm_image_outputs.GenerateImageSet@stream(prompt: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<image[], image[]> {
     // Locals:
     let _0: ai.stream.Stream<image[], image[]> // _0 // return
-    let _1: string // prompt // param [captured]
+    let _1: string // prompt // param
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: ai.FunctionSpec<image[]>
-    let _7: map<string, unknown>
-    let _8: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _9: ai.tools.Toolbox
-    let _10: ai.tools.Tool[]
-    let _11: openai.ImageClient
-    let _12: reflect.Type
-    let _13: reflect.Type
+    let _7: reflect.Type
+    let _8: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -497,117 +430,24 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet@stream(prompt: string, clien
     }
 
     bb4: {
-        _7 = { const "prompt": copy _1 }: map<string, unknown>;
-        _8 = make_closure lambda[0](copy _1);
-        _10 = []: ai.tools.Tool[];
-        _9 = call const fn ai.tools.Toolbox.new(copy _10) -> [bb5];
+        _6 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet@spec(copy _1) -> [bb5];
     }
 
     bb5: {
-        _11 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb6];
+        _7 = load_type(image[]);
+        _8 = load_type(image[]);
+        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _2, copy _3) -> [bb6];
     }
 
     bb6: {
-        _6 = ai.FunctionSpec<image[]> { const "GenerateImageSet", copy _7, copy _8, copy _9, copy _11 };
-        _12 = load_type(image[]);
-        _13 = load_type(image[]);
-        _0 = call const fn ai.stream.from_spec<copy _12, copy _13>(copy _6, copy _2, copy _3) -> [bb7];
-    }
-
-    bb7: {
         return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(GenerateImageSet@stream, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
-    // Locals:
-    let _0: ai.Prompt // _0 // return
-    let _1: ai.OutputFormat //  __spec_output_format // param
-    let _2: unknown //  __prompt_render_err
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: string
-    let _8: int
-    let _9: string[]
-    let _10: string
-    let _11: reflect.Type
-    let _12: int
-    let _13: unknown[]
-    let _14: string
-    let _15: reflect.Type
-    let _16: int
-    let _17: string[]
-    let _18: ""
-    let _19: reflect.Type
-    let _20: string[]
-    let _21: unknown[]
-    let _22: string[]
-    let _23: baml.TaggedString
-    let _24: unknown[]
-    let _25: baml.TaggedString
-    let _26: ai.errors.PromptRenderError
-    let _27: never
-
-    bb0: {
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _7 = copy _6;
-        _6 = copy _7 + const "Generate multiple distinct image outputs for this prompt:\n";
-        _9 = copy _4;
-        _10 = copy _6;
-        _11 = load_type(string);
-        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1, unwind: bb5];
-    }
-
-    bb1: {
-        _6 = const "";
-        _13 = copy _5;
-        _14 = copy capture[0];
-        _15 = load_type(unknown);
-        _12 = call const fn baml.Array.push<copy _15>(copy _13, copy _14) -> [bb2, unwind: bb5];
-    }
-
-    bb2: {
-        _17 = copy _4;
-        _18 = copy _6;
-        _19 = load_type(string);
-        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3, unwind: bb5];
-    }
-
-    bb3: {
-        _20 = copy _4;
-        _21 = copy _5;
-        _3 = baml.TaggedString { copy _20, copy _21 };
-        _23 = copy _3;
-        _22 = copy _23.0;
-        _25 = copy _3;
-        _24 = copy _25.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _22, copy _24) -> [bb4, unwind: bb5];
-    }
-
-    bb4: {
-        return;
-    }
-
-    bb5: {
-        throw_if_panic copy _2 -> bb6;
-    }
-
-    bb6: {
-        _27 = copy _2;
-        _26 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _27 };
-        throw copy _26;
     }
 }
 
 fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> (string | image)[] {
     // Locals:
     let _0: (string | image)[] // _0 // return
-    let _1: string // prompt // param [captured]
+    let _1: string // prompt // param
     let _2: null | ai.Client // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
@@ -616,12 +456,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, c
     let _7: ai.Agent
     let _8: reflect.Type
     let _9: ai.FunctionSpec<(string | image)[]>
-    let _10: map<string, unknown>
-    let _11: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _12: ai.tools.Toolbox
-    let _13: ai.tools.Tool[]
-    let _14: openai.ResponsesClient
-    let _15: reflect.Type
+    let _10: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -649,34 +484,57 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, c
     }
 
     bb5: {
-        _10 = { const "prompt": copy _1 }: map<string, unknown>;
-        _11 = make_closure lambda[0](copy _1);
-        _13 = []: ai.tools.Tool[];
-        _12 = call const fn ai.tools.Toolbox.new(copy _13) -> [bb6];
+        _9 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(copy _1) -> [bb6];
     }
 
     bb6: {
-        _14 = call const fn openai.ResponsesClient.new(const "gpt-4.1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb7];
+        _10 = load_type((string | image)[]);
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _10>(copy _7, copy _9) -> [bb7];
     }
 
     bb7: {
-        _9 = ai.FunctionSpec<(image | string)[]> { const "GenerateMixedImageNarrative", copy _10, copy _11, copy _12, copy _14 };
-        _15 = load_type((string | image)[]);
-        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _15>(copy _7, copy _9) -> [bb8];
+        _0 = copy _6.0;
+        goto -> bb8;
     }
 
     bb8: {
-        _0 = copy _6.0;
-        goto -> bb9;
+        return;
+    }
+}
+
+fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(prompt: string) -> ai.FunctionSpec<(string | image)[]> {
+    // Locals:
+    let _0: ai.FunctionSpec<(string | image)[]> // _0 // return
+    let _1: string // prompt // param [captured]
+    let _2: map<string, unknown>
+    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
+    let _6: openai.ResponsesClient
+
+    bb0: {
+        _2 = { const "prompt": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0](copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
     }
 
-    bb9: {
+    bb1: {
+        _6 = call const fn openai.ResponsesClient.new(const "gpt-4.1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<(image | string)[]> { const "GenerateMixedImageNarrative", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
 
 // lambda[0]
-fn .<lambda(GenerateMixedImageNarrative, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(GenerateMixedImageNarrative@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -792,19 +650,14 @@ fn .<lambda(GenerateMixedImageNarrative, 0)>( __spec_output_format: ai.OutputFor
 fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@stream(prompt: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<(string | image)[], (string | image)[]> {
     // Locals:
     let _0: ai.stream.Stream<(string | image)[], (string | image)[]> // _0 // return
-    let _1: string // prompt // param [captured]
+    let _1: string // prompt // param
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: ai.FunctionSpec<(string | image)[]>
-    let _7: map<string, unknown>
-    let _8: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _9: ai.tools.Toolbox
-    let _10: ai.tools.Tool[]
-    let _11: openai.ResponsesClient
-    let _12: reflect.Type
-    let _13: reflect.Type
+    let _7: reflect.Type
+    let _8: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -827,138 +680,16 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@stream(prompt: st
     }
 
     bb4: {
-        _7 = { const "prompt": copy _1 }: map<string, unknown>;
-        _8 = make_closure lambda[0](copy _1);
-        _10 = []: ai.tools.Tool[];
-        _9 = call const fn ai.tools.Toolbox.new(copy _10) -> [bb5];
+        _6 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(copy _1) -> [bb5];
     }
 
     bb5: {
-        _11 = call const fn openai.ResponsesClient.new(const "gpt-4.1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb6];
+        _7 = load_type((image | string)[]);
+        _8 = load_type((image | string)[]);
+        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _2, copy _3) -> [bb6];
     }
 
     bb6: {
-        _6 = ai.FunctionSpec<(image | string)[]> { const "GenerateMixedImageNarrative", copy _7, copy _8, copy _9, copy _11 };
-        _12 = load_type((image | string)[]);
-        _13 = load_type((image | string)[]);
-        _0 = call const fn ai.stream.from_spec<copy _12, copy _13>(copy _6, copy _2, copy _3) -> [bb7];
-    }
-
-    bb7: {
         return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(GenerateMixedImageNarrative@stream, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
-    // Locals:
-    let _0: ai.Prompt // _0 // return
-    let _1: ai.OutputFormat //  __spec_output_format // param
-    let _2: unknown //  __prompt_render_err
-    let _3: ai.internal.SpecCtx // ctx
-    let _4: baml.TaggedString //  __spec_tagged_prompt
-    let _5: string[] //  __tt_parts
-    let _6: unknown[] //  __tt_values
-    let _7: string //  __tt_cur
-    let _8: string
-    let _9: int
-    let _10: string[]
-    let _11: string
-    let _12: reflect.Type
-    let _13: int
-    let _14: unknown[]
-    let _15: string
-    let _16: reflect.Type
-    let _17: int
-    let _18: string[]
-    let _19: "\n\n"
-    let _20: reflect.Type
-    let _21: int
-    let _22: unknown[]
-    let _23: string
-    let _24: reflect.Type
-    let _25: int
-    let _26: string[]
-    let _27: ""
-    let _28: reflect.Type
-    let _29: string[]
-    let _30: unknown[]
-    let _31: string[]
-    let _32: baml.TaggedString
-    let _33: unknown[]
-    let _34: baml.TaggedString
-    let _35: ai.errors.PromptRenderError
-    let _36: never
-
-    bb0: {
-        _3 = ai.internal.SpecCtx { copy _1 };
-        _5 = []: string[];
-        _6 = []: unknown[];
-        _7 = const "";
-        _8 = copy _7;
-        _7 = copy _8 + const "Generate a short narrative with text captions and image outputs for:\n";
-        _10 = copy _5;
-        _11 = copy _7;
-        _12 = load_type(string);
-        _9 = call const fn baml.Array.push<copy _12>(copy _10, copy _11) -> [bb1, unwind: bb8];
-    }
-
-    bb1: {
-        _7 = const "";
-        _14 = copy _6;
-        _15 = copy capture[0];
-        _16 = load_type(unknown);
-        _13 = call const fn baml.Array.push<copy _16>(copy _14, copy _15) -> [bb2, unwind: bb8];
-    }
-
-    bb2: {
-        _7 = const "\n\n";
-        _18 = copy _5;
-        _19 = copy _7;
-        _20 = load_type(string);
-        _17 = call const fn baml.Array.push<copy _20>(copy _18, copy _19) -> [bb3, unwind: bb8];
-    }
-
-    bb3: {
-        _7 = const "";
-        _22 = copy _6;
-        _23 = call const fn ai.internal.SpecCtx.output_format(copy _3, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb4, unwind: bb8];
-    }
-
-    bb4: {
-        _24 = load_type(unknown);
-        _21 = call const fn baml.Array.push<copy _24>(copy _22, copy _23) -> [bb5, unwind: bb8];
-    }
-
-    bb5: {
-        _26 = copy _5;
-        _27 = copy _7;
-        _28 = load_type(string);
-        _25 = call const fn baml.Array.push<copy _28>(copy _26, copy _27) -> [bb6, unwind: bb8];
-    }
-
-    bb6: {
-        _29 = copy _5;
-        _30 = copy _6;
-        _4 = baml.TaggedString { copy _29, copy _30 };
-        _32 = copy _4;
-        _31 = copy _32.0;
-        _34 = copy _4;
-        _33 = copy _34.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _31, copy _33) -> [bb7, unwind: bb8];
-    }
-
-    bb7: {
-        return;
-    }
-
-    bb8: {
-        throw_if_panic copy _2 -> bb9;
-    }
-
-    bb9: {
-        _36 = copy _2;
-        _35 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _36 };
-        throw copy _35;
     }
 }

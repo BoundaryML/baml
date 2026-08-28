@@ -1,7 +1,8 @@
 //! Integration tests for LLM prompt rendering.
 //!
-//! Tests drive `Fn@spec(...).prompt()`, which renders the function's attached
-//! recipe (with the return type's output format) as a structural `ai.Prompt`.
+//! Tests drive `Fn@spec(...).prompt()`, which calls the private ordinary spec
+//! companion and renders its recipe (with the return type's output format) as
+//! a structural `ai.Prompt`.
 
 use bex_engine::FunctionCallContextBuilder;
 use bex_external_types::BexExternalAdt;

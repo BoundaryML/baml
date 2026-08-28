@@ -9,7 +9,7 @@ import baml_bridge.BamlMedia;
  * {@link BamlHandle} over the engine-side {@code Adt(Media)} row.
  */
 public final class Video implements BamlMedia {
-    /** BAML stdlib FQN, emitted on the inbound {@code class_value}. */
+    /** BAML stdlib FQN used to choose the portable media kind. */
     public static final String FQN = "baml.media.Video";
     /** Proto {@code MediaTypeEnum.VIDEO}. */
     private static final int KIND = 4;

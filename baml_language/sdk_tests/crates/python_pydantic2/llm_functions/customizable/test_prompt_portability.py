@@ -18,6 +18,7 @@ def _walk_dicts(value):
             yield from _walk_dicts(child)
 
 
+# SDK_PARITY_LINT(skip): validates Python's portable Prompt and media wrapper surface
 def test_prompt_is_reusable_and_media_survives_request_preview():
     image = Image.from_base64(PNG_B64, "image/png")
     spec = lorem.InspectMedia_spec(photo=image)
@@ -58,6 +59,7 @@ def test_prompt_is_reusable_and_media_survives_request_preview():
     assert spec.build_request().body == request.body
 
 
+# SDK_PARITY_LINT(skip): validates Python's generated FunctionSpec parse surface
 def test_function_spec_parse_replaces_the_parse_companion():
     spec = lorem.ExtractResume_spec(text="Ada Lovelace")
     parsed = spec.parse('{"name":"Ada Lovelace","email":null}')

@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { encodeCallArgs, encodeRunArgs, decodeCallResult, serializeValue, deserializeValue } from '../index';
-import { CallFunctionArgs, InboundMapEntry } from '../generated/baml_bridge/cffi/v1/baml_inbound';
+import {
+  CallFunctionArgs,
+  FunctionOperation,
+  InboundMapEntry,
+} from '../generated/baml_bridge/cffi/v1/baml_inbound';
 import { BamlHandleType } from '../generated/baml_bridge/cffi/v1/baml_handle';
 import { BamlOutboundValue, MediaTypeEnum } from '../generated/baml_bridge/cffi/v1/baml_outbound';
 import { BamlTyPrimitiveKind } from '../generated/baml_bridge/cffi/v1/baml_type';
@@ -42,6 +46,7 @@ describe('encodeCallArgs', () => {
     // Decode back to proto to verify structure
     const decoded = CallFunctionArgs.decode(bytes);
     expect(decoded.callId).toBe(123);
+    expect(decoded.operation).toBe(FunctionOperation.DIRECT);
     expect(decoded.kwargs).toHaveLength(1);
 
     const kwarg = decoded.kwargs[0];

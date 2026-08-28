@@ -578,16 +578,6 @@ impl ExprBody {
                 .map(smol_str::SmolStr::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
-            Expr::FunctionProjection { path, projection } => {
-                let path = path
-                    .iter()
-                    .map(smol_str::SmolStr::as_str)
-                    .collect::<Vec<_>>()
-                    .join(".");
-                match projection {
-                    FunctionProjection::Spec => format!("{path}@spec"),
-                }
-            }
             Expr::GenericApply { base, type_args } => {
                 let base = self.display_expr_inner(*base, depth + 1);
                 let tys: Vec<String> = type_args.iter().map(ToString::to_string).collect();
@@ -930,16 +920,6 @@ impl MapExprEntry {
     }
 }
 
-/// A compiler-owned projection of an authored function declaration.
-///
-/// Projections are deliberately not represented by synthetic declarations or
-/// encoded in names. `Fn@spec` keeps `Fn` as the resolved declaration and
-/// selects its attached spec recipe through this operation tag.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum FunctionProjection {
-    Spec,
-}
-
 /// Expressions — modeled after `Expr` in `body.rs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
@@ -950,11 +930,6 @@ pub enum Expr {
     Null,
     /// Path expression: `x`, `user.name`, `Status.Active`
     Path(Vec<Name>),
-    /// Function operation projection: `Fn@spec`.
-    FunctionProjection {
-        path: Vec<Name>,
-        projection: FunctionProjection,
-    },
     /// Generic instantiation as a value: `foo<int>` — a generic callable
     /// referenced with explicit type arguments but NOT called. The result is
     /// the specialized function value (`(int) -> int`). Distinct from
@@ -1831,10 +1806,10 @@ pub struct LlmPromptSpans {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmBodyDef {
     pub client: Option<Name>,
-    /// The function's pre-lowered, unbound spec recipe. It is built in
-    /// `lower_cst` while the CST backtick is still in hand (the AST must stay
-    /// CST-free for Salsa: a rowan node is `!Send`). This recipe belongs to the
-    /// authored LLM function; it is not a separately named declaration.
+    /// The staging body for the private ordinary `Fn@spec` companion. It is
+    /// built in `lower_cst` while the CST backtick is still in hand (the AST
+    /// must stay CST-free for Salsa: a rowan node is `!Send`) and copied into
+    /// the companion by `companions::llm_spec`.
     ///
     /// Absent when the prompt or client is unusable (a migration diagnostic was
     /// emitted instead).
@@ -1849,9 +1824,9 @@ pub struct LlmBodyDef {
     /// any value other than an absent field or a literal empty list (`tools
     /// []`). A non-literal expression (`tools: shared()`) counts as `true`
     /// even if it evaluates empty — the compile-time signal is conservative.
-    /// PPIR skips `$stream` synthesis when set (streaming does not run the
-    /// tool loop); `ai.stream.from_spec`'s runtime empty-toolbox check covers the
-    /// dynamic cases.
+    /// PPIR skips private `Fn@stream` synthesis when set (streaming does not run
+    /// the tool loop); `ai.stream.from_spec`'s runtime empty-toolbox check covers
+    /// the dynamic cases.
     pub has_tools: bool,
     pub span: TextRange,
 }

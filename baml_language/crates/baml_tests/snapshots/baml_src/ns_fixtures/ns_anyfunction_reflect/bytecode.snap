@@ -2,9 +2,6 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> #0 {
-    load_var ?1
-    make_cell
-    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -29,27 +26,12 @@ function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.
     load_var on_event
     call ai.Agent.new
     store_var _7
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _12
-    load_global user.fixtures.anyfunction_reflect.RuntimeEnumClient
-    call ai.clients.resolve
-    store_var _14
-    load_type #0
-    load_var _7
-    load_const "RuntimeClassify"
-    load_deref ?1
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
     load_type #0
     load_var input
-    make_closure .<lambda(RuntimeClassify, 0)>, captures=1, ntypeargs=1
-    load_var2 6 7
+    call user.fixtures.anyfunction_reflect.RuntimeClassify@spec
+    store_var _9
     load_type #0
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    load_var2 5 6
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
@@ -59,10 +41,33 @@ function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.
     return
 }
 
-function fixtures.anyfunction_reflect.RuntimeClassify@stream(input: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<#0 | null, #0> {
+function fixtures.anyfunction_reflect.RuntimeClassify@spec(input: string) -> ai.FunctionSpec<#0> {
     load_var ?1
     make_cell
     store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_global user.fixtures.anyfunction_reflect.RuntimeEnumClient
+    call ai.clients.resolve
+    store_var _6
+    load_const "RuntimeClassify"
+    load_deref ?1
+    load_const "input"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_type #0
+    load_var input
+    make_closure .<lambda(RuntimeClassify@spec, 0)>, captures=1, ntypeargs=1
+    load_var2 2 3
+    load_type #0
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function fixtures.anyfunction_reflect.RuntimeClassify@stream(input: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<#0 | null, #0> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -79,28 +84,14 @@ function fixtures.anyfunction_reflect.RuntimeClassify@stream(input: string, clie
     store_var on_event
 
   L1:
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _9
-    load_global user.fixtures.anyfunction_reflect.RuntimeEnumClient
-    call ai.clients.resolve
-    store_var _11
-    load_type #0 | null
-    load_type #0
-    load_const "RuntimeClassify"
-    load_deref ?1
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
     load_type #0
     load_var input
-    make_closure .<lambda(RuntimeClassify@stream, 0)>, captures=1, ntypeargs=1
-    load_var2 4 5
+    call user.fixtures.anyfunction_reflect.RuntimeClassify@spec
+    store_var _6
+    load_type #0 | null
     load_type #0
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
-    load_var2 2 3
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }
@@ -145,10 +136,9 @@ function fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> s
     store_var category
     load_var category
     bind_type 0
-    load_const "sample"
     load_type #0
-    make_spec_function user.fixtures.anyfunction_reflect.RuntimeClassify@spec ntypeargs=1
-    call_indirect
+    load_const "sample"
+    call user.fixtures.anyfunction_reflect.RuntimeClassify@spec
     store_var spec
     load_type #0
     load_var spec

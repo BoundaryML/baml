@@ -48,22 +48,6 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `GPT4`
-   ╭─[mixed_functions.baml:3:11]
- 3 │   client: GPT4
-   ·           ────
-   ╰────
-
-  [type] E0003
-
-  × unresolved name: `GPT4`
-    ╭─[mixed_functions.baml:32:11]
- 32 │   client: GPT4
-    ·           ────
-    ╰────
-
-  [type] E0003
-
-  × unresolved name: `GPT4`
     ╭─[mixed_functions.baml:32:11]
  32 │   client: GPT4
     ·           ────

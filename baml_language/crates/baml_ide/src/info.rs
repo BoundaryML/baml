@@ -2457,9 +2457,10 @@ function helpful_turn(username: string, history: string[]) -> string {
 
     #[test]
     fn prompt_ctx_hovers_the_driver_frame_param() {
-        // The private @spec recipe binds `ctx` to `ai.internal.SpecCtx`, but
-        // that storage carrier is not authored API. Hover preserves the
-        // public `ai.Context` prompt contract rather than leaking it.
+        // The private ordinary @spec companion binds `ctx` to
+        // `ai.internal.SpecCtx`, but that storage carrier is not authored API.
+        // Hover preserves the public `ai.Context` prompt contract rather than
+        // leaking it.
         let test = CursorTest::new(
             r#"client Terra = openai.ResponsesClient.new(model = "gpt-5.6-terra");
 

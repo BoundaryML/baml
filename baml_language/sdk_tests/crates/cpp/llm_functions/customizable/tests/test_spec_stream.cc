@@ -62,6 +62,7 @@ static_assert(
 
 }  // namespace
 
+// SDK_PARITY_LINT(skip): C++-only integration test pins generated flat-stream spelling and authored-identity bridge dispatch.
 BAML_TEST(flat_stream_calls_private_projection_through_authored_identity) {
   std::ifstream input("baml_sdk/src/bindings.cc");
   const std::string bindings((std::istreambuf_iterator<char>(input)),

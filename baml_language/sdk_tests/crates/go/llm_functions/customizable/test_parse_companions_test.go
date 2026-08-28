@@ -19,12 +19,14 @@ var (
 	_ func(context.Context, string, ...baml_sdk.LoremExtractResumeStreamOption) (baml_go.Stream[*baml_sdk.LoremResumeStream, baml_sdk.LoremResume], error) = baml_sdk.LoremExtractResumeStream
 )
 
+// SDK_PARITY_LINT(skip): pins the Go generator's typed option surface for flat stream controls.
 func Test_flat_stream_controls_are_typed_options(t *testing.T) {
 	client := baml_sdk.LoremExtractResumeStreamClient(nil)
 	onEvent := baml_sdk.LoremExtractResumeStreamOnEvent(func(baml_go.Value) {})
 	_ = []baml_sdk.LoremExtractResumeStreamOption{client, onEvent}
 }
 
+// SDK_PARITY_LINT(skip): pins the Go generator's emitted wire-binding names.
 func Test_legacy_function_companion_wire_bindings_are_absent(t *testing.T) {
 	source, err := os.ReadFile("baml_sdk/functions.go")
 	if err != nil {
@@ -43,6 +45,7 @@ func Test_legacy_function_companion_wire_bindings_are_absent(t *testing.T) {
 	}
 }
 
+// SDK_PARITY_LINT(skip): pins the Go FunctionSpec prompt facade and reusable context behavior.
 func Test_function_spec_prompt_uses_generated_ai_prompt_type_and_is_reusable(t *testing.T) {
 	withoutProviderCredentials(t)
 
@@ -80,6 +83,7 @@ func Test_function_spec_prompt_uses_generated_ai_prompt_type_and_is_reusable(t *
 	}
 }
 
+// SDK_PARITY_LINT(skip): pins Go's typed FunctionSpec class decoder surface.
 func Test_function_spec_parse_returns_typed_class_and_fills_missing_nullable_field(t *testing.T) {
 	withoutProviderCredentials(t)
 
@@ -97,6 +101,7 @@ func Test_function_spec_parse_returns_typed_class_and_fills_missing_nullable_fie
 	}
 }
 
+// SDK_PARITY_LINT(skip): pins Go's closed-enum FunctionSpec decoder surface.
 func Test_function_spec_parse_returns_closed_enum(t *testing.T) {
 	withoutProviderCredentials(t)
 
@@ -114,6 +119,7 @@ func Test_function_spec_parse_returns_closed_enum(t *testing.T) {
 	}
 }
 
+// SDK_PARITY_LINT(skip): pins Go context cancellation through the Spec projection.
 func Test_spec_projection_honors_cancellation(t *testing.T) {
 	withoutProviderCredentials(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -125,6 +131,7 @@ func Test_spec_projection_honors_cancellation(t *testing.T) {
 	}
 }
 
+// SDK_PARITY_LINT(skip): pins Go's FunctionSpec parse-error translation.
 func Test_function_spec_parse_returns_runtime_error_for_invalid_output(t *testing.T) {
 	withoutProviderCredentials(t)
 

@@ -813,8 +813,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Rvalue::Uint8Array(_)
             | Rvalue::LoadType(_)
             | Rvalue::CurrentPackage(_)
-            | Rvalue::MakeGenericFunction { .. }
-            | Rvalue::MakeSpecFunction { .. } => false,
+            | Rvalue::MakeGenericFunction { .. } => false,
             Rvalue::MakeGenericFunctionFromValue { value, .. } => {
                 self.operand_reads_spawn_captured_local(value, seen)
             }
@@ -1974,8 +1973,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             self.set_operand(inst, OperandMeta::Field(field.to_string()));
             return;
         }
-        // Generic/spec function construction needs no special handling here
-        // (neither has value captures); `walk_rvalue_pull` emits both uniformly.
+        // `MakeGenericFunction` needs no special handling here (it has no value
+        // captures) — `walk_rvalue_pull` emits it uniformly for both the direct
+        // and inlined paths.
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
@@ -2013,8 +2013,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             .iter()
             .position(|o| {
                 matches!(o, Object::GenericFunction(gf)
-                if gf.function == gidx
-                    && gf.type_args == anchored_args)
+                if gf.function == gidx && gf.type_args == anchored_args)
             })
             .map(|local| self.objects_base + local);
         let pool_idx = match existing {
@@ -2333,6 +2332,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     .as_ref()
                     .and_then(|name| self.globals.get(name).copied())
                     .map(GlobalIndex::from_raw);
+
                 if let Some(global_callee) = global_callee {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
                     if let Some(runtime_id) = runtime_id {
@@ -3730,25 +3730,6 @@ impl PullSink for StackifyCodegen<'_, '_> {
             ntypeargs,
         });
         self.set_operand(inst, OperandMeta::Global(func_name));
-        Ok(())
-    }
-
-    fn make_spec_function(
-        &mut self,
-        item: &baml_compiler2_mir::ItemRef,
-        ntypeargs: usize,
-    ) -> Result<(), Self::Error> {
-        let func_name = item.to_string();
-        let global_idx = *self
-            .globals
-            .get(&func_name)
-            .unwrap_or_else(|| panic!("MakeSpecFunction: global not found for {func_name}"));
-        let ntypeargs = u16::try_from(ntypeargs).expect("ntypeargs fits u16");
-        let inst = self.emit(Instruction::MakeSpecFunction {
-            function: GlobalIndex::from_raw(global_idx),
-            ntypeargs,
-        });
-        self.set_operand(inst, OperandMeta::Global(format!("{func_name}@spec")));
         Ok(())
     }
 

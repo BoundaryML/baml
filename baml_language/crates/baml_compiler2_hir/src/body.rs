@@ -119,8 +119,6 @@ pub fn let_body_source_map<'db>(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update)]
 pub enum BodyOwnerId<'db> {
     Function(FunctionLoc<'db>),
-    /// Private, non-symbol spec recipe owned by a declarative LLM function.
-    LlmSpec(FunctionLoc<'db>),
     Let(LetLoc<'db>),
     /// A function's parameter-default expressions - ONE owner per
     /// function because all its defaults share one arena
@@ -134,7 +132,6 @@ impl<'db> BodyOwnerId<'db> {
     pub fn file(self, db: &'db dyn crate::Db) -> baml_base::SourceFile {
         match self {
             BodyOwnerId::Function(function) => function.file(db),
-            BodyOwnerId::LlmSpec(function) => function.file(db),
             BodyOwnerId::Let(let_binding) => let_binding.file(db),
             BodyOwnerId::ParameterDefaults(function) => function.file(db),
         }
@@ -158,7 +155,6 @@ impl<'db> From<LetLoc<'db>> for BodyOwnerId<'db> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OwnerBody {
     Function(Arc<FunctionBody>),
-    LlmSpec(Arc<FunctionBody>),
     Let(Arc<LetBody>),
     ParameterDefaults(Arc<crate::signature::FunctionParameterDefaults>),
 }
@@ -168,7 +164,7 @@ impl OwnerBody {
     /// missing bodies).
     pub fn expr_body(&self) -> Option<&ExprBody> {
         match self {
-            OwnerBody::Function(body) | OwnerBody::LlmSpec(body) => match body.as_ref() {
+            OwnerBody::Function(body) => match body.as_ref() {
                 FunctionBody::Expr(expr_body) => Some(expr_body),
                 FunctionBody::Builtin(_) | FunctionBody::Missing => None,
             },

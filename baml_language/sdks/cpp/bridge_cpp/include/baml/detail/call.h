@@ -56,8 +56,7 @@ Ret call_sync(const std::string& fqn, args_encoder&& args,
 
 template <typename Ret, typename ThrownU>
 Ret call_handle_sync(uint64_t handle_key, args_encoder&& args,
-                     function_operation operation =
-                         function_operation::direct) {
+                     function_operation operation) {
   return start_handle_call<Ret, ThrownU>(handle_key, std::move(args), operation)
       .get();
 }

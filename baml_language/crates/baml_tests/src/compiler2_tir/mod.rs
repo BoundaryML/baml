@@ -171,16 +171,6 @@ pub(crate) mod support {
                 .map(|n| n.as_str())
                 .collect::<Vec<_>>()
                 .join("."),
-            Expr::FunctionProjection { path, projection } => format!(
-                "{}@{}",
-                path.iter()
-                    .map(|n| n.as_str())
-                    .collect::<Vec<_>>()
-                    .join("."),
-                match projection {
-                    baml_compiler2_ast::FunctionProjection::Spec => "spec",
-                }
-            ),
             Expr::If {
                 condition,
                 then_branch,
@@ -1795,16 +1785,6 @@ pub(crate) mod support {
                     .map(|n| n.as_str())
                     .collect::<Vec<_>>()
                     .join("."),
-                Expr::FunctionProjection { path, projection } => format!(
-                    "{}@{}",
-                    path.iter()
-                        .map(|n| n.as_str())
-                        .collect::<Vec<_>>()
-                        .join("."),
-                    match projection {
-                        baml_compiler2_ast::FunctionProjection::Spec => "spec",
-                    }
-                ),
                 Expr::If {
                     condition,
                     then_branch,

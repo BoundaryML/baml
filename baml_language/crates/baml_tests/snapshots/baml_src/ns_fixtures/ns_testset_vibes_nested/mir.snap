@@ -92,18 +92,17 @@ fn .<lambda(<lambda($init_test_ns_fixtures_ns_testset_vibes_nested_main, 0)>, 1)
     let _5: string // data
     let _6: string[] // tests
     let _7: ai.FunctionSpec<string[]>
-    let _8: (int, string) -> ai.FunctionSpec<string[]> throws ai.errors.InvalidRequest | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError
-    let _9: string
-    let _10: reflect.Type
-    let _11: string[]
-    let _12: baml.iter.Iterator<Error = never, Item = string>
-    let _13: unknown
-    let _14: bool
-    let _15: string
-    let _16: string // ex
-    let _17: void
-    let _18: string
-    let _19: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _8: string
+    let _9: reflect.Type
+    let _10: string[]
+    let _11: baml.iter.Iterator<Error = never, Item = string>
+    let _12: unknown
+    let _13: bool
+    let _14: string
+    let _15: string // ex
+    let _16: void
+    let _17: string
+    let _18: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
 
     bb0: {
         _4 = copy capture[0];
@@ -116,37 +115,36 @@ fn .<lambda(<lambda($init_test_ns_fixtures_ns_testset_vibes_nested_main, 0)>, 1)
     }
 
     bb2: {
-        _8 = make_spec_function user.fixtures.testset_vibes_nested.GenerateTests<never>;
-        _7 = call copy _8(const 0_i64, const "") -> [bb3];
+        _7 = call const fn user.fixtures.testset_vibes_nested.GenerateTests@spec(const 0_i64, const "") -> [bb3];
     }
 
     bb3: {
-        _9 = copy _5;
-        _10 = load_type(string[]);
-        _6 = call const fn ai.FunctionSpec.parse<copy _10>(copy _7, copy _9) -> [bb4];
+        _8 = copy _5;
+        _9 = load_type(string[]);
+        _6 = call const fn ai.FunctionSpec.parse<copy _9>(copy _7, copy _8) -> [bb4];
     }
 
     bb4: {
-        _11 = copy _6;
-        _12 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _11) -> [bb5];
+        _10 = copy _6;
+        _11 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _10) -> [bb5];
     }
 
     bb5: {
-        _13 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _12) -> [bb6];
+        _12 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _11) -> [bb6];
     }
 
     bb6: {
-        _14 = is_type(copy _13, baml.iter.Done);
-        branch copy _14 -> [bb8, bb7];
+        _13 = is_type(copy _12, baml.iter.Done);
+        branch copy _13 -> [bb8, bb7];
     }
 
     bb7: {
-        _15 = copy _13;
-        fresh_cell(_16);
-        _16 = copy _15;
-        _18 = copy _16;
-        _19 = make_closure lambda[0]();
-        _17 = call const fn testing.TestCollector.register_test(copy _1, copy _18, copy _19, const null) -> [bb5];
+        _14 = copy _12;
+        fresh_cell(_15);
+        _15 = copy _14;
+        _17 = copy _15;
+        _18 = make_closure lambda[0]();
+        _16 = call const fn testing.TestCollector.register_test(copy _1, copy _17, copy _18, const null) -> [bb5];
     }
 
     bb8: {
@@ -327,7 +325,7 @@ fn .<lambda(<lambda(<lambda(<lambda($init_test_ns_fixtures_ns_testset_vibes_nest
 fn user.fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> fixtures.testset_vibes_nested.Sentiment {
     // Locals:
     let _0: fixtures.testset_vibes_nested.Sentiment // _0 // return
-    let _1: string // text // param [captured]
+    let _1: string // text // param
     let _2: null | ai.Client // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
@@ -336,12 +334,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: nu
     let _7: ai.Agent
     let _8: reflect.Type
     let _9: ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment>
-    let _10: map<string, unknown>
-    let _11: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _12: ai.tools.Toolbox
-    let _13: ai.tools.Tool[]
-    let _14: ai.Client
-    let _15: reflect.Type
+    let _10: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -369,34 +362,57 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: nu
     }
 
     bb5: {
-        _10 = { const "text": copy _1 }: map<string, unknown>;
-        _11 = make_closure lambda[0](copy _1);
-        _13 = []: ai.tools.Tool[];
-        _12 = call const fn ai.tools.Toolbox.new(copy _13) -> [bb6];
+        _9 = call const fn user.fixtures.testset_vibes_nested.ClassifySentiment@spec(copy _1) -> [bb6];
     }
 
     bb6: {
-        _14 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb7];
+        _10 = load_type(fixtures.testset_vibes_nested.Sentiment);
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _10>(copy _7, copy _9) -> [bb7];
     }
 
     bb7: {
-        _9 = ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment> { const "ClassifySentiment", copy _10, copy _11, copy _12, copy _14 };
-        _15 = load_type(fixtures.testset_vibes_nested.Sentiment);
-        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _15>(copy _7, copy _9) -> [bb8];
+        _0 = copy _6.0;
+        goto -> bb8;
     }
 
     bb8: {
-        _0 = copy _6.0;
-        goto -> bb9;
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.ClassifySentiment@spec(text: string) -> ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment> {
+    // Locals:
+    let _0: ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment> // _0 // return
+    let _1: string // text // param [captured]
+    let _2: map<string, unknown>
+    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
+    let _6: ai.Client
+
+    bb0: {
+        _2 = { const "text": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0](copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
     }
 
-    bb9: {
+    bb1: {
+        _6 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment> { const "ClassifySentiment", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
 
 // lambda[0]
-fn .<lambda(ClassifySentiment, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(ClassifySentiment@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -483,19 +499,14 @@ fn .<lambda(ClassifySentiment, 0)>( __spec_output_format: ai.OutputFormat) -> ai
 fn user.fixtures.testset_vibes_nested.ClassifySentiment@stream(text: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<null | fixtures.testset_vibes_nested.Sentiment$stream, fixtures.testset_vibes_nested.Sentiment> {
     // Locals:
     let _0: ai.stream.Stream<null | fixtures.testset_vibes_nested.Sentiment$stream, fixtures.testset_vibes_nested.Sentiment> // _0 // return
-    let _1: string // text // param [captured]
+    let _1: string // text // param
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment>
-    let _7: map<string, unknown>
-    let _8: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _9: ai.tools.Toolbox
-    let _10: ai.tools.Tool[]
-    let _11: ai.Client
-    let _12: reflect.Type
-    let _13: reflect.Type
+    let _7: reflect.Type
+    let _8: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -518,118 +529,25 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment@stream(text: string, cli
     }
 
     bb4: {
-        _7 = { const "text": copy _1 }: map<string, unknown>;
-        _8 = make_closure lambda[0](copy _1);
-        _10 = []: ai.tools.Tool[];
-        _9 = call const fn ai.tools.Toolbox.new(copy _10) -> [bb5];
+        _6 = call const fn user.fixtures.testset_vibes_nested.ClassifySentiment@spec(copy _1) -> [bb5];
     }
 
     bb5: {
-        _11 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb6];
+        _7 = load_type(fixtures.testset_vibes_nested.Sentiment$stream | null);
+        _8 = load_type(fixtures.testset_vibes_nested.Sentiment);
+        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _2, copy _3) -> [bb6];
     }
 
     bb6: {
-        _6 = ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment> { const "ClassifySentiment", copy _7, copy _8, copy _9, copy _11 };
-        _12 = load_type(fixtures.testset_vibes_nested.Sentiment$stream | null);
-        _13 = load_type(fixtures.testset_vibes_nested.Sentiment);
-        _0 = call const fn ai.stream.from_spec<copy _12, copy _13>(copy _6, copy _2, copy _3) -> [bb7];
-    }
-
-    bb7: {
         return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(ClassifySentiment@stream, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
-    // Locals:
-    let _0: ai.Prompt // _0 // return
-    let _1: ai.OutputFormat //  __spec_output_format // param
-    let _2: unknown //  __prompt_render_err
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: string
-    let _8: int
-    let _9: string[]
-    let _10: string
-    let _11: reflect.Type
-    let _12: int
-    let _13: unknown[]
-    let _14: string
-    let _15: reflect.Type
-    let _16: int
-    let _17: string[]
-    let _18: ""
-    let _19: reflect.Type
-    let _20: string[]
-    let _21: unknown[]
-    let _22: string[]
-    let _23: baml.TaggedString
-    let _24: unknown[]
-    let _25: baml.TaggedString
-    let _26: ai.errors.PromptRenderError
-    let _27: never
-
-    bb0: {
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _7 = copy _6;
-        _6 = copy _7 + const "classify ";
-        _9 = copy _4;
-        _10 = copy _6;
-        _11 = load_type(string);
-        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1, unwind: bb5];
-    }
-
-    bb1: {
-        _6 = const "";
-        _13 = copy _5;
-        _14 = copy capture[0];
-        _15 = load_type(unknown);
-        _12 = call const fn baml.Array.push<copy _15>(copy _13, copy _14) -> [bb2, unwind: bb5];
-    }
-
-    bb2: {
-        _17 = copy _4;
-        _18 = copy _6;
-        _19 = load_type(string);
-        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3, unwind: bb5];
-    }
-
-    bb3: {
-        _20 = copy _4;
-        _21 = copy _5;
-        _3 = baml.TaggedString { copy _20, copy _21 };
-        _23 = copy _3;
-        _22 = copy _23.0;
-        _25 = copy _3;
-        _24 = copy _25.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _22, copy _24) -> [bb4, unwind: bb5];
-    }
-
-    bb4: {
-        return;
-    }
-
-    bb5: {
-        throw_if_panic copy _2 -> bb6;
-    }
-
-    bb6: {
-        _27 = copy _2;
-        _26 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _27 };
-        throw copy _26;
     }
 }
 
 fn user.fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string[] {
     // Locals:
     let _0: string[] // _0 // return
-    let _1: int // count // param [captured]
-    let _2: string // topic // param [captured]
+    let _1: int // count // param
+    let _2: string // topic // param
     let _3: null | ai.Client // client // param
     let _4: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _5: bool
@@ -638,12 +556,7 @@ fn user.fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, c
     let _8: ai.Agent
     let _9: reflect.Type
     let _10: ai.FunctionSpec<string[]>
-    let _11: map<string, unknown>
-    let _12: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _13: ai.tools.Toolbox
-    let _14: ai.tools.Tool[]
-    let _15: ai.Client
-    let _16: reflect.Type
+    let _11: reflect.Type
 
     bb0: {
         _5 = copy _3 == const <omitted>;
@@ -671,34 +584,58 @@ fn user.fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, c
     }
 
     bb5: {
-        _11 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
-        _12 = make_closure lambda[0](copy _1, copy _2);
-        _14 = []: ai.tools.Tool[];
-        _13 = call const fn ai.tools.Toolbox.new(copy _14) -> [bb6];
+        _10 = call const fn user.fixtures.testset_vibes_nested.GenerateTests@spec(copy _1, copy _2) -> [bb6];
     }
 
     bb6: {
-        _15 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb7];
+        _11 = load_type(string[]);
+        _7 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _11>(copy _8, copy _10) -> [bb7];
     }
 
     bb7: {
-        _10 = ai.FunctionSpec<string[]> { const "GenerateTests", copy _11, copy _12, copy _13, copy _15 };
-        _16 = load_type(string[]);
-        _7 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _16>(copy _8, copy _10) -> [bb8];
+        _0 = copy _7.0;
+        goto -> bb8;
     }
 
     bb8: {
-        _0 = copy _7.0;
-        goto -> bb9;
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.GenerateTests@spec(count: int, topic: string) -> ai.FunctionSpec<string[]> {
+    // Locals:
+    let _0: ai.FunctionSpec<string[]> // _0 // return
+    let _1: int // count // param [captured]
+    let _2: string // topic // param [captured]
+    let _3: map<string, unknown>
+    let _4: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
+    let _7: ai.Client
+
+    bb0: {
+        _3 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
+        _4 = make_closure lambda[0](copy _1, copy _2);
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
     }
 
-    bb9: {
+    bb1: {
+        _7 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<string[]> { const "GenerateTests", copy _3, copy _4, copy _5, copy _7 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
 
 // lambda[0]
-fn .<lambda(GenerateTests, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(GenerateTests@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -809,20 +746,15 @@ fn .<lambda(GenerateTests, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Pro
 fn user.fixtures.testset_vibes_nested.GenerateTests@stream(count: int, topic: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string[], string[]> {
     // Locals:
     let _0: ai.stream.Stream<string[], string[]> // _0 // return
-    let _1: int // count // param [captured]
-    let _2: string // topic // param [captured]
+    let _1: int // count // param
+    let _2: string // topic // param
     let _3: null | ai.stream.StreamingClient // client // param
     let _4: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _5: bool
     let _6: bool
     let _7: ai.FunctionSpec<string[]>
-    let _8: map<string, unknown>
-    let _9: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _10: ai.tools.Toolbox
-    let _11: ai.tools.Tool[]
-    let _12: ai.Client
-    let _13: reflect.Type
-    let _14: reflect.Type
+    let _8: reflect.Type
+    let _9: reflect.Type
 
     bb0: {
         _5 = copy _3 == const <omitted>;
@@ -845,134 +777,17 @@ fn user.fixtures.testset_vibes_nested.GenerateTests@stream(count: int, topic: st
     }
 
     bb4: {
-        _8 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
-        _9 = make_closure lambda[0](copy _1, copy _2);
-        _11 = []: ai.tools.Tool[];
-        _10 = call const fn ai.tools.Toolbox.new(copy _11) -> [bb5];
+        _7 = call const fn user.fixtures.testset_vibes_nested.GenerateTests@spec(copy _1, copy _2) -> [bb5];
     }
 
     bb5: {
-        _12 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb6];
-    }
-
-    bb6: {
-        _7 = ai.FunctionSpec<string[]> { const "GenerateTests", copy _8, copy _9, copy _10, copy _12 };
-        _13 = load_type(string[]);
-        _14 = load_type(string[]);
-        _0 = call const fn ai.stream.from_spec<copy _13, copy _14>(copy _7, copy _3, copy _4) -> [bb7];
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(GenerateTests@stream, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
-    // Locals:
-    let _0: ai.Prompt // _0 // return
-    let _1: ai.OutputFormat //  __spec_output_format // param
-    let _2: unknown //  __prompt_render_err
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: string
-    let _8: int
-    let _9: string[]
-    let _10: string
-    let _11: reflect.Type
-    let _12: int
-    let _13: unknown[]
-    let _14: int
-    let _15: reflect.Type
-    let _16: int
-    let _17: string[]
-    let _18: " tests about "
-    let _19: reflect.Type
-    let _20: int
-    let _21: unknown[]
-    let _22: string
-    let _23: reflect.Type
-    let _24: int
-    let _25: string[]
-    let _26: ""
-    let _27: reflect.Type
-    let _28: string[]
-    let _29: unknown[]
-    let _30: string[]
-    let _31: baml.TaggedString
-    let _32: unknown[]
-    let _33: baml.TaggedString
-    let _34: ai.errors.PromptRenderError
-    let _35: never
-
-    bb0: {
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _7 = copy _6;
-        _6 = copy _7 + const "generate ";
-        _9 = copy _4;
-        _10 = copy _6;
-        _11 = load_type(string);
-        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1, unwind: bb7];
-    }
-
-    bb1: {
-        _6 = const "";
-        _13 = copy _5;
-        _14 = copy capture[0];
-        _15 = load_type(unknown);
-        _12 = call const fn baml.Array.push<copy _15>(copy _13, copy _14) -> [bb2, unwind: bb7];
-    }
-
-    bb2: {
-        _6 = const " tests about ";
-        _17 = copy _4;
-        _18 = copy _6;
-        _19 = load_type(string);
-        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3, unwind: bb7];
-    }
-
-    bb3: {
-        _6 = const "";
-        _21 = copy _5;
-        _22 = copy capture[1];
-        _23 = load_type(unknown);
-        _20 = call const fn baml.Array.push<copy _23>(copy _21, copy _22) -> [bb4, unwind: bb7];
-    }
-
-    bb4: {
-        _25 = copy _4;
-        _26 = copy _6;
-        _27 = load_type(string);
-        _24 = call const fn baml.Array.push<copy _27>(copy _25, copy _26) -> [bb5, unwind: bb7];
-    }
-
-    bb5: {
-        _28 = copy _4;
-        _29 = copy _5;
-        _3 = baml.TaggedString { copy _28, copy _29 };
-        _31 = copy _3;
-        _30 = copy _31.0;
-        _33 = copy _3;
-        _32 = copy _33.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _30, copy _32) -> [bb6, unwind: bb7];
+        _8 = load_type(string[]);
+        _9 = load_type(string[]);
+        _0 = call const fn ai.stream.from_spec<copy _8, copy _9>(copy _7, copy _3, copy _4) -> [bb6];
     }
 
     bb6: {
         return;
-    }
-
-    bb7: {
-        throw_if_panic copy _2 -> bb8;
-    }
-
-    bb8: {
-        _35 = copy _2;
-        _34 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _35 };
-        throw copy _34;
     }
 }
 
@@ -1025,7 +840,7 @@ fn user.fixtures.testset_vibes_nested.Foo() -> string | image {
 fn user.fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: string // text // param [captured]
+    let _1: string // text // param
     let _2: null | ai.Client // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
@@ -1034,12 +849,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: n
     let _7: ai.Agent
     let _8: reflect.Type
     let _9: ai.FunctionSpec<string>
-    let _10: map<string, unknown>
-    let _11: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _12: ai.tools.Toolbox
-    let _13: ai.tools.Tool[]
-    let _14: ai.Client
-    let _15: reflect.Type
+    let _10: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -1067,34 +877,57 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: n
     }
 
     bb5: {
-        _10 = { const "text": copy _1 }: map<string, unknown>;
-        _11 = make_closure lambda[0](copy _1);
-        _13 = []: ai.tools.Tool[];
-        _12 = call const fn ai.tools.Toolbox.new(copy _13) -> [bb6];
+        _9 = call const fn user.fixtures.testset_vibes_nested.ClassifySentiment2@spec(copy _1) -> [bb6];
     }
 
     bb6: {
-        _14 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb7];
+        _10 = load_type(string);
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _10>(copy _7, copy _9) -> [bb7];
     }
 
     bb7: {
-        _9 = ai.FunctionSpec<string> { const "ClassifySentiment2", copy _10, copy _11, copy _12, copy _14 };
-        _15 = load_type(string);
-        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _15>(copy _7, copy _9) -> [bb8];
+        _0 = copy _6.0;
+        goto -> bb8;
     }
 
     bb8: {
-        _0 = copy _6.0;
-        goto -> bb9;
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.ClassifySentiment2@spec(text: string) -> ai.FunctionSpec<string> {
+    // Locals:
+    let _0: ai.FunctionSpec<string> // _0 // return
+    let _1: string // text // param [captured]
+    let _2: map<string, unknown>
+    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
+    let _6: ai.Client
+
+    bb0: {
+        _2 = { const "text": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0](copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
     }
 
-    bb9: {
+    bb1: {
+        _6 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<string> { const "ClassifySentiment2", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
 
 // lambda[0]
-fn .<lambda(ClassifySentiment2, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(ClassifySentiment2@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -1181,19 +1014,14 @@ fn .<lambda(ClassifySentiment2, 0)>( __spec_output_format: ai.OutputFormat) -> a
 fn user.fixtures.testset_vibes_nested.ClassifySentiment2@stream(text: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
-    let _1: string // text // param [captured]
+    let _1: string // text // param
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: ai.FunctionSpec<string>
-    let _7: map<string, unknown>
-    let _8: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _9: ai.tools.Toolbox
-    let _10: ai.tools.Tool[]
-    let _11: ai.Client
-    let _12: reflect.Type
-    let _13: reflect.Type
+    let _7: reflect.Type
+    let _8: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -1216,109 +1044,16 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2@stream(text: string, cl
     }
 
     bb4: {
-        _7 = { const "text": copy _1 }: map<string, unknown>;
-        _8 = make_closure lambda[0](copy _1);
-        _10 = []: ai.tools.Tool[];
-        _9 = call const fn ai.tools.Toolbox.new(copy _10) -> [bb5];
+        _6 = call const fn user.fixtures.testset_vibes_nested.ClassifySentiment2@spec(copy _1) -> [bb5];
     }
 
     bb5: {
-        _11 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb6];
+        _7 = load_type(string | null);
+        _8 = load_type(string);
+        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _2, copy _3) -> [bb6];
     }
 
     bb6: {
-        _6 = ai.FunctionSpec<string> { const "ClassifySentiment2", copy _7, copy _8, copy _9, copy _11 };
-        _12 = load_type(string | null);
-        _13 = load_type(string);
-        _0 = call const fn ai.stream.from_spec<copy _12, copy _13>(copy _6, copy _2, copy _3) -> [bb7];
-    }
-
-    bb7: {
         return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(ClassifySentiment2@stream, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
-    // Locals:
-    let _0: ai.Prompt // _0 // return
-    let _1: ai.OutputFormat //  __spec_output_format // param
-    let _2: unknown //  __prompt_render_err
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: string
-    let _8: int
-    let _9: string[]
-    let _10: string
-    let _11: reflect.Type
-    let _12: int
-    let _13: unknown[]
-    let _14: string
-    let _15: reflect.Type
-    let _16: int
-    let _17: string[]
-    let _18: ""
-    let _19: reflect.Type
-    let _20: string[]
-    let _21: unknown[]
-    let _22: string[]
-    let _23: baml.TaggedString
-    let _24: unknown[]
-    let _25: baml.TaggedString
-    let _26: ai.errors.PromptRenderError
-    let _27: never
-
-    bb0: {
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _7 = copy _6;
-        _6 = copy _7 + const "classify ";
-        _9 = copy _4;
-        _10 = copy _6;
-        _11 = load_type(string);
-        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1, unwind: bb5];
-    }
-
-    bb1: {
-        _6 = const "";
-        _13 = copy _5;
-        _14 = copy capture[0];
-        _15 = load_type(unknown);
-        _12 = call const fn baml.Array.push<copy _15>(copy _13, copy _14) -> [bb2, unwind: bb5];
-    }
-
-    bb2: {
-        _17 = copy _4;
-        _18 = copy _6;
-        _19 = load_type(string);
-        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3, unwind: bb5];
-    }
-
-    bb3: {
-        _20 = copy _4;
-        _21 = copy _5;
-        _3 = baml.TaggedString { copy _20, copy _21 };
-        _23 = copy _3;
-        _22 = copy _23.0;
-        _25 = copy _3;
-        _24 = copy _25.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _22, copy _24) -> [bb4, unwind: bb5];
-    }
-
-    bb4: {
-        return;
-    }
-
-    bb5: {
-        throw_if_panic copy _2 -> bb6;
-    }
-
-    bb6: {
-        _27 = copy _2;
-        _26 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _27 };
-        throw copy _26;
     }
 }

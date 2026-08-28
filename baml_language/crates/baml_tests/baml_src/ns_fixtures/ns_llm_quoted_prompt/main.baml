@@ -3,7 +3,7 @@
 // strings do not interpolate, so `${...}` stays literal text and earns a
 // warning, while a backtick prompt interpolates and can escape with `\${`.
 //
-// The quoted form previously synthesized no `$spec` and no diagnostic, leaving
+// The quoted form previously synthesized no spec companion and no diagnostic, leaving
 // the function with an empty body that the VM entered and read past the end of.
 // These snapshots pin that both forms emit a real body.
 

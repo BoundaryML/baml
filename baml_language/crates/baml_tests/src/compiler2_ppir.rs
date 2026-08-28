@@ -160,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn llm_stream_projection_is_internal_and_source_callable() {
+    fn llm_stream_companion_is_internal_and_source_callable() {
         let mut db = ProjectDatabase::new();
         db.workspace(std::path::Path::new("."));
         let file = db.file(
@@ -198,6 +198,19 @@ function Start(text: string) -> ai.stream.Stream<Box$stream<int>?, Box<int>> {
     Ask@stream<int>(text)
 }
 
+function RunDirect(text: string) -> Box<int> {
+    Ask<int>(text)
+}
+
+function DirectSpec(text: string) -> ai.FunctionSpec<Box<int>> {
+    Ask@spec<int>(text)
+}
+
+function SpecValue(text: string) -> ai.FunctionSpec<Box<int>> {
+    let make_spec = Ask@spec<int>;
+    make_spec(text)
+}
+
 function StartDollar(text: string) -> ai.stream.Stream<string?, string> {
     Dollar$Ask@stream(text)
 }
@@ -233,8 +246,10 @@ function StaticSpec(text: string) -> ai.FunctionSpec<string> {
             .get(&Vec::new())
             .expect("user root namespace");
         assert!(root.values.contains_key(&Name::new("Ask")));
+        assert!(root.values.contains_key(&Name::new("Ask@spec")));
         assert!(root.values.contains_key(&Name::new("Ask@stream")));
         assert!(root.values.contains_key(&Name::new("Dollar$Ask")));
+        assert!(root.values.contains_key(&Name::new("Dollar$Ask@spec")));
         assert!(root.values.contains_key(&Name::new("Dollar$Ask@stream")));
         assert!(root.types.contains_key(&Name::new("Box$stream")));
 
@@ -264,6 +279,80 @@ function StaticSpec(text: string) -> ai.FunctionSpec<string> {
                 _ => None,
             })
             .expect("authored LLM function");
+        let spec = authored_ast
+            .items
+            .iter()
+            .find_map(|item| match item {
+                baml_compiler2_ast::ast::Item::Function(function)
+                    if function.name.as_str() == "Ask@spec" =>
+                {
+                    Some(function)
+                }
+                _ => None,
+            })
+            .expect("AST must synthesize the private spec companion");
+
+        assert_eq!(spec.generic_params, authored.generic_params);
+        assert_eq!(spec.defaults, authored.defaults);
+        assert_eq!(spec.is_tagged_template_tag, authored.is_tagged_template_tag);
+        assert_eq!(
+            spec.metadata.origin,
+            baml_compiler2_ast::ast::FunctionOrigin::Companion
+        );
+        assert!(spec.metadata.is_language_internal);
+        assert_eq!(
+            spec.params
+                .iter()
+                .map(|param| param.name.as_str())
+                .collect::<Vec<_>>(),
+            ["text", "tone"]
+        );
+        let Some(baml_compiler2_ast::ast::FunctionBodyDef::Expr(direct_body, _)) = &authored.body
+        else {
+            panic!("authored LLM function must have a direct body")
+        };
+        assert!(direct_body.exprs.iter().any(|(_, expr)| {
+            matches!(expr, baml_compiler2_ast::ast::Expr::Path(path)
+                if path.last().is_some_and(|name| name == "Ask@spec"))
+        }));
+        let Some(baml_compiler2_ast::ast::FunctionBodyDef::Expr(stream_body, _)) = &stream.body
+        else {
+            panic!("stream companion must have an expression body")
+        };
+        assert!(stream_body.exprs.iter().any(|(_, expr)| {
+            matches!(expr, baml_compiler2_ast::ast::Expr::Path(path)
+                if path.last().is_some_and(|name| name == "Ask@spec"))
+        }));
+
+        let runner = authored_ast
+            .items
+            .iter()
+            .find_map(|item| match item {
+                baml_compiler2_ast::ast::Item::Class(class) if class.name.as_str() == "Runner" => {
+                    Some(class)
+                }
+                _ => None,
+            })
+            .expect("Runner class");
+        for (name, expected) in [
+            ("Ask@spec", &["self", "text"][..]),
+            ("StaticAsk@spec", &["text"][..]),
+        ] {
+            let method = runner
+                .methods
+                .iter()
+                .find(|method| method.name.as_str() == name)
+                .unwrap_or_else(|| panic!("missing private method companion {name}"));
+            assert!(method.metadata.is_language_internal);
+            assert_eq!(
+                method
+                    .params
+                    .iter()
+                    .map(|param| param.name.as_str())
+                    .collect::<Vec<_>>(),
+                expected
+            );
+        }
 
         assert_eq!(stream.generic_params, authored.generic_params);
         assert_eq!(stream.defaults, authored.defaults);

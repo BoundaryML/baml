@@ -6,29 +6,20 @@ class user.Box {
   value: T
 }
 function user.GetBoxedInt(client: ai.Client | null = null, on_event: ((ai.events.Event) -> void throws __effect_param_0) | null = null) -> user.Box<int> throws never {
-  ai.Agent.new(client = client, on_event = on_event).run(ai.FunctionSpec { spec_name: "GetBoxedInt", args: map {  }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Dummy) }).value : user.Box<int>
+  ai.Agent.new(client = client, on_event = on_event).run(GetBoxedInt@spec()).value : user.Box<int>
 }
-lambda user.GetBoxedInt {
+function user.GetBoxedInt@spec() -> ai.FunctionSpec<user.Box<int>> throws never {
+  ai.FunctionSpec { spec_name: "GetBoxedInt", args: map {  }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Dummy) } : ai.FunctionSpec<user.Box<int>>
 }
-block user.GetBoxedInt {
+lambda user.GetBoxedInt@spec {
 }
-block user.GetBoxedInt {
+block user.GetBoxedInt@spec {
 }
-lambda user.GetBoxedInt {
-}
-block user.GetBoxedInt {
-}
-block user.GetBoxedInt {
+block user.GetBoxedInt@spec {
 }
 class user.Box$stream {
   value: T | null
 }
 function user.GetBoxedInt@stream(client: ai.stream.StreamingClient | null = null, on_event: ((ai.events.Event) -> void throws __effect_param_0) | null = null) -> ai.stream.Stream<user.Box$stream<int> | null, user.Box<int>> throws never {
-  ai.stream.from_spec<__effect_param_0>(ai.FunctionSpec { spec_name: "GetBoxedInt", args: map {  }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Dummy) }, client = client, on_event = on_event) : ai.stream.Stream<user.Box$stream<int> | null, user.Box<int>>
-}
-lambda user.GetBoxedInt@stream {
-}
-block user.GetBoxedInt@stream {
-}
-block user.GetBoxedInt@stream {
+  ai.stream.from_spec<__effect_param_0>(GetBoxedInt@spec(), client = client, on_event = on_event) : ai.stream.Stream<user.Box$stream<int> | null, user.Box<int>>
 }

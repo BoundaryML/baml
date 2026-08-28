@@ -11,7 +11,7 @@ use baml_compiler2_hir::{
 use baml_type::{BuiltinTypeName, Package};
 use text_size::TextSize;
 
-use crate::line_index::LineIndex;
+use crate::{line_index::LineIndex, symbols::is_language_internal_definition};
 
 // ── ResolvedTarget ────────────────────────────────────────────────────────────
 
@@ -107,7 +107,7 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def.filter(|def| !def.is_language_internal(db)) {
+        if let Some(def) = def.filter(|def| !is_language_internal_definition(db, *def)) {
             return Some(ResolvedTarget::Item(def));
         }
     }
@@ -120,7 +120,7 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def.filter(|def| !def.is_language_internal(db)) {
+        if let Some(def) = def.filter(|def| !is_language_internal_definition(db, *def)) {
             return Some(ResolvedTarget::Member {
                 parent: def,
                 member_name,
@@ -368,7 +368,7 @@ fn make_entry<'db>(
     item_name: Name,
     def: Definition<'db>,
 ) -> Option<ListingEntry> {
-    if def.is_language_internal(db) {
+    if is_language_internal_definition(db, def) {
         return None;
     }
     let (file, name_span) = crate::syntax::definition_span(db, def)?;
@@ -603,8 +603,8 @@ test "identity" {
         assert!(resolve_target(&project.db, pkg_id, internal_name.as_str()).is_none());
     }
 
-    /// An LLM function is the sole listed function declaration; operation
-    /// projections are metadata and PPIR partial types remain hidden.
+    /// An LLM function is the sole listed function declaration; its private
+    /// ordinary spec/stream companions and PPIR partial types remain hidden.
     #[test]
     fn llm_function_listing_has_no_operation_companions() {
         let mut builder = ProjectTest::builder();
@@ -627,6 +627,7 @@ function summarize(input: string) -> string {
                 .any(|entry| entry.item_name.as_str() == "summarize")
         );
         for name in [
+            "summarize@spec",
             "summarize$spec",
             "summarize$render_prompt",
             "summarize$parse",

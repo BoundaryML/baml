@@ -22,7 +22,6 @@ import { baml_bridge } from './proto/baml_cffi.js';
 import { BamlType, lowerTypeToWireTy, type BamlTypeToken } from './wire_ty.js';
 
 export type Mode = 'sync' | 'async';
-export type FunctionProjection = FunctionOperation;
 
 /** Sentinel for "argument not supplied" so optional kwargs can be skipped. */
 export const UNSET: unique symbol = Symbol('baml.UNSET');
@@ -210,15 +209,15 @@ export function defineFunction(
     requiredParamNames: readonly string[],
     optionalParamNames?: readonly string[] | undefined,
     generics?: GenericParams | undefined,
-    projection: FunctionProjection = 'direct',
+    operation: FunctionOperation = 'direct',
 ): (...args: unknown[]) => unknown {
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
     // A free function / static method binds only its OWN generic params (a
     // generic receiver is never in play here), so `classTypeParams` is unused.
     const typeParams = generics?.typeParams ?? [];
-    if (projection !== 'direct' && projection !== 'spec' && projection !== 'stream') {
-        throw new TypeError(`unknown function projection ${JSON.stringify(projection)}`);
+    if (operation !== 'direct' && operation !== 'spec' && operation !== 'stream') {
+        throw new TypeError(`unknown function operation ${JSON.stringify(operation)}`);
     }
     const isGeneric = typeParams.length > 0;
     // Eagerly reject `$types` on a non-generic call, matching the generic path's
@@ -236,7 +235,7 @@ export function defineFunction(
                 callId,
                 typeArgs,
                 functionName: bamlFqn,
-                operation: projection,
+                operation,
             });
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {
@@ -257,7 +256,7 @@ export function defineFunction(
                 callId,
                 typeArgs,
                 functionName: bamlFqn,
-                operation: projection,
+                operation,
             });
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {

@@ -82,7 +82,7 @@ fn collect_default_expr_forward_references(
     refs: &mut Vec<Name>,
 ) {
     match &body.exprs[expr_id] {
-        Expr::Path(segments) | Expr::FunctionProjection { path: segments, .. } => {
+        Expr::Path(segments) => {
             if let Some(root) = segments.first()
                 && later_params.contains(root)
                 && !shadowed.iter().rev().any(|name| name == root)

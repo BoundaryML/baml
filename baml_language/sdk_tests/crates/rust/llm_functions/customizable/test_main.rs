@@ -81,6 +81,7 @@ fn test_main_extract_resume_factory_bindings() {
     let _ = lorem::ExtractResume_async;
 }
 
+// SDK_PARITY_LINT(skip): pins Rust generated spec and stream binding spellings
 #[test]
 fn test_main_extract_resume_spec_and_stream_bindings() {
     use baml_sdk::lorem;
@@ -101,6 +102,7 @@ fn test_main_streaming_extract_factory_bindings() {
     let _ = lorem::StreamingExtract_async;
 }
 
+// SDK_PARITY_LINT(skip): pins Rust generated streaming spec and stream binding spellings
 #[test]
 fn test_main_streaming_extract_spec_and_stream_bindings() {
     use baml_sdk::lorem;
@@ -136,6 +138,7 @@ fn test_main_classify_sentiment_factory_bindings() {
     let _ = ipsum::ClassifySentiment_async;
 }
 
+// SDK_PARITY_LINT(skip): validates Rust's generated FunctionSpec prompt, parse, and request surface
 #[test]
 fn test_main_spec_replaces_prompt_parse_and_request_companions() {
     use baml_sdk::{

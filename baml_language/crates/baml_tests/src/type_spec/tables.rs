@@ -769,8 +769,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
         let result = infer_body(&db, owner);
         let owner_name = match owner {
             baml_compiler2_hir::body::BodyOwnerId::Function(function)
-            | baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(function)
-            | baml_compiler2_hir::body::BodyOwnerId::LlmSpec(function) => {
+            | baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(function) => {
                 baml_compiler2_ppir::item_data::function_data(&db, function)
                     .name
                     .as_str()

@@ -684,7 +684,7 @@ and derives method calls as `<carried-FQN>.next` and `<carried-FQN>.final`.
 `TPartial`/`TFinal` generic arguments remain host-erased, as in Python. A tagged
 stream handle without a class FQN is rejected rather than falling back to a
 hardcoded namespace. Stream *partials* (`next()` results) still decode as
-ordinary registered PPIR `$stream` partial-output classes on the wire-driven path.
+ordinary registered `$stream` companion classes on the wire-driven path.
 
 > ⚠ **Deviation from Python — `HANDLE_UNSPECIFIED`:** Python raises `BamlError`
 > for a `HANDLE_UNSPECIFIED` handle; Java degrades it to a bare `BamlHandle`

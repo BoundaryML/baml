@@ -46,7 +46,7 @@ auto prompt = spec.prompt();
 auto request =
     spec.build_request<baml_sdk::baml::http::Request>();
 
-// This invokes the compiler-private Extract@stream projection.
+// This invokes the compiler-private ordinary Extract@stream companion.
 auto stream = baml_sdk::lorem::Extract_stream(input);
 for (;;) {
   auto item = stream.next();
@@ -66,7 +66,7 @@ identity. No callable `$spec`, `$stream`, `$parse`, `$render_prompt`, or
 
 The flat C++ stream shortcut has synchronous and asynchronous forms and sends
 the authored function FQN with the Stream boundary operation. The C++ surface
-currently uses the private stream projection's client and callback defaults;
+currently uses the private stream companion's client and callback defaults;
 explicit `client` / `on_event` controls await host representations for
 streaming-client interfaces and optional callbacks.
 

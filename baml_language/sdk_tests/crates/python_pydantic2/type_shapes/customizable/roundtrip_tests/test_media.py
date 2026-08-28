@@ -87,6 +87,7 @@ def test_media_round_trip_media():
     assert round_trip_media(m=m) is not None
 
 
+# SDK_PARITY_LINT(skip): validates Python host-created media wrapper encoding
 def test_host_created_media_round_trips_through_optional_list():
     image = Image.from_base64(PNG_B64, "image/png")
 

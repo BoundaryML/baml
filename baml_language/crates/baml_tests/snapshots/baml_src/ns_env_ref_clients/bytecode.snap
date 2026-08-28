@@ -156,9 +156,6 @@ function env_ref_clients.$init_test_ns_env_ref_clients_env_ref_clients(registry:
 }
 
 function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
-    load_var ?1
-    make_cell
-    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -183,37 +180,11 @@ function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client |
     load_var on_event
     call ai.Agent.new
     store_var _7
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _12
-    load_const "BAML_TEST_ENV_REF_UNSET_CLIENT"
-    call baml.env.ref
-    call baml.env.Ref.get
-    store_var_load_var _16
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
-    load_const "openai/gpt-4o-mini"
-    store_var _16
-
-  L2:
-    load_var _16
-    call ai.clients.resolve
-    store_var _14
-    load_type string
-    load_var _7
-    load_const "EnvRefDynamicEcho"
-    load_deref ?1
-    load_const "question"
-    load_type string
-    load_type unknown
-    alloc_map 1
     load_var question
-    make_closure .<lambda(EnvRefDynamicEcho, 0)>, 1
-    load_var2 6 7
+    call user.env_ref_clients.EnvRefDynamicEcho@spec
+    store_var _9
     load_type string
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    load_var2 5 6
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
@@ -223,10 +194,43 @@ function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client |
     return
 }
 
-function env_ref_clients.EnvRefDynamicEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefDynamicEcho@spec(question: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
     store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "BAML_TEST_ENV_REF_UNSET_CLIENT"
+    call baml.env.ref
+    call baml.env.Ref.get
+    store_var_load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "openai/gpt-4o-mini"
+    store_var _8
+
+  L0:
+    load_var _8
+    call ai.clients.resolve
+    store_var _6
+    load_const "EnvRefDynamicEcho"
+    load_deref ?1
+    load_const "question"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var question
+    make_closure .<lambda(EnvRefDynamicEcho@spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function env_ref_clients.EnvRefDynamicEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -243,46 +247,18 @@ function env_ref_clients.EnvRefDynamicEcho@stream(question: string, client: ai.s
     store_var on_event
 
   L1:
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _9
-    load_const "BAML_TEST_ENV_REF_UNSET_CLIENT"
-    call baml.env.ref
-    call baml.env.Ref.get
-    store_var_load_var _13
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
-    load_const "openai/gpt-4o-mini"
-    store_var _13
-
-  L2:
-    load_var _13
-    call ai.clients.resolve
-    store_var _11
+    load_var question
+    call user.env_ref_clients.EnvRefDynamicEcho@spec
+    store_var _6
     load_type string | null
     load_type string
-    load_const "EnvRefDynamicEcho"
-    load_deref ?1
-    load_const "question"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_var question
-    make_closure .<lambda(EnvRefDynamicEcho@stream, 0)>, 1
-    load_var2 4 5
-    load_type string
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
-    load_var2 2 3
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }
 
 function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
-    load_var ?1
-    make_cell
-    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -307,10 +283,28 @@ function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null, 
     load_var on_event
     call ai.Agent.new
     store_var _7
+    load_var question
+    call user.env_ref_clients.EnvRefEcho@spec
+    store_var _9
+    load_type string
+    load_var2 5 6
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _6
+    load_var _6
+    load_field .value
+    return
+}
+
+function env_ref_clients.EnvRefEcho@spec(question: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _12
+    store_var _4
     load_const "gpt-4o-mini"
     load_const <omitted>
     load_const <omitted>
@@ -329,9 +323,7 @@ function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null, 
     load_const <omitted>
     load_const <omitted>
     call openai.ResponsesClient.new
-    store_var _14
-    load_type string
-    load_var _7
+    store_var _6
     load_const "EnvRefEcho"
     load_deref ?1
     load_const "question"
@@ -339,23 +331,14 @@ function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null, 
     load_type unknown
     alloc_map 1
     load_var question
-    make_closure .<lambda(EnvRefEcho, 0)>, 1
-    load_var2 6 7
+    make_closure .<lambda(EnvRefEcho@spec, 0)>, 1
+    load_var2 2 3
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
-    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
-    load_field .value
     return
 }
 
 function env_ref_clients.EnvRefEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
-    load_var ?1
-    make_cell
-    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -372,51 +355,18 @@ function env_ref_clients.EnvRefEcho@stream(question: string, client: ai.stream.S
     store_var on_event
 
   L1:
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _9
-    load_const "gpt-4o-mini"
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    call openai.ResponsesClient.new
-    store_var _11
+    load_var question
+    call user.env_ref_clients.EnvRefEcho@spec
+    store_var _6
     load_type string | null
     load_type string
-    load_const "EnvRefEcho"
-    load_deref ?1
-    load_const "question"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_var question
-    make_closure .<lambda(EnvRefEcho@stream, 0)>, 1
-    load_var2 4 5
-    load_type string
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
-    load_var2 2 3
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }
 
 function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
-    load_var ?1
-    make_cell
-    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -441,27 +391,11 @@ function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client 
     load_var on_event
     call ai.Agent.new
     store_var _7
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _12
-    load_const "openai/gpt-4o-mini"
-    call ai.clients.resolve
-    call ai.clients.resolve
-    store_var _14
-    load_type string
-    load_var _7
-    load_const "EnvRefResolvedEcho"
-    load_deref ?1
-    load_const "question"
-    load_type string
-    load_type unknown
-    alloc_map 1
     load_var question
-    make_closure .<lambda(EnvRefResolvedEcho, 0)>, 1
-    load_var2 6 7
+    call user.env_ref_clients.EnvRefResolvedEcho@spec
+    store_var _9
     load_type string
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    load_var2 5 6
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
@@ -471,10 +405,33 @@ function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client 
     return
 }
 
-function env_ref_clients.EnvRefResolvedEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefResolvedEcho@spec(question: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
     store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "openai/gpt-4o-mini"
+    call ai.clients.resolve
+    call ai.clients.resolve
+    store_var _6
+    load_const "EnvRefResolvedEcho"
+    load_deref ?1
+    load_const "question"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var question
+    make_closure .<lambda(EnvRefResolvedEcho@spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function env_ref_clients.EnvRefResolvedEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -491,36 +448,18 @@ function env_ref_clients.EnvRefResolvedEcho@stream(question: string, client: ai.
     store_var on_event
 
   L1:
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _9
-    load_const "openai/gpt-4o-mini"
-    call ai.clients.resolve
-    call ai.clients.resolve
-    store_var _11
+    load_var question
+    call user.env_ref_clients.EnvRefResolvedEcho@spec
+    store_var _6
     load_type string | null
     load_type string
-    load_const "EnvRefResolvedEcho"
-    load_deref ?1
-    load_const "question"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_var question
-    make_closure .<lambda(EnvRefResolvedEcho@stream, 0)>, 1
-    load_var2 4 5
-    load_type string
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
-    load_var2 2 3
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }
 
 function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
-    load_var ?1
-    make_cell
-    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -545,26 +484,11 @@ function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | nu
     load_var on_event
     call ai.Agent.new
     store_var _7
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _12
-    load_global user.env_ref_clients.LiveEnvRefOpenAi
-    call ai.clients.resolve
-    store_var _14
-    load_type string
-    load_var _7
-    load_const "LiveEnvRefEcho"
-    load_deref ?1
-    load_const "question"
-    load_type string
-    load_type unknown
-    alloc_map 1
     load_var question
-    make_closure .<lambda(LiveEnvRefEcho, 0)>, 1
-    load_var2 6 7
+    call user.env_ref_clients.LiveEnvRefEcho@spec
+    store_var _9
     load_type string
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    load_var2 5 6
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
@@ -574,10 +498,32 @@ function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | nu
     return
 }
 
-function env_ref_clients.LiveEnvRefEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.LiveEnvRefEcho@spec(question: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
     store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_global user.env_ref_clients.LiveEnvRefOpenAi
+    call ai.clients.resolve
+    store_var _6
+    load_const "LiveEnvRefEcho"
+    load_deref ?1
+    load_const "question"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var question
+    make_closure .<lambda(LiveEnvRefEcho@spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function env_ref_clients.LiveEnvRefEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -594,35 +540,18 @@ function env_ref_clients.LiveEnvRefEcho@stream(question: string, client: ai.stre
     store_var on_event
 
   L1:
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _9
-    load_global user.env_ref_clients.LiveEnvRefOpenAi
-    call ai.clients.resolve
-    store_var _11
+    load_var question
+    call user.env_ref_clients.LiveEnvRefEcho@spec
+    store_var _6
     load_type string | null
     load_type string
-    load_const "LiveEnvRefEcho"
-    load_deref ?1
-    load_const "question"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_var question
-    make_closure .<lambda(LiveEnvRefEcho@stream, 0)>, 1
-    load_var2 4 5
-    load_type string
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
-    load_var2 2 3
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }
 
 function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
-    load_var ?1
-    make_cell
-    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -647,37 +576,11 @@ function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Cli
     load_var on_event
     call ai.Agent.new
     store_var _7
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _12
-    load_const "BAML_TEST_CLIENT_UNSET"
-    call baml.env.ref
-    call baml.env.Ref.get
-    store_var_load_var _16
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
-    load_const "openai/gpt-4o-mini"
-    store_var _16
-
-  L2:
-    load_var _16
-    call ai.clients.resolve
-    store_var _14
-    load_type string
-    load_var _7
-    load_const "LiveEnvRefFallbackEcho"
-    load_deref ?1
-    load_const "question"
-    load_type string
-    load_type unknown
-    alloc_map 1
     load_var question
-    make_closure .<lambda(LiveEnvRefFallbackEcho, 0)>, 1
-    load_var2 6 7
+    call user.env_ref_clients.LiveEnvRefFallbackEcho@spec
+    store_var _9
     load_type string
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    load_var2 5 6
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
@@ -687,10 +590,43 @@ function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Cli
     return
 }
 
-function env_ref_clients.LiveEnvRefFallbackEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.LiveEnvRefFallbackEcho@spec(question: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
     store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "BAML_TEST_CLIENT_UNSET"
+    call baml.env.ref
+    call baml.env.Ref.get
+    store_var_load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "openai/gpt-4o-mini"
+    store_var _8
+
+  L0:
+    load_var _8
+    call ai.clients.resolve
+    store_var _6
+    load_const "LiveEnvRefFallbackEcho"
+    load_deref ?1
+    load_const "question"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var question
+    make_closure .<lambda(LiveEnvRefFallbackEcho@spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function env_ref_clients.LiveEnvRefFallbackEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -707,38 +643,13 @@ function env_ref_clients.LiveEnvRefFallbackEcho@stream(question: string, client:
     store_var on_event
 
   L1:
-    load_type ai.tools.Tool
-    alloc_array 0
-    call ai.tools.Toolbox.new
-    store_var _9
-    load_const "BAML_TEST_CLIENT_UNSET"
-    call baml.env.ref
-    call baml.env.Ref.get
-    store_var_load_var _13
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
-    load_const "openai/gpt-4o-mini"
-    store_var _13
-
-  L2:
-    load_var _13
-    call ai.clients.resolve
-    store_var _11
+    load_var question
+    call user.env_ref_clients.LiveEnvRefFallbackEcho@spec
+    store_var _6
     load_type string | null
     load_type string
-    load_const "LiveEnvRefFallbackEcho"
-    load_deref ?1
-    load_const "question"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_var question
-    make_closure .<lambda(LiveEnvRefFallbackEcho@stream, 0)>, 1
-    load_var2 4 5
-    load_type string
-    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
-    load_var2 2 3
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }

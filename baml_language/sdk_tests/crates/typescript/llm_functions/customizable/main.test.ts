@@ -58,6 +58,7 @@ describe("llm_functions — factory + operation bindings", () => {
     expect(typeof lorem.ExtractResume_async).toBe("function");
   });
 
+  // SDK_PARITY_LINT(skip): pins TypeScript's dollar-preserving flat stream binding names
   it("main_lorem_extract_resume_exposes_flat_spec_and_stream_bindings", () => {
     expect(typeof lorem.ExtractResume_spec).toBe("function");
     expect(typeof lorem.ExtractResume_spec_async).toBe("function");
@@ -70,6 +71,7 @@ describe("llm_functions — factory + operation bindings", () => {
     expect(typeof lorem.StreamingExtract_async).toBe("function");
   });
 
+  // SDK_PARITY_LINT(skip): pins TypeScript's dollar-preserving flat streaming binding names
   it("main_lorem_streaming_extract_exposes_flat_spec_and_stream_bindings", () => {
     expect(typeof lorem.StreamingExtract_spec).toBe("function");
     expect(typeof lorem.StreamingExtract_spec_async).toBe("function");
@@ -82,6 +84,7 @@ describe("llm_functions — factory + operation bindings", () => {
     expect(typeof ipsum.ClassifySentiment_async).toBe("function");
   });
 
+  // SDK_PARITY_LINT(skip): validates TypeScript static and instance operation member spellings
   it("projects_static_and_instance_llm_methods_without_invoking_a_provider", () => {
     const probe = new lorem.MethodProjectionProbe({ prefix: "probe" });
 
@@ -102,6 +105,7 @@ describe("llm_functions — factory + operation bindings", () => {
 });
 
 describe("llm_functions — FunctionSpec", () => {
+  // SDK_PARITY_LINT(skip): validates TypeScript's live FunctionSpec metadata surface
   it("constructs_a_live_spec_without_a_synthetic_fqn", () => {
     const spec = lorem.ExtractResume_spec("Ada Lovelace, ada@example.test");
     expect(spec.name()).toContain("ExtractResume");
@@ -115,6 +119,7 @@ describe("llm_functions — FunctionSpec", () => {
     expect(parsed.email).toBeNull();
   });
 
+  // SDK_PARITY_LINT(skip): validates TypeScript's portable Prompt and Image wrappers
   it("keeps_a_portable_prompt_reusable_across_engine_reentry", () => {
     const png = "iVBORw0KGgo=";
     const spec = lorem.InspectMedia_spec(Image.fromBase64(png, "image/png"));

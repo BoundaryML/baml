@@ -303,7 +303,7 @@ pub(crate) fn render_callable(
         // Match the former `$stream` companion closely: expose one ordinary
         // callable returning `Stream<Partial, Final>`, with authored arguments
         // followed by the compiler-private stream controls. The bridge alone
-        // projects the raw authored FQN to its attached `@stream` entry.
+        // resolves the raw authored FQN to its private ordinary `@stream` entry.
         let mut projected = function.clone();
         projected.name = baml_base::Name::new(format!("{}_stream", function.name.as_str()));
         projected.arguments.retain(|argument| !argument.injected);
