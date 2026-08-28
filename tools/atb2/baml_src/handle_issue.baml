@@ -169,13 +169,15 @@ function handle_ready(issue: Issue, update: bool) -> string? {
     }
 }
 
-/// True unless EVERY repro comes back Fixed on this toolchain. Inconclusive
-/// (needs a human, or a command the in-process check cannot verify) counts
-/// as still broken — the agent gets to look.
+/// True unless EVERY repro comes back Fixed on CANARY. Inconclusive (needs
+/// a human, or a command that cannot be checked) counts as still broken —
+/// the agent gets to look.
 ///
-/// Each repro is first compiled in a SUBPROCESS: a repro that crashes the
-/// compiler (#4468, #4587 ...) would otherwise take this process down with
-/// it, and a crash is the strongest possible "still broken".
+/// The check runs the cache's freshly built canary `baml-cli` out of
+/// process (falling back to the installed toolchain before the cache
+/// exists): a repro that crashes the compiler (#4468, #4587 ...) would
+/// take this process down, and a fix already merged to canary would be
+/// invisible to the installed release.
 function still_broken(issue: Issue) -> bool {
     if (issue.repros.length() == 0) {
         return true;
@@ -183,20 +185,26 @@ function still_broken(issue: Issue) -> bool {
     let i = 0;
     for (let r in issue.repros) {
         i += 1;
-        if (compiler_crashes_on(r, i)) {
-            return true;
-        };
-        if (run_repro(r).verdict != Verdict.Fixed) {
+        if (check_on_canary(r, i) != Verdict.Fixed) {
             return true;
         };
     }
     false
 }
 
-/// `baml check` on the repro's files in a scratch dir, out of process.
-/// True when the toolchain itself dies (signal / panic), which is exactly
-/// the case the in-process check cannot survive.
-function compiler_crashes_on(r: Repro, n: int) -> bool {
+/// The `baml-cli` to check repros with: canary's own build when the cache
+/// has been built, else whatever `baml` resolves to.
+function check_cli() -> string {
+    let built = target_dir() + "/debug/baml-cli";
+    if (baml.fs.exists(built)) {
+        built
+    } else {
+        "baml"
+    }
+}
+
+/// Write the repro to a scratch project and run it with check_cli().
+function check_on_canary(r: Repro, n: int) -> Verdict {
     let dir = atb2_home() + "/repro-check/" + baml.id.new();
     baml.fs.mkdir(dir + "/baml_src", baml.fs.MkdirOptions { recursive: true });
     defer {
@@ -204,30 +212,109 @@ function compiler_crashes_on(r: Repro, n: int) -> bool {
             _ => null,
         };
     }
-    baml.fs.write(dir + "/baml.toml", "[package]\nname = \"repro" + n.to_string() + "\"\n");
+    if (!r.files.has("baml.toml")) {
+        baml.fs.write(dir + "/baml.toml", "[package]\nname = \"repro" + n.to_string() + "\"\n");
+    };
+    let prefixed = r.files.keys()
+        .filter((k: string) -> bool {
+            k.starts_with("baml_src/")
+        })
+        .length()
+        > 0;
     for (let name in r.files.keys()) {
-        baml.fs.write(dir + "/baml_src/" + name, r.files.get(name) ?? "");
+        let path = dir + "/" + repro_file_path(name, prefixed);
+        let parent = path.slice(0, path.last_index_of("/") ?? 0);
+        baml.fs.mkdir(parent, baml.fs.MkdirOptions { recursive: true });
+        baml.fs.write(path, r.files.get(name) ?? "");
     }
     let env = sandbox_env(false);
     let v = baml.env.get("BAML_VERSION");
     if (v != null) {
         env.set("BAML_VERSION", v ?? "");
     };
-    let out = run_with(Cmd { program: "baml", args: ["check"], cwd: dir, timeout_ms: 120000 }, env);
-    let crashed = out.exit_code >= 128
-        || out.exit_code == 124
-        || out.stderr.includes("panicked at")
-        || out.stderr.includes("internal error");
-    if (crashed) {
-        log.info(
-            {
-                "repro_check": "compiler crashed",
-                "exit_code": out.exit_code,
-                "tail": tail(out.stderr, 3),
-            },
-        );
+    let evaluate = match (r.expectation) {
+        let e: ShouldEvaluateTo => true,
+        _ => false,
     };
-    crashed
+    let args = if (evaluate) {
+        ["run", "-e", "repro_main()"]
+    } else {
+        ["check"]
+    };
+    let out = run_with(Cmd { program: check_cli(), args: args, cwd: dir, timeout_ms: 180000 }, env);
+    let verdict = verdict_from_check(r.expectation, out.exit_code, out.stdout, out.stderr);
+    log.info(
+        {
+            "repro_check": n,
+            "cli": check_cli(),
+            "exit_code": out.exit_code,
+            "verdict": verdict.to_string(),
+        },
+    );
+    verdict
+}
+
+/// Where a repro file goes in the scratch project: repros name files
+/// either bare ("main.baml") or already under "baml_src/"; sources land in
+/// baml_src/ either way, and baml.toml stays at the root.
+function repro_file_path(name: string, any_prefixed: bool) -> string {
+    if (name == "baml.toml" || name.starts_with("baml_src/") || any_prefixed) {
+        name
+    } else {
+        "baml_src/" + name
+    }
+}
+
+/// Map a subprocess check to a verdict (pure, unit-tested). A crash —
+/// signal exit, timeout, panic text — is StillBroken for every expectation.
+function verdict_from_check(
+    expectation: Expectation,
+    exit_code: int,
+    stdout: string,
+    stderr: string,
+) -> Verdict {
+    let crashed = exit_code >= 128
+        || exit_code == 124
+        || stderr.includes("panicked at")
+        || stderr.includes("internal error");
+    if (crashed) {
+        return Verdict.StillBroken;
+    };
+    match (expectation) {
+        let e: RequiresInspection => Verdict.Inconclusive,
+        let e: ShouldCompile => {
+            if (exit_code == 0) {
+                Verdict.Fixed
+            } else {
+                Verdict.StillBroken
+            }
+        },
+        let e: ShouldNotCompile => {
+            if (exit_code == 0) {
+                Verdict.StillBroken
+            } else {
+                let wanted = e.diagnostic_contains;
+                if (wanted != null && !(stderr + stdout).includes(wanted ?? "")) {
+                    Verdict.Inconclusive
+                } else {
+                    Verdict.Fixed
+                }
+            }
+        },
+        let e: ShouldEvaluateTo => {
+            if (exit_code != 0) {
+                Verdict.Inconclusive
+            } else {
+                let expected = baml.json.stringify(e.expected);
+                let got = stdout.trim();
+                if (got == expected || got.includes(expected)) {
+                    Verdict.Fixed
+                } else {
+                    Verdict.StillBroken
+                }
+            }
+        },
+    }
 }
 
 function with_status(issue: Issue, status: IssueStatus) -> Issue {
@@ -1760,6 +1847,44 @@ testset "handle_issue" {
         assert.equal(out.exit_code, 0);
         assert.equal(parse_stream(baml.fs.read("/tmp/atb2-transcript-test.jsonl")).num_turns, 3);
         baml.fs.remove("/tmp/atb2-transcript-test.jsonl");
+    }
+
+    test "repro files land in baml_src/ whether or not the repro says so" {
+        assert.equal(repro_file_path("main.baml", false), "baml_src/main.baml");
+        assert.equal(repro_file_path("baml_src/main.baml", true), "baml_src/main.baml");
+        assert.equal(repro_file_path("baml.toml", true), "baml.toml");
+        assert.equal(repro_file_path("clients.baml", true), "clients.baml");
+    }
+
+    test "verdicts from an out-of-process check" {
+        let sc = ShouldCompile { check: "should_compile" };
+        assert.equal(verdict_from_check(sc, 0, "", ""), Verdict.Fixed);
+        assert.equal(
+            verdict_from_check(sc, 1, "", "error[E0002]: unresolved type"),
+            Verdict.StillBroken,
+        );
+        assert.equal(
+            verdict_from_check(sc, 134, "", "thread 'main' panicked at type_ref.rs:346"),
+            Verdict.StillBroken,
+        );
+        assert.equal(
+            verdict_from_check(sc, 1, "", "internal error: entered unreachable code"),
+            Verdict.StillBroken,
+        );
+        let snc = ShouldNotCompile { check: "should_not_compile", diagnostic_contains: "E0002" };
+        assert.equal(verdict_from_check(snc, 1, "", "error[E0002]: unresolved type"), Verdict.Fixed);
+        assert.equal(
+            verdict_from_check(snc, 1, "", "error[E0001]: mismatched"),
+            Verdict.Inconclusive,
+        );
+        assert.equal(verdict_from_check(snc, 0, "", ""), Verdict.StillBroken);
+        let ev = ShouldEvaluateTo { check: "should_evaluate_to", expected: 2 };
+        assert.equal(verdict_from_check(ev, 0, "2\n", ""), Verdict.Fixed);
+        assert.equal(verdict_from_check(ev, 0, "3\n", ""), Verdict.StillBroken);
+        assert.equal(
+            verdict_from_check(RequiresInspection { check: "requires_inspection", instructions: "look" }, 0, "", ""),
+            Verdict.Inconclusive,
+        );
     }
 
     test "known-flaky nextest failures are subtracted" {
