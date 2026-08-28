@@ -33,8 +33,10 @@
 // to_json shims share row 12's road (pinned in ns_comparable_sort /
 // ns_to_json_interface).
 //
-// Test bodies live in top-level helper functions (test-block local-boxing VM
-// bug — locals holding instances misbehave inside test blocks).
+// Test bodies live in top-level helper functions. (Historical: a
+// test-block local-boxing VM bug once made instance-holding locals
+// misbehave inside `test` blocks; it no longer reproduces —
+// ns_test_block_locals pins the fixed behavior.)
 
 interface Speaker {
     function speak(self) -> string throws never {
@@ -176,8 +178,12 @@ class FreshCount {
     implements Counter {}
 }
 
-function row10_type_qualified() -> int throws never {
-    Tally.start() + FreshCount.start()
+function row10_provided() -> int throws never {
+    Tally.start()
+}
+
+function row10_adopted() -> int throws never {
+    FreshCount.start()
 }
 
 function row11_written_qualifier() -> int throws never {
@@ -276,7 +282,10 @@ test "row9 same-interface union dispatches on the shared interface" {
 }
 
 test "row10 bare type-qualified members resolve through the impl" {
-    assert.equal(row10_type_qualified(), 10)
+    // Asserted separately: a provided/adopted swap must fail, not cancel
+    // out inside a sum.
+    assert.equal(row10_provided(), 10)
+    assert.equal(row10_adopted(), 0)
 }
 
 test "row11 written qualifier resolves the same member" {

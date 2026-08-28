@@ -1011,7 +1011,7 @@ fn file_has_impl_construct(db: &ProjectDatabase, file: SourceFile) -> bool {
 /// A file whose bytecode bakes a type's *layout* through a non-`Object`
 /// operand (field offsets, enum discriminants, virtual-dispatch slots) also
 /// gets the `LAYOUT_SENTINEL` — see `bakes_type_layout`. The bytecode set is
-/// unioned with `syntactic_type_names` in `store_with_manifest`, so both
+/// unioned with `syntactic_type_names` in `store_artifacts_with_manifest`, so both
 /// desugared-reference coverage and source-level type dependencies are kept.
 fn referenced_names_by_file(program: &Program) -> HashMap<String, Vec<String>> {
     let mut slot_names: HashMap<usize, &str> = HashMap::new();
@@ -1928,7 +1928,7 @@ impl CacheContext {
             std::collections::BTreeMap::new()
         };
         // Ensure every re-checked user file has an entry (empty if it produced
-        // no diagnostics) so `store_with_manifest` overwrites a stale/poison
+        // no diagnostics) so `store_artifacts_with_manifest` overwrites a stale/poison
         // carry for a degraded-but-now-clean file rather than re-carrying it.
         if persist_fresh {
             for (sf, rel) in user_files_with_rel_paths(db) {

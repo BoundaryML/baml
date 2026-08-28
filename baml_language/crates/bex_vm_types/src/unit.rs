@@ -137,7 +137,7 @@ pub struct ProgramPackageFrag {
     /// UNIT'S FILE declares for it (the interface may live in another file or
     /// a dependency package). Rules ride their declaring unit — never a
     /// package carrier — so each rule's provided-method bodies are objects in
-    /// this unit's own `code` bucket ([`ProgramMethodImplFrag::body`]).
+    /// this unit's own `code` bucket ([`ProgramMethodImplFrag::code_offset`]).
     pub impl_rules: Vec<(String, Vec<ProgramImplRuleFrag>)>,
     /// Recursive type aliases defined in this unit, by fully-qualified name of
     /// the emitted `Object::TypeAlias`. Non-recursive aliases are expanded at
@@ -150,8 +150,10 @@ pub struct ProgramPackageFrag {
     pub test_init: Option<String>,
 }
 
-/// Symbolic twin of `ProgramImplRule`: `interface_head` and each method `fqn`
-/// are fully-qualified names the linker resolves to `ObjectIndex`es.
+/// Symbolic twin of `ProgramImplRule`: `interface_head` is a fully-qualified
+/// name the linker resolves to an `ObjectIndex`; each provided method
+/// references its body by `code_offset` into the declaring unit's own `code`
+/// bucket — a body has no name on any wire.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct ProgramImplRuleFrag {
     /// Fully-qualified name of the interface this rule heads.

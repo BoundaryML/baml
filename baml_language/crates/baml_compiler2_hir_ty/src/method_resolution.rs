@@ -307,7 +307,8 @@ pub enum MemberDeclarer<'db> {
 
 /// The pieces the call site needs to finish a default method's
 /// instantiation: the method and the interface-frame prefix
-/// (`[Self, args.., assoc..]`) already pinned by the receiver.
+/// (`[Self, args..]` — associated types are not slots) already pinned by
+/// the receiver.
 pub enum PendingOwnGenerics<'db> {
     Source {
         method: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -551,7 +552,7 @@ pub fn concrete_member_ambiguity<'db>(
 /// method resolution. Class-inherent methods were tried first (the
 /// caller's ladder); here every impl the receiver matches contributes
 /// its interface's members - fields, required signatures, and DEFAULT
-/// methods realized at `Self` = the receiver, unpinned associated slots
+/// methods realized at `Self` = the receiver, unpinned associated types
 /// as symbolic projections the oracle reduces through the impl's
 /// bindings (I5). Root-wins across providers (a provider another
 /// provider `requires` is shadowed - the most-derived interface wins,
@@ -574,12 +575,34 @@ fn lookup_impl_member<'db>(
     // pattern pins the unsolved argument (`implements Foo for Bin<int>`)
     // genuinely depends on it and correctly stays unmatched until
     // inference solves the argument.
+    //
+    // The probe frame's rigid vars are PROBE-UNIQUE, never the class's own
+    // `(index, name)` frame: `ParamTy` identity is index + name, and a
+    // plain class frame can coincide with unrelated frames — the CALLER's
+    // param env (`env_discharges_rigid_bounds` would discharge a bounded
+    // blanket impl against an unrelated env var that happens to share the
+    // identity — an over-match nothing re-checks) and a member's own
+    // generics (an adopted default's own generic starts at
+    // `1 + iface_generics`, inside the class frame's index range, and
+    // `substitute_class_params` would capture it as a class arg). `$` is
+    // unwritable in user identifiers, so `$probe$…` collides with nothing
+    // a declaration produces; a bounded blanket therefore declines here
+    // (fail closed) exactly like an argument-pinning impl.
     if let TyKind::Class(qtn, args, _) = receiver.kind()
         && args.iter().any(Ty::has_infer)
         && let Some(Definition::Class(class)) = facts.definition_of(qtn)
     {
-        let frame = crate::lower::class_generic_frame(db, class);
-        let probe = crate::lower::class_self_ty(db, class);
+        let frame: Vec<ParamTy> = crate::lower::class_generic_frame(db, class)
+            .iter()
+            .map(|param| ParamTy::new(param.index(), Name::new(format!("$probe${}", param.name()))))
+            .collect();
+        let probe = crate::lower::class_ty(
+            crate::lower::class_qualified_name(db, class),
+            frame
+                .iter()
+                .map(|param| Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default())))
+                .collect(),
+        );
         let lookup = lookup_impl_member(db, facts, &probe, name);
         return substitute_lookup_class_args(lookup, &frame, args);
     }
@@ -1301,16 +1324,12 @@ pub fn member_candidates<'db>(
 /// Enum variants are the opposite case: `Status.Active` is the only way to
 /// name one, so they are the type's members and nothing else's.
 ///
-// BUG: UFCS through a COMPANION CARRIER does not type-check. `Point.norm(p)`
-// works, but `int.abs(a)` / `string.includes(s, "x")` report a mismatch of
-// `baml.Int` against `int`: a carrier method's `self` has the carrier CLASS
-// type (`class_self_ty` returns `Class(baml.Int)` with no bridging), and a
-// primitive is not a subtype of the class that carries its methods. The
-// value-receiver path never compares the two, which is why `a.abs()` is
-// fine. Fixing it means deciding what `Self` realizes to inside a carrier —
-// a TYPE_SYSTEM.md question, not a local one — so the enumeration keeps
-// reporting what the language says (UFCS reaches instance methods) rather
-// than what today's checker manages.
+// NOTE: carrier UFCS (`int.abs(a)`, `string.includes(s, "x")`) type-checks
+// via the B-1080 bridging: a carrier class effectively does not exist as a
+// type (`class_ty` reads `baml.Int` as `int`, …), so a carrier method's
+// `self` compares against the primitive directly. TYPE_SYSTEM.md
+// ("Concrete Types") records the rule and the two canonical-spelling
+// exceptions (`reflect.Type`, `baml.future.Future`).
 pub fn type_member_candidates<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     definition: Definition<'db>,

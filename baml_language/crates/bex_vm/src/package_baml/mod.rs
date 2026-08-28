@@ -220,8 +220,8 @@ pub struct PackageBamlImpl;
 /// For a value `v` whose type implements `baml.Comparable`, look up the
 /// matching `compare` function and return a `BoundMethod { compare, receiver: v }`.
 ///
-/// Builtin impls are out-of-body (`baml.Comparable$for$int.compare`, …); user
-/// classes carry the in-body impl method `{class_fqn}.baml.Comparable.compare`.
+/// Resolution reads the impl-rule tables (`shim_rule_method`) — the block's
+/// spelling (in-body or out-of-body) is display-only and never consulted.
 /// The bound method has `receiver = v` baked in, so the VM inserts it as `self`
 /// and the comparison call only passes the `other` argument
 /// (`YieldToCall { args: [other] }`).
@@ -254,7 +254,7 @@ pub(super) struct ShimRuleMethod {
     /// `true` when `callee` IS the interface's default body — the shims'
     /// no-provided-method case (their structural fallback renders exactly
     /// what the default body delegates to).
-    pub(super) is_default: bool,
+    is_default: bool,
 }
 
 /// The rule-resolved `method` entry behind a value-position stdlib shim: `v`'s

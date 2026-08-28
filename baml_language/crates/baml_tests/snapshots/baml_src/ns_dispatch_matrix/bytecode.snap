@@ -196,20 +196,21 @@ function dispatch_matrix.pick_speaker(loud: bool) -> dispatch_matrix.Loud | disp
     return
 }
 
-function dispatch_matrix.row10_type_qualified() -> int {
-    load_type dispatch_matrix.Tally
-    load_type dispatch_matrix.Counter
-    load_const "start"
-    make_virtual_function ntypeargs=0
-    call_indirect
-    store_var _1
+function dispatch_matrix.row10_adopted() -> int {
     load_type dispatch_matrix.FreshCount
     load_type dispatch_matrix.Counter
     load_const "start"
     make_virtual_function ntypeargs=0
     call_indirect
-    load_var _1
-    add_int
+    return
+}
+
+function dispatch_matrix.row10_provided() -> int {
+    load_type dispatch_matrix.Tally
+    load_type dispatch_matrix.Counter
+    load_const "start"
+    make_virtual_function ntypeargs=0
+    call_indirect
     return
 }
 

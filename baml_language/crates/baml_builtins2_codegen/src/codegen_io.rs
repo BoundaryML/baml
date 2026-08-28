@@ -139,8 +139,13 @@ fn io_class_dispatch_key(builtin: &NativeBuiltin) -> String {
 /// class reached through both spellings needs every one as an arm key.
 fn io_class_segment(builtin: &NativeBuiltin) -> &str {
     // Structural, like [`io_namespace_name`] — a dotted interface qualifier
-    // makes the path unsplittable.
-    builtin.class_segment.as_deref().unwrap_or("")
+    // makes the path unsplittable. Only called for methods, which always
+    // carry their segment; an empty-string fallback would mint a router
+    // arm nothing can ever spell.
+    builtin
+        .class_segment
+        .as_deref()
+        .expect("a method builtin carries its class segment")
 }
 
 fn build_io_namespace_tree<'a>(
@@ -173,20 +178,18 @@ fn build_io_namespace_tree<'a>(
 // ============================================================================
 
 /// Collect the set of namespace prefixes that contain IO builtins.
+/// Structural, like [`io_namespace_name`]: the path alone cannot be
+/// dot-split once an impl-block class segment embeds a dotted written
+/// interface (`root.io.Read$for$File`).
 fn io_namespace_prefixes(io_builtins: &[NativeBuiltin]) -> BTreeSet<String> {
     io_builtins
         .iter()
         .map(|b| {
-            if b.receiver.is_some() {
-                // Class method: strip ".ClassName.method" → namespace prefix
-                let last = b.path.rfind('.').unwrap();
-                let before = &b.path[..last];
-                let second_last = before.rfind('.').unwrap();
-                b.path[..second_last].to_string()
+            let package = io_package_name(b);
+            if b.namespace.is_empty() {
+                package.to_string()
             } else {
-                // Free function: strip ".function" → namespace prefix
-                let last = b.path.rfind('.').unwrap();
-                b.path[..last].to_string()
+                format!("{package}.{}", b.namespace)
             }
         })
         .collect()
@@ -1477,7 +1480,26 @@ fn emit_one_class_trait(
         .map(|m| emit_glue_method(m, ns, class_name, class_ns_map, paths))
         .collect();
 
-    // Dispatch method — match arms
+    // Dispatch method — match arms. The key is the bare method name, so it
+    // must be INJECTIVE within the class node: the router strips the class
+    // segment before dispatching here, and two builtins sharing a method
+    // name (an inherent method plus an implements-block one, or two blocks)
+    // would silently first-arm-win. No such pair exists in the stdlib;
+    // enforce it instead of relying on that.
+    {
+        let mut seen = std::collections::BTreeMap::new();
+        for m in methods {
+            if let Some(prev) = seen.insert(io_class_dispatch_key(m), &m.path) {
+                panic!(
+                    "sys-op dispatch key `{}` is claimed by both `{prev}` and `{}`; \
+                     the class dispatcher matches the bare method name, so the two \
+                     cannot coexist on one class",
+                    io_class_dispatch_key(m),
+                    m.path,
+                );
+            }
+        }
+    }
     let dispatch_arms: Vec<TokenStream> = methods
         .iter()
         .map(|m| {
@@ -1806,7 +1828,7 @@ fn emit_one_namespace_trait(
                 segment_routes.push((format!("{seg}."), cn.as_str()));
             }
         }
-        segment_routes.sort_by(|a, b| b.0.len().cmp(&a.0.len()).then(a.0.cmp(&b.0)));
+        sort_segment_routes(&mut segment_routes);
         let class_routes: Vec<TokenStream> = segment_routes
             .iter()
             .map(|(prefix, cn)| {
@@ -2078,6 +2100,36 @@ fn emit_root_trait(tree: &BTreeMap<String, IoNamespaceNode>) -> TokenStream {
         ));
     }
 
+    // The root router peels ONE dot-segment as the namespace before falling
+    // back to the package-root dispatcher, so an empty-namespace class whose
+    // segment is DOTTED (a relatively-written cross-namespace interface,
+    // `implements io.Read` → segment `io.Read$for$X`) would misroute into a
+    // same-named sibling namespace. The stdlib writes such targets
+    // absolutely (`root.io.Read`); enforce the convention instead of
+    // relying on it.
+    for node in tree.values() {
+        if !node.namespace.is_empty() {
+            continue;
+        }
+        for methods in node.classes.values() {
+            for m in methods {
+                let segment = io_class_segment(m);
+                if let Some((first, _)) = segment.split_once('.')
+                    && tree
+                        .values()
+                        .any(|n| n.package == node.package && n.namespace == first)
+                {
+                    panic!(
+                        "package-top-level class segment `{segment}` (from `{}`) starts \
+                         with sibling namespace `{first}`; the root router would peel \
+                         `{first}.` off it and misroute — write the interface target \
+                         absolutely (`root.{first}.…`)",
+                        m.path,
+                    );
+                }
+            }
+        }
+    }
     let package_arms: Vec<TokenStream> = by_package
         .iter()
         .map(|(package, namespaces)| {
@@ -2843,8 +2895,37 @@ fn emit_build_runtime_io(io_builtins: &[NativeBuiltin]) -> TokenStream {
     }
 }
 
+/// Order class-segment routes LONGEST-FIRST (ties lexicographic): the
+/// dispatcher tries `strip_prefix` in this order, so a segment that extends
+/// another dot-for-dot (`root.io.Read$for$File` vs a hypothetical `root`)
+/// cannot be shadowed by its prefix.
+fn sort_segment_routes(routes: &mut [(String, &str)]) {
+    routes.sort_by(|a, b| b.0.len().cmp(&a.0.len()).then(a.0.cmp(&b.0)));
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn segment_routes_sort_longest_first() {
+        let mut routes = vec![
+            ("File.".to_string(), "File"),
+            ("root.io.Read$for$File.".to_string(), "File"),
+            ("root.io.Write$for$File.".to_string(), "File"),
+            ("Rng$for$SystemRandom.".to_string(), "SystemRandom"),
+        ];
+        super::sort_segment_routes(&mut routes);
+        let order: Vec<&str> = routes.iter().map(|(p, _)| p.as_str()).collect();
+        assert_eq!(
+            order,
+            [
+                "root.io.Write$for$File.",
+                "root.io.Read$for$File.",
+                "Rng$for$SystemRandom.",
+                "File.",
+            ]
+        );
+    }
+
     use std::collections::{BTreeMap, HashSet};
 
     use super::{CodegenPaths, emit_owned_struct, emit_view_struct};

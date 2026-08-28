@@ -310,11 +310,15 @@ impl<'vm> ImplResolver<'vm> {
         let bex_vm_types::Object::Interface(iface) = self.vm.get_object(rule.interface_head) else {
             return None;
         };
-        let default_fn = iface
-            .methods
-            .iter()
-            .find(|m| m.name.as_str() == method)?
-            .default_fn;
+        let method_def = iface.methods.iter().find(|m| m.name.as_str() == method)?;
+        // A wire-declared default must have been bound to its pointer at
+        // load/graft; a null alongside `default: Some(..)` is a binding bug,
+        // not an absent default.
+        debug_assert!(
+            method_def.default.is_none() || !method_def.default_fn.is_null(),
+            "interface default for `{method}` declared but unbound"
+        );
+        let default_fn = method_def.default_fn;
         if default_fn.is_null() {
             return None;
         }

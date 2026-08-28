@@ -1784,6 +1784,12 @@ fn try_yield_interface_from_json(
         Object::Class(class) if !class.owner.is_null() => {
             super::resolve::ImplResolver::for_package(vm, class.owner)
         }
+        // An interface head carries the same owner edge; rooting it the
+        // same way keeps runtime-declared interfaces symmetric with
+        // runtime classes instead of falling to the lexical world.
+        Object::Interface(iface) if !iface.owner.is_null() => {
+            super::resolve::ImplResolver::for_package(vm, iface.owner)
+        }
         _ => super::resolve::ImplResolver::new(vm),
     };
     let (rule, bound_args) = resolver.resolve_implements_rule(ty, from_json_head, &[])?;

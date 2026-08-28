@@ -1519,9 +1519,9 @@ fn enforce_arity(args: &mut Vec<Ty>, expected: usize) {
 // -- Generic frames -----------------------------------------------------------
 
 /// The flattened generic frame for a function: owner generics first (class
-/// generics; interfaces prepend `Self` and append associated-type names,
-/// mirroring TIR's layout), then the function's own generics, then its
-/// synthetic effect params. Indices are absolute frame positions.
+/// generics; interfaces prepend `Self` — associated types are not frame
+/// slots), then the function's own generics, then its synthetic effect
+/// params. Indices are absolute frame positions.
 pub fn function_generic_frame<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
@@ -1606,6 +1606,11 @@ pub fn class_ty(qtn: TypeName, mut args: Vec<Ty>) -> Ty {
                     "Bool" => return Ty::intern(TyKind::Bool { attr: attr() }),
                     "String" => return Ty::intern(TyKind::String { attr: attr() }),
                     "Uint8Array" => return Ty::intern(TyKind::Uint8Array { attr: attr() }),
+                    // The carrier family is total: `class baml.Null` exists
+                    // (empty — a doc anchor), and leaving it unbridged would
+                    // let `baml.Null` denote a nominal class no value
+                    // inhabits.
+                    "Null" => return Ty::intern(TyKind::Null { attr: attr() }),
                     _ => {}
                 }
             }
@@ -1672,8 +1677,8 @@ pub fn interface_frame<'db>(
     interface_generic_frame_params(&names)
 }
 
-/// The interface's OWN declared params - `interface_frame`'s middle
-/// section, without `Self` and the associated slots.
+/// The interface's OWN declared params - `interface_frame`'s tail, without
+/// the `Self` slot (associated types are not slots).
 pub fn interface_declared_params<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     interface: InterfaceLoc<'db>,
@@ -1986,10 +1991,12 @@ pub fn function_generic_bounds<'db>(
 
 /// The interface scope's param env, keyed by `interface_frame`
 /// identities: `Self` (slot 0) bounded by the interface itself at its own
-/// params, each generic param's declared bound, and each associated
-/// slot's declared bound (I5 consumes those for projections). The single
-/// env every interface-scoped lowering shares - member signatures via
-/// `function_generic_bounds`, required-method and field lowering, and
+/// params, plus each generic param's declared bound. Associated types are
+/// not slots and contribute no env entries — a `Self.Member` projection
+/// reduces through the resolver, and the member's declared `extends` bound
+/// is consulted there (`assoc_bound_roots` / `realized_assoc_bound`). The
+/// single env every interface-scoped lowering shares - member signatures
+/// via `function_generic_bounds`, required-method and field lowering, and
 /// associated-type bounds/defaults - so `Self.Member` projections resolve
 /// their qualifying interface identically everywhere.
 pub fn interface_scope_bounds<'db>(
@@ -2016,28 +2023,15 @@ pub fn interface_scope_bounds<'db>(
             .take(data.generic_params.len())
             .map(|param| Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default())))
             .collect();
-        // Each associated slot pins to the frame's OWN var, so inside the
-        // interface `Self.Member` reduces to that slot (TIR's layout: the
-        // member is a frame position, bound per-receiver at impl
-        // selection - a default method's projection stays symbolic, never
-        // the declared default).
-        let pins: Vec<(Name, Ty)> = frame
-            .iter()
-            .skip(1 + data.generic_params.len())
-            .zip(&data.associated_types)
-            .map(|(param, assoc)| {
-                (
-                    assoc.name.clone(),
-                    Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default())),
-                )
-            })
-            .collect();
+        // `Self`'s self-bound carries no pins: a `Self.Member` projection
+        // stays symbolic inside the interface and reduces through the
+        // resolver at use.
         out.insert(
             self_param.clone(),
             vec![baml_type::interned::InterfaceRef::new(
                 interface_qualified_name(db, interface),
                 args.into_boxed_slice(),
-                pins,
+                Vec::new(),
             )],
         );
     }
@@ -2058,18 +2052,6 @@ pub fn interface_scope_bounds<'db>(
             .collect();
         if !refs.is_empty() {
             out.insert(param.clone(), refs);
-        }
-    }
-    for assoc in &data.associated_types {
-        let param = frame_iter.next();
-        if let (Some(param), Some(type_ref)) = (param, assoc.bound)
-            && let Some(bound) = as_ref(&ctx.lower_type_ref_at(
-                &data.type_refs,
-                type_ref,
-                TypePosition::ConstraintHead,
-            ))
-        {
-            out.insert(param.clone(), vec![bound]);
         }
     }
     out
@@ -2269,9 +2251,9 @@ pub fn signature_lowering_diagnostics<'db>(
 ) -> Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> {
     use crate::diagnostics::TirTypeError;
     // Required interface methods are signature-only items checked by the
-    // interface-scope driver with `Self` and the associated slots in
-    // scope; this pass would misreport their `Self.*` references (the
-    // same exclusion the pre-S17 signature pass carried).
+    // interface-scope driver with `Self` in scope; this pass would
+    // misreport their `Self.*` references (the same exclusion the
+    // pre-S17 signature pass carried).
     if baml_compiler2_ppir::item_data::is_required_interface_method(db, function) {
         return Vec::new();
     }

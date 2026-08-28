@@ -101,10 +101,13 @@ use sha2::{Digest, Sha256};
 /// `default_fn`, never through a baked row), rule fragments moved onto their
 /// declaring unit, `ProgramMethodImplFrag` dropped its `fqn` string for the
 /// body's code-bucket offset in that unit, and `Program::body_indices` was
-/// deleted outright (a body has no name-keyed coordinates on any wire;
-/// compile boundaries recover them structurally via the Pass-1 slot replay +
-/// the globals array). One version covers all of these: they landed on one
-/// branch, and a bump only matters against a format canary has shipped.
+/// deleted outright. A body has no name-keyed coordinates on the PROGRAM
+/// wire — its spelling survives only as the `CompilationUnit`'s
+/// link-internal export/import key; compile boundaries read coordinates
+/// from the declaration-keyed placement registry, with a Pass-1 slot replay
+/// only at the stdlib-splice boundary. One version covers all of these:
+/// they landed on one branch, and a bump only matters against a format
+/// canary has shipped.
 pub const FORMAT_VERSION: u32 = 12;
 
 const MAGIC: [u8; 4] = *b"BEXC";

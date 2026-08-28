@@ -6752,24 +6752,11 @@ impl<'db> InferenceContext<'db> {
             // an unrealized slot (the `Interface.item` spelling, which has no
             // subject to realize against) stays a fresh variable the call's
             // arguments solve.
-            let realized_arg = realized.and_then(|realized| {
-                // The frame's middle groups follow the DECLARED shape, so the
-                // declared generic count is the branch boundary; a realization
-                // that comes up short leaves that slot fresh rather than
-                // shifting the associated-type offset.
-                let generic_count = interface_data.generic_params.len();
-                if index < generic_count {
-                    return realized.generics.get(index).map(Ty::from_plain);
-                }
-                let assoc = interface_data
-                    .associated_types
-                    .get(index.checked_sub(generic_count)?)?;
-                realized
-                    .associated_types
-                    .iter()
-                    .find(|(name, _)| *name == assoc.name)
-                    .map(|(_, ty)| Ty::from_plain(ty))
-            });
+            // The pinned group IS the declared generics — associated types
+            // are not frame slots, so the index maps 1:1; a realization that
+            // comes up short leaves the slot fresh.
+            let realized_arg =
+                realized.and_then(|realized| realized.generics.get(index).map(Ty::from_plain));
             instantiation.push(match realized_arg {
                 Some(arg) => arg,
                 None => {
@@ -7313,7 +7300,10 @@ impl<'db> InferenceContext<'db> {
                 }
                 return Some(Ty::error());
             }
-            _ => return None,
+            crate::interfaces::Determination::Undeclared { .. }
+            | crate::interfaces::Determination::SubjectDoesNotImplementQualifier { .. }
+            | crate::interfaces::Determination::InvalidBase
+            | crate::interfaces::Determination::Poisoned => return None,
         };
         let interface_loc = self.interface_loc_for(&realized.name)?;
         // A consumed channel holds the CLASS args, so the member's own

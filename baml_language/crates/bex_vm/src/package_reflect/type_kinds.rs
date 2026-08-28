@@ -346,8 +346,10 @@ pub(super) fn register_class_witnesses(
         // A witness supplies fields only, so its method table is EMPTY: every
         // method is the interface's default body, adopted at resolution
         // (`ImplResolver::rule_method_impl` falls back to the interface's
-        // bound `default_fn` with the `[Self, iface args..]` frame). The gate
-        // above rejected any interface with a required method.
+        // bound `default_fn` with the `[Self, iface args..]` frame). The
+        // required-method gate in `register_class_witnesses` (the
+        // "cannot be witnessed structurally" rejection) already excluded
+        // any interface with a bodyless required method.
         // The witness is an ordinary heap `Object::ImplRule` — the resolver
         // borrows it exactly like a package-owned rule and the collector keeps
         // its `interface_head`/`methods[].fqn` current — so the side table

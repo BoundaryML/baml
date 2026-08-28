@@ -146,8 +146,6 @@ pub(crate) fn interface_self_param(
         .expect("interface frame starts with Self")
 }
 
-/// Resolve a name against the FULL interface frame (declared params and
-/// associated slots), innermost-last-wins.
 /// Collapse `Self.X` projections through the pins resolved so far — the
 /// projection-only counterpart of the old associated frame-slot
 /// substitution (associated types are not frame slots; a sibling reference

@@ -32,7 +32,7 @@ pub(crate) fn cache_disabled() -> bool {
 /// verbatim prefix). `ProjectDatabase` canonicalizes both the workspace root and
 /// every source path, but only when they exist on disk: db1 is built before the
 /// cache dir exists (root canonicalize is a no-op fallback), then
-/// `store_with_manifest` materializes the root, so db2's `add_source_root`
+/// `store_artifacts_with_manifest` materializes the root, so db2's `add_source_root`
 /// *does* canonicalize it — while the in-memory `.baml` files never exist to
 /// canonicalize. If the base held an unresolved symlink, the root would then
 /// gain a resolved prefix the file paths lack, `strip_prefix` would fail, every

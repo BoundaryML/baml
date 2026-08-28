@@ -580,4 +580,3 @@ function vdc_dispatch_distinguishes_instantiations() -> string {
 test "virtual_dispatch_cache_distinguishes_generic_interface_instantiations" {
     assert.equal(vdc_dispatch_distinguishes_instantiations(), "animal|animal-or-dog")
 }
-

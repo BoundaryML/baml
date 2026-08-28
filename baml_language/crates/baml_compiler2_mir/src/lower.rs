@@ -1241,7 +1241,9 @@ pub fn native_key_for<'db>(
 /// it like any function, but excludes it from every name map
 /// (`Program::function_indices` / `function_global_indices`) and marks its
 /// `Function::is_interface_body`. The [`def_to_item_ref`] spelling for a body
-/// is display-only plus a link-internal unit-export key.
+/// is display-only plus a link-internal unit-export key — the latter makes
+/// it load-bearing as a KEY: it must be unique (coherence + the canonical
+/// rendering guarantee it; decompose enforces it).
 ///
 /// Required interface methods (signature-only, no body) never reach the
 /// emit paths that ask this; the interface-owner arm still classifies them
@@ -3436,16 +3438,10 @@ impl<'db> LoweringContext<'db> {
                 return false;
             }
             let iface_args: Vec<Tir2Ty> = plan.type_args[1..=shape.interface_generics].to_vec();
-            let iface_assoc: Vec<(Name, Tir2Ty)> = iface_data
-                .associated_types
-                .iter()
-                .map(|assoc| assoc.name.clone())
-                .zip(
-                    plan.type_args[1 + shape.interface_generics..shape.own_start]
-                        .iter()
-                        .cloned(),
-                )
-                .collect();
+            // Associated types are OUTPUTS of the impl match, never frame
+            // slots (`own_start == 1 + interface_generics`), so the view
+            // carries none — dispatch keys on head + args alone.
+            let iface_assoc: Vec<(Name, Tir2Ty)> = Vec::new();
             // Lowered as ONE argument list, then split: the call plan covers
             // every written argument, `self` included, and reads them by
             // position in the call expression.
@@ -3595,16 +3591,10 @@ impl<'db> LoweringContext<'db> {
                 .iter()
                 .map(|ty| to_template(self, ty))
                 .collect(),
-            associated_types: iface_data
-                .associated_types
-                .iter()
-                .map(|assoc| assoc.name.clone())
-                .zip(
-                    prefix[1 + shape.interface_generics..shape.own_start]
-                        .iter()
-                        .map(|ty| to_template(self, ty)),
-                )
-                .collect(),
+            // Associated types are OUTPUTS of the impl match, never frame
+            // slots (`own_start == 1 + interface_generics`) — dispatch keys
+            // on head + args alone.
+            associated_types: Vec::new(),
         };
         Some(Rvalue::MakeVirtualFunction {
             self_ty: to_template(self, &prefix[0]),
@@ -7419,7 +7409,8 @@ impl<'db> LoweringContext<'db> {
     /// concrete `implements` block has already been resolved to the block's
     /// subject — the *MIR local* type keeps the unresolved `Self` (see
     /// `lower_signature_runtime_ty`), and reading that instead would deoptimize
-    /// `baml.Comparable$for$int.compare` and friends off the opcode path.
+    /// `int`'s `baml.Comparable` impl (`<(int as baml.Comparable)>.compare`)
+    /// and friends off the opcode path.
     fn ordering_uses_primitive_opcode(&self, lhs: AstExprId, rhs: AstExprId) -> bool {
         /// `arith_primitive`, minus the `null`-transparency carve-out.
         fn orderable(ty: &RuntimeTy) -> bool {
@@ -8755,8 +8746,8 @@ impl<'db> LoweringContext<'db> {
                     return;
                 };
                 // Seed the default method's frame exactly as the runtime seeds
-                // an adopted default: `[Self ++ interface generics]` (see
-                // `interface_frame` in `baml_compiler2_emit` and
+                // an adopted default: `[Self ++ interface generics]` (the
+                // frame law on `MethodImpl` in `bex_vm_types`; also
                 // `enclosing_generic_params`), expressed over the enclosing
                 // impl's generic params. `Self` is the enclosing
                 // implements-block's subject, statically known at this call.

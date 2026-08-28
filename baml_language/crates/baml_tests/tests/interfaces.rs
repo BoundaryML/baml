@@ -6876,6 +6876,47 @@ fn union_ruling_mixed_inherent_and_impl_arm_is_rejected() {
     );
 }
 
+/// A bounded blanket impl must not resolve a member on a receiver whose
+/// class args are still UNSOLVED by discharging its bound against an
+/// unrelated caller env param that happens to share the `(index, name)`
+/// `ParamTy` identity — the rigid-probe road probes at probe-unique
+/// `$probe$` vars, so the env can never discharge them and the bounded
+/// candidate declines (fail closed) like an argument-pinning impl.
+/// `int` does not implement the marker, so the call must be rejected on
+/// every road; the env-coincidence over-match would have ACCEPTED it with
+/// nothing re-checking after the arg solved.
+#[test]
+fn bounded_blanket_impl_does_not_discharge_against_unrelated_env_param() {
+    let errors = collect_compile_errors(
+        r#"
+        interface ProbeMarker {
+            function probe_tag(self) -> int throws never
+        }
+        class ProbeBin<T> {
+            value: T[]
+        }
+        implements<T extends ProbeMarker> ProbeMarker for ProbeBin<T> {
+            function probe_tag(self) -> int { return 1 }
+        }
+        function probe_caller<T extends ProbeMarker>(x: T) -> int {
+            let items = [];
+            let b = ProbeBin { value: items };
+            let n = b.probe_tag();
+            items.push(3);
+            return n
+        }
+        function main() -> int {
+            return 0
+        }
+        "#,
+    );
+    assert!(
+        !errors.is_empty(),
+        "a bounded blanket impl must not resolve on an unsolved receiver via \
+         env-identity coincidence"
+    );
+}
+
 /// An impl declaring a PHANTOM generic param — one bound by neither the
 /// `for` type nor the interface (`U` here; E0135 diagnoses the header
 /// without rejecting the block) — must fail CLOSED at method resolution:

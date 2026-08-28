@@ -1556,7 +1556,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     .map(InterfaceFieldLink::from_ast)
                     .collect(),
                 associated_type_bindings: impl_block.associated_type_bindings.clone(),
-                methods: block_method_ids.clone(),
+                methods: block_method_ids,
                 span: impl_block.span,
                 // In-body `implements` blocks don't carry a docstring today —
                 // the AST `ImplementsBlock` has no field for one.

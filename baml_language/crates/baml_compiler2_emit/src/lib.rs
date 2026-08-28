@@ -91,9 +91,9 @@ fn build_interface_def(
     let generics = &interface.generic_params;
     let interface_frame_params = baml_compiler2_hir_ty::lower::interface_frame(db, iface_loc);
     // The interface scope's own param env: `Self` (slot 0) bounded by the
-    // interface itself, declared param bounds, and the associated slots -
-    // the single env every interface-scoped lowering shares, so `Self.Item`
-    // projections resolve here exactly as in signature lowering.
+    // interface itself plus declared param bounds - the single env every
+    // interface-scoped lowering shares (associated types are not slots), so
+    // `Self.Item` projections resolve here exactly as in signature lowering.
     let decl_ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
         .with_frame(interface_frame_params.clone())
         .with_bounds(baml_compiler2_hir_ty::lower::interface_scope_bounds(
@@ -1005,6 +1005,9 @@ fn build_packages<'db>(
                 // method (losing a dispatch, never adding a wrong one). The
                 // stdlib only uses those bodies on free functions, so this is
                 // unreachable today; the debug_assert pins the convention.
+                // TODO: reject intrinsic/await-any bodies inside impl blocks
+                // at lowering (a diagnostic), so the soft-fail here becomes
+                // unrepresentable instead of merely asserted.
                 let Some(fqn) = interface_bodies.interface_body_reference(m) else {
                     debug_assert!(
                         matches!(
@@ -1037,7 +1040,7 @@ fn build_packages<'db>(
             // rule rather than bake a partial table: losing a dispatch is
             // recoverable, a table whose positions no longer line up with the
             // interface silently reads the wrong field. Matches the
-            // `resolve_fqn` convention above.
+            // fail-closed rule-drop convention above.
             let field_links: Option<Box<[u32]>> = match (
                 iface_field_decls.get(&iface_tn),
                 baml_compiler2_ppir::item_data::impl_enclosing_class(db, impl_loc),
@@ -1882,7 +1885,6 @@ enum PoolObjKind {
 ///
 /// [`LoweringError::Internal`] if the program holds a pool object the
 /// decomposition cannot attribute to a source file.
-#[allow(clippy::too_many_lines)]
 fn decompose_units<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     program: &Program,
@@ -1891,7 +1893,7 @@ fn decompose_units<'db>(
     decompose_units_after_prefix(db, program, coords, 0)
 }
 
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 fn decompose_units_after_prefix<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     program: &Program,
@@ -1996,10 +1998,25 @@ fn decompose_units_after_prefix<'db>(
         fn_obj_name.insert(placement.reference_object(), fq.clone());
         interface_body_slot_names.push((slot, fq));
     }
-    let interface_body_names: HashSet<String> = interface_body_slot_names
-        .iter()
-        .map(|(_, name)| name.clone())
-        .collect();
+    // `placements` is a HashMap, so the collection order above is arbitrary;
+    // consumers write by slot index (order-insensitive today), but keep the
+    // vec deterministic so nothing downstream can ever depend on hash order.
+    interface_body_slot_names.sort_unstable();
+    // Body spellings are LINK KEYS — the unit export/import tables key by
+    // string — so they must be unique across the union of bodies and named
+    // functions. Coherence plus the canonical `<(target as iface)>`
+    // rendering guarantee that for accepted programs; this converts the
+    // prose invariant into the same hard error named items get at Pass 1,
+    // instead of a silent last-writer-wins at link.
+    let mut interface_body_names: HashSet<String> = HashSet::new();
+    for (_, name) in &interface_body_slot_names {
+        if program.function_indices.contains_key(name) || !interface_body_names.insert(name.clone())
+        {
+            return Err(LoweringError::Internal(format!(
+                "two items render to the link key `{name}`"
+            )));
+        }
+    }
 
     let n_obj = program.objects.len();
 
@@ -2486,14 +2503,13 @@ fn decompose_units_after_prefix<'db>(
                     let fi = owners
                         .and_then(|owners| {
                             owners.iter().find_map(|(pattern, args, fi)| {
-                                (*pattern == rule.for_ty_pattern
-                                    && args == &rule.interface_args)
+                                (*pattern == rule.for_ty_pattern && args == &rule.interface_args)
                                     .then_some(*fi)
                             })
                         })
                         .ok_or_else(|| {
                             LoweringError::Internal(format!(
-                                "impl rule for `{iface_fq}` matches no declaring                                  `implements` block"
+                                "impl rule for `{iface_fq}` matches no declaring `implements` block"
                             ))
                         })?;
                     // Provided-method bodies must be this unit's own pooled
@@ -2513,7 +2529,8 @@ fn decompose_units_after_prefix<'db>(
                             Some(LocalRef::Code(k)) => {
                                 debug_assert_eq!(
                                     obj_owner[idx], fi,
-                                    "provided body owned by a different file                                      than its rule's `implements` block",
+                                    "provided body owned by a different file than its rule's \
+                                     `implements` block",
                                 );
                                 methods.push((
                                     name.clone(),
@@ -2525,7 +2542,8 @@ fn decompose_units_after_prefix<'db>(
                             }
                             Some(other) => {
                                 return Err(LoweringError::Internal(format!(
-                                    "provided body of `{iface_fq}` rule is a                                      non-code object ({other:?})"
+                                    "provided body of `{iface_fq}` rule is a non-code object \
+                                     ({other:?})"
                                 )));
                             }
                             None => {
@@ -3089,9 +3107,9 @@ fn inject_clean_object_placeholders<'db>(
                 }
             } else {
                 let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
-                let Some(_) = globals.get(&fq) else {
+                if !globals.contains_key(&fq) {
                     continue;
-                };
+                }
                 let idx = *program.function_indices.entry(fq).or_insert_with(|| {
                     let idx = placeholder;
                     placeholder += 1;
@@ -3109,14 +3127,6 @@ fn inject_clean_object_placeholders<'db>(
     }
 }
 
-/// Emit the whole project (B-693 Stage 6 core).
-///
-/// `skip_clean`, when `Some`, is the set of project-relative paths whose files
-/// are **clean** in an incremental compile: Pass 4 skips them entirely (they are
-/// neither lowered nor cloned — their units come verbatim from the cached image),
-/// and only the dirty files are lowered. Dirty functions are written to their
-/// whole-project (Pass-1) global slots so the decomposition reverses their
-/// operands to names identically to a full compile. `None` is a full compile.
 /// Where one source-visible function's compiled artifact lives, by
 /// provenance — the value type of [`FunctionPlacements`]. The variant IS the
 /// law (`hir::loc::DeclRef`'s emit-side mirror): only `Live` and `Spliced`
@@ -3197,8 +3207,10 @@ impl PlacedFunction {
 
 /// The provenance-typed placement registry: every source-visible function
 /// this emit placed, by declaration. Total over the enumeration (live,
-/// spliced, and clean-reused alike); MOUNTED items have no `FunctionLoc` and
-/// are deliberately absent — see [`FunctionCoordinates`].
+/// spliced, and clean-reused alike) EXCEPT `$compiler_intrinsic` /
+/// `$await_any` bodies, which Pass 1/4 skip by design — `build_packages`'
+/// method-drop lane relies on that absence; MOUNTED items have no
+/// `FunctionLoc` and are deliberately absent — see [`FunctionCoordinates`].
 type FunctionPlacements<'db> = HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, PlacedFunction>;
 
 /// Declaration-keyed coordinates of every function one emit placed: the
@@ -3235,6 +3247,14 @@ struct FunctionCoordinates<'db> {
     spliced_files: usize,
 }
 
+/// Emit the whole project (B-693 Stage 6 core).
+///
+/// `skip_clean`, when `Some`, is the set of project-relative paths whose files
+/// are **clean** in an incremental compile: Pass 4 skips them entirely (they are
+/// neither lowered nor cloned — their units come verbatim from the cached image),
+/// and only the dirty files are lowered. Dirty functions are written to their
+/// whole-project (Pass-1) global slots so the decomposition reverses their
+/// operands to names identically to a full compile. `None` is a full compile.
 fn generate_impl<'db>(
     db: &'db dyn crate::Db,
     opt: OptLevel,
@@ -3662,9 +3682,10 @@ fn emit_file_group<'db>(
             }
             if baml_compiler2_mir::function_is_interface_body(db, func_loc) {
                 // An interface body owns a slot but no runtime name: its
-                // declaration is
-                // its only key, so its rendered spelling enters no map (and
-                // need not be unique).
+                // declaration is its only RUNTIME key, so its rendered
+                // spelling enters no name map here. The spelling must still
+                // be unique — decompose renders it as the unit
+                // export/import key and enforces that there.
                 let prev = interface_body_slots.insert(func_loc, global_idx);
                 debug_assert!(prev.is_none(), "one declaration slotted twice");
             } else {
@@ -4599,9 +4620,9 @@ fn compute_function_metadata<'db>(
 
     // Every type variable in scope for this signature, with its interface
     // bounds - the one shared param env (`function_generic_bounds` covers
-    // the enclosing class/interface/free-impl plus the function's own
-    // params; the interface arm carries `Self`'s own bound and the
-    // associated slots). Threaded into every lowering below so a
+    // the enclosing class/interface/impl plus the function's own params;
+    // the interface arm carries `Self`'s own bound — associated types are
+    // not slots). Threaded into every lowering below so a
     // `T.member` projection resolves through `T`'s declared bound DURING
     // lowering.
     let scope_bounds = baml_compiler2_hir_ty::lower::function_generic_bounds(db, func_loc);

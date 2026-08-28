@@ -513,6 +513,12 @@ fn emitted_program_dependency_and_consumer_units_are_byte_identical() {
 
     let blob_db = blob_db(ARTIFACT_USER, artifacts.blob.clone());
     assert_no_diagnostic_errors(&blob_db);
+    // The blob side decomposes with ITS OWN db's coordinates (the
+    // same-frame artifacts API), never against the source db: decompose
+    // consumes the generating emit's declaration-keyed placements, and a
+    // foreign db has none for this program. (The pre-coordinates version
+    // of this oracle exploited the old Pass-1 replay to decompose a
+    // foreign program — that road no longer exists, on purpose.)
     let (blob_program, blob_units) =
         baml_compiler2_emit::generate_project_bytecode_with_mounted_units_artifacts(
             &blob_db,

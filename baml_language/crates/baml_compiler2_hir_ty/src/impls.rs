@@ -546,6 +546,7 @@ pub struct ResolvedImpl<'db> {
 
 /// A method an impl provides, by where its body lives: a source block's
 /// function item, or a mounted/precompiled row's exported descriptor.
+#[derive(Debug, Clone, Copy)]
 pub enum ProvidedMethod<'db, 'a> {
     Source {
         block: ImplLoc<'db>,

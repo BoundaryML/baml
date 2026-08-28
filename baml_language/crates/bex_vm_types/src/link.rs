@@ -129,10 +129,12 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
         }
 
         // Package fragments also carry symbolic object references (not bytecode
-        // operands): most point at the unit's own exports, but an impl of a
-        // mounted interface or an inherited mounted default points directly at
-        // the live dependency. Feed those names into the same synthetic-prefix
-        // plan so fragment resolution and code relocation see one alias table.
+        // operands): most point at the unit's own exports, but an impl OF a
+        // mounted interface names the live dependency's interface object
+        // directly (adopted defaults resolve at dispatch through that
+        // object's bound `default_fn`, never through a fragment reference).
+        // Feed those names into the same synthetic-prefix plan so fragment
+        // resolution and code relocation see one alias table.
         let fragment = &unit.package_fragment;
         for (_, fq_name) in &fragment.classes {
             consider_object(&Symbol {
@@ -1151,10 +1153,13 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
             .function_indices
             .remove(&name)
             .unwrap_or_else(|| unreachable!("scrubbed name came from this map"));
+        // Same invariant as the sibling: a name in `function_indices` is in
+        // `function_global_indices` — an internal inconsistency, never an
+        // unresolved IMPORT.
         program
             .function_global_indices
             .remove(&name)
-            .ok_or_else(|| LinkError::UnresolvedImport(name.clone()))?;
+            .unwrap_or_else(|| unreachable!("scrubbed name came from this map"));
     }
     Ok(program)
 }
@@ -1232,10 +1237,24 @@ fn merge_package_fragment(
                 // (shadow-aware, like a `Code` export).
                 let abs = *code_abs.get(method.code_offset as usize).ok_or_else(|| {
                     LinkError::InvalidUnit(format!(
-                        "impl rule for `{iface_fq}` references code offset {}                          outside its declaring unit",
+                        "impl rule for `{iface_fq}` references code offset {} outside its \
+                         declaring unit",
                         method.code_offset
                     ))
                 })?;
+                // The shadow-aware placement is only as trustworthy as the
+                // unit: require the target to actually BE a function object,
+                // so a corrupt unit fails the link instead of confusing the
+                // VM at dispatch.
+                if !matches!(
+                    program.objects.get(abs),
+                    Some(crate::types::Object::Function(_))
+                ) {
+                    return Err(LinkError::InvalidUnit(format!(
+                        "impl rule for `{iface_fq}` method `{name}` resolves to a \
+                         non-function object"
+                    )));
+                }
                 methods.insert(
                     name.clone(),
                     ProgramMethodImpl {

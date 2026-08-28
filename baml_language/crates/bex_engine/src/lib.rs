@@ -2101,10 +2101,6 @@ impl BexEngine {
             compile_time_objects,
             &bytecode.packages,
         );
-        // Interface bodies join the image-symbol tables (the runtime linker's
-        // resolution surface — grafted packages direct-call static bodies by
-        // their link-boundary spellings) but are absent from every
-        // name-resolution map (`resolved_function_names` excludes them).
         // Interface bodies are absent from the image-symbol tables. A runtime
         // compilation still consumes static impl methods — their SIGNATURES
         // (possibly subtype refinements of the interface's) through the

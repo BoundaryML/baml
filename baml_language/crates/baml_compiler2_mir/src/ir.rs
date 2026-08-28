@@ -207,7 +207,11 @@ pub struct MirFunction<'db> {
 // Safety: replacement-only `Update` (always report changed). MIR feeds the
 // untracked emit stage, so backdating buys nothing, and the tree has no
 // `PartialEq` to compare with; unconditionally replacing the old value is
-// always sound under the `Update` contract.
+// always sound under the `Update` contract ONLY under this premise:
+// `MirFunction` OWNS all of its data — its sole `'db` members are Copy
+// interned ids (no `&'db` references, no drop glue that could observe the
+// old revision). Adding any `&'db` field would make the blind replacement
+// UB; re-derive that before extending the struct.
 #[expect(unsafe_code)]
 unsafe impl salsa::Update for MirFunction<'_> {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
@@ -1141,9 +1145,8 @@ pub enum ItemRef<'db> {
     },
     /// An interface-machinery BODY: an impl block's provided method or an
     /// interface's default body. An interface body is not itself a logical
-    /// item — its
-    /// one identity is its DECLARATION, carried as the opaque
-    /// session-scoped [`BodyDeclId`]; `display_owner` exists only so
+    /// item — its one identity is its DECLARATION, carried as the
+    /// [`InterfaceBodyRef::decl`] location; `display_owner` exists only so
     /// bytecode and trace spellings keep their `<(target as iface)>` /
     /// `Iface` form, and is never a key.
     InterfaceBody(Box<InterfaceBodyRef<'db>>),
@@ -1152,8 +1155,11 @@ pub enum ItemRef<'db> {
 /// A reference to an interface-machinery body: the declaration — a body's
 /// one identity, carried as the `'db` location itself the way every other
 /// compiler layer carries declarations — plus display-only spelling parts.
-/// Never serialized: at decompose, bodies are re-expressed through the rule
-/// / interface tables that reference them by object index.
+/// The ref itself is never serialized — rule / interface tables reference
+/// bodies by object index — but decompose DOES render the spelling as the
+/// unit export/import key (the U1-sanctioned link-internal string lane), so
+/// the spelling must be unique; coherence and the canonical
+/// `<(target as iface)>` rendering guarantee it, and decompose enforces it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterfaceBodyRef<'db> {
     pub package: Name,

@@ -108,6 +108,12 @@ pub struct ImplLoc<'db> {
 /// `L` is the kind's `*Loc` type (salsa's macros take no generics, so the
 /// nine loc structs stay concrete and this enum is generic over them); `E`
 /// is the kind's extern-loc type, defined where the mounted rows live.
+///
+/// EQUALITY is provenance-inclusive: `Live(x) != Spliced(x)` even though
+/// both name the same declaration. That is deliberate for registries (the
+/// variant IS part of the placement law), but it makes a `DeclRef`-keyed
+/// map wrong for "same declaration" questions — key those on
+/// [`Self::source_loc`] instead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DeclRef<L, E> {
     /// Source available: type-checked and compiled by this database.

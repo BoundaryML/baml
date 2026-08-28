@@ -4455,14 +4455,17 @@ impl BexVm {
     /// or `None` if no such function exists in the global pool.
     ///
     /// This is O(globals) and intended for use in native methods that need to
-    /// dispatch to a dynamically resolved method (e.g. `Map.to_json`). Not
-    /// suitable for hot paths; callers that need repeated lookups should cache
-    /// the result.
+    /// dispatch to a dynamically resolved FREE stdlib function (e.g.
+    /// `baml.json.to`). Not suitable for hot paths; callers that need repeated
+    /// lookups should cache the result. Interface-machinery bodies are
+    /// excluded: a body's `name` is display-only (its identity is the
+    /// implements relation), so this scan must never become a name→body
+    /// channel.
     pub fn find_function_by_name(&self, name: &str) -> Option<HeapPtr> {
         for v in self.globals.as_slice(self.proof()) {
             if let Some(ptr) = v.as_object_ptr() {
                 if let Object::Function(f) = self.get_object(ptr) {
-                    if f.name == name {
+                    if f.name == name && !f.is_interface_body {
                         return Some(ptr);
                     }
                 }
@@ -8454,10 +8457,11 @@ impl BexVm {
                         .ok_or(VmInternalError::NotEnoughItemsOnStack(nargs))?;
                     // `Self` is the receiver's runtime concrete type; coherence makes
                     // `(Self, iface<args>)` resolve to at most one impl. Off that rule
-                    // the method is `rule.methods[name]`. `nargs` equals the method's
-                    // arity — the interface fixes the parameter count, so every impl
-                    // agrees. The rule borrows `self`; scope it so the borrow ends
-                    // before the `&mut self` call below.
+                    // the method resolves through `rule_method_impl` (the provided
+                    // row, or the interface's default on a miss). `nargs` equals the
+                    // method's arity — the interface fixes the parameter count, so
+                    // every impl agrees. The rule borrows `self`; scope it so the
+                    // borrow ends before the `&mut self` call below.
                     let receiver = self.stack[StackIndex::from_raw(args_offset)];
                     let cache_key = if function.runtime_package.is_null() {
                         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
@@ -8545,10 +8549,11 @@ impl BexVm {
                         // row or adopted interface default) — invoke it directly.
                         let callee = method.fqn;
                         // Seed the callee frame: the impl's frame realized against
-                        // its bound args (the impl's own generics for an impl method,
-                        // or the interface's args + associated types for an inherited
-                        // default), then the method-level type args — matching the
-                        // callee's De Bruijn layout `[owner… ++ method…]`.
+                        // its bound args (the impl's own generics for a provided
+                        // method, or `[Self, interface args..]` for an adopted
+                        // default — associated types are never frame slots), then
+                        // the method-level type args — matching the callee's
+                        // De Bruijn layout `[owner… ++ method…]`.
                         let frame = resolver.realize_frame(&method.frame, &bound_args)?;
                         let cacheable = rule.is_static();
                         if cacheable && let Some(cache_key) = cache_key {
