@@ -654,7 +654,7 @@ def step_inputs(step: str) -> dict[str, str]:
 
 
 class WorkflowGraphTests(unittest.TestCase):
-    def test_release_slack_notifications_cover_failures_and_canary_success(self) -> None:
+    def test_release_slack_notifications_cover_failures_and_successes(self) -> None:
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         notifier = RELEASE_NOTIFIER.read_text(encoding="utf-8")
         notify_slack = job_block(workflow, "notify-slack")
@@ -677,10 +677,7 @@ class WorkflowGraphTests(unittest.TestCase):
             "RELEASE_SUCCEEDED: ${{ needs.publish-pkg-channel.result == 'success' }}",
             notify_step,
         )
-        self.assertIn(
-            'if release_succeeded and not failures and channel != "canary"',
-            notifier,
-        )
+        self.assertNotIn("skipping Slack notification", notifier)
         self.assertIn(
             'SUCCESSFUL_JOB_CONCLUSIONS = {"success", "skipped"}',
             notifier,

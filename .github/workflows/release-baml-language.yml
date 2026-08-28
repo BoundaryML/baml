@@ -2341,7 +2341,7 @@ jobs:
       - publish-pkg-channel
       - smoke-swift-release
     # Use the dispatch input so a failure in plan itself is still reportable.
-    # This job must run after failed dependencies. Failures and successful canary releases notify Slack; successful nightlies stay silent.
+    # This job must run after failed dependencies. Every production release result notifies Slack, including successful nightlies.
     if: ${{ always() && inputs.dry_run == false && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     environment: boundary-tools-dev
