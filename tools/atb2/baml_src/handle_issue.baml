@@ -40,30 +40,35 @@ function handle_issue(
         return issue;
     };
     let difficulty = issue.difficulty ?? baml.sys.panic("handle_issue: gauge_issue first (" + issue.id + ")");
-
-    // 0. Is it still a bug on this toolchain? (in-process repro check, no sandbox)
+    //# still broken? 
     if (!still_broken(issue)) {
         log.info({ "issue": issue.id, "kind": "already_fixed", "toolchain": toolchain_version() });
         return issue;
     };
-
+    //# ensure cache
     ensure_cache();
+    //# create sandbox
     let sb = open_sandbox(issue, update);
     let keep_branch = false;
     defer {
+        //#close sandvix
         close_sandbox(sb, keep_branch);
     }
+    //# get budget
     let budget = time_budget_s(difficulty);
     let started = baml.time.Instant.now();
-
-    // Hard: suggested fix + design doc, read-only.
+    //#if the difficulty is hard
     if (difficulty == Difficulty.Hard) {
+        //# run agent design
         let d = run_agent_design(sb, issue, budget);
         if (d == null) {
+            //# if the design is null, write the stopped outcome
             write_outcome(sb, stopped_outcome(sb, started));
             return issue;
         };
+        //# render the design doc
         let doc = render_design_doc(d ?? baml.sys.panic("unreachable"));
+        //# write final outcome
         write_outcome(
             sb,
             HandleOutcome {
@@ -80,20 +85,27 @@ function handle_issue(
         );
         return with_design_doc(issue, doc);
     };
-
-    // Easy / Medium: fix + tests + gate + PR.
+    //#if the difficulty is easy or medium
+    //# get the latest warm build
     warm_build(sb);
+    //# run the agent fix
     let report = run_agent_fix(sb, issue, budget);
     if (report == null) {
         keep_branch = mode == HandleMode.Live;
         write_outcome(sb, stopped_outcome(sb, started));
         return issue;
     };
+    //# if the report is null, write the stopped outcome
     let fix = report ?? baml.sys.panic("unreachable");
+    //# checkpoint the uncommitted changes
     checkpoint_uncommitted(sb);
+    //# run the gate
     let gate = run_gate(sb.worktree);
+    //# read the turns
     let turns = read_turns(sb);
+    //# get the seconds
     let seconds = elapsed_s(started);
+    //# if the gate failed, write the gate failed outcome
     if (!gate.ok) {
         keep_branch = mode == HandleMode.Live;
         write_outcome(
@@ -112,7 +124,7 @@ function handle_issue(
         );
         return issue;
     };
-
+    //# create the draft PR
     let draft = PrDraft { title: pr_title(issue), body: pr_body(issue, fix, gate, turns, seconds) };
     baml.fs.write(sb.run_dir + "/pr_body.md", draft.body);
     if (mode == HandleMode.DryRun) {
@@ -132,8 +144,9 @@ function handle_issue(
         );
         return issue;
     };
-
+    //# push and open the PR
     let pr = push_and_open_pr(sb, draft);
+    //# write the final outcome
     write_outcome(
         sb,
         HandleOutcome {
@@ -149,6 +162,7 @@ function handle_issue(
         },
     );
     log.info({ "issue": issue.id, "pr": pr, "turns": turns, "seconds": seconds });
+    //# with the status
     with_status(issue, InProgress { state: "in_progress", pr: pr })
 }
 
@@ -588,9 +602,13 @@ class Sandbox {
 /// One cached clone, fetched each run. Safe to call from parallel tests:
 /// the fetch is retried when another child holds the index lock.
 function ensure_cache() -> null {
+    //# get the repo
     let repo = cache_repo();
+    //# mkdir the atb2 home
     baml.fs.mkdir(atb2_home(), baml.fs.MkdirOptions { recursive: true });
+    //# mkdir the target dir
     baml.fs.mkdir(target_dir(), baml.fs.MkdirOptions { recursive: true });
+    //# if the repo does not exist
     if (!baml.fs.exists(repo + "/.git")) {
         let clone = run(
             Cmd {
@@ -603,19 +621,25 @@ function ensure_cache() -> null {
         if (!clone.ok) {
             baml.sys.panic("clone failed: " + tail(clone.stderr, 5));
         };
+        //# config the git extensions
         git(repo, ["config", "extensions.worktreeConfig", "true"]);
     };
     let tries = 0;
+    //# while the tries are less than 3
     while (tries < 3) {
         tries += 1;
+        //# fetch the origin canary
         let f = git(repo, ["fetch", "--prune", "origin", "canary"]);
+        //# if the fetch is ok, return null
         if (f.ok) {
             return null;
         };
+        //# sleep for 5 seconds
         baml.sys.sleep(baml.time.Duration.from_seconds(5)) catch (_) {
             _ => null,
         };
     }
+    //# panic if the git fetch failed three times
     baml.sys.panic("git fetch failed three times")
 }
 
@@ -628,28 +652,40 @@ function branch_exists_on_origin(branch: string) -> bool {
 }
 
 function open_sandbox(issue: Issue, update: bool) -> Sandbox {
+    //# get the repo
     let repo = cache_repo();
+    //# get the branch
     let branch = branch_for(issue);
+    //# get the worktree
     let wt = worktree_for(branch);
+    //# get the run dir
     let rd = run_dir_for(branch);
-
-    // a crashed earlier run may have left the worktree registered
+    //# if the worktree exists
     if (baml.fs.exists(wt)) {
+        //# remove the worktree
         git(repo, ["worktree", "remove", "--force", wt]);
+        //# if the worktree still exists, remove the dir all
         if (baml.fs.exists(wt)) {
             baml.fs.remove_dir_all(wt);
         };
     };
+    //# prune the worktree
     git(repo, ["worktree", "prune"]);
+    //# remove the run dir
     baml.fs.remove_dir_all(rd);
     baml.fs.mkdir(rd, baml.fs.MkdirOptions { recursive: true });
+    //# mkdir the worktrees dir
     baml.fs.mkdir(atb2_home() + "/worktrees", baml.fs.MkdirOptions { recursive: true });
-
+    //# set reused to false
     let reused = false;
+    //# if the branch exists locally and update is true
     let add = if (branch_exists_locally(branch) && update) {
+        //# set reused to true
         reused = true;
+        //# add the worktree
         git(repo, ["worktree", "add", wt, branch])
     } else {
+        //# if the branch exists locally
         if (branch_exists_locally(branch)) {
             git(repo, ["branch", "-D", branch]);
         };
@@ -661,13 +697,13 @@ function open_sandbox(issue: Issue, update: bool) -> Sandbox {
             git(repo, ["worktree", "add", "-b", branch, wt, "origin/canary"])
         }
     };
+    //# if the add is not ok, panic
     if (!add.ok) {
         baml.sys.panic("worktree add failed: " + tail(add.stderr, 5));
     };
-
-    // the agent can run git, but it cannot push: only push_and_open_pr
-    // overrides this, and only in Live mode after the gate passed
+    //# config the worktree
     git(wt, ["config", "--worktree", "remote.origin.pushurl", "no_push://atb2"]);
+    //# config the user name
     git(wt, ["config", "--worktree", "user.name", "atb2"]);
     git(wt, ["config", "--worktree", "user.email", "atb2@boundaryml.com"]);
 
