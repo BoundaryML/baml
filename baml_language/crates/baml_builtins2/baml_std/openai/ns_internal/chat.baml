@@ -1627,7 +1627,8 @@ function _chat_stream_failure(provider: string, detail: string) -> ai.errors.Fai
             }
         }
     }
-    ai.errors.NetworkFailure { status_code: null,
+    ai.errors.NetworkFailure {
+        status_code: null,
         provider: provider,
         detail: `transport failed before a response arrived: ${detail}`,
         raw_body: null,
@@ -1694,11 +1695,7 @@ function chat_invoke_stream(
         } else {
             null
         },
-        http_response: ai.events.HttpResponse {
-            status: sse.status_code,
-            headers: sse.headers,
-            body: null,
-        },
+        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
         usage: null,
         selected: true,
         sse_responses: if (capture_wire) {

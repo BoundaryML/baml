@@ -453,11 +453,7 @@ function vertex_invoke_stream(
         } else {
             null
         },
-        http_response: ai.events.HttpResponse {
-            status: sse.status_code,
-            headers: sse.headers,
-            body: null,
-        },
+        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
         usage: null,
         selected: true,
         sse_responses: if (c.capture_wire) {

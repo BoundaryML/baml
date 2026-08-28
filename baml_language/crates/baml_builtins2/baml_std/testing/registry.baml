@@ -222,7 +222,11 @@ class TestRegistry {
         for (let ts in self.collector.testsets) {
             if (ts.name == name) {
                 let pool = root.test_pool(0);
-                return root.run_testset(root.testset_children(self.expand_testset_registry(ts), pool), ts.runner, pool);
+                return root.run_testset(
+                    root.testset_children(self.expand_testset_registry(ts), pool),
+                    ts.runner,
+                    pool,
+                );
             }
         }
         for (let k in self.expansions.keys()) {
@@ -347,7 +351,11 @@ function testset_children(registry: TestRegistry, pool: TestPool) -> TestSetChil
     children
 }
 
-function testset_children_selected(registry: TestRegistry, names: string[], pool: TestPool) -> TestSetChild[] {
+function testset_children_selected(
+    registry: TestRegistry,
+    names: string[],
+    pool: TestPool,
+) -> TestSetChild[] {
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
         if (root._name_selected(t.name, names)) {
@@ -381,12 +389,20 @@ function test_child(name: string, body: TestBody, runner: TestRunner?) -> TestSe
     }
 }
 
-function testset_child(registry: TestRegistry, ts: TestSetRegistration, pool: TestPool) -> TestSetChild {
+function testset_child(
+    registry: TestRegistry,
+    ts: TestSetRegistration,
+    pool: TestPool,
+) -> TestSetChild {
     TestSetChild {
         name: ts.name,
         is_container: true,
         run: () -> ChildReport {
-            root.run_testset(root.testset_children(registry.expand_testset_registry(ts), pool), ts.runner, pool) catch_all (e) {
+            root.run_testset(
+                root.testset_children(registry.expand_testset_registry(ts), pool),
+                ts.runner,
+                pool,
+            ) catch_all (e) {
                 baml.panics.Panic => root.expansion_error_report(ts.name),
                 _ => root.expansion_error_report(ts.name),
             }
@@ -515,7 +531,9 @@ class TestPool {
             // dispatchers poll, and there is at most one dispatcher per
             // currently-expanding testset, so the wakeup load is bounded by
             // testset nesting, not by test count.
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(10)) catch (e) { _ => null };
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10)) catch (e) {
+                _ => null
+            };
         }
     }
 
@@ -530,7 +548,11 @@ class TestPool {
 // fan-out from creating thousands of live VM threads while staying above any
 // real machine's core count (the CLI always passes an explicit budget).
 function test_pool(max_concurrency: int) -> TestPool {
-    let limit = if (max_concurrency > 0) { max_concurrency } else { 64 };
+    let limit = if (max_concurrency > 0) {
+        max_concurrency
+    } else {
+        64
+    };
     let tokens: int[] = [];
     let i = 0;
     while (i < limit) {
@@ -540,7 +562,10 @@ function test_pool(max_concurrency: int) -> TestPool {
     TestPool { tokens: tokens }
 }
 
-function run_children_parallel(children: TestSetChild[], pool: TestPool) -> TestSetReport throws never {
+function run_children_parallel(
+    children: TestSetChild[],
+    pool: TestPool,
+) -> TestSetReport throws never {
     let futures: baml.future.Future<NamedChildReport, never>[] = [];
     for (let child in children) {
         if (child.is_container) {
@@ -578,8 +603,16 @@ function run_children_parallel(children: TestSetChild[], pool: TestPool) -> Test
 function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
     let base_run: TestReportThunk = () -> TestReport {
         let start = baml.time.Instant.now();
-        let timeout_ms = match (baml.env.get("BAML_TEST_TIMEOUT_MS") catch (e) { _ => null }) {
-            let t: string => int.parse(t) catch (e) { _ => 300000 },
+        let timeout_ms = match (
+            baml.env.get("BAML_TEST_TIMEOUT_MS") catch (e) {
+                _ => null
+            }
+        ) {
+            let t: string => {
+                int.parse(t) catch (e) {
+                    _ => 300000
+                }
+            },
             _ => 300000,
         };
         let work: baml.future.Future<RunReport, never> = spawn {
@@ -602,18 +635,28 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
             }
         };
         let timer: baml.future.Future<RunReport, never> = spawn {
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms)) catch (e) { _ => null };
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms)) catch (e) {
+                _ => null
+            };
             RunReport {
                 outcome: "fail",
                 duration_ms: 0,
-                message: "test timed out after " + timeout_ms.to_string() + "ms (override with BAML_TEST_TIMEOUT_MS)",
+                message: "test timed out after "
+                    + timeout_ms.to_string()
+                    + "ms (override with BAML_TEST_TIMEOUT_MS)",
             }
         };
         // Race the body against the deadline; race cancels the loser on settle
         // (BEP-034), so a timed-out body is actively cancelled and a finished
         // test's timer does not linger.
         let result = (await baml.future.race([work, timer])) catch_all (e) {
-            _ => RunReport { outcome: "fail", duration_ms: 0, message: "test task failed unexpectedly" }
+            _ => {
+                RunReport {
+                    outcome: "fail",
+                    duration_ms: 0,
+                    message: "test task failed unexpectedly",
+                }
+            }
         };
         // `duration_ms` is an `int`; see the note in expand_testset_registry for
         // why narrowing the bigint millisecond count cannot fail here.
@@ -639,13 +682,17 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
                 let wrapped: TestReportThunk = r(base_run);
                 wrapped()
             } catch_all (e, ctx) {
-                _ => TestReport {
-                    outcome: "fail",
-                    runs: [RunReport {
+                _ => {
+                    TestReport {
                         outcome: "fail",
-                        duration_ms: 0,
-                        message: "test runner middleware failed: " + ctx.to_string(),
-                    }],
+                        runs: [
+                            RunReport {
+                                outcome: "fail",
+                                duration_ms: 0,
+                                message: "test runner middleware failed: " + ctx.to_string(),
+                            },
+                        ],
+                    }
                 }
             }
         },
@@ -657,7 +704,11 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
 // A custom `TestSetRunner` receives the children as a plain closure and runs
 // them however it likes, outside the pool's budget — the built-in runners are
 // sequential (inherently capped) or take a local fallback pool (`PassRate`).
-function run_testset(children: TestSetChild[], runner: TestSetRunner?, pool: TestPool) -> TestSetReport {
+function run_testset(
+    children: TestSetChild[],
+    runner: TestSetRunner?,
+    pool: TestPool,
+) -> TestSetReport {
     match (runner) {
         null => root.run_children_parallel(children, pool),
         let r: TestSetRunner => r(children),

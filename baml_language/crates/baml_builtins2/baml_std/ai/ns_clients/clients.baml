@@ -125,11 +125,7 @@ function _failed_leg_call(client_name: string?, f: root.errors.Failure) -> root.
     root.events.LLMCall {
         client_name: client_name ?? provider,
         provider: provider,
-        timing: root.events.Timing {
-            start_time_utc_ms: null,
-            duration_ms: null,
-            ttft_ms: null,
-        },
+        timing: root.events.Timing { start_time_utc_ms: null, duration_ms: null, ttft_ms: null },
         http_request: null,
         http_response: match (status) {
             let s: int => root.events.HttpResponse { status: s, headers: {}, body: raw },
@@ -613,8 +609,7 @@ class StreamRelay {
                     self.pending_text = batch;
                     self.pending_cursor = 1;
                     root.stream.TextDelta {
-                        text: batch.at(0)
-                            ?? baml.sys.panic("StreamRelay received an empty batch"),
+                        text: batch.at(0) ?? baml.sys.panic("StreamRelay received an empty batch"),
                     }
                 },
                 let done: root.stream.Done => {

@@ -83,7 +83,7 @@ function assemble_llm_prompt(parts: string[], values: unknown[]) -> root.Prompt 
     if (needs_system) {
         // The reserved metadata key marks this role as assembler-inserted; the
         // VM strips it and skips legacy edge-trimming for the message.
-        let system = root.Role { name: "system", metadata: {"__baml_synthetic_role": "1"} };
+        let system = root.Role { name: "system", metadata: { "__baml_synthetic_role": "1" } };
         let llm_parts: string[] = [""];
         for (let part in parts) {
             llm_parts.push(part);

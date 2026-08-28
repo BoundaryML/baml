@@ -145,7 +145,8 @@ function _wrap_into_day(total_ns: bigint) -> int throws never {
     {
         wrapped.to_int()
     } catch (e) {
-        root.errors.InvalidArgument => baml.sys
-            .panic("unreachable: nanoseconds wrapped into [0, 24h) exceed int range")
+        root.errors.InvalidArgument => {
+            baml.sys.panic("unreachable: nanoseconds wrapped into [0, 24h) exceed int range")
+        }
     }
 }

@@ -102,23 +102,25 @@ function tool_protocol(tb: ai.tools.Toolbox) -> string {
             `{"name": "${t.name}", "description": "${t.description}", "parameters": ${baml.json.stringify(baml.json.to_json(t.input_schema))}}`,
         );
     }
-    `\n\nThe output contract is one object with an outcome field. Set outcome
-to either the final result or a tool request. The tools in the catalog
-below are NOT installed in your environment — never attempt to invoke
-them directly; any such attempt fails. The ONLY way to run one is to
-finish your reply with outcome set to
-{"calls": [{"id": "<unique id>", "name": "<exact tool name>", "args": {...}}]};
-the caller executes the calls and re-invokes you with their results in
-the conversation. If the Conversation so far section shows no tool
-results yet, your outcome MUST be a calls request — never invent data a
-tool can provide. After tool results appear in the conversation, use
-them; the Conversation so far section is authoritative. A tool result
-with is_error=false means that call already ran — never repeat the same
-successful tool call. Request only tools that are still necessary, or
-return the final result.
+    `
+        \n\nThe output contract is one object with an outcome field. Set outcome
+        to either the final result or a tool request. The tools in the catalog
+        below are NOT installed in your environment — never attempt to invoke
+        them directly; any such attempt fails. The ONLY way to run one is to
+        finish your reply with outcome set to
+        {"calls": [{"id": "<unique id>", "name": "<exact tool name>", "args": {...}}]};
+        the caller executes the calls and re-invokes you with their results in
+        the conversation. If the Conversation so far section shows no tool
+        results yet, your outcome MUST be a calls request — never invent data a
+        tool can provide. After tool results appear in the conversation, use
+        them; the Conversation so far section is authoritative. A tool result
+        with is_error=false means that call already ran — never repeat the same
+        successful tool call. Request only tools that are still necessary, or
+        return the final result.
 
-Application tool catalog (request via outcome.calls only):
-[${catalog.join(", ")}]`
+        Application tool catalog (request via outcome.calls only):
+        [${catalog.join(", ")}]
+    `
 }
 
 // Consume the live JSONL stream: log every event as it arrives, return the

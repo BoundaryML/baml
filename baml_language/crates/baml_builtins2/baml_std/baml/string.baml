@@ -17,8 +17,8 @@ class String {
     ///
     function from<T>(value: T) -> string throws never {
         match (value) {
-            baml.ToString => value.to_string()
-            _ => root._to_string_default(value)
+            baml.ToString => value.to_string(),
+            _ => root._to_string_default(value),
         }
     }
 

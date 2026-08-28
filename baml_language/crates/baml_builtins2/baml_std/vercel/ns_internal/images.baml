@@ -228,8 +228,7 @@ function _gw_images_trim_slash(url: string) -> string {
 
 // Percent-escape the characters that would otherwise change a URL's structure.
 function _gw_images_escape_query(raw: string) -> string {
-    let escaped = raw
-        .replace_all("%", "%25")
+    let escaped = raw.replace_all("%", "%25")
         .replace_all(" ", "%20")
         .replace_all("&", "%26")
         .replace_all("+", "%2B")
@@ -243,10 +242,9 @@ function _gw_images_with_query(url: string, params: map<string, string>?) -> str
     let pairs: string[] = [];
     if let configured: map<string, string> = params {
         for (let key in configured.keys()) {
-            pairs
-                .push(
-                    `${_gw_images_escape_query(key)}=${_gw_images_escape_query(configured.get(key) ?? "")}`,
-                );
+            pairs.push(
+                `${_gw_images_escape_query(key)}=${_gw_images_escape_query(configured.get(key) ?? "")}`,
+            );
         }
     }
     if (pairs.length() == 0) {
@@ -446,7 +444,12 @@ function gateway_images_parse(
     } else {
         null
     };
-    ai.ModelTurn { calls: [], content: content, stop_reason: ai.content.StopReason.Complete, usage: usage }
+    ai.ModelTurn {
+        calls: [],
+        content: content,
+        stop_reason: ai.content.StopReason.Complete,
+        usage: usage,
+    }
 }
 
 // The one internal entry point: render, send, normalize — one model turn. The

@@ -61,18 +61,21 @@ implement BitAnd<int> for int {
         $rust_function
     }
 }
+
 implement BitOr<int> for int {
     type Output = int;
     function bit_or(self, rhs: int) -> int throws never {
         $rust_function
     }
 }
+
 implement BitXor<int> for int {
     type Output = int;
     function bit_xor(self, rhs: int) -> int throws never {
         $rust_function
     }
 }
+
 implement ShiftLeft<int> for int {
     type Output = int;
     //baml:fallible
@@ -80,6 +83,7 @@ implement ShiftLeft<int> for int {
         $rust_function
     }
 }
+
 implement ShiftRight<int> for int {
     type Output = int;
     //baml:fallible
@@ -94,18 +98,21 @@ implement BitAnd<bigint> for int {
         $rust_function
     }
 }
+
 implement BitOr<bigint> for int {
     type Output = bigint;
     function bit_or(self, rhs: bigint) -> bigint throws never {
         $rust_function
     }
 }
+
 implement BitXor<bigint> for int {
     type Output = bigint;
     function bit_xor(self, rhs: bigint) -> bigint throws never {
         $rust_function
     }
 }
+
 implement ShiftLeft<bigint> for int {
     type Output = bigint;
     //baml:fallible
@@ -113,6 +120,7 @@ implement ShiftLeft<bigint> for int {
         $rust_function
     }
 }
+
 implement ShiftRight<bigint> for int {
     type Output = bigint;
     //baml:fallible
@@ -128,18 +136,21 @@ implement BitAnd<int> for bigint {
         $rust_function
     }
 }
+
 implement BitOr<int> for bigint {
     type Output = bigint;
     function bit_or(self, rhs: int) -> bigint throws never {
         $rust_function
     }
 }
+
 implement BitXor<int> for bigint {
     type Output = bigint;
     function bit_xor(self, rhs: int) -> bigint throws never {
         $rust_function
     }
 }
+
 implement ShiftLeft<int> for bigint {
     type Output = bigint;
     //baml:fallible
@@ -147,6 +158,7 @@ implement ShiftLeft<int> for bigint {
         $rust_function
     }
 }
+
 implement ShiftRight<int> for bigint {
     type Output = bigint;
     //baml:fallible
@@ -161,18 +173,21 @@ implement BitAnd<bigint> for bigint {
         $rust_function
     }
 }
+
 implement BitOr<bigint> for bigint {
     type Output = bigint;
     function bit_or(self, rhs: bigint) -> bigint throws never {
         $rust_function
     }
 }
+
 implement BitXor<bigint> for bigint {
     type Output = bigint;
     function bit_xor(self, rhs: bigint) -> bigint throws never {
         $rust_function
     }
 }
+
 implement ShiftLeft<bigint> for bigint {
     type Output = bigint;
     //baml:fallible
@@ -180,6 +195,7 @@ implement ShiftLeft<bigint> for bigint {
         $rust_function
     }
 }
+
 implement ShiftRight<bigint> for bigint {
     type Output = bigint;
     //baml:fallible

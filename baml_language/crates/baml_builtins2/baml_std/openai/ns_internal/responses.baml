@@ -831,11 +831,21 @@ function _openai_error_failure(err: OaErrorBody) -> ai.errors.Failure {
     let detail = err.message ?? "the OpenAI Responses request failed";
     let raw = baml.json.stringify(baml.json.to_json(err));
     if (code.includes("rate_limit") || code.includes("quota") || code.includes("credit_balance")) {
-        ai.errors.RateLimited { status_code: null, provider: "openai", retry_after_ms: null, raw_body: raw }
+        ai.errors.RateLimited {
+            status_code: null,
+            provider: "openai",
+            retry_after_ms: null,
+            raw_body: raw,
+        }
     } else if (code.includes("content_filter") || code.includes("moderation") || code.includes("refusal")) {
         ai.errors.Refused { provider: "openai", reason: detail, raw_body: raw }
     } else if (_openai_transient_code(code)) {
-        ai.errors.NetworkFailure { status_code: null, provider: "openai", detail: detail, raw_body: raw }
+        ai.errors.NetworkFailure {
+            status_code: null,
+            provider: "openai",
+            detail: detail,
+            raw_body: raw,
+        }
     } else {
         ai.errors.InvalidRequest {
             provider: "openai",
@@ -1187,7 +1197,8 @@ function _openai_sse_failure(error: unknown) -> ai.errors.Failure {
             };
         };
     };
-    ai.errors.NetworkFailure { status_code: null,
+    ai.errors.NetworkFailure {
+        status_code: null,
         provider: "openai",
         detail: `transport failed before a response arrived: ${text}`,
         raw_body: null,
@@ -1248,11 +1259,7 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
         } else {
             null
         },
-        http_response: ai.events.HttpResponse {
-            status: sse.status_code,
-            headers: sse.headers,
-            body: null,
-        },
+        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
         usage: null,
         selected: true,
         sse_responses: if (c.capture_wire) {

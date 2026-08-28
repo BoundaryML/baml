@@ -44,7 +44,6 @@ class FinalProduced {
     value_json: string,
 }
 
-
 // ---------------------------------------------------------------------------
 // Wire records (v0-Collector-shaped). One LLMCall per HTTP exchange,
 // INCLUDING failed retry/fallback legs (selected: false).
@@ -105,12 +104,12 @@ type Event = RunStarted
 // A null listener stays null; callers `if let` and skip emission entirely.
 // `E` accepts fallible listeners (host callables included); the wrapper
 // swallows whatever they throw, hence the `throws never` on the returned type.
-function guard<E>(
-    listener: ((Event) -> void throws E)?,
-) -> ((Event) -> void throws never)? {
+function guard<E>(listener: ((Event) -> void throws E)?) -> ((Event) -> void throws never)? {
     if let cb: (Event) -> void throws E = listener {
         (e: Event) -> void {
-            cb(e) catch_all (err) { _ => {} }
+            cb(e) catch_all (err) {
+                _ => {}
+            }
         }
     } else {
         null

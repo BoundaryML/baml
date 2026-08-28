@@ -78,16 +78,15 @@ class Prompt {
 function prompt(
     // No `throws` clause: the callback's effect is inferred per call site
     // (rule 5); whatever a template expression throws is wrapped below.
-    body: (
-        role: (string) -> root.Role throws never,
-        ctx: root.Context,
-    ) -> baml.TaggedString,
+    body: (role: (string) -> root.Role throws never, ctx: root.Context) -> baml.TaggedString,
 ) -> (root.Context) -> Prompt throws root.errors.PromptRenderError {
     let render = (ctx: root.Context) -> {
         let tagged = body(root.internal.make_role, ctx) catch_all (e) {
-            _ => throw root.errors.PromptRenderError {
+            _ => {
+                throw root.errors.PromptRenderError {
                 message: "prompt template rendering threw",
                 cause: e,
+            }
             }
         };
         root.internal.assemble_prompt(tagged.parts, tagged.values)
@@ -111,15 +110,14 @@ class FunctionSpec<Out> {
     // A supplied client overrides the spec's default; null uses the default.
     function build_request(self, override_client: Client? = null) -> baml.http.Request {
         let selected = override_client ?? self.default_client;
-        selected
-            .render(
-                ModelTurnInput {
-                    prompt: self.prompt_template,
-                    journal: Journal.new(self),
-                    toolbox: self.tools(),
-                    output_type: self.output_type(),
-                },
-            )
+        selected.render(
+            ModelTurnInput {
+                prompt: self.prompt_template,
+                journal: Journal.new(self),
+                toolbox: self.tools(),
+                output_type: self.output_type(),
+            },
+        )
     }
 
     function name(self) -> string {

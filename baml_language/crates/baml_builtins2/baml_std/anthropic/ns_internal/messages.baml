@@ -1026,10 +1026,16 @@ function _anth_stream_failure(error: AnthStreamError?, raw: string) -> ai.errors
     let detail = error?.message ?? kind;
     match (kind) {
         "rate_limit_error" => {
-            ai.errors.RateLimited { status_code: null, provider: "anthropic", retry_after_ms: null, raw_body: raw }
+            ai.errors.RateLimited {
+                status_code: null,
+                provider: "anthropic",
+                retry_after_ms: null,
+                raw_body: raw,
+            }
         },
         "overloaded_error" | "api_error" | "timeout_error" => {
-            ai.errors.NetworkFailure { status_code: null,
+            ai.errors.NetworkFailure {
+                status_code: null,
                 provider: "anthropic",
                 detail: `${kind}: ${detail}`,
                 raw_body: raw,
@@ -1226,7 +1232,8 @@ function _anthropic_sse_failure(message: string) -> ai.errors.Failure {
             }
         }
     }
-    ai.errors.NetworkFailure { status_code: null,
+    ai.errors.NetworkFailure {
+        status_code: null,
         provider: "anthropic",
         detail: `transport failed before a response arrived: ${message}`,
         raw_body: null,
@@ -1286,11 +1293,7 @@ function invoke_stream(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.
         } else {
             null
         },
-        http_response: ai.events.HttpResponse {
-            status: sse.status_code,
-            headers: sse.headers,
-            body: null,
-        },
+        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
         usage: null,
         selected: true,
         sse_responses: if (c.capture_wire) {

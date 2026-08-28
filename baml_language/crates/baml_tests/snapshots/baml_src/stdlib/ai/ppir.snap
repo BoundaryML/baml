@@ -1048,7 +1048,7 @@ function ai.output_type(self: ?) -> reflect.Type  [expr] {
   { let output_type = reflect.Type.of(); root.internal.validate_output_type(output_type) } output_type
 }
 function ai.prompt(body: (role: (string) -> root.Role throws never, ctx: root.Context) -> baml.TaggedString) -> (root.Context) -> ai.Prompt throws root.errors.PromptRenderError  [expr] {
-  { let render = (ctx: root.Context) -> { { let tagged = body(root.internal.make_role, ctx) catch_all (e) { _ => throw root.errors.PromptRenderError { message: "prompt template r...", cause: e } } } root.internal.assemble_prompt(tagged.parts, tagged.values) } } render
+  { let render = (ctx: root.Context) -> { { let tagged = body(root.internal.make_role, ctx) catch_all (e) { _ => { throw root.errors.PromptRenderError { message: "prompt template r...", cause: e } } } } root.internal.assemble_prompt(tagged.parts, tagged.values) } } render
 }
 function ai.prompt(self: ?) -> ai.Prompt  [expr] {
   {  } self.prompt_template(root.internal.build_output_format(self.output_type()))

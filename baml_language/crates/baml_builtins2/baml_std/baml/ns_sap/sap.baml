@@ -13,7 +13,10 @@ class ParseCache<TStream, TFinal> {
     /// Panics if schema-aligned parsing cannot model `t_stream`/`t_final`: the
     /// type arguments come from the caller's own `parse<T>`, so an unmodelable
     /// `T` is a program bug rather than a recoverable condition.
-    function new(t_stream: reflect.Type, t_final: reflect.Type) -> ParseCache<TStream, TFinal> throws never {
+    function new(
+        t_stream: reflect.Type,
+        t_final: reflect.Type,
+    ) -> ParseCache<TStream, TFinal> throws never {
         $rust_io_function
     }
 }

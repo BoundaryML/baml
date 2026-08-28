@@ -925,7 +925,12 @@ function google_parse(resp: GmResponse, seq: int, provider: string = "google") -
     } else {
         ai.content.StopReason.Complete
     };
-    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: _gm_usage(resp.usageMetadata) }
+    ai.ModelTurn {
+        calls: [],
+        content: content,
+        stop_reason: stop,
+        usage: _gm_usage(resp.usageMetadata),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -962,7 +967,8 @@ function _gm_sse_failure(provider: string, error: unknown) -> ai.errors.Failure 
             return ai.errors.classify_http(provider, status, body);
         }
     }
-    ai.errors.NetworkFailure { status_code: null,
+    ai.errors.NetworkFailure {
+        status_code: null,
         provider: provider,
         detail: `transport failed before a response arrived: ${text}`,
         raw_body: null,
@@ -1146,12 +1152,7 @@ function gemini_invoke(c: root.GoogleClient, input: ai.ModelTurnInput) -> ai.Mod
     // from it are stable across re-renders.
     let seq = input.journal.entries().length();
     let req = google_render(c, input);
-    let sent = ai.wire.send_as_with_wire<GmResponse>(
-        req,
-        "google",
-        c.id(),
-        capture_wire = c.capture_wire,
-    );
+    let sent = ai.wire.send_as_with_wire<GmResponse>(req, "google", c.id(), capture_wire = c.capture_wire);
     let turn = google_parse(sent.value, seq);
     ai.ModelTurn { ...turn, calls: [sent.call] }
 }
@@ -1198,11 +1199,7 @@ function gemini_invoke_stream(
         } else {
             null
         },
-        http_response: ai.events.HttpResponse {
-            status: sse.status_code,
-            headers: sse.headers,
-            body: null,
-        },
+        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
         usage: null,
         selected: true,
         sse_responses: if (c.capture_wire) {

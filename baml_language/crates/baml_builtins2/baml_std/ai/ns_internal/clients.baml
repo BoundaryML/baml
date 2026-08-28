@@ -18,7 +18,8 @@ function _shorthand_prefixes() -> string {
         "bedrock",
         "ai-gateway-images",
         "claude-code",
-    ].join(", ")
+    ]
+        .join(", ")
 }
 
 // !!! DRIFT HAZARD !!!

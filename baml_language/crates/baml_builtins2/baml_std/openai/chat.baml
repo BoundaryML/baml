@@ -95,37 +95,33 @@ class ChatClient {
     // endpoint. Only `stream_options` distinguishes first-party OpenAI from a
     // bare compatible server.
     function compat(self) -> root.internal.ChatCompat {
-        root.internal
-            .ChatCompat
-            .new(
-                provider = "openai-chat",
-                base_url = self.resolved_base_url(),
-                api_key_env = "OPENAI_API_KEY",
-                api_key_required = true,
-                send_stream_options = true,
-            )
+        root.internal.ChatCompat.new(
+            provider = "openai-chat",
+            base_url = self.resolved_base_url(),
+            api_key_env = "OPENAI_API_KEY",
+            api_key_required = true,
+            send_stream_options = true,
+        )
     }
 
     function params(self, preview: bool = false) -> root.internal.ChatParams {
-        root.internal
-            .ChatParams
-            .new(
-                model = self.model,
-                api_key = if (preview) {
-                    null
-                } else {
-                    self.resolved_api_key()
-                },
-                temperature = self.temperature,
-                max_tokens = self.max_tokens,
-                max_completion_tokens = self.max_completion_tokens,
-                top_p = self.top_p,
-                stop = self.stop,
-                seed = self.seed,
-                headers = self.headers,
-                query_params = self.query_params,
-                request_body = self.request_body,
-            )
+        root.internal.ChatParams.new(
+            model = self.model,
+            api_key = if (preview) {
+                null
+            } else {
+                self.resolved_api_key()
+            },
+            temperature = self.temperature,
+            max_tokens = self.max_tokens,
+            max_completion_tokens = self.max_completion_tokens,
+            top_p = self.top_p,
+            stop = self.stop,
+            seed = self.seed,
+            headers = self.headers,
+            query_params = self.query_params,
+            request_body = self.request_body,
+        )
     }
 
     implements ai.Client {

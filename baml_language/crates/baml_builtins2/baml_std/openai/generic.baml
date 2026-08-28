@@ -97,34 +97,30 @@ class GenericClient {
     }
 
     function compat(self) -> root.internal.ChatCompat {
-        root.internal
-            .ChatCompat
-            .new(
-                provider = "openai-generic",
-                base_url = self.resolved_base_url(),
-                collapse_text_content = true,
-            )
+        root.internal.ChatCompat.new(
+            provider = "openai-generic",
+            base_url = self.resolved_base_url(),
+            collapse_text_content = true,
+        )
     }
 
     function params(self, preview: bool = false) -> root.internal.ChatParams {
-        root.internal
-            .ChatParams
-            .new(
-                model = self.model,
-                api_key = if (preview) {
-                    null
-                } else {
-                    self.resolved_api_key()
-                },
-                temperature = self.temperature,
-                max_tokens = self.max_tokens,
-                top_p = self.top_p,
-                stop = self.stop,
-                seed = self.seed,
-                headers = self.headers,
-                query_params = self.query_params,
-                request_body = self.request_body,
-            )
+        root.internal.ChatParams.new(
+            model = self.model,
+            api_key = if (preview) {
+                null
+            } else {
+                self.resolved_api_key()
+            },
+            temperature = self.temperature,
+            max_tokens = self.max_tokens,
+            top_p = self.top_p,
+            stop = self.stop,
+            seed = self.seed,
+            headers = self.headers,
+            query_params = self.query_params,
+            request_body = self.request_body,
+        )
     }
 
     implements ai.Client {

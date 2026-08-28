@@ -244,7 +244,7 @@ class ToolInputSchema {
 
     implements baml.ToJson {
         function to_json(self) -> baml.json.json {
-            let out: map<string, baml.json.json> = {  };
+            let out: map<string, baml.json.json> = {};
             let _ = out.set("json", self.json_schema);
             out
         }
@@ -792,10 +792,7 @@ function _lower_journal(journal: ai.Journal, with_status: bool) -> Message[] {
             let user: ai.events.UserMessage => {
                 pending.push(
                     PendingMessage {
-                        message: Message {
-                            role: "user",
-                            content: [ContentBlock.of_text(user.content)],
-                        },
+                        message: Message { role: "user", content: [ContentBlock.of_text(user.content)] },
                         tool_results: false,
                     },
                 );
@@ -843,7 +840,7 @@ function _lower_journal(journal: ai.Journal, with_status: bool) -> Message[] {
 // `tool_choice` option -> the Converse union. "auto" and "any" are the two
 // documented modes; anything else names a specific tool.
 function _tool_choice(choice: string) -> ToolChoice {
-    let empty: map<string, unknown> = { };
+    let empty: map<string, unknown> = {};
     match (choice) {
         "auto" => ToolChoice { auto: empty, any: null, tool: null },
         "any" | "required" => ToolChoice { auto: null, any: empty, tool: null },
@@ -909,10 +906,12 @@ function _inference_config(client: root.BedrockClient) -> InferenceConfig? {
             }
         },
     };
-    if (client.max_tokens == null
-        && client.temperature == null
-        && client.top_p == null
-        && stops == null) {
+    if (
+        client.max_tokens == null
+            && client.temperature == null
+            && client.top_p == null
+            && stops == null
+    ) {
         return null;
     }
     InferenceConfig {
@@ -975,10 +974,7 @@ function converse_request(
     input: ai.ModelTurnInput,
     preview: bool = false,
 ) -> ConverseRequest {
-    let prompt = _lower_prompt(
-        input.prompt(ai.internal.build_output_format(input.output_type)),
-        preview = preview,
-    );
+    let prompt = _lower_prompt(input.prompt(ai.internal.build_output_format(input.output_type)), preview = preview);
     let system = prompt.system;
     if (client.cache_system_prompt && system.length() > 0) {
         system.push(SystemContentBlock.of_cache_point());
@@ -1087,7 +1083,7 @@ function _merge_headers(
     base: map<string, string>,
     extra: map<string, string>?,
 ) -> map<string, string> {
-    let out: map<string, string> = { };
+    let out: map<string, string> = {};
     for (let name in base.keys()) {
         let _ = out.set(name.to_lower_case(), base.get(name) ?? "");
     }
@@ -1111,9 +1107,7 @@ function _apply_query(url: string, params: map<string, string>?) -> string {
         let query: map<string, string> => {
             let pairs: string[] = [];
             for (let name in query.keys()) {
-                pairs.push(
-                    `${encode_path_label(name)}=${encode_path_label(query.get(name) ?? "")}`,
-                );
+                pairs.push(`${encode_path_label(name)}=${encode_path_label(query.get(name) ?? "")}`);
             }
             if (pairs.length() == 0) {
                 url
@@ -1140,10 +1134,7 @@ function build_request(
     baml.http.Request {
         method: "POST",
         url: _apply_query(converse_url(client, preview = preview), client.query_params),
-        headers: _merge_headers(
-            { "content-type": "application/json", "accept": "application/json" },
-            client.headers,
-        ),
+        headers: _merge_headers({ "content-type": "application/json", "accept": "application/json" }, client.headers),
         body: baml.json.stringify(merged),
     }
 }
@@ -1313,7 +1304,7 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
             content.push(ai.content.Text { text: text });
             null
         } else if let use: ResponseToolUse = block.toolUse {
-            let empty: map<string, unknown> = { };
+            let empty: map<string, unknown> = {};
             content.push(
                 ai.content.ToolUse {
                     id: use.toolUseId ?? "",

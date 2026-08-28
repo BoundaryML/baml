@@ -69,35 +69,31 @@ class OpenRouterClient {
     }
 
     function compat(self) -> root.internal.ChatCompat {
-        root.internal
-            .ChatCompat
-            .new(
-                provider = "openrouter",
-                base_url = self.resolved_base_url(),
-                api_key_env = "OPENROUTER_API_KEY",
-                api_key_required = true,
-            )
+        root.internal.ChatCompat.new(
+            provider = "openrouter",
+            base_url = self.resolved_base_url(),
+            api_key_env = "OPENROUTER_API_KEY",
+            api_key_required = true,
+        )
     }
 
     function params(self, preview: bool = false) -> root.internal.ChatParams {
-        root.internal
-            .ChatParams
-            .new(
-                model = self.model,
-                api_key = if (preview) {
-                    null
-                } else {
-                    self.resolved_api_key()
-                },
-                temperature = self.temperature,
-                max_tokens = self.max_tokens,
-                top_p = self.top_p,
-                stop = self.stop,
-                seed = self.seed,
-                headers = self.headers,
-                query_params = self.query_params,
-                request_body = self.request_body,
-            )
+        root.internal.ChatParams.new(
+            model = self.model,
+            api_key = if (preview) {
+                null
+            } else {
+                self.resolved_api_key()
+            },
+            temperature = self.temperature,
+            max_tokens = self.max_tokens,
+            top_p = self.top_p,
+            stop = self.stop,
+            seed = self.seed,
+            headers = self.headers,
+            query_params = self.query_params,
+            request_body = self.request_body,
+        )
     }
 
     implements ai.Client {
@@ -112,7 +108,12 @@ class OpenRouterClient {
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-            root.internal.chat_invoke(self.compat(), self.params(), input, capture_wire = self.capture_wire) catch_all (e) {
+            root.internal.chat_invoke(
+                self.compat(),
+                self.params(),
+                input,
+                capture_wire = self.capture_wire,
+            ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
         }
@@ -120,7 +121,12 @@ class OpenRouterClient {
 
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-            root.internal.chat_invoke_stream(self.compat(), self.params(), input, capture_wire = self.capture_wire) catch_all (e) {
+            root.internal.chat_invoke_stream(
+                self.compat(),
+                self.params(),
+                input,
+                capture_wire = self.capture_wire,
+            ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
         }

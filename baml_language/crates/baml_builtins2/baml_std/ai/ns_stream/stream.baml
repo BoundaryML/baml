@@ -560,10 +560,7 @@ function from_spec<TStream, TFinal>(
     let emit = root.events.guard(on_event);
     let settled = false;
     if let cb: (root.events.Event) -> void throws never = emit {
-        cb(root.events.RunStarted {
-            spec_name: spec.name(),
-            arguments: spec.arguments(),
-        });
+        cb(root.events.RunStarted { spec_name: spec.name(), arguments: spec.arguments() });
     }
     let turns = selected.invoke_stream(
         root.ModelTurnInput {
@@ -588,10 +585,12 @@ function from_spec<TStream, TFinal>(
                         settled = true;
                         if let cb: (root.events.Event) -> void throws never = emit {
                             let turn = turns.final_turn();
-                            cb(root.events.AssistantMessage {
-                                content: turn.content,
-                                client_id: provider,
-                            });
+                            cb(
+                                root.events.AssistantMessage {
+                                    content: turn.content,
+                                    client_id: provider,
+                                },
+                            );
                             if let u: root.events.Usage = turn.usage {
                                 cb(u);
                             }

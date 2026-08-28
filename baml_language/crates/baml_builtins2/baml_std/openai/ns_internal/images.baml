@@ -210,8 +210,7 @@ function _oai_images_trim_slash(url: string) -> string {
 // `baml.http` has no query-string builder; this covers what a header/query
 // passthrough realistically carries.
 function _oai_images_escape_query(raw: string) -> string {
-    let escaped = raw
-        .replace_all("%", "%25")
+    let escaped = raw.replace_all("%", "%25")
         .replace_all(" ", "%20")
         .replace_all("&", "%26")
         .replace_all("=", "%3D")
@@ -243,10 +242,7 @@ function _oai_images_with_query(url: string, params: map<string, string>?) -> st
 // Provider defaults, then the user's `headers` (lowercased, as the HTTP layer
 // stores them), then auth for a live request. A preview leaves user-supplied
 // auth intact without resolving or exposing the configured credential.
-function _oai_images_headers(
-    c: root.ImageClient,
-    preview: bool = false,
-) -> map<string, string> {
+function _oai_images_headers(c: root.ImageClient, preview: bool = false) -> map<string, string> {
     let headers: map<string, string> = { "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
         for (let name in extra.keys()) {
@@ -400,7 +396,8 @@ function images_parse(c: root.ImageClient, resp: OaImagesResponse) -> ai.ModelTu
     } else {
         null
     };
-    ai.ModelTurn { calls: [],
+    ai.ModelTurn {
+        calls: [],
         content: content,
         stop_reason: ai.content.StopReason.Complete,
         usage: usage,

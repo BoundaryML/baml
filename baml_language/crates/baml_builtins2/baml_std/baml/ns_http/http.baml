@@ -193,11 +193,7 @@ function fetch_sse(
     timeout: root.time.Duration? = null,
     first_event_timeout: root.time.Duration? = null,
 ) -> SseStream throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
-    _fetch_sse(
-        request,
-        _timeout_nanos(timeout),
-        _timeout_nanos(first_event_timeout),
-    )
+    _fetch_sse(request, _timeout_nanos(timeout), _timeout_nanos(first_event_timeout))
 }
 
 function _fetch_sse(

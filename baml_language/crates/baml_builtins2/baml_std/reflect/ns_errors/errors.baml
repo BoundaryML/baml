@@ -1,13 +1,13 @@
 /// A reflection construction failed compiler-equivalent validation.
 class CompilationError {
-  message string
-  diagnostics reflect.Diagnostic[]
+    message: string,
+    diagnostics: reflect.Diagnostic[],
 }
 
 /// Runtime evaluation failed after successful construction/compilation.
 class EvaluationError {
-  message string
-  cause unknown
+    message: string,
+    cause: unknown,
 }
 
 /// A reflective typed read did not fit the requested type: `Field.value<T>()`
@@ -17,10 +17,10 @@ class EvaluationError {
 /// synthesized from `EngineError::TypeMismatch` — that one names the FFI
 /// contract; this one names a reflection read.
 class TypeMismatch {
-  message string
+    message: string,
 }
 
 /// A session rejected concurrent use.
 class SessionBusy {
-  message string
+    message: string,
 }
