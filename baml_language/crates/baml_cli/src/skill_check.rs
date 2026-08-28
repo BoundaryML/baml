@@ -1,79 +1,103 @@
-//! Passive agent-skill warning, printed on the core authoring commands
-//! (`init`, `run`, `generate`, `pack`).
+//! Passive warning for missing or stale BAML agent skills.
 //!
-//! Living in the toolchain (rather than the `baml` wrapper) means the warning
-//! ships with every nightly instead of waiting on a wrapper release, and fires
-//! even when the toolchain binary is invoked directly. The check itself never
-//! blocks the command on the network: the warning is decided from the local
-//! caches, and a TTL-throttled refresh of the latest-commit cache runs in the
-//! background while the command executes, so a newly stale skill is reported
-//! by the *next* invocation.
+//! The active toolchain compares installed skill bytes with the skill embedded
+//! in its own binary. This keeps skill freshness local and gives each
+//! toolchain version its matching instructions without separate version state.
 
-use std::time::{Duration, Instant};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
-use baml_release::skills;
+use crate::agent_command::{SKILL_CONTENT, SKILL_NAME};
 
-/// Bound on how long [`SkillCheck::drop`] waits for the background refresh
-/// after the command finishes, anchored at refresh start (a command that ran
-/// 3s only waits up to 2s more). Matches the wrapper's auto-check budget.
-const AUTO_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
+const SKILL_OUTDATED_WARNING: &str =
+    "your baml skill does not match this toolchain; use `baml agent install` to upgrade it";
+const SKILL_MISSING_WARNING: &str =
+    "no baml skill is installed; set it up with `baml agent install`";
 
-/// Guard returned by [`SkillCheck::start`]. Dropping it gives the background
-/// cache refresh whatever remains of its time budget; cache writes are
-/// atomic, so abandoning a refresh mid-write on timeout is safe.
-pub(crate) struct SkillCheck {
-    refresh: Option<(std::sync::mpsc::Receiver<()>, Instant)>,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SkillStatus {
+    Missing,
+    Current,
+    Outdated,
 }
 
-impl SkillCheck {
-    /// Print the applicable skill warning (if any) from the local caches and
-    /// kick off the TTL-throttled background refresh of the latest-commit
-    /// cache. `[update] auto_check = false` in `~/.baml/config.toml` disables
-    /// the network refresh but not the cache-based warning.
-    pub(crate) fn start() -> Self {
-        let latest =
-            skills::read_cached_latest_skill_commit(&skills::latest_skill_commit_cache_path());
-        let state = skills::read_skills_state(&skills::state_path());
-        if let Some(message) = skills::skill_warning_message(
-            skills::project_has_baml_skills(),
-            state.as_ref(),
-            latest.as_deref(),
-        ) {
-            crate::reporter::print_warning(format_args!("{message}"));
-        }
-
-        let refresh = (skills::update_auto_check_enabled()
-            && skills::should_attempt_latest_commit_refresh())
-        .then(|| {
-            let deadline = Instant::now() + AUTO_CHECK_TIMEOUT;
-            let (sender, done) = std::sync::mpsc::channel();
-            std::thread::spawn(move || {
-                if let Ok(sha) = skills::fetch_latest_skill_commit(AUTO_CHECK_TIMEOUT) {
-                    let _ = skills::write_cached_latest_skill_commit(
-                        &skills::latest_skill_commit_cache_path(),
-                        &sha,
-                    );
-                }
-                let _ = sender.send(());
-            });
-            (done, deadline)
-        });
-        Self { refresh }
-    }
-
-    /// An inert guard for every command outside the init/run/generate/pack
-    /// whitelist (machine-facing commands, utilities, and `baml agent …`
-    /// itself, whose whole purpose is acting on skills).
-    pub(crate) fn skipped() -> Self {
-        Self { refresh: None }
+pub(crate) fn check() {
+    if let Some(message) = skill_warning_message(project_skill_status()) {
+        crate::reporter::print_warning(format_args!("{message}"));
     }
 }
 
-impl Drop for SkillCheck {
-    fn drop(&mut self) {
-        if let Some((done, deadline)) = self.refresh.take() {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            let _ = done.recv_timeout(remaining);
+fn skill_warning_message(status: SkillStatus) -> Option<&'static str> {
+    match status {
+        SkillStatus::Missing => Some(SKILL_MISSING_WARNING),
+        SkillStatus::Outdated => Some(SKILL_OUTDATED_WARNING),
+        SkillStatus::Current => None,
+    }
+}
+
+fn project_skill_status() -> SkillStatus {
+    let Ok(mut dir) = std::env::current_dir() else {
+        return SkillStatus::Missing;
+    };
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+
+    loop {
+        let statuses = [".agents/skills", ".claude/skills"]
+            .map(|relative| installed_skill_status(&dir.join(relative)));
+        if statuses.contains(&SkillStatus::Outdated) {
+            return SkillStatus::Outdated;
         }
+        if statuses.contains(&SkillStatus::Current) {
+            return SkillStatus::Current;
+        }
+        if home.as_ref().is_some_and(|home| dir == *home) || !dir.pop() {
+            break;
+        }
+    }
+
+    SkillStatus::Missing
+}
+
+fn installed_skill_status(skills_dir: &Path) -> SkillStatus {
+    let path = skills_dir.join(SKILL_NAME).join("SKILL.md");
+    match fs::read(path) {
+        Ok(contents) if contents == SKILL_CONTENT.as_bytes() => SkillStatus::Current,
+        Ok(_) => SkillStatus::Outdated,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => SkillStatus::Missing,
+        Err(_) => SkillStatus::Outdated,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn warning_tracks_local_skill_status() {
+        assert_eq!(
+            skill_warning_message(SkillStatus::Missing),
+            Some(SKILL_MISSING_WARNING)
+        );
+        assert_eq!(
+            skill_warning_message(SkillStatus::Outdated),
+            Some(SKILL_OUTDATED_WARNING)
+        );
+        assert_eq!(skill_warning_message(SkillStatus::Current), None);
+    }
+
+    #[test]
+    fn installed_skill_status_compares_embedded_bytes() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert_eq!(installed_skill_status(tmp.path()), SkillStatus::Missing);
+
+        let skill_dir = tmp.path().join(SKILL_NAME);
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(skill_dir.join("SKILL.md"), "old").unwrap();
+        assert_eq!(installed_skill_status(tmp.path()), SkillStatus::Outdated);
+
+        fs::write(skill_dir.join("SKILL.md"), SKILL_CONTENT).unwrap();
+        assert_eq!(installed_skill_status(tmp.path()), SkillStatus::Current);
     }
 }

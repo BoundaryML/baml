@@ -51,7 +51,6 @@ clap = { workspace = true, features = [ "color", "env", "wrap_help" ] }
 console = { workspace = true }
 ctrlc = { workspace = true }
 datafusion = { workspace = true }
-flate2 = { workspace = true }
 hex = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
@@ -65,7 +64,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 strsim = { workspace = true }
-tar = { workspace = true }
 text-size = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
