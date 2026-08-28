@@ -397,6 +397,11 @@ class ReferenceIssue {
     repros: Repro[],
     /// How much work the fix is, as a maintainer would gauge it.
     difficulty: Difficulty,
+    /// handle_issue eval: seconds the agent gets to land a fix (Easy 1800,
+    /// Medium 3600); null for Hard issues.
+    time_budget_s: int?,
+    /// Hard only: the reference suggested fix + design doc.
+    design_doc: string?,
 }
 
 /// A row of triage_issues.
@@ -410,11 +415,6 @@ class IssueRow {
     /// Input tokens a repro must contain to exercise the same defect.
     keywords: string[],
     reference_issue: ReferenceIssue,
-    /// handle_issue eval: seconds the agent gets to land a fix (Easy 1800,
-    /// Medium 3600); null for Hard issues.
-    time_budget_s: int?,
-    /// Hard only: the reference suggested fix + design doc.
-    design_doc: string?,
 }
 
 /// A row of triage_feedback — a Feedback with its author flattened.

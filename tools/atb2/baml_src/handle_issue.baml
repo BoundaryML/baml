@@ -1437,7 +1437,7 @@ testset "fix_in_budget" with testing.PassRate(0.6) {
         let only = handle_issues_selected();
         for (let key in issues.keys()) {
             let row = issues.get(key) ?? baml.sys.panic("unreachable");
-            if (row.time_budget_s != null && selected(only, key)) {
+            if (row.reference_issue.time_budget_s != null && selected(only, key)) {
                 test ("#" + key) {
                     // everything derived from `key` in here (loop-capture caveat)
                     let issue = load_issues().get(key) ?? baml.sys.panic("no triage_issues row for #" + key);
@@ -1450,7 +1450,7 @@ testset "fix_in_budget" with testing.PassRate(0.6) {
                             "issue": key,
                             "kind": out.kind,
                             "seconds": out.seconds,
-                            "budget": issue.time_budget_s,
+                            "budget": issue.reference_issue.time_budget_s,
                             "turns": out.turns,
                             "gate": match (out.gate) {
                                 null => "not run",
@@ -1472,14 +1472,14 @@ testset "design_doc" with testing.PassRate(0.5) {
         let only = handle_issues_selected();
         for (let key in issues.keys()) {
             let row = issues.get(key) ?? baml.sys.panic("unreachable");
-            if (row.design_doc != null && selected(only, key)) {
+            if (row.reference_issue.design_doc != null && selected(only, key)) {
                 test ("#" + key) {
                     let issue = load_issues().get(key) ?? baml.sys.panic("no triage_issues row for #" + key);
                     let r = issue.reference_issue;
                     let target = with_difficulty(reference_as_issue(issue.number, r), Difficulty.Hard);
                     let handled = handle_issue(target, mode = HandleMode.DryRun);
                     let ours = handled.design_doc ?? baml.sys.panic("no design doc produced for #" + key);
-                    let j = judge_design_doc(ours, issue.design_doc ?? "");
+                    let j = judge_design_doc(ours, issue.reference_issue.design_doc ?? "");
                     log.info({ "issue": key, "similarity": j.similarity, "missing": j.missing });
                     assert.is_true(j.similarity >= 0.7);
                 }
