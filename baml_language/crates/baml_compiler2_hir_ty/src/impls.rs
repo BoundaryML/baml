@@ -34,7 +34,7 @@
 use baml_compiler2_hir::{loc::ImplLoc, package::PackageId};
 use baml_type::{
     Name, ParamTy, TypeName,
-    interned::{InferInterface, InferTy, Ty},
+    interned::{ClosedInterface, ClosedTy, InferInterface, InferTy, Ty},
     normalize::{TypeContext, equivalent_interned},
 };
 use rustc_hash::FxHashMap;
@@ -61,14 +61,24 @@ pub fn try_interned_ty(ty: &baml_type::Ty) -> Option<Ty> {
 }
 
 /// One impl's resolution-relevant facts, normalized to the free shape.
+///
+/// Declaration-side data in the CLOSED interned vocabulary
+/// ([`ClosedTy`](baml_type::interned::ClosedTy) /
+/// [`ClosedInterface`](baml_type::interned::ClosedInterface)): lowering
+/// rejects holes and never sees inference, so these values provably carry
+/// no inference variables — and saying so in the type serves both sides.
+/// The MATCHER, which is the hot consumer and speaks interned, reads them
+/// free through `Deref`; the cold plain consumers (coherence, export, IDE)
+/// convert with a TOTAL `to_plain()`, so no boundary re-derives the
+/// closedness with an `unreachable!`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImplFacts<'db> {
-    pub interface: InferInterface,
-    pub for_ty_pattern: Ty,
+    pub interface: baml_type::interned::ClosedInterface,
+    pub for_ty_pattern: baml_type::interned::ClosedTy,
     /// The impl's own generic params with their CONJUNCTIVE bounds (each
     /// bound an interface reference).
-    pub generic_params: Vec<(ParamTy, Vec<InferInterface>)>,
-    pub associated_types: Vec<(Name, Ty)>,
+    pub generic_params: Vec<(ParamTy, Vec<baml_type::interned::ClosedInterface>)>,
+    pub associated_types: Vec<(Name, baml_type::interned::ClosedTy)>,
     pub methods: Vec<baml_compiler2_hir::loc::FunctionLoc<'db>>,
 }
 
@@ -128,7 +138,7 @@ pub fn impl_facts<'db>(
                 (
                     frame,
                     bounds,
-                    interned_ty(&crate::lower::class_self_ty(db, *class)),
+                    ClosedTy::from_plain(&crate::lower::class_self_ty(db, *class)),
                 )
             }
             ImplSubjectData::Free {
@@ -163,7 +173,7 @@ pub fn impl_facts<'db>(
                             .collect()
                     })
                     .collect();
-                let for_ty = interned_ty(&crate::lower::reject_holes(
+                let for_ty = ClosedTy::from_plain(&crate::lower::reject_holes(
                     &ctx.lower_type_ref(&data.type_refs, *for_target),
                 ));
                 (frame, bounds, for_ty)
@@ -181,13 +191,14 @@ pub fn impl_facts<'db>(
     let ctx = crate::lower::lower_ctx_for_file(db, file)
         .with_frame(params.clone())
         .with_bounds(bounds_map);
-    let interface = InferInterface::of_ty(&interned_ty(&crate::lower::reject_holes(
-        &ctx.lower_type_ref_at(
+    let interface = ClosedInterface::from_constraint(
+        &crate::lower::reject_holes(&ctx.lower_type_ref_at(
             &data.type_refs,
             data.interface_target,
             crate::lower::TypePosition::ConstraintHead,
-        ),
-    )))?;
+        ))
+        .as_interface()?,
+    );
     let associated_types = data
         .associated_type_bindings
         .iter()
@@ -195,7 +206,7 @@ pub fn impl_facts<'db>(
             binding.type_ref.map(|type_ref| {
                 (
                     binding.name.clone(),
-                    interned_ty(&crate::lower::reject_holes(
+                    ClosedTy::from_plain(&crate::lower::reject_holes(
                         &ctx.lower_type_ref(&data.type_refs, type_ref),
                     )),
                 )
@@ -206,14 +217,12 @@ pub fn impl_facts<'db>(
     Some(ImplFacts {
         interface,
         for_ty_pattern,
-        // The engine's matcher vocabulary is interned; bound constraints
-        // enter it here (plain→interned, the total ingestion direction).
         generic_params: params
             .into_iter()
             .zip(param_bounds.iter().map(|bounds| {
                 bounds
                     .iter()
-                    .map(InferInterface::from_constraint)
+                    .map(ClosedInterface::from_constraint)
                     .collect::<Vec<_>>()
             }))
             .collect(),
@@ -376,13 +385,14 @@ pub(crate) fn is_concrete_receiver(ty: &Ty) -> bool {
 }
 
 /// Resolution-relevant impl facts in a location-free shape shared by source
-/// blocks and mounted export rows.
+/// blocks and mounted export rows. Closed for the same reason as
+/// [`ImplFacts`].
 #[derive(Clone, PartialEq)]
 pub struct MountedImplFacts {
-    pub interface: InferInterface,
-    pub for_ty_pattern: Ty,
-    pub generic_params: Vec<(ParamTy, Vec<InferInterface>)>,
-    pub associated_types: Vec<(Name, Ty)>,
+    pub interface: baml_type::interned::ClosedInterface,
+    pub for_ty_pattern: baml_type::interned::ClosedTy,
+    pub generic_params: Vec<(ParamTy, Vec<baml_type::interned::ClosedInterface>)>,
+    pub associated_types: Vec<(Name, baml_type::interned::ClosedTy)>,
 }
 
 // SAFETY: mounted/precompiled facts are fully owned interned values and
@@ -407,14 +417,14 @@ unsafe impl salsa::Update for MountedImplFacts {
 #[derive(Clone, PartialEq)]
 pub enum ResolvedImplFacts<'db> {
     Source(&'db ImplFacts<'db>),
-    Mounted(MountedImplFacts),
+    Mounted(Box<MountedImplFacts>),
     /// Compiler-built source-less facts are re-hydrated from a tracked row and
     /// borrowed, keeping the memoized candidate entry fact-free like Source.
     Precompiled(&'db MountedImplFacts),
 }
 
 impl ResolvedImplFacts<'_> {
-    pub fn interface(&self) -> &InferInterface {
+    pub fn interface(&self) -> &baml_type::interned::ClosedInterface {
         match self {
             Self::Source(facts) => &facts.interface,
             Self::Mounted(facts) => &facts.interface,
@@ -422,7 +432,7 @@ impl ResolvedImplFacts<'_> {
         }
     }
 
-    pub fn for_ty_pattern(&self) -> &Ty {
+    pub fn for_ty_pattern(&self) -> &baml_type::interned::ClosedTy {
         match self {
             Self::Source(facts) => &facts.for_ty_pattern,
             Self::Mounted(facts) => &facts.for_ty_pattern,
@@ -430,7 +440,7 @@ impl ResolvedImplFacts<'_> {
         }
     }
 
-    pub fn generic_params(&self) -> &[(ParamTy, Vec<InferInterface>)] {
+    pub fn generic_params(&self) -> &[(ParamTy, Vec<baml_type::interned::ClosedInterface>)] {
         match self {
             Self::Source(facts) => &facts.generic_params,
             Self::Mounted(facts) => &facts.generic_params,
@@ -438,7 +448,7 @@ impl ResolvedImplFacts<'_> {
         }
     }
 
-    pub fn associated_types(&self) -> &[(Name, Ty)] {
+    pub fn associated_types(&self) -> &[(Name, baml_type::interned::ClosedTy)] {
         match self {
             Self::Source(facts) => &facts.associated_types,
             Self::Mounted(facts) => &facts.associated_types,
@@ -485,7 +495,7 @@ enum CachedResolvedImplOrigin<'db> {
     /// re-hydrate them, so this arm retains the facts alongside the methods.
     Mounted {
         methods: Vec<crate::package_interface::ExportedFunction>,
-        facts: MountedImplFacts,
+        facts: Box<MountedImplFacts>,
     },
     /// Fact-free identity for an immutable compiler-built interface row.
     Precompiled { package: PackageId<'db>, row: u32 },
@@ -676,39 +686,6 @@ pub(crate) fn realized_assoc_default(
 /// The declared BOUND of `member` (`type member extends J`), realized at
 /// the reference - rustc's `explicit_item_bounds` instantiated: what a
 /// still-symbolic projection is provable against.
-/// The implemented-interface header in the plain vocabulary — the
-/// display/read surface for consumers outside the matcher.
-pub fn plain_implemented_interface(facts: &ImplFacts<'_>) -> baml_type::Interface {
-    baml_type::Interface::try_from(&facts.interface)
-        .unwrap_or_else(|_| unreachable!("declaration-side interface header is closed"))
-}
-
-/// The `for`-target pattern in the plain vocabulary — the display/read
-/// surface for consumers outside the matcher. Declaration-side lowering
-/// rejects holes and never sees inference, so the pattern is closed.
-pub fn plain_for_ty_pattern(facts: &ImplFacts<'_>) -> baml_type::Ty {
-    baml_type::interned::ClosedTy::try_from(&facts.for_ty_pattern)
-        .unwrap_or_else(|_| unreachable!("declaration-side for-target is closed"))
-        .to_plain()
-}
-
-/// The impl's associated-type bindings in the plain vocabulary — same
-/// declaration-side contract as [`plain_for_ty_pattern`].
-pub fn plain_impl_associated_types(facts: &ImplFacts<'_>) -> Vec<(Name, baml_type::Ty)> {
-    facts
-        .associated_types
-        .iter()
-        .map(|(name, ty)| {
-            (
-                name.clone(),
-                baml_type::interned::ClosedTy::try_from(ty)
-                    .unwrap_or_else(|_| unreachable!("declaration-side bindings are closed"))
-                    .to_plain(),
-            )
-        })
-        .collect()
-}
-
 /// Equivalence over matcher values: both sides close (the entry gates
 /// reject open goals; patterns/pins are declaration-side), so an open
 /// operand slipping through matches NOTHING — fail closed, never a
@@ -874,10 +851,13 @@ pub fn impl_views_for_type(
     db: &dyn baml_compiler2_ppir::Db,
     concrete: &baml_type::Ty,
 ) -> Vec<baml_type::Interface> {
+    // Enumeration takes the plain goal directly; the interned form is only
+    // needed as the subject `implemented_view` realizes against (and its
+    // `None` is the Error-carrying rejection, which enumeration shares).
     let Some(interned) = try_interned_ty(concrete) else {
         return Vec::new();
     };
-    impls_for_type(db, &interned)
+    impls_for_type(db, concrete)
         .into_iter()
         .map(|resolved| {
             let view = resolved.implemented_view(db, &interned);
@@ -906,18 +886,22 @@ pub fn direct_requires_closure_plain(
         .collect()
 }
 
+/// Takes the goal PLAIN: enumeration is keyed and memoized on the plain
+/// form, so that is what this actually operates on. Engine callers holding
+/// an interned goal close it themselves ([`ClosedTy`](baml_type::interned::ClosedTy)),
+/// which is the point - an open goal has no impls, and the disposition for
+/// one belongs to the caller that knows why its type is still open. Callers
+/// already holding a plain type (the MIR/IDE surfaces) pay nothing.
+///
+/// RIGID vars (skolems) are legal in goals, as in `resolve_impl`:
+/// `self: RbeBox<T>` inside the impl's own body matches the impl with the
+/// placeholder as an opaque constant. Bounds the match places on rigid
+/// bindings are the CALLER's to discharge against its param env
+/// (`lookup_impl_member` does).
 pub fn impls_for_type<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    concrete: &Ty,
+    concrete: &baml_type::Ty,
 ) -> Vec<ResolvedImpl<'db>> {
-    // The same admission as `resolve_impl`: RIGID vars (skolems) are
-    // legal in goals - `self: RbeBox<T>` inside the impl's own body
-    // matches the impl with the placeholder as an opaque constant.
-    // Bounds the match places on rigid bindings are the CALLER's to
-    // discharge against its param env (`lookup_impl_member` does).
-    if concrete.has_infer() || concrete.has_error() {
-        return Vec::new();
-    }
     impls_for_type_cached(db, ImplTypeKey::new(db, concrete.clone()))
         .iter()
         .map(|cached| match &cached.origin {
@@ -964,14 +948,16 @@ pub fn impls_for_type<'db>(
             }
         })
         .filter(|resolved| {
-            let implemented = resolved.implemented();
             // `AnyClass` is an explicit narrowing surface, not another
             // concrete-member provider. Keep its blanket witness out of the
             // concrete receiver lookup tier so established fields and methods
             // named `get`, `name`, `type`, and so on retain their resolution.
             // Explicit `reflect.AnyClass` receivers dispatch through
             // `resolve_impl`, where the witness remains available.
-            provides_concrete_members(&implemented.name)
+            //
+            // Read off the declared header: realization substitutes into the
+            // arguments and never touches the name.
+            provides_concrete_members(&resolved.facts.interface().name)
         })
         .collect()
 }
@@ -1006,10 +992,15 @@ fn derived_impl_allows(
     matches!(normalized.kind(), InferTy::Class(..))
 }
 
+// PLAIN key, matching `impls_for_type`'s plain operand. Salsa DOES collect
+// interned values (LRU, after a minimum staleness in revisions), but only
+// at `Durability::LOW` — a key interned while reading only higher-durability
+// inputs is never reused, so an interned handle here could outlive every
+// other reference to its pool entry.
 #[salsa::interned]
 struct ImplTypeKey<'db> {
     #[returns(ref)]
-    concrete: Ty,
+    concrete: baml_type::Ty,
 }
 
 /// A recursive obligation can re-enter candidate assembly through
@@ -1032,7 +1023,14 @@ fn impls_for_type_cached<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     type_key: ImplTypeKey<'db>,
 ) -> Vec<CachedResolvedImpl<'db>> {
-    let concrete = type_key.concrete(db);
+    // The matcher's working vocabulary is interned: the plain key and each
+    // candidate's plain pattern enter it here (total ingestion).
+    let concrete = interned_ty(type_key.concrete(db));
+    // Judged on the interned form (an O(1) flag) and memoized with the rest
+    // of the scan: an error-carrying goal proves nothing.
+    if concrete.has_error() {
+        return Vec::new();
+    }
     let eq = AliasOnlyFacts::memoized(db);
     let mut out = Vec::new();
     for &package in all_packages(db) {
@@ -1042,7 +1040,7 @@ fn impls_for_type_cached<'db>(
         for (origin, facts) in package_impl_candidates(db, package) {
             let pattern = facts.for_ty_pattern();
             let pattern_has_typevar = pattern.has_typevar();
-            if !pattern_has_typevar && !eq_admitted(pattern, concrete, &eq) {
+            if !pattern_has_typevar && !eq_admitted(pattern, &concrete, &eq) {
                 continue;
             }
             let params: Vec<ParamTy> = facts
@@ -1051,14 +1049,15 @@ fn impls_for_type_cached<'db>(
                 .map(|(param, _)| param.clone())
                 .collect();
             // Bare-blanket guard, as in `match_impl_head`.
-            if let InferTy::TypeVar(param, _) = facts.for_ty_pattern().kind()
+            if let InferTy::TypeVar(param, _) = pattern.kind()
                 && params.contains(param)
-                && !is_concrete_receiver(concrete)
+                && !is_concrete_receiver(&concrete)
             {
                 continue;
             }
             let mut bindings = FxHashMap::default();
-            if pattern_has_typevar && !match_pattern(pattern, concrete, &params, &mut bindings, &eq)
+            if pattern_has_typevar
+                && !match_pattern(pattern, &concrete, &params, &mut bindings, &eq)
             {
                 continue;
             }
@@ -1178,7 +1177,7 @@ fn package_impl_candidates<'db>(
                     ResolvedImplOrigin::Mounted {
                         methods: row.methods.clone(),
                     },
-                    ResolvedImplFacts::Mounted(exported_impl_facts(row)),
+                    ResolvedImplFacts::Mounted(Box::new(exported_impl_facts(row))),
                 )
             })
         });
@@ -1196,19 +1195,19 @@ fn exported_impl_facts(row: &crate::package_interface::ExportedImpl) -> MountedI
                 .get(index)
                 .into_iter()
                 .flatten()
-                .map(InferInterface::from_constraint)
+                .map(ClosedInterface::from_constraint)
                 .collect();
             (param.clone(), bounds)
         })
         .collect();
     MountedImplFacts {
-        interface: InferInterface::from_constraint(&row.interface),
-        for_ty_pattern: Ty::from_plain(&row.for_ty_pattern),
+        interface: ClosedInterface::from_constraint(&row.interface),
+        for_ty_pattern: ClosedTy::from_plain(&row.for_ty_pattern),
         generic_params,
         associated_types: row
             .associated_types
             .iter()
-            .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
+            .map(|(name, ty)| (name.clone(), ClosedTy::from_plain(ty)))
             .collect(),
     }
 }
@@ -1447,9 +1446,10 @@ fn match_impl_head(
     {
         return None;
     }
+    let pattern = facts.for_ty_pattern();
     // Bare-blanket guard: `implement<T> I for T` applies only to
     // concrete receivers - never existentials, unions, or vars.
-    if let InferTy::TypeVar(param, _) = facts.for_ty_pattern().kind()
+    if let InferTy::TypeVar(param, _) = pattern.kind()
         && facts.generic_params().iter().any(|(p, _)| p == param)
         && !is_concrete_receiver(concrete)
     {
@@ -1461,7 +1461,7 @@ fn match_impl_head(
         .map(|(param, _)| param.clone())
         .collect();
     let mut bindings = FxHashMap::default();
-    if !match_pattern(facts.for_ty_pattern(), concrete, &params, &mut bindings, eq) {
+    if !match_pattern(pattern, concrete, &params, &mut bindings, eq) {
         return None;
     }
     for (pattern, target) in facts.interface().generics.iter().zip(&interface.generics) {

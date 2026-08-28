@@ -148,7 +148,9 @@ pub fn members_for_receiver<'db>(
 ) -> Vec<crate::method_resolution::MemberCandidate<'db>> {
     let facts =
         crate::facts::Facts::with_bounds(db, crate::infer::owner_declared_bounds(db, owner));
-    let receiver = baml_type::interned::Ty::from_plain(receiver);
+    // Total: a plain receiver has no inference variables to begin with, so
+    // the proof is constructed, never checked.
+    let receiver = baml_type::interned::ClosedTy::from_plain(receiver);
     crate::method_resolution::member_candidates(db, &facts, &receiver)
 }
 

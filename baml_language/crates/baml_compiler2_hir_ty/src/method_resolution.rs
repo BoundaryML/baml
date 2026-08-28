@@ -552,7 +552,7 @@ fn lookup_impl_member<'db>(
     name: &Name,
 ) -> InterfaceMemberLookup<'db> {
     let mut providers: Vec<(InferInterface, InterfaceMember<'db>)> = Vec::new();
-    for resolved in crate::impls::impls_for_type(db, receiver) {
+    for resolved in impls_for_receiver(db, receiver) {
         if !env_discharges_rigid_bounds(db, facts, &resolved) {
             continue;
         }
@@ -768,6 +768,29 @@ fn assoc_bound_roots<'db>(
         // declaration, not a fresh verdict.
         _ => Vec::new(),
     }
+}
+
+/// [`crate::impls::impls_for_type`] for an ENGINE (interned) receiver.
+///
+/// Enumeration takes a plain goal, so the interned receiver states its
+/// openness disposition here: an open receiver enumerates NOTHING. A goal
+/// that can still change shape must not commit to an impl set (inference
+/// variables are the method PROBE's candidate tier, not this one).
+///
+/// Only the two INFERENCE-side sites need this: both take their receiver
+/// straight from `structurally_resolve`, which legitimately yields an
+/// unsolved variable (`let x = []; x.foo()`). The IDE enumeration
+/// ([`member_candidates`]) carries a [`ClosedTy`](baml_type::interned::ClosedTy)
+/// from its entry point instead, so it converts totally and never reaches
+/// this check.
+fn impls_for_receiver<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    receiver: &Ty,
+) -> Vec<crate::impls::ResolvedImpl<'db>> {
+    let Ok(closed) = baml_type::interned::ClosedTy::try_from(receiver) else {
+        return Vec::new();
+    };
+    crate::impls::impls_for_type(db, &closed.to_plain())
 }
 
 /// Discharges the bounds `bounds_hold` skipped as vacuous - impl params
@@ -1042,7 +1065,7 @@ pub enum MemberSource {
 pub fn member_candidates<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
-    receiver: &Ty,
+    receiver: &baml_type::interned::ClosedTy,
 ) -> Vec<MemberCandidate<'db>> {
     let mut out: Vec<MemberCandidate<'db>> = Vec::new();
 
@@ -1109,7 +1132,10 @@ pub fn member_candidates<'db>(
             }
         }
         None => {
-            for resolved in crate::impls::impls_for_type(db, receiver) {
+            // Total: the receiver arrived closed, so enumeration needs no
+            // disposition here (contrast `impls_for_receiver`, whose
+            // inference-side callers can still be open).
+            for resolved in crate::impls::impls_for_type(db, &receiver.to_plain()) {
                 if !env_discharges_rigid_bounds(db, facts, &resolved) {
                     continue;
                 }
@@ -1664,7 +1690,7 @@ fn union_arm_interfaces<'db>(
         }
         _ => {
             let mut out = Vec::new();
-            for resolved in crate::impls::impls_for_type(db, arm) {
+            for resolved in impls_for_receiver(db, arm) {
                 if !env_discharges_rigid_bounds(db, facts, &resolved) {
                     continue;
                 }

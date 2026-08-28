@@ -1291,7 +1291,7 @@ fn collect_interface_impls(
 /// repeating the full path would be noise; the variation a reader scans for
 /// is the instantiation and the implementor.
 fn render_impl_row(facts: &baml_compiler2_hir_ty::impls::ImplFacts<'_>) -> String {
-    let iface = baml_compiler2_hir_ty::impls::plain_implemented_interface(facts);
+    let iface = facts.interface.to_plain();
     let mut head = iface.name.name().as_str().to_string();
     let mut args: Vec<String> = iface
         .generics
@@ -1310,7 +1310,7 @@ fn render_impl_row(facts: &baml_compiler2_hir_ty::impls::ImplFacts<'_>) -> Strin
     }
     format!(
         "implement {head} for {}",
-        render::display_addressable_ty(&baml_compiler2_hir_ty::impls::plain_for_ty_pattern(facts))
+        render::display_addressable_ty(&facts.for_ty_pattern.to_plain())
     )
 }
 

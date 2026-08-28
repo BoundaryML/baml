@@ -35,7 +35,8 @@ use baml_compiler2_hir::{
 };
 use baml_type::{
     FunctionParamTy, Interface, Literal, Name, ParamTy, RealizedTy, Ty, TyAttr, TypeName,
-    interned::InferInterface, normalize::TypeContext,
+    interned::{ClosedInterface, ClosedTy, InferInterface},
+    normalize::TypeContext,
 };
 use rustc_hash::FxHashMap;
 
@@ -1162,9 +1163,8 @@ pub fn impls_conflict(
     if a.interface.name != b.interface.name {
         return Overlap::No;
     }
-    if !expand_alias_head(&crate::impls::plain_for_ty_pattern(a), aliases).is_valid_impl_subject()
-        || !expand_alias_head(&crate::impls::plain_for_ty_pattern(b), aliases)
-            .is_valid_impl_subject()
+    if !expand_alias_head(&a.for_ty_pattern.to_plain(), aliases).is_valid_impl_subject()
+        || !expand_alias_head(&b.for_ty_pattern.to_plain(), aliases).is_valid_impl_subject()
     {
         return Overlap::No;
     }
@@ -1182,8 +1182,8 @@ pub fn source_mounted_impl_conflict(
     mounted: &crate::package_interface::ExportedImpl,
 ) -> Overlap {
     let mounted_facts = ImplFacts {
-        interface: InferInterface::from_constraint(&mounted.interface),
-        for_ty_pattern: baml_type::interned::Ty::from_plain(&mounted.for_ty_pattern),
+        interface: ClosedInterface::from_constraint(&mounted.interface),
+        for_ty_pattern: ClosedTy::from_plain(&mounted.for_ty_pattern),
         generic_params: mounted
             .generic_params
             .iter()
@@ -1196,7 +1196,7 @@ pub fn source_mounted_impl_conflict(
                         .get(index)
                         .into_iter()
                         .flatten()
-                        .map(InferInterface::from_constraint)
+                        .map(ClosedInterface::from_constraint)
                         .collect(),
                 )
             })
@@ -1204,7 +1204,7 @@ pub fn source_mounted_impl_conflict(
         associated_types: mounted
             .associated_types
             .iter()
-            .map(|(name, ty)| (name.clone(), baml_type::interned::Ty::from_plain(ty)))
+            .map(|(name, ty)| (name.clone(), ClosedTy::from_plain(ty)))
             .collect(),
         methods: Vec::new(),
     };
@@ -1309,7 +1309,9 @@ fn bounds_hold_at_common_instance(
             continue;
         }
         for bound in bounds {
-            let bound = plain_bound(bound).map_tys(|t| substitute_plain(t, &param_witnesses));
+            let bound = bound
+                .to_plain()
+                .map_tys(|t| substitute_plain(t, &param_witnesses));
             if bound.tys().all(|t| RealizedTy::try_from(t).is_ok())
                 && crate::impls::resolve_impl(
                     db,
@@ -1323,12 +1325,6 @@ fn bounds_hold_at_common_instance(
         }
     }
     true
-}
-
-/// An interned bound target as a plain constraint.
-fn plain_bound(target: &InferInterface) -> Interface {
-    Interface::try_from(target)
-        .unwrap_or_else(|_| unreachable!("declared bounds are declaration-side and closed"))
 }
 
 /// Fresh unification param for side `prefix`'s `idx`-th generic param.
@@ -1360,10 +1356,12 @@ fn renamed_subject(
         })
         .collect();
     let for_ty = nf(
-        &substitute_plain(&crate::impls::plain_for_ty_pattern(rule), &rename),
+        &substitute_plain(&rule.for_ty_pattern.to_plain(), &rename),
         enum_variants,
     );
-    let args = crate::impls::plain_implemented_interface(rule)
+    let args = rule
+        .interface
+        .to_plain()
         .generics
         .iter()
         .map(|arg| nf(&substitute_plain(arg, &rename), enum_variants))
@@ -1418,10 +1416,8 @@ pub fn package_orphan_violations<'db>(
     let current_package = pkg.name(db);
     let mut violations = Vec::new();
     for (loc, facts) in package_impls(db, pkg) {
-        let for_ty = crate::impls::plain_for_ty_pattern(facts);
-        let args: Vec<Ty> = crate::impls::plain_implemented_interface(facts)
-            .generics
-            .to_vec();
+        let for_ty = facts.for_ty_pattern.to_plain();
+        let args: Vec<Ty> = facts.interface.to_plain().generics.to_vec();
         match orphan_check(&current_package, &facts.interface.name, &for_ty, &args) {
             OrphanOutcome::Ok => {}
             OrphanOutcome::UncoveredParam(name) => violations.push(OrphanViolation {

@@ -744,11 +744,10 @@ fn interface_method_impl_loc<'db>(
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     method_name: &baml_base::Name,
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
-    let interned = baml_compiler2_hir_ty::impls::try_interned_ty(concrete)?;
     let method_of = |func_loc: &baml_compiler2_hir::loc::FunctionLoc<'db>| {
         baml_compiler2_ppir::item_data::function_data(db, *func_loc).name == *method_name
     };
-    let mut methods = baml_compiler2_hir_ty::impls::impls_for_type(db, &interned)
+    let mut methods = baml_compiler2_hir_ty::impls::impls_for_type(db, concrete)
         .into_iter()
         .filter_map(|resolved| resolved.source_block())
         .filter(|block| {

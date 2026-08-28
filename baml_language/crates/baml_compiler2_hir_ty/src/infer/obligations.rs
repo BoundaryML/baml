@@ -513,7 +513,8 @@ impl<'db> InferenceContext<'db> {
             .interface
             .associated_types
             .iter()
-            .chain(facts.associated_types.iter())
+            .map(|(pin, ty)| (pin, ty))
+            .chain(facts.associated_types.iter().map(|(pin, ty)| (pin, &**ty)))
             .map(|(pin, ty)| {
                 (
                     pin.clone(),

@@ -757,6 +757,61 @@ impl TryFrom<&InferInterface> for crate::Interface {
     }
 }
 
+/// The interface-constraint twin of [`ClosedTy`]: an [`InferInterface`]
+/// whose carried types are all free of live inference variables.
+///
+/// Exists for the same reason as `ClosedTy` — so a boundary that stores or
+/// hands out declaration-side interface references converts to the plain
+/// vocabulary TOTALLY, instead of re-deriving "this cannot contain a
+/// variable" with an `unreachable!` at each exit.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ClosedInterface(InferInterface);
+
+impl TryFrom<&InferInterface> for ClosedInterface {
+    type Error = OpenTy;
+
+    fn try_from(reference: &InferInterface) -> Result<ClosedInterface, OpenTy> {
+        let closed = reference.generics.iter().all(Ty::is_closed)
+            && reference
+                .associated_types
+                .iter()
+                .all(|(_, ty)| ty.is_closed());
+        if closed {
+            Ok(ClosedInterface(reference.clone()))
+        } else {
+            Err(OpenTy)
+        }
+    }
+}
+
+impl std::ops::Deref for ClosedInterface {
+    type Target = InferInterface;
+
+    fn deref(&self) -> &InferInterface {
+        &self.0
+    }
+}
+
+impl ClosedInterface {
+    /// Interning a plain constraint, TOTAL into the closed world: the plain
+    /// vocabulary has no inference variants.
+    pub fn from_constraint(interface: &crate::Interface) -> ClosedInterface {
+        ClosedInterface(InferInterface::from_constraint(interface))
+    }
+
+    /// The underlying reference.
+    pub fn as_reference(&self) -> &InferInterface {
+        &self.0
+    }
+
+    /// Materializes the plain constraint — total by the closed invariant.
+    pub fn to_plain(&self) -> crate::Interface {
+        crate::Interface::try_from(&self.0).unwrap_or_else(|_| {
+            unreachable!("ClosedInterface invariant: no live inference variables")
+        })
+    }
+}
+
 impl PartialEq<Ty> for ClosedTy {
     fn eq(&self, other: &Ty) -> bool {
         &self.0 == other

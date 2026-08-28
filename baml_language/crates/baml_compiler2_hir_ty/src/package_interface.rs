@@ -1049,15 +1049,7 @@ fn exported_impls<'db>(
         let param_bounds = facts
             .generic_params
             .iter()
-            .map(|(_, bounds)| {
-                bounds
-                    .iter()
-                    .map(|bound| {
-                        baml_type::Interface::try_from(bound)
-                            .unwrap_or_else(|_| unreachable!("declaration-side bounds are closed"))
-                    })
-                    .collect()
-            })
+            .map(|(_, bounds)| bounds.iter().map(baml_type::interned::ClosedInterface::to_plain).collect())
             .collect();
         let methods = facts
             .methods
@@ -1082,11 +1074,15 @@ fn exported_impls<'db>(
             | ImplSubjectData::Free { .. } => ExportedImplOrigin::OutOfBody,
         };
         rows.push(ExportedImpl {
-            interface: crate::impls::plain_implemented_interface(facts),
-            for_ty_pattern: crate::impls::plain_for_ty_pattern(facts),
+            interface: facts.interface.to_plain(),
+            for_ty_pattern: facts.for_ty_pattern.to_plain(),
             generic_params,
             param_bounds,
-            associated_types: crate::impls::plain_impl_associated_types(facts),
+            associated_types: facts
+                .associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                .collect(),
             field_links: data
                 .field_links
                 .iter()
