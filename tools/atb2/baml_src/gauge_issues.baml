@@ -15,8 +15,12 @@ class DifficultyEstimate {
     unknowns: string[],
 }
 
+// Difficulty is a judgment call the rest of the pipeline is not; it runs
+// on Opus, the other stages on Triage (Sonnet).
+client Gauge = claude_code.ClaudeCodeClient.new(model = "opus", timeout_ms = 900000);
+
 function estimate_difficulty(issue: Issue) -> DifficultyEstimate {
-    client: Triage
+    client: Gauge
     prompt: `
         Estimate how much engineering work this BAML toolchain issue is, from
         the ticket alone. Judge the FIX, not the symptom: a crash can be a
