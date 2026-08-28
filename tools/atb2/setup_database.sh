@@ -5,10 +5,10 @@
 # testsets read it through FEEDBACK_SUPABASE_URL + FEEDBACK_SUPABASE_KEY.
 # Those come from Infisical (project "boundary-tools", env "dev") the same
 # way the rest of the repo gets its secrets — nothing is written to disk.
-# The project is whatever the infisical CLI resolves from the nearest
-# .infisical.json (run `infisical init` in tools/atb2 once and pick
-# boundary-tools); FEEDBACK_INFISICAL_PROJECT_ID / FEEDBACK_INFISICAL_ENV
-# override.
+# The project is whatever the infisical CLI resolves from tools/atb2 (run
+# `infisical init` there once and pick boundary-tools) — the script cds there
+# first, so the repo root's .infisical.json is never picked up by accident;
+# FEEDBACK_INFISICAL_PROJECT_ID / FEEDBACK_INFISICAL_ENV override.
 #
 #   tools/atb2/setup_database.sh            # check the link, then run the metrics
 #   tools/atb2/setup_database.sh --check    # only verify infisical + secrets
@@ -17,6 +17,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$here"
 export BAML_VERSION="${BAML_VERSION:-0.17.0}"
 
 die() { echo "setup_database: $*" >&2; exit 1; }
@@ -62,7 +63,7 @@ echo "setup_database: infisical linked (env $env); FEEDBACK_SUPABASE_URL and FEE
 
 case "${1:-}" in
     --check) exit 0 ;;
-    --)      shift; cd "$here" && exec "$@" ;;
-    "")      cd "$here" && exec baml test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::difficulty_estimate::*" -i "root::organize_issue::*" ;;
+    --)      shift; exec "$@" ;;
+    "")      exec baml test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::difficulty_estimate::*" -i "root::organize_issue::*" ;;
     *)       die "unknown argument: $1 (use --check, or -- <cmd>)" ;;
 esac
