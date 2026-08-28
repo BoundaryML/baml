@@ -3,9 +3,12 @@
 #
 # The dataset (triage_issues / triage_feedback) lives in Supabase; the
 # testsets read it through FEEDBACK_SUPABASE_URL + FEEDBACK_SUPABASE_KEY.
-# Those come from the Infisical project "boundary-tools" (env "dev"), the
-# same way the rest of the repo gets its secrets — nothing is written to
-# disk. Override with FEEDBACK_INFISICAL_PROJECT_ID / FEEDBACK_INFISICAL_ENV.
+# Those come from Infisical (project "boundary-tools", env "dev") the same
+# way the rest of the repo gets its secrets — nothing is written to disk.
+# The project is whatever the infisical CLI resolves from the nearest
+# .infisical.json (run `infisical init` in tools/atb2 once and pick
+# boundary-tools); FEEDBACK_INFISICAL_PROJECT_ID / FEEDBACK_INFISICAL_ENV
+# override.
 #
 #   tools/atb2/setup_database.sh            # check the link, then run the metrics
 #   tools/atb2/setup_database.sh --check    # only verify infisical + secrets
@@ -19,10 +22,17 @@ export BAML_VERSION="${BAML_VERSION:-0.17.0}"
 die() { echo "setup_database: $*" >&2; exit 1; }
 
 command -v infisical >/dev/null || die "infisical CLI not found — brew install infisical"
-# Infisical project "boundary-tools"
-project="${FEEDBACK_INFISICAL_PROJECT_ID:-bdd280e2-259c-4750-9b16-a8597a67214c}"
 env="${FEEDBACK_INFISICAL_ENV:-dev}"
-inf() { infisical "$@" --env="$env" --projectId="$project" --silent; }
+project_id="${FEEDBACK_INFISICAL_PROJECT_ID:-}"
+project="${project_id:-the nearest .infisical.json}"
+# (no arrays: macOS ships bash 3.2, where an empty array trips `set -u`)
+inf() {
+    if [ -n "$project_id" ]; then
+        infisical "$@" --env="$env" --projectId="$project_id" --silent
+    else
+        infisical "$@" --env="$env" --silent
+    fi
+}
 
 # The two secrets the testsets need — and ONLY those. `infisical run` would
 # inject the whole environment, and an ANTHROPIC_API_KEY in there makes the
@@ -40,15 +50,15 @@ for name in FEEDBACK_SUPABASE_URL FEEDBACK_SUPABASE_KEY; do
         out="$(inf secrets get "$name" --plain --path=/ 2>&1 </dev/null || true)"
         case "$out" in
             *"not a member"*|*"status-code=403"*)
-                die "your Infisical account is not a member of project $project — ask for access, or set FEEDBACK_INFISICAL_PROJECT_ID to the project holding the secrets" ;;
+                die "your Infisical account is not a member of the Infisical project this resolves to ($project) — run 'infisical init' in tools/atb2 and pick boundary-tools, or ask for access" ;;
             *login*|*"log in"*|*session*)
                 die "not logged in — run 'infisical login' in a terminal, then retry" ;;
             *)
-                die "secret $name is not in Infisical project $project, env '$env' — ask a maintainer to add it" ;;
+                die "secret $name is not in the Infisical project this resolves to ($project), env '$env' — run 'infisical init' in tools/atb2 and pick boundary-tools, or ask a maintainer to add it" ;;
         esac
     fi
 done
-echo "setup_database: infisical linked (project $project, env $env); FEEDBACK_SUPABASE_URL and FEEDBACK_SUPABASE_KEY resolve"
+echo "setup_database: infisical linked (env $env); FEEDBACK_SUPABASE_URL and FEEDBACK_SUPABASE_KEY resolve"
 
 case "${1:-}" in
     --check) exit 0 ;;
