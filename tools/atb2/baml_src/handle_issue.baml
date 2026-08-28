@@ -352,7 +352,17 @@ function sandbox_env(with_gh: bool) -> map<string, string> {
         "CARGO_INCREMENTAL": "0",
     };
     // USER + TMPDIR: the Claude Code CLI finds its keychain login through them
-    for (let k in ["USER", "LOGNAME", "TMPDIR", "CARGO_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN", "SSH_AUTH_SOCK"]) {
+    for (
+        let k in [
+            "USER",
+            "LOGNAME",
+            "TMPDIR",
+            "CARGO_HOME",
+            "RUSTUP_HOME",
+            "RUSTUP_TOOLCHAIN",
+            "SSH_AUTH_SOCK",
+        ]
+    ) {
         let v = baml.env.get(k);
         if (v != null) {
             env.set(k, v ?? "");
@@ -1143,22 +1153,17 @@ function pr_body(issue: Issue, r: FixReport, g: GateResult, turns: int, seconds:
         + "\n\n_Opened by atb2 `handle_issue`; the gate above was re-run by the pipeline, not the agent._\n"
 }
 
-/// Live only. Pushes with the real push URL (the worktree's is disabled)
-/// and opens a draft PR, or updates the existing PR for the branch.
+/// Live only. Lifts the worktree's push guard, pushes, and opens a draft
+/// PR — or updates the existing PR for the branch.
 function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
     let env = sandbox_env(true);
+    // pushurl is multi-valued, so it cannot be overridden with -c; the
+    // no_push guard is removed here, and only here, for this one push
+    git(sb.worktree, ["config", "--worktree", "--unset-all", "remote.origin.pushurl"]);
     let push = run_with(
         Cmd {
             program: "git",
-            args: [
-                "-c",
-                "remote.origin.pushurl=" + repo_url(),
-                "push",
-                "--force-with-lease",
-                "-u",
-                "origin",
-                sb.branch,
-            ],
+            args: ["push", "--force-with-lease", "-u", "origin", sb.branch],
             cwd: sb.worktree,
             timeout_ms: 600000,
         },
