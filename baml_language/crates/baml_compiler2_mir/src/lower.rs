@@ -10965,7 +10965,7 @@ impl<'db> LoweringContext<'db> {
     ) {
         let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
         // Prefer the explicitly written type name. If absent (e.g., when the
-        // type is a qualified path like `baml.errors.DevOther`), fall back to
+        // type is a qualified path like `baml.errors.Io`), fall back to
         // the TIR-inferred type to get the short class name.
         //
         // We also extract a `TypeName` for looking up fields in `class_fields`,

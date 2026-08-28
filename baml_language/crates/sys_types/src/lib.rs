@@ -1036,23 +1036,6 @@ mod tests {
         assert_eq!(violation.actual_category, SysOpErrorCategory::LlmClient);
     }
 
-    #[test]
-    fn contract_allows_devother_when_declared() {
-        // `baml.http.fetch` is a thin BAML wrapper; the sys-op (which carries
-        // the `throws Io | Timeout` contract) is `baml.http._fetch`.
-        let op = bex_vm_types::sys_op_for_path("baml.http._fetch").unwrap();
-        let err: bex_vm_types::errors::VmRustFnError =
-            bex_vm_types::errors::VmBamlError::DevOther {
-                message: "some debug detail".into(),
-            }
-            .into();
-        let result = validate_sys_op_error(op, &err);
-        assert!(
-            result.is_err(),
-            "DevOther should be rejected when not in #[throws]"
-        );
-    }
-
     /// `Panic` / `Thrown` / `InternalError` variants of `VmRustFnError` are
     /// outside the `#[throws(...)]` contract surface; validation must let
     /// them pass even on an op that declares no throws categories.
@@ -1094,9 +1077,6 @@ mod tests {
             },
             bex_vm_types::errors::VmBamlError::Unsupported {
                 message: "u".into(),
-            },
-            bex_vm_types::errors::VmBamlError::DevOther {
-                message: "x".into(),
             },
         ] {
             let rust_err: bex_vm_types::errors::VmRustFnError = err.into();
@@ -1151,14 +1131,8 @@ mod tests {
             VmBamlError::RenderPrompt {
                 message: "r".into(),
             },
-            VmBamlError::NotImplemented {
-                message: "n".into(),
-            },
             VmBamlError::LlmClient {
                 message: "l".into(),
-            },
-            VmBamlError::DevOther {
-                message: "test".into(),
             },
             VmBamlError::HostCallable {
                 class_name: "C".into(),

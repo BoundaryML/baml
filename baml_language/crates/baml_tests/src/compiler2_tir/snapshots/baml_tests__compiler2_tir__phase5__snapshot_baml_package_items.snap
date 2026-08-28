@@ -96,14 +96,12 @@ namespace baml.env:
 namespace baml.errors:
   class AccessError { methods: [] }
   class CompilationError { methods: [] }
-  class DevOther { methods: [] }
   class ErrorContext { methods: [root_cause, _to_string_impl, to_string] }
   class GenericSdkError { methods: [] }
   class HostCallable { methods: [] }
   class InvalidArgument { methods: [] }
   class Io { methods: [] }
   class LlmClient { methods: [] }
-  class NotImplemented { methods: [] }
   class ParseError { methods: [] }
   class RenderPrompt { methods: [] }
   class StackFrame { methods: [] }

@@ -431,7 +431,7 @@ mod tests {
             u32::MAX - 3,
             OpError::new(
                 SysOp::BamlHostCallHostValue,
-                VmBamlError::NotImplemented {
+                VmBamlError::Io {
                     message: "unknown id".to_string(),
                 },
             ),

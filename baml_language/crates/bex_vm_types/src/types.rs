@@ -236,7 +236,6 @@ pub enum SysOpErrorCategory {
     /// stream we tried to parse are malformed".
     ParseError,
     Unsupported,
-    NotImplemented,
     AccessError,
     RenderPrompt,
     LlmClient,
@@ -244,9 +243,6 @@ pub enum SysOpErrorCategory {
     CompilationError,
     /// A live Session already has an evaluation in flight.
     SessionBusy,
-    /// Wildcard for development convenience. Must be explicitly declared in
-    /// `#[throws(DevOther)]` and should be migrated to named categories.
-    DevOther,
     /// A host-language callable raised an exception or invalid-argument error.
     HostCallable,
 }
@@ -259,13 +255,11 @@ impl std::fmt::Display for SysOpErrorCategory {
             Self::InvalidArgument => write!(f, "InvalidArgument"),
             Self::ParseError => write!(f, "ParseError"),
             Self::Unsupported => write!(f, "Unsupported"),
-            Self::NotImplemented => write!(f, "NotImplemented"),
             Self::AccessError => write!(f, "AccessError"),
             Self::RenderPrompt => write!(f, "RenderPrompt"),
             Self::LlmClient => write!(f, "LlmClient"),
             Self::CompilationError => write!(f, "CompilationError"),
             Self::SessionBusy => write!(f, "SessionBusy"),
-            Self::DevOther => write!(f, "DevOther"),
             Self::HostCallable => write!(f, "HostCallable"),
         }
     }

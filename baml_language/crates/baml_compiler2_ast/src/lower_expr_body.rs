@@ -5016,7 +5016,7 @@ impl LoweringContext {
 
         // Look for the optional type name (first WORD or path before the brace):
         //   - A simple WORD token: `MyClass { ... }` → `TypePath::bare`.
-        //   - A qualified path node: `baml.errors.DevOther { ... }` (parsed as
+        //   - A qualified path node: `baml.errors.Io { ... }` (parsed as
         //     PATH_EXPR) → `TypePath` of all the WORD segments.
         //   - A generic path: `Foo<int> { ... }` (parsed as PATH_EXPR with
         //     GENERIC_ARGS child) → `TypePath::bare("Foo")` + `type_args = [int]`.

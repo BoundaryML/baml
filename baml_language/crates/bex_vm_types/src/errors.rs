@@ -131,14 +131,8 @@ pub enum VmBamlError {
     #[error("render prompt: {message}")]
     RenderPrompt { message: String },
 
-    #[error("not implemented: {message}")]
-    NotImplemented { message: String },
-
     #[error("LLM client error: {message}")]
     LlmClient { message: String },
-
-    #[error("developer error: {message}")]
-    DevOther { message: String },
 
     /// An error value from the host language that has no direct BAML
     /// representation. The `handle` is the load-bearing field — it
@@ -185,9 +179,7 @@ impl VmBamlError {
             Self::Unsupported { .. } => SysOpErrorCategory::Unsupported,
             Self::AccessError { .. } => SysOpErrorCategory::AccessError,
             Self::RenderPrompt { .. } => SysOpErrorCategory::RenderPrompt,
-            Self::NotImplemented { .. } => SysOpErrorCategory::NotImplemented,
             Self::LlmClient { .. } => SysOpErrorCategory::LlmClient,
-            Self::DevOther { .. } => SysOpErrorCategory::DevOther,
             Self::HostCallable { .. } => SysOpErrorCategory::HostCallable,
         }
     }

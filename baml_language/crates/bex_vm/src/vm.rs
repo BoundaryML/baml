@@ -4574,16 +4574,8 @@ impl BexVm {
                 ErrorClass::RenderPrompt,
                 vec![Value::object(self.alloc_string(message))],
             ),
-            VmBamlError::NotImplemented { message } => (
-                ErrorClass::NotImplemented,
-                vec![Value::object(self.alloc_string(message))],
-            ),
             VmBamlError::LlmClient { message } => (
                 ErrorClass::LlmClient,
-                vec![Value::object(self.alloc_string(message))],
-            ),
-            VmBamlError::DevOther { message } => (
-                ErrorClass::DevOther,
                 vec![Value::object(self.alloc_string(message))],
             ),
             // Field order matches the `HostCallable` class in

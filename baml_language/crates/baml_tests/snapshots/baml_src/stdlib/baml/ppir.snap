@@ -675,12 +675,6 @@ class baml.errors.CompilationError {
 class baml.errors.CompilationError$stream {
   message: string | null
 }
-class baml.errors.DevOther {
-  message: string
-}
-class baml.errors.DevOther$stream {
-  message: string | null
-}
 class baml.errors.GenericSdkError {
   message: string
 }
@@ -717,12 +711,6 @@ class baml.errors.LlmClient {
   message: string
 }
 class baml.errors.LlmClient$stream {
-  message: string | null
-}
-class baml.errors.NotImplemented {
-  message: string
-}
-class baml.errors.NotImplemented$stream {
   message: string | null
 }
 class baml.errors.ParseError {
