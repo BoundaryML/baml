@@ -13,8 +13,6 @@ use std::{
     process::{Command, Output, Stdio},
 };
 
-const SKILL_CONTENT: &str = include_str!("../../../../skills/baml-core/SKILL.md");
-
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -522,7 +520,11 @@ fn run_valid_project_outputs_only_program_output() {
     // exactly the program's own output.
     let skill_dir = tmp.path().join(".agents/skills/baml-core");
     std::fs::create_dir_all(&skill_dir).unwrap();
-    std::fs::write(skill_dir.join("SKILL.md"), SKILL_CONTENT).unwrap();
+    std::fs::write(
+        skill_dir.join("SKILL.md"),
+        common::installed_skill_content(),
+    )
+    .unwrap();
 
     let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
 

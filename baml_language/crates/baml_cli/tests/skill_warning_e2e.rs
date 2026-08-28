@@ -1,12 +1,13 @@
 //! End-to-end tests for local embedded-skill freshness warnings.
 
+mod common;
+
 use std::{
     fs,
     path::Path,
     process::{Command, Output},
 };
 
-const SKILL_CONTENT: &str = include_str!("../../../../skills/baml-core/SKILL.md");
 const SKILL_OUTDATED_WARNING: &str =
     "your baml skill does not match this toolchain; use `baml agent install` to upgrade it";
 const SKILL_MISSING_WARNING: &str =
@@ -87,7 +88,7 @@ fn stale_project_skill_prompts_upgrade() {
 
 #[test]
 fn matching_project_skill_is_silent() {
-    let project = project_with_skill(SKILL_CONTENT);
+    let project = project_with_skill(&common::installed_skill_content());
     let stderr = stderr_of(&run_args_from(&["generate"], project.path()));
 
     assert!(!stderr.contains("baml skill"), "{stderr}");
@@ -102,7 +103,7 @@ fn matching_project_skill_takes_precedence_over_stale_parent() {
     let project = tree.path().join("project");
     let project_skill = project.join(".agents/skills/baml-core/SKILL.md");
     fs::create_dir_all(project_skill.parent().unwrap()).unwrap();
-    fs::write(project_skill, SKILL_CONTENT).unwrap();
+    fs::write(project_skill, common::installed_skill_content()).unwrap();
 
     let stderr = stderr_of(&run_args_from(&["generate"], &project));
     assert!(!stderr.contains("baml skill"), "{stderr}");
@@ -110,7 +111,7 @@ fn matching_project_skill_takes_precedence_over_stale_parent() {
 
 #[test]
 fn stale_copy_in_either_agent_directory_prompts_upgrade() {
-    let project = project_with_skill(SKILL_CONTENT);
+    let project = project_with_skill(&common::installed_skill_content());
     let skill = project.path().join(".claude/skills/baml-core/SKILL.md");
     fs::create_dir_all(skill.parent().unwrap()).unwrap();
     fs::write(skill, "old").unwrap();

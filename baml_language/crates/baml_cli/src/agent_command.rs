@@ -5,17 +5,14 @@ use std::{
     process::Command,
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, ensure};
 use clap::Args;
 
 use crate::ExitCode;
 
 pub(crate) const SKILL_NAME: &str = "baml-core";
-pub(crate) const SKILL_CONTENT: &str = include_str!("../../../../skills/baml-core/SKILL.md");
-const EMBEDDED_SKILLS: &[Skill<'static>] = &[Skill {
-    name: SKILL_NAME,
-    content: SKILL_CONTENT,
-}];
+pub(crate) const SKILL_TEMPLATE: &str = include_str!("../../../../skills/baml-core/SKILL.md");
+const TOOLCHAIN_VERSION_PLACEHOLDER: &str = "{{BAML_TOOLCHAIN_VERSION}}";
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct AgentArgs {
@@ -64,10 +61,32 @@ impl AgentInstallArgs {
             Some(dir) => explicit_install_root(dir)?,
             None => detect_install_root()?,
         };
-        install_skills(&root, EMBEDDED_SKILLS)?;
+        let content = rendered_skill()?;
+        install_skills(
+            &root,
+            &[Skill {
+                name: SKILL_NAME,
+                content: &content,
+            }],
+        )?;
         print_success(&root)?;
         Ok(ExitCode::Success)
     }
+}
+
+pub(crate) fn rendered_skill() -> Result<String> {
+    ensure!(
+        SKILL_TEMPLATE
+            .matches(TOOLCHAIN_VERSION_PLACEHOLDER)
+            .count()
+            == 1,
+        "embedded BAML skill must contain exactly one toolchain version placeholder"
+    );
+    Ok(SKILL_TEMPLATE.replacen(
+        TOOLCHAIN_VERSION_PLACEHOLDER,
+        baml_version::CANONICAL_VERSION,
+        1,
+    ))
 }
 
 fn explicit_install_root(dir: &Path) -> Result<PathBuf> {
@@ -304,7 +323,13 @@ mod tests {
 
     #[test]
     fn embedded_skill_name_matches_install_directory() {
-        assert!(SKILL_CONTENT.starts_with("---\nname: baml-core\n"));
+        assert!(SKILL_TEMPLATE.starts_with("---\nname: baml-core\n"));
+        assert_eq!(
+            SKILL_TEMPLATE
+                .matches(TOOLCHAIN_VERSION_PLACEHOLDER)
+                .count(),
+            1
+        );
     }
 
     #[test]
@@ -314,7 +339,15 @@ mod tests {
         fs::create_dir_all(unrelated.parent().unwrap()).unwrap();
         fs::write(&unrelated, "other").unwrap();
 
-        install_skills(tmp.path(), EMBEDDED_SKILLS).unwrap();
+        let content = rendered_skill().unwrap();
+        install_skills(
+            tmp.path(),
+            &[Skill {
+                name: SKILL_NAME,
+                content: &content,
+            }],
+        )
+        .unwrap();
 
         for skills_dir in [".agents/skills", ".claude/skills"] {
             assert_eq!(
@@ -325,7 +358,7 @@ mod tests {
                         .join("SKILL.md")
                 )
                 .unwrap(),
-                SKILL_CONTENT
+                content
             );
         }
         assert_eq!(fs::read_to_string(unrelated).unwrap(), "other");

@@ -1,6 +1,8 @@
 ---
 name: baml-core
 description: Minimal BAML skill. BAML is a statically-typed, expression-oriented language with first-class LLM functions — TypeScript-like, snake_case methods, etc. Useful for building ai workflows, agents, evals.
+metadata:
+  baml-toolchain-version: "{{BAML_TOOLCHAIN_VERSION}}"
 ---
 
 # baml

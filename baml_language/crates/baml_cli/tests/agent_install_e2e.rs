@@ -1,8 +1,8 @@
 //! End-to-end tests for the toolchain-owned BAML agent skill.
 
-use std::{fs, process::Command};
+mod common;
 
-const SKILL_CONTENT: &str = include_str!("../../../../skills/baml-core/SKILL.md");
+use std::{fs, process::Command};
 
 fn run_from(project: &std::path::Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_baml-cli"))
@@ -48,10 +48,11 @@ fn init_warns_then_embedded_install_silences_authoring_commands() {
         "agent install failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
+    let expected = common::installed_skill_content();
     for dir in [".agents/skills", ".claude/skills"] {
         assert_eq!(
             fs::read_to_string(project.join(dir).join("baml-core/SKILL.md")).unwrap(),
-            SKILL_CONTENT
+            expected
         );
     }
 
@@ -71,6 +72,7 @@ fn init_warns_then_embedded_install_silences_authoring_commands() {
 #[test]
 fn install_is_network_independent_and_archives_the_previous_skill() {
     let project = tempfile::tempdir().unwrap();
+    let expected = common::installed_skill_content();
     for dir in [".agents/skills", ".claude/skills"] {
         let skill = project.path().join(dir).join("baml-core/SKILL.md");
         fs::create_dir_all(skill.parent().unwrap()).unwrap();
@@ -88,7 +90,7 @@ fn install_is_network_independent_and_archives_the_previous_skill() {
         let root = project.path().join(dir);
         assert_eq!(
             fs::read_to_string(root.join("baml-core/SKILL.md")).unwrap(),
-            SKILL_CONTENT
+            expected
         );
         assert_eq!(
             fs::read_to_string(root.join("baml-old_skills/baml-core/SKILL.md")).unwrap(),
