@@ -22,9 +22,13 @@ function new(name: string, values: (string | Value)[]) -> Type throws reflect.er
 }
 
 /// Recover the source variant name from a runtime or static enum value.
+///
+/// # Throws
+/// - `baml.errors.InvalidArgument` if `value` is not an enum value. The
+///   parameter is `unknown` by design — the check is a runtime one, so a
+///   caller that passes a non-enum gets an error value rather than a panic.
 //baml:mut_vm
-//baml:fallible
-function get_value(value: unknown) -> string throws never { $rust_function }
+function get_value(value: unknown) -> string throws baml.errors.InvalidArgument { $rust_function }
 
 /// An enum-kind view of a `type` value. Users never construct this class.
 class Type {

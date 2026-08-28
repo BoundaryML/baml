@@ -25,7 +25,7 @@ function ints.$init_test_ns_ints_ints(registry: testing.TestCollector) -> null {
     pop 1
     load_var registry
     load_const "root.ints"
-    load_const "int_abs_min_value_throws"
+    load_const "int_abs_min_value_panics"
     make_closure .<lambda($init_test_ns_ints_ints, 3)>, 0
     load_const null
     call testing.TestCollector.register_test_at

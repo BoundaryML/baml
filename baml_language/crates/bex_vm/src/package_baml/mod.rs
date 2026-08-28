@@ -256,24 +256,30 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
                     }
                 };
                 let Some(qtn) = qtn else {
-                    return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                        message: "_compare_shim: element type does not implement Comparable"
-                            .to_string(),
-                    }));
+                    return Err(VmRustFnError::InternalError(
+                        VmInternalError::MissingNativeFunction {
+                            name: "_compare_shim: element type does not implement Comparable"
+                                .to_string(),
+                        },
+                    ));
                 };
                 format!("{}.baml.Comparable.compare", qtn.render_dotted(false))
             }
             _ => {
-                return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                    message: "_compare_shim: element type does not implement Comparable"
-                        .to_string(),
-                }));
+                return Err(VmRustFnError::InternalError(
+                    VmInternalError::MissingNativeFunction {
+                        name: "_compare_shim: element type does not implement Comparable"
+                            .to_string(),
+                    },
+                ));
             }
         },
         _ => {
-            return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                message: "_compare_shim: element type does not implement Comparable".to_string(),
-            }));
+            return Err(VmRustFnError::InternalError(
+                VmInternalError::MissingNativeFunction {
+                    name: "_compare_shim: element type does not implement Comparable".to_string(),
+                },
+            ));
         }
     };
 

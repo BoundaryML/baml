@@ -2297,9 +2297,17 @@ fn ty_never() -> RealizedTy {
 /// The two natives' parameters are statically `reflect.AnyFunction`, so a
 /// non-callable here means the coercion rule and the runtime disagree — an
 /// internal invariant break, not a user error.
+/// A reflection entry point was handed a value that is not callable.
+///
+/// Both callers take an `AnyFunction`-typed parameter, so the type checker has
+/// already proved the argument is callable: `reflect.signature` declares
+/// `throws never` and `reflect.call_any`'s only argument-shaped throw is
+/// `reflect.InvalidArgumentError` (which describes an argument that does not
+/// fit a *parameter*, not a non-callable callee). Neither contract can carry
+/// this, and neither is user-reachable, so it is an internal inconsistency.
 fn non_callable_error(what: &str) -> VmRustFnError {
-    VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-        message: format!("{what} expects a function value"),
+    VmRustFnError::InternalError(crate::errors::VmInternalError::MissingNativeFunction {
+        name: format!("{what} expects a function value"),
     })
 }
 

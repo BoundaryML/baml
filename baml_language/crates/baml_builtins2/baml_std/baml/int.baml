@@ -21,17 +21,19 @@ class Int {
 
     /// Returns the absolute value of `self`.
     ///
-    /// Throws `InvalidArgument` for `int.min_value()` because its absolute value
-    /// (`2^62`) does not fit in an `int`.
+    /// Panics with `baml.panics.IntegerOverflow` for `int.min_value()`, whose
+    /// absolute value (`2^62`) does not fit in an `int` — the same channel
+    /// `-int.min_value()` and the arithmetic operators use for an overflow.
     ///
     /// # Examples
     /// ```
     /// (-7).abs()         // 7
     /// (3).abs()          // 3
     /// (0).abs()          // 0
-    /// int.min_value().abs()  // throws — overflow
+    /// int.min_value().abs()  // panics — overflow
     /// ```
-    function abs(self) -> int throws root.errors.InvalidArgument {
+    //baml:fallible
+    function abs(self) -> int throws never {
         $rust_function
     }
 

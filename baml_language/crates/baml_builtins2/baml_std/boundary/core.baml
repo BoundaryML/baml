@@ -1,5 +1,12 @@
+/// Mints a fresh boundary id.
+///
+/// Reads 16 bytes of OS entropy, so it panics with
+/// `baml.panics.HostUnavailable` where no entropy source is reachable — the
+/// same channel `baml.random.SystemRandom` uses. There is nothing for it to
+/// throw.
 //baml:mut_vm
-function id() -> LocalId throws baml.errors.InvalidArgument {
+//baml:fallible
+function id() -> LocalId throws never {
     $rust_function
 }
 
