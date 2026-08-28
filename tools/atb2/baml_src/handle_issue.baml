@@ -857,13 +857,13 @@ function implement_fix(issue: Issue, branch: string, test_route: string) -> FixR
            per baml_language/TEST_INSTRUCTIONS.md. For this issue: ${test_route}
            Confirm the new test fails before the fix and passes after it.
         2. Make the smallest correct fix. Cite the files you changed.
-        3. Run the gate, in this order, from baml_language/, and make every step pass:
+        3. Verify with FAST, targeted checks only — your time budget is short and the full gate
+           (clippy, nextest, insta, the baml-cli corpus) is run by the pipeline after you finish:
              cargo fmt --all -- --config imports_granularity=Crate --config group_imports=StdExternalCrate
-             cargo clippy --workspace --all-targets --all-features -- -D warnings
+             cargo test -p <each crate you changed> <your new test name>      (the repro test: fails before, passes after)
              cargo test --lib -p <each crate you changed>
-             cargo nextest run -p baml_tests
-             cargo insta test --test-runner=nextest --accept -p baml_tests   (then commit any .snap changes)
-             cargo build -p baml_cli --bin baml-cli && $CARGO_TARGET_DIR/debug/baml-cli test --from crates/baml_tests/baml_src
+           If you added a diagnostic fixture or changed diagnostics, also: cargo insta test --test-runner=nextest --accept -p baml_tests
+           and commit the .snap changes. Do not run the whole workspace's clippy or nextest.
         4. Commit everything. \`git status --porcelain\` must be empty. Do not push.
 
         ${ctx.output_format}
