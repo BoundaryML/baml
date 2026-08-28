@@ -19,7 +19,10 @@ function main() -> int {
 fn evaluation_error_value(output: TestOutput) -> BexExternalValue {
     match output.result.unwrap_err() {
         EngineError::UnhandledThrow { value, .. } => {
-            let value = *value;
+            let value = match *value {
+                BexExternalValue::Union { value, .. } => *value,
+                value => value,
+            };
             match &value {
                 BexExternalValue::Instance { class_name, .. }
                     if class_name == "reflect.errors.EvaluationError" =>
