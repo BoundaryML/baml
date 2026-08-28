@@ -7,7 +7,7 @@ use bex_engine::BexExternalValue;
 async fn compiled_package_declarations_share_one_identity_across_all_access_paths() {
     let output = baml_test!(
         r####"
-function main() -> bool throws unknown {
+function main() -> bool {
   let pkg = reflect.Package.compile({ "pkg.baml": `
 class Item { value int }
 enum State { Ready }

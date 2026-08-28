@@ -459,11 +459,11 @@ function sc_stream(runtime_t: reflect.Type) -> int throws never {
 function sc_ordinary_contract() -> null throws never {
     sc_contract<(string) -> string>()
 }
-function sc_extract(pkg: reflect.Package) -> null throws unknown {
+function sc_extract(pkg: reflect.Package) -> null {
     let extracted = pkg.get_function<(string) -> string>("root.Target");
     null
 }
-function sc_session(session: reflect.Session) -> null throws unknown {
+function sc_session(session: reflect.Session) -> null {
     let value = session.eval("1");
     null
 }
@@ -1005,7 +1005,7 @@ fn call_plan_effect_solves_from_deferred_lambda() {
     // lower rides a deferred sub - draining goals first lands the lower
     // before E commits, so E = never, not the minimum-upper unknown.
     let source = r#"
-function ir_probe() -> int throws unknown {
+function ir_probe() -> int {
     let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
     it.reduce((a: int, x: int) -> int { a + x }, 0)
 }

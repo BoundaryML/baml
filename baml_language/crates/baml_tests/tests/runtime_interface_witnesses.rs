@@ -455,7 +455,7 @@ async fn witness_still_rejects_interfaces_with_required_methods() {
 async fn session_interface_default_methods_are_bound_and_inherited() {
     let output = baml_test!(
         r#####"
-        function main() -> string throws unknown {
+        function main() -> string {
             let s = reflect.Session.new()
             s.eval(`interface Greeter { who: string  function greet(self) -> string throws never { "hello" } }`)
             // BUG (session hygiene, pre-existing): a top-level session `let`
