@@ -22,7 +22,7 @@ jobs:
     env:
       PRODUCT_METRICS_DASHBOARD_URL: https://boundary-product-metrics.fly.dev/
       SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
-      SLACK_CHANNEL_ID: C07UTQN7N1X
+      SLACK_CHANNEL_ID: C03KV1PJ6EM
     steps:
       - name: Checkout
         uses: actions/checkout@v6

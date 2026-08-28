@@ -33,6 +33,6 @@ primary_region = 'iad'
   ZOOM_SHEEP_COUNCIL_MEETING_ID = '89180085282'
 
 [[vm]]
-  memory = '512mb'
+  memory = '256mb'
   cpu_kind = 'shared'
   cpus = 1
