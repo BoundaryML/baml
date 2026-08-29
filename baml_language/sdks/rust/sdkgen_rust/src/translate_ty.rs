@@ -57,6 +57,30 @@ pub(crate) fn translate(ty: &Ty, ctx: &TyCtx<'_>) -> Result<TokenStream, Unsuppo
     translate_inner(ty, ctx, false)
 }
 
+/// Translate a function's declared throws contract.
+///
+/// Open BAML interfaces cannot be represented as Rust values. When one is
+/// present in a throws contract, leave it to `Error::Runtime` (which preserves
+/// its class name, message, and trace) while retaining the typed Rust surface
+/// for every representable concrete arm.
+pub(crate) fn translate_throws(ty: &Ty, ctx: &TyCtx<'_>) -> Result<TokenStream, Unsupported> {
+    match ty {
+        Ty::Interface(..) => Ok(quote! { ::core::convert::Infallible }),
+        Ty::Union(items, attr) => {
+            let representable: Vec<_> = items
+                .iter()
+                .filter(|item| unions::arm_is_representable(item, ctx.analysis))
+                .cloned()
+                .collect();
+            translate(&Ty::Union(representable, attr.clone()), ctx)
+        }
+        Ty::Class(..) | Ty::TypeAlias(..) if !unions::arm_is_representable(ty, ctx.analysis) => {
+            Ok(quote! { ::core::convert::Infallible })
+        }
+        _ => translate(ty, ctx),
+    }
+}
+
 /// The absolute `crate::…` path of an emitted nominal type.
 pub(crate) fn type_path(name: &Name, analysis: &Analysis) -> TokenStream {
     let routed = routing::route(name).segments;
@@ -114,7 +138,13 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                     let Some(union_enum) = ctx.unions.lookup(ctx.leaf, arms) else {
                         return Err(Unsupported {
                             reason: unions::shape_error(arms).unwrap_or_else(|| {
-                                "union references a skipped or unknown type".to_string()
+                                format!(
+                                    "union references a skipped or unknown type: {}",
+                                    arms.iter()
+                                        .map(std::string::ToString::to_string)
+                                        .collect::<Vec<_>>()
+                                        .join(" | ")
+                                )
                             }),
                         });
                     };

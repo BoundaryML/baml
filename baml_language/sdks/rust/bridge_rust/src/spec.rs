@@ -111,7 +111,8 @@ impl CallOptions {
         self
     }
 
-    pub(crate) fn append_to(self, kwargs: &mut Vec<wire::InboundMapEntry>) {
+    #[doc(hidden)]
+    pub fn append_to(self, kwargs: &mut Vec<wire::InboundMapEntry>) {
         kwargs.extend(
             self.entries
                 .into_iter()

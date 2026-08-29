@@ -61,7 +61,7 @@ impl LeafPath {
 /// receives a trailing underscore so it cannot shadow the Python builtin in
 /// sibling annotations. Runtime BAML FQNs are built from `Name`, not
 /// `LeafPath`, so routing does not alter them.
-fn sanitize_python_module_segment(seg: &str) -> String {
+pub(crate) fn sanitize_python_module_segment(seg: &str) -> String {
     let mut projected = String::new();
     for (index, ch) in seg.chars().enumerate() {
         if ch == '_' || ch.is_alphanumeric() && (index > 0 || ch.is_alphabetic()) {
@@ -236,7 +236,7 @@ mod tests {
     fn enum_with_stream_suffix_does_not_route_to_stream_types() {
         // Enums never get a `$stream` companion in the current model;
         // a stream-suffixed enum (defensive) routes by package only.
-        let n = name("user", &["lorem"], "Foo");
+        let n = name("user", &["lorem"], "Foo$stream");
         let lp = route_inner(&n, false);
         assert_eq!(lp.segments, vec!["lorem".to_string()]);
     }

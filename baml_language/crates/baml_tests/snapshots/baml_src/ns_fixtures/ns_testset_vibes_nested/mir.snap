@@ -38,7 +38,7 @@ fn .<lambda($init_test_ns_fixtures_ns_testset_vibes_nested_main, 0)>(testset: te
     let _8: string // sentiments [captured]
     let _9: void
     let _10: string
-    let _11: (testing.TestCollector) -> void throws baml.errors.Io | baml.errors.LlmClient | baml.errors.Timeout | testing.InvalidTestName
+    let _11: (testing.TestCollector) -> void throws baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | testing.InvalidTestName
     let _12: void
     let _13: (testing.TestCollector) -> void throws testing.InvalidTestName
 

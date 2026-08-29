@@ -78,6 +78,26 @@ async fn test_streaming_e2e_stream_async() {
     .await;
 }
 
+/// BAML-side collection keeps the `S | Done` protocol inside the engine and
+/// returns only concrete host values.
+#[test]
+fn test_streaming_e2e_stream_collect_in_baml() {
+    use baml_sdk::lorem::{StreamE2ECollectResult, stream_e2e_collect};
+
+    replay_server("replay_extract_string", || {
+        let result: StreamE2ECollectResult =
+            stream_e2e_collect("ignored-by-replay-server".to_string()).unwrap();
+        assert!(
+            result.next_calls.len() >= 10,
+            "expected at least 10 collected partials"
+        );
+        for item in result.next_calls {
+            let _: Option<String> = item;
+        }
+        let _: String = result.final_call;
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Class-typed `T` — Stream<StreamingDoc$stream, StreamingDoc>. The case the
 // plain-`string` tests above deliberately avoid; the regression guard for the
@@ -135,4 +155,16 @@ async fn test_streaming_e2e_stream_doc_async() {
         let _: StreamingDoc = stream.final_async().await.unwrap();
     })
     .await;
+}
+
+/// BAML-side class collection returns the concrete final value across FFI.
+#[test]
+fn test_streaming_e2e_stream_doc_collect_in_baml() {
+    use baml_sdk::lorem::{StreamingDoc, stream_e2e_collect_doc};
+
+    replay_server("replay_extract_doc", || {
+        let result: StreamingDoc =
+            stream_e2e_collect_doc("ignored-by-replay-server".to_string()).unwrap();
+        let _ = result.title;
+    });
 }

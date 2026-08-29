@@ -2,11 +2,11 @@
 //! steps 1-8): the single-header layout, namespace routing, free functions
 //! with required + optional arguments (per-function opts structs, spec D4),
 //! classes + enums with generated `codec<T>` specializations, transparent
-//! and recursive type aliases, and recursion via `baml::Box` cycle-breaking.
+//! and recursive type aliases, and recursion via `baml::Box` cycle-breaking;
 //! multi-member unions as order-canonical `::baml::variant` aliases, and
 //! typed error unions via `BamlThrown`.
 //! Post-step-8 features (async, methods, callbacks, generics, streaming
-//! companions, media/handles) are skipped and reported in a trailing
+//! media/handles) are skipped and reported in a trailing
 //! header comment (no silent caps); the full implementation is preserved on
 //! the avery/bridge-cpp-full branch.
 //!
@@ -524,7 +524,8 @@ const OPTS_MEMBER: &str = "opts";
 const ASYNC_MEMBER: &str = "async";
 
 /// One typed request per identifier any emit pass may need. Mirrors the
-/// pool-level skip filters (`pkg`, `$stream`, `$` companions); symbols that
+/// pool-level skip filters (`pkg`, partial `$stream` types, legacy `$`
+/// companions); symbols that
 /// only emission can rule out (unsupported field types, broken cycles) still
 /// get allocations, which are simply never rendered.
 fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
@@ -631,22 +632,118 @@ fn request_callable_members(
     fqn: &BamlFqn,
     function: &Function,
 ) {
-    for arg in &function.arguments {
+    for arg in function.arguments.iter().filter(|arg| !arg.injected) {
         requests.insert(NameRequest::new(
             fqn.child(arg.name.as_str()),
             CppNameKind::Parameter,
         ));
     }
-    if function.arguments.iter().any(|arg| arg.default.is_some()) {
+    if function
+        .arguments
+        .iter()
+        .any(|arg| !arg.injected && arg.default.is_some())
+    {
         requests.insert(opts_request(fqn, function));
-        for arg in function.arguments.iter().filter(|a| a.default.is_some()) {
+        for arg in function
+            .arguments
+            .iter()
+            .filter(|arg| !arg.injected && arg.default.is_some())
+        {
             requests.insert(setter_request(fqn, arg.name.as_str()));
         }
     }
 }
 
-/// Post-step-8 symbols this slice never emits: `$stream` companions and
-/// `$`-suffixed companion functions.
+#[cfg(test)]
+mod injected_argument_tests {
+    use baml_base::{Name as BaseName, TyAttr};
+    use baml_codegen_types::{FunctionArgument, FunctionArgumentDefault, Origin};
+
+    use super::*;
+
+    #[test]
+    fn injected_callback_does_not_hide_callable() {
+        let name = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("review")],
+            BaseName::new("extract"),
+        );
+        let callback = Ty::Function {
+            params: vec![CallableParam {
+                name: None,
+                ty: Ty::String {
+                    attr: TyAttr::default(),
+                },
+                mode: CodegenFunctionParamMode::Required,
+            }],
+            ret: Box::new(Ty::Void {
+                attr: TyAttr::default(),
+            }),
+            throws: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        };
+        let function = Function {
+            name: BaseName::new("extract"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![
+                FunctionArgument {
+                    name: BaseName::new("input"),
+                    docstring: None,
+                    ty: Ty::String {
+                        attr: TyAttr::default(),
+                    },
+                    default: None,
+                    injected: false,
+                },
+                FunctionArgument {
+                    name: BaseName::new("on_event"),
+                    docstring: None,
+                    ty: Ty::Union(
+                        vec![
+                            callback,
+                            Ty::Null {
+                                attr: TyAttr::default(),
+                            },
+                        ],
+                        TyAttr::default(),
+                    ),
+                    default: Some(FunctionArgumentDefault::Null),
+                    injected: true,
+                },
+            ],
+            return_type: Ty::String {
+                attr: TyAttr::default(),
+            },
+            throws: None,
+            watchers: vec![],
+            origin: Origin {
+                source_file_path: "review.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let files = to_source_code_with_bytecode(
+            &SymbolPool::from([(name, Symbol::Function(function))]),
+            &[],
+            &[],
+        );
+        let header = &files[&PathBuf::from("include/baml_sdk.h")];
+        let bindings = &files[&PathBuf::from("src/bindings.cc")];
+
+        assert!(
+            header.contains("extract(const std::string& input)"),
+            "{header}"
+        );
+        assert!(!header.contains("on_event"), "{header}");
+        assert!(bindings.contains("\"user.review.extract\""), "{bindings}");
+    }
+}
+
+/// Post-step-8 symbols this slice never emits: partial `$stream` types and
+/// legacy `$`-suffixed companion functions. Callable `@spec`/`@stream`
+/// companions intentionally continue to ordinary function emission.
 fn skip_symbol(name: &Name) -> bool {
     name.is_stream() || name.bare_name().contains('$')
 }
@@ -1040,7 +1137,7 @@ fn emit_callable(
 
     let mut params = Vec::new();
     let mut opt_params = Vec::new();
-    for arg in &function.arguments {
+    for arg in function.arguments.iter().filter(|arg| !arg.injected) {
         // Top-level callable parameters cross as host callables
         // (std::function); callables nested in other types stay
         // unsupported (translate_ty rejects them).

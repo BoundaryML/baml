@@ -27,8 +27,8 @@
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
 #include "baml_bridge/cffi/v1/baml_handle.pb.h"
-#include "baml_bridge/cffi/v1/baml_outbound.pb.h"
 #include "baml_bridge/cffi/v1/baml_type.pb.h"
+#include "baml_bridge/cffi/v1/baml_outbound.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.

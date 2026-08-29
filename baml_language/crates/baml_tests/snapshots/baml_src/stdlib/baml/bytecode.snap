@@ -6035,6 +6035,23 @@ function baml.sap.parse(text: string) -> #0 {
     load_type #0
     load_type #0
     sys_op baml.sap.__parse_final
+    jump L2
+    load_var _
+    is_type baml.errors.LlmClient
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    rethrow
+
+  L1:
+    load_var _
+    load_field .0
+    init_instance baml.errors.ParseError .message
+    throw
+
+  L2:
     return
 }
 
@@ -6046,6 +6063,23 @@ function baml.sap.parse_type(t: reflect.Type, text: string) -> unknown {
     load_type unknown
     load_type unknown
     sys_op baml.sap.__parse_final
+    jump L2
+    load_var _
+    is_type baml.errors.LlmClient
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    rethrow
+
+  L1:
+    load_var _
+    load_field .0
+    init_instance baml.errors.ParseError .message
+    throw
+
+  L2:
     return
 }
 

@@ -95,7 +95,11 @@ fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
 
 fn public_interface_tokens(pool: &SymbolPool) -> BTreeSet<Name> {
     fn collect_function(function: &Function, out: &mut BTreeSet<Name>) {
-        for argument in &function.arguments {
+        for argument in function
+            .arguments
+            .iter()
+            .filter(|argument| !argument.injected)
+        {
             collect_interface_tys(&argument.ty, out);
         }
         collect_interface_tys(&function.return_type, out);
@@ -563,7 +567,7 @@ fn generated_functions<'a>(
                 option_type: (function
                     .arguments
                     .iter()
-                    .any(|argument| argument.default.is_some())
+                    .any(|argument| !argument.injected && argument.default.is_some())
                     || !function.generic_params.is_empty())
                 .then(|| {
                     names
@@ -573,6 +577,7 @@ fn generated_functions<'a>(
                 arguments: function
                     .arguments
                     .iter()
+                    .filter(|argument| !argument.injected)
                     .map(|argument| GeneratedArgument {
                         argument,
                         go_name: names
@@ -620,7 +625,8 @@ fn generated_functions<'a>(
                 wireable_classes.contains(owner_name)
                     && supported_function(method, pool, wireable_classes, projection)
                     && !method.arguments.iter().any(|argument| {
-                        argument.default.is_some()
+                        !argument.injected
+                            && argument.default.is_some()
                             && projected_contains_type_var(&projection.project(&argument.ty))
                     })
             })
@@ -661,7 +667,7 @@ fn generated_functions<'a>(
                 option_type: (method
                     .arguments
                     .iter()
-                    .any(|argument| argument.default.is_some())
+                    .any(|argument| !argument.injected && argument.default.is_some())
                     || !class.generic_params.is_empty()
                     || !method.generic_params.is_empty())
                 .then(|| {
@@ -676,6 +682,7 @@ fn generated_functions<'a>(
                 arguments: method
                     .arguments
                     .iter()
+                    .filter(|argument| !argument.injected)
                     .map(|argument| GeneratedArgument {
                         argument,
                         go_name: names
@@ -705,7 +712,8 @@ fn generated_functions<'a>(
             .filter(|method| {
                 supported_function(method, pool, wireable_classes, projection)
                     && !method.arguments.iter().any(|argument| {
-                        argument.default.is_some()
+                        !argument.injected
+                            && argument.default.is_some()
                             && projected_contains_type_var(&projection.project(&argument.ty))
                     })
             })
@@ -740,7 +748,7 @@ fn generated_functions<'a>(
                 option_type: (method
                     .arguments
                     .iter()
-                    .any(|argument| argument.default.is_some())
+                    .any(|argument| !argument.injected && argument.default.is_some())
                     || !class.generic_params.is_empty()
                     || !method.generic_params.is_empty())
                 .then(|| {
@@ -755,6 +763,7 @@ fn generated_functions<'a>(
                 arguments: method
                     .arguments
                     .iter()
+                    .filter(|argument| !argument.injected)
                     .map(|argument| GeneratedArgument {
                         argument,
                         go_name: names
@@ -888,6 +897,7 @@ impl WireCodecs {
                 .function
                 .arguments
                 .iter()
+                .filter(|argument| !argument.injected)
                 .map(|argument| &argument.ty)
                 .chain(std::iter::once(&routed.function.return_type))
             {
@@ -1544,14 +1554,17 @@ fn supported_function(
     function
         .arguments
         .iter()
+        .filter(|argument| !argument.injected)
         .all(|arg| supported_function_argument(&arg.ty, wireable_classes, projection))
         && (function.generic_params.is_empty()
             || (function
                 .arguments
                 .iter()
+                .filter(|argument| !argument.injected)
                 .all(|argument| argument.default.is_none())
                 && function.arguments.iter().all(|argument| {
-                    !matches!(projection.project(&argument.ty), GoTy::Function(_))
+                    argument.injected
+                        || !matches!(projection.project(&argument.ty), GoTy::Function(_))
                 })))
         && !projected_contains_type_var_dynamic_union(&projection.project(&function.return_type))
         && match &function.return_type {
@@ -1720,6 +1733,7 @@ fn render_functions(
             .function
             .arguments
             .iter()
+            .filter(|argument| !argument.injected)
             .map(|argument| &argument.ty)
             .chain(std::iter::once(&routed.function.return_type))
         {
@@ -3696,9 +3710,14 @@ fn method_references_type_var(
     parameter: &BaseName,
     projection: &GoTypeProjection<'_>,
 ) -> bool {
-    method.arguments.iter().any(|argument| {
-        projected_contains_named_type_var(&projection.project(&argument.ty), parameter)
-    }) || projected_contains_named_type_var(&projection.project(&method.return_type), parameter)
+    method
+        .arguments
+        .iter()
+        .filter(|argument| !argument.injected)
+        .any(|argument| {
+            projected_contains_named_type_var(&projection.project(&argument.ty), parameter)
+        })
+        || projected_contains_named_type_var(&projection.project(&method.return_type), parameter)
         || method.throws.as_ref().is_some_and(|throws| {
             projected_contains_named_type_var(&projection.project(throws), parameter)
         })
@@ -5267,6 +5286,52 @@ mod tests {
             files[&PathBuf::from("internal/bootstrap/bootstrap.go")]
                 .contains("var bytecode = []byte{\n\t1, 2, 3,")
         );
+    }
+
+    #[test]
+    fn injected_callback_does_not_hide_or_enter_callable_surface() {
+        let name = Name::new(BaseName::new("user"), vec![], BaseName::new("extract"));
+        let function = Function {
+            name: BaseName::new("extract"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![
+                FunctionArgument {
+                    injected: false,
+                    name: BaseName::new("input"),
+                    docstring: None,
+                    ty: ty_string(),
+                    default: None,
+                },
+                FunctionArgument {
+                    injected: true,
+                    name: BaseName::new("on_event"),
+                    docstring: None,
+                    ty: ty_union(vec![
+                        ty_callable(vec![ty_string()], ty_void(), ty_never()),
+                        ty_null(),
+                    ]),
+                    default: Some(FunctionArgumentDefault::Null),
+                },
+            ],
+            return_type: ty_string(),
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        };
+        let files = to_source_code_with_bytecode(
+            &SymbolPool::from([(name, Symbol::Function(function))]),
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        let functions = &files[&PathBuf::from("functions.go")];
+
+        assert!(
+            functions.contains("func Extract(ctx_ context.Context, input string) (string, error)"),
+            "{functions}"
+        );
+        assert!(!functions.contains("on_event"), "{functions}");
     }
 
     #[test]

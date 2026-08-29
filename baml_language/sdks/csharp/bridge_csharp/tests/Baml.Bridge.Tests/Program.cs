@@ -2299,12 +2299,15 @@ internal static unsafe class Program
             lastFakeFunction == "ai.FunctionSpec.prompt",
             "FunctionSpec.prompt did not use its authored stdlib method");
 
+        BamlValue promptValue = BamlValue.From(prompt);
+        BamlPrompt roundTrippedPrompt = promptValue.As<BamlPrompt>();
+
         SetFakeResult(new BamlOutboundValue { StringValue = "user: Describe image" });
         Require(
-            prompt.Text() == "user: Describe image"
+            roundTrippedPrompt.Text() == "user: Describe image"
                 && prompt.Text() == "user: Describe image"
                 && lastFakeFunction == "ai.Prompt.text",
-            "portable Prompt.text was not repeatable");
+            "portable Prompt did not round-trip through BamlValue");
         CallFunctionArgs promptCall = CallFunctionArgs.Parser.ParseFrom(lastFakeArguments!);
         Require(
             promptCall.Kwargs.Count == 1

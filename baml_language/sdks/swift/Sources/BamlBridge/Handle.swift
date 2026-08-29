@@ -12,15 +12,20 @@ public final class BamlHandle: @unchecked Sendable {
     let handleType: BamlBridge_Cffi_V1_BamlHandleType
     /// Root class identity carried by an outbound tagged handle's `ty`.
     let classFQN: String?
+    /// Media handles cache their portable wire value when they are created or
+    /// decoded. Encoding never has to perform a fallible native read.
+    let portableMedia: BamlBridge_Cffi_V1_BamlValueMedia?
 
     init(
         key: UInt64,
         handleType: BamlBridge_Cffi_V1_BamlHandleType,
-        classFQN: String? = nil
+        classFQN: String? = nil,
+        portableMedia: BamlBridge_Cffi_V1_BamlValueMedia? = nil
     ) {
         self.key = key
         self.handleType = handleType
         self.classFQN = classFQN
+        self.portableMedia = portableMedia
     }
 
     deinit {
@@ -46,8 +51,8 @@ extension BamlHandle: Equatable {
 
 extension BamlHandle: BamlEncodable {
     public func _bamlEncode() -> BamlInboundValue {
-        if BamlMedia.isPortableHandle(handleType) {
-            return BamlMedia.encodePortable(self)
+        if let portableMedia {
+            return BamlMedia.encodePortable(portableMedia)
         }
         // Clone a fresh key for the wire; the engine drains it while
         // this instance keeps its own.
@@ -84,10 +89,20 @@ extension BamlHandle: BamlDecodable {
         } else {
             classFQN = nil
         }
+        let portableMedia: BamlBridge_Cffi_V1_BamlValueMedia?
+        if BamlMedia.isPortableHandle(handle.handleType) {
+            portableMedia = try BamlMedia.snapshotPortable(
+                key: handle.key,
+                handleType: handle.handleType
+            )
+        } else {
+            portableMedia = nil
+        }
         return BamlHandle(
             key: handle.key,
             handleType: handle.handleType,
-            classFQN: classFQN
+            classFQN: classFQN,
+            portableMedia: portableMedia
         )
     }
 }

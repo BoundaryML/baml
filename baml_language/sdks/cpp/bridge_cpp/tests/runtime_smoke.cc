@@ -190,6 +190,9 @@ static void TestTypedSpecStreamAndPortableValueCodecs() {
   prompt_value.mutable_prompt_ast_value()->mutable_simple()->set_string(
       "portable");
   const baml::prompt prompt = baml::codec<baml::prompt>::decode(prompt_value);
+  const baml::prompt equal_prompt =
+      baml::codec<baml::prompt>::decode(prompt_value);
+  Require(prompt == equal_prompt, "Prompt equality was not structural");
   baml::detail::pb::InboundValue encoded_prompt;
   baml::codec<baml::prompt>::encode(encoded_prompt, prompt);
   Require(encoded_prompt.has_prompt_ast_value() &&

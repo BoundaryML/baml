@@ -43,7 +43,7 @@ pub(crate) fn render_type_alias(
         return None;
     }
     let target = translate_ty(&alias.resolves_to, ctx)?;
-    // `$stream` companion aliases strip the suffix like companion
+    // `@stream` companion aliases strip the suffix like companion
     // classes do (they route under stream_types, so no collision).
     let name = escape_ident(key.bare_name());
     Some(format!("public typealias {name} = {target}\n"))
@@ -106,7 +106,7 @@ pub(crate) fn render_class(
     fields: &[RenderedField],
     methods: &[String],
 ) -> String {
-    // `$stream` companion classes strip the suffix (they route under
+    // `@stream` companion classes strip the suffix (they route under
     // the stream_types namespace, so no collision with the base type).
     let name = escape_ident(key.bare_name());
     let fqn = key.to_string();
@@ -290,10 +290,10 @@ pub(crate) fn render_callable(
     }
 
     let raw_name = function.name.as_str();
-    // `$` is not a Swift identifier character. Companion names map it
-    // to `_`: `classify$stream` → `classify_stream`, `$build_request`
-    // → `_build_request`, `$parse$stream` → `_parse_stream`. The wire
-    // FQN keeps the `$` names verbatim. A `$stream` companion is an
+    // `@` is not a Swift identifier character. Companion names map it
+    // to `_`: `classify@stream` → `classify_stream`, `@build_request`
+    // → `_build_request`, `@parse@stream` → `_parse_stream`. The wire
+    // FQN keeps the `@` names verbatim. An `@stream` companion is an
     // ordinary function whose return type is `ai.stream.Stream<P, F>`
     // (→ BamlStream) — no special streaming emission exists.
     let bare: String = raw_name.replace(['$', '@'], "_");

@@ -152,11 +152,17 @@ public indirect enum BamlPromptJSON: Sendable, Equatable, BamlDecodable {
         case .listValue(let list):
             return .list(try list.items.map { try _bamlDecode(BamlOutboundValue($0)) })
         case .mapValue(let map):
-            return .object(
-                try Dictionary(uniqueKeysWithValues: map.entries.map {
-                    ($0.key, try _bamlDecode(BamlOutboundValue($0.value)))
-                })
-            )
+            var object: [String: BamlPromptJSON] = [:]
+            for entry in map.entries {
+                guard object[entry.key] == nil else {
+                    throw BamlDecodeError.typeMismatch(
+                        expected: "unique JSON object keys",
+                        got: "duplicate key \(entry.key)"
+                    )
+                }
+                object[entry.key] = try _bamlDecode(BamlOutboundValue(entry.value))
+            }
+            return .object(object)
         default:
             throw BamlDecodeError.typeMismatch(expected: "JSON", got: wireArmName(raw))
         }

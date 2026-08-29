@@ -53,7 +53,16 @@ public enum BamlMedia {
         guard let wireType = BamlBridge_Cffi_V1_BamlHandleType(rawValue: Int(handleType)) else {
             throw BamlDecodeError.unsupported("unknown media handle type \(handleType)")
         }
-        return BamlHandle(key: key, handleType: wireType)
+        var portable = BamlBridge_Cffi_V1_BamlValueMedia()
+        portable.media = BamlBridge_Cffi_V1_MediaTypeEnum(rawValue: Int(kind.rawValue))!
+        if let mimeType { portable.mimeType = mimeType }
+        switch source {
+        case .url: portable.url = value
+        case .file: portable.file = value
+        case .base64: portable.base64 = value
+        case .mimeType: break
+        }
+        return BamlHandle(key: key, handleType: wireType, portableMedia: portable)
     }
 
     public static func fromUrl(_ kind: Kind, _ url: String, mimeType: String?) throws -> BamlHandle {
@@ -89,44 +98,57 @@ public enum BamlMedia {
         }
     }
 
-    private static func read(_ source: Source, handle: BamlHandle) throws -> String? {
+    private static func read(
+        _ source: Source,
+        key: UInt64,
+        handleType: BamlBridge_Cffi_V1_BamlHandleType
+    ) throws -> String? {
         var buffer = BamlBuffer(ptr: nil, len: 0)
         let status: UInt32
         switch source {
-        case .url: status = BamlApi.mediaUrl(handle.key, Int32(handle.handleType.rawValue), &buffer)
-        case .file: status = BamlApi.mediaFile(handle.key, Int32(handle.handleType.rawValue), &buffer)
-        case .base64: status = BamlApi.mediaBase64(handle.key, Int32(handle.handleType.rawValue), &buffer)
-        case .mimeType: status = BamlApi.mediaMimeType(handle.key, Int32(handle.handleType.rawValue), &buffer)
+        case .url: status = BamlApi.mediaUrl(key, Int32(handleType.rawValue), &buffer)
+        case .file: status = BamlApi.mediaFile(key, Int32(handleType.rawValue), &buffer)
+        case .base64: status = BamlApi.mediaBase64(key, Int32(handleType.rawValue), &buffer)
+        case .mimeType: status = BamlApi.mediaMimeType(key, Int32(handleType.rawValue), &buffer)
         }
         guard status == BAML_CFFI_STATUS_OK.rawValue else {
             throw BamlDecodeError.unsupported("media access failed with status \(status)")
         }
         let absent = buffer.ptr == nil
         let data = BamlApi.takeBuffer(buffer)
-        return absent ? nil : String(decoding: data, as: UTF8.self)
+        guard !absent else { return nil }
+        guard let value = String(data: data, encoding: .utf8) else {
+            throw BamlDecodeError.typeMismatch(expected: "UTF-8 media data", got: "invalid bytes")
+        }
+        return value
     }
 
-    static func encodePortable(_ handle: BamlHandle) -> BamlInboundValue {
-        do {
-            let kind = try kind(for: handle.handleType)
-            var media = BamlBridge_Cffi_V1_BamlValueMedia()
-            media.media = BamlBridge_Cffi_V1_MediaTypeEnum(rawValue: Int(kind.rawValue))!
-            if let mimeType = try read(.mimeType, handle: handle) { media.mimeType = mimeType }
-            if let url = try read(.url, handle: handle) {
-                media.url = url
-            } else if let file = try read(.file, handle: handle) {
-                media.file = file
-            } else if let base64 = try read(.base64, handle: handle) {
-                media.base64 = base64
-            } else {
-                preconditionFailure("BAML media value has no portable payload")
-            }
-            var inbound = BamlBridge_Cffi_V1_InboundValue()
-            inbound.mediaValue = media
-            return BamlInboundValue(inbound)
-        } catch {
-            preconditionFailure("failed to serialize BAML media: \(error)")
+    static func snapshotPortable(
+        key: UInt64,
+        handleType: BamlBridge_Cffi_V1_BamlHandleType
+    ) throws -> BamlBridge_Cffi_V1_BamlValueMedia {
+        let kind = try kind(for: handleType)
+        var media = BamlBridge_Cffi_V1_BamlValueMedia()
+        media.media = BamlBridge_Cffi_V1_MediaTypeEnum(rawValue: Int(kind.rawValue))!
+        if let mimeType = try read(.mimeType, key: key, handleType: handleType) {
+            media.mimeType = mimeType
         }
+        if let url = try read(.url, key: key, handleType: handleType) {
+            media.url = url
+        } else if let file = try read(.file, key: key, handleType: handleType) {
+            media.file = file
+        } else if let base64 = try read(.base64, key: key, handleType: handleType) {
+            media.base64 = base64
+        } else {
+            throw BamlDecodeError.typeMismatch(expected: "media payload", got: "empty media")
+        }
+        return media
+    }
+
+    static func encodePortable(_ media: BamlBridge_Cffi_V1_BamlValueMedia) -> BamlInboundValue {
+        var inbound = BamlBridge_Cffi_V1_InboundValue()
+        inbound.mediaValue = media
+        return BamlInboundValue(inbound)
     }
 
     static func decodePortable(_ media: BamlBridge_Cffi_V1_BamlValueMedia) throws -> BamlHandle {

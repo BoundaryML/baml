@@ -206,14 +206,14 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
 /// actually reach the loop body rather than reusing the broader next type.
 fn translate_stream_yield_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
     match ty {
-        Ty::Null { .. } => "typing.Never".to_string(),
+        Ty::Null { .. } => "typing_extensions.Never".to_string(),
         Ty::Union(items, _) => {
             let non_null = items
                 .iter()
                 .filter(|item| !matches!(item, Ty::Null { .. }))
                 .collect::<Vec<_>>();
             match non_null.as_slice() {
-                [] => "typing.Never".to_string(),
+                [] => "typing_extensions.Never".to_string(),
                 [only] => translate_ty(only, ctx),
                 many => format!(
                     "typing.Union[{}]",

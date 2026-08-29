@@ -20,20 +20,15 @@ test "non-equivalent same-name runtime classes fail before render" {
     let left = reflect.class.new("Collision", { "left": reflect.Type.of<int>() });
     let right = reflect.class.new("Collision", { "right": reflect.Type.of<string>() });
     let combined = reflect.union.new([left.as_type(), right.as_type()]);
-    let rendered = Render@render_prompt<unreflect(combined.as_type())>() catch (e) {
-        reflect.errors.CompilationError => {
-            `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
+    assert.equal(
+        Render@render_prompt<unreflect(combined.as_type())>().text() catch (e) {
+            reflect.errors.CompilationError => {
+                `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
+            },
+            _ => "wrong render error",
         },
-        _ => "wrong render error",
-    };
-    if let message: string = rendered {
-        assert.equal(
-            message,
-            "E0162|type `Collision` has non-equivalent definitions in the same LLM render context",
-        )
-    } else {
-        assert.is_true(false)
-    }
+        "E0162|type `Collision` has non-equivalent definitions in the same LLM render context",
+    )
 }
 
 test "recursive and equivalent same-name runtime classes still render" {
@@ -56,14 +51,13 @@ class Chain<T> {
 }
 
 test "non-regular recursive generic fails before render" {
-    let rendered = Render@render_prompt<Chain<int>>().text() catch (e) {
-        reflect.errors.CompilationError => {
-            `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
-        },
-        _ => "wrong render error",
-    };
     assert.equal(
-        rendered,
+        Render@render_prompt<Chain<int>>().text() catch (e) {
+            reflect.errors.CompilationError => {
+                `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
+            },
+            _ => "wrong render error",
+        },
         "E0162|non-regular recursive generic class `runtime_render_identity.Chain` expands from `runtime_render_identity.Chain<int>` to `runtime_render_identity.Chain<runtime_render_identity.Chain<int>>` and cannot be rendered as an LLM output schema",
     )
 }
@@ -79,19 +73,14 @@ class ChainWrapped<T> {
 // The bounded specialization analysis must run BEFORE the structural
 // interface walk, which keys every realization and would diverge here.
 test "interface-wrapped recursive generic fails before interface walk" {
-    let rendered = Render@render_prompt<ChainWrapped<int>>() catch (e) {
-        reflect.errors.CompilationError => {
-            `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
+    assert.equal(
+        Render@render_prompt<ChainWrapped<int>>().text() catch (e) {
+            reflect.errors.CompilationError => {
+                `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
+            },
         },
-    };
-    if let message: string = rendered {
-        assert.equal(
-            message,
-            "E0162|non-regular recursive generic class `runtime_render_identity.ChainWrapped` expands from `runtime_render_identity.ChainWrapped<int>` to `runtime_render_identity.ChainWrapped<runtime_render_identity.Wrapped<int>>` and cannot be rendered as an LLM output schema",
-        )
-    } else {
-        assert.is_true(false)
-    }
+        "E0162|non-regular recursive generic class `runtime_render_identity.ChainWrapped` expands from `runtime_render_identity.ChainWrapped<int>` to `runtime_render_identity.ChainWrapped<runtime_render_identity.Wrapped<int>>` and cannot be rendered as an LLM output schema",
+    )
 }
 
 class Box<T> {
@@ -139,19 +128,14 @@ class Envelope {
 }
 
 test "open interface in second generic specialization is rejected" {
-    let rendered = Render@render_prompt<Envelope>() catch (e) {
-        reflect.errors.CompilationError => {
-            `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
+    assert.equal(
+        Render@render_prompt<Envelope>().text() catch (e) {
+            reflect.errors.CompilationError => {
+                `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
+            },
         },
-    };
-    if let message: string = rendered {
-        assert.equal(
-            message,
-            "E0161|field `runtime_render_identity.Envelope.open.value` has open interface type `runtime_render_identity.OpenValue`, which cannot be rendered as an LLM output schema",
-        )
-    } else {
-        assert.is_true(false)
-    }
+        "E0161|field `runtime_render_identity.Envelope.open.value` has open interface type `runtime_render_identity.OpenValue`, which cannot be rendered as an LLM output schema",
+    )
 }
 
 class BoxRec<T> {
@@ -168,17 +152,12 @@ function RenderPair<T, U>() -> BoxRec<T> | BoxRec<U> {
 test "runtime type arguments with the same display name remain distinct" {
     let left = reflect.class.new("Arg", { "value": reflect.Type.of<int>() });
     let right = reflect.class.new("Arg", { "value": reflect.Type.of<int>() });
-    let rendered = RenderPair@render_prompt<unreflect(left.as_type()), unreflect(right.as_type())>() catch (e) {
-        reflect.errors.CompilationError => {
-            `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
+    assert.equal(
+        RenderPair@render_prompt<unreflect(left.as_type()), unreflect(right.as_type())>().text() catch (e) {
+            reflect.errors.CompilationError => {
+                `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
+            },
         },
-    };
-    if let message: string = rendered {
-        assert.equal(
-            message,
-            "E0162|classes `runtime_render_identity.BoxRec<Arg>` and `runtime_render_identity.BoxRec<Arg>` both render as `Sleeve<Arg>` in the same LLM render context",
-        )
-    } else {
-        assert.is_true(false)
-    }
+        "E0162|classes `runtime_render_identity.BoxRec<Arg>` and `runtime_render_identity.BoxRec<Arg>` both render as `Sleeve<Arg>` in the same LLM render context",
+    )
 }

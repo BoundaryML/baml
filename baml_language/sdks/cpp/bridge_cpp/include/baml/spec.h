@@ -75,6 +75,83 @@ inline void encode_capability(pb::InboundValue& target,
   handle->set_handle_type(state.handle_type);
 }
 
+inline bool prompt_media_equal(const pb::BamlValueMedia& lhs,
+                               const pb::BamlValueMedia& rhs) {
+  if (lhs.media() != rhs.media() ||
+      lhs.has_mime_type() != rhs.has_mime_type() ||
+      (lhs.has_mime_type() && lhs.mime_type() != rhs.mime_type()) ||
+      lhs.value_case() != rhs.value_case()) {
+    return false;
+  }
+  switch (lhs.value_case()) {
+    case pb::BamlValueMedia::kUrl:
+      return lhs.url() == rhs.url();
+    case pb::BamlValueMedia::kBase64:
+      return lhs.base64() == rhs.base64();
+    case pb::BamlValueMedia::kFile:
+      return lhs.file() == rhs.file();
+    case pb::BamlValueMedia::VALUE_NOT_SET:
+      return true;
+  }
+  return false;
+}
+
+inline bool prompt_simple_equal(const pb::BamlValuePromptAstSimple& lhs,
+                                const pb::BamlValuePromptAstSimple& rhs);
+
+inline bool prompt_ast_equal(const pb::BamlValuePromptAst& lhs,
+                             const pb::BamlValuePromptAst& rhs) {
+  if (lhs.value_case() != rhs.value_case()) return false;
+  switch (lhs.value_case()) {
+    case pb::BamlValuePromptAst::kSimple:
+      return prompt_simple_equal(lhs.simple(), rhs.simple());
+    case pb::BamlValuePromptAst::kMessage: {
+      const auto& left = lhs.message();
+      const auto& right = rhs.message();
+      return left.role() == right.role() &&
+             left.metadata_as_json() == right.metadata_as_json() &&
+             left.has_content() == right.has_content() &&
+             (!left.has_content() ||
+              prompt_simple_equal(left.content(), right.content()));
+    }
+    case pb::BamlValuePromptAst::kMultiple: {
+      const auto& left = lhs.multiple().items();
+      const auto& right = rhs.multiple().items();
+      if (left.size() != right.size()) return false;
+      for (int i = 0; i < left.size(); ++i) {
+        if (!prompt_ast_equal(left.Get(i), right.Get(i))) return false;
+      }
+      return true;
+    }
+    case pb::BamlValuePromptAst::VALUE_NOT_SET:
+      return true;
+  }
+  return false;
+}
+
+inline bool prompt_simple_equal(const pb::BamlValuePromptAstSimple& lhs,
+                                const pb::BamlValuePromptAstSimple& rhs) {
+  if (lhs.value_case() != rhs.value_case()) return false;
+  switch (lhs.value_case()) {
+    case pb::BamlValuePromptAstSimple::kString:
+      return lhs.string() == rhs.string();
+    case pb::BamlValuePromptAstSimple::kMedia:
+      return prompt_media_equal(lhs.media(), rhs.media());
+    case pb::BamlValuePromptAstSimple::kMultiple: {
+      const auto& left = lhs.multiple().items();
+      const auto& right = rhs.multiple().items();
+      if (left.size() != right.size()) return false;
+      for (int i = 0; i < left.size(); ++i) {
+        if (!prompt_simple_equal(left.Get(i), right.Get(i))) return false;
+      }
+      return true;
+    }
+    case pb::BamlValuePromptAstSimple::VALUE_NOT_SET:
+      return true;
+  }
+  return false;
+}
+
 template <typename... Args>
 pb::BamlTy generic_nominal_ty(const char* fqn) {
   pb::BamlTy ty;
@@ -277,7 +354,7 @@ class stream {
 class prompt {
  public:
   friend bool operator==(const prompt& lhs, const prompt& rhs) {
-    return lhs.value_.SerializeAsString() == rhs.value_.SerializeAsString();
+    return detail::prompt_ast_equal(lhs.value_, rhs.value_);
   }
 
   friend bool operator!=(const prompt& lhs, const prompt& rhs) {
@@ -323,14 +400,16 @@ template <typename Out>
 ::baml::prompt function_spec<Out>::prompt() const {
   detail::args_encoder args;
   add_self(args);
-  return detail::call_sync<prompt>("ai.FunctionSpec.prompt", std::move(args));
+  return detail::call_sync<::baml::prompt>("ai.FunctionSpec.prompt",
+                                           std::move(args));
 }
 
 template <typename Out>
 future<::baml::prompt> function_spec<Out>::prompt_async() const {
   detail::args_encoder args;
   add_self(args);
-  return detail::start_call<prompt>("ai.FunctionSpec.prompt", std::move(args));
+  return detail::start_call<::baml::prompt>("ai.FunctionSpec.prompt",
+                                            std::move(args));
 }
 
 template <>

@@ -82,7 +82,12 @@ impl LeafBody {
         }
         // Recursive aliases (18c) render via
         // `typing_extensions.TypeAliasType`.
-        if self.has_recursive_alias() {
+        if self.has_recursive_alias()
+            || self
+                .symbols
+                .iter()
+                .any(|(symbol, _)| matches!(symbol, EmittedSymbol::Class(_)))
+        {
             out.push("typing_extensions");
         }
         out
@@ -2605,7 +2610,10 @@ pub(crate) fn render_leaf_body_pyi(
     }
     let needs_typing =
         body.needs_typing_pyi() || !rel_imports.is_empty() || !callable_child_bodies.is_empty();
-    let needs_typing_extensions = body.has_recursive_alias();
+    // Stream accessor annotations can use `typing_extensions.Never` for
+    // Python 3.10. Stubs with type expressions import the backport alongside
+    // `typing`, even when this particular leaf has no recursive alias.
+    let needs_typing_extensions = body.has_recursive_alias() || needs_typing;
     let needs_pydantic = body.needs_pydantic();
     let has_stdlib_block = needs_enum || needs_typing || needs_typing_extensions || needs_pydantic;
     if has_stdlib_block {

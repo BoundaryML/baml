@@ -22,7 +22,7 @@ The final change should do all of the following:
 9. Keep deterministic Python identifier projection and report every public symbol that had to be renamed.
 10. Keep cancellation propagation and capability lifetime/GC fixes.
 
-The final change should **not** introduce a semantic `FunctionOperation` axis through codegen, protobuf, bridge, project, and engine layers. Spec and stream companions are ordinary compiled functions with exact internal FQNs.
+The final change should **not** introduce a semantic `FunctionOperation` axis through codegen, the wire protocol, project, or engine layers. A host bridge may retain a local `FunctionOperation::{Direct, Spec, Stream}` selector as API-boundary plumbing, but it must resolve that selector to an exact companion FQN before the wire call. Spec and stream companions remain ordinary compiled functions with exact internal FQNs.
 
 ## 2. Terminology and hard boundaries
 
@@ -37,12 +37,13 @@ There are three different concepts that must not be conflated:
 
 The `$` to `@` rename applies to **callable companion FQNs only**. It must not rename partial classes, type aliases, or any other generated type whose `$stream` suffix is already part of its schema identity.
 
-The BAML parser recognizes the compiler-produced callable postfixes
+The BAML parser supports source references to the compiler-produced callable postfixes
 `@spec`, `@stream`, `@render_prompt`, `@build_request`, and `@parse`. This
-preserves the existing ability to exercise companions from BAML source while
-changing their exact identity from `$` to `@`. Only `@spec` and `@stream` are
-projected into host SDK bindings; the other helper companions remain internal
-to the BAML surface.
+preserves the ability to exercise ordinary companion functions from BAML source
+while changing their exact identity from `$` to `@`. `@stream` is therefore
+valid companion-reference syntax, not a special streaming expression or a
+second dispatch protocol. Only `@spec` and `@stream` are projected into host SDK
+bindings; the other helper companions remain internal to the BAML surface.
 
 ## 3. Architectural decision
 
@@ -57,6 +58,27 @@ Python Extract_stream(...)   -> call_function("user.orders.Extract@stream", args
 ```
 
 The same rule applies in every SDK. The public spelling differs by language; the wire/runtime FQN does not.
+
+A hand-written host bridge API may expose a local selector for convenience:
+
+```rust
+enum FunctionOperation {
+    Direct,
+    Spec,
+    Stream,
+}
+
+fn exact_fqn(authored_fqn: &str, operation: FunctionOperation) -> String {
+    match operation {
+        FunctionOperation::Direct => authored_fqn.to_owned(),
+        FunctionOperation::Spec => format!("{authored_fqn}@spec"),
+        FunctionOperation::Stream => format!("{authored_fqn}@stream"),
+    }
+}
+```
+
+That enum is boundary-local only. It is not serialized, attached to codegen
+symbols, or passed into project/engine dispatch.
 
 The inbound call request therefore stays conceptually simple:
 
@@ -699,7 +721,7 @@ then replayed mixed files surgically using the slices below.
 | Engine semantic dispatcher | `FunctionOperation::{Direct,Spec,Stream}`, `*_operation` entry switching | ordinary function lookup/call |
 | Project operation APIs | `call_function_operation`, `call_callable_operation`, operation parameter lookup | existing call-by-name/callable APIs |
 | Cross-SDK shared binding roles | generator-wide Direct/Spec/Stream fan-out metadata | per-generator companion filtering and naming |
-| Public BAML `@stream` syntax, if added only for this PR | parser/syntax additions | internal synthesized `Fn@stream`; no source syntax |
+| A distinct `STREAM_EXPR` or special `@stream` execution mode | parser/lowering operation-specific nodes | ordinary companion-reference syntax lowering to `Fn@stream` |
 
 ### 11.3 Files requiring surgical replay
 
@@ -721,7 +743,7 @@ Use one conceptual concern per commit so any later regression can be dropped wit
 3. **RuntimeValue bridge.** Add the stable handle discriminant, CFFI/WASM adapters, host codecs/wrappers, and dynamic stream round-trip tests.
 4. **Prompt/media portability.** Add hand-written protocol/codec behavior, then regenerate protocol clients in a separate mechanical commit.
 5. **FunctionSpec core.** Keep the BAML methods and tagged capability conversion, without any function-operation API.
-6. **Internal companion rename.** Rename callable `$...` FQNs to `@...`, update source `@spec` lowering, and synthesize internal `@stream`.
+6. **Internal companion rename.** Rename callable `$...` FQNs to `@...`, lower each supported source companion postfix—including `@spec` and `@stream`—to its ordinary exact FQN, and synthesize `Fn@stream`.
 7. **Per-SDK spec/stream bindings.** Each generator exposes only direct + spec + stream and invokes exact companion FQNs.
 8. **Python typing.** Apply `BamlStream[TNext, TYield, TFinal]`, one-argument `BamlFunctionSpec[TOut]`, aliases, and static type fixtures.
 9. **Python rename reporting.** Return, sort, deduplicate, and print structured public rename records.
@@ -859,7 +881,7 @@ updated to assert exact `@spec`/`@stream` FQNs with no operation selector.
 
 ## 15. Acceptance checklist
 
-- [x] No `FunctionOperation` enum or call-request operation field remains.
+- [x] No wire/codegen/project/engine `FunctionOperation` axis or call-request operation field remains; a host-bridge-local selector is permitted.
 - [x] No engine/project `*_operation` call API is needed for spec or stream.
 - [x] Internal callable companions use `@`; partial type names keep `$stream`.
 - [x] BAML source `@spec` lowers to the ordinary `Fn@spec` symbol.
@@ -884,6 +906,6 @@ updated to assert exact `@spec`/`@stream` FQNs with no operation selector.
 - Reconstructing spec/stream signatures in the IDE symbol pool.
 - Making live RuntimeValue or FunctionSpec handles portable across processes.
 - Exposing render-prompt/build-request/parse as generated top-level functions.
-- A special source-level `@stream` execution form. Callable postfixes resolve
-  to ordinary companion symbols and carry no extra operation semantics.
+- Special execution semantics for source `@stream`. The supported postfix is
+  only an ordinary companion reference and carries no extra operation semantics.
 - Mixing formatter, clippy, boxing, or unrelated cleanup into the replay.

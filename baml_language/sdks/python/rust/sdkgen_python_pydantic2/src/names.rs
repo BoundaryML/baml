@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use baml_codegen_types::{Name, Symbol, SymbolPool};
 
-use crate::routing::{LeafPath, raw_route_segments};
+use crate::routing::{LeafPath, raw_route_segments, sanitize_python_module_segment};
 
 /// One sync or async Python binding for a concrete BAML callable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -131,7 +131,7 @@ impl PythonNames {
                 self.module_segments
                     .get(&prefix)
                     .cloned()
-                    .unwrap_or_else(|| project_identifier(&segment).0),
+                    .unwrap_or_else(|| sanitize_python_module_segment(&segment)),
             );
         }
         LeafPath {
@@ -419,8 +419,9 @@ impl PythonNames {
                 id: format!("1:{raw}"),
                 kind: "method".to_string(),
                 fqn: format!("{owner}.{raw}"),
+                protected: is_pydantic_protected(&raw)
+                    .then_some(IdentifierRenameReason::FrameworkProtected),
                 raw,
-                protected: None,
                 report: is_reportable_user_name(owner),
             });
         }

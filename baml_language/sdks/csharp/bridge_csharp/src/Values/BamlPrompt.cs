@@ -68,6 +68,8 @@ public sealed class BamlPrompt
 
     internal BamlValuePromptAst WireCopy() => wire.Clone();
 
+    internal BamlGeneratedRegistry Registry => registry;
+
     private Task<BamlGeneratedValue> InvokeAsync(
         string functionIdentity,
         CancellationToken cancellationToken)

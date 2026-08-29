@@ -33,7 +33,7 @@ pub(crate) fn emit(
     if name.name().as_str().contains('$') {
         return Err(SkipWarning {
             fqn,
-            reason: "companion functions ($stream, $build_request, …) are not emitted yet"
+            reason: "legacy `$` companion functions are not emitted; callable companions use `@`"
                 .to_string(),
         });
     }
@@ -69,7 +69,7 @@ pub(crate) fn emit_method(
     if method_name.contains('$') {
         return Err(SkipWarning {
             fqn,
-            reason: "companion methods ($stream, $build_request, …) are not emitted yet"
+            reason: "legacy `$` companion methods are not emitted; callable companions use `@`"
                 .to_string(),
         });
     }
@@ -133,12 +133,21 @@ fn emit_binding(
         generic_params: translation_scope.as_slice(),
         ..*ctx
     };
+    // Compiler-injected controls have defaults at the VM boundary. Rust does
+    // not yet expose optional host-callable controls, so omit them instead of
+    // dropping the entire authored function. User-declared arguments are never
+    // marked injected and remain fail-closed.
+    let host_arguments: Vec<_> = function
+        .arguments
+        .iter()
+        .filter(|argument| !argument.injected)
+        .collect();
 
     let ret = translate_ty::translate(&function.return_type, &gctx)
         .map_err(|u| skip(format!("return: {}", u.reason)))?;
     let throws = match &function.throws {
         None => quote! { ::core::convert::Infallible },
-        Some(ty) => translate_ty::translate(ty, &gctx)
+        Some(ty) => translate_ty::translate_throws(ty, &gctx)
             .map_err(|u| skip(format!("throws contract: {}", u.reason)))?,
     };
 
@@ -163,7 +172,7 @@ fn emit_binding(
             )
         });
     }
-    for arg in &function.arguments {
+    for arg in &host_arguments {
         let arg_name = arg.name.as_str();
         let param = idents::ident(arg_name);
         // A direct callable parameter (`(…) -> R`) is registered as a host
@@ -252,7 +261,7 @@ fn emit_binding(
         Receiver::RefSelf => {
             append_by_value_note(&mut doc_attrs, ByValueSubject::ReceiverAndArguments);
         }
-        Receiver::None if !function.arguments.is_empty() => {
+        Receiver::None if !host_arguments.is_empty() => {
             append_by_value_note(&mut doc_attrs, ByValueSubject::Arguments);
         }
         Receiver::None => {}
@@ -270,7 +279,7 @@ fn emit_binding(
     let result_ty = quote! { ::std::result::Result<#ret, ::baml_bridge::Error<#throws>> };
     // The receiver counts toward clippy's tally (`self` is one of the
     // `fn_decl` inputs), so it counts here too.
-    let arg_count = function.arguments.len() + usize::from(matches!(receiver, Receiver::RefSelf));
+    let arg_count = host_arguments.len() + usize::from(matches!(receiver, Receiver::RefSelf));
     let too_many_arguments_attr = if arg_count > 7 {
         quote! { #[allow(clippy::too_many_arguments)] }
     } else {
@@ -327,6 +336,48 @@ fn emit_binding(
         quote! { ::baml_bridge::encode::type_args(::std::vec![#(#entries),*]) }
     };
 
+    let stream_with_bindings = if fqn.ends_with("@stream") {
+        let with_name = format_ident!("{}_with", idents::dir_segment(binding_name));
+        let with_async_name = format_ident!("{}_with_async", idents::dir_segment(binding_name));
+        quote! {
+            #(#doc_attrs)*
+            #too_many_arguments_attr
+            #schema_method_name_attr
+            pub fn #with_name #generics_decl (
+                #self_param
+                #(#params,)*
+                options: ::baml_bridge::CallOptions,
+            ) -> #result_ty {
+                crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
+                #(#converts)*
+                let mut kwargs = ::baml_bridge::encode::kwargs(
+                    ::std::vec![#(#kwarg_entries),*]
+                );
+                options.append_to(&mut kwargs);
+                ::baml_bridge::runtime::invoke_sync(#fqn, kwargs, #type_args_expr)
+            }
+
+            #(#doc_attrs)*
+            #too_many_arguments_attr
+            #schema_method_name_attr
+            pub async fn #with_async_name #generics_decl (
+                #self_param
+                #(#params,)*
+                options: ::baml_bridge::CallOptions,
+            ) -> #result_ty {
+                crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
+                #(#converts)*
+                let mut kwargs = ::baml_bridge::encode::kwargs(
+                    ::std::vec![#(#kwarg_entries),*]
+                );
+                options.append_to(&mut kwargs);
+                ::baml_bridge::runtime::invoke(#fqn, kwargs, #type_args_expr).await
+            }
+        }
+    } else {
+        TokenStream::new()
+    };
+
     Ok(quote! {
         #(#doc_attrs)*
         #too_many_arguments_attr
@@ -354,6 +405,8 @@ fn emit_binding(
             )
             .await
         }
+
+        #stream_with_bindings
     })
 }
 
@@ -388,7 +441,8 @@ fn collect_effect_params(
 ) -> Vec<String> {
     let mut effect_params: Vec<String> = Vec::new();
     for arg in &function.arguments {
-        if arg.default.is_none()
+        if !arg.injected
+            && arg.default.is_none()
             && let Some(baml_codegen_types::Ty::Function { throws, .. }) =
                 crate::effect_rename::callback_root(&arg.ty)
             && let baml_codegen_types::Ty::TypeVar(name, _) = throws.as_ref()
@@ -543,7 +597,7 @@ fn raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> {
     fn walk(ty: &Ty, out: &mut Vec<String>) {
         match ty {
             Ty::Class(name, _, _) | Ty::Enum(name, _) | Ty::TypeAlias(name, _) => {
-                let n = name.name().as_str().to_string();
+                let n = name.bare_name().to_string();
                 if !out.contains(&n) {
                     out.push(n);
                 }

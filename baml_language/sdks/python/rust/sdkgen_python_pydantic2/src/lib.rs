@@ -1799,15 +1799,25 @@ mod tests {
             cg_name("user", &["lorem"], "extract_resume"),
             func_sym("extract_resume", "x.baml", 0),
         );
+        pool.insert(
+            cg_name("user", &["lorem"], "extract_resume@spec"),
+            func_sym("extract_resume@spec", "x.baml", 1),
+        );
 
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        for removed in ["build_request", "render_prompt", "__parse", "$spec"] {
+        for removed in ["build_request", "render_prompt", "__parse"] {
             assert!(
                 !leaf.contains(removed),
                 "found removed {removed} binding:\n{leaf}"
             );
         }
+        assert!(leaf.contains("extract_resume_spec       ="), "{leaf}");
+        assert!(
+            leaf.contains("\"user.lorem.extract_resume@spec\""),
+            "{leaf}"
+        );
+        assert!(!leaf.contains("user.lorem.extract_resume$spec"), "{leaf}");
     }
 
     #[test]

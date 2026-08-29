@@ -2222,7 +2222,11 @@ fn collect_type_closure(
                 )?;
             }
         }
-        Ty::Class(name, _, _) if is_runtime_class_projection(name) => {}
+        Ty::Class(name, arguments, _) if is_runtime_class_projection(name) => {
+            for argument in arguments {
+                collect_type_closure(argument, model, types)?;
+            }
+        }
         Ty::Class(name, arguments, _) => {
             let Some(Symbol::Class(class)) = model.symbols.get(name) else {
                 return Err(unsupported(
@@ -4845,7 +4849,7 @@ fn csharp_string(value: &str) -> String {
     reason = "TyAttr is intentionally reached through generator-owned Ty constructors"
 )]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{BTreeSet, HashMap};
 
     use super::*;
 
@@ -4865,6 +4869,51 @@ mod tests {
         Ty::Uint8Array {
             attr: Default::default(),
         }
+    }
+
+    #[test]
+    fn function_spec_registers_its_output_codec() {
+        let payload_name = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("review")],
+            BaseName::new("Payload"),
+        );
+        let payload_ty = Ty::Class(payload_name.clone(), vec![], TyAttr::EMPTY);
+        let payload = Class {
+            name: payload_name.clone(),
+            generic_params: vec![],
+            docstring: None,
+            properties: vec![ClassProperty {
+                name: BaseName::new("value"),
+                docstring: None,
+                ty: primitive_string(),
+            }],
+            static_methods: vec![],
+            instance_methods: vec![],
+            origin: baml_codegen_types::Origin {
+                source_file_path: "review.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let function_spec_name =
+            Name::new(BaseName::new("ai"), vec![], BaseName::new("FunctionSpec"));
+        let model = CodegenModel {
+            symbols: HashMap::from([
+                (payload_name, Symbol::Class(payload)),
+                (
+                    function_spec_name.clone(),
+                    builtin_class(function_spec_name.clone(), vec![BaseName::new("Out")]),
+                ),
+            ]),
+            callables: HashMap::new(),
+        };
+        let function_spec = Ty::Class(function_spec_name, vec![payload_ty.clone()], TyAttr::EMPTY);
+        let mut types = BTreeSet::new();
+
+        collect_type_closure(&function_spec, &model, &mut types)
+            .expect("FunctionSpec output should be reachable");
+
+        assert!(types.contains(&payload_ty), "registered types: {types:?}");
     }
 
     fn media(kind: MediaKind) -> Ty {

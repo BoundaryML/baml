@@ -187,16 +187,23 @@ function MediaShape(photo: image) -> string {
 }
 
 test "preview media never reads files or fetches urls" {
-    let file_result = MediaShape@build_request(image.from_file("/definitely/not-a-real-preview-file.png", "image/png")).body catch_all (e) {
-        ai.errors.PreviewUnsupported => "preview",
-        _ => `wrong:${e.to_string()}`,
-    };
-    assert.equal(file_result, "preview");
-    let url_result = MediaShape@build_request(image.from_url("http://127.0.0.1:9/image.png", "image/png")).body catch_all (e) {
-        _ => `wrong:${e.to_string()}`,
-    };
-    assert.is_true(url_result.includes("http://127.0.0.1:9/image.png"));
-    assert.is_true(!url_result.includes("wrong:"))
+    assert.equal(
+        MediaShape@build_request(image.from_file("/definitely/not-a-real-preview-file.png", "image/png")).body catch_all (e) {
+            ai.errors.PreviewUnsupported => "preview",
+            _ => `wrong:${e.to_string()}`,
+        },
+        "preview",
+    );
+    assert.is_true(
+        (MediaShape@build_request(image.from_url("http://127.0.0.1:9/image.png", "image/png")).body catch_all (e) {
+            _ => `wrong:${e.to_string()}`,
+        }).includes("http://127.0.0.1:9/image.png"),
+    );
+    assert.is_true(
+        !(MediaShape@build_request(image.from_url("http://127.0.0.1:9/image.png", "image/png")).body catch_all (e) {
+            _ => `wrong:${e.to_string()}`,
+        }).includes("wrong:"),
+    )
 }
 
 function ChatMediaShape(photo: image) -> string {
@@ -210,11 +217,13 @@ test "chat preview preserves urls unless invoke would inline them" {
     assert.is_true(chat.includes("http://127.0.0.1:9/image.png"));
     // Ollama inlines image URLs at invoke time, so its preview must refuse the
     // URL rather than silently building a request invoke would not send.
-    let ollama = ChatMediaShape@build_request(photo, client = UnroutableOllama).body catch_all (e) {
-        ai.errors.PreviewUnsupported => "unsupported",
-        _ => `wrong:${e.to_string()}`,
-    };
-    assert.equal(ollama, "unsupported")
+    assert.equal(
+        ChatMediaShape@build_request(photo, client = UnroutableOllama).body catch_all (e) {
+            ai.errors.PreviewUnsupported => "unsupported",
+            _ => `wrong:${e.to_string()}`,
+        },
+        "unsupported",
+    )
 }
 
 // ── provider prompt lowering: roles ──────────────────────────────────────────

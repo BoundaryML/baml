@@ -106,12 +106,13 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
     for (name, symbol) in symbols {
         let leaf = analysis.renamed(&routing::route(name).segments).to_vec();
         let mut tys: Vec<&Ty> = Vec::new();
+        let mut throws_tys: Vec<&Ty> = Vec::new();
         match symbol {
             Symbol::Function(function) => {
                 tys.extend(function.arguments.iter().map(|a| &a.ty));
                 tys.push(&function.return_type);
                 if let Some(throws) = &function.throws {
-                    tys.push(throws);
+                    throws_tys.push(throws);
                 }
             }
             Symbol::Class(class) => {
@@ -126,7 +127,7 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
                     tys.extend(method.arguments.iter().map(|a| &a.ty));
                     tys.push(&method.return_type);
                     if let Some(throws) = &method.throws {
-                        tys.push(throws);
+                        throws_tys.push(throws);
                     }
                 }
             }
@@ -140,6 +141,9 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
         }
         for ty in tys {
             register_unions_in(ty, &leaf, analysis, &mut registry);
+        }
+        for ty in throws_tys {
+            register_throws_unions_in(ty, &leaf, analysis, &mut registry);
         }
     }
 
@@ -158,6 +162,49 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
     }
 
     registry
+}
+
+/// Register unions as they appear on Rust's typed error surface. Interface
+/// arms are intentionally omitted: open interfaces cannot become a closed
+/// Rust enum, and values selecting those arms are preserved by
+/// `baml_bridge::Error::Runtime` instead.
+fn register_throws_unions_in(
+    ty: &Ty,
+    leaf: &[String],
+    analysis: &Analysis,
+    registry: &mut UnionRegistry,
+) {
+    match ty {
+        Ty::Union(items, _) => {
+            let representable: Vec<_> = items
+                .iter()
+                .filter(|item| arm_is_representable(item, analysis))
+                .cloned()
+                .collect();
+            let (arms, _) = strip_null(&representable);
+            if arms.len() >= 2
+                && let Some(union_enum) = synthesize(&arms, analysis)
+            {
+                registry
+                    .by_leaf
+                    .entry(leaf.to_vec())
+                    .or_default()
+                    .entry(shape_key(&arms))
+                    .or_insert(union_enum);
+            }
+            for item in &representable {
+                register_throws_unions_in(item, leaf, analysis, registry);
+            }
+        }
+        Ty::List(inner, _) => register_throws_unions_in(inner, leaf, analysis, registry),
+        Ty::Map { value, .. } => register_throws_unions_in(value, leaf, analysis, registry),
+        Ty::Class(_, args, _) => {
+            for arg in args {
+                register_throws_unions_in(arg, leaf, analysis, registry);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Walk a type and register every representable multi-arm union in it.
@@ -308,7 +355,7 @@ fn collect_arm_type_vars(ty: &Ty, out: &mut Vec<String>, seen: &mut HashSet<Stri
 
 /// Whether a payload arm's type is representable given the emitted set
 /// (the structural checks live in [`shape_error`]).
-fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
+pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
     match ty {
         Ty::Int { .. }
         | Ty::Bigint { .. }
@@ -364,7 +411,13 @@ fn variant_name(arm: &Ty) -> Option<String> {
         Ty::Class(name, _, _)
         | Ty::Enum(name, _)
         | Ty::EnumVariant(name, _, _)
-        | Ty::TypeAlias(name, _) => Some(name.name().as_str().to_string()),
+        | Ty::TypeAlias(name, _) => {
+            let mut variant = name.bare_name().to_string();
+            if name.name().as_str().ends_with("$stream") {
+                variant.push_str("Stream");
+            }
+            Some(variant)
+        }
         // A `TypeVar` arm's variant is named after the type parameter
         // (`T | string` → `TOrString { T(T), String(String) }`).
         Ty::TypeVar(var, _) => Some(var.as_str().to_string()),

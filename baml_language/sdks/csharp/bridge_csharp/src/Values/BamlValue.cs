@@ -71,11 +71,15 @@ public sealed class BamlValue : IEquatable<BamlValue>
 
     private readonly BamlGeneratedValue value;
     private readonly BamlTypeDescriptor type;
+    private readonly BamlGeneratedRegistry? promptRegistry;
 
-    internal BamlValue(BamlGeneratedValue value)
+    internal BamlValue(
+        BamlGeneratedValue value,
+        BamlGeneratedRegistry? promptRegistry = null)
     {
         ArgumentNullException.ThrowIfNull(value);
         this.value = value;
+        this.promptRegistry = promptRegistry;
         type = BamlTypeDescriptor.FromGenerated(value);
     }
 
@@ -279,9 +283,11 @@ public sealed class BamlValue : IEquatable<BamlValue>
         }
         if (declaredType == typeof(BamlPrompt))
         {
+            var prompt = (BamlPrompt)(object)value;
             return new BamlValue(
                 BamlGeneratedValue.CreatePromptAst(
-                    ((BamlPrompt)(object)value).WireCopy()));
+                    prompt.WireCopy()),
+                prompt.Registry);
         }
         if (declaredType == typeof(BamlType))
         {
@@ -335,6 +341,13 @@ public sealed class BamlValue : IEquatable<BamlValue>
         if (Kind == BamlValueKind.Type && typeof(T) == typeof(BamlType))
         {
             result = (T)(object)value.ReadType();
+            return true;
+        }
+        if (Kind == BamlValueKind.Prompt
+            && typeof(T) == typeof(BamlPrompt)
+            && promptRegistry is not null)
+        {
+            result = (T)(object)new BamlPrompt(value.ReadPromptAst(), promptRegistry);
             return true;
         }
         if (BamlDynamicCodecRegistry.TryDecode(this, out result))
@@ -652,8 +665,7 @@ public sealed class BamlValue : IEquatable<BamlValue>
                     right.ReadUnionOptionName())
                 && ValueEquals(left.ReadUnionPayload(), right.ReadUnionPayload()),
             PrimitiveCarrierKind.Media => left.ReadMedia().Equals(right.ReadMedia()),
-            PrimitiveCarrierKind.Prompt => left.ReadPromptAst().ToByteArray().AsSpan()
-                .SequenceEqual(right.ReadPromptAst().ToByteArray()),
+            PrimitiveCarrierKind.Prompt => left.ReadPromptAst().Equals(right.ReadPromptAst()),
             PrimitiveCarrierKind.Type => left.ReadType().Equals(right.ReadType()),
             PrimitiveCarrierKind.Handle => ReferenceEquals(left.ReadHandle(), right.ReadHandle()),
             _ => false,
@@ -755,10 +767,7 @@ public sealed class BamlValue : IEquatable<BamlValue>
                 hash.Add(value.ReadMedia());
                 break;
             case PrimitiveCarrierKind.Prompt:
-                foreach (byte item in value.ReadPromptAst().ToByteArray())
-                {
-                    hash.Add(item);
-                }
+                hash.Add(value.ReadPromptAst());
                 break;
             case PrimitiveCarrierKind.Type:
                 hash.Add(value.ReadType());
@@ -817,6 +826,7 @@ public sealed class BamlValue : IEquatable<BamlValue>
             || canonicalType == typeof(BamlAudio)
             || canonicalType == typeof(BamlVideo)
             || canonicalType == typeof(BamlPdf)
+            || canonicalType == typeof(BamlPrompt)
             || canonicalType == typeof(BamlType)
             || canonicalType == typeof(BamlHandle);
     }
