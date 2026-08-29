@@ -481,11 +481,27 @@ function sandbox_env(with_gh: bool) -> map<string, string> {
     env
 }
 
+/// Runs every sandbox process under `caffeinate -i` on macOS: a laptop that
+/// drifts into maintenance sleep mid-run loses the network, and the agent
+/// dies with "Can't reach the API server" hours later (seen twice on #4506).
+function keep_awake(program: string, args: string[]) -> Cmd {
+    if (baml.fs.exists("/usr/bin/caffeinate")) {
+        return Cmd {
+            program: "/usr/bin/caffeinate",
+            args: ["-i", program].concat(args),
+            cwd: "",
+            timeout_ms: 0,
+        };
+    };
+    Cmd { program: program, args: args, cwd: "", timeout_ms: 0 }
+}
+
 function run_with(c: Cmd, env: map<string, string>) -> CmdResult {
     let label = c.program + " " + c.args.join(" ");
+    let awake = keep_awake(c.program, c.args);
     let out = baml.sys.exec(
-        c.program,
-        c.args,
+        awake.program,
+        awake.args,
         baml.sys.ProcessOptions {
             cwd: c.cwd,
             env: env,
