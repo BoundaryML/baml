@@ -133,7 +133,7 @@ public sealed class BamlPromptMessage
             role.ReadString(),
             content.ReadString(),
             Array.AsReadOnly(
-                parts.ReadList().Select(item => new BamlValue(item)).ToArray()),
+                parts.ReadList().Select(ProjectPart).ToArray()),
             new ReadOnlyDictionary<string, BamlValue>(
                 metadata.ReadMapEntries().ToDictionary(
                     pair => pair.Key,
@@ -149,4 +149,15 @@ public sealed class BamlPromptMessage
             : throw new BamlProtocolException(
                 "The native bridge returned a malformed prompt message.",
                 $"ai.PromptMessage omitted field {name}.");
+
+    private static BamlValue ProjectPart(BamlGeneratedValue generated)
+    {
+        var part = new BamlValue(generated);
+        while (part.Kind == BamlValueKind.Union)
+        {
+            part = part.ReadUnionValue();
+        }
+
+        return part;
+    }
 }
