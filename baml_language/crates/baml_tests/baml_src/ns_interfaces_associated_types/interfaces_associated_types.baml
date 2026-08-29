@@ -872,3 +872,37 @@ function ogb_main(s: OgbSums, c: OgbCard) -> string {
 test "own_generic_bound_after_associated_type_reaches_default_body" {
     assert.equal(ogb_main(OgbSums {}, OgbCard {}), "card")
 }
+
+// ── Foreign-instantiation projections keep their own realization ─────────────
+// A class may implement one interface at several instantiations. Inside one
+// realization's implements block, a written `(FipBoth as I<other>).X` names
+// the OTHER instantiation's member and must resolve to THAT realization's
+// pin — the projection's base is the block's own receiver, so only the
+// qualifier's generics tell the two realizations apart. (Today the ground
+// projection reduces eagerly at lowering; the sibling-pin collapse also
+// compares the qualifier's generics, so the pin holds even for a lane that
+// defers the reduction.)
+
+interface FipConv<T> {
+    type Wide
+    type Out
+}
+
+class FipBoth {
+    implements FipConv<int> {
+        type Wide = string;
+        type Out = string;
+    }
+    implements FipConv<float> {
+        type Wide = bool;
+        type Out = (FipBoth as FipConv<int>).Wide;
+    }
+}
+
+function fip_probe(x: (FipBoth as FipConv<float>).Out) -> string throws never {
+    return x
+}
+
+test "foreign_instantiation_projection_keeps_its_own_realization" {
+    assert.equal(fip_probe("ok"), "ok")
+}

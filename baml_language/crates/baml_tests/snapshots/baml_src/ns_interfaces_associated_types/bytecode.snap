@@ -149,6 +149,13 @@ function interfaces_associated_types.$init_test_ns_interfaces_associated_types_i
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "foreign_instantiation_projection_keeps_its_own_realization"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -612,6 +619,11 @@ function interfaces_associated_types.dms_main() -> string {
     virtual_call nargs=1 ntypeargs=0
     store_var _0
     load_var _0
+    return
+}
+
+function interfaces_associated_types.fip_probe(x: string) -> string {
+    load_var x
     return
 }
 

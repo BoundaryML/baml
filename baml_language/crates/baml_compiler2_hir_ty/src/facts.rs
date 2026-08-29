@@ -196,6 +196,7 @@ impl TypeContext for Facts<'_> {
                         ty,
                         &[&symbolic_self_plain],
                         Some(&interface.name),
+                        &interface.generics,
                         &interface.associated_types,
                     );
                     baml_type::normalize::normalize(&collapsed, self)
@@ -300,9 +301,14 @@ impl TypeContext for Facts<'_> {
             // A pin inherited through the requires closure (`interface Child
             // requires Parent<Item = int>`; the projection asks for
             // `Parent.Item` on a `Child` existential): elaborate the base's
-            // closure and read the matching head's pin — rustc's supertrait
+            // closure and read the matching heads' pins — rustc's supertrait
             // elaboration, after the base's own reference and before its
-            // declared default.
+            // declared default. Same discipline as the rigid-var branch: the
+            // closure keeps heads with different pins, so all matching heads
+            // vote — one agreed value reduces, a disagreement stays an
+            // opaque projection (never the declared default, which the
+            // conflicting requirements have both overridden).
+            let mut inherited = Vec::new();
             for head in crate::impls::requires_heads(self.db, &base_target, &base_interned, 8) {
                 if !crate::impls::head_matches(&head, &target, &eq) {
                     continue;
@@ -311,9 +317,17 @@ impl TypeContext for Facts<'_> {
                     .associated_types
                     .iter()
                     .find(|(name, _)| name == member)
+                    && !inherited
+                        .iter()
+                        .any(|have| equivalent_interned(have, ty, &eq))
                 {
-                    return ProjectionStep::Reduced(ty.to_plain());
+                    inherited.push(ty.clone());
                 }
+            }
+            match inherited.as_slice() {
+                [only] => return ProjectionStep::Reduced(only.to_plain()),
+                [] => {}
+                _ => return ProjectionStep::Opaque,
             }
             if let Some(default) =
                 crate::impls::realized_assoc_default(self.db, &base_target, &base_interned, member)

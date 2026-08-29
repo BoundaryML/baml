@@ -1577,8 +1577,8 @@ pub fn generate_project_bytecode_with_stdlib(
 
 /// [`generate_project_bytecode_with_stdlib`] plus the decomposed symbolic
 /// units, assembled in the same frame so the emit's declaration-keyed
-/// [`FunctionCoordinates`] flow straight into decomposition (mirrors
-/// [`generate_project_bytecode_with_reuse_artifacts`]).
+/// `FunctionCoordinates` (internal) flow straight into decomposition
+/// (mirrors [`generate_project_bytecode_with_reuse_artifacts`]).
 pub fn generate_project_bytecode_with_stdlib_artifacts(
     db: &dyn crate::Db,
     opt: OptLevel,
@@ -1618,7 +1618,7 @@ pub fn generate_project_bytecode_with_mounted_units(
 
 /// [`generate_project_bytecode_with_mounted_units`] plus the consumer's own
 /// decomposed symbolic units, assembled in the same frame so the emit's
-/// declaration-keyed [`FunctionCoordinates`] flow straight into
+/// declaration-keyed `FunctionCoordinates` (internal) flow straight into
 /// decomposition. The dependency prefix is not decomposed — every reference
 /// into it becomes a symbolic import, exactly as on the stdlib-prefix path.
 pub fn generate_project_bytecode_with_mounted_units_artifacts(

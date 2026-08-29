@@ -150,15 +150,23 @@ class MockJsonServer {
                     // The delayed write races the client: a request-timeout
                     // test hangs up before `delay` elapses, and if teardown
                     // loses the race to cancel this task, writing into the
-                    // closed stream throws `Io` — the outcome the test
-                    // arranged, not a mock failure. Anything else still
-                    // propagates as an unhandled spawn error.
+                    // closed stream throws the hangup `Io` — the outcome the
+                    // test arranged, not a mock failure. Any OTHER I/O error
+                    // is a real mock failure and still propagates as an
+                    // unhandled spawn error (same filter as
+                    // `MockSseServer.handle`).
                     {
                         response.write(body.to_utf8());
                         response.end();
                         null
                     } catch (e) {
-                        baml.errors.Io => null
+                        baml.errors.Io => {
+                            if (e.message == "streaming response could not be written: the client has hung up") {
+                                null
+                            } else {
+                                throw e
+                            }
+                        }
                     };
                     null
                 };

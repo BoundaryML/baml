@@ -473,7 +473,7 @@ function add_makes_int<O, T extends baml.ops.Add<O, Output=int>>(
 
 ### Members of union-typed receivers
 
-The member surface of a union-typed receiver is exactly the interface methods of the interfaces that _every_ member implements (at one shared instantiation), and nothing else. Inherent methods never participate: two classes each declaring their own `execute` give `A | B` no callable `execute`, even with identical signatures — only a shared interface that declares the member does. A call through the union then dispatches open-world on that shared interface, resolving against the runtime member's own implementation. This is effectively a call via upcasting to the shared interface-existential (thus requiring common associated-type pins) but provides a narrower callsite reciever type.
+The member surface of a union-typed receiver is exactly the interface methods of the interfaces that _every_ member implements (at one shared instantiation), and nothing else. Inherent methods never participate: two classes each declaring their own `execute` give `A | B` no callable `execute`, even with identical signatures — only a shared interface that declares the member does. A call through the union then dispatches open-world on that shared interface, resolving against the runtime member's own implementation. This is effectively a call via upcasting to the shared interface-existential (thus requiring common associated-type pins) but provides a narrower callsite receiver type.
 
 ### Interface Implementations
 

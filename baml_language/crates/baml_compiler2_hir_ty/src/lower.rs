@@ -1157,7 +1157,22 @@ impl<'db> LowerCtx<'db> {
             } => {
                 self.record_arity(short, args.len(), generic_params.len());
                 enforce_arity(&mut args, generic_params.len());
-                Ty::intern(TyKind::Class(qtn, args.into_boxed_slice(), attr()))
+                // Through `class_ty`, exactly like the source-backed lane: the
+                // builtin bridgings (B-1080 carriers, `baml.future.Future`)
+                // are a property of the SPELLING, so a mounted `baml` must
+                // lower it identically to a source-visible one.
+                let ty = class_ty(qtn, args);
+                // The `baml.Map<K, V>` spelling bridges to the structural
+                // map, so it gets the same key validation as the
+                // `map<k, v>` syntax.
+                if let TyKind::Map { key, value, attr } = ty.kind() {
+                    return Ty::intern(TyKind::Map {
+                        key: self.checked_map_key(key.clone()),
+                        value: value.clone(),
+                        attr: attr.clone(),
+                    });
+                }
+                ty
             }
             ExportedType::Enum { qtn, .. } => {
                 self.record_arity(short, args.len(), 0);

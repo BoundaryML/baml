@@ -152,10 +152,19 @@ pub(crate) fn interface_self_param(
 /// in a binding value or realized default is a projection over `Self`).
 /// Only projections whose base IS this interface's `Self` — the symbolic
 /// param or the realized receiver — collapse; foreign bases keep theirs.
+/// The qualifier must match at its GENERICS too, not just its name: `Self`
+/// may implement the same interface at several instantiations, and a
+/// written `(Self as I<float>).X` inside an `I<int>` realization names the
+/// OTHER instantiation's member — its pin belongs to the resolver, never to
+/// this realization's pin list. (A projection's spelled qualifier always
+/// carries its instantiation — `projection_interface_for` reads it off the
+/// bound or the existential — and every caller collapses a type already
+/// substituted at the realization's args, so equality is exact here.)
 pub(crate) fn collapse_self_assoc_projections(
     ty: &Ty,
     self_tys: &[&Ty],
     iface: Option<&QualifiedTypeName>,
+    iface_args: &[Ty],
     pins: &[(Name, Ty)],
 ) -> Ty {
     let Some(iface) = iface else {
@@ -172,6 +181,8 @@ pub(crate) fn collapse_self_assoc_projections(
             ..
         } = node
             && &interface.name == iface
+            && interface.generics.len() == iface_args.len()
+            && interface.generics.iter().eq(iface_args)
             && self_tys.iter().any(|s| *s == base.as_ref())
             && let Some((_, pin)) = pins.iter().find(|(name, _)| name == member)
         {
@@ -483,6 +494,7 @@ fn lower_interface_associated_bindings<'db>(
                 &ty,
                 &[&self_var, self_ty],
                 iface_qtn.as_ref(),
+                interface_args,
                 &resolved_pins,
             );
             resolved_pins.push((assoc.name.clone(), ty.clone()));
@@ -529,6 +541,7 @@ pub(crate) fn complete_interface_associated_bindings_from_tys<'db>(
                     &ty,
                     &[&self_var],
                     iface_qtn.as_ref(),
+                    interface_args,
                     &resolved_pins,
                 );
                 resolved_pins.push((assoc.name.clone(), ty.clone()));
@@ -561,6 +574,7 @@ pub(crate) fn complete_interface_associated_bindings_from_tys<'db>(
                 &ty,
                 &[&self_var, &self_ty],
                 iface_qtn.as_ref(),
+                interface_args,
                 &resolved_pins,
             );
             resolved_pins.push((assoc.name.clone(), ty.clone()));
@@ -963,6 +977,7 @@ fn lower_interface_type_associated_bindings(
                     &ty,
                     &[&self_var],
                     iface_qtn.as_ref(),
+                    ctx.interface_args,
                     &resolved_pins,
                 );
                 resolved_pins.push((assoc.name.clone(), ty.clone()));
@@ -989,6 +1004,7 @@ fn lower_interface_type_associated_bindings(
                 &ty,
                 &[&self_var, &self_ty],
                 iface_qtn.as_ref(),
+                ctx.interface_args,
                 &resolved_pins,
             );
             resolved_pins.push((assoc.name.clone(), ty.clone()));
