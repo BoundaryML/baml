@@ -24,7 +24,7 @@ pub(crate) fn emit(
     alias: &TypeAlias,
     ctx: &TyCtx<'_>,
 ) -> Result<TokenStream, SkipWarning> {
-    let ident = idents::ident(name.name().as_str());
+    let ident = idents::ident(ctx.analysis.rust_type_name(name));
     let rhs = translate_ty::translate(&alias.resolves_to, ctx).map_err(|u| SkipWarning {
         fqn: name.to_string(),
         reason: format!(
