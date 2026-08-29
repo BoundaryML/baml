@@ -19,9 +19,8 @@ use std::{
 
 /// Run a baml-cli command and return the output (stdout, stderr, exit code).
 ///
-/// `BAML_HOME` is pointed at an empty directory inside the project (with the
-/// freshness auto-check disabled) so the passive skill check never reads the
-/// developer's real `~/.baml` state or touches the network.
+/// `BAML_HOME` and `HOME` are pointed inside the project so tests never read
+/// developer state.
 ///
 /// Tests here take the CLI from `common::baml_cli()`, never `ensure_built()`:
 /// nothing in this suite runs `baml pack`, and `ensure_built`'s in-test
@@ -40,6 +39,7 @@ fn run_baml_cli_with_env(built: &Path, dir: &Path, args: &[&str], env: &[(&str, 
         cmd.arg(arg);
     }
     cmd.current_dir(dir);
+    cmd.env("HOME", dir);
     cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
     // Pin the human output preset: under a coding agent the inherited
     // CLAUDECODE/AI_AGENT/… environment flips `--output-preset auto` to
@@ -520,7 +520,11 @@ fn run_valid_project_outputs_only_program_output() {
     // exactly the program's own output.
     let skill_dir = tmp.path().join(".agents/skills/baml-core");
     std::fs::create_dir_all(&skill_dir).unwrap();
-    std::fs::write(skill_dir.join("SKILL.md"), "---\nname: baml-core\n---\n").unwrap();
+    std::fs::write(
+        skill_dir.join("SKILL.md"),
+        common::installed_skill_content(),
+    )
+    .unwrap();
 
     let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
 
