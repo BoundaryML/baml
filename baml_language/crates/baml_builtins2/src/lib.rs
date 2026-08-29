@@ -115,6 +115,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_glob/glob.baml"),
     builtin!("baml", "ns_net/net.baml"),
     builtin!("baml", "ns_media/media.baml"),
+    builtin!("baml", "ns_regex/regex.baml"),
     builtin!("baml", "ns_json/json.baml"),
     builtin!("baml", "ns_yaml/yaml.baml"),
     builtin!("baml", "ns_toml/toml.baml"),

@@ -1838,6 +1838,72 @@ function baml.random.random_int(self: ?) -> int  [builtin]
 function baml.random.random_int(self: ?) -> int  [builtin]
 function baml.random.random_int(self: ?) -> int  [builtin]
 
+--- <builtin>/baml/ns_regex/regex.baml ---
+class baml.regex.Error {
+  kind: baml.regex.ErrorKind
+  message: string
+  pattern: string
+  span_start: int?
+  span_end: int?
+}
+class baml.regex.Error$stream {
+  kind: baml.regex.ErrorKind | null
+  message: string | null
+  pattern: string | null
+  span_start: int | null
+  span_end: int | null
+}
+class baml.regex.Group {
+  text: string
+  start: int
+  end: int
+}
+class baml.regex.Group$stream {
+  text: string | null
+  start: int | null
+  end: int | null
+}
+class baml.regex.Match {
+  text: string
+  start: int
+  end: int
+  groups: baml.regex.Group?[]
+  named: map<string, baml.regex.Group?>
+}
+class baml.regex.Match$stream {
+  text: string | null
+  start: int | null
+  end: int | null
+  groups: baml.regex.Group$stream | null[]
+  named: map<string, baml.regex.Group$stream | null>
+}
+class baml.regex.Regex {
+  _handle: $rust_type
+}
+class baml.regex.Regex$stream {
+  _handle: $rust_type
+}
+enum baml.regex.ErrorKind {Syntax, Unsupported, TooLarge}
+function baml.regex._compile(pattern: string, backtracking: bool) -> baml.regex.Regex  [builtin]
+function baml.regex._literal_match(text: string, start: int) -> baml.regex.Match  [expr] {
+  { let end = start Add text.length() } baml.regex.Match { text: text, start: start, end: end, groups: [baml.regex.Group { text: text, start: start, end: end }], named: map {  } }
+}
+function baml.regex._replace_all_template(self: ?, haystack: string, template: string) -> string  [builtin]
+function baml.regex._replace_template(self: ?, haystack: string, template: string) -> string  [builtin]
+function baml.regex._word(literal: string, ignore_case: bool) -> baml.regex.Regex  [builtin]
+function baml.regex.compile(pattern: string, backtracking: bool = false) -> baml.regex.Regex  [expr] {
+  {  } _compile(pattern, backtracking)
+}
+function baml.regex.escape(literal: string) -> string  [builtin]
+function baml.regex.exact_match(self: ?, haystack: string) -> baml.regex.Match?  [builtin]
+function baml.regex.is_match(self: ?, haystack: string) -> bool  [builtin]
+function baml.regex.match(self: ?, haystack: string) -> baml.regex.Match?  [builtin]
+function baml.regex.match_all(self: ?, haystack: string) -> baml.regex.Match[]  [builtin]
+function baml.regex.split(self: ?, haystack: string) -> string[]  [builtin]
+function baml.regex.word(literal: string, ignore_case: bool = false) -> baml.regex.Regex  [expr] {
+  {  } _word(literal, ignore_case)
+}
+
 --- <builtin>/baml/ns_sap/sap.baml ---
 class baml.sap.NoYield {
 }
@@ -2481,6 +2547,20 @@ class baml.String {
 }
 class baml.String$stream {
 }
+function baml._as_string(self: ?) -> string  [expr] {
+  {  } self.slice(0, self.length())
+}
+function baml._replace_all_literal(self: ?, search: string, replacement: string) -> string  [builtin]
+function baml._replace_impl(self: ?, search: string | root.regex.Regex, replacement: string | (root.regex.Match) -> string throws E, all: bool) -> string  [expr] {
+  {  } match (search) { string => match (replacement) { string => if (all) {  } self._replace_all_literal(search, replacement) else {  } self._replace_literal(search, replacement), f: (root.regex.Match) -> string throws E => {  } self._replace_literal_with(search, f, all) }, root.regex.Regex => match (replacement) { string => if (all) {  } search._replace_all_template(self._as_string(), replacement) else {  } search._replace_template(self._as_string(), replacement), f: (root.regex.Match) -> string throws E => {  } self._replace_pattern_with(search, f, all) } }
+}
+function baml._replace_literal(self: ?, search: string, replacement: string) -> string  [builtin]
+function baml._replace_literal_with(self: ?, search: string, f: (root.regex.Match) -> string throws E, all: bool) -> string  [expr] {
+  { let length = self.length(); let width = search.length(); let pieces: string[] = []; let pos = 0; let scanning = true; while scanning And pos Le length {  } match (self.slice(pos, length).index_of(search)) { null => { scanning = false }, offset: int => { let at = pos Add offset; pieces.push(self.slice(pos, at)); pieces.push(f(root.regex._literal_match(search, at))); pieces.push(if (width Eq 0) {  } self.slice(at, at Add 1) else {  } ""); pos = if (width Eq 0) {  } at Add 1 else {  } at Add width; scanning = all } }; pieces.push(self.slice(pos, length)) } pieces.join("")
+}
+function baml._replace_pattern_with(self: ?, search: root.regex.Regex, f: (root.regex.Match) -> string throws E, all: bool) -> string  [expr] {
+  { let text = self._as_string(); let matches: root.regex.Match[] = if (all) {  } search.match_all(text) else {  } match (search.match(text)) { null => [], first: root.regex.Match => [first] }; let pieces: string[] = []; let pos = 0; for m in matches { pieces.push(self.slice(pos, m.start)); pieces.push(f(m)); pos = m.end }; pieces.push(self.slice(pos, self.length())) } pieces.join("")
+}
 function baml.add(self: ?, rhs: string) -> string  [expr] {
   {  } `...`
 }
@@ -2522,8 +2602,12 @@ function baml.last_index_of(self: ?, search: string) -> int?  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.lines(self: ?) -> string[]  [builtin]
 function baml.repeat(self: ?, count: int) -> string  [builtin]
-function baml.replace(self: ?, search: string, replacement: string) -> string  [builtin]
-function baml.replace_all(self: ?, search: string, replacement: string) -> string  [builtin]
+function baml.replace(self: ?, search: string | root.regex.Regex, replacement: string | (root.regex.Match) -> string throws E) -> string  [expr] {
+  {  } self._replace_impl(search, replacement, false)
+}
+function baml.replace_all(self: ?, search: string | root.regex.Regex, replacement: string | (root.regex.Match) -> string throws E) -> string  [expr] {
+  {  } self._replace_impl(search, replacement, true)
+}
 function baml.slice(self: ?, start: int, end: int) -> string  [builtin]
 function baml.split(self: ?, delimiter: string) -> string[]  [builtin]
 function baml.starts_with(self: ?, prefix: string) -> bool  [builtin]

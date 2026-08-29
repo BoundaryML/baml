@@ -69,6 +69,18 @@ pub(crate) fn is_ident_token(kind: SyntaxKind) -> bool {
     )
 }
 
+/// Tokens that can name a member after a `.`.
+///
+/// Wider than [`is_ident_token`]: a keyword that could never start an
+/// expression is unambiguous in member position, so the parser admits it there
+/// and the name lowers by text. `match` is the case that needs it —
+/// `re.match(haystack)` on `baml.regex.Regex` — and it is deliberately *not* in
+/// `is_ident_token`, where it would also make a bare `match` token lower as an
+/// identifier and shadow the match expression.
+pub(crate) fn is_member_name_token(kind: SyntaxKind) -> bool {
+    is_ident_token(kind) || matches!(kind, SyntaxKind::KW_MATCH)
+}
+
 /// Locate the `GENERIC_ARGS` node that should be treated as the *call-site*
 /// type-args for a `CALL_EXPR` whose callee is `callee_node`.
 ///
@@ -3616,7 +3628,7 @@ impl LoweringContext {
                         // of these (and returns None for anything else, leaving
                         // the Missing recovery below intact).
                         base = self.try_lower_bare_token(&token);
-                    } else if seen_accessor && is_ident_token(token.kind()) {
+                    } else if seen_accessor && is_member_name_token(token.kind()) {
                         field = Some(Name::new(token.text()));
                         field_range = Some(token.text_range());
                     }

@@ -1839,6 +1839,9 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::MountedPackageCallUnsupported { path } => {
             runtime_type::mounted_package_call_unsupported(path.as_str()).id
         }
+        TirTypeError::InvalidRegexPattern { .. } | TirTypeError::RegexPatternBackspaceEscape => {
+            DiagnosticId::InvalidRegexPattern
+        }
         TirTypeError::CannotConstructReflectionKind { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotConstructBuiltinCompanion { .. } => {
             DiagnosticId::CannotConstructBuiltinCompanion

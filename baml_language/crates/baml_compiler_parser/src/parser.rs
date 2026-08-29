@@ -548,6 +548,11 @@ impl<'a> Parser<'a> {
                 // Unambiguous here: class bodies and `.member` access have no
                 // `client` construct.
                 | TokenKind::Client
+                // `match` introduces a match expression, but stays valid as a
+                // member name so `re.match(haystack)` on `baml.regex.Regex`
+                // parses. Unambiguous here: a match expression never starts
+                // immediately after a `.`.
+                | TokenKind::Match
         )
     }
 
@@ -4160,6 +4165,9 @@ impl<'a> Parser<'a> {
                 || p.at(TokenKind::Extends)
                 || p.at(TokenKind::Requires)
                 || p.at(TokenKind::Interface)
+                // `baml.regex.Regex.match` — the name position after
+                // `function` cannot begin a match expression.
+                || p.at(TokenKind::Match)
             {
                 p.bump();
             } else {

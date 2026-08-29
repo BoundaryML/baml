@@ -102,3 +102,7 @@ func:
 lambda:
   message: "BAML uses anonymous functions with `(params) -> ReturnType { body }` syntax."
   see: "function"
+
+RegExp:
+  message: "BAML compiles patterns with `baml.regex.compile(pattern)`. There is no `/…/` literal, and no `g` flag: a `baml.regex.Regex` is stateless, and how many matches you want is the method — `match` / `match_all`, `replace` / `replace_all`. Lookaround, backreferences, and recursive subroutines need `baml.regex.compile(pattern, backtracking = true)`."
+  see: "baml.regex.compile"

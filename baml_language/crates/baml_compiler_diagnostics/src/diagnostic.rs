@@ -358,6 +358,11 @@ pub enum DiagnosticId {
     /// An interface method (required or default) omits its `throws` clause.
     InterfaceMethodMissingThrows,
 
+    // Regex diagnostics (E0171+).
+    /// A constant pattern passed to `baml.regex.compile` does not compile, or
+    /// contains a literal backspace where `\\b` was meant.
+    InvalidRegexPattern,
+
     /// A runtime reflection union constructor received no members. Static
     /// source cannot spell this defect, so BEP-066 reserves a surface code.
     RuntimeEmptyUnion,
@@ -606,6 +611,7 @@ impl DiagnosticId {
             DiagnosticId::RuntimeTypeMustBeNamed => "E0168",
             DiagnosticId::ReflectSpecializationFailed => "E0169",
             DiagnosticId::InterfaceMethodMissingThrows => "E0170",
+            DiagnosticId::InvalidRegexPattern => "E0171",
             DiagnosticId::TypeMustBeKnown => "E0155",
         }
     }

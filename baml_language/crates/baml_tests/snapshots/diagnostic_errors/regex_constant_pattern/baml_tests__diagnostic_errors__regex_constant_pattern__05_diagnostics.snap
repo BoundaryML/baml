@@ -1,0 +1,45 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0171
+
+  × invalid regex pattern at character 0: unclosed group
+   ╭─[regex_constant_pattern.baml:7:24]
+ 7 │     baml.regex.compile("(unclosed")
+   ·                        ───────────
+   ╰────
+
+  [type] E0171
+
+  × unsupported regex construct at character 3: look-around, including look-ahead and look-behind, is not supported; `backtracking = true` enables lookahead, lookbehind, backreferences, and
+  │ subroutine calls, at the cost of the default dialect's matching-time bound
+    ╭─[regex_constant_pattern.baml:13:24]
+ 13 │     baml.regex.compile("\\d+(?= USD)")
+    ·                        ──────────────
+    ╰────
+
+  [type] E0171
+
+  × unsupported regex construct at character 6: backreferences are not supported; `backtracking = true` enables lookahead, lookbehind, backreferences, and subroutine calls, at the cost of the
+  │ default dialect's matching-time bound
+    ╭─[regex_constant_pattern.baml:17:24]
+ 17 │     baml.regex.compile("(\\w+) \\1")
+    ·                        ────────────
+    ╰────
+
+  [type] E0171
+
+  × this pattern contains a backspace character (U+0008): `\b` in a string literal is a backspace, not a word boundary. Write `\\b` for a word boundary, or `\x08` for the backspace character itself
+    ╭─[regex_constant_pattern.baml:23:24]
+ 23 │     baml.regex.compile("\bword\b")
+    ·                        ──────────
+    ╰────
+
+  [type] E0171
+
+  × invalid regex pattern: Left-recursive subroutine call detected: group 'expr' (1)
+    ╭─[regex_constant_pattern.baml:29:24]
+ 29 │     baml.regex.compile("(?<expr>\\g<expr>a|a)", backtracking = true)
+    ·                        ───────────────────────
+    ╰────
