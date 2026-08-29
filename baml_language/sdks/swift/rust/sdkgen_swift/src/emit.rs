@@ -266,6 +266,7 @@ pub(crate) enum FnKind {
 /// method is `<class FQN>.<method name>`.
 pub(crate) fn render_callable(
     fqn: &str,
+    binding_name: &str,
     function: &Function,
     kind: FnKind,
     ctx: &TranslateCtx,
@@ -289,15 +290,10 @@ pub(crate) fn render_callable(
         },
     }
 
-    let raw_name = function.name.as_str();
-    // `@` is not a Swift identifier character. Companion names map it
-    // to `_`: `classify@stream` → `classify_stream`, `@build_request`
-    // → `_build_request`, `@parse@stream` → `_parse_stream`. The wire
-    // FQN keeps the `@` names verbatim. An `@stream` companion is an
-    // ordinary function whose return type is `ai.stream.Stream<P, F>`
-    // (→ BamlStream) — no special streaming emission exists.
-    let bare: String = raw_name.replace(['$', '@'], "_");
-    let bare = bare.as_str();
+    // The caller allocates a collision-safe Swift name for this scope.
+    // The wire FQN keeps `@` verbatim; an `@stream` companion remains an
+    // ordinary function returning `ai.stream.Stream<P, F>` (→ BamlStream).
+    let bare = binding_name;
 
     // Generic functions/methods: emit a Swift generic signature when
     // every TypeVar appears in a required-parameter position — the

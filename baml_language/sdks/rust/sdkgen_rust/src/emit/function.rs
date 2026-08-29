@@ -279,7 +279,9 @@ fn emit_binding(
     let result_ty = quote! { ::std::result::Result<#ret, ::baml_bridge::Error<#throws>> };
     // The receiver counts toward clippy's tally (`self` is one of the
     // `fn_decl` inputs), so it counts here too.
-    let arg_count = host_arguments.len() + usize::from(matches!(receiver, Receiver::RefSelf));
+    let arg_count = host_arguments.len()
+        + usize::from(matches!(receiver, Receiver::RefSelf))
+        + usize::from(fqn.ends_with("@stream"));
     let too_many_arguments_attr = if arg_count > 7 {
         quote! { #[allow(clippy::too_many_arguments)] }
     } else {
