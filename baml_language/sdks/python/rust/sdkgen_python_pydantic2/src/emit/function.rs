@@ -43,9 +43,9 @@ pub(crate) struct PyFunction {
     /// functions. Surfaces only in `.pyi` rendering — the `.py` factory
     /// binding is type-erased.
     pub(crate) generic_params: Vec<String>,
-    /// Raw BAML TypeVar names matching `generic_params`.
+    /// Raw BAML `TypeVar` names matching `generic_params`.
     pub(crate) wire_generic_params: Vec<String>,
-    /// Raw TypeVar spelling -> projected Python spelling for annotations.
+    /// Raw `TypeVar` spelling -> projected Python spelling for annotations.
     pub(crate) type_var_names: BTreeMap<String, String>,
     /// Joined `///` doc-comment lines from the BAML function declaration.
     /// Surfaced only by `.pyi` rendering as a `"""..."""` body so

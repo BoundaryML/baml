@@ -36,10 +36,9 @@ static_assert(
 using async_string_stream =
     decltype(baml_sdk::lorem::stream_e2e_extract_stream_async(
         std::declval<const std::string&>()));
-static_assert(
-    std::is_same<async_string_stream,
-                 baml::future<expected_string_stream>>::value,
-    "Fn_stream must remain available asynchronously");
+static_assert(std::is_same<async_string_stream,
+                           baml::future<expected_string_stream>>::value,
+              "Fn_stream must remain available asynchronously");
 
 using rendered_prompt = decltype(std::declval<const string_spec&>().prompt());
 static_assert(std::is_same<rendered_prompt, baml::prompt>::value,
@@ -62,7 +61,8 @@ static_assert(
 
 }  // namespace
 
-// SDK_PARITY_LINT(skip): C++-only integration test pins generated flat-stream spelling and exact companion dispatch.
+// SDK_PARITY_LINT(skip): C++-only integration test pins generated flat-stream
+// spelling and exact companion dispatch.
 BAML_TEST(flat_stream_calls_exact_companion_fqn) {
   std::ifstream input("baml_sdk/src/bindings.cc");
   const std::string bindings((std::istreambuf_iterator<char>(input)),
@@ -73,8 +73,7 @@ BAML_TEST(flat_stream_calls_exact_companion_fqn) {
   BAML_ASSERT(bindings.find("return bound_spec.stream();") ==
               std::string::npos);
   BAML_ASSERT(bindings.find("stream_e2e_extract@spec") != std::string::npos);
-  BAML_ASSERT(bindings.find("stream_e2e_extract@stream") !=
-              std::string::npos);
+  BAML_ASSERT(bindings.find("stream_e2e_extract@stream") != std::string::npos);
   BAML_ASSERT(bindings.find("$render_prompt") == std::string::npos);
   BAML_ASSERT(bindings.find("$build_request") == std::string::npos);
   BAML_ASSERT(bindings.find("$parse") == std::string::npos);

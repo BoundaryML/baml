@@ -101,8 +101,7 @@ class basic_media {
   }
 
   static basic_media from_base64(
-      std::string base64,
-      std::optional<std::string> mime_type = std::nullopt) {
+      std::string base64, std::optional<std::string> mime_type = std::nullopt) {
     static_assert(Expected != media_kind::generic,
                   "generic media needs an explicit media kind");
     return from_base64(Expected, std::move(base64), std::move(mime_type));
@@ -173,8 +172,7 @@ class basic_media {
       : value_(std::move(value)) {}
 
   template <typename SetValue>
-  static basic_media make(media_kind kind,
-                          std::optional<std::string> mime_type,
+  static basic_media make(media_kind kind, std::optional<std::string> mime_type,
                           SetValue&& set_value) {
     if (kind == media_kind::generic ||
         (Expected != media_kind::generic && kind != Expected)) {
@@ -218,7 +216,8 @@ struct codec<basic_media<Expected>> {
     if (value.value_case() != detail::pb::BamlOutboundValue::kMediaValue) {
       detail::kind_mismatch("media", value);
     }
-    const media_kind actual = detail::media_host_kind(value.media_value().media());
+    const media_kind actual =
+        detail::media_host_kind(value.media_value().media());
     if (Expected != media_kind::generic && actual != Expected) {
       detail::kind_mismatch("specific media kind", value);
     }

@@ -1,13 +1,16 @@
-import { describe, it, expect } from 'vitest';
-import { encodeCallArgs, encodeRunArgs, decodeCallResult, serializeValue, deserializeValue } from '../index';
+import { describe, expect, it } from 'vitest';
+import { BamlHandleType } from '../generated/baml_bridge/cffi/v1/baml_handle';
 import {
   CallFunctionArgs,
   FunctionOperation,
   InboundMapEntry,
 } from '../generated/baml_bridge/cffi/v1/baml_inbound';
-import { BamlHandleType } from '../generated/baml_bridge/cffi/v1/baml_handle';
-import { BamlOutboundValue, MediaTypeEnum } from '../generated/baml_bridge/cffi/v1/baml_outbound';
+import {
+  BamlOutboundValue,
+  MediaTypeEnum,
+} from '../generated/baml_bridge/cffi/v1/baml_outbound';
 import { BamlTyPrimitiveKind } from '../generated/baml_bridge/cffi/v1/baml_type';
+import { decodeCallResult, encodeCallArgs, encodeRunArgs } from '../index';
 
 function decodeDelimitedEntries(bytes: Uint8Array): InboundMapEntry[] {
   const entries: InboundMapEntry[] = [];
@@ -22,7 +25,10 @@ function decodeDelimitedEntries(bytes: Uint8Array): InboundMapEntry[] {
   return entries;
 }
 
-function readVarint(bytes: Uint8Array, offset: number): { value: number; nextOffset: number } {
+function readVarint(
+  bytes: Uint8Array,
+  offset: number,
+): { value: number; nextOffset: number } {
   let value = 0;
   let shift = 0;
   let cursor = offset;
@@ -30,7 +36,7 @@ function readVarint(bytes: Uint8Array, offset: number): { value: number; nextOff
     const byte = bytes[cursor++];
     value += (byte & 0x7f) * 2 ** shift;
     if ((byte & 0x80) === 0) {
-      return { value, nextOffset: cursor };
+      return { nextOffset: cursor, value };
     }
     shift += 7;
   }
@@ -68,6 +74,7 @@ describe('encodeCallArgs', () => {
   });
 
   it('encodes run args without the CallFunctionArgs call id wrapper', () => {
+    // biome-ignore assist/source/useSortedKeys: insertion order is the wire order asserted below.
     const bytes = encodeRunArgs({ name: 'Ada', count: 2 });
     const entries = decodeDelimitedEntries(bytes);
 
@@ -87,13 +94,16 @@ describe('encodeCallArgs', () => {
   });
 
   it('encodes various JS types correctly', () => {
-    const bytes = encodeCallArgs({
-      name: 'Alice',
-      age: 30,
-      score: 99.5,
-      active: true,
-      nothing: null,
-    }, 124);
+    const bytes = encodeCallArgs(
+      {
+        active: true,
+        age: 30,
+        name: 'Alice',
+        nothing: null,
+        score: 99.5,
+      },
+      124,
+    );
     const decoded = CallFunctionArgs.decode(bytes);
     expect(decoded.kwargs).toHaveLength(5);
 
@@ -112,9 +122,12 @@ describe('encodeCallArgs', () => {
   });
 
   it('encodes nested objects as maps', () => {
-    const bytes = encodeCallArgs({
-      user: { name: 'Bob', scores: [10, 20] },
-    }, 125);
+    const bytes = encodeCallArgs(
+      {
+        user: { name: 'Bob', scores: [10, 20] },
+      },
+      125,
+    );
     const decoded = CallFunctionArgs.decode(bytes);
     const userVal = decoded.kwargs[0].value;
     expect(userVal?.value?.$case).toBe('mapValue');
@@ -124,12 +137,6 @@ describe('encodeCallArgs', () => {
     const custom = {
       toBaml() {
         return {
-          valueType: {
-            ty: {
-              $case: 'classTy' as const,
-              classTy: { name: 'MyClass', typeArgs: [] },
-            },
-          },
           value: {
             $case: 'classValue',
             classValue: {
@@ -139,6 +146,12 @@ describe('encodeCallArgs', () => {
                   value: { value: { $case: 'intValue', intValue: 42 } },
                 },
               ],
+            },
+          },
+          valueType: {
+            ty: {
+              $case: 'classTy' as const,
+              classTy: { name: 'MyClass', typeArgs: [] },
             },
           },
         };
@@ -158,6 +171,10 @@ describe('encodeCallArgs', () => {
     const draft = {
       toBaml() {
         return {
+          value: {
+            $case: 'stringValue' as const,
+            stringValue: 'draft',
+          },
           valueType: {
             ty: {
               $case: 'literal' as const,
@@ -169,15 +186,13 @@ describe('encodeCallArgs', () => {
               },
             },
           },
-          value: {
-            $case: 'stringValue' as const,
-            stringValue: 'draft',
-          },
         };
       },
     };
 
-    const decoded = CallFunctionArgs.decode(encodeCallArgs({ status: draft }, 131));
+    const decoded = CallFunctionArgs.decode(
+      encodeCallArgs({ status: draft }, 131),
+    );
     const value = decoded.kwargs[0].value;
     expect(value?.valueType?.ty).toEqual({
       $case: 'literal',
@@ -241,18 +256,23 @@ describe('encodeCallArgs', () => {
 });
 
 describe('decodeCallResult', () => {
-  function encodeResult(holder: Parameters<typeof BamlOutboundValue.encode>[0]): Uint8Array {
+  function encodeResult(
+    holder: Parameters<typeof BamlOutboundValue.encode>[0],
+  ): Uint8Array {
     return BamlOutboundValue.encode(holder).finish();
   }
 
-  const defaultWrapHandle = (_key: bigint, _handleType: number, typeName: string) => ({ handle_type: typeName });
+  const defaultWrapHandle = (
+    _key: bigint,
+    _handleType: number,
+    typeName: string,
+  ) => ({ handle_type: typeName });
 
   it('decodes a sorted int array', () => {
     const bytes = encodeResult({
       value: {
         $case: 'listValue',
         listValue: {
-          itemType: { ty: { $case: 'primitive', primitive: { kind: BamlTyPrimitiveKind.BAML_TY_PRIMITIVE_INT } } },
           items: [
             { value: { $case: 'intValue', intValue: 1 } },
             { value: { $case: 'intValue', intValue: 2 } },
@@ -260,6 +280,12 @@ describe('decodeCallResult', () => {
             { value: { $case: 'intValue', intValue: 4 } },
             { value: { $case: 'intValue', intValue: 5 } },
           ],
+          itemType: {
+            ty: {
+              $case: 'primitive',
+              primitive: { kind: BamlTyPrimitiveKind.BAML_TY_PRIMITIVE_INT },
+            },
+          },
         },
       },
     });
@@ -287,8 +313,6 @@ describe('decodeCallResult', () => {
       value: {
         $case: 'classValue',
         classValue: {
-          name: 'Person',
-          typeArgs: [],
           fields: [
             {
               key: 'name',
@@ -299,14 +323,16 @@ describe('decodeCallResult', () => {
               value: { value: { $case: 'intValue', intValue: 30 } },
             },
           ],
+          name: 'Person',
+          typeArgs: [],
         },
       },
     });
     const result = decodeCallResult(bytes, defaultWrapHandle);
     expect(result).toEqual({
       $baml: { type: 'Person' },
-      name: 'Alice',
       age: 30,
+      name: 'Alice',
     });
   });
 
@@ -315,9 +341,9 @@ describe('decodeCallResult', () => {
       value: {
         $case: 'enumValue',
         enumValue: {
+          isDynamic: false,
           name: 'Color',
           value: 'RED',
-          isDynamic: false,
         },
       },
     });
@@ -329,8 +355,6 @@ describe('decodeCallResult', () => {
       value: {
         $case: 'mapValue',
         mapValue: {
-          keyType: { ty: { $case: 'primitive', primitive: { kind: BamlTyPrimitiveKind.BAML_TY_PRIMITIVE_STRING } } },
-          valueType: { ty: { $case: 'primitive', primitive: { kind: BamlTyPrimitiveKind.BAML_TY_PRIMITIVE_INT } } },
           entries: [
             {
               key: 'a',
@@ -341,6 +365,18 @@ describe('decodeCallResult', () => {
               value: { value: { $case: 'intValue', intValue: 2 } },
             },
           ],
+          keyType: {
+            ty: {
+              $case: 'primitive',
+              primitive: { kind: BamlTyPrimitiveKind.BAML_TY_PRIMITIVE_STRING },
+            },
+          },
+          valueType: {
+            ty: {
+              $case: 'primitive',
+              primitive: { kind: BamlTyPrimitiveKind.BAML_TY_PRIMITIVE_INT },
+            },
+          },
         },
       },
     });
@@ -374,12 +410,12 @@ describe('decodeCallResult', () => {
       value: {
         $case: 'unionVariantValue',
         unionVariantValue: {
-          name: 'StringOrInt',
           isOptional: false,
           isSinglePattern: false,
+          name: 'StringOrInt',
           selfType: undefined,
-          valueOptionName: 'stringValue',
           value: { value: { $case: 'stringValue', stringValue: 'hi' } },
+          valueOptionName: 'stringValue',
         },
       },
     });
@@ -391,8 +427,8 @@ describe('decodeCallResult', () => {
       value: {
         $case: 'handleValue',
         handleValue: {
-          key: 42,
           handleType: BamlHandleType.FUNCTION_REF,
+          key: 42,
           ty: undefined,
         },
       },
@@ -401,11 +437,11 @@ describe('decodeCallResult', () => {
       expect(key).toBe(42n);
       expect(handleType).toBe(BamlHandleType.FUNCTION_REF);
       expect(typeName).toBe('function_ref');
-      return { kind: 'functionRef', key: 42n };
+      return { key: 42n, kind: 'functionRef' };
     });
     expect(result).toEqual({
       $baml: { type: '$handle' },
-      handle: { kind: 'functionRef', key: 42n },
+      handle: { key: 42n, kind: 'functionRef' },
     });
   });
 
@@ -436,12 +472,15 @@ describe('decodeCallResult', () => {
         },
       },
     });
-    const result = decodeCallResult(bytes, defaultWrapHandle) as Record<string, unknown>;
+    const result = decodeCallResult(bytes, defaultWrapHandle) as Record<
+      string,
+      unknown
+    >;
     expect(result).toEqual({
       $baml: { type: '$media' },
+      content_type: 'url',
       media_type: 'image',
       mime_type: 'image/png',
-      content_type: 'url',
       url: 'https://example.com/img.png',
     });
   });
@@ -460,7 +499,10 @@ describe('decodeCallResult', () => {
         },
       },
     });
-    const result = decodeCallResult(bytes, defaultWrapHandle) as Record<string, unknown>;
+    const result = decodeCallResult(bytes, defaultWrapHandle) as Record<
+      string,
+      unknown
+    >;
     expect(result).toEqual({
       $baml: { type: '$prompt_ast' },
       content_type: 'simple',
@@ -487,27 +529,40 @@ describe('round-trip: encode bubble sort args', () => {
       value: {
         $case: 'listValue',
         listValue: {
-          itemType: { ty: { $case: 'primitive', primitive: { kind: BamlTyPrimitiveKind.BAML_TY_PRIMITIVE_INT } } },
           items: [...unsorted]
             .sort((a, b) => a - b)
             .map((n) => ({
               value: { $case: 'intValue' as const, intValue: n },
             })),
+          itemType: {
+            ty: {
+              $case: 'primitive',
+              primitive: { kind: BamlTyPrimitiveKind.BAML_TY_PRIMITIVE_INT },
+            },
+          },
         },
       },
     }).finish();
 
-    const result = decodeCallResult(sortedResult, (_key, _ht, typeName) => ({ handle_type: typeName }));
+    const result = decodeCallResult(sortedResult, (_key, _ht, typeName) => ({
+      handle_type: typeName,
+    }));
     expect(result).toEqual([1, 2, 3, 4, 5]);
   });
 });
 
 describe('structuredClone round-trip', () => {
-  function encodeResult(holder: Parameters<typeof BamlOutboundValue.encode>[0]): Uint8Array {
+  function encodeResult(
+    holder: Parameters<typeof BamlOutboundValue.encode>[0],
+  ): Uint8Array {
     return BamlOutboundValue.encode(holder).finish();
   }
 
-  const cloneWrapHandle = (key: bigint, handleType: number, typeName: string) => ({
+  const cloneWrapHandle = (
+    key: bigint,
+    handleType: number,
+    typeName: string,
+  ) => ({
     handle_key: key,
     handle_type: handleType,
     type_name: typeName,
@@ -543,12 +598,18 @@ describe('structuredClone round-trip', () => {
       value: {
         $case: 'classValue',
         classValue: {
+          fields: [
+            {
+              key: 'name',
+              value: { value: { $case: 'stringValue', stringValue: 'Alice' } },
+            },
+            {
+              key: 'age',
+              value: { value: { $case: 'intValue', intValue: 30 } },
+            },
+          ],
           name: 'Person',
           typeArgs: [],
-          fields: [
-            { key: 'name', value: { value: { $case: 'stringValue', stringValue: 'Alice' } } },
-            { key: 'age', value: { value: { $case: 'intValue', intValue: 30 } } },
-          ],
         },
       },
     });
@@ -561,8 +622,8 @@ describe('structuredClone round-trip', () => {
       value: {
         $case: 'handleValue',
         handleValue: {
-          key: 42,
           handleType: BamlHandleType.FUNCTION_REF,
+          key: 42,
           ty: undefined,
         },
       },
@@ -580,8 +641,6 @@ describe('structuredClone round-trip', () => {
       value: {
         $case: 'classValue',
         classValue: {
-          name: 'ComplexResult',
-          typeArgs: [],
           fields: [
             {
               key: 'items',
@@ -589,11 +648,18 @@ describe('structuredClone round-trip', () => {
                 value: {
                   $case: 'listValue',
                   listValue: {
-                    itemType: { ty: { $case: 'primitive', primitive: { kind: BamlTyPrimitiveKind.BAML_TY_PRIMITIVE_INT } } },
                     items: [
                       { value: { $case: 'intValue', intValue: 1 } },
                       { value: { $case: 'intValue', intValue: 2 } },
                     ],
+                    itemType: {
+                      ty: {
+                        $case: 'primitive',
+                        primitive: {
+                          kind: BamlTyPrimitiveKind.BAML_TY_PRIMITIVE_INT,
+                        },
+                      },
+                    },
                   },
                 },
               },
@@ -601,7 +667,10 @@ describe('structuredClone round-trip', () => {
             {
               key: 'data',
               value: {
-                value: { $case: 'uint8arrayValue', uint8arrayValue: new Uint8Array([10, 20, 30]) },
+                value: {
+                  $case: 'uint8arrayValue',
+                  uint8arrayValue: new Uint8Array([10, 20, 30]),
+                },
               },
             },
             {
@@ -610,8 +679,8 @@ describe('structuredClone round-trip', () => {
                 value: {
                   $case: 'handleValue',
                   handleValue: {
-                    key: 99,
                     handleType: BamlHandleType.FUNCTION_REF,
+                    key: 99,
                     ty: undefined,
                   },
                 },
@@ -631,6 +700,8 @@ describe('structuredClone round-trip', () => {
               },
             },
           ],
+          name: 'ComplexResult',
+          typeArgs: [],
         },
       },
     });

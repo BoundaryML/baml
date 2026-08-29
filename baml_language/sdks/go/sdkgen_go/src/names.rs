@@ -60,6 +60,7 @@ pub(crate) enum GoNameKind {
     MethodOptionType,
     FunctionOptionSetter,
     MethodOptionSetter,
+    StreamControlOptionSetter,
     Class,
     InterfaceToken,
     Enum,
@@ -220,6 +221,7 @@ impl NameRequest {
             | GoNameKind::FunctionOptionSetter
             | GoNameKind::MethodOptionType
             | GoNameKind::MethodOptionSetter
+            | GoNameKind::StreamControlOptionSetter
             | GoNameKind::Class
             | GoNameKind::InterfaceToken
             | GoNameKind::Enum
@@ -406,6 +408,7 @@ impl GoNames {
                     .arguments
                     .iter()
                     .any(|argument| argument.default.is_some())
+                    || function.name.as_str().ends_with("@stream")
                     || !function.generic_params.is_empty()
                 {
                     requests.push(NameRequest::new(
@@ -434,6 +437,15 @@ impl GoNames {
                             )
                         }),
                 );
+                if function.name.as_str().ends_with("@stream") {
+                    requests.extend(["client", "on_event"].map(|control| {
+                        NameRequest::new(
+                            fqn.member(&baml_base::Name::new(control)),
+                            GoNameKind::StreamControlOptionSetter,
+                            GoVisibility::Exported,
+                        )
+                    }));
+                }
             }
             if let Symbol::Class(class) = symbol {
                 requests.extend(class.generic_params.iter().map(|parameter| {
@@ -494,6 +506,7 @@ impl GoNames {
                         .arguments
                         .iter()
                         .any(|argument| argument.default.is_some())
+                        || method.name.as_str().ends_with("@stream")
                         || !class.generic_params.is_empty()
                         || !method.generic_params.is_empty()
                     {
@@ -523,6 +536,15 @@ impl GoNames {
                                 )
                             }),
                     );
+                    if method.name.as_str().ends_with("@stream") {
+                        requests.extend(["client", "on_event"].map(|control| {
+                            NameRequest::new(
+                                method_fqn.member(&baml_base::Name::new(control)),
+                                GoNameKind::StreamControlOptionSetter,
+                                GoVisibility::Exported,
+                            )
+                        }));
+                    }
                 }
             }
             if let Symbol::Enum(enum_) = symbol {
@@ -1219,6 +1241,15 @@ fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
                 push_upper_component(&mut value, member);
             }
         }
+        GoNameKind::StreamControlOptionSetter => {
+            for segment in request.fqn.symbol.namespace() {
+                push_upper_component(&mut value, segment);
+            }
+            push_upper_component(&mut value, request.fqn.symbol.name());
+            for member in &request.fqn.members {
+                push_upper_component(&mut value, member);
+            }
+        }
         GoNameKind::EnumVariant => {
             for segment in request.fqn.symbol.namespace() {
                 push_upper_component(&mut value, segment);
@@ -1269,6 +1300,7 @@ fn wire_name(request: &NameRequest) -> BamlWireName {
         }
         GoNameKind::FunctionOptionSetter
         | GoNameKind::MethodOptionSetter
+        | GoNameKind::StreamControlOptionSetter
         | GoNameKind::EnumVariant
         | GoNameKind::ClassTypeParameter
         | GoNameKind::CallableTypeParameter
@@ -1332,6 +1364,7 @@ fn short_hash(request: &NameRequest) -> String {
         GoNameKind::EnumVariant => 8,
         GoNameKind::MethodOptionType => 10,
         GoNameKind::MethodOptionSetter => 11,
+        GoNameKind::StreamControlOptionSetter => 17,
     });
     hash.byte(match request.visibility {
         GoVisibility::Exported => 0,

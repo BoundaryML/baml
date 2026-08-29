@@ -402,7 +402,7 @@ fn to_source_code_internal(
     // at least one routed symbol ends up with a `LeafBody` here; all
     // others render with G1-identical content.
     let triples = build_emitted(pool, &names);
-    let bodies: BTreeMap<LeafPath, LeafBody> = group_and_sort_with_names(triples, names.clone());
+    let bodies: BTreeMap<LeafPath, LeafBody> = group_and_sort_with_names(triples, &names);
 
     // Emit every directory's `__init__.py` and a sibling `__init__.pyi`.
     for dir in &all_dirs {
@@ -532,7 +532,7 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
                 if !name.name().as_str().contains('@')
                     && pool.contains_key(&Name::new(
                         name.package().clone(),
-                        name.namespace().to_vec(),
+                        name.namespace().clone(),
                         baml_base::Name::new(format!("{}@spec", name.name())),
                     )) =>
             {
@@ -573,7 +573,7 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
         for suffix in ["spec", "stream"] {
             let companion = Name::new(
                 name.package().clone(),
-                name.namespace().to_vec(),
+                name.namespace().clone(),
                 baml_base::Name::new(format!("{}@{suffix}", name.name())),
             );
             let Some(Symbol::Function(_)) = pool.get(&companion) else {

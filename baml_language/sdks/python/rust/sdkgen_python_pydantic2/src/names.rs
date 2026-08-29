@@ -258,21 +258,21 @@ impl PythonNames {
             symbols.sort_by_key(|(name, _)| *name);
             let primaries = symbols
                 .iter()
-                .filter_map(|(name, symbol)| {
+                .map(|(name, symbol)| {
                     let (raw, kind, fqn) = match symbol {
                         Symbol::Class(_) => (name.bare_name(), "class", name.to_string()),
                         Symbol::Enum(_) => (name.bare_name(), "enum", name.to_string()),
                         Symbol::TypeAlias(_) => (name.bare_name(), "type alias", name.to_string()),
                         Symbol::Function(_) => (name.bare_name(), "function", name.to_string()),
                     };
-                    Some(Entry {
+                    Entry {
                         id: fqn.clone(),
                         raw: raw.to_string(),
                         kind: kind.to_string(),
                         fqn,
                         protected: None,
                         report: is_reportable_user_name(name),
-                    })
+                    }
                 })
                 .collect();
 
@@ -358,7 +358,7 @@ impl PythonNames {
                     self.allocate_generics(
                         owner.to_string().as_str(),
                         "class type parameter",
-                        value.generic_params.iter().map(|name| name.as_str()),
+                        value.generic_params.iter().map(baml_base::Name::as_str),
                     );
                     for method in value
                         .static_methods
@@ -377,7 +377,7 @@ impl PythonNames {
                         self.allocate_generics(
                             &fqn,
                             "method type parameter",
-                            method.generic_params.iter().map(|name| name.as_str()),
+                            method.generic_params.iter().map(baml_base::Name::as_str),
                         );
                     }
                 }
@@ -387,7 +387,7 @@ impl PythonNames {
                     self.allocate_generics(
                         &fqn,
                         "function type parameter",
-                        value.generic_params.iter().map(|name| name.as_str()),
+                        value.generic_params.iter().map(baml_base::Name::as_str),
                     );
                 }
                 Symbol::TypeAlias(_) => {}

@@ -563,6 +563,7 @@ mod tests {
         let handle = bex_project::Handle::new(7, stub_heap());
         let adt = |h: &bex_project::Handle| {
             CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+                kind: bex_project::TaggedHeapHandleKind::RuntimeValue,
                 ty: bex_project::RuntimeTy::int(),
                 heap_handle: h.clone(),
             })

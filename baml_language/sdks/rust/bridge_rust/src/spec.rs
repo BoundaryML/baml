@@ -88,6 +88,7 @@ impl CapabilityHandle {
 /// Fn_stream_with(args, CallOptions::new().client(client))?;
 /// ```
 #[derive(Default)]
+#[must_use]
 pub struct CallOptions {
     entries: Vec<(String, wire::InboundValue)>,
 }
@@ -106,6 +107,7 @@ impl CallOptions {
     /// Add a named control understood by the canonical `FunctionSpec` method.
     /// This is primarily an extension seam for generated controls whose host
     /// type is representable by the Rust SDK.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn argument<T: BamlValue>(mut self, name: impl Into<String>, value: T) -> Self {
         self.entries.push((name.into(), value.to_baml()));
         self
@@ -183,7 +185,8 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     }
 
     /// Parse an existing model response using this spec's realized output.
-    pub fn parse(&self, json: String) -> Result<Output, Error<Infallible>> {
+    pub fn parse(&self, json: impl Into<String>) -> Result<Output, Error<Infallible>> {
+        let json = json.into();
         crate::runtime::invoke_sync(
             "ai.FunctionSpec.parse",
             crate::encode::kwargs(vec![
@@ -194,7 +197,8 @@ impl<Output: BamlValue> FunctionSpec<Output> {
         )
     }
 
-    pub async fn parse_async(&self, json: String) -> Result<Output, Error<Infallible>> {
+    pub async fn parse_async(&self, json: impl Into<String>) -> Result<Output, Error<Infallible>> {
+        let json = json.into();
         crate::runtime::invoke(
             "ai.FunctionSpec.parse",
             crate::encode::kwargs(vec![

@@ -33,9 +33,9 @@ pub(crate) struct PyMethodBinding {
     /// methods. Surfaces only in `.pyi` rendering — the `.py` factory
     /// binding is type-erased.
     pub(crate) generic_params: Vec<String>,
-    /// Raw BAML TypeVar names matching `generic_params`.
+    /// Raw BAML `TypeVar` names matching `generic_params`.
     pub(crate) wire_generic_params: Vec<String>,
-    /// Raw method TypeVar spelling -> projected Python spelling.
+    /// Raw method `TypeVar` spelling -> projected Python spelling.
     pub(crate) type_var_names: BTreeMap<String, String>,
     /// Joined `///` doc-comment lines from the BAML method declaration.
     /// Surfaced only by `.pyi` rendering as a `"""..."""` body, since

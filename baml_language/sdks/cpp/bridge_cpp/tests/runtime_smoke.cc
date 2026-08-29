@@ -138,15 +138,12 @@ static void TestPortableValuesTranscodeWithoutHandles() {
   baml::detail::transcode_outbound_to_inbound(inbound_media, media);
   Require(inbound_media.has_media_value(),
           "media did not use the portable inbound arm");
-  Require(inbound_media.media_value().url() ==
-              "https://example.test/cat.png",
+  Require(inbound_media.media_value().url() == "https://example.test/cat.png",
           "portable media payload changed");
   Require(!inbound_media.has_handle(), "portable media became a handle");
 
   baml::detail::pb::BamlOutboundValue prompt;
-  prompt.mutable_prompt_ast_value()
-      ->mutable_simple()
-      ->set_string("hello");
+  prompt.mutable_prompt_ast_value()->mutable_simple()->set_string("hello");
   baml::detail::pb::InboundValue inbound_prompt;
   baml::detail::transcode_outbound_to_inbound(inbound_prompt, prompt);
   Require(inbound_prompt.has_prompt_ast_value(),
@@ -196,18 +193,17 @@ static void TestTypedSpecStreamAndPortableValueCodecs() {
   baml::detail::pb::InboundValue encoded_prompt;
   baml::codec<baml::prompt>::encode(encoded_prompt, prompt);
   Require(encoded_prompt.has_prompt_ast_value() &&
-              encoded_prompt.prompt_ast_value().simple().string() ==
-                  "portable",
+              encoded_prompt.prompt_ast_value().simple().string() == "portable",
           "Prompt codec did not preserve portable data");
 
   const baml::image image = baml::image::from_url(
       "https://example.test/cat.png", std::string("image/png"));
   baml::detail::pb::InboundValue encoded_image;
   baml::codec<baml::image>::encode(encoded_image, image);
-  Require(encoded_image.has_media_value() &&
-              encoded_image.media_value().url() ==
-                  "https://example.test/cat.png",
-          "Media codec did not preserve portable data");
+  Require(
+      encoded_image.has_media_value() &&
+          encoded_image.media_value().url() == "https://example.test/cat.png",
+      "Media codec did not preserve portable data");
 }
 
 static void TestUnhandledSpawnErrorUsesHostDefault() {

@@ -26,9 +26,9 @@ pub(crate) struct PyClass {
     /// `typing.Generic[T, …]` second base and the leaf-level `TypeVar`
     /// declarations include each name.
     pub(crate) generic_params: Vec<String>,
-    /// Raw BAML TypeVar names matching `generic_params`.
+    /// Raw BAML `TypeVar` names matching `generic_params`.
     pub(crate) wire_generic_params: Vec<String>,
-    /// Raw TypeVar spelling -> projected Python spelling for annotations.
+    /// Raw `TypeVar` spelling -> projected Python spelling for annotations.
     pub(crate) type_var_names: BTreeMap<String, String>,
     /// Joined `///` doc-comment lines from the BAML class declaration.
     /// Combined with `PyClassProperty.docstring` from each entry in

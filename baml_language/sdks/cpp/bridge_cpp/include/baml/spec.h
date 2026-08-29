@@ -164,7 +164,8 @@ pb::BamlTy generic_nominal_ty(const char* fqn) {
 }  // namespace detail
 
 // The result of one typed stream pull. `done()` is distinct from a partial
-// whose own value is null (stream_item<std::optional<T>> with value()==nullopt).
+// whose own value is null (stream_item<std::optional<T>> with
+// value()==nullopt).
 template <typename T>
 class stream_item {
  public:
@@ -316,8 +317,8 @@ class stream {
   future<stream_item<Partial>> next_async() const {
     detail::args_encoder args;
     add_self(args);
-    return detail::start_call<stream_item<Partial>>(
-        "ai.stream.Stream.next", std::move(args));
+    return detail::start_call<stream_item<Partial>>("ai.stream.Stream.next",
+                                                    std::move(args));
   }
 
   Out final_() const {
@@ -329,8 +330,7 @@ class stream {
   future<Out> final_async() const {
     detail::args_encoder args;
     add_self(args);
-    return detail::start_call<Out>("ai.stream.Stream.final",
-                                   std::move(args));
+    return detail::start_call<Out>("ai.stream.Stream.final", std::move(args));
   }
 
  private:
@@ -438,8 +438,7 @@ struct codec<function_spec<Out>> {
     detail::encode_capability(target, *value.state_);
   }
 
-  static function_spec<Out> decode(
-      const detail::pb::BamlOutboundValue& value) {
+  static function_spec<Out> decode(const detail::pb::BamlOutboundValue& value) {
     return function_spec<Out>(detail::decode_capability(
         value, detail::pb::ADT_FUNCTION_SPEC, "ai.FunctionSpec handle"));
   }
@@ -459,8 +458,7 @@ struct codec<stream<Partial, Out>> {
   static stream<Partial, Out> decode(
       const detail::pb::BamlOutboundValue& value) {
     return stream<Partial, Out>(detail::decode_capability(
-        value, detail::pb::ADT_TAGGED_HEAP_HANDLE,
-        "ai.stream.Stream handle"));
+        value, detail::pb::ADT_TAGGED_HEAP_HANDLE, "ai.stream.Stream handle"));
   }
 };
 
@@ -472,8 +470,7 @@ struct codec<stream_item<Partial>> {
     return ty;
   }
 
-  static stream_item<Partial> decode(
-      const detail::pb::BamlOutboundValue& raw) {
+  static stream_item<Partial> decode(const detail::pb::BamlOutboundValue& raw) {
     const detail::pb::BamlOutboundValue& value = detail::unwrap(raw);
     if (value.value_case() == detail::pb::BamlOutboundValue::kClassValue &&
         value.class_value().name() == "ai.stream.Done") {

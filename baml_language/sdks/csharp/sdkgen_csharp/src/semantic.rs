@@ -14,9 +14,11 @@ use baml_base::{
     Literal, MediaKind, Name as BaseName, TyAttr, TyAttrValue,
     qualified_name::{AI_STREAM_DONE, AI_STREAM_STREAM},
 };
+#[cfg(test)]
+use baml_codegen_types::FunctionArgument;
 use baml_codegen_types::{
-    CallableParam, Class, ClassProperty, CodegenFunctionParamMode, EnumVariant, Function,
-    FunctionArgument, Name, ParamTy, Symbol, Ty,
+    CallableParam, Class, ClassProperty, CodegenFunctionParamMode, EnumVariant, Function, Name,
+    ParamTy, Symbol, Ty,
 };
 use sha2::{Digest, Sha256};
 
@@ -79,8 +81,8 @@ impl From<PreparationError> for CSharpGenerationError {
     }
 }
 
-struct ArgumentSpec<'a> {
-    argument: &'a FunctionArgument,
+struct ArgumentSpec {
+    wire_name: BaseName,
     ty: Ty,
     optional: bool,
     parameter_request: CSharpNameRequest,
@@ -102,7 +104,7 @@ struct FunctionSpec<'a> {
     cancellation_request: CSharpNameRequest,
     field_request: CSharpNameRequest,
     locals: CallableLocalRequests,
-    arguments: Vec<ArgumentSpec<'a>>,
+    arguments: Vec<ArgumentSpec>,
 }
 
 #[derive(Clone)]
@@ -145,7 +147,7 @@ struct MethodSpec<'a> {
     function_field_request: CSharpNameRequest,
     receiver_field_request: Option<CSharpNameRequest>,
     locals: CallableLocalRequests,
-    arguments: Vec<ArgumentSpec<'a>>,
+    arguments: Vec<ArgumentSpec>,
 }
 
 struct CallableLocalRequests {
@@ -168,6 +170,30 @@ struct VariantSpec<'a> {
 
 fn is_stream_callable_variant(variant: CallableVariant) -> bool {
     matches!(variant, CallableVariant::Stream)
+}
+
+fn stream_client_argument(
+    callable_fqn: &BamlFqn,
+    field_request: CSharpNameRequest,
+) -> ArgumentSpec {
+    let wire_name = BaseName::new("client");
+    ArgumentSpec {
+        wire_name: wire_name.clone(),
+        ty: Ty::Unknown {
+            attr: TyAttr::EMPTY,
+        },
+        optional: true,
+        parameter_request: CSharpNameRequest::new(
+            callable_fqn.member(&wire_name),
+            BamlWireName::Key(wire_name),
+            "client",
+            CSharpNameKind::Parameter,
+            CSharpVisibility::Public,
+            CSharpNameOrigin::CompilerGenerated,
+            CSharpScope::Callable(callable_fqn.clone()),
+        ),
+        field_request,
+    }
 }
 
 struct EnumSpec<'a> {
@@ -1312,7 +1338,7 @@ fn collect_methods<'a>(
         let mut arguments = Vec::new();
         for argument in &method.arguments {
             arguments.push(ArgumentSpec {
-                argument,
+                wire_name: argument.name.clone(),
                 ty: argument.ty.clone(),
                 optional: argument.default.is_some(),
                 parameter_request: source_request(
@@ -1332,6 +1358,19 @@ fn collect_methods<'a>(
                     ),
                 ),
             });
+        }
+        if is_stream_callable_variant(identity.variant) {
+            arguments.push(stream_client_argument(
+                &callable_fqn,
+                helper_request(
+                    &generated_program_fqn(),
+                    &format!(
+                        "{}_{}_client_argument",
+                        method_helper_owner(owner),
+                        callable_source_identity(identity)
+                    ),
+                ),
+            ));
         }
         let type_param_count = type_params.len();
         let wire_identity = match runtime_identities {
@@ -1582,7 +1621,7 @@ fn collect_functions<'a>(
         let mut arguments = Vec::new();
         for argument in &function.arguments {
             arguments.push(ArgumentSpec {
-                argument,
+                wire_name: argument.name.clone(),
                 ty: argument.ty.clone(),
                 optional: argument.default.is_some(),
                 parameter_request: source_request(
@@ -1597,6 +1636,12 @@ fn collect_functions<'a>(
                     &format!("{}_{}_argument", helper_family, argument.name),
                 ),
             });
+        }
+        if is_stream_callable_variant(identity.variant) {
+            arguments.push(stream_client_argument(
+                &callable_fqn,
+                helper_request(program_fqn, &format!("{helper_family}_client_argument")),
+            ));
         }
         let generic_param_count = generic_params.len();
         functions.push(FunctionSpec {
@@ -3351,7 +3396,7 @@ fn render_program(
                     "        {argument_field} = builder.DeclareArgument(\n            {function_field},\n            {wire},\n            {type_field},\n            optional: {optional});\n",
                     argument_field = allocated(render.names, &argument.field_request).source(),
                     function_field = allocated(render.names, &function.field_request).source(),
-                    wire = csharp_string(argument.argument.name.as_str()),
+                    wire = csharp_string(argument.wire_name.as_str()),
                     type_field = render.type_field(&argument.ty),
                     optional = argument.optional,
                 ));
@@ -3360,7 +3405,7 @@ fn render_program(
                     "        {argument_field} = builder.DeclareGenericArgument(\n            {function_field},\n            {wire},\n            optional: {optional});\n",
                     argument_field = allocated(render.names, &argument.field_request).source(),
                     function_field = allocated(render.names, &function.field_request).source(),
-                    wire = csharp_string(argument.argument.name.as_str()),
+                    wire = csharp_string(argument.wire_name.as_str()),
                     optional = argument.optional,
                 ));
             }
@@ -3396,7 +3441,7 @@ fn render_program(
                 source.push_str(&format!(
                     "        {argument_field} = builder.DeclareGenericArgument(\n            {function_field},\n            {wire},\n            optional: {optional});\n",
                     argument_field = allocated(render.names, &argument.field_request).source(),
-                    wire = csharp_string(argument.argument.name.as_str()),
+                    wire = csharp_string(argument.wire_name.as_str()),
                     optional = argument.optional,
                 ));
             }
@@ -6155,6 +6200,8 @@ mod tests {
         assert!(source.contains("BamlGeneratedContract.CreateStream("));
         assert!(source.contains(".DeferredProgram,"));
         assert!(source.contains("global::Baml.BamlStream<string, string>"));
+        assert!(source.contains("BamlOptional<global::Baml.BamlValue> client = default"));
+        assert!(source.contains("optional: true"));
         assert!(!source.contains("BamlGeneratedCodec<global::Baml.BamlStream"));
     }
 
@@ -6610,6 +6657,7 @@ mod tests {
         assert!(source.contains(
             "public static global::Baml.BamlStream<long, global::OnlyMethods.Counter> NewStream("
         ));
+        assert!(source.contains("BamlOptional<global::Baml.BamlValue> client = default"));
         assert!(!source.contains("NewStreamAsync"));
         assert!(source.contains("\"user.only_methods.Counter.new@stream\""));
     }

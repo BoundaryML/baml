@@ -204,6 +204,7 @@ fn verify_streaming_surface(fixture: &std::path::Path) {
     }
     for forbidden in [
         "user.csharp_streaming.Deterministic$stream",
+        "user.csharp_streaming.InspectMedia$stream",
         "user.csharp_streaming.Structured$stream",
     ] {
         assert!(
@@ -212,24 +213,20 @@ fn verify_streaming_surface(fixture: &std::path::Path) {
         );
     }
     assert!(
-        !functions.contains("$stream"),
-        "generated public function surface exposed a synthetic $stream binding"
-    );
-    assert!(
         !functions.contains("onEvent"),
         "generated C# stream surface exposed the unsupported injected event listener"
     );
     for expected in [
-        "\"user.csharp_streaming.Deterministic\",\n            \"direct\"",
-        "\"user.csharp_streaming.Deterministic\",\n            \"spec\"",
-        "\"user.csharp_streaming.Deterministic\",\n            \"stream\"",
-        "\"user.csharp_streaming.Structured\",\n            \"direct\"",
-        "\"user.csharp_streaming.Structured\",\n            \"spec\"",
-        "\"user.csharp_streaming.Structured\",\n            \"stream\"",
+        "\"user.csharp_streaming.Deterministic\",\n            \"call\"",
+        "\"user.csharp_streaming.Deterministic@spec\",\n            \"call\"",
+        "\"user.csharp_streaming.Deterministic@stream\",\n            \"stream\"",
+        "\"user.csharp_streaming.Structured\",\n            \"call\"",
+        "\"user.csharp_streaming.Structured@spec\",\n            \"call\"",
+        "\"user.csharp_streaming.Structured@stream\",\n            \"stream\"",
     ] {
         assert!(
             program.contains(expected),
-            "generated streaming registry omitted exact authored-FQN operation `{expected}`"
+            "generated streaming registry omitted exact callable `{expected}`"
         );
     }
     assert!(

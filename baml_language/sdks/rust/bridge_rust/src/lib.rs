@@ -32,10 +32,10 @@ pub use baml_value::{BamlMapKey, BamlValue, OptionalArg};
 pub use error::{DecodeError, Error, SdkError};
 pub use function::{BamlFunction, FunctionArgs};
 pub use host_value::{HostCallable, HostCallback, HostParam};
-pub use spec::{CallOptions, FunctionSpec, Prompt, Stream};
 // reexports
 pub use indexmap::IndexMap;
 pub use num_bigint::BigInt;
+pub use spec::{CallOptions, FunctionSpec, Prompt, Stream};
 
 /// Order-preserving map type of BAML `map` values (the engine's own
 /// representation is insertion-ordered).

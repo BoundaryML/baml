@@ -54,7 +54,7 @@ pub(crate) struct TranslateCtx {
     /// Shared declaration/module projection. Translator-only unit tests may
     /// leave this unset to exercise the identity fallback.
     pub(crate) names: Option<std::rc::Rc<PythonNames>>,
-    /// Raw TypeVar spelling -> projected Python spelling in this scope.
+    /// Raw `TypeVar` spelling -> projected Python spelling in this scope.
     pub(crate) type_var_names: BTreeMap<String, String>,
 }
 

@@ -721,14 +721,14 @@ fn record_name_routing(
 
 pub(crate) fn group_and_sort_with_names(
     triples: Vec<(LeafPath, EmittedSymbol, SortKey)>,
-    names: Rc<PythonNames>,
+    names: &Rc<PythonNames>,
 ) -> BTreeMap<LeafPath, LeafBody> {
     group_and_sort_inner(triples, Some(names))
 }
 
 fn group_and_sort_inner(
     triples: Vec<(LeafPath, EmittedSymbol, SortKey)>,
-    names: Option<Rc<PythonNames>>,
+    names: Option<&Rc<PythonNames>>,
 ) -> BTreeMap<LeafPath, LeafBody> {
     let mut buckets: BTreeMap<LeafPath, Vec<(EmittedSymbol, SortKey)>> = BTreeMap::new();
     for (leaf, sym, key) in triples {
@@ -789,7 +789,7 @@ fn group_and_sort_inner(
             LeafBody {
                 leaf,
                 symbols,
-                names: names.clone(),
+                names: names.cloned(),
             },
         );
     }
@@ -1314,7 +1314,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath, names: Option<Rc<PythonName
         EmittedSymbol::Class(c) => {
             let class_ctx = TranslateCtx {
                 type_var_names: c.type_var_names.clone(),
-                ..ctx.clone()
+                ..ctx
             };
             if let Some((module, rust_name)) = media_reexport_rust_name(c) {
                 // 25b2 Phase 4: media re-export is now a pure import
@@ -2196,7 +2196,7 @@ fn render_symbol_pyi(
         EmittedSymbol::Class(c) => {
             let class_ctx = TranslateCtx {
                 type_var_names: c.type_var_names.clone(),
-                ..ctx.clone()
+                ..ctx
             };
             if c.source.to_string() == AI_FUNCTION_SPEC {
                 let params = c.generic_params.join(", ");
