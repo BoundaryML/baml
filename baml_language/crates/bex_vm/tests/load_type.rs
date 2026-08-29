@@ -72,6 +72,8 @@ fn inject_function(
             attr: baml_type::TyAttr::default(),
         },
         origin: FunctionOrigin::UserDefined,
+        is_interface_body: false,
+        native_key: None,
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
         function_id: 0,

@@ -895,14 +895,7 @@ function bigints.$init_test_ns_bigints_bigints(registry: testing.TestCollector) 
     return
 }
 
-function bigints.BigintBox.set(self: bigints.BigintBox<#0>, x: #0) -> #0 {
-    load_var2 1 2
-    store_field .v
-    load_var x
-    return
-}
-
-function bigints.BigintRejectionThenAcceptedRng.baml.random.Rng.random(self: bigints.BigintRejectionThenAcceptedRng, bytes: int) -> uint8array {
+function bigints.<(user.bigints.BigintRejectionThenAcceptedRng as baml.random.Rng)>.random(self: bigints.BigintRejectionThenAcceptedRng, bytes: int) -> uint8array {
     load_var bytes
     load_const 2
     cmp_int_op !=
@@ -941,6 +934,13 @@ function bigints.BigintRejectionThenAcceptedRng.baml.random.Rng.random(self: big
 
   L3:
     load_var draw
+    return
+}
+
+function bigints.BigintBox.set(self: bigints.BigintBox<#0>, x: #0) -> #0 {
+    load_var2 1 2
+    store_field .v
+    load_var x
     return
 }
 

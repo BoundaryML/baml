@@ -1,6 +1,23 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
+function compiler.<(user.compiler.ExactDiagnostic as user.compiler.DiagnosticExpectation)>.assert_matches(self: compiler.ExactDiagnostic, actual: reflect.Diagnostic) -> void {
+    load_var actual
+    load_field .code
+    load_var self
+    load_field .code
+    call assert.equal
+    pop 1
+    load_var actual
+    load_field .message
+    load_var self
+    load_field .message
+    call assert.equal
+    pop 1
+    load_const null
+    return
+}
+
 function compiler.AssertCompiles(files: map<string, string>, packages: map<string, reflect.Package>) -> void {
     load_var packages
     load_const <omitted>
@@ -242,22 +259,5 @@ function compiler.CompileFixturePackage(files: map<string, string>, packages: ma
     call baml.sys.panic
 
   L4:
-    return
-}
-
-function compiler.ExactDiagnostic.DiagnosticExpectation.assert_matches(self: compiler.ExactDiagnostic, actual: reflect.Diagnostic) -> void {
-    load_var actual
-    load_field .code
-    load_var self
-    load_field .code
-    call assert.equal
-    pop 1
-    load_var actual
-    load_field .message
-    load_var self
-    load_field .message
-    call assert.equal
-    pop 1
-    load_const null
     return
 }

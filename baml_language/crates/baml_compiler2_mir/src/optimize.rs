@@ -90,7 +90,7 @@ fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
 
     // Build old -> new BlockId mapping (only reachable blocks, preserving order)
     let mut old_to_new: Vec<Option<BlockId>> = vec![None; body.blocks.len()];
-    let mut new_blocks: Vec<BasicBlock> = Vec::new();
+    let mut new_blocks: Vec<BasicBlock<'_>> = Vec::new();
     for block in &body.blocks {
         if reachable.contains(&block.id) {
             let new_id = BlockId(new_blocks.len());
@@ -334,7 +334,7 @@ fn merge_passthrough_blocks(body: &mut MirFunctionBody) {
 /// and locals used as the `index` field of `Place::Index`. These positions are
 /// typed as `Local` (not `Operand`), so they cannot be replaced by a `Constant`
 /// during copy propagation.
-fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
+fn collect_place_index_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
     fn scan_place(p: &Place, set: &mut HashSet<Local>) {
         match p {
             Place::Local(_) => {}
@@ -356,7 +356,7 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
         }
     }
 
-    fn scan_operand(op: &Operand, set: &mut HashSet<Local>) {
+    fn scan_operand(op: &Operand<'_>, set: &mut HashSet<Local>) {
         match op {
             Operand::Copy(p) | Operand::Move(p) => scan_place(p, set),
             Operand::Constant(_) => {}
@@ -582,7 +582,7 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
 /// in exactly one statement. Locals defined in multiple branches (e.g., a temp
 /// that is assigned in both arms of an if-else) have a count > 1 and must not
 /// be constant-propagated.
-fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
+fn count_local_defs(body: &MirFunctionBody<'_>) -> Vec<usize> {
     let mut defs = vec![0usize; body.locals.len()];
 
     for block in &body.blocks {
@@ -615,7 +615,7 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
     defs
 }
 
-fn count_local_uses(body: &MirFunctionBody) -> Vec<usize> {
+fn count_local_uses(body: &MirFunctionBody<'_>) -> Vec<usize> {
     let mut uses = vec![0usize; body.locals.len()];
 
     for block in &body.blocks {
@@ -666,7 +666,7 @@ fn count_in_place(p: &Place, uses: &mut [usize]) {
     }
 }
 
-fn count_in_operand(op: &Operand, uses: &mut [usize]) {
+fn count_in_operand(op: &Operand<'_>, uses: &mut [usize]) {
     match op {
         Operand::Copy(p) | Operand::Move(p) => count_in_place(p, uses),
         Operand::Constant(_) => {}
@@ -770,7 +770,7 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
     }
 }
 
-fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
+fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
     // For terminator destination places (Call::destination, Await::destination,
     // SysOp::destination): these are writes, so don't count plain Local
     // destinations. But if the destination is a projection (Field/Index), the
@@ -892,7 +892,7 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
     // with constants — that field is typed `Local`, not `Operand`. Collect them
     // so we can exclude them from constant inlining below.
     let used_as_place_index = collect_place_index_locals(body);
-    let mut subst: HashMap<Local, Operand> = HashMap::new();
+    let mut subst: HashMap<Local, Operand<'_>> = HashMap::new();
 
     // Scan for copy-of-param: `_X = copy _Y` where Y is a param (1..=arity)
     // and single-use constants: `_X = const V` where X is used exactly once.
@@ -1000,7 +1000,7 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
     }
 }
 
-fn apply_subst_to_operand(op: &mut Operand, subst: &HashMap<Local, Operand>) {
+fn apply_subst_to_operand<'db>(op: &mut Operand<'db>, subst: &HashMap<Local, Operand<'db>>) {
     match op {
         Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l)) => {
             // Plain local — replace the entire operand if in subst
@@ -1020,7 +1020,7 @@ fn apply_subst_to_operand(op: &mut Operand, subst: &HashMap<Local, Operand>) {
 /// Substitute all Local references within a place using the subst map.
 /// Only substitutes when the substitution maps to a plain-local operand
 /// (i.e., `copy _Y`), since projecting through a constant is not meaningful.
-fn apply_subst_to_place_locals(p: &mut Place, subst: &HashMap<Local, Operand>) {
+fn apply_subst_to_place_locals(p: &mut Place, subst: &HashMap<Local, Operand<'_>>) {
     match p {
         Place::Local(l) => {
             // Substitute bare local if it maps to another local
@@ -1048,7 +1048,7 @@ fn apply_subst_to_place_locals(p: &mut Place, subst: &HashMap<Local, Operand>) {
     }
 }
 
-fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>) {
+fn apply_subst_to_rvalue<'db>(rv: &mut crate::Rvalue<'db>, subst: &HashMap<Local, Operand<'db>>) {
     match rv {
         crate::Rvalue::Use(op) => apply_subst_to_operand(op, subst),
         crate::Rvalue::BinaryOp { left, right, .. } => {
@@ -1112,7 +1112,10 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
     }
 }
 
-fn apply_subst_to_statement(stmt: &mut crate::Statement, subst: &HashMap<Local, Operand>) {
+fn apply_subst_to_statement<'db>(
+    stmt: &mut crate::Statement<'db>,
+    subst: &HashMap<Local, Operand<'db>>,
+) {
     match &mut stmt.kind {
         crate::StatementKind::Assign { value, .. } => {
             apply_subst_to_rvalue(value, subst);
@@ -1140,7 +1143,10 @@ fn apply_subst_to_statement(stmt: &mut crate::Statement, subst: &HashMap<Local, 
     }
 }
 
-fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Operand>) {
+fn apply_subst_to_terminator<'db>(
+    term: &mut Terminator<'db>,
+    subst: &HashMap<Local, Operand<'db>>,
+) {
     match term {
         Terminator::Branch { condition, .. } => apply_subst_to_operand(condition, subst),
         Terminator::NarrowBind { source, .. } => apply_subst_to_operand(source, subst),
@@ -1562,7 +1568,7 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
 /// Debug-only — catches invariant drift between lowering, optimization, and
 /// downstream consumers. Modeled after V1's `verifier.rs`.
 #[cfg(debug_assertions)]
-fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
+fn verify_mir(body: &MirFunctionBody<'_>, name: &crate::ItemRef) {
     let num_blocks = body.blocks.len();
     let num_locals = body.locals.len();
 
@@ -1633,7 +1639,7 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
         }
     };
 
-    let check_operand = |op: &Operand, ctx: &str| match op {
+    let check_operand = |op: &Operand<'_>, ctx: &str| match op {
         Operand::Copy(p) | Operand::Move(p) => check_place(p, ctx),
         Operand::Constant(_) => {}
     };
@@ -1959,7 +1965,7 @@ fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
     }
 
     // Reorder blocks and rewrite internal BlockId references
-    let mut new_blocks: Vec<BasicBlock> = Vec::with_capacity(post_order.len());
+    let mut new_blocks: Vec<BasicBlock<'_>> = Vec::with_capacity(post_order.len());
     for &old_id in &post_order {
         let mut block = body.blocks[old_id.0].clone();
         block.id = old_to_new[old_id.0].unwrap();

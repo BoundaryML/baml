@@ -160,7 +160,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 non_free_function_locs.insert(m);
             }
         }
-        for &impl_loc in baml_compiler2_ppir::item_data::file_free_impls(db, source_file) {
+        // ALL implements blocks, in-class and out-of-body alike: their
+        // methods are Impl-owned (never in `class_data.methods`).
+        for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, source_file) {
             for &m in &baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc).methods {
                 non_free_function_locs.insert(m);
             }
@@ -224,24 +226,15 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 // Interfaces themselves are never emitted — host languages differ
                 // too much on trait/protocol/interface semantics — so a method
                 // that only exists to satisfy one has nothing to attach to.
-                //
-                // Emitting them is not merely redundant but unsound: the
-                // generated name is the bare method name, so a type implementing
-                // one interface at several instantiations (`Multiply<int>` and
-                // `Multiply<bigint>` for `baml.time.Duration`) or two interfaces
-                // sharing a method name (`Subtract<Duration>` and
-                // `Subtract<Instant>` for `baml.time.Instant`) collides with
-                // itself. The runtime path it invokes (`baml.time.Duration.mul`)
-                // is ambiguous for the same reason.
-                //
-                // `class.methods` is flat: in-body `implements I { … }` and a
-                // non-generic out-of-body `implement I for C` merged onto `C`
-                // (`lower_cst`) both land here, so the interface target — not the
-                // declaration site — is what identifies them.
-                if baml_compiler2_ppir::item_data::method_interface_target(db, method_loc).is_some()
-                {
-                    continue;
-                }
+                // `class.methods` already excludes them: an `implements`-block
+                // method (in-body or out-of-body) is Impl-owned and never lands
+                // here.
+                debug_assert!(
+                    baml_compiler2_ppir::item_data::method_interface_target(db, method_loc)
+                        .is_none(),
+                    "interface targets are recorded on impl-block methods, which never appear \
+                     in `class.methods`",
+                );
 
                 if matches!(
                     baml_compiler2_ppir::function_body(db, method_loc).as_ref(),

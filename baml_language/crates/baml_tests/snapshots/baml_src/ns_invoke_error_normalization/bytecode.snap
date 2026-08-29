@@ -55,12 +55,12 @@ function invoke_error_normalization.$init_test_ns_invoke_error_normalization_inv
     return
 }
 
-function invoke_error_normalization.TimeoutInvokeClient.ai.Client.id(self: invoke_error_normalization.TimeoutInvokeClient) -> string {
+function invoke_error_normalization.<(user.invoke_error_normalization.TimeoutInvokeClient as ai.Client)>.id(self: invoke_error_normalization.TimeoutInvokeClient) -> string {
     load_const "timeout-provider"
     return
 }
 
-function invoke_error_normalization.TimeoutInvokeClient.ai.Client.invoke(self: invoke_error_normalization.TimeoutInvokeClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
+function invoke_error_normalization.<(user.invoke_error_normalization.TimeoutInvokeClient as ai.Client)>.invoke(self: invoke_error_normalization.TimeoutInvokeClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     load_var self
     load_field .probe
     copy 0
@@ -74,7 +74,7 @@ function invoke_error_normalization.TimeoutInvokeClient.ai.Client.invoke(self: i
     throw
 }
 
-function invoke_error_normalization.TimeoutInvokeClient.ai.Client.render(self: invoke_error_normalization.TimeoutInvokeClient, input: ai.ModelTurnInput) -> baml.http.Request {
+function invoke_error_normalization.<(user.invoke_error_normalization.TimeoutInvokeClient as ai.Client)>.render(self: invoke_error_normalization.TimeoutInvokeClient, input: ai.ModelTurnInput) -> baml.http.Request {
     load_const "POST"
     load_const "https://example.invalid/timeout"
     load_type string

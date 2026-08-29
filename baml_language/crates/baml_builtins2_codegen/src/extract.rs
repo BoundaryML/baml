@@ -267,10 +267,11 @@ fn extract_from_class(
     // Builtin methods may be declared directly on the class or inside an
     // `implements I { ... }` block (BEP-044) — e.g. the `random.Rng`
     // implementors put their `$rust_function` / `$rust_io_function` methods in
-    // an `implements Rng { ... }` block. A method inside `implements I` is named
-    // `{ns}.{Class}.{I}.{method}` at runtime (matching MIR's
-    // `scoped_implements_method_name`), so it carries the interface qualifier; a
-    // direct method is just `{ns}.{Class}.{method}`.
+    // an `implements Rng { ... }` block. A method inside `implements I` is an
+    // impl-block method like any other and is keyed `{ns}.{I}$for${Class}.{method}`
+    // (matching MIR's `native_key_for` — the KEY partner; `def_to_item_ref`
+    // renders the separate `<(target as iface)>` DISPLAY spelling); a direct
+    // method is just `{ns}.{Class}.{method}`.
     let direct = class_def.methods.iter().map(|m| (m, None));
     let in_impl = class_def.implements.iter().flat_map(|b| {
         // The interface `TypeExpr`'s `Display` is the exact form MIR uses to
@@ -296,15 +297,16 @@ fn extract_from_class(
             }
         }
 
-        let path = match &iface_qualifier {
-            Some(iface) => {
-                format!(
-                    "{namespace_prefix}.{class_name}.{iface}.{}",
-                    method.name.as_str()
-                )
-            }
-            None => format!("{namespace_prefix}.{class_name}.{}", method.name.as_str()),
+        // ONE construction for the class segment; the path derives from it
+        // so the two can never drift.
+        let class_segment = match &iface_qualifier {
+            Some(iface) => format!("{iface}$for${class_name}"),
+            None => class_name.to_string(),
         };
+        let path = format!(
+            "{namespace_prefix}.{class_segment}.{}",
+            method.name.as_str()
+        );
         let fn_name = path_to_fn_name(&path);
 
         let has_self = method
@@ -397,6 +399,8 @@ fn extract_from_class(
 
         let builtin = NativeBuiltin {
             path,
+            namespace: namespace_only(namespace_prefix),
+            class_segment: Some(class_segment),
             fn_name,
             params,
             return_type,
@@ -536,6 +540,8 @@ fn extract_from_free_function(
 
     let builtin = NativeBuiltin {
         path,
+        namespace: namespace_only(namespace_prefix),
+        class_segment: None,
         fn_name,
         params,
         return_type,
@@ -558,10 +564,10 @@ fn extract_from_free_function(
 /// Extract `$rust_function` methods from a top-level `implement Interface for Type`
 /// block (e.g. `implement Equals for int { function eq(...) { $rust_function } }`).
 ///
-/// These are dispatched at runtime under the synthetic class name
-/// `<Interface>$for$<for_target>`, which MUST match the name the MIR lowering
-/// assigns to such methods (see `baml_compiler2_mir::lower`'s
-/// `definition_item_ref` / `{iface}$for${for}` formatting) so that
+/// These are dispatched at runtime under the synthetic class segment
+/// `<Interface>$for$<for_target>`, which MUST match the native KEY the MIR
+/// lowering mints for such methods (`baml_compiler2_mir::native_key_for` —
+/// the `{iface}$for${for}` scheme; display spelling is separate) so that
 /// `get_native_fn` resolves the function the VM looks up.
 ///
 /// The receiver (`self`) and any `Self`-typed parameters are mapped to the
@@ -690,6 +696,8 @@ fn extract_from_implements_for(
 
         let builtin = NativeBuiltin {
             path,
+            namespace: namespace_only(namespace_prefix),
+            class_segment: Some(synthetic_class.clone()),
             fn_name,
             params,
             return_type,
@@ -820,6 +828,22 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
     }
 }
 
+/// The namespace-only part of a `{package}` or `{package}.{ns…}` prefix.
+fn namespace_only(namespace_prefix: &str) -> String {
+    let ns = namespace_prefix
+        .split_once('.')
+        .map_or(String::new(), |(_, rest)| rest.to_string());
+    // The generated dispatch idents (`__dispatch_{ns}`, `IoNamespace{Ns}`)
+    // take the namespace as one identifier segment; a NESTED namespace
+    // would reach `format_ident!` as a dotted string and panic
+    // inscrutably inside syn. Fail here with the actual reason instead.
+    assert!(
+        !ns.contains('.'),
+        "nested builtin namespace `{ns}` is unsupported by the sys-op ident scheme"
+    );
+    ns
+}
+
 /// Convert a dotted path to a Rust function name.
 ///
 /// Examples:
@@ -828,7 +852,9 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
 /// - `"baml.sys.argv"` → `"baml_sys_argv"`
 /// - `"baml.media.Pdf.url"` → `"baml_media_pdf_url"`
 fn path_to_fn_name(path: &str) -> String {
-    path.replace('.', "_").to_lowercase()
+    // `$` appears in impl-block method paths (`{iface}$for${Class}.method`)
+    // and is not a valid identifier character.
+    path.replace(['.', '$'], "_").to_lowercase()
 }
 
 /// Extract parameters from a method, skipping the first `self` parameter.
@@ -1225,6 +1251,8 @@ mod tests {
     fn test_sys_op_variant_name() {
         let make = |path: &str| NativeBuiltin {
             path: path.to_string(),
+            namespace: String::new(),
+            class_segment: None,
             fn_name: String::new(),
             params: vec![],
             return_type: BamlType::Null,
@@ -1382,5 +1410,40 @@ mod tests {
             .find(|b| b.path == "baml.sap.__parse_final")
             .unwrap();
         assert_eq!(sap_final.throws, throws(&["LlmClient"]));
+    }
+
+    /// Keys and glue names derive from the path by `.`/`$` → `_` +
+    /// lowercase — the exact spelling the hand-written sys-op glue in
+    /// `crates/sys_ops` must carry.
+    #[test]
+    fn path_to_fn_name_sanitizes_impl_block_segments() {
+        assert_eq!(
+            super::path_to_fn_name("baml.Array.length"),
+            "baml_array_length"
+        );
+        assert_eq!(super::path_to_fn_name("baml.deep_copy"), "baml_deep_copy");
+        assert_eq!(
+            super::path_to_fn_name("baml.random.Rng$for$SystemRandom.random"),
+            "baml_random_rng_for_systemrandom_random"
+        );
+        assert_eq!(
+            super::path_to_fn_name("baml.fs.root.io.Read$for$File.read"),
+            "baml_fs_root_io_read_for_file_read"
+        );
+    }
+
+    #[test]
+    fn namespace_only_strips_the_package() {
+        assert_eq!(super::namespace_only("baml.fs"), "fs");
+        assert_eq!(super::namespace_only("baml"), "");
+        assert_eq!(super::namespace_only("ai.internal"), "internal");
+    }
+
+    /// Nested namespaces would reach `format_ident!` as dotted strings and
+    /// panic inside syn; `namespace_only` refuses them with the reason.
+    #[test]
+    #[should_panic(expected = "nested builtin namespace")]
+    fn namespace_only_rejects_nested_namespaces() {
+        let _ = super::namespace_only("baml.sys.io");
     }
 }

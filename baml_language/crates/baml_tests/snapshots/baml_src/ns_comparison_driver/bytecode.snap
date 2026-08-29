@@ -125,71 +125,7 @@ function comparison_driver.$init_test_ns_comparison_driver_comparison_driver(reg
     return
 }
 
-function comparison_driver.CdMoney.baml.ops.Compare.lt(self: comparison_driver.CdMoney, other: comparison_driver.CdMoney) -> bool {
-    load_var self
-    load_field .cents
-    load_var other
-    load_field .cents
-    cmp_int_op <
-    return
-}
-
-function comparison_driver.CdMoney.baml.ops.Equals.eq(self: comparison_driver.CdMoney, other: comparison_driver.CdMoney) -> bool {
-    load_var self
-    load_field .cents
-    load_var other
-    load_field .cents
-    cmp_int_op ==
-    return
-}
-
-function comparison_driver.CdNestedTag.baml.ops.Equals.eq(self: comparison_driver.CdNestedTag, other: comparison_driver.CdNestedTag) -> bool {
-    load_var self
-    load_field .id
-    load_var other
-    load_field .id
-    cmp_int_op ==
-    return
-}
-
-function comparison_driver.CdOdd.baml.ops.Compare.gt(self: comparison_driver.CdOdd, other: comparison_driver.CdOdd) -> bool {
-    load_const true
-    return
-}
-
-function comparison_driver.CdOdd.baml.ops.Compare.lt(self: comparison_driver.CdOdd, other: comparison_driver.CdOdd) -> bool {
-    load_var self
-    load_field .n
-    load_var other
-    load_field .n
-    cmp_int_op <
-    return
-}
-
-function comparison_driver.CdOdd.baml.ops.Equals.eq(self: comparison_driver.CdOdd, other: comparison_driver.CdOdd) -> bool {
-    load_var self
-    load_field .n
-    load_var other
-    load_field .n
-    cmp_int_op ==
-    return
-}
-
-function comparison_driver.CdTag.baml.ops.Equals.eq(self: comparison_driver.CdTag, other: comparison_driver.CdTag) -> bool {
-    load_var self
-    load_field .id
-    load_var other
-    load_field .id
-    cmp_int_op ==
-    return
-}
-
-function comparison_driver.baml.ops.Compare$for$CdOrderedEnum.lt(self: comparison_driver.CdOrderedEnum, other: comparison_driver.CdOrderedEnum) -> bool {
-    load_const true
-    return
-}
-
-function comparison_driver.baml.ops.Equals$for$CdBox<T>.eq(self: comparison_driver.CdBox<#0>, other: comparison_driver.CdBox<#0>) -> bool {
+function comparison_driver.<(user.comparison_driver.CdBox<#0> as baml.ops.Equals)>.eq(self: comparison_driver.CdBox<#0>, other: comparison_driver.CdBox<#0>) -> bool {
     load_var self
     load_field .v
     load_var other
@@ -198,12 +134,76 @@ function comparison_driver.baml.ops.Equals$for$CdBox<T>.eq(self: comparison_driv
     return
 }
 
-function comparison_driver.baml.ops.Equals$for$CdOrderedEnum.eq(self: comparison_driver.CdOrderedEnum, other: comparison_driver.CdOrderedEnum) -> bool {
+function comparison_driver.<(user.comparison_driver.CdMoney as baml.ops.Compare)>.lt(self: comparison_driver.CdMoney, other: comparison_driver.CdMoney) -> bool {
+    load_var self
+    load_field .cents
+    load_var other
+    load_field .cents
+    cmp_int_op <
+    return
+}
+
+function comparison_driver.<(user.comparison_driver.CdMoney as baml.ops.Equals)>.eq(self: comparison_driver.CdMoney, other: comparison_driver.CdMoney) -> bool {
+    load_var self
+    load_field .cents
+    load_var other
+    load_field .cents
+    cmp_int_op ==
+    return
+}
+
+function comparison_driver.<(user.comparison_driver.CdNestedTag as baml.ops.Equals)>.eq(self: comparison_driver.CdNestedTag, other: comparison_driver.CdNestedTag) -> bool {
+    load_var self
+    load_field .id
+    load_var other
+    load_field .id
+    cmp_int_op ==
+    return
+}
+
+function comparison_driver.<(user.comparison_driver.CdOdd as baml.ops.Compare)>.gt(self: comparison_driver.CdOdd, other: comparison_driver.CdOdd) -> bool {
+    load_const true
+    return
+}
+
+function comparison_driver.<(user.comparison_driver.CdOdd as baml.ops.Compare)>.lt(self: comparison_driver.CdOdd, other: comparison_driver.CdOdd) -> bool {
+    load_var self
+    load_field .n
+    load_var other
+    load_field .n
+    cmp_int_op <
+    return
+}
+
+function comparison_driver.<(user.comparison_driver.CdOdd as baml.ops.Equals)>.eq(self: comparison_driver.CdOdd, other: comparison_driver.CdOdd) -> bool {
+    load_var self
+    load_field .n
+    load_var other
+    load_field .n
+    cmp_int_op ==
+    return
+}
+
+function comparison_driver.<(user.comparison_driver.CdOrderedEnum as baml.ops.Compare)>.lt(self: comparison_driver.CdOrderedEnum, other: comparison_driver.CdOrderedEnum) -> bool {
+    load_const true
+    return
+}
+
+function comparison_driver.<(user.comparison_driver.CdOrderedEnum as baml.ops.Equals)>.eq(self: comparison_driver.CdOrderedEnum, other: comparison_driver.CdOrderedEnum) -> bool {
     load_const false
     return
 }
 
-function comparison_driver.baml.ops.Equals$for$CdTotalEq.eq(self: comparison_driver.CdTotalEq, other: comparison_driver.CdTotalEq) -> bool {
+function comparison_driver.<(user.comparison_driver.CdTag as baml.ops.Equals)>.eq(self: comparison_driver.CdTag, other: comparison_driver.CdTag) -> bool {
+    load_var self
+    load_field .id
+    load_var other
+    load_field .id
+    cmp_int_op ==
+    return
+}
+
+function comparison_driver.<(user.comparison_driver.CdTotalEq as baml.ops.Equals)>.eq(self: comparison_driver.CdTotalEq, other: comparison_driver.CdTotalEq) -> bool {
     load_const true
     return
 }

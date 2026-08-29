@@ -601,6 +601,8 @@ pub(crate) mod tests {
                 attr: baml_type::TyAttr::default(),
             },
             origin: FunctionOrigin::Internal,
+            is_interface_body: false,
+            native_key: None,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0,
@@ -1422,9 +1424,14 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
 
     // Build the function-name lookup by scanning objects. Classes and enums are
     // resolved through `packages` at runtime, so they need no separate index here.
+    // Interface bodies are anonymous at runtime — their `name` is display-only —
+    // so they never enter a name-resolution surface (entry points, suffix
+    // matching, engine lookups).
     let mut resolved_function_names = HashMap::new();
     for (idx, obj) in objects.iter().enumerate() {
-        if let Object::Function(func) = obj {
+        if let Object::Function(func) = obj
+            && !func.is_interface_body
+        {
             resolved_function_names
                 .insert(func.name.clone(), (ObjectIndex::from_raw(idx), func.kind));
         }
@@ -3073,11 +3080,12 @@ impl BexVm {
             .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                 method: method_name.to_string(),
             })?;
-        let method = rule.methods.get(method_name).ok_or_else(|| {
-            VmInternalError::UnresolvedVirtualCall {
+        let method = resolver
+            .rule_method_impl(&rule, method_name)
+            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                 method: method_name.to_string(),
-            }
-        })?;
+            })?
+            .method;
         let mut frame = resolver.realize_frame(&method.frame, &bound_args)?;
         // Only `.tys` reaches the callee frame. `method_type_args.values` (the
         // exact `TypeValue`s) is dropped, which is sound here: a type argument
@@ -3928,6 +3936,8 @@ impl BexVm {
             display_return_type,
             throws_type,
             origin: FunctionOrigin::Internal,
+            is_interface_body: false,
+            native_key: None,
             body_meta: None,
             capture: bex_vm_types::FunctionCaptureProps::disabled(),
             function_id: 0, // synthetic; not in the profiling function table
@@ -4014,6 +4024,8 @@ impl BexVm {
             display_return_type,
             throws_type,
             origin: FunctionOrigin::Internal,
+            is_interface_body: false,
+            native_key: None,
             body_meta: None,
             capture: bex_vm_types::FunctionCaptureProps::disabled(),
             function_id: 0,
@@ -4443,14 +4455,17 @@ impl BexVm {
     /// or `None` if no such function exists in the global pool.
     ///
     /// This is O(globals) and intended for use in native methods that need to
-    /// dispatch to a dynamically resolved method (e.g. `Map.to_json`). Not
-    /// suitable for hot paths; callers that need repeated lookups should cache
-    /// the result.
+    /// dispatch to a dynamically resolved FREE stdlib function (e.g.
+    /// `baml.json.to`). Not suitable for hot paths; callers that need repeated
+    /// lookups should cache the result. Interface-machinery bodies are
+    /// excluded: a body's `name` is display-only (its identity is the
+    /// implements relation), so this scan must never become a name→body
+    /// channel.
     pub fn find_function_by_name(&self, name: &str) -> Option<HeapPtr> {
         for v in self.globals.as_slice(self.proof()) {
             if let Some(ptr) = v.as_object_ptr() {
                 if let Object::Function(f) = self.get_object(ptr) {
-                    if f.name == name {
+                    if f.name == name && !f.is_interface_body {
                         return Some(ptr);
                     }
                 }
@@ -5621,6 +5636,14 @@ impl BexVm {
     /// class generics). Captured at `MakeBoundMethod` time so the value is fully
     /// realized; installed as the callee's `frame.type_args` at `CallIndirect`
     /// (see the `Object::BoundMethod` arm of `execute_call_from_locals_offset`).
+    ///
+    /// This is EXACT, not an approximation: `MakeBoundMethod`'s only callees
+    /// are class-inherent methods, whose owner frame IS the class frame. An
+    /// implements-block method referenced in value position binds through
+    /// `MakeVirtualBoundMethod` (or a shim's `shim_rule_method`) instead,
+    /// where the impl rule's `realize_frame` supplies the owner frame a
+    /// receiver's class args cannot express (blanket impls, inherited
+    /// defaults).
     pub(crate) fn bound_method_curried_type_args(
         &self,
         receiver: Value,
@@ -8434,10 +8457,11 @@ impl BexVm {
                         .ok_or(VmInternalError::NotEnoughItemsOnStack(nargs))?;
                     // `Self` is the receiver's runtime concrete type; coherence makes
                     // `(Self, iface<args>)` resolve to at most one impl. Off that rule
-                    // the method is `rule.methods[name]`. `nargs` equals the method's
-                    // arity — the interface fixes the parameter count, so every impl
-                    // agrees. The rule borrows `self`; scope it so the borrow ends
-                    // before the `&mut self` call below.
+                    // the method resolves through `rule_method_impl` (the provided
+                    // row, or the interface's default on a miss). `nargs` equals the
+                    // method's arity — the interface fixes the parameter count, so
+                    // every impl agrees. The rule borrows `self`; scope it so the
+                    // borrow ends before the `&mut self` call below.
                     let receiver = self.stack[StackIndex::from_raw(args_offset)];
                     let cache_key = if function.runtime_package.is_null() {
                         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
@@ -8515,19 +8539,21 @@ impl BexVm {
                             .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
                             })?;
-                        let method = rule.methods.get(method_name.as_str()).ok_or_else(|| {
-                            VmInternalError::UnresolvedVirtualCall {
+                        let method = resolver
+                            .rule_method_impl(&rule, method_name.as_str())
+                            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
-                            }
-                        })?;
-                        // `fqn` is the resolved callee's heap pointer, baked at
-                        // emit time — invoke it directly.
+                            })?
+                            .method;
+                        // `fqn` is the resolved callee's heap pointer (provided
+                        // row or adopted interface default) — invoke it directly.
                         let callee = method.fqn;
                         // Seed the callee frame: the impl's frame realized against
-                        // its bound args (the impl's own generics for an impl method,
-                        // or the interface's args + associated types for an inherited
-                        // default), then the method-level type args — matching the
-                        // callee's De Bruijn layout `[owner… ++ method…]`.
+                        // its bound args (the impl's own generics for a provided
+                        // method, or `[Self, interface args..]` for an adopted
+                        // default — associated types are never frame slots), then
+                        // the method-level type args — matching the callee's
+                        // De Bruijn layout `[owner… ++ method…]`.
                         let frame = resolver.realize_frame(&method.frame, &bound_args)?;
                         let cacheable = rule.is_static();
                         if cacheable && let Some(cache_key) = cache_key {

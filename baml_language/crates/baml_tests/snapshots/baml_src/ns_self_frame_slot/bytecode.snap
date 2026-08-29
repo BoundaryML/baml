@@ -174,7 +174,63 @@ function self_frame_slot.$init_test_ns_self_frame_slot_self_frame_slot(registry:
     return
 }
 
-function self_frame_slot.Crate.Marked.is_self(self: self_frame_slot.Crate<#0>, other: unknown) -> bool {
+function self_frame_slot.<(#0[] as user.self_frame_slot.Marked)>.is_self(self: #0[], other: unknown) -> bool {
+    load_var other
+    is_type #0[]
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function self_frame_slot.<(#0[] as user.self_frame_slot.Marked)>.mark(self: #0[]) -> string {
+    load_const "list"
+    return
+}
+
+function self_frame_slot.<(#0[] as user.self_frame_slot.Marked)>.type_name(self: #0[]) -> string {
+    load_type #0[]
+    call baml.<(reflect.Type as baml.ToString)>.to_string
+    return
+}
+
+function self_frame_slot.<(int as user.self_frame_slot.Marked)>.is_self(self: int, other: unknown) -> bool {
+    load_var other
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function self_frame_slot.<(int as user.self_frame_slot.Marked)>.mark(self: int) -> string {
+    load_const "int"
+    return
+}
+
+function self_frame_slot.<(int as user.self_frame_slot.Marked)>.type_name(self: int) -> string {
+    load_type int
+    call baml.<(reflect.Type as baml.ToString)>.to_string
+    return
+}
+
+function self_frame_slot.<(user.self_frame_slot.Crate<#0> as user.self_frame_slot.Marked)>.is_self(self: self_frame_slot.Crate<#0>, other: unknown) -> bool {
     load_var other
     is_type self_frame_slot.Crate<...>
     pop_jump_if_false L0
@@ -191,18 +247,18 @@ function self_frame_slot.Crate.Marked.is_self(self: self_frame_slot.Crate<#0>, o
     return
 }
 
-function self_frame_slot.Crate.Marked.mark(self: self_frame_slot.Crate<#0>) -> string {
+function self_frame_slot.<(user.self_frame_slot.Crate<#0> as user.self_frame_slot.Marked)>.mark(self: self_frame_slot.Crate<#0>) -> string {
     load_const "crate"
     return
 }
 
-function self_frame_slot.Crate.Marked.type_name(self: self_frame_slot.Crate<#0>) -> string {
+function self_frame_slot.<(user.self_frame_slot.Crate<#0> as user.self_frame_slot.Marked)>.type_name(self: self_frame_slot.Crate<#0>) -> string {
     load_type self_frame_slot.Crate<#0>
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 
-function self_frame_slot.Croc.Marked.is_self(self: self_frame_slot.Croc, other: unknown) -> bool {
+function self_frame_slot.<(user.self_frame_slot.Croc as user.self_frame_slot.Marked)>.is_self(self: self_frame_slot.Croc, other: unknown) -> bool {
     load_var other
     is_type self_frame_slot.Croc
     pop_jump_if_false L0
@@ -219,21 +275,20 @@ function self_frame_slot.Croc.Marked.is_self(self: self_frame_slot.Croc, other: 
     return
 }
 
-function self_frame_slot.Croc.Marked.mark(self: self_frame_slot.Croc) -> string {
+function self_frame_slot.<(user.self_frame_slot.Croc as user.self_frame_slot.Marked)>.mark(self: self_frame_slot.Croc) -> string {
     load_const "croc"
     return
 }
 
-function self_frame_slot.Croc.Marked.type_name(self: self_frame_slot.Croc) -> string {
+function self_frame_slot.<(user.self_frame_slot.Croc as user.self_frame_slot.Marked)>.type_name(self: self_frame_slot.Croc) -> string {
     load_type self_frame_slot.Croc
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 
-function self_frame_slot.IntShelf.Store<int>.describe(self: self_frame_slot.IntShelf) -> string {
+function self_frame_slot.<(user.self_frame_slot.IntShelf as user.self_frame_slot.Store<int>)>.describe(self: self_frame_slot.IntShelf) -> string {
     load_type self_frame_slot.IntShelf
     load_type int
-    load_type string
     load_var self
     call user.self_frame_slot.Store.describe
     store_var _2
@@ -245,7 +300,7 @@ function self_frame_slot.IntShelf.Store<int>.describe(self: self_frame_slot.IntS
 
 function self_frame_slot.Kinded.kind_name(self: self_frame_slot.Kinded) -> string {
     load_type #0
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 
@@ -308,71 +363,15 @@ function self_frame_slot.Kinded.same_kind_of(self: self_frame_slot.Kinded, other
     return
 }
 
-function self_frame_slot.Marked$for$T[].is_self(self: #0[], other: unknown) -> bool {
-    load_var other
-    is_type #0[]
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
-    return
-}
-
-function self_frame_slot.Marked$for$T[].mark(self: #0[]) -> string {
-    load_const "list"
-    return
-}
-
-function self_frame_slot.Marked$for$T[].type_name(self: #0[]) -> string {
-    load_type #0[]
-    call baml.root.ToString$for$reflect.Type.to_string
-    return
-}
-
-function self_frame_slot.Marked$for$int.is_self(self: int, other: unknown) -> bool {
-    load_var other
-    is_type int
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
-    return
-}
-
-function self_frame_slot.Marked$for$int.mark(self: int) -> string {
-    load_const "int"
-    return
-}
-
-function self_frame_slot.Marked$for$int.type_name(self: int) -> string {
-    load_type int
-    call baml.root.ToString$for$reflect.Type.to_string
-    return
-}
-
 function self_frame_slot.Store.describe(self: self_frame_slot.Store<#1>) -> string {
     load_type #0
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var _5
     load_type #1
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var _7
-    load_type #2
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type (#0 as self_frame_slot.Store<#1>).Key
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var _9
     load_var _5
     load_const "/"

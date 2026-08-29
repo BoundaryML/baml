@@ -760,8 +760,8 @@ class Robot {
 }
 
 // A simple `implements I for C` is merged onto the class during AST lowering
-// (its method becomes class-owned); only a *generic* out-of-body impl stays a
-// free impl block.
+// as an in-class block; its methods stay Impl-owned either way (the block
+// spelling is syntax, not ownership).
 implements Greeter for Robot {
     function greet(self) -> string throws never {
         self.id
@@ -814,7 +814,7 @@ function free_standing(x: int) -> int throws never {
                     .methods
                     .contains(&loc)
             });
-        let by_free_impl = baml_compiler2_ppir::item_data::file_free_impls(db, file)
+        let by_impl = baml_compiler2_ppir::item_data::file_impls(db, file)
             .iter()
             .copied()
             .find(|&impl_loc| {
@@ -826,7 +826,7 @@ function free_standing(x: int) -> int throws never {
         let indexed = baml_compiler2_ppir::item_data::method_owner(db, loc);
 
         use baml_compiler2_ppir::item_data::MethodOwner;
-        match (by_class, by_interface, by_free_impl) {
+        match (by_class, by_interface, by_impl) {
             (Some(class_loc), None, None) => {
                 cases.0 += 1;
                 assert!(
@@ -844,8 +844,8 @@ function free_standing(x: int) -> int throws never {
             (None, None, Some(impl_loc)) => {
                 cases.2 += 1;
                 assert!(
-                    matches!(indexed, Some(MethodOwner::FreeImpl(b)) if b == impl_loc),
-                    "free-impl scan and index disagree for {func_name:?}"
+                    matches!(indexed, Some(MethodOwner::Impl(b)) if b == impl_loc),
+                    "impl scan and index disagree for {func_name:?}"
                 );
             }
             (None, None, None) => {
@@ -862,12 +862,12 @@ function free_standing(x: int) -> int throws never {
     }
 
     // Guard against a vacuous fixture: every ownership case must be present.
-    assert!(
-        cases.0 >= 2,
-        "expected class methods (plain + in-body impl)"
-    );
+    assert!(cases.0 >= 1, "expected a plain class method");
     assert!(cases.1 >= 1, "expected an interface default method");
-    assert!(cases.2 >= 1, "expected a free-impl method");
+    assert!(
+        cases.2 >= 2,
+        "expected impl methods (in-body + out-of-body)"
+    );
     assert!(cases.3 >= 1, "expected a top-level function");
 }
 

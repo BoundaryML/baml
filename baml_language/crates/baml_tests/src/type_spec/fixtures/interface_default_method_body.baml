@@ -1,14 +1,11 @@
-//
-// (TIR renders the frame slot as the projection `(Self as
-// user.Store).Item` rather than the slot's own name.)
-//
 // I6: an interface DEFAULT-method body is an ordinary inference root.
 // Inside it `self` is the rigid `Self` (frame slot 0) bounded by the
-// interface AT ITS OWN FRAME (each associated slot pinned to the
-// frame's own var), so a call through `self` resolves members via the
-// carried bound exactly like `T extends I` would, and `Self.Item`
-// reduces to the frame's `Item` slot - the same slot the runtime binds
-// per-receiver at impl selection.
+// interface, so a call through `self` resolves members via the carried
+// bound exactly like `T extends I` would. Associated types are not
+// frame slots: `Self.Item` is the rigid projection
+// `(Self as user.Store).Item` - the canonical `(Self, interface, name)`
+// triple - which the runtime reduces per-receiver through the selected
+// impl's bindings.
 interface Store {
     type Item
 
@@ -16,7 +13,7 @@ interface Store {
 
     function pair(self) -> Self.Item[] throws never {
         let a = self.get();
-         // ^ Item
+         // ^ (Self as user.Store).Item
         [a, self.get()]
     }
 }
