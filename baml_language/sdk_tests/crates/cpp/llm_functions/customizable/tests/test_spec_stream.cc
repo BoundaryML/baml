@@ -29,9 +29,9 @@ static_assert(std::is_same<string_stream, expected_string_stream>::value,
 using async_string_spec =
     decltype(baml_sdk::lorem::stream_e2e_extract_spec_async(
         std::declval<const std::string&>()));
-static_assert(
-    std::is_same<async_string_spec, baml::future<expected_string_spec>>::value,
-    "the bound spec itself remains available asynchronously");
+static_assert(std::is_same<decltype(std::declval<async_string_spec&&>().get()),
+                           expected_string_spec>::value,
+              "the bound spec itself remains available asynchronously");
 
 using async_string_stream =
     decltype(baml_sdk::lorem::stream_e2e_extract_stream_async(

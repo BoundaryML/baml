@@ -1183,8 +1183,8 @@ fn error_surfaces_source(origin: &str) -> String {
             type Item = unreflect(item_type)
 
             let sap = baml.sap.parse<Item>("null") catch (e) {{
-                baml.errors.LlmClient => e.message,
-                _ => "not an LlmClient error",
+                baml.errors.ParseError => e.message,
+                _ => "not a ParseError",
             }}
             let sap_message = if sap is string {{ sap }} else {{ "sap accepted a null" }}
 

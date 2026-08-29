@@ -749,11 +749,11 @@ mod injected_argument_tests {
     }
 }
 
-/// Post-step-8 symbols this slice never emits: partial `$stream` types and
-/// legacy `$`-suffixed companion functions. Callable `@spec`/`@stream`
-/// companions intentionally continue to ordinary function emission.
+/// Legacy `$`-suffixed companion functions are not part of the host surface.
+/// Partial `$stream` types route under `stream_types`, while callable
+/// `@spec`/`@stream` companions continue to ordinary function emission.
 fn skip_symbol(name: &Name) -> bool {
-    name.is_stream() || name.bare_name().contains('$')
+    name.bare_name().contains('$')
 }
 
 /// Whether `name` is a NON-recursive type alias, i.e. one that emits a
@@ -1475,9 +1475,13 @@ fn translate_ty(
         Ty::Bigint { .. } => {
             return Translated::Unsupported("bigint (post-step-8)".to_string());
         }
-        Ty::Media(..) => {
-            return Translated::Unsupported("media type (post-step-8)".to_string());
-        }
+        Ty::Media(kind, _) => match kind {
+            baml_base::MediaKind::Image => "::baml::image".to_string(),
+            baml_base::MediaKind::Audio => "::baml::audio".to_string(),
+            baml_base::MediaKind::Video => "::baml::video".to_string(),
+            baml_base::MediaKind::Pdf => "::baml::pdf".to_string(),
+            baml_base::MediaKind::Generic => "::baml::media".to_string(),
+        },
         Ty::Literal(lit, ..) => {
             // Literal types are singleton ::baml::lit types (each distinct
             // value a distinct C++ type), spelled as char packs / typed
