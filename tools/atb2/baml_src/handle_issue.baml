@@ -1606,6 +1606,29 @@ class HandleOutcome {
     gate: GateResult?,
     report: FixReport?,
     design_doc: string?,
+    /// Why the agent stopped (agent_stopped only): the CLI's error text,
+    /// "killed at the time budget", or "reply did not parse".
+    reason: string?,
+}
+
+/// Reads the last agent transcript for the reason the run stopped.
+function stop_reason(path: string) -> string? {
+    if (!baml.fs.exists(path)) {
+        return "no transcript was written";
+    };
+    let lines = baml.fs.read(path).split("\n").filter((l: string) -> bool {
+        l.includes("\"type\":\"result\"")
+    });
+    if (lines.length() == 0) {
+        return "killed at the time budget";
+    };
+    let ev = baml.json.parse(lines[lines.length() - 1]) catch (_) {
+        _ => baml.json.parse("{}"),
+    };
+    if (baml.json.path_or<bool>(ev, ".is_error", false)) {
+        return "cli error: " + baml.json.path_or<string>(ev, ".result", "").slice(0, 300);
+    };
+    "reply did not parse"
 }
 
 function outcome(
@@ -1627,6 +1650,7 @@ function outcome(
         gate: gate,
         report: report,
         design_doc: doc,
+        reason: null,
     }
 }
 
@@ -1648,6 +1672,7 @@ function stopped_outcome(sb: Sandbox, started: baml.time.Instant) -> HandleOutco
         gate: null,
         report: null,
         design_doc: null,
+        reason: stop_reason(last),
     }
 }
 
@@ -1657,6 +1682,7 @@ function write_outcome(sb: Sandbox, o: HandleOutcome) -> null {
         {
             "issue_branch": sb.branch,
             "kind": o.kind,
+            "reason": o.reason,
             "turns": o.turns,
             "seconds": o.seconds,
             "timed_out": o.timed_out,
