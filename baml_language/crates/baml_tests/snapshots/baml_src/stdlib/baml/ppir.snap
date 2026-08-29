@@ -1988,6 +1988,7 @@ function baml.sys.iter(self: ?) -> root.iter.Iterator<Item = string, Error = roo
   {  } self
 }
 function baml.sys.kill(self: ?) -> void  [builtin]
+function baml.sys.kill(pid: int) -> null  [builtin]
 function baml.sys.lines(self: ?) -> baml.sys.ReadPipeLines  [expr] {
   {  } baml.sys.ReadPipeLines { pipe: self, _pending: b"<0 bytes>" }
 }
@@ -2001,6 +2002,7 @@ function baml.sys.ok(self: ?) -> bool  [expr] {
   {  } self.exit_code Eq 0
 }
 function baml.sys.panic(message: string) -> never  [builtin]
+function baml.sys.pid(self: ?) -> int  [builtin]
 function baml.sys.pid() -> int  [builtin]
 function baml.sys.read(self: ?, limit: int) -> uint8array?  [builtin]
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]

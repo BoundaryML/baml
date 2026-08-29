@@ -288,7 +288,7 @@ namespace baml.spawn:
   class TaskGroup { methods: [new, cancel, set_limit, limit, name, active_count, queued_count] }
   function options<T, E>
 namespace baml.sys:
-  class Process { methods: [wait, kill, close] }
+  class Process { methods: [pid, wait, kill, close] }
   class ProcessExit { methods: [ok] }
   class ProcessOptions { methods: [] }
   class ReadPipe { methods: [close, lines, read] }
@@ -301,6 +301,7 @@ namespace baml.sys:
   function collect_garbage
   function exec
   function exit
+  function kill
   function panic
   function pid
   function shell

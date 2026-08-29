@@ -123,6 +123,14 @@ class Process {
     stdout: ReadPipe,
     stderr: ReadPipe?,
 
+    /// Returns the OS process ID of the child process.
+    ///
+    /// Mirrors `std::process::Child::id`: the ID identifies the child for as
+    /// long as this handle is alive, including after the child has exited.
+    function pid(self) -> int throws never {
+        $rust_io_function
+    }
+
     /// Wait for the child to exit.
     function wait(self) -> ProcessExit throws root.errors.Io | root.errors.Timeout {
         $rust_io_function
@@ -249,5 +257,18 @@ function argv() -> string[] throws never {
 /// If the environment does not support process IDs (e.g. in a browser), with
 /// `baml.panics.HostUnavailable`.
 function pid() -> int throws never {
+    $rust_io_function
+}
+
+/// Force-kills the process with the given OS process ID.
+///
+/// Unix sends `SIGKILL`; Windows calls `TerminateProcess`. Mirrors
+/// `std::process::Child::kill` but for an arbitrary PID, so one BAML
+/// invocation can kill a process started by another (for example a service
+/// whose PID an earlier invocation recorded).
+///
+/// Throws `root.errors.Io` when `pid` is not positive, no such process
+/// exists, or the OS denies the kill.
+function kill(pid: int) -> null throws root.errors.Io {
     $rust_io_function
 }

@@ -559,6 +559,115 @@ async fn pid_is_the_host_process() {
     );
 }
 
+// === Process.pid() and sys.kill(pid) tests ===
+
+/// `Process.pid` reports the child process ID, and the free function
+/// `baml.sys.kill` can kill that child from its pid alone. Unix asserts the
+/// child died to SIGKILL specifically.
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn process_pid_and_kill_by_pid() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process("sleep", ["30"], null);
+                defer { process.close() }
+
+                let pid = process.pid();
+                if (pid <= 0 || pid == baml.sys.pid()) {
+                    return false;
+                }
+                baml.sys.kill(pid);
+                let exit = process.wait();
+                match (exit.signal) {
+                    let signal: string => signal == "9",
+                    null => false,
+                }
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// Windows variant: `TerminateProcess` reports no signal, so only assert the
+/// child did not exit cleanly.
+#[tokio::test]
+#[cfg(target_os = "windows")]
+async fn process_pid_and_kill_by_pid() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process("ping", ["-n", "31", "127.0.0.1"], null);
+                defer { process.close() }
+
+                let pid = process.pid();
+                if (pid <= 0 || pid == baml.sys.pid()) {
+                    return false;
+                }
+                baml.sys.kill(pid);
+                let exit = process.wait();
+                !exit.ok()
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// Killing a pid whose process has already exited (and been reaped) throws
+/// `baml.errors.Io`.
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn kill_pid_of_exited_process_throws_io() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process("sleep", ["30"], null);
+                defer { process.close() }
+
+                let pid = process.pid();
+                process.kill();
+                process.wait();
+
+                baml.sys.kill(pid) catch (e) {
+                    let io: baml.errors.Io => { return true; },
+                    _ => { return false; },
+                };
+                false
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// Windows variant of `kill_pid_of_exited_process_throws_io`.
+#[tokio::test]
+#[cfg(target_os = "windows")]
+async fn kill_pid_of_exited_process_throws_io() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process("ping", ["-n", "31", "127.0.0.1"], null);
+                defer { process.close() }
+
+                let pid = process.pid();
+                process.kill();
+                process.wait();
+
+                baml.sys.kill(pid) catch (e) {
+                    let io: baml.errors.Io => { return true; },
+                    _ => { return false; },
+                };
+                false
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
 // === stdout / stderr as uint8array field tests ===
 
 #[tokio::test]

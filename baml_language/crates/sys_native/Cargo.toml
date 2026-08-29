@@ -77,6 +77,17 @@ tokio-tungstenite = { workspace = true, optional = true, features = [
 tracing = { workspace = true }
 walkdir = { workspace = true }
 
+# `baml.sys.kill` sends SIGKILL by pid; std can only kill a `Child` handle.
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+# `baml.sys.kill` uses OpenProcess + TerminateProcess by pid.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_System_Threading",
+] }
+
 [lints]
 workspace = true
 
