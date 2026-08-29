@@ -687,7 +687,6 @@ dependencies = [
  "console",
  "ctrlc",
  "datafusion",
- "flate2",
  "hex",
  "indexmap",
  "indicatif",
@@ -711,7 +710,6 @@ dependencies = [
  "sha2",
  "strsim",
  "sys_native",
- "tar",
  "tempfile",
  "text-size",
  "tokio",
@@ -719,6 +717,7 @@ dependencies = [
  "toml_edit 0.22.27",
  "uuid",
  "webbrowser",
+ "yaml_serde",
 ]
 
 [[package]]

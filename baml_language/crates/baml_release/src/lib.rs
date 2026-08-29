@@ -2,7 +2,6 @@
 
 pub mod manifest;
 pub mod platforms;
-pub mod skills;
 
 use std::{
     fs::{self, OpenOptions},
