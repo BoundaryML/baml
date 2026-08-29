@@ -161,7 +161,6 @@ ast_node!(ClientField, CLIENT_FIELD);
 ast_node!(PromptField, PROMPT_FIELD);
 ast_node!(ToolsField, TOOLS_FIELD);
 ast_node!(SpecExpr, SPEC_EXPR);
-ast_node!(StreamExpr, STREAM_EXPR);
 ast_node!(ClientValueDef, CLIENT_VALUE_DEF);
 ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
 ast_node!(StringLiteral, STRING_LITERAL);
@@ -1080,8 +1079,7 @@ impl ToolsField {
 }
 
 impl SpecExpr {
-    /// The base expression the postfix `@spec` was applied to (a `PATH_EXPR`
-    /// naming an LLM function).
+    /// The base expression a companion postfix was applied to.
     pub fn base(&self) -> Option<SyntaxNode> {
         self.syntax.children().next()
     }
@@ -2607,7 +2605,6 @@ impl BlockExpr {
                         | SyntaxKind::UPCAST_EXPR
                         | SyntaxKind::QUALIFIED_PATH_EXPR
                         | SyntaxKind::SPEC_EXPR
-                        | SyntaxKind::STREAM_EXPR
                         | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                         | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR

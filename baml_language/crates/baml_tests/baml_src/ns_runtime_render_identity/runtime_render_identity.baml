@@ -20,8 +20,7 @@ test "non-equivalent same-name runtime classes fail before render" {
     let left = reflect.class.new("Collision", { "left": reflect.Type.of<int>() });
     let right = reflect.class.new("Collision", { "right": reflect.Type.of<string>() });
     let combined = reflect.union.new([left.as_type(), right.as_type()]);
-    type Combined = unreflect(combined.as_type());
-    let rendered = Render@spec<Combined>().prompt() catch (e) {
+    let rendered = Render@render_prompt<unreflect(combined.as_type())>() catch (e) {
         reflect.errors.CompilationError => {
             `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
         },
@@ -42,15 +41,13 @@ test "recursive and equivalent same-name runtime classes still render" {
     node.field("value", reflect.Type.of<int>());
     node.field("next", node.type().optional());
     let node_t = node.build();
-    type NodeOutput = unreflect(node_t.as_type());
-    let recursive_prompt = Render@spec<NodeOutput>().prompt().text();
+    let recursive_prompt = Render@render_prompt<unreflect(node_t.as_type())>().text();
     assert.is_true(recursive_prompt.includes("Node"));
 
     let left = reflect.class.new("Collision", { "value": reflect.Type.of<int>() });
     let right = reflect.class.new("Collision", { "value": reflect.Type.of<int>() });
     let equivalent = reflect.union.new([left.as_type(), right.as_type()]);
-    type EquivalentOutput = unreflect(equivalent.as_type());
-    let equivalent_prompt = Render@spec<EquivalentOutput>().prompt().text();
+    let equivalent_prompt = Render@render_prompt<unreflect(equivalent.as_type())>().text();
     assert.is_true(equivalent_prompt.includes("value"))
 }
 
@@ -59,7 +56,7 @@ class Chain<T> {
 }
 
 test "non-regular recursive generic fails before render" {
-    let rendered = Render@spec<Chain<int>>().prompt().text() catch (e) {
+    let rendered = Render@render_prompt<Chain<int>>().text() catch (e) {
         reflect.errors.CompilationError => {
             `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
         },
@@ -82,7 +79,7 @@ class ChainWrapped<T> {
 // The bounded specialization analysis must run BEFORE the structural
 // interface walk, which keys every realization and would diverge here.
 test "interface-wrapped recursive generic fails before interface walk" {
-    let rendered = Render@spec<ChainWrapped<int>>().prompt() catch (e) {
+    let rendered = Render@render_prompt<ChainWrapped<int>>() catch (e) {
         reflect.errors.CompilationError => {
             `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
         },
@@ -113,7 +110,7 @@ class Both {
 }
 
 test "colliding non-hoisted generic aliases render inline" {
-    let rendered = Render@spec<Both>().prompt().text();
+    let rendered = Render@render_prompt<Both>().text();
     assert.is_true(rendered.includes("boxed:"));
     assert.is_true(rendered.includes("crated:"));
     assert.is_true(!rendered.includes("Container<int>"))
@@ -124,7 +121,7 @@ class Step<A, B> {
 }
 
 test "finite transformed recursion reaches an exact cycle" {
-    let rendered = Render@spec<Step<string, bool>>().prompt().text();
+    let rendered = Render@render_prompt<Step<string, bool>>().text();
     assert.is_true(rendered.includes("Step<int[], int>"))
 }
 
@@ -142,7 +139,7 @@ class Envelope {
 }
 
 test "open interface in second generic specialization is rejected" {
-    let rendered = Render@spec<Envelope>().prompt() catch (e) {
+    let rendered = Render@render_prompt<Envelope>() catch (e) {
         reflect.errors.CompilationError => {
             `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
         },
@@ -171,9 +168,7 @@ function RenderPair<T, U>() -> BoxRec<T> | BoxRec<U> {
 test "runtime type arguments with the same display name remain distinct" {
     let left = reflect.class.new("Arg", { "value": reflect.Type.of<int>() });
     let right = reflect.class.new("Arg", { "value": reflect.Type.of<int>() });
-    type Left = unreflect(left.as_type());
-    type Right = unreflect(right.as_type());
-    let rendered = RenderPair@spec<Left, Right>().prompt() catch (e) {
+    let rendered = RenderPair@render_prompt<unreflect(left.as_type()), unreflect(right.as_type())>() catch (e) {
         reflect.errors.CompilationError => {
             `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
         },

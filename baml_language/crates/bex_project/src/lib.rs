@@ -15,10 +15,11 @@ pub use bex::{Bex, BexCallTraceResult};
 // hosts that manage engine lifecycles (the LSP server's and the browser's
 // playground runtimes): the blessed seam stays this crate rather than a
 // direct `bex_engine`/`bex_vm_types` dependency.
+pub use bex_engine::BexCallResult;
 pub use bex_engine::{
-    BexCallResult, BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext,
-    FunctionCallContextBuilder, FunctionOperation, InboundUnionAmbiguityPolicy,
-    UnhandledSpawnError, UnhandledSpawnErrorHandler, is_cancelled_engine_error,
+    BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
+    InboundUnionAmbiguityPolicy, UnhandledSpawnError, UnhandledSpawnErrorHandler,
+    is_cancelled_engine_error,
     logger::{TraceLogDrainReport, TraceLogMetadata, TraceLogger},
     register_inbound_union_ambiguity_policy,
 };

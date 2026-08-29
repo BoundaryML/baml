@@ -22,7 +22,7 @@
 5. [Packages and Name Resolution](#packages-and-name-resolution)
 6. [Scopes](#scopes)
 7. [CST-to-AST Desugaring: Detailed Examples](#cst-to-ast-desugaring-detailed-examples)
-   - [LLM Function Projections](#llm-function-projections)
+   - [Companion Functions](#companion-functions)
    - [Client Desugaring](#client-desugaring)
    - [Lambda Expression Bodies](#lambda-expression-bodies)
 8. [Global Let Bindings and Initialization Order](#global-let-bindings-and-initialization-order)
@@ -138,10 +138,10 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 **Responsibility:** Desugaring. The AST takes the CST and produces a well-formed, semantically-oriented syntax tree. This is where most features live.
 
 **What lives here:**
-- **LLM spec companions** — For each authored LLM function, the AST synthesizes one language-internal ordinary `Fn@spec` companion that constructs `ai.FunctionSpec<Out>`. PPIR later adds the ordinary private `Fn@stream` companion once the expanded partial output type is known.
+- **Companion function expansion** — LLM functions are expanded into the base function plus generated companions (`render_prompt`, `build_request`, `parse`).
 - **Client desugaring** — `client<llm>` blocks are desugared into a top-level `Let` binding (the `Client` object) plus an optional `$new` companion function (the `PrimitiveClient` constructor).
 - **Lambda expression bodies** — A lambda's body is lowered into the enclosing function's arena and referenced by `ExprId`; the lambda gets its own scope, not its own arena.
-- **LLM function normalization** — The authored declaration remains the only public function. Its direct-call body delegates to `Fn@spec`, while both private companions follow ordinary function resolution and compilation. Direct/Spec/Stream selection exists only at the host bridge boundary.
+- **LLM function normalization** — There is no concept of "LLM function" downstream. LLM functions become regular functions with declarative metadata attached.
 - **Type expression lowering** — Source-level type syntax is converted to `TypeExpr` nodes.
 - **Config item lowering** — Config block syntax (used in clients, generators, etc.) is lowered to AST expressions.
 
@@ -198,7 +198,6 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 
 **What lives here:**
 - Synthesis of `*$stream` variants for classes and type aliases
-- Synthesis of the compiler-private ordinary `Fn@stream` function for each stream-capable LLM function
 - Stream expansion logic (`stream_expand`, `expand_partial`)
 - SAP (streaming attribute propagation) attributes
 - **The canonical item layer** — `ppir::file_item_tree` merges original items with the synthetic stream items, and the per-item **firewall queries** (`item_data`: enumeration + `*_data` + `*_source_map`) that front the item tree live here.
@@ -391,56 +390,23 @@ Shadowing rules are scope-kind-dependent. For example, a match arm can shadow a 
 
 ## CST-to-AST Desugaring: Detailed Examples
 
-### LLM Function Projections
+### Companion Functions
 
-An authored LLM function remains the only public declaration. AST lowering
-synthesizes one language-internal ordinary `Fn@spec` companion from its
-prompt/client recipe. PPIR separately synthesizes `Fn@stream`, because only
-PPIR knows the expanded partial output type. Neither companion is exposed in
-SDK, IDE listing, package reflection, or other authored-symbol surfaces.
+When the AST layer encounters an LLM function, it expands it into the original function plus up to three **companion functions**:
 
-`Fn@spec(args)` is an ordinary call to that private companion and returns
-`ai.FunctionSpec<Out>`. Prompt rendering, HTTP request construction, parsing,
-and direct execution are methods on that bound spec. A spec carries the final
-output type only: it has no partial-output type argument/accessor or `stream()`
-method.
+| Companion | Name Pattern | Parameters | Return Type | Purpose |
+|---|---|---|---|---|
+| `render_prompt` | `FuncName$render_prompt` | Same as parent | `baml.llm.PromptAst` | Renders the prompt AST |
+| `build_request` | `FuncName$build_request` | Same as parent | `baml.http.Request` | Builds the HTTP request |
+| `parse` | `FuncName$parse` | `json: string` | Same as parent | Parses the JSON response |
 
-Streaming is a separate first-class source projection: `Fn@stream(args)`.
-PPIR synthesizes one compiler-private ordinary `Fn@stream` function with the
-former `Fn$stream` signature and body shape. It owns the PPIR-expanded partial
-and final type arguments and returns `ai.stream.Stream<Out$stream, Out>` (or
-the corresponding recursively expanded partial type). The entry is
-language-internal rather than an authored/public symbol. There are no public
-or fabricated `$spec`, `$render_prompt`, `$build_request`, `$parse`, or
-`$stream` BAML functions/runtime FQNs.
+**Implementation** (`baml_compiler2_ast/src/companions.rs`):
 
-Both `@spec` and `@stream` syntax lower by rewriting the terminal callable name
-and then use ordinary path/member resolution, generic application, bound-method
-handling, MIR calls, and `MakeGenericFunction` bytecode. There is no projection
-expression, spec-specific opcode, `SpecFunction` object, or operation tag on VM
-function values. Direct/Spec/Stream is a host-boundary request, not a common VM
-function property.
+Companion expanders are pure functions of type `fn(&FunctionDef) -> Option<FunctionDef>`, stored in a const array `COMPANIONS`. Each expander inspects the function's `declarative_meta` — if it's an LLM function, it produces a companion; otherwise, it returns `None`.
 
-Host SDKs receive structured Direct/Spec/Stream operation metadata for the
-authored FQN. Flat `Fn_spec` bindings request Spec. Python `Fn_stream` and
-TypeScript `Fn$stream` request Stream while still sending the authored FQN;
-the engine resolves those boundary operations to the private ordinary
-`Fn@spec` and `Fn@stream` entries. The host spellings are not public BAML
-functions or runtime FQNs, and the operation enum is never stored on VM
-generic-function values. PPIR's `Out$stream` partial **type** declarations
-remain: those encode streaming completeness/SAP shape and are distinct from
-the private stream companion.
+Companion functions are **complete, self-contained AST items**. They flow through HIR → TIR → MIR → emit with zero special-casing. Downstream layers have no idea they were generated.
 
-Runtime-created declarations and `unreflect` bindings are constructed only in
-BAML's reflection/typebuilder layer. Host SDKs receive opaque FunctionSpec,
-Stream, and RuntimeValue handles; they do not construct or echo reflected type
-arguments. An inline occurrence that escapes through `Fn@spec` or `Fn@stream`
-is E0168 and must be given a scoped local `type` alias first.
-
-Prompt and Media cross the host boundary as portable canonical ADTs and rebuild
-fresh stdlib wrappers on re-entry. FunctionSpec, Stream, and RuntimeValue remain
-engine-scoped live capabilities. PPIR's existing `Out$stream` declarations,
-not a `StreamPartial` intrinsic, define streaming partiality.
+**Implication for duplicate name detection:** If you have two LLM functions `Foo` and `Foo` (a duplicate), each produces four AST items (itself + three companions). All eight items will trigger duplicate-name errors in the HIR. To prevent cascading duplicate errors, the HIR must be aware that companion-derived errors should not produce additional diagnostics beyond the root duplicate.
 
 ### Client Desugaring
 

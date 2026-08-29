@@ -1806,14 +1806,13 @@ pub struct LlmPromptSpans {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmBodyDef {
     pub client: Option<Name>,
-    /// The staging body for the private ordinary `Fn@spec` companion. It is
-    /// built in `lower_cst` while the CST backtick is still in hand (the AST
-    /// must stay CST-free for Salsa: a rowan node is `!Send`) and copied into
-    /// the companion by `companions::llm_spec`.
-    ///
-    /// Absent when the prompt or client is unusable (a migration diagnostic was
-    /// emitted instead).
-    pub spec_body: Option<(ExprBody, AstSourceMap)>,
+    /// Pre-lowered companion bodies keyed by target name. The single-path
+    /// world stashes exactly one: `"spec"` — the `<Fn>@spec` body, built in
+    /// `lower_cst` while the CST backtick is still in hand (the AST must stay
+    /// CST-free for Salsa: a rowan node is `!Send`), and read back by
+    /// `companions::llm_spec`. Absent when the prompt or client is unusable
+    /// (a migration diagnostic was emitted instead).
+    pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
     /// The prompt literal's source geometry, recorded while the CST is in
     /// hand: hover/navigation classify prompt PROSE (addressed to the
     /// `ai.prompt` driver) versus `${…}` code without re-deriving the
@@ -1824,9 +1823,9 @@ pub struct LlmBodyDef {
     /// any value other than an absent field or a literal empty list (`tools
     /// []`). A non-literal expression (`tools: shared()`) counts as `true`
     /// even if it evaluates empty — the compile-time signal is conservative.
-    /// PPIR skips private `Fn@stream` synthesis when set (streaming does not run
-    /// the tool loop); `ai.stream.from_spec`'s runtime empty-toolbox check covers
-    /// the dynamic cases.
+    /// PPIR skips `$stream` synthesis when set (streaming does not run the
+    /// tool loop); `ai.stream.from_spec`'s runtime empty-toolbox check covers the
+    /// dynamic cases.
     pub has_tools: bool,
     pub span: TextRange,
 }

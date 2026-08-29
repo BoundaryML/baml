@@ -98,8 +98,8 @@ test "clsstr_previously_safe_shapes_stay_safe" {
 
 // ---- a real LLM function must still classify ----
 //
-// The `@spec` projection only exists for LLM functions, so
-// `ClsstrEcho@spec(...)` failing to resolve is exactly the regression
+// The `@render_prompt` companion only exists for LLM functions, so
+// `ClsstrEcho@render_prompt(...)` failing to resolve is exactly the regression
 // this
 // guards: a string-aware pre-scan that over-skipped would demote this body to
 // an expression function. The prompt deliberately contains braces, an
@@ -115,7 +115,7 @@ function ClsstrEcho(question: string) -> string {
 }
 
 function clsstr_llm_spec_prompt() -> string {
-    ClsstrEcho@spec(question = "hello").prompt().text()
+    ClsstrEcho@render_prompt(question = "hello").text()
 }
 
 test "clsstr_real_llm_function_still_classifies" {

@@ -1286,14 +1286,12 @@ fn is_synth_init_name(name: &str) -> bool {
 fn emitted_function_origin(
     fq_name: &str,
     is_builtin_file: bool,
-    metadata: baml_compiler2_ast::FunctionMetadata,
+    origin: baml_compiler2_ast::FunctionOrigin,
 ) -> FunctionOrigin {
-    if metadata.is_language_internal {
-        FunctionOrigin::Internal
-    } else if is_builtin_file || is_builtin_function_name(fq_name) {
+    if is_builtin_file || is_builtin_function_name(fq_name) {
         FunctionOrigin::Builtin
     } else {
-        match metadata.origin {
+        match origin {
             baml_compiler2_ast::FunctionOrigin::UserDefined => FunctionOrigin::UserDefined,
             baml_compiler2_ast::FunctionOrigin::Companion => FunctionOrigin::Companion,
             baml_compiler2_ast::FunctionOrigin::Internal => FunctionOrigin::Internal,
@@ -2526,8 +2524,7 @@ fn tail_generic_dupes_clean(
     prev_units: &[CompilationUnit],
     effective_clean: &HashSet<String>,
 ) -> bool {
-    // (base fn fq name, type args) of every interned function value clean
-    // files own.
+    // (base fn fq name, type args) of every generic value clean files own.
     // `GenericFunction::type_args` is `RealizedTy` (runtime narrowing, #3998).
     let mut clean_keys: Vec<(String, Vec<bex_vm_types::RealizedTy>)> = Vec::new();
     for unit in prev_units {
@@ -2548,21 +2545,19 @@ fn tail_generic_dupes_clean(
     // A tail generic's base is always a function, so it is a tail global import.
     let n_tail_slots = tail.slot_objects.len();
     for obj in &tail.objects {
-        let (base_raw, type_args) = match obj {
-            Object::GenericFunction(gf) => (gf.function.raw(), gf.type_args.as_ref()),
-            _ => continue,
-        };
-        if base_raw < n_tail_slots {
-            continue; // a helper slot is never a generic base
-        }
-        let Some(sym) = tail.global_imports.get(base_raw - n_tail_slots) else {
-            continue;
-        };
-        if clean_keys
-            .iter()
-            .any(|(name, args)| name == &sym.fq_name && args.as_slice() == type_args)
-        {
-            return true;
+        if let Object::GenericFunction(gf) = obj {
+            let base_raw = gf.function.raw();
+            if base_raw < n_tail_slots {
+                continue; // a helper slot is never a generic base
+            }
+            let Some(sym) = tail.global_imports.get(base_raw - n_tail_slots) else {
+                continue;
+            };
+            if clean_keys.iter().any(|(name, args)| {
+                name == &sym.fq_name && args.as_slice() == gf.type_args.as_ref()
+            }) {
+                return true;
+            }
         }
     }
     false
@@ -5444,7 +5439,7 @@ fn merge_function_fragment(
     let mut index_map: Vec<usize> = Vec::with_capacity(fragment.len());
     let mut appended: Vec<usize> = Vec::with_capacity(fragment.len());
     for obj in fragment {
-        let interned_generic = match &obj {
+        let is_generic_function = match &obj {
             Object::GenericFunction(gf) => {
                 if let Some(existing) = intern.get(gf) {
                     index_map.push(existing);
@@ -5455,10 +5450,10 @@ fn merge_function_fragment(
             _ => false,
         };
         let idx = program.add_object(obj);
-        if interned_generic
-            && let Object::GenericFunction(gf) = &program.objects[ObjectIndex::from_raw(idx)]
-        {
-            intern.insert_if_absent(gf, idx);
+        if is_generic_function {
+            if let Object::GenericFunction(gf) = &program.objects[ObjectIndex::from_raw(idx)] {
+                intern.insert_if_absent(gf, idx);
+            }
         }
         index_map.push(idx);
         appended.push(idx);
@@ -5553,9 +5548,16 @@ fn attach_function_metadata<'db>(
     let parameter_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
     let signature_metadata = compute_function_metadata(db, func_loc, &parameter_defaults, cache);
     apply_signature_metadata(compiled_fn, &signature_metadata);
-    compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata);
+    compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata.origin);
 
     // Set LLM-specific body_meta if this is an LLM function with a client.
+    //
+    // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
+    // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
+    // The stream return type is now carried by the synthesized `$stream` companion's
+    // own `return_type` (see ppir's `companion_stream_return_type`), so the old
+    // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
+    // of `ctx.output_format()` should be re-verified against canary's streaming.
     if let Some(llm_meta) = function_llm_meta(db, func_loc)
         && let Some(client) = &llm_meta.client_name
     {

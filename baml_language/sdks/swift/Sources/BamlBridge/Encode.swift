@@ -19,18 +19,6 @@ public struct BamlInboundValue: Sendable {
     }
 }
 
-/// Semantic projection of an authored BAML function. `direct` is raw value
-/// zero so an omitted protobuf field preserves the historical call behavior.
-public enum BamlFunctionOperation: Int, Sendable {
-    case direct = 0
-    case spec = 1
-    case stream = 2
-
-    var wire: BamlBridge_Cffi_V1_FunctionOperation {
-        BamlBridge_Cffi_V1_FunctionOperation(rawValue: rawValue)!
-    }
-}
-
 /// Public, protobuf-independent wrapper around an exact BAML type descriptor.
 /// Generated/static Swift values expose this cheaply from their host type; the
 /// encoder attaches it only at a selected union boundary or for nominal class
@@ -345,14 +333,12 @@ extension BamlIndirect: BamlEncodable where Value: BamlEncodable {
 func encodeCallArgs(
     _ args: [(String, (any BamlEncodable)?)],
     callId: UInt64,
-    callTarget: BamlBridge_Cffi_V1_CallFunctionArgs.OneOf_CallTarget,
-    operation: BamlFunctionOperation = .direct
+    callTarget: BamlBridge_Cffi_V1_CallFunctionArgs.OneOf_CallTarget
 ) throws -> Data {
     precondition(callId != 0, "call_id must be nonzero")
     var msg = BamlBridge_Cffi_V1_CallFunctionArgs()
     msg.callID = callId
     msg.callTarget = callTarget
-    msg.operation = operation.wire
     msg.kwargs = args.map { name, value in
         var entry = BamlBridge_Cffi_V1_InboundMapEntry()
         entry.stringKey = name

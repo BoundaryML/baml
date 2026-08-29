@@ -29,9 +29,6 @@ impl LeafPath {
 /// Route a pool entry to the module its Rust items are emitted in.
 pub(crate) fn route(name: &Name) -> LeafPath {
     let mut segments = Vec::new();
-    if name.is_stream() {
-        segments.push("stream_types".to_string());
-    }
     if !name.is_local() {
         match name.package().as_str() {
             "baml" => segments.push("baml".to_string()),
@@ -78,14 +75,6 @@ mod tests {
         assert_eq!(
             route(&name("aws", &["s3"], "Bucket")).segments,
             ["vendor", "aws", "s3"]
-        );
-    }
-
-    #[test]
-    fn stream_types_route_under_the_dedicated_tree() {
-        assert_eq!(
-            route(&name("user", &["lorem"], "Resume$stream")).segments,
-            ["stream_types", "lorem"]
         );
     }
 }

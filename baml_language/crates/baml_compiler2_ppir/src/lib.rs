@@ -3,8 +3,8 @@
 //! Pipeline: CST -> AST -> HIR (raw) -> PPIR (expansion + canonical) -> TIR.
 //!
 //! PPIR uses HIR's `package_items` for symbol classification (class vs enum vs alias),
-//! then synthesizes concrete `*$stream` types plus compiler-private `Fn@stream`
-//! functions and provides canonical queries over original and synthetic items.
+//! then synthesizes `*$stream` AST items and provides canonical queries that include
+//! both original and synthetic items.
 //!
 //! **No union simplification in PPIR.** Deferred to TIR.
 
@@ -215,53 +215,48 @@ fn make_raw_attr_no_args(name: &str) -> ast::RawAttribute {
     }
 }
 
-/// Whether one authored LLM function owns the compiler-private stream entry.
-/// This predicate is shared by companion synthesis and host-operation metadata
-/// so those surfaces cannot advertise different support.
-pub fn llm_stream_projection_available(
-    function_name: &Name,
-    has_spec: bool,
-    has_tools: bool,
-) -> bool {
-    has_spec && !has_tools && !function_name.contains('@')
-}
-
-/// Build the compiler-private `Fn@stream` function using the former `$stream`
-/// companion shape: same generics, parameters/defaults, partial expansion,
-/// client override, event callback, and tagged-template metadata. `Fn@stream`
-/// delegates to the AST-level private ordinary `Fn@spec` companion,
-/// so the spec recipe's implementation lives in one ordinary function. The
-/// `@` name and language-internal visibility keep both entries out of SDK and
-/// public symbol surfaces.
+/// Build the `@stream` callable companion for an LLM function or class method.
+///
+/// The stream-expanded return type is only available in PPIR, so this cannot
+/// be part of the AST-level companion expansion. Class methods use the same
+/// path as top-level functions; retaining the method's `self` parameter keeps
+/// the generated companion on the class while SDK lowering can hide it.
 fn synthesize_llm_stream_companion(
     func: &ast::FunctionDef,
     ctx: &ExpandCtx<'_>,
     owner_class_name: Option<&Name>,
     owner_generic_param_names: &[Name],
 ) -> Option<ast::FunctionDef> {
-    let ast::DeclarativeMeta::Llm(llm) = func.declarative_meta.as_ref()?;
-    llm.spec_body.as_ref()?;
-    if !llm_stream_projection_available(&func.name, true, llm.has_tools) {
+    let Some(ast::DeclarativeMeta::Llm(llm)) = &func.declarative_meta else {
+        return None;
+    };
+    if !llm.companion_bodies.iter().any(|(t, _)| t == "spec")
+        || llm.has_tools
+        || func.name.contains('@')
+    {
         return None;
     }
-    let final_type = func.return_type.clone()?;
-    let (partial_type, _) = stream_expand(&PpirTy::from_type_expr(&final_type), ctx);
-    let partial_type = partial_type.to_type_expr();
-    let stream_type_args = vec![partial_type, final_type.clone()];
+    let return_type_spanned = func.return_type.as_ref()?;
+
+    let ppir_ty = PpirTy::from_type_expr(return_type_spanned);
+    let (stream_type, _sap_attrs) = stream_expand(&ppir_ty, ctx);
+    let stream_type_expr = stream_type.to_type_expr();
+    let span = func.span;
+    let companion_type_args = vec![stream_type_expr, return_type_spanned.clone()];
     let return_type = ast::TypeExprKind::Path {
         segments: vec![Name::new("ai"), Name::new("stream"), Name::new("Stream")],
-        generic_args: stream_type_args.clone(),
+        generic_args: companion_type_args.clone(),
         associated_type_bindings: vec![],
         attrs: vec![],
     }
-    .at(func.span);
+    .at(span);
 
-    let params = func
+    let params: Vec<ast::Param> = func
         .params
         .iter()
         .cloned()
-        .map(|mut param| {
-            if param.name.as_str() == "client" {
+        .map(|mut p| {
+            if p.name.as_str() == "client" {
                 let capability = ast::TypeExprKind::Path {
                     segments: vec![
                         Name::new("ai"),
@@ -272,27 +267,28 @@ fn synthesize_llm_stream_companion(
                     associated_type_bindings: vec![],
                     attrs: vec![],
                 }
-                .at(func.span);
-                param.type_expr = Some(
+                .at(span);
+                p.type_expr = Some(
                     ast::TypeExprKind::Optional {
                         inner: Box::new(capability),
                         attrs: vec![],
                     }
-                    .at(func.span),
+                    .at(span),
                 );
             }
-            param
+            p
         })
         .collect();
-    let own_params = func
+
+    let user_params: Vec<ast::Param> = func
         .params
         .iter()
-        .filter(|param| !matches!(param.name.as_str(), "client" | "on_event"))
+        .filter(|p| p.name.as_str() != "client" && p.name.as_str() != "on_event")
         .cloned()
-        .collect::<Vec<_>>();
+        .collect();
     let (body, source_map) = ast::synthesize_spec_stream_body(
         func.name.as_str(),
-        &own_params,
+        &user_params,
         &func
             .generic_params
             .iter()
@@ -300,12 +296,12 @@ fn synthesize_llm_stream_companion(
             .collect::<Vec<_>>(),
         owner_class_name,
         owner_generic_param_names,
-        stream_type_args,
-        func.span,
+        companion_type_args,
+        span,
     );
 
     Some(ast::FunctionDef {
-        name: Name::new(format!("{}@stream", func.name)),
+        name: SmolStr::new(format!("{}@stream", func.name)),
         generic_params: func.generic_params.clone(),
         params,
         defaults: func.defaults.clone(),
@@ -313,61 +309,13 @@ fn synthesize_llm_stream_companion(
         throws: None,
         body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
         declarative_meta: None,
-        metadata: ast::FunctionMetadata::language_internal(ast::FunctionOrigin::Companion),
+        metadata: ast::FunctionMetadata::user_facing(ast::FunctionOrigin::Companion),
+        is_tagged_template_tag: func.is_tagged_template_tag,
         attributes: vec![],
         docstring: func.docstring.clone(),
-        is_tagged_template_tag: func.is_tagged_template_tag,
-        span: func.span,
+        span,
         name_span: func.name_span,
     })
-}
-
-/// Exact partial output type computed by the existing PPIR expansion algebra.
-/// Nominal results refer to the existing `*$stream` type declarations; this
-/// query never synthesizes a function companion.
-pub fn llm_partial_output_type_expr<'db>(
-    db: &'db dyn Db,
-    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
-) -> Option<(ast::TypeExpr, SapAttrs)> {
-    let item_tree = file_item_tree(db, function.file(db));
-    let function_data = &item_tree[function.id(db)];
-    let ast::DeclarativeMeta::Llm(llm) = function_data.declarative_meta.as_ref()?;
-    if llm.spec_body.is_none() {
-        return None;
-    }
-    let return_type = function_data.return_type.as_ref()?;
-    let pkg_info = baml_compiler2_hir::file_package::file_package(db, function.file(db));
-    let package_items = baml_compiler2_hir::package::package_items(
-        db,
-        PackageId::new(db, pkg_info.package.clone()),
-    );
-    let all_package_items = build_all_package_items(db);
-    let expansion_maps = project_expansion_maps(db, db.source_roots());
-    let ctx = ExpandCtx {
-        package_name: &pkg_info.package,
-        namespace_path: &pkg_info.namespace_path,
-        package_items,
-        all_package_items: &all_package_items,
-        block_attrs: &expansion_maps.block_attrs,
-        alias_bodies: &expansion_maps.alias_bodies,
-    };
-    let (partial, sap) = stream_expand(&PpirTy::from_type_expr(return_type), &ctx);
-    Some((partial.to_type_expr(), sap))
-}
-
-/// Exact partial item type for the Stream operation of an authored LLM
-/// function. Tool-bearing specs keep a `never` partial slot and expose no
-/// Stream operation until the tool loop supports streaming.
-pub fn llm_stream_operation_type_expr<'db>(
-    db: &'db dyn Db,
-    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
-) -> Option<(ast::TypeExpr, SapAttrs)> {
-    let meta = item_data::function_llm_meta(db, function).as_ref()?;
-    let function_name = &item_data::function_data(db, function).name;
-    if !llm_stream_projection_available(function_name, meta.has_spec, meta.has_tools) {
-        return None;
-    }
-    llm_partial_output_type_expr(db, function)
 }
 
 // -- Salsa queries ------------------------------------------------------------
@@ -481,6 +429,10 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     true
                 });
 
+                // `$stream` companions for methods belong to the original
+                // class, not to its stream-shaped data class. Keep them in a
+                // synthetic same-name class that is merged into the original
+                // class when the canonical index is rebuilt below.
                 let owner_generic_param_names = c
                     .generic_params
                     .iter()
@@ -586,6 +538,16 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 synthetic_items.push(ast::Item::TypeAlias(stream_alias));
             }
+            // LLM `@stream` callable companions, single-path StreamingClient design:
+            // `Fn@stream(args, client)` = one-turn streaming over the
+            // function's own spec, returning the typed partial stream
+            // `ai.stream.Stream<Out$stream, Out>`. Synthesized here (not with the
+            // AST-level companions) because the body's explicit type args
+            // need the stream-expanded return type, which only PPIR can
+            // compute. Tools-bearing functions get no `@stream`: streaming
+            // does not run the tool loop yet (`LlmBodyDef::has_tools` is the
+            // conservative compile-time signal; `ai.from_spec` re-checks
+            // the toolbox at runtime for the dynamic cases).
             ast::Item::Function(func) => {
                 let ctx = ExpandCtx {
                     package_name: &package_name,
@@ -632,18 +594,20 @@ fn file_semantic_index_expanded(db: &dyn Db, file: SourceFile) -> FileSemanticIn
     let ast_result = baml_compiler2_hir::file_ast(db, file);
     let mut items = ast_result.items.clone();
 
-    // Merge concrete `*$stream` types and compiler-private `@stream`
-    // functions. Method companions arrive in a same-name class fragment and
-    // are merged back into their authored class.
-    for item in ppir_expansion_items(db, file).items(db).iter().cloned() {
-        if let ast::Item::Class(fragment) = &item
-            && !fragment.name.ends_with("$stream")
-            && let Some(ast::Item::Class(original)) = items
-                .iter_mut()
-                .find(|item| matches!(item, ast::Item::Class(class) if class.name == fragment.name))
-        {
-            original.methods.extend(fragment.methods.clone());
-            continue;
+    // Merge synthetic *$stream items and class-method companions. Class
+    // methods are nested under their owning class, so PPIR carries their
+    // generated companions in a same-name, method-only class fragment.
+    let expansion = ppir_expansion_items(db, file);
+    for item in expansion.items(db).iter().cloned() {
+        if let ast::Item::Class(fragment) = &item {
+            if !fragment.name.ends_with("$stream") {
+                if let Some(ast::Item::Class(original)) = items.iter_mut().find(
+                    |item| matches!(item, ast::Item::Class(class) if class.name == fragment.name),
+                ) {
+                    original.methods.extend(fragment.methods.clone());
+                    continue;
+                }
+            }
         }
         items.push(item);
     }
@@ -685,10 +649,10 @@ pub(crate) fn file_item_tree_source_map(db: &dyn Db, file: SourceFile) -> Arc<It
     Arc::clone(&index.item_tree_source_map)
 }
 
-/// Canonical function body from PPIR's merged item tree.
+/// Canonical function body — uses PPIR's item tree (includes synthetic companions).
 ///
 /// TIR should call this instead of `baml_compiler2_hir::body::function_body`
-/// so every function sees the same post-expansion type universe.
+/// so that PPIR-synthesized functions (like `@stream`) are found.
 ///
 /// Salsa-tracked (mirroring HIR's `function_body`): MIR lowering fetches the
 /// callee's body at every direct-call site, and the untracked version cloned

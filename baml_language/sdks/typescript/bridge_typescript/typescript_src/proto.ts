@@ -92,9 +92,6 @@ export interface EncodeCallArgsOptions {
     syncMode?: boolean;
     functionName?: string;
     functionHandle?: HandleKey;
-    /** Bridge operation for an authored BAML function. Omitted means the
-     * backwards-compatible direct call (wire value 0). */
-    operation?: FunctionOperation;
     /**
      * Call-level TypeVar bindings for a generic function/method, as
      * `[typeVarName, wireTy]` pairs in De Bruijn order (enclosing class params
@@ -104,8 +101,6 @@ export interface EncodeCallArgsOptions {
      */
     typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy | BamlType]>;
 }
-
-export type FunctionOperation = 'direct' | 'spec' | 'stream';
 
 export interface BamlPromptCallOptions {
     $ctx?: BamlCallContext;
@@ -204,15 +199,6 @@ export class BamlPrompt {
         wire: baml_bridge.cffi.v1.IBamlValuePromptAst,
     ): baml_bridge.cffi.v1.IBamlValuePromptAst {
         return BamlValuePromptAst.decode(BamlValuePromptAst.encode(wire).finish());
-    }
-}
-
-function wireFunctionOperation(operation: FunctionOperation | undefined): number {
-    switch (operation ?? 'direct') {
-        case 'direct': return 0;
-        case 'spec': return 1;
-        case 'stream': return 2;
-        default: throw new TypeError(`unknown BAML function operation ${JSON.stringify(operation)}`);
     }
 }
 
@@ -459,12 +445,6 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
     if (options.functionName !== undefined && options.functionHandle !== undefined) {
         throw new TypeError('exactly one BAML call target may be set');
     }
-    if (options.operation !== undefined
-        && options.operation !== 'direct'
-        && options.functionName === undefined
-        && options.functionHandle === undefined) {
-        throw new TypeError(`${options.operation} requires a function target`);
-    }
     const ctx: EncodeCtx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
         const entries: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
@@ -484,7 +464,6 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
             typeArgs,
             functionName: options.functionName,
             functionHandle: options.functionHandle,
-            operation: wireFunctionOperation(options.operation),
         });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     } catch (err) {

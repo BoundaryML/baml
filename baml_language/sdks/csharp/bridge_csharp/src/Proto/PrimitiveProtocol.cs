@@ -54,8 +54,7 @@ internal static class PrimitiveProtocol
     internal static EncodedCallArguments EncodeOwnedCallArguments<TResult>(
         BamlGeneratedArguments<TResult> arguments,
         ulong callId,
-        NativeApi api,
-        FunctionOperation operation = FunctionOperation.Direct)
+        NativeApi api)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentNullException.ThrowIfNull(api);
@@ -63,7 +62,7 @@ internal static class PrimitiveProtocol
         var ownership = new EncodedCallArguments([]);
         try
         {
-            var call = new CallFunctionArgs { CallId = callId, Operation = operation };
+            var call = new CallFunctionArgs { CallId = callId };
             foreach ((ArgumentDeclaration argument, BamlGeneratedValue value) in arguments.Supplied())
             {
                 call.Kwargs.Add(new InboundMapEntry
@@ -119,8 +118,7 @@ internal static class PrimitiveProtocol
     internal static EncodedCallArguments EncodeOwnedCallArguments<TResult>(
         BamlGeneratedGenericArguments<TResult> arguments,
         ulong callId,
-        NativeApi api,
-        FunctionOperation operation = FunctionOperation.Direct)
+        NativeApi api)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentNullException.ThrowIfNull(api);
@@ -128,7 +126,7 @@ internal static class PrimitiveProtocol
         var ownership = new EncodedCallArguments([]);
         try
         {
-            var call = new CallFunctionArgs { CallId = callId, Operation = operation };
+            var call = new CallFunctionArgs { CallId = callId };
             foreach ((GenericArgumentDeclaration argument, BamlGeneratedValue value) in arguments.Supplied())
             {
                 call.Kwargs.Add(new InboundMapEntry

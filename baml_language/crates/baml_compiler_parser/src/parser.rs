@@ -6278,23 +6278,21 @@ impl<'a> Parser<'a> {
             } else if op == TokenKind::At
                 && !self.has_newline_ahead()
                 && self.peek(1).is_some_and(|t| {
-                    t.kind == TokenKind::Word && matches!(t.text.as_str(), "spec" | "stream")
+                    t.kind == TokenKind::Word
+                        && matches!(
+                            t.text.as_str(),
+                            "spec" | "stream" | "render_prompt" | "build_request" | "parse"
+                        )
                 })
             {
-                // Postfix companion selector on an LLM function reference.
-                // AST lowering rewrites both spellings to their ordinary
-                // compiler-private companion names.
-                // The no-newline guard mirrors tagged templates so a next-line
-                // attribute is never absorbed.
+                // Postfix companion reference, such as `MyFunc@spec(...)` or
+                // `MyFunc@parse(...)`. AST lowering turns it into the ordinary
+                // internal callable FQN. The no-newline guard mirrors the tagged
+                // template rule so a next-line attribute is never absorbed.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
-                let kind = if self.peek(1).is_some_and(|t| t.text == "spec") {
-                    SyntaxKind::SPEC_EXPR
-                } else {
-                    SyntaxKind::STREAM_EXPR
-                };
-                self.wrap_events_in_node(lhs_start, kind);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::SPEC_EXPR);
                 self.bump(); // @
-                self.bump(); // spec / stream
+                self.bump(); // spec
                 self.finish_node();
             } else if op == TokenKind::Dot && self.looks_like_as_projection() {
                 let lhs_start = self.find_previous_expr_start_after(expr_start);

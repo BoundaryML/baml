@@ -20,7 +20,7 @@ function Extract<T>() -> T {
 
 function Check<T>(expected: reflect.Type, document: string) -> bool throws unknown {
   let direct = baml.sap.parse<T>(document)
-  let companion = Extract@spec<T>().parse(document)
+  let companion = Extract@parse<T>(document)
   reflect.Type.of_value(direct) == expected
     && reflect.Type.of_value(companion) == expected
     && baml.json.to_string(direct) == baml.json.to_string(companion)

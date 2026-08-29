@@ -96,6 +96,13 @@ function _merged_headers(content_type: string, extra: map<string, string>) -> ma
     out
 }
 
+// Timeout tests deliberately let the client disconnect before a delayed mock
+// body is ready. That is normal server cleanup, not an unhandled spawned-task
+// failure.
+function _write_delayed_body(response: baml.http.Response, body: string) -> null {
+    response.write(body.to_utf8()) catch (e) { _ => null }
+}
+
 // ─── JSON mock ───────────────────────────────────────────────────────────────
 
 // A non-streaming fake provider. `responses` are answered in order; once they
@@ -147,7 +154,7 @@ class MockJsonServer {
                 let body = canned.body;
                 spawn {
                     baml.sys.sleep(delay);
-                    response.write(body.to_utf8());
+                    root.llm_mock._write_delayed_body(response, body);
                     response.end();
                     null
                 };

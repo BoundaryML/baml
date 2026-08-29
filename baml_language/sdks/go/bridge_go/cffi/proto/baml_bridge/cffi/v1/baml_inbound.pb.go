@@ -23,57 +23,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Semantic projection of an authored function declaration. These are runtime
-// operations, not synthesized `$...` functions or host sync/async modes.
-type FunctionOperation int32
-
-const (
-	FunctionOperation_FUNCTION_OPERATION_DIRECT FunctionOperation = 0
-	FunctionOperation_FUNCTION_OPERATION_SPEC   FunctionOperation = 1
-	FunctionOperation_FUNCTION_OPERATION_STREAM FunctionOperation = 2
-)
-
-// Enum value maps for FunctionOperation.
-var (
-	FunctionOperation_name = map[int32]string{
-		0: "FUNCTION_OPERATION_DIRECT",
-		1: "FUNCTION_OPERATION_SPEC",
-		2: "FUNCTION_OPERATION_STREAM",
-	}
-	FunctionOperation_value = map[string]int32{
-		"FUNCTION_OPERATION_DIRECT": 0,
-		"FUNCTION_OPERATION_SPEC":   1,
-		"FUNCTION_OPERATION_STREAM": 2,
-	}
-)
-
-func (x FunctionOperation) Enum() *FunctionOperation {
-	p := new(FunctionOperation)
-	*p = x
-	return p
-}
-
-func (x FunctionOperation) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (FunctionOperation) Descriptor() protoreflect.EnumDescriptor {
-	return file_baml_bridge_cffi_v1_baml_inbound_proto_enumTypes[0].Descriptor()
-}
-
-func (FunctionOperation) Type() protoreflect.EnumType {
-	return &file_baml_bridge_cffi_v1_baml_inbound_proto_enumTypes[0]
-}
-
-func (x FunctionOperation) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use FunctionOperation.Descriptor instead.
-func (FunctionOperation) EnumDescriptor() ([]byte, []int) {
-	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{0}
-}
-
 // Core value type. `value_type` is a sparse exact-type annotation for this
 // node, never a copy of the enclosing union. Most values omit it and are
 // decoded from the declared contextual type plus payload shape. Hosts set it
@@ -761,7 +710,6 @@ type CallFunctionArgs struct {
 	//	*CallFunctionArgs_FunctionName
 	//	*CallFunctionArgs_FunctionHandle
 	CallTarget isCallFunctionArgs_CallTarget `protobuf_oneof:"call_target"`
-	Operation  FunctionOperation             `protobuf:"varint,6,opt,name=operation,proto3,enum=baml_bridge.cffi.v1.FunctionOperation" json:"operation,omitempty"`
 }
 
 func (x *CallFunctionArgs) Reset() {
@@ -836,13 +784,6 @@ func (x *CallFunctionArgs) GetFunctionHandle() uint64 {
 		return x.FunctionHandle
 	}
 	return 0
-}
-
-func (x *CallFunctionArgs) GetOperation() FunctionOperation {
-	if x != nil {
-		return x.Operation
-	}
-	return FunctionOperation_FUNCTION_OPERATION_DIRECT
 }
 
 type isCallFunctionArgs_CallTarget interface {
@@ -1049,7 +990,7 @@ var file_baml_bridge_cffi_v1_baml_inbound_proto_rawDesc = []byte{
 	0x32, 0x1e, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63,
 	0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x44, 0x65, 0x66,
 	0x52, 0x0e, 0x74, 0x79, 0x70, 0x65, 0x44, 0x65, 0x66, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x6f, 0x6e,
-	0x22, 0xcd, 0x02, 0x0a, 0x10, 0x43, 0x61, 0x6c, 0x6c, 0x46, 0x75, 0x6e, 0x63, 0x74, 0x69, 0x6f,
+	0x22, 0x87, 0x02, 0x0a, 0x10, 0x43, 0x61, 0x6c, 0x6c, 0x46, 0x75, 0x6e, 0x63, 0x74, 0x69, 0x6f,
 	0x6e, 0x41, 0x72, 0x67, 0x73, 0x12, 0x3c, 0x0a, 0x06, 0x6b, 0x77, 0x61, 0x72, 0x67, 0x73, 0x18,
 	0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x24, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69,
 	0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6e, 0x62, 0x6f,
@@ -1064,24 +1005,12 @@ var file_baml_bridge_cffi_v1_baml_inbound_proto_rawDesc = []byte{
 	0x48, 0x00, 0x52, 0x0c, 0x66, 0x75, 0x6e, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4e, 0x61, 0x6d, 0x65,
 	0x12, 0x29, 0x0a, 0x0f, 0x66, 0x75, 0x6e, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x68, 0x61, 0x6e,
 	0x64, 0x6c, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x04, 0x48, 0x00, 0x52, 0x0e, 0x66, 0x75, 0x6e,
-	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x12, 0x44, 0x0a, 0x09, 0x6f,
-	0x70, 0x65, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x26,
-	0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66,
-	0x69, 0x2e, 0x76, 0x31, 0x2e, 0x46, 0x75, 0x6e, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4f, 0x70, 0x65,
-	0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x09, 0x6f, 0x70, 0x65, 0x72, 0x61, 0x74, 0x69, 0x6f,
-	0x6e, 0x42, 0x0d, 0x0a, 0x0b, 0x63, 0x61, 0x6c, 0x6c, 0x5f, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74,
-	0x22, 0x2d, 0x0a, 0x07, 0x43, 0x61, 0x6c, 0x6c, 0x41, 0x63, 0x6b, 0x12, 0x16, 0x0a, 0x05, 0x65,
-	0x72, 0x72, 0x6f, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x05, 0x65, 0x72,
-	0x72, 0x6f, 0x72, 0x42, 0x0a, 0x0a, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2a,
-	0x6e, 0x0a, 0x11, 0x46, 0x75, 0x6e, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4f, 0x70, 0x65, 0x72, 0x61,
-	0x74, 0x69, 0x6f, 0x6e, 0x12, 0x1d, 0x0a, 0x19, 0x46, 0x55, 0x4e, 0x43, 0x54, 0x49, 0x4f, 0x4e,
-	0x5f, 0x4f, 0x50, 0x45, 0x52, 0x41, 0x54, 0x49, 0x4f, 0x4e, 0x5f, 0x44, 0x49, 0x52, 0x45, 0x43,
-	0x54, 0x10, 0x00, 0x12, 0x1b, 0x0a, 0x17, 0x46, 0x55, 0x4e, 0x43, 0x54, 0x49, 0x4f, 0x4e, 0x5f,
-	0x4f, 0x50, 0x45, 0x52, 0x41, 0x54, 0x49, 0x4f, 0x4e, 0x5f, 0x53, 0x50, 0x45, 0x43, 0x10, 0x01,
-	0x12, 0x1d, 0x0a, 0x19, 0x46, 0x55, 0x4e, 0x43, 0x54, 0x49, 0x4f, 0x4e, 0x5f, 0x4f, 0x50, 0x45,
-	0x52, 0x41, 0x54, 0x49, 0x4f, 0x4e, 0x5f, 0x53, 0x54, 0x52, 0x45, 0x41, 0x4d, 0x10, 0x02, 0x42,
-	0x0a, 0x48, 0x03, 0x5a, 0x06, 0x2e, 0x2f, 0x63, 0x66, 0x66, 0x69, 0x62, 0x06, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x33,
+	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x42, 0x0d, 0x0a, 0x0b, 0x63,
+	0x61, 0x6c, 0x6c, 0x5f, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x22, 0x2d, 0x0a, 0x07, 0x43, 0x61,
+	0x6c, 0x6c, 0x41, 0x63, 0x6b, 0x12, 0x16, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x42, 0x0a, 0x0a,
+	0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42, 0x0a, 0x48, 0x03, 0x5a, 0x06, 0x2e,
+	0x2f, 0x63, 0x66, 0x66, 0x69, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1096,51 +1025,48 @@ func file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP() []byte {
 	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescData
 }
 
-var file_baml_bridge_cffi_v1_baml_inbound_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_baml_bridge_cffi_v1_baml_inbound_proto_goTypes = []interface{}{
-	(FunctionOperation)(0),     // 0: baml_bridge.cffi.v1.FunctionOperation
-	(*InboundValue)(nil),       // 1: baml_bridge.cffi.v1.InboundValue
-	(*InboundListValue)(nil),   // 2: baml_bridge.cffi.v1.InboundListValue
-	(*InboundMapValue)(nil),    // 3: baml_bridge.cffi.v1.InboundMapValue
-	(*InboundMapEntry)(nil),    // 4: baml_bridge.cffi.v1.InboundMapEntry
-	(*InboundClassValue)(nil),  // 5: baml_bridge.cffi.v1.InboundClassValue
-	(*InboundEnumValue)(nil),   // 6: baml_bridge.cffi.v1.InboundEnumValue
-	(*BamlTyArg)(nil),          // 7: baml_bridge.cffi.v1.BamlTyArg
-	(*CallFunctionArgs)(nil),   // 8: baml_bridge.cffi.v1.CallFunctionArgs
-	(*CallAck)(nil),            // 9: baml_bridge.cffi.v1.CallAck
-	(*BamlTy)(nil),             // 10: baml_bridge.cffi.v1.BamlTy
-	(*BamlHandle)(nil),         // 11: baml_bridge.cffi.v1.BamlHandle
-	(*BamlTyDef)(nil),          // 12: baml_bridge.cffi.v1.BamlTyDef
-	(*BamlValueMedia)(nil),     // 13: baml_bridge.cffi.v1.BamlValueMedia
-	(*BamlValuePromptAst)(nil), // 14: baml_bridge.cffi.v1.BamlValuePromptAst
+	(*InboundValue)(nil),       // 0: baml_bridge.cffi.v1.InboundValue
+	(*InboundListValue)(nil),   // 1: baml_bridge.cffi.v1.InboundListValue
+	(*InboundMapValue)(nil),    // 2: baml_bridge.cffi.v1.InboundMapValue
+	(*InboundMapEntry)(nil),    // 3: baml_bridge.cffi.v1.InboundMapEntry
+	(*InboundClassValue)(nil),  // 4: baml_bridge.cffi.v1.InboundClassValue
+	(*InboundEnumValue)(nil),   // 5: baml_bridge.cffi.v1.InboundEnumValue
+	(*BamlTyArg)(nil),          // 6: baml_bridge.cffi.v1.BamlTyArg
+	(*CallFunctionArgs)(nil),   // 7: baml_bridge.cffi.v1.CallFunctionArgs
+	(*CallAck)(nil),            // 8: baml_bridge.cffi.v1.CallAck
+	(*BamlTy)(nil),             // 9: baml_bridge.cffi.v1.BamlTy
+	(*BamlHandle)(nil),         // 10: baml_bridge.cffi.v1.BamlHandle
+	(*BamlTyDef)(nil),          // 11: baml_bridge.cffi.v1.BamlTyDef
+	(*BamlValueMedia)(nil),     // 12: baml_bridge.cffi.v1.BamlValueMedia
+	(*BamlValuePromptAst)(nil), // 13: baml_bridge.cffi.v1.BamlValuePromptAst
 }
 var file_baml_bridge_cffi_v1_baml_inbound_proto_depIdxs = []int32{
-	10, // 0: baml_bridge.cffi.v1.InboundValue.value_type:type_name -> baml_bridge.cffi.v1.BamlTy
-	2,  // 1: baml_bridge.cffi.v1.InboundValue.list_value:type_name -> baml_bridge.cffi.v1.InboundListValue
-	3,  // 2: baml_bridge.cffi.v1.InboundValue.map_value:type_name -> baml_bridge.cffi.v1.InboundMapValue
-	5,  // 3: baml_bridge.cffi.v1.InboundValue.class_value:type_name -> baml_bridge.cffi.v1.InboundClassValue
-	6,  // 4: baml_bridge.cffi.v1.InboundValue.enum_value:type_name -> baml_bridge.cffi.v1.InboundEnumValue
-	11, // 5: baml_bridge.cffi.v1.InboundValue.handle:type_name -> baml_bridge.cffi.v1.BamlHandle
-	10, // 6: baml_bridge.cffi.v1.InboundValue.ty_value:type_name -> baml_bridge.cffi.v1.BamlTy
-	12, // 7: baml_bridge.cffi.v1.InboundValue.ty_def_value:type_name -> baml_bridge.cffi.v1.BamlTyDef
-	13, // 8: baml_bridge.cffi.v1.InboundValue.media_value:type_name -> baml_bridge.cffi.v1.BamlValueMedia
-	14, // 9: baml_bridge.cffi.v1.InboundValue.prompt_ast_value:type_name -> baml_bridge.cffi.v1.BamlValuePromptAst
-	1,  // 10: baml_bridge.cffi.v1.InboundListValue.values:type_name -> baml_bridge.cffi.v1.InboundValue
-	4,  // 11: baml_bridge.cffi.v1.InboundMapValue.entries:type_name -> baml_bridge.cffi.v1.InboundMapEntry
-	6,  // 12: baml_bridge.cffi.v1.InboundMapEntry.enum_key:type_name -> baml_bridge.cffi.v1.InboundEnumValue
-	1,  // 13: baml_bridge.cffi.v1.InboundMapEntry.value:type_name -> baml_bridge.cffi.v1.InboundValue
-	4,  // 14: baml_bridge.cffi.v1.InboundClassValue.fields:type_name -> baml_bridge.cffi.v1.InboundMapEntry
-	10, // 15: baml_bridge.cffi.v1.BamlTyArg.type_value:type_name -> baml_bridge.cffi.v1.BamlTy
-	12, // 16: baml_bridge.cffi.v1.BamlTyArg.type_definition:type_name -> baml_bridge.cffi.v1.BamlTyDef
-	4,  // 17: baml_bridge.cffi.v1.CallFunctionArgs.kwargs:type_name -> baml_bridge.cffi.v1.InboundMapEntry
-	7,  // 18: baml_bridge.cffi.v1.CallFunctionArgs.type_args:type_name -> baml_bridge.cffi.v1.BamlTyArg
-	0,  // 19: baml_bridge.cffi.v1.CallFunctionArgs.operation:type_name -> baml_bridge.cffi.v1.FunctionOperation
-	20, // [20:20] is the sub-list for method output_type
-	20, // [20:20] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	9,  // 0: baml_bridge.cffi.v1.InboundValue.value_type:type_name -> baml_bridge.cffi.v1.BamlTy
+	1,  // 1: baml_bridge.cffi.v1.InboundValue.list_value:type_name -> baml_bridge.cffi.v1.InboundListValue
+	2,  // 2: baml_bridge.cffi.v1.InboundValue.map_value:type_name -> baml_bridge.cffi.v1.InboundMapValue
+	4,  // 3: baml_bridge.cffi.v1.InboundValue.class_value:type_name -> baml_bridge.cffi.v1.InboundClassValue
+	5,  // 4: baml_bridge.cffi.v1.InboundValue.enum_value:type_name -> baml_bridge.cffi.v1.InboundEnumValue
+	10, // 5: baml_bridge.cffi.v1.InboundValue.handle:type_name -> baml_bridge.cffi.v1.BamlHandle
+	9,  // 6: baml_bridge.cffi.v1.InboundValue.ty_value:type_name -> baml_bridge.cffi.v1.BamlTy
+	11, // 7: baml_bridge.cffi.v1.InboundValue.ty_def_value:type_name -> baml_bridge.cffi.v1.BamlTyDef
+	12, // 8: baml_bridge.cffi.v1.InboundValue.media_value:type_name -> baml_bridge.cffi.v1.BamlValueMedia
+	13, // 9: baml_bridge.cffi.v1.InboundValue.prompt_ast_value:type_name -> baml_bridge.cffi.v1.BamlValuePromptAst
+	0,  // 10: baml_bridge.cffi.v1.InboundListValue.values:type_name -> baml_bridge.cffi.v1.InboundValue
+	3,  // 11: baml_bridge.cffi.v1.InboundMapValue.entries:type_name -> baml_bridge.cffi.v1.InboundMapEntry
+	5,  // 12: baml_bridge.cffi.v1.InboundMapEntry.enum_key:type_name -> baml_bridge.cffi.v1.InboundEnumValue
+	0,  // 13: baml_bridge.cffi.v1.InboundMapEntry.value:type_name -> baml_bridge.cffi.v1.InboundValue
+	3,  // 14: baml_bridge.cffi.v1.InboundClassValue.fields:type_name -> baml_bridge.cffi.v1.InboundMapEntry
+	9,  // 15: baml_bridge.cffi.v1.BamlTyArg.type_value:type_name -> baml_bridge.cffi.v1.BamlTy
+	11, // 16: baml_bridge.cffi.v1.BamlTyArg.type_definition:type_name -> baml_bridge.cffi.v1.BamlTyDef
+	3,  // 17: baml_bridge.cffi.v1.CallFunctionArgs.kwargs:type_name -> baml_bridge.cffi.v1.InboundMapEntry
+	6,  // 18: baml_bridge.cffi.v1.CallFunctionArgs.type_args:type_name -> baml_bridge.cffi.v1.BamlTyArg
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_baml_bridge_cffi_v1_baml_inbound_proto_init() }
@@ -1296,14 +1222,13 @@ func file_baml_bridge_cffi_v1_baml_inbound_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_baml_bridge_cffi_v1_baml_inbound_proto_rawDesc,
-			NumEnums:      1,
+			NumEnums:      0,
 			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_baml_bridge_cffi_v1_baml_inbound_proto_goTypes,
 		DependencyIndexes: file_baml_bridge_cffi_v1_baml_inbound_proto_depIdxs,
-		EnumInfos:         file_baml_bridge_cffi_v1_baml_inbound_proto_enumTypes,
 		MessageInfos:      file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes,
 	}.Build()
 	File_baml_bridge_cffi_v1_baml_inbound_proto = out.File

@@ -60,6 +60,76 @@ fn user.fixtures.llm_image_outputs.GenerateImage(prompt: string, client: null | 
     }
 }
 
+fn user.fixtures.llm_image_outputs.GenerateImage@build_request(prompt: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // prompt // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<image>
+    let _5: reflect.Type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.llm_image_outputs.GenerateImage@spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(image);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.llm_image_outputs.GenerateImage@parse(json: string) -> image {
+    // Locals:
+    let _0: image // _0 // return
+    let _1: string // json // param
+    let _2: reflect.Type
+
+    bb0: {
+        _2 = load_type(image);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.llm_image_outputs.GenerateImage@render_prompt(prompt: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // prompt // param
+    let _2: ai.FunctionSpec<image>
+    let _3: reflect.Type
+
+    bb0: {
+        _2 = call const fn user.fixtures.llm_image_outputs.GenerateImage@spec(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(image);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.fixtures.llm_image_outputs.GenerateImage@spec(prompt: string) -> ai.FunctionSpec<image> {
     // Locals:
     let _0: ai.FunctionSpec<image> // _0 // return
@@ -281,6 +351,76 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: null
     }
 }
 
+fn user.fixtures.llm_image_outputs.GenerateImageSet@build_request(prompt: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // prompt // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<image[]>
+    let _5: reflect.Type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet@spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(image[]);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.llm_image_outputs.GenerateImageSet@parse(json: string) -> image[] {
+    // Locals:
+    let _0: image[] // _0 // return
+    let _1: string // json // param
+    let _2: reflect.Type
+
+    bb0: {
+        _2 = load_type(image[]);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.llm_image_outputs.GenerateImageSet@render_prompt(prompt: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // prompt // param
+    let _2: ai.FunctionSpec<image[]>
+    let _3: reflect.Type
+
+    bb0: {
+        _2 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet@spec(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(image[]);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.fixtures.llm_image_outputs.GenerateImageSet@spec(prompt: string) -> ai.FunctionSpec<image[]> {
     // Locals:
     let _0: ai.FunctionSpec<image[]> // _0 // return
@@ -498,6 +638,76 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, c
     }
 
     bb8: {
+        return;
+    }
+}
+
+fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@build_request(prompt: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // prompt // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<(string | image)[]>
+    let _5: reflect.Type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type((string | image)[]);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@parse(json: string) -> (string | image)[] {
+    // Locals:
+    let _0: (string | image)[] // _0 // return
+    let _1: string // json // param
+    let _2: reflect.Type
+
+    bb0: {
+        _2 = load_type((image | string)[]);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@render_prompt(prompt: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // prompt // param
+    let _2: ai.FunctionSpec<(string | image)[]>
+    let _3: reflect.Type
+
+    bb0: {
+        _2 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type((string | image)[]);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
         return;
     }
 }

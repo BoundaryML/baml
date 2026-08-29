@@ -128,6 +128,39 @@ function streaming_composite_clients.CompositeStreamSpec(client: ai.Client | nul
     return
 }
 
+function streaming_composite_clients.CompositeStreamSpec@build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.streaming_composite_clients.CompositeStreamSpec@spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function streaming_composite_clients.CompositeStreamSpec@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function streaming_composite_clients.CompositeStreamSpec@render_prompt() -> ai.Prompt {
+    call user.streaming_composite_clients.CompositeStreamSpec@spec
+    store_var _1
+    load_type string
+    load_var _1
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function streaming_composite_clients.CompositeStreamSpec@spec() -> ai.FunctionSpec<string> {
     load_type ai.tools.Tool
     alloc_array 0

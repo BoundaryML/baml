@@ -16,34 +16,6 @@ Super/sub-typing in BAML represents a super/sub-set relationship, not inheritanc
 2. Types exist at run-time. [Reflection](https://beps.boundaryml.com/beps/39) is a first-class feature of BAML. We can always determine what concrete type a value has, as well as if the value fits a given non-concrete type.
 3. Prefer compiler errors over type-erasure: the compiler is here to ensure users catch problems early instead of having run-time errors (or worse, silently producing the incorrect answer).
 
-### Runtime-created type occurrences
-
-`unreflect(expr)` creates a runtime type occurrence owned by the current
-function body. It may be written inline in a generic call only when the call's
-published return and error types erase that occurrence. If a returned value
-still contains it, the type must first be given a scoped name:
-
-```baml
-type Output = unreflect(runtime_type)
-let spec = Extract@spec<Output>(input)
-```
-
-This is required even when a method is chained immediately. `Fn@spec<T>` first
-creates `FunctionSpec<T>`, so
-`Fn@spec<unreflect(runtime_type)>(...).prompt()` still publishes the inline
-occurrence through the intermediate spec and is rejected with E0168. Naming
-the type gives the spec, parser, and their results a lexical owner for the
-runtime declaration identity. Streaming is a separate projection:
-`Fn@stream<T>(...)` returns a stream whose first type argument is PPIR's
-existing expansion of `T` (for example, `Stream<Out$stream, Out>`), so an
-inline runtime occurrence there also requires a scoped alias.
-`FunctionSpec<T>` deliberately has no partial type argument or stream method;
-there is no `StreamPartial` intrinsic in the universal type system.
-Both `@spec` and `@stream` rewrite the terminal callable name and then use
-ordinary path/member resolution and generic application. `FunctionOperation`
-selects these companions only at host bridge boundaries; it is not part of a
-BAML function value or the VM type system.
-
 ## Taxonomy
 
 BAML types can be categorized into three groups:

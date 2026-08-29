@@ -104,13 +104,13 @@ export class Collector {
     /** Internal: get native collector for passing to Rust */
     _native() { return this._inner; }
 }
-export function callFunctionSync(rt, functionName, kwargs, ctx, collectors, callCtx, operation = 'direct') {
+export function callFunctionSync(rt, functionName, kwargs, ctx, collectors, callCtx) {
     // Encode in sync mode so a host callable in the kwargs fast-fails
     // with a clear error instead of registering a tsfn and then hanging —
     // the sync path blocks the Node main thread on a tokio `block_on`,
     // starving libuv so the dispatch could never run.
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId, functionName, operation });
+    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId, functionName });
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
@@ -132,9 +132,9 @@ export function callFunctionSync(rt, functionName, kwargs, ctx, collectors, call
         callCtxBinding.detach();
     }
 }
-export async function callFunction(rt, functionName, kwargs, ctx, collectors, callCtx, operation = 'direct') {
+export async function callFunction(rt, functionName, kwargs, ctx, collectors, callCtx) {
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { callId, functionName, operation });
+    const argsProto = encodeCallArgs(kwargs, { callId, functionName });
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`

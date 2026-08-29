@@ -32,7 +32,7 @@ use std::{
     path::PathBuf,
 };
 
-use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_DONE, AI_STREAM_STREAM};
+use baml_base::qualified_name::{AI_STREAM_DONE, AI_STREAM_STREAM};
 use baml_codegen_types::{Function, Symbol, SymbolPool, Ty};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 
@@ -41,8 +41,6 @@ use crate::{
     routing::{PackagePath, java_identifier, route},
     translate_ty::{AliasTable, TranslateCtx, UnionSink, descriptor_expr_opt, registry_arm_expr},
 };
-
-const AI_PROMPT: &str = "ai.Prompt";
 
 /// Banner prepended to every generated `.java` file. Mirrors the TS
 /// emitter's `NODE_BANNER`.
@@ -71,8 +69,6 @@ const RUNTIME_OWNED_FQNS: &[&str] = &[
     "baml.media.Video",
     "baml.media.Pdf",
     AI_STREAM_STREAM,
-    AI_FUNCTION_SPEC,
-    AI_PROMPT,
     // The stream-done sentinel is runtime-owned: its body ships in
     // `baml-bridge` as `baml_sdk.ai.stream.Done` and
     // is registered in the typemap by the runtime (TypeRegistry static block),
@@ -680,7 +676,6 @@ mod tests {
             docstring: None,
             arguments: Vec::new(),
             return_type: t_int(),
-            operations: Default::default(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(span),
@@ -773,7 +768,6 @@ mod tests {
                 default: None,
             }],
             return_type: t_int(),
-            operations: Default::default(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(span),
@@ -796,7 +790,6 @@ mod tests {
                 default: None,
             }],
             return_type: ret,
-            operations: Default::default(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(span),
@@ -969,7 +962,6 @@ mod tests {
                     default: None,
                 }],
                 return_type: t_string(),
-                operations: Default::default(),
                 throws: None,
                 watchers: Vec::new(),
                 origin: origin(0),
@@ -1052,124 +1044,6 @@ mod tests {
     }
 
     #[test]
-    fn llm_operations_emit_flat_spec_and_boundary_stream_controls() {
-        use baml_codegen_types::{
-            CallableParam, CodegenFunctionParamMode, FunctionArgumentDefault, FunctionOperations,
-            SpecOperation, StreamOperation,
-        };
-
-        let spec_ty = Ty::Class(name("ai", &[], "FunctionSpec"), vec![t_string()], a());
-        let stream_ty = Ty::Class(
-            name("ai", &["stream"], "Stream"),
-            vec![t_string(), t_string()],
-            a(),
-        );
-        let controls = vec![
-            FunctionArgument {
-                injected: true,
-                name: BaseName::new("client"),
-                docstring: None,
-                ty: t_opt(t_string()),
-                default: Some(FunctionArgumentDefault::Null),
-            },
-            FunctionArgument {
-                injected: true,
-                name: BaseName::new("on_event"),
-                docstring: None,
-                ty: t_opt(Ty::Function {
-                    params: vec![CallableParam {
-                        name: Some(BaseName::new("event")),
-                        ty: t_string(),
-                        mode: CodegenFunctionParamMode::Required,
-                    }],
-                    ret: Box::new(Ty::Void { attr: a() }),
-                    throws: Box::new(Ty::Never { attr: a() }),
-                    attr: a(),
-                }),
-                default: Some(FunctionArgumentDefault::Null),
-            },
-        ];
-        let function = Function {
-            name: BaseName::new("extract"),
-            generic_params: Vec::new(),
-            docstring: None,
-            arguments: vec![
-                FunctionArgument {
-                    injected: false,
-                    name: BaseName::new("text"),
-                    docstring: None,
-                    ty: t_string(),
-                    default: None,
-                },
-                FunctionArgument {
-                    injected: false,
-                    name: BaseName::new("tone"),
-                    docstring: None,
-                    ty: t_opt(t_string()),
-                    default: Some(FunctionArgumentDefault::Null),
-                },
-            ],
-            return_type: t_string(),
-            operations: FunctionOperations {
-                spec: Some(SpecOperation {
-                    return_type: spec_ty,
-                }),
-                stream: Some(StreamOperation {
-                    return_type: stream_ty,
-                    partial_type: t_string(),
-                    item_type: t_string(),
-                    control_arguments: controls,
-                }),
-            },
-            throws: None,
-            watchers: Vec::new(),
-            origin: origin(0),
-        };
-        let mut pool = SymbolPool::new();
-        pool.insert(name("user", &[], "extract"), Symbol::Function(function));
-
-        let out = emit_sdk(&pool);
-        let file = &out[&PathBuf::from("Fns.java")];
-        assert!(
-            file.contains("extract_spec(java.lang.String text)"),
-            "{file}"
-        );
-        assert!(file.contains("BamlFunctionOperation.SPEC"), "{file}");
-        assert!(
-            file.contains("baml_bridge.BamlFunctionSpec<java.lang.String> extract_spec"),
-            "{file}"
-        );
-        assert!(
-            file.contains("extract_stream(java.lang.String text)"),
-            "{file}"
-        );
-        assert!(file.contains("BamlFunctionOperation.STREAM"), "{file}");
-        assert!(
-            file.contains("public extract_stream$Opts client("),
-            "{file}"
-        );
-        assert!(
-            file.contains("public extract_stream$Opts on_event("),
-            "{file}"
-        );
-        assert!(
-            file.contains("this.$values.put(\"on_event\", new baml_bridge.BamlTypedCallable(v,"),
-            "{file}"
-        );
-        assert!(
-            file.contains("$opts.$names(new java.lang.String[] {\"text\"})"),
-            "{file}"
-        );
-        assert!(
-            file.contains("$opts.$args(new java.lang.Object[] {text})"),
-            "{file}"
-        );
-        assert!(!file.contains(".stream("), "{file}");
-        assert!(!file.contains(".stream_async("), "{file}");
-        assert!(!file.contains("extract$stream"), "{file}");
-    }
-
-    #[test]
     fn throwing_function_renders_throws_tags_on_both_siblings() {
         // A free function that throws `ParseError | TimeoutError` documents
         // one `@throws <UnqualifiedName>` tag per arm, in source order, on
@@ -1188,7 +1062,6 @@ mod tests {
                 default: None,
             }],
             return_type: t_string(),
-            operations: Default::default(),
             throws: Some(t_union(vec![
                 t_class(name("user", &["raises_test"], "ParseError")),
                 t_class(name("user", &["raises_test"], "TimeoutError")),
@@ -1336,7 +1209,6 @@ mod tests {
                 },
             ],
             return_type: t_int(),
-            operations: Default::default(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(0),
@@ -1423,7 +1295,6 @@ mod tests {
                 },
             ],
             return_type: t_int(),
-            operations: Default::default(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(1),
@@ -1499,7 +1370,6 @@ mod tests {
                 },
             ],
             return_type: t_list(t_int()),
-            operations: Default::default(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(0),
@@ -1578,7 +1448,6 @@ mod tests {
                 docstring: None,
                 arguments: Vec::new(),
                 return_type: returned,
-                operations: Default::default(),
                 throws: None,
                 watchers: Vec::new(),
                 origin: origin(0),
@@ -1610,7 +1479,6 @@ mod tests {
                 docstring: None,
                 arguments: Vec::new(),
                 return_type: returned,
-                operations: Default::default(),
                 throws: None,
                 watchers: Vec::new(),
                 origin: origin(0),
@@ -1748,15 +1616,12 @@ mod tests {
         pool.insert(stream.clone(), class_sym(&stream, &[], 1));
         let done = name("ai", &["stream"], "Done");
         pool.insert(done.clone(), class_sym(&done, &[], 2));
-        let prompt = name("ai", &[], "Prompt");
-        pool.insert(prompt.clone(), class_sym(&prompt, &[], 3));
         let resp = name("baml", &["http"], "Response");
-        pool.insert(resp.clone(), class_sym(&resp, &[], 4));
+        pool.insert(resp.clone(), class_sym(&resp, &[], 3));
         let out = emit_sdk(&pool);
         assert!(!out.contains_key(&PathBuf::from("baml/media/Image.java")));
         assert!(!out.contains_key(&PathBuf::from("vendor/ai/stream/Stream.java")));
         assert!(!out.contains_key(&PathBuf::from("vendor/ai/stream/Done.java")));
-        assert!(!out.contains_key(&PathBuf::from("vendor/ai/Prompt.java")));
         assert!(out.contains_key(&PathBuf::from("baml/http/Response.java")));
     }
 
@@ -1794,7 +1659,6 @@ mod tests {
                 default: None,
             }],
             return_type: t_typevar("T"),
-            operations: Default::default(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(span),
@@ -1901,7 +1765,6 @@ mod tests {
                 },
             ],
             return_type: t_typevar("T"),
-            operations: Default::default(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(0),
@@ -2315,7 +2178,6 @@ mod tests {
                 default: None,
             }],
             return_type: t_opt(t_string()),
-            operations: Default::default(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(0),
@@ -2366,7 +2228,6 @@ mod tests {
                 },
             ],
             return_type: t_int(),
-            operations: Default::default(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(0),

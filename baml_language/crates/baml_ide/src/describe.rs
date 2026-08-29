@@ -22,7 +22,6 @@ use crate::{
     info::type_info_for_definition,
     render,
     search::{SymbolInfo, search_symbols},
-    symbols::is_language_internal_definition,
     usages::usages_at,
 };
 
@@ -391,7 +390,7 @@ pub fn describe_by_definition(
     files: &[SourceFile],
     definition: Definition<'_>,
 ) -> Option<SymbolDescription> {
-    if is_language_internal_definition(db, definition) {
+    if definition.is_language_internal(db) {
         return None;
     }
     let (file, name_span) = crate::syntax::definition_span(db, definition)?;

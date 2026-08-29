@@ -5138,7 +5138,7 @@ impl<'db> InferenceContext<'db> {
             _ => None,
         };
         if let Some(name) = name
-            && name.as_str() == "__make_stream"
+            && (name.as_str().ends_with("$stream") || name.as_str() == "__make_stream")
         {
             self.pending_diags
                 .push(PendingDiag::RuntimeTypeArgumentOnStreamingCall {

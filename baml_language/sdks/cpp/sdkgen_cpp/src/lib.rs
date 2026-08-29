@@ -5,8 +5,8 @@
 //! and recursive type aliases, and recursion via `baml::Box` cycle-breaking.
 //! multi-member unions as order-canonical `::baml::variant` aliases, and
 //! typed error unions via `BamlThrown`.
-//! Post-step-8 features (callbacks, general generics, and dynamic reflection)
-//! are skipped and reported in a trailing
+//! Post-step-8 features (async, methods, callbacks, generics, streaming
+//! companions, media/handles) are skipped and reported in a trailing
 //! header comment (no silent caps); the full implementation is preserved on
 //! the avery/bridge-cpp-full branch.
 //!
@@ -85,7 +85,7 @@ fn to_source_code_with_optional_metadata(
     let mut enums: Vec<EmittedEnum> = Vec::new();
     let mut emitted_types: BTreeSet<Name> = BTreeSet::new();
     for name in &pool_names {
-        if skip_symbol(name, &pool[*name]) {
+        if skip_symbol(name) {
             continue;
         }
         if let Symbol::Enum(enum_def) = &pool[*name] {
@@ -128,7 +128,7 @@ fn to_source_code_with_optional_metadata(
         .iter()
         .copied()
         .filter(|name| {
-            if skip_symbol(name, &pool[*name]) {
+            if skip_symbol(name) {
                 return false;
             }
             match &pool[*name] {
@@ -272,7 +272,6 @@ fn to_source_code_with_optional_metadata(
                     continue;
                 }
                 let fqn = BamlFqn::member(&class.pool_name, method.name.as_str());
-                let call_fqn = format!("{}.{}", class.pool_name, method.name);
                 match emit_callable(
                     pool,
                     &names,
@@ -280,8 +279,6 @@ fn to_source_code_with_optional_metadata(
                     CppNameKind::Method,
                     method,
                     &emitted_types,
-                    EmittedOperation::Direct,
-                    call_fqn.clone(),
                 ) {
                     Ok(emitted_fn) => {
                         if is_static {
@@ -292,58 +289,6 @@ fn to_source_code_with_optional_metadata(
                     }
                     Err(reason) => {
                         skipped.push(format!("{}.{}: {reason}", class.pool_name, method.name));
-                    }
-                }
-                if let Some(spec) = &method.operations.spec {
-                    let projected = projected_function(method, &spec.return_type, SPEC_MEMBER);
-                    let projected_fqn = method_projection_fqn(&fqn, SPEC_MEMBER);
-                    match emit_callable(
-                        pool,
-                        &names,
-                        &projected_fqn,
-                        CppNameKind::Method,
-                        &projected,
-                        &emitted_types,
-                        EmittedOperation::Spec,
-                        call_fqn.clone(),
-                    ) {
-                        Ok(emitted_fn) => {
-                            if is_static {
-                                class.static_methods.push(emitted_fn);
-                            } else {
-                                class.instance_methods.push(emitted_fn);
-                            }
-                        }
-                        Err(reason) => skipped.push(format!(
-                            "{}.{}_spec: {reason}",
-                            class.pool_name, method.name
-                        )),
-                    }
-                }
-                if let Some(stream) = &method.operations.stream {
-                    let projected = projected_function(method, &stream.return_type, STREAM_MEMBER);
-                    let projected_fqn = method_projection_fqn(&fqn, STREAM_MEMBER);
-                    match emit_callable(
-                        pool,
-                        &names,
-                        &projected_fqn,
-                        CppNameKind::Method,
-                        &projected,
-                        &emitted_types,
-                        EmittedOperation::Stream,
-                        call_fqn.clone(),
-                    ) {
-                        Ok(emitted_fn) => {
-                            if is_static {
-                                class.static_methods.push(emitted_fn);
-                            } else {
-                                class.instance_methods.push(emitted_fn);
-                            }
-                        }
-                        Err(reason) => skipped.push(format!(
-                            "{}.{}_stream: {reason}",
-                            class.pool_name, method.name
-                        )),
                     }
                 }
             }
@@ -357,10 +302,8 @@ fn to_source_code_with_optional_metadata(
         let Symbol::Function(function) = &pool[*name] else {
             continue;
         };
-        if skip_symbol(name, &pool[*name]) {
-            skipped.push(format!(
-                "{name}: compiler-internal function is not host-callable"
-            ));
+        if skip_symbol(name) {
+            skipped.push(format!("{name}: companion functions (post-step-8)"));
             continue;
         }
         if !function.generic_params.is_empty() {
@@ -374,52 +317,10 @@ fn to_source_code_with_optional_metadata(
             CppNameKind::Function,
             function,
             &emitted_types,
-            EmittedOperation::Direct,
-            name.to_string(),
         ) {
             Ok(emitted) => {
                 let ns = allocated_namespace(&names, name);
-                let functions = fns_by_namespace.entry(ns).or_default();
-                functions.push(emitted);
-
-                if let Some(spec) = &function.operations.spec {
-                    let projected = projected_function(function, &spec.return_type, SPEC_MEMBER);
-                    match emit_callable(
-                        pool,
-                        &names,
-                        &BamlFqn::symbol(name).child(SPEC_MEMBER),
-                        CppNameKind::Function,
-                        &projected,
-                        &emitted_types,
-                        EmittedOperation::Spec,
-                        name.to_string(),
-                    ) {
-                        Ok(emitted) => functions.push(emitted),
-                        Err(reason) => skipped.push(format!("{name}_spec: {reason}")),
-                    }
-                }
-
-                if let Some(stream) = &function.operations.stream {
-                    // C++ cannot yet represent StreamingClient interfaces or
-                    // optional host callbacks, so this projection uses the
-                    // private stream function's defaults. Those controls remain metadata,
-                    // rather than being encoded as authored function args.
-                    let projected =
-                        projected_function(function, &stream.return_type, STREAM_MEMBER);
-                    match emit_callable(
-                        pool,
-                        &names,
-                        &BamlFqn::symbol(name).child(STREAM_MEMBER),
-                        CppNameKind::Function,
-                        &projected,
-                        &emitted_types,
-                        EmittedOperation::Stream,
-                        name.to_string(),
-                    ) {
-                        Ok(emitted) => functions.push(emitted),
-                        Err(reason) => skipped.push(format!("{name}_stream: {reason}")),
-                    }
-                }
+                fns_by_namespace.entry(ns).or_default().push(emitted);
             }
             Err(reason) => skipped.push(format!("{name}: {reason}")),
         }
@@ -577,16 +478,8 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/lit.h"),
     ),
     (
-        "include/baml/media.h",
-        include_str!("../../bridge_cpp/include/baml/media.h"),
-    ),
-    (
         "include/baml/runtime.h",
         include_str!("../../bridge_cpp/include/baml/runtime.h"),
-    ),
-    (
-        "include/baml/spec.h",
-        include_str!("../../bridge_cpp/include/baml/spec.h"),
     ),
     (
         "include/baml/version.h",
@@ -630,19 +523,15 @@ const OPTS_MEMBER: &str = "opts";
 /// identity.
 const ASYNC_MEMBER: &str = "async";
 
-/// Compiler-declared host projections. These are naming identities only;
-/// wire dispatch always uses the authored function's FQN.
-const SPEC_MEMBER: &str = "spec";
-const STREAM_MEMBER: &str = "stream";
-
-/// One typed request per identifier any emit pass may need. Symbols that
+/// One typed request per identifier any emit pass may need. Mirrors the
+/// pool-level skip filters (`pkg`, `$stream`, `$` companions); symbols that
 /// only emission can rule out (unsupported field types, broken cycles) still
 /// get allocations, which are simply never rendered.
 fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
     let mut requests = BTreeSet::new();
     for (name, symbol) in pool {
         // Post-step-8 symbols never allocate names.
-        if skip_symbol(name, symbol) {
+        if skip_symbol(name) {
             continue;
         }
         match symbol {
@@ -677,32 +566,9 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                         continue; // generic methods (post-step-8)
                     }
                     let method_fqn = BamlFqn::member(name, method.name.as_str());
-                    requests.insert(callable_request(&method_fqn, CppNameKind::Method, method));
+                    requests.insert(NameRequest::new(method_fqn.clone(), CppNameKind::Method));
                     requests.insert(async_request(&method_fqn, method));
                     request_callable_members(&mut requests, &method_fqn, method);
-                    if let Some(spec) = &method.operations.spec {
-                        let projected = projected_function(method, &spec.return_type, SPEC_MEMBER);
-                        let projected_fqn = method_projection_fqn(&method_fqn, SPEC_MEMBER);
-                        requests.insert(callable_request(
-                            &projected_fqn,
-                            CppNameKind::Method,
-                            &projected,
-                        ));
-                        requests.insert(async_request(&projected_fqn, &projected));
-                        request_callable_members(&mut requests, &projected_fqn, &projected);
-                    }
-                    if let Some(stream) = &method.operations.stream {
-                        let projected =
-                            projected_function(method, &stream.return_type, STREAM_MEMBER);
-                        let projected_fqn = method_projection_fqn(&method_fqn, STREAM_MEMBER);
-                        requests.insert(callable_request(
-                            &projected_fqn,
-                            CppNameKind::Method,
-                            &projected,
-                        ));
-                        requests.insert(async_request(&projected_fqn, &projected));
-                        request_callable_members(&mut requests, &projected_fqn, &projected);
-                    }
                 }
             }
             Symbol::Function(function) => {
@@ -711,33 +577,9 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                 }
                 request_namespace_segments(&mut requests, name);
                 let fqn = BamlFqn::symbol(name);
-                requests.insert(callable_request(&fqn, CppNameKind::Function, function));
+                requests.insert(function_request(name));
                 requests.insert(async_request(&fqn, function));
                 request_callable_members(&mut requests, &fqn, function);
-
-                if let Some(spec) = &function.operations.spec {
-                    let projected = projected_function(function, &spec.return_type, SPEC_MEMBER);
-                    let projected_fqn = fqn.child(SPEC_MEMBER);
-                    requests.insert(callable_request(
-                        &projected_fqn,
-                        CppNameKind::Function,
-                        &projected,
-                    ));
-                    requests.insert(async_request(&projected_fqn, &projected));
-                    request_callable_members(&mut requests, &projected_fqn, &projected);
-                }
-                if let Some(stream) = &function.operations.stream {
-                    let projected =
-                        projected_function(function, &stream.return_type, STREAM_MEMBER);
-                    let projected_fqn = fqn.child(STREAM_MEMBER);
-                    requests.insert(callable_request(
-                        &projected_fqn,
-                        CppNameKind::Function,
-                        &projected,
-                    ));
-                    requests.insert(async_request(&projected_fqn, &projected));
-                    request_callable_members(&mut requests, &projected_fqn, &projected);
-                }
             }
             // Non-recursive aliases emit a `using` declaration; recursive
             // aliases emit a named wrapper struct that breaks the type
@@ -803,13 +645,10 @@ fn request_callable_members(
     }
 }
 
-/// Compiler-owned `$` callables are not part of the host contract. PPIR
-/// `$stream` *types* are intentionally retained and routed to stream_types.
-fn skip_symbol(name: &Name, symbol: &Symbol) -> bool {
-    if name.is_stream() {
-        return matches!(symbol, Symbol::Function(_));
-    }
-    name.name().as_str().contains('$')
+/// Post-step-8 symbols this slice never emits: `$stream` companions and
+/// `$`-suffixed companion functions.
+fn skip_symbol(name: &Name) -> bool {
+    name.is_stream() || name.bare_name().contains('$')
 }
 
 /// Whether `name` is a NON-recursive type alias, i.e. one that emits a
@@ -820,37 +659,10 @@ fn is_plain_alias(pool: &SymbolPool, name: &Name) -> bool {
     matches!(pool.get(name), Some(Symbol::TypeAlias(alias)) if !alias.recursive)
 }
 
-/// The name request for any callable. `Function.name` is also used for
-/// compiler-declared flat projections (`Fn_spec`, `Fn_stream`), while the
-/// structured BamlFqn keeps those names separate from the authored symbol.
-fn callable_request(fqn: &BamlFqn, kind: CppNameKind, function: &Function) -> NameRequest {
-    NameRequest::synthesized(fqn.clone(), kind, function.name.as_str())
-}
-
-fn projected_function(function: &Function, return_type: &Ty, operation: &str) -> Function {
-    let mut projected = function.clone();
-    projected.name =
-        baml_base::Name::from(format!("{}_{operation}", function.name.as_str()).as_str());
-    projected.arguments.retain(|arg| !arg.injected);
-    projected.return_type = return_type.clone();
-    projected.operations = baml_codegen_types::FunctionOperations::DIRECT;
-    projected.throws = None;
-    projected.watchers.clear();
-    projected
-}
-
-/// Give a projected method its own class-scoped naming identity while its
-/// dispatch continues to use the authored method FQN.
-fn method_projection_fqn(method: &BamlFqn, operation: &str) -> BamlFqn {
-    let mut projected = method.clone();
-    let method_name = projected
-        .members
-        .pop()
-        .expect("method projection requires a member identity");
-    projected
-        .members
-        .push(format!("{method_name}@{operation}").into());
-    projected
+/// The name request for a free function. Shared between collection and
+/// emission so the lookup key cannot drift.
+fn function_request(name: &Name) -> NameRequest {
+    NameRequest::new(BamlFqn::symbol(name), CppNameKind::Function)
 }
 
 /// The synthesized `value` field request of a recursive-alias wrapper
@@ -1197,15 +1009,6 @@ struct EmittedOptParam {
     setter: CppName,
 }
 
-#[derive(Clone)]
-enum EmittedOperation {
-    Direct,
-    Spec,
-    /// The flat shortcut invokes the compiler-private `Fn@stream` projection
-    /// using the authored FQN plus the STREAM boundary operation.
-    Stream,
-}
-
 struct EmittedFn {
     name: CppName,
     /// The async sibling's allocated name (`{name}Async`).
@@ -1223,7 +1026,6 @@ struct EmittedFn {
     /// The declared throws set as a `::baml::variant<...>` spelling, when
     /// every member translates; `None` uses the untyped `error` path.
     thrown: Option<String>,
-    operation: EmittedOperation,
 }
 
 fn emit_callable(
@@ -1233,10 +1035,8 @@ fn emit_callable(
     kind: CppNameKind,
     function: &Function,
     emitted_types: &BTreeSet<Name>,
-    operation: EmittedOperation,
-    call_fqn: String,
 ) -> Result<EmittedFn, String> {
-    let name = names.get(&callable_request(fqn, kind, function)).clone();
+    let name = names.get(&NameRequest::new(fqn.clone(), kind)).clone();
 
     let mut params = Vec::new();
     let mut opt_params = Vec::new();
@@ -1252,9 +1052,6 @@ fn emit_callable(
         } = &arg.ty
         {
             if arg.default.is_some() {
-                if arg.injected {
-                    continue;
-                }
                 return Err(format!(
                     "optional argument `{}` has a callable type (unsupported)",
                     arg.name
@@ -1266,9 +1063,6 @@ fn emit_callable(
                     ty
                 }
                 Err(reason) => {
-                    if arg.injected {
-                        continue;
-                    }
                     return Err(format!(
                         "argument `{}` has unsupported type {} ({reason})",
                         arg.name, arg.ty
@@ -1279,9 +1073,6 @@ fn emit_callable(
             match translate_ty(pool, names, &arg.ty, emitted_types, &BTreeSet::new()) {
                 Translated::Cpp(ty) => ty,
                 Translated::NotYet | Translated::Unsupported(_) => {
-                    if arg.injected {
-                        continue;
-                    }
                     return Err(format!(
                         "argument `{}` has unsupported type {}",
                         arg.name, arg.ty
@@ -1354,6 +1145,16 @@ fn emit_callable(
         Some(names.get(&opts_request(fqn, function)).clone())
     };
 
+    // The runtime dispatches on the BAML FQN: for methods that is the
+    // class's wire symbol plus the method's source member token, never a
+    // C++ name.
+    let call_fqn = if kind == CppNameKind::Method {
+        let member = fqn.members.last().expect("method identity has a member");
+        format!("{}.{member}", name.wire())
+    } else {
+        name.wire().to_string()
+    };
+
     Ok(EmittedFn {
         call_fqn,
         name,
@@ -1365,7 +1166,6 @@ fn emit_callable(
         doc: function.docstring.clone(),
         raises,
         thrown,
-        operation,
     })
 }
 
@@ -1563,7 +1363,6 @@ fn translate_ty(
         Ty::String { .. } => "std::string".to_string(),
         Ty::Bool { .. } => "bool".to_string(),
         Ty::Null { .. } => "std::monostate".to_string(),
-        Ty::Never { .. } => "::baml::never".to_string(),
         Ty::Uint8Array { .. } => "std::vector<uint8_t>".to_string(),
         Ty::RustType { .. } => {
             return Translated::Unsupported("handle type (post-step-8)".to_string());
@@ -1571,13 +1370,9 @@ fn translate_ty(
         Ty::Bigint { .. } => {
             return Translated::Unsupported("bigint (post-step-8)".to_string());
         }
-        Ty::Media(kind, ..) => match kind {
-            baml_base::MediaKind::Image => "::baml::image".to_string(),
-            baml_base::MediaKind::Audio => "::baml::audio".to_string(),
-            baml_base::MediaKind::Video => "::baml::video".to_string(),
-            baml_base::MediaKind::Pdf => "::baml::pdf".to_string(),
-            baml_base::MediaKind::Generic => "::baml::media".to_string(),
-        },
+        Ty::Media(..) => {
+            return Translated::Unsupported("media type (post-step-8)".to_string());
+        }
         Ty::Literal(lit, ..) => {
             // Literal types are singleton ::baml::lit types (each distinct
             // value a distinct C++ type), spelled as char packs / typed
@@ -1810,9 +1605,6 @@ enum FnVariant {
 }
 
 const FN_VARIANTS: [FnVariant; 2] = [FnVariant::Sync, FnVariant::Async];
-fn fn_variants(_function: &EmittedFn) -> &'static [FnVariant] {
-    &FN_VARIANTS
-}
 
 /// The async sibling's return type: the sync return wrapped in
 /// `baml::Future`, with the declared throws union as the second parameter
@@ -2025,30 +1817,21 @@ fn render_body(
             ty = p.ty
         );
     }
-    match &f.operation {
-        EmittedOperation::Direct | EmittedOperation::Spec | EmittedOperation::Stream => {
-            let thrown = match &f.thrown {
-                Some(u) => format!(", {u}"),
-                None => String::new(),
-            };
-            let driver = match variant {
-                FnVariant::Sync => "call_sync",
-                FnVariant::Async => "start_call",
-            };
-            let operation = match &f.operation {
-                EmittedOperation::Direct => "",
-                EmittedOperation::Spec => ", ::baml::function_operation::spec",
-                EmittedOperation::Stream => ", ::baml::function_operation::stream",
-            };
-            let _ = writeln!(
-                buf,
-                "{indent}return ::baml::detail::{driver}<{ret}{thrown}>(\"{fqn}\", \
-                 std::move({args}){operation});",
-                ret = f.ret,
-                fqn = f.call_fqn,
-            );
-        }
-    }
+    let thrown = match &f.thrown {
+        Some(u) => format!(", {u}"),
+        None => String::new(),
+    };
+    let driver = match variant {
+        FnVariant::Sync => "call_sync",
+        FnVariant::Async => "start_call",
+    };
+    let _ = writeln!(
+        buf,
+        "{indent}return ::baml::detail::{driver}<{ret}{thrown}>(\"{fqn}\", \
+         std::move({args}));",
+        ret = f.ret,
+        fqn = f.call_fqn,
+    );
 }
 fn render_header(
     enums: &[EmittedEnum],
@@ -2156,7 +1939,7 @@ fn render_header(
             (&c.instance_methods, RenderPos::InstanceDecl),
         ] {
             for f in methods {
-                for &variant in fn_variants(f) {
+                for variant in FN_VARIANTS {
                     push_doc(&mut buf, "  ", f.doc.as_ref(), &f.raises);
                     let _ = writeln!(buf, "  {};", signature(f, decl_pos, variant));
                 }
@@ -2191,7 +1974,7 @@ fn render_header(
         open_namespaces(&mut buf, ns);
         for f in fns {
             render_opts_struct(&mut buf, "", f);
-            for &variant in fn_variants(f) {
+            for variant in FN_VARIANTS {
                 push_doc(&mut buf, "", f.doc.as_ref(), &f.raises);
                 let _ = writeln!(buf, "{};", signature(f, RenderPos::Decl, variant));
             }
@@ -2420,7 +2203,7 @@ fn render_bindings(
                 } else {
                     (RenderPos::StaticDef { class: c }, None)
                 };
-                for &variant in fn_variants(f) {
+                for variant in FN_VARIANTS {
                     let _ = writeln!(buf, "\n{} {{", signature(f, def_pos, variant));
                     render_body(&mut buf, "  ", f, variant, self_type);
                     buf.push_str("}\n");
@@ -2434,7 +2217,7 @@ fn render_bindings(
         buf.push('\n');
         open_namespaces(&mut buf, ns);
         for f in fns {
-            for &variant in fn_variants(f) {
+            for variant in FN_VARIANTS {
                 let _ = writeln!(buf, "\n{} {{", signature(f, RenderPos::Def, variant));
                 render_body(&mut buf, "  ", f, variant, None);
                 buf.push_str("}\n");
@@ -2703,137 +2486,5 @@ mod declaration_safety_tests {
 
         complete.insert(alias);
         assert!(undeclared_alias_issue(&pool, &alias_ty, &complete).is_none());
-    }
-}
-
-#[cfg(test)]
-mod operation_projection_tests {
-    use std::path::PathBuf;
-
-    use baml_base::TyAttr;
-    use baml_codegen_types::{
-        Class, Function, FunctionArgument, FunctionArgumentDefault, FunctionOperations, Name,
-        Origin, SpecOperation, StreamOperation, Symbol, SymbolPool, Ty,
-    };
-
-    use super::to_source_code_with_bytecode;
-
-    fn name(leaf: &str) -> Name {
-        Name::new(
-            baml_base::Name::new("user"),
-            Vec::new(),
-            baml_base::Name::new(leaf),
-        )
-    }
-
-    fn llm_function(leaf: &str) -> Function {
-        let output = Ty::String {
-            attr: TyAttr::default(),
-        };
-        let partial = Ty::Union(
-            vec![
-                Ty::String {
-                    attr: TyAttr::default(),
-                },
-                Ty::Null {
-                    attr: TyAttr::default(),
-                },
-            ],
-            TyAttr::default(),
-        );
-        Function {
-            name: baml_base::Name::new(leaf),
-            generic_params: Vec::new(),
-            docstring: None,
-            arguments: vec![FunctionArgument {
-                name: baml_base::Name::new("text"),
-                docstring: None,
-                ty: Ty::String {
-                    attr: TyAttr::default(),
-                },
-                default: None,
-                injected: false,
-            }],
-            return_type: output.clone(),
-            operations: FunctionOperations {
-                spec: Some(SpecOperation {
-                    return_type: Ty::Class(
-                        Name::new(
-                            baml_base::Name::new("ai"),
-                            Vec::new(),
-                            baml_base::Name::new("FunctionSpec"),
-                        ),
-                        vec![output.clone()],
-                        TyAttr::default(),
-                    ),
-                }),
-                stream: Some(StreamOperation {
-                    return_type: Ty::Class(
-                        Name::new(
-                            baml_base::Name::new("ai"),
-                            vec![baml_base::Name::new("stream")],
-                            baml_base::Name::new("Stream"),
-                        ),
-                        vec![partial.clone(), output],
-                        TyAttr::default(),
-                    ),
-                    partial_type: partial.clone(),
-                    item_type: partial,
-                    control_arguments: vec![FunctionArgument {
-                        name: baml_base::Name::new("client"),
-                        docstring: None,
-                        ty: Ty::Unknown {
-                            attr: TyAttr::default(),
-                        },
-                        default: Some(FunctionArgumentDefault::Null),
-                        injected: true,
-                    }],
-                }),
-            },
-            throws: None,
-            watchers: Vec::new(),
-            origin: Origin {
-                source_file_path: "main.baml".to_string(),
-                span_start: 0,
-            },
-        }
-    }
-
-    #[test]
-    fn stream_projection_uses_authored_fqn_and_stream_operation() {
-        let function_name = name("Extract");
-        let method = llm_function("Extract");
-        let class_name = name("Runner");
-        let pool = SymbolPool::from([
-            (
-                function_name.clone(),
-                Symbol::Function(llm_function("Extract")),
-            ),
-            (
-                class_name.clone(),
-                Symbol::Class(Class {
-                    name: class_name,
-                    generic_params: Vec::new(),
-                    docstring: None,
-                    properties: Vec::new(),
-                    static_methods: vec![method],
-                    instance_methods: Vec::new(),
-                    origin: Origin {
-                        source_file_path: "main.baml".to_string(),
-                        span_start: 1,
-                    },
-                }),
-            ),
-        ]);
-        let generated = to_source_code_with_bytecode(&pool, &[], &[]);
-        let header = &generated[&PathBuf::from("include/baml_sdk.h")];
-        let bindings = &generated[&PathBuf::from("src/bindings.cc")];
-
-        assert!(header.contains("::baml::function_spec<std::string>"));
-        assert!(header.contains("Extract_stream_async"));
-        assert!(bindings.contains("\"user.Extract\""));
-        assert!(bindings.contains("\"user.Runner.Extract\""));
-        assert!(bindings.contains("::baml::function_operation::stream"));
-        assert!(!bindings.contains("bound_spec.stream"));
     }
 }

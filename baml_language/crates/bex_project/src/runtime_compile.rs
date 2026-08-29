@@ -281,10 +281,12 @@ fn enrich_runtime_mount(
                 (target_namespace, method.clone())
             }
         };
-        // Compiler-generated init/test helpers are not part of the mounted
-        // callable ABI. They can carry internal-only signature forms that are
-        // intentionally not source-spellable, and no consumer can name them.
-        if name.as_str().starts_with('$') {
+        // Compiler-generated init/test helpers and callable companions are not
+        // authored declarations. The mounted interface already exports their
+        // exact callable identities; emitting either spelling as a source stub
+        // is invalid (`$init`) or would redeclare the authored function
+        // (`Extract@spec` is postfix syntax, not a declaration identifier).
+        if name.as_str().starts_with('$') || name.as_str().contains('@') {
             return;
         }
         let generic_params = function

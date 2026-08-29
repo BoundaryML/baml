@@ -62,19 +62,18 @@ static_assert(
 
 }  // namespace
 
-// SDK_PARITY_LINT(skip): C++-only integration test pins generated flat-stream spelling and authored-identity bridge dispatch.
-BAML_TEST(flat_stream_calls_private_projection_through_authored_identity) {
+// SDK_PARITY_LINT(skip): C++-only integration test pins generated flat-stream spelling and exact companion dispatch.
+BAML_TEST(flat_stream_calls_exact_companion_fqn) {
   std::ifstream input("baml_sdk/src/bindings.cc");
   const std::string bindings((std::istreambuf_iterator<char>(input)),
                              std::istreambuf_iterator<char>());
-  BAML_ASSERT(bindings.find("\"user.lorem.stream_e2e_extract\"") !=
+  BAML_ASSERT(bindings.find("\"user.lorem.stream_e2e_extract@stream\"") !=
               std::string::npos);
-  BAML_ASSERT(bindings.find("::baml::function_operation::stream") !=
-              std::string::npos);
+  BAML_ASSERT(bindings.find("function_operation") == std::string::npos);
   BAML_ASSERT(bindings.find("return bound_spec.stream();") ==
               std::string::npos);
-  BAML_ASSERT(bindings.find("stream_e2e_extract$spec") == std::string::npos);
-  BAML_ASSERT(bindings.find("stream_e2e_extract$stream") ==
+  BAML_ASSERT(bindings.find("stream_e2e_extract@spec") != std::string::npos);
+  BAML_ASSERT(bindings.find("stream_e2e_extract@stream") !=
               std::string::npos);
   BAML_ASSERT(bindings.find("$render_prompt") == std::string::npos);
   BAML_ASSERT(bindings.find("$build_request") == std::string::npos);

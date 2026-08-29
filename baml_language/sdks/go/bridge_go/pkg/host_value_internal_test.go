@@ -272,35 +272,6 @@ func TestEncodeCallArgsAlwaysSetsFunctionTarget(t *testing.T) {
 	}
 }
 
-func TestEncodeCallArgsCarriesOperationWithoutRewritingFunctionName(t *testing.T) {
-	for _, test := range []struct {
-		name      string
-		operation FunctionOperation
-		want      pb.FunctionOperation
-	}{
-		{"direct", FunctionOperationDirect, pb.FunctionOperation_FUNCTION_OPERATION_DIRECT},
-		{"spec", FunctionOperationSpec, pb.FunctionOperation_FUNCTION_OPERATION_SPEC},
-		{"stream", FunctionOperationStream, pb.FunctionOperation_FUNCTION_OPERATION_STREAM},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			encoded, err := encodeCallArgsWithOperation(map[string]any{}, "user.Extract", 9, test.operation)
-			if err != nil {
-				t.Fatalf("encodeCallArgsWithOperation failed: %v", err)
-			}
-			var call pb.CallFunctionArgs
-			if err := proto.Unmarshal(encoded, &call); err != nil {
-				t.Fatalf("decoding CallFunctionArgs failed: %v", err)
-			}
-			if got := call.GetFunctionName(); got != "user.Extract" {
-				t.Fatalf("function target = %q, want authored FQN", got)
-			}
-			if got := call.GetOperation(); got != test.want {
-				t.Fatalf("operation = %s, want %s", got, test.want)
-			}
-		})
-	}
-}
-
 func TestPortableMediaAndPromptRoundTripWithoutHandles(t *testing.T) {
 	media := &pb.BamlValueMedia{
 		Media: pb.MediaTypeEnum_IMAGE,

@@ -50,8 +50,7 @@ public sealed class BamlGeneratedProgram
             callId => PrimitiveProtocol.EncodeOwnedCallArguments(
                 arguments,
                 callId,
-                nativeState.Api,
-                Operation(declaration.Variant)),
+                nativeState.Api),
             cancellationToken);
         return DecodeResultAsync(
             function.Result,
@@ -84,8 +83,7 @@ public sealed class BamlGeneratedProgram
             callId => PrimitiveProtocol.EncodeOwnedCallArguments(
                 arguments,
                 callId,
-                nativeState.Api,
-                Operation(declaration.Variant)),
+                nativeState.Api),
             cancellationToken);
     }
 
@@ -114,8 +112,7 @@ public sealed class BamlGeneratedProgram
             callId => PrimitiveProtocol.EncodeOwnedCallArguments(
                 arguments,
                 callId,
-                nativeState.Api,
-                Operation(declaration.Definition.Variant)),
+                nativeState.Api),
             cancellationToken);
     }
 
@@ -185,8 +182,7 @@ public sealed class BamlGeneratedProgram
             callId => PrimitiveProtocol.EncodeOwnedCallArguments(
                 arguments,
                 callId,
-                nativeState.Api,
-                Operation(declaration.Definition.Variant)),
+                nativeState.Api),
             cancellationToken);
         return DecodeResultAsync(
             declaration.Result,
@@ -267,12 +263,4 @@ public sealed class BamlGeneratedProgram
         }
     }
 
-    private static FunctionOperation Operation(string variant) => variant switch
-    {
-        "direct" or "call" => FunctionOperation.Direct,
-        "spec" => FunctionOperation.Spec,
-        "stream" => FunctionOperation.Stream,
-        _ => throw new InvalidOperationException(
-            $"Generated function token has unsupported semantic operation {variant}."),
-    };
 }

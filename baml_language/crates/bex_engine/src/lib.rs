@@ -101,9 +101,7 @@ pub use bex_events::{
     },
     prof::backend::RootProfileIntent,
 };
-pub use bex_external_types::{
-    BexExternalAdt, BexExternalValue, RuntimeTy, TypeName, UnionMetadata,
-};
+pub use bex_external_types::{BexExternalValue, RuntimeTy, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
@@ -128,19 +126,6 @@ pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
-
-/// A host-boundary projection of an authored function.
-///
-/// This is deliberately an engine API rather than part of the VM's callable
-/// representation. The engine resolves Spec and Stream requests to the private
-/// ordinary `Fn@spec` and `Fn@stream` entries. Source-level `@` syntax uses
-/// ordinary name/member resolution, and VM function values carry no operation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FunctionOperation {
-    Direct,
-    Spec,
-    Stream,
-}
 
 /// Compiler implementation injected by an assembly crate above the runtime.
 /// Every call receives only owned data and returns an owned, compiler-neutral
@@ -873,24 +858,6 @@ pub enum EngineError {
 
     #[error("{0}")]
     Other(String),
-}
-
-fn unsupported_function_operation(
-    function_name: &str,
-    operation: FunctionOperation,
-) -> EngineError {
-    let operation_name = function_operation_name(operation);
-    EngineError::Other(format!(
-        "Function `{function_name}` does not support the `{operation_name}` operation"
-    ))
-}
-
-const fn function_operation_name(operation: FunctionOperation) -> &'static str {
-    match operation {
-        FunctionOperation::Direct => "direct",
-        FunctionOperation::Spec => "spec",
-        FunctionOperation::Stream => "stream",
-    }
 }
 
 fn format_vm_internal_error(
@@ -2650,7 +2617,7 @@ impl BexEngine {
             // SAFETY: ptr is from resolved_function_names, a compile-time object
             let obj = unsafe { ptr.get() };
             if let Object::Function(func) = obj {
-                if let Some(FunctionMeta::Llm { client, .. }) = &func.body_meta {
+                if let Some(FunctionMeta::Llm { client }) = &func.body_meta {
                     llm_functions.insert(
                         name.clone(),
                         sys_types::LlmFunctionInfo {
@@ -3570,46 +3537,6 @@ impl BexEngine {
         self: &Arc<Self>,
         function_name: &str,
         args: Vec<BexCallArg>,
-        call_ctx: FunctionCallContext,
-        copy_objects: bool,
-    ) -> Result<BexCallResult, EngineError> {
-        self.call_function_bound_args_operation_with_trace(
-            function_name,
-            FunctionOperation::Direct,
-            args,
-            call_ctx,
-            copy_objects,
-        )
-        .await
-    }
-
-    /// Evaluate one host projection of an authored function. `Spec` and
-    /// `Stream` enter the compiler-private ordinary `Fn@spec` and `Fn@stream`
-    /// functions while the host continues to name the authored FQN.
-    pub async fn call_function_bound_args_operation(
-        self: &Arc<Self>,
-        function_name: &str,
-        operation: FunctionOperation,
-        args: Vec<BexCallArg>,
-        call_ctx: FunctionCallContext,
-        copy_objects: bool,
-    ) -> Result<BexExternalValue, EngineError> {
-        self.call_function_bound_args_operation_with_trace(
-            function_name,
-            operation,
-            args,
-            call_ctx,
-            copy_objects,
-        )
-        .await
-        .and_then(|result| result.value)
-    }
-
-    async fn call_function_bound_args_operation_with_trace(
-        self: &Arc<Self>,
-        function_name: &str,
-        operation: FunctionOperation,
-        args: Vec<BexCallArg>,
         FunctionCallContext {
             host_call_id,
             boundary,
@@ -3635,54 +3562,29 @@ impl BexEngine {
             return Err(cancelled_unhandled_throw());
         }
 
-        let (authored_function_index, kind) = self.lookup_function(function_name)?;
+        let (function_index, kind) = self.lookup_function(function_name)?;
         if matches!(kind, bex_vm_types::FunctionKind::NativeUnresolved) {
             return Err(EngineError::NotInvokableAsEntry {
                 name: function_name.to_string(),
                 kind: format!("{kind:?}"),
             });
         }
-        let function_index =
-            self.function_operation_entry(authored_function_index, operation, function_name)?;
-        let Object::Function(entry_function) = (unsafe { function_index.get() }) else {
-            return Err(EngineError::TypeMismatch {
-                message: format!("operation entry for `{function_name}` is not a function"),
+        self.validate_bound_args(function_name, &args)?;
+        let mut return_type = self
+            .function_return_type(function_name)
+            .unwrap_or(RuntimeTy::Null {
+                attr: baml_type::TyAttr::default(),
             });
-        };
-        let params = self.function_params_for_entry(function_index, function_name)?;
-        self.validate_bound_args_against(function_name, &args, &params)?;
-        // Every projection keeps the authored generic frame. Spec keeps the
-        // authored parameter list too; Stream's private ordinary function may
-        // additionally expose injected stream controls.
-        let mut return_type = if operation == FunctionOperation::Direct {
-            self.function_return_type(function_name)
-                .unwrap_or(RuntimeTy::Null {
-                    attr: baml_type::TyAttr::default(),
-                })
-        } else {
-            crate::conversion::to_wire_ty(&declared_symbolic(
-                &entry_function.return_type,
-                entry_function,
-            ))
-            .unwrap_or_else(|_| RuntimeTy::unknown())
-        };
-        let throws_type = if operation == FunctionOperation::Direct {
-            self.function_throws_type(function_name)
-        } else {
-            match &entry_function.throws_type {
-                baml_type::TyTemplate::Never { .. } => None,
-                ty => crate::conversion::to_wire_ty(&declared_symbolic(ty, entry_function)).ok(),
-            }
-        };
+        let throws_type = self.function_throws_type(function_name);
 
         // Declared parameter types (TypeVars unsubstituted).
+        let params = self.function_params(function_name)?;
         let declared_param_types: Vec<RuntimeTy> =
             params.iter().map(|(_, ty, _)| (*ty).clone()).collect();
 
-        // Tagged engine ADTs are live values. Resolve them under a
-        // permit before generic inference so receiver bindings come from the
-        // heap object's TypeHead/class_type_args, never from host-supplied wire
-        // metadata carried alongside the handle.
+        // Tagged capabilities are live engine values. Acquire the heap permit
+        // before generic inference so their type arguments come from the
+        // rooted object, never from host-echoed descriptive metadata.
         let mut thread = self.new_root_thread(cancel.clone()).await;
 
         // `type_args` is the unified `TypeVar -> concrete` binding map for a
@@ -3709,8 +3611,10 @@ impl BexEngine {
         if let (Some(self_declared), Some(BexCallArg::Provided(self_value))) =
             (declared_param_types.first(), args.first())
         {
-            if let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { heap_handle, .. }) =
-                self_value.as_ref()
+            if let BexExternalValue::Adt(bex_external_types::BexExternalAdt::TaggedHeapHandle {
+                heap_handle,
+                ..
+            }) = self_value.as_ref()
                 && let Some(receiver_ptr) = self.resolve_handle(thread.proof(), heap_handle)
                 && let Some(self_actual) =
                     value_runtime_baml_ty(Value::object(receiver_ptr), thread.proof())
@@ -3739,12 +3643,7 @@ impl BexEngine {
         // step below mutates `type_args` and is gated on this flag. The
         // (unsubstituted) `return_type` is used; self-receiver substitution does
         // not change whether the callee is generic.
-        let signature_function_name = if operation != FunctionOperation::Direct {
-            entry_function.name.as_str()
-        } else {
-            function_name
-        };
-        let declared_generic_params = self.function_generic_params(signature_function_name);
+        let declared_generic_params = self.function_generic_params(function_name);
         let callee_is_generic = !declared_generic_params.is_empty()
             || declared_param_types
                 .iter()
@@ -3796,9 +3695,11 @@ impl BexEngine {
                     continue;
                 };
                 let live_actual = match value.as_ref() {
-                    BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
-                        heap_handle, ..
-                    }) => self
+                    BexExternalValue::Adt(
+                        bex_external_types::BexExternalAdt::TaggedHeapHandle {
+                            heap_handle, ..
+                        },
+                    ) => self
                         .resolve_handle(thread.proof(), heap_handle)
                         .and_then(|ptr| value_runtime_baml_ty(Value::object(ptr), thread.proof())),
                     _ => None,
@@ -3811,9 +3712,6 @@ impl BexEngine {
                     );
                     crate::conversion::overlay_wire_ty_under_permit(&live_actual, thread.proof())
                 } else {
-                    // Formal-aware: a forcing generic-class formal recovers an
-                    // unbound instance's args from its fields (03b G1); every
-                    // other value synthesizes from the value alone.
                     self.synth_inference_actual(declared, value)
                 };
                 pairs.push((declared.clone(), actual));
@@ -3921,7 +3819,7 @@ impl BexEngine {
             //       catches a param/return type var the bindings didn't cover,
             //       including an instance method whose receiver failed to supply
             //       its class type args.
-            let missing_declared = if self.is_class_method(signature_function_name) {
+            let missing_declared = if self.is_class_method(function_name) {
                 // Demand the method's OWN generic params (the suffix after the
                 // class prefix). Inherited class params ride on the receiver (an
                 // instance method) or are phantom (a static), so they're never
@@ -3929,8 +3827,7 @@ impl BexEngine {
                 // ARE demanded — so rule 3 (no value position ⇒ must-specify)
                 // fires for a method's body-only own var (`reflect_t<T>()`), which
                 // check (2)'s signature scan misses.
-                let class_prefix =
-                    self.enclosing_class_generic_param_count(signature_function_name);
+                let class_prefix = self.enclosing_class_generic_param_count(function_name);
                 declared_generic_params
                     .iter()
                     .skip(class_prefix)
@@ -4123,11 +4020,9 @@ impl BexEngine {
         }
         let dynamic_classes = indexmap::IndexMap::new();
         let dynamic_enums = indexmap::IndexMap::new();
-        // A trusted capability receiver contributes both a projected,
-        // host-facing spelling (used above for structural checks) and the
-        // exact heap-owned type. The latter is semantic authority at VM entry:
-        // never try to re-anchor its projected name, which may be anonymous or
-        // collide with an unrelated compiled declaration.
+        // Live capability receivers supply exact heap-owned types. Their wire
+        // spellings are useful for structural checks above, but may name a
+        // runtime-only declaration and must not be re-anchored by name here.
         let mut type_args = type_args
             .into_iter()
             .filter(|(name, _)| !live_type_args.contains_key(name))
@@ -4162,9 +4057,6 @@ impl BexEngine {
                     ),
                 })
             })?;
-            // Explicit host bindings and definition-carrying TypeValues were
-            // installed first and retain their documented precedence. A live
-            // receiver normally supplies disjoint enclosing-class parameters.
             type_args.insert(name, realized);
         }
         let root_thread_ref = ThreadRef {
@@ -4353,7 +4245,6 @@ impl BexEngine {
     ) -> Result<BexExternalValue, EngineError> {
         self.call_callable_with_trace_impl(
             handle,
-            FunctionOperation::Direct,
             CallableArgs::Positional(args),
             call_ctx,
             copy_objects,
@@ -4371,7 +4262,6 @@ impl BexEngine {
     ) -> Result<BexCallResult, EngineError> {
         self.call_callable_with_trace_impl(
             handle,
-            FunctionOperation::Direct,
             CallableArgs::Positional(args),
             call_ctx,
             copy_objects,
@@ -4389,33 +4279,8 @@ impl BexEngine {
         call_ctx: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
-        self.call_callable_operation_named(
-            handle,
-            FunctionOperation::Direct,
-            required,
-            optional,
-            call_ctx,
-            copy_objects,
-        )
-        .await
-    }
-
-    /// Invoke a semantic projection of a live authored function value. For a
-    /// generic function or bound method, the original callable supplies the
-    /// concrete type arguments and receiver while the entry point is switched
-    /// to the matching compiler-private ordinary companion function.
-    pub async fn call_callable_operation_named(
-        self: &Arc<Self>,
-        handle: bex_external_types::Handle,
-        operation: FunctionOperation,
-        required: indexmap::IndexMap<String, BexExternalValue>,
-        optional: indexmap::IndexMap<String, BexExternalValue>,
-        call_ctx: FunctionCallContext,
-        copy_objects: bool,
-    ) -> Result<BexExternalValue, EngineError> {
         self.call_callable_with_trace_impl(
             handle,
-            operation,
             CallableArgs::Named { required, optional },
             call_ctx,
             copy_objects,
@@ -4427,7 +4292,6 @@ impl BexEngine {
     async fn call_callable_with_trace_impl(
         self: &Arc<Self>,
         handle: bex_external_types::Handle,
-        operation: FunctionOperation,
         args: CallableArgs,
         FunctionCallContext {
             host_call_id,
@@ -4459,7 +4323,7 @@ impl BexEngine {
         // `Function` pointer to read metadata from. `entry` is the closure value
         // itself (so its captures/upvalues resolve) or, for a bound method, the
         // inner function (its `self` is supplied positionally).
-        let (mut entry, receiver, seed_type_args, mut func_ptr, host_signature) =
+        let (entry, receiver, seed_type_args, func_ptr, host_signature) =
             match thread.vm.get_object(entry_ptr) {
                 Object::Function(_) => (entry_ptr, None, Vec::new(), Some(entry_ptr), None),
                 // A plain (or `foo<int>`-instantiated) function reference: the
@@ -4468,10 +4332,12 @@ impl BexEngine {
                 // `Function` object; its `type_args` seed the frame.
                 Object::GenericFunction(gf) => {
                     let type_args = gf.type_args.to_vec();
-                    let func_ptr = thread
-                        .vm
-                        .generic_function_authored_ptr(gf)
-                        .map_err(EngineError::VmInternalError)?;
+                    let inner = thread.vm.globals.get(thread.proof(), gf.function);
+                    let func_ptr = inner.as_object_ptr().ok_or_else(|| {
+                        EngineError::Other(
+                            "call_callable: function wrapper resolves to no object".to_string(),
+                        )
+                    })?;
                     (func_ptr, None, type_args, Some(func_ptr), None)
                 }
                 Object::Closure(closure) => (
@@ -4483,10 +4349,17 @@ impl BexEngine {
                 ),
                 Object::BoundMethod(bm) => {
                     let receiver = bm.receiver;
+                    let class_type_args = receiver
+                        .as_object_ptr()
+                        .and_then(|ptr| match thread.vm.get_object(ptr) {
+                            Object::Instance(inst) => Some(inst.class_type_args.to_vec()),
+                            _ => None,
+                        })
+                        .unwrap_or_default();
                     (
                         bm.function,
                         Some(receiver),
-                        bm.type_args.to_vec(),
+                        class_type_args,
                         Some(bm.function),
                         None,
                     )
@@ -4540,27 +4413,6 @@ impl BexEngine {
                     });
                 }
             };
-
-        // Explicit host projections switch an authored callable's entry point.
-        // Source `Fn@spec` and `Fn@stream` values already target ordinary
-        // private companion functions, so a default Direct call carries no
-        // operation state.
-        if operation != FunctionOperation::Direct {
-            let authored_function = func_ptr
-                .ok_or_else(|| unsupported_function_operation("<host callable>", operation))?;
-            let authored_name = match thread.vm.get_object(authored_function) {
-                Object::Function(function) => function.name.as_str(),
-                _ => "<callable>",
-            };
-            let operation_entry = self.callable_operation_entry(
-                &thread.vm,
-                authored_function,
-                authored_name,
-                operation,
-            )?;
-            entry = operation_entry;
-            func_ptr = Some(operation_entry);
-        }
 
         // Read the inner function's metadata. `param_types` carries declared
         // parameter types (including `self` for methods) for type-directed
@@ -4789,7 +4641,7 @@ impl BexEngine {
         // resolves to the actual function's metadata row. The structural
         // `CallFunction` id is stamped independently by the VM from
         // `Function.function_id`.
-        // Lower the closure's captured / bound-method's curried type args (held
+        // Lower the closure's captured / bound-method's class type args (held
         // positionally in De Bruijn order) onto the named `type_args` channel by
         // pairing each with the callee's generic-param name. A lambda has no
         // declared param names, so fall back to the index as a key; the named
@@ -4840,12 +4692,12 @@ impl BexEngine {
         Ok(())
     }
 
-    fn validate_bound_args_against(
+    fn validate_bound_args(
         &self,
         function_name: &str,
         args: &[BexCallArg],
-        params: &[(&str, RuntimeTy, bool)],
     ) -> Result<(), EngineError> {
+        let params = self.function_params(function_name)?;
         if args.len() != params.len() {
             return Err(EngineError::TypeMismatch {
                 message: format!(
@@ -4888,87 +4740,6 @@ impl BexEngine {
             .ok_or_else(|| EngineError::FunctionNotFound {
                 name: function_name.to_string(),
             })
-    }
-
-    /// Select an engine-private entry for a host semantic operation. The host
-    /// always names the authored function; `Spec` and `Stream` resolve the exact
-    /// compiler-private ordinary `Fn@spec` and `Fn@stream` globals.
-    fn function_operation_entry(
-        &self,
-        authored_function: HeapPtr,
-        operation: FunctionOperation,
-        authored_name: &str,
-    ) -> Result<HeapPtr, EngineError> {
-        if operation == FunctionOperation::Direct {
-            return Ok(authored_function);
-        }
-
-        let Object::Function(function) = (unsafe { authored_function.get() }) else {
-            return Err(EngineError::TypeMismatch {
-                message: format!("operation target `{authored_name}` is not a function"),
-            });
-        };
-        let companion_name = format!("{}@{}", function.name, function_operation_name(operation));
-        let target = self
-            .resolved_function_names
-            .get(&companion_name)
-            .map(|(ptr, _)| *ptr)
-            .ok_or_else(|| unsupported_function_operation(authored_name, operation))?;
-
-        if !matches!(unsafe { target.get() }, Object::Function(_)) {
-            return Err(EngineError::TypeMismatch {
-                message: format!(
-                    "{} operation entry for `{authored_name}` is not a function",
-                    function_operation_name(operation)
-                ),
-            });
-        }
-        Ok(target)
-    }
-
-    fn callable_operation_entry(
-        &self,
-        vm: &BexVm,
-        authored_function: HeapPtr,
-        authored_name: &str,
-        operation: FunctionOperation,
-    ) -> Result<HeapPtr, EngineError> {
-        debug_assert_ne!(operation, FunctionOperation::Direct);
-        let Object::Function(function) = vm.get_object(authored_function) else {
-            return Err(EngineError::TypeMismatch {
-                message: format!("operation target `{authored_name}` is not a function"),
-            });
-        };
-
-        let companion_name = format!("{}@{}", function.name, function_operation_name(operation));
-        let target = if function.runtime_package.is_null() {
-            self.resolved_function_names
-                .get(&companion_name)
-                .map(|(ptr, _)| *ptr)
-        } else {
-            let Object::Package(package) = vm.get_object(function.runtime_package) else {
-                return Err(EngineError::TypeMismatch {
-                    message: format!(
-                        "runtime package for operation target `{authored_name}` is invalid"
-                    ),
-                });
-            };
-            package.runtime().and_then(|runtime| {
-                let slot = *runtime.global_names.get(&companion_name)?;
-                runtime.load_global(slot)?.as_object_ptr()
-            })
-        }
-        .ok_or_else(|| unsupported_function_operation(authored_name, operation))?;
-
-        if !matches!(vm.get_object(target), Object::Function(_)) {
-            return Err(EngineError::TypeMismatch {
-                message: format!(
-                    "{} operation entry for `{authored_name}` is not a function",
-                    function_operation_name(operation)
-                ),
-            });
-        }
-        Ok(target)
     }
 
     /// Resolve a function name to the key actually present in
@@ -5022,26 +4793,6 @@ impl BexEngine {
                 .ok_or(EngineError::FunctionNotFound {
                     name: name.to_string(),
                 })?;
-        self.function_params_for_entry(*ptr, name)
-    }
-
-    /// Get the host-visible parameters for one boundary operation while the
-    /// caller continues to address the authored FQN.
-    pub fn function_operation_params(
-        &self,
-        name: &str,
-        operation: FunctionOperation,
-    ) -> Result<Vec<(&str, RuntimeTy, bool)>, EngineError> {
-        let (authored, _kind) = self.lookup_function(name)?;
-        let entry = self.function_operation_entry(authored, operation, name)?;
-        self.function_params_for_entry(entry, name)
-    }
-
-    fn function_params_for_entry(
-        &self,
-        ptr: HeapPtr,
-        display_name: &str,
-    ) -> Result<Vec<(&str, RuntimeTy, bool)>, EngineError> {
         // SAFETY: ptr is from resolved_function_names, a compile-time object
         let obj = unsafe { ptr.get() };
         match obj {
@@ -5060,7 +4811,7 @@ impl BexEngine {
                 })
                 .collect()),
             other => Err(EngineError::TypeMismatch {
-                message: format!("Expected Function for `{display_name}`, got {other:?}"),
+                message: format!("Expected Function, got {other:?}"),
             }),
         }
     }

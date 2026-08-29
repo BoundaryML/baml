@@ -40,6 +40,41 @@ function fixtures.llm_quoted_prompt.BacktickPrompt(topic: string, client: ai.Cli
     return
 }
 
+function fixtures.llm_quoted_prompt.BacktickPrompt@build_request(topic: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var topic
+    call user.fixtures.llm_quoted_prompt.BacktickPrompt@spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function fixtures.llm_quoted_prompt.BacktickPrompt@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function fixtures.llm_quoted_prompt.BacktickPrompt@render_prompt(topic: string) -> ai.Prompt {
+    load_var topic
+    call user.fixtures.llm_quoted_prompt.BacktickPrompt@spec
+    store_var _2
+    load_type string
+    load_var _2
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function fixtures.llm_quoted_prompt.BacktickPrompt@spec(topic: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
@@ -129,6 +164,41 @@ function fixtures.llm_quoted_prompt.QuotedPrompt(topic: string, client: ai.Clien
     store_var _6
     load_var _6
     load_field .value
+    return
+}
+
+function fixtures.llm_quoted_prompt.QuotedPrompt@build_request(topic: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var topic
+    call user.fixtures.llm_quoted_prompt.QuotedPrompt@spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function fixtures.llm_quoted_prompt.QuotedPrompt@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function fixtures.llm_quoted_prompt.QuotedPrompt@render_prompt(topic: string) -> ai.Prompt {
+    load_var topic
+    call user.fixtures.llm_quoted_prompt.QuotedPrompt@spec
+    store_var _2
+    load_type string
+    load_var _2
+    call ai.FunctionSpec.prompt
     return
 }
 

@@ -17,6 +17,15 @@ class user.fixtures.anyfunction_reflect.ToolError$stream {
 function user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> T  [llm] {
   ai.Agent.new(client = client, on_event = on_event).run(RuntimeClassify@spec(input)).value
 }
+function user.fixtures.anyfunction_reflect.RuntimeClassify@build_request(input: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  RuntimeClassify@spec(input).build_request(client = client)
+}
+function user.fixtures.anyfunction_reflect.RuntimeClassify@parse(json: string) -> T  [expr] {
+  baml.sap.parse(json)
+}
+function user.fixtures.anyfunction_reflect.RuntimeClassify@render_prompt(input: string) -> ai.Prompt  [expr] {
+  RuntimeClassify@spec(input).prompt()
+}
 function user.fixtures.anyfunction_reflect.RuntimeClassify@spec(input: string) -> ai.FunctionSpec<T>  [expr] {
   ai.FunctionSpec { spec_name: "RuntimeClassify", args: map { "input": input }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Choose a category...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_cur =  __tt_cur Add ".\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format());  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(RuntimeEnumClient) }
 }
@@ -33,7 +42,7 @@ function user.fixtures.anyfunction_reflect.heterogeneous_tool_map() -> map<strin
   { return map { "search": web_search, "now": current_time } }
 }
 function user.fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> string  [expr] {
-  { let category = reflect.enum.new("Category", [reflect.enum.value("RED", alias = "k7", description = "warm"), "BLUE"]); type CategoryOutput = unreflect(category); let spec = RuntimeClassify@spec("sample"); let prompt = spec.prompt().text(); let parsed = spec.parse(`...`); return prompt Add reflect.enum.get_value(parsed) }
+  { let category = reflect.enum.new("Category", [reflect.enum.value("RED", alias = "k7", description = "warm"), "BLUE"]); let prompt = RuntimeClassify@render_prompt("sample").text(); let parsed = RuntimeClassify@parse(`...`); return prompt Add reflect.enum.get_value(parsed) }
 }
 function user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction) -> string  [expr] {
   { let sig = reflect.signature(f); let parts = sig.returns.to_string() Add sig.errors.to_string() Add sig.args.length().to_string(); for arg in sig.args { parts = parts Add arg.name Add arg.type.to_string() }; for key in sig.opts.keys() { let opt = sig.opts.get(key) } if (opt Ne null) { parts = parts Add key Add opt.type.to_string() }; return parts }

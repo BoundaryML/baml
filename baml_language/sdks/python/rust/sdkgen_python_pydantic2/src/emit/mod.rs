@@ -14,7 +14,7 @@ pub(crate) mod typemap_file;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use baml_codegen_types::{FunctionArgument, FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty};
+use baml_codegen_types::{FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty};
 
 use crate::{
     emit::{
@@ -56,9 +56,8 @@ impl EmittedSymbol {
 pub(crate) type SortKey = (String, u32);
 
 /// Walk every `(Name, Symbol)` in the pool and build the
-/// `(LeafPath, EmittedSymbol, SortKey)` triples that drive G2
-/// emission. Function symbols fan out into up to 6 `PyFunction` stubs
-/// per §4.4 of the G2 plan; all other variants are 1:1.
+/// `(LeafPath, EmittedSymbol, SortKey)` triples that drive emission.
+/// Each concrete callable symbol gets one sync and one async binding.
 pub(crate) fn build_emitted(
     pool: &SymbolPool,
     names: &PythonNames,
@@ -220,9 +219,7 @@ fn is_nullable(ty: &Ty, aliases: &BTreeMap<Name, Ty>, visiting: &mut BTreeSet<Na
     }
 }
 
-/// Fan out an authored `Symbol::Function` into its available flat host
-/// projections. Every projection dispatches to the same authored FQN; the
-/// generated host role is carried separately by [`BindingRole`].
+/// Emit sync and async Python bindings for one exact BAML callable FQN.
 fn expand_function(
     leaf: &LeafPath,
     key: &Name,
@@ -231,8 +228,7 @@ fn expand_function(
     names: &PythonNames,
     out: &mut Vec<(LeafPath, EmittedSymbol, SortKey)>,
 ) {
-    // The FQN is the authored codegen-facing `Name`'s Display form:
-    // `<pkg>.<ns…>.<bare>`. No projection suffix is ever added to it.
+    // Companion symbols already carry their exact `@spec`/`@stream` suffix.
     let fqn_root = key.to_string();
     let func_generic_params: Vec<String> = f
         .generic_params
@@ -256,8 +252,8 @@ fn expand_function(
         .collect();
     let func_docstring = f.docstring.clone();
     let raises_names = collect_raises_names(f.throws.as_ref(), names);
-    for (role, return_ty) in operation_bindings(f) {
-        let arguments = arguments_for_role(f, role);
+    for role in [BindingRole::DirectSync, BindingRole::DirectAsync] {
+        let arguments: Vec<_> = f.arguments.iter().collect();
         let wire_params: Vec<String> = arguments
             .iter()
             .map(|argument| argument.name.as_str().to_string())
@@ -272,7 +268,7 @@ fn expand_function(
             .collect();
         let arg_defaults: Vec<Option<FunctionArgumentDefault>> = arguments
             .iter()
-            .map(|argument| role_default(argument, role))
+            .map(|argument| argument.default.clone())
             .collect();
         let mode = if role.is_async() {
             SyncAsync::Async
@@ -285,12 +281,11 @@ fn expand_function(
                 py_name: names.callable(&fqn_root, role).into_owned(),
                 baml_fqn: fqn_root.clone(),
                 mode,
-                role,
                 param_names: params,
                 wire_param_names: wire_params,
                 arg_defaults,
                 arg_tys,
-                return_ty,
+                return_ty: f.return_type.clone(),
                 generic_params: func_generic_params.clone(),
                 wire_generic_params: wire_generic_params.clone(),
                 type_var_names: type_var_names.clone(),
@@ -332,9 +327,7 @@ fn collect_raises_names(
     out
 }
 
-/// Fan out source-declared methods into one `PyMethodBinding` per available
-/// flat host projection. Methods are sorted by source location and raw name;
-/// all roles of one authored method remain contiguous.
+/// Emit sync and async bindings for source-declared methods.
 fn expand_methods(
     methods: &[baml_codegen_types::Function],
     class_fqn_root: &str,
@@ -370,10 +363,9 @@ fn expand_methods(
             .collect();
         let method_docstring = m.docstring.clone();
         let raises_names = collect_raises_names(m.throws.as_ref(), names);
-        for (role, return_ty) in operation_bindings(m) {
-            let arguments = arguments_for_role(m, role);
-            let (required_args, optional_args) =
-                split_arguments(&arguments, &fqn_root, names, role);
+        for role in [BindingRole::DirectSync, BindingRole::DirectAsync] {
+            let arguments: Vec<_> = m.arguments.iter().collect();
+            let (required_args, optional_args) = split_arguments(&arguments, &fqn_root, names);
             let mode = if role.is_async() {
                 SyncAsync::Async
             } else {
@@ -383,11 +375,10 @@ fn expand_methods(
                 py_name: names.callable(&fqn_root, role).into_owned(),
                 baml_fqn: fqn_root.clone(),
                 mode,
-                role,
                 required_args,
                 optional_args,
                 kind,
-                return_ty,
+                return_ty: m.return_type.clone(),
                 generic_params: method_generic_params.clone(),
                 wire_generic_params: wire_generic_params.clone(),
                 type_var_names: type_var_names.clone(),
@@ -399,64 +390,14 @@ fn expand_methods(
     out
 }
 
-fn arguments_for_role(
-    function: &baml_codegen_types::Function,
-    role: BindingRole,
-) -> Vec<&FunctionArgument> {
-    if role.is_stream() {
-        let mut arguments: Vec<_> = function
-            .arguments
-            .iter()
-            .filter(|argument| !argument.injected)
-            .collect();
-        if let Some(stream) = &function.operations.stream {
-            arguments.extend(stream.control_arguments.iter());
-        }
-        return arguments;
-    }
-
-    function
-        .arguments
-        .iter()
-        .filter(|argument| !role.is_spec() || !argument.injected)
-        .collect()
-}
-
-fn role_default(argument: &FunctionArgument, role: BindingRole) -> Option<FunctionArgumentDefault> {
-    argument.default.clone().or_else(|| {
-        (role.is_stream() && argument.injected).then_some(FunctionArgumentDefault::Null)
-    })
-}
-
-fn operation_bindings(function: &baml_codegen_types::Function) -> Vec<(BindingRole, Ty)> {
-    let mut bindings = vec![
-        (BindingRole::DirectSync, function.return_type.clone()),
-        (BindingRole::DirectAsync, function.return_type.clone()),
-    ];
-    if let Some(spec) = &function.operations.spec {
-        bindings.extend([
-            (BindingRole::SpecSync, spec.return_type.clone()),
-            (BindingRole::SpecAsync, spec.return_type.clone()),
-        ]);
-    }
-    if let Some(stream) = &function.operations.stream {
-        bindings.extend([
-            (BindingRole::StreamSync, stream.return_type.clone()),
-            (BindingRole::StreamAsync, stream.return_type.clone()),
-        ]);
-    }
-    bindings
-}
-
 fn split_arguments(
-    arguments: &[&FunctionArgument],
+    arguments: &[&baml_codegen_types::FunctionArgument],
     fqn: &str,
     names: &PythonNames,
-    role: BindingRole,
 ) -> (Vec<RequiredArg>, Vec<OptionalArg>) {
     let first_optional = arguments
         .iter()
-        .position(|arg| role_default(arg, role).is_some())
+        .position(|arg| arg.default.is_some())
         .unwrap_or(arguments.len());
     (
         arguments[..first_optional]
@@ -478,7 +419,7 @@ fn split_arguments(
                     name: names.param(fqn, &wire_name).into_owned(),
                     wire_name,
                     ty: arg.ty.clone(),
-                    default: role_default(arg, role).expect(
+                    default: arg.default.clone().expect(
                         "arguments after the first defaulted method arg must have defaults",
                     ),
                 }

@@ -245,7 +245,6 @@ inline constexpr CallFunctionArgs::Impl_::Impl_(
         kwargs_{},
         type_args_{},
         call_id_{::uint64_t{0u}},
-        operation_{static_cast< ::baml_bridge::cffi::v1::FunctionOperation >(0)},
         call_target_{},
         _oneof_case_{} {}
 
@@ -274,50 +273,6 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 namespace baml_bridge {
 namespace cffi {
 namespace v1 {
-PROTOBUF_CONSTINIT const uint32_t FunctionOperation_internal_data_[] = {
-    196608u, 0u, };
-static ::google::protobuf::internal::ExplicitlyConstructed<::std::string>
-    FunctionOperation_strings[3] = {};
-
-static const char FunctionOperation_names[] = {
-    "FUNCTION_OPERATION_DIRECT"
-    "FUNCTION_OPERATION_SPEC"
-    "FUNCTION_OPERATION_STREAM"
-};
-
-static const ::google::protobuf::internal::EnumEntry FunctionOperation_entries[] = {
-    {{&FunctionOperation_names[0], 25}, 0},
-    {{&FunctionOperation_names[25], 23}, 1},
-    {{&FunctionOperation_names[48], 25}, 2},
-};
-
-static const int FunctionOperation_entries_by_number[] = {
-    0,  // 0 -> FUNCTION_OPERATION_DIRECT
-    1,  // 1 -> FUNCTION_OPERATION_SPEC
-    2,  // 2 -> FUNCTION_OPERATION_STREAM
-};
-
-const ::std::string& FunctionOperation_Name(FunctionOperation value) {
-  static const bool kDummy = ::google::protobuf::internal::InitializeEnumStrings(
-      FunctionOperation_entries, FunctionOperation_entries_by_number, 3,
-      FunctionOperation_strings);
-  (void)kDummy;
-
-  int idx = ::google::protobuf::internal::LookUpEnumName(FunctionOperation_entries,
-                                  FunctionOperation_entries_by_number,
-                                  3, value);
-  return idx == -1 ? ::google::protobuf::internal::GetEmptyString() : FunctionOperation_strings[idx].get();
-}
-
-bool FunctionOperation_Parse(::absl::string_view name, FunctionOperation* PROTOBUF_NONNULL value) {
-  int int_value;
-  bool success = ::google::protobuf::internal::LookUpEnumValue(
-      FunctionOperation_entries, 3, name, &int_value);
-  if (success) {
-    *value = static_cast<FunctionOperation>(int_value);
-  }
-  return success;
-}
 // ===================================================================
 
 class InboundValue::_Internal {
@@ -3213,13 +3168,7 @@ CallFunctionArgs::CallFunctionArgs(
   _internal_metadata_.MergeFrom<std::string>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  ::memcpy(reinterpret_cast<char *>(&_impl_) +
-               offsetof(Impl_, call_id_),
-           reinterpret_cast<const char *>(&from._impl_) +
-               offsetof(Impl_, call_id_),
-           offsetof(Impl_, operation_) -
-               offsetof(Impl_, call_id_) +
-               sizeof(Impl_::operation_));
+  _impl_.call_id_ = from._impl_.call_id_;
   switch (call_target_case()) {
     case CALL_TARGET_NOT_SET:
       break;
@@ -3244,12 +3193,7 @@ PROTOBUF_NDEBUG_INLINE CallFunctionArgs::Impl_::Impl_(
 
 inline void CallFunctionArgs::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  ::memset(reinterpret_cast<char *>(&_impl_) +
-               offsetof(Impl_, call_id_),
-           0,
-           offsetof(Impl_, operation_) -
-               offsetof(Impl_, call_id_) +
-               sizeof(Impl_::operation_));
+  _impl_.call_id_ = {};
 }
 CallFunctionArgs::~CallFunctionArgs() {
   // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.CallFunctionArgs)
@@ -3341,16 +3285,16 @@ CallFunctionArgs::GetClassData() const {
   return CallFunctionArgs_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<3, 6, 2, 58, 2>
+const ::_pbi::TcParseTable<2, 5, 2, 58, 2>
 CallFunctionArgs::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_._has_bits_),
     0, // no _extensions_
-    6, 56,  // max_field_number, fast_idx_mask
+    5, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967232,  // skipmap
+    4294967264,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    6,  // num_field_entries
+    5,  // num_field_entries
     2,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     CallFunctionArgs_class_data_.base(),
@@ -3370,12 +3314,6 @@ CallFunctionArgs::_table_ = {
     // repeated .baml_bridge.cffi.v1.BamlTyArg type_args = 3;
     {::_pbi::TcParser::FastMtR1,
      {26, 63, 1, PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.type_args_)}},
-    {::_pbi::TcParser::MiniParse, {}},
-    {::_pbi::TcParser::MiniParse, {}},
-    // .baml_bridge.cffi.v1.FunctionOperation operation = 6;
-    {::_pbi::TcParser::FastV32S1,
-     {48, 1, 0, PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.operation_)}},
-    {::_pbi::TcParser::MiniParse, {}},
   }}, {{
     65535, 65535
   }}, {{
@@ -3394,9 +3332,6 @@ CallFunctionArgs::_table_ = {
     // uint64 function_handle = 5;
     {PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.call_target_.function_handle_), _Internal::kOneofCaseOffset + 0, 0,
     (0 | ::_fl::kFcOneof | ::_fl::kUInt64)},
-    // .baml_bridge.cffi.v1.FunctionOperation operation = 6;
-    {PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.operation_), _Internal::kHasBitsOffset + 1, 0,
-    (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundMapEntry>()},
@@ -3417,12 +3352,7 @@ PROTOBUF_NOINLINE void CallFunctionArgs::Clear() {
 
   _impl_.kwargs_.Clear();
   _impl_.type_args_.Clear();
-  cached_has_bits = _impl_._has_bits_[0];
-  if ((cached_has_bits & 0x00000003u) != 0) {
-    ::memset(&_impl_.call_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.operation_) -
-        reinterpret_cast<char*>(&_impl_.call_id_)) + sizeof(_impl_.operation_));
-  }
+  _impl_.call_id_ = ::uint64_t{0u};
   clear_call_target();
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<std::string>();
@@ -3491,15 +3421,6 @@ PROTOBUF_NOINLINE void CallFunctionArgs::Clear() {
     default:
       break;
   }
-  // .baml_bridge.cffi.v1.FunctionOperation operation = 6;
-  if ((this_._impl_._has_bits_[0] & 0x00000002u) != 0) {
-    if (this_._internal_operation() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteEnumToArray(
-          6, this_._internal_operation(), target);
-    }
-  }
-
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(
         this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
@@ -3540,20 +3461,13 @@ PROTOBUF_NOINLINE void CallFunctionArgs::Clear() {
       }
     }
   }
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if ((cached_has_bits & 0x00000003u) != 0) {
+   {
     // uint64 call_id = 2;
+    cached_has_bits = this_._impl_._has_bits_[0];
     if ((cached_has_bits & 0x00000001u) != 0) {
       if (this_._internal_call_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_call_id());
-      }
-    }
-    // .baml_bridge.cffi.v1.FunctionOperation operation = 6;
-    if ((cached_has_bits & 0x00000002u) != 0) {
-      if (this_._internal_operation() != 0) {
-        total_size += 1 +
-                      ::_pbi::WireFormatLite::EnumSize(this_._internal_operation());
       }
     }
   }
@@ -3595,16 +3509,9 @@ void CallFunctionArgs::MergeImpl(::google::protobuf::MessageLite& to_msg, const 
   _this->_internal_mutable_type_args()->MergeFrom(
       from._internal_type_args());
   cached_has_bits = from._impl_._has_bits_[0];
-  if ((cached_has_bits & 0x00000003u) != 0) {
-    if ((cached_has_bits & 0x00000001u) != 0) {
-      if (from._internal_call_id() != 0) {
-        _this->_impl_.call_id_ = from._impl_.call_id_;
-      }
-    }
-    if ((cached_has_bits & 0x00000002u) != 0) {
-      if (from._internal_operation() != 0) {
-        _this->_impl_.operation_ = from._impl_.operation_;
-      }
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    if (from._internal_call_id() != 0) {
+      _this->_impl_.call_id_ = from._impl_.call_id_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -3651,12 +3558,7 @@ void CallFunctionArgs::InternalSwap(CallFunctionArgs* PROTOBUF_RESTRICT PROTOBUF
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.kwargs_.InternalSwap(&other->_impl_.kwargs_);
   _impl_.type_args_.InternalSwap(&other->_impl_.type_args_);
-  ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.operation_)
-      + sizeof(CallFunctionArgs::_impl_.operation_)
-      - PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.call_id_)>(
-          reinterpret_cast<char*>(&_impl_.call_id_),
-          reinterpret_cast<char*>(&other->_impl_.call_id_));
+  swap(_impl_.call_id_, other->_impl_.call_id_);
   swap(_impl_.call_target_, other->_impl_.call_target_);
   swap(_impl_._oneof_case_[0], other->_impl_._oneof_case_[0]);
 }

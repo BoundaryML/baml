@@ -43,10 +43,8 @@ class WireCodecTest {
     private static final int OV_LIST = 11;
     private static final int OV_MAP = 12;
     private static final int OV_UNION = 13;
-    private static final int OV_PROMPT_AST = 18;
     private static final int OV_UINT8ARRAY = 19;
     private static final int OV_BIGINT = 20;
-    private static final int OV_TY = 21;
 
     // -- outbound builders (mirror the engine's value_encode side) -----------
 
@@ -123,39 +121,6 @@ class WireCodecTest {
         WireWriter w = new WireWriter();
         w.writeString(OV_BIGINT, big.toString(16));
         assertEquals(big, ProtoReader.decodeOutboundResult(okEnvelope(w.toByteArray())));
-    }
-
-    @Test
-    void decode_ok_type_value() {
-        WireWriter primitive = new WireWriter();
-        primitive.writeInt64(1, 2); // BamlTyPrimitive.kind = INT
-        WireWriter ty = new WireWriter();
-        ty.writeMessage(1, primitive.toByteArray()); // BamlTy.primitive = 1
-        WireWriter value = new WireWriter();
-        value.writeMessage(OV_TY, ty.toByteArray());
-        assertEquals(
-                BamlType.INT,
-                ProtoReader.decodeOutboundResult(okEnvelope(value.toByteArray())));
-    }
-
-    @Test
-    void named_stream_call_writes_operation_two() {
-        byte[] encoded =
-                ProtoWriter.encodeNamedCallFunctionArgs(
-                        "user.Extract",
-                        new String[0],
-                        new Object[0],
-                        7,
-                        null,
-                        BamlFunctionOperation.STREAM);
-        boolean found = false;
-        for (int i = 0; i + 1 < encoded.length; i++) {
-            if (encoded[i] == 0x30 && encoded[i + 1] == 0x02) {
-                found = true;
-                break;
-            }
-        }
-        assertTrue(found, "expected operation field 6 with STREAM value 2");
     }
 
     // -- bigint decode length cap (Python-parity DoS hardening) --------------
@@ -342,24 +307,6 @@ class WireCodecTest {
     void inbound_null_argument_is_absent_value() {
         byte[] bytes = ProtoWriter.encodeInboundValue(null);
         assertEquals(0, bytes.length); // empty InboundValue ≡ null
-    }
-
-    @Test
-    void prompt_ast_decodes_and_reencodes_as_portable_data() {
-        WireWriter simple = new WireWriter();
-        simple.writeString(1, "hello"); // BamlValuePromptAstSimple.string
-        WireWriter promptAst = new WireWriter();
-        promptAst.writeMessage(1, simple.toByteArray()); // BamlValuePromptAst.simple
-        WireWriter outbound = new WireWriter();
-        outbound.writeMessage(OV_PROMPT_AST, promptAst.toByteArray());
-
-        BamlPrompt prompt = assertInstanceOf(
-                BamlPrompt.class,
-                ProtoReader.decodeOutboundResult(okEnvelope(outbound.toByteArray())));
-        WireWriter expectedInbound = new WireWriter();
-        expectedInbound.writeMessage(16, promptAst.toByteArray());
-        assertArrayEquals(expectedInbound.toByteArray(), ProtoWriter.encodeInboundValue(prompt));
-        assertArrayEquals(expectedInbound.toByteArray(), ProtoWriter.encodeInboundValue(prompt));
     }
 
     @Test

@@ -25,13 +25,6 @@ import (
 // for the life of the process. To avoid that, we track every key registered
 // during this encode and unregister them all if any kwarg fails.
 func encodeCallArgs(kwargs map[string]any, functionName string, callID uint64) ([]byte, error) {
-	return encodeCallArgsWithOperation(kwargs, functionName, callID, FunctionOperationDirect)
-}
-
-func encodeCallArgsWithOperation(kwargs map[string]any, functionName string, callID uint64, operation FunctionOperation) ([]byte, error) {
-	if !operation.valid() {
-		return nil, fmt.Errorf("unknown BAML function operation %d", operation)
-	}
 	var registered []uint64
 	entries, err := encodeKwargs(kwargs, &registered)
 	if err != nil {
@@ -42,7 +35,6 @@ func encodeCallArgsWithOperation(kwargs map[string]any, functionName string, cal
 		Kwargs:     entries,
 		CallId:     callID,
 		CallTarget: &pb.CallFunctionArgs_FunctionName{FunctionName: functionName},
-		Operation:  pb.FunctionOperation(operation),
 	}
 	out, err := proto.Marshal(call)
 	if err != nil {

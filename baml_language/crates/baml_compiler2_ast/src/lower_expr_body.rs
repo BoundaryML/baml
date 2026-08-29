@@ -6,7 +6,7 @@
 
 use baml_base::{Name, TypePath, num_lit};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxNodeExt, SyntaxToken};
-use la_arena::{Arena, Idx};
+use la_arena::Arena;
 use rowan::ast::AstNode;
 use text_size::TextRange;
 
@@ -331,8 +331,8 @@ pub(crate) fn lower_client_initializer(
     (body, source_map)
 }
 
-/// Synthesize the body of the private ordinary `Fn@spec` companion: an
-/// `ai.FunctionSpec<Out>` literal binding the authored function's arguments:
+/// BEP `@spec`: synthesize the body of the `<Fn>@spec` companion — an
+/// `ai.FunctionSpec<Out>` literal binding the function's arguments:
 ///
 /// ```baml
 /// ai.FunctionSpec<Out> {
@@ -356,8 +356,8 @@ pub(crate) fn lower_client_initializer(
 /// so `${ctx.output_format()}` renders the closure's schema handle and every
 /// other interpolation captures the enclosing function's parameters.
 ///
-/// The `default_client` expression is evaluated when this companion runs — that
-/// is, on every call of the LLM function — never during `$init`. Provider
+/// The `default_client` expression is evaluated when this `@spec` body runs —
+/// that is, on every call of the LLM function — never during `$init`. Provider
 /// construction itself is pure, so building the spec still never touches
 /// credentials; only a request reads them.
 ///
@@ -702,8 +702,10 @@ pub(crate) fn synthesize_llm_spec_body(
         span,
     );
 
-    // default_client — evaluated when the private recipe runs, i.e. when the
-    // LLM function or `Fn@spec` is called, *not* during `$init`. So a dynamic
+    // default_client — evaluated when the `@spec` function RUNS, i.e. when the
+    // LLM function is called, *not* during `$init`. (This whole body is the
+    // `<Fn>@spec` companion function; the caller is `<Fn>`'s own body,
+    // `ai.Agent<Out>.new(client = client).run(Fn@spec(p...))`.) So a dynamic
     // selector is re-read on every call and a host may load secrets after the
     // runtime initializes.
     //
@@ -782,8 +784,144 @@ pub(crate) fn synthesize_llm_spec_body(
     ctx.finish(Some(spec_obj))
 }
 
-/// Synthesize the direct-call body of an LLM function by invoking its private
-/// ordinary spec companion and unwrapping the default runner's value:
+/// Synthesize the `@render_prompt` companion body: render the spec's prompt
+/// with the return type's output-format handle: `Fn@spec(p...).prompt()`.
+pub(crate) fn synthesize_spec_render_prompt_body(
+    function_name: &str,
+    params: &[Param],
+    generic_param_names: &[Name],
+    owner_class_name: Option<&Name>,
+    owner_generic_param_names: &[Name],
+    span: TextRange,
+) -> (ExprBody, AstSourceMap) {
+    let mut ctx = LoweringContext::new();
+    let (spec_callee, binds_receiver) =
+        companion_callee(&mut ctx, function_name, params, owner_class_name, span);
+    let spec_args = companion_param_call_args(
+        &mut ctx,
+        if binds_receiver { &params[1..] } else { params },
+        span,
+    );
+    let spec_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: spec_callee,
+            type_args: companion_type_args(
+                generic_param_names,
+                owner_generic_param_names,
+                owner_class_name.is_some() && !binds_receiver,
+                span,
+            ),
+            args: spec_args,
+        },
+        span,
+    );
+    let prompt_callee = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: spec_call,
+            member: Name::new("prompt"),
+        },
+        span,
+    );
+    let render_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: prompt_callee,
+            type_args: vec![],
+            args: vec![],
+        },
+        span,
+    );
+
+    let (body, source_map, _diags, _env_refs) = ctx.finish(Some(render_call));
+    (body, source_map)
+}
+
+/// Synthesize the `@build_request` companion body:
+/// `Fn@spec(p...).build_request(client = client)`.
+pub(crate) fn synthesize_spec_build_request_body(
+    function_name: &str,
+    params: &[Param],
+    generic_param_names: &[Name],
+    owner_class_name: Option<&Name>,
+    owner_generic_param_names: &[Name],
+    span: TextRange,
+) -> (ExprBody, AstSourceMap) {
+    use crate::ast::CallArg;
+
+    let mut ctx = LoweringContext::new();
+    let (spec_callee, binds_receiver) =
+        companion_callee(&mut ctx, function_name, params, owner_class_name, span);
+    let spec_args = companion_param_call_args(
+        &mut ctx,
+        if binds_receiver { &params[1..] } else { params },
+        span,
+    );
+    let spec_call = ctx.alloc_expr(
+        Expr::Call {
+            callee: spec_callee,
+            type_args: companion_type_args(
+                generic_param_names,
+                owner_generic_param_names,
+                owner_class_name.is_some() && !binds_receiver,
+                span,
+            ),
+            args: spec_args,
+        },
+        span,
+    );
+    let build_callee = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: spec_call,
+            member: Name::new("build_request"),
+        },
+        span,
+    );
+    let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
+    let call = ctx.alloc_expr(
+        Expr::Call {
+            callee: build_callee,
+            type_args: vec![],
+            args: vec![CallArg::named("client", client_ref)],
+        },
+        span,
+    );
+    let (body, source_map, _diags, _env_refs) = ctx.finish(Some(call));
+    (body, source_map)
+}
+
+/// Synthesize the `@parse` companion body: a network-free parse of an
+/// existing JSON/SAP string into the function's return type —
+/// `baml.sap.parse<Out>(json)`.
+pub(crate) fn synthesize_spec_parse_body(
+    out_type: Option<crate::ast::TypeExpr>,
+    span: TextRange,
+) -> (ExprBody, AstSourceMap) {
+    use crate::ast::CallArg;
+
+    let mut ctx = LoweringContext::new();
+    let json_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("json")]), span);
+    let callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new("baml"),
+            Name::new("sap"),
+            Name::new("parse"),
+        ]),
+        span,
+    );
+    let call = ctx.alloc_expr(
+        Expr::Call {
+            callee,
+            type_args: out_type.map(|t| vec![t]).unwrap_or_default(),
+            args: vec![CallArg::positional(json_ref)],
+        },
+        span,
+    );
+    let (body, source_map, _diags, _env_refs) = ctx.finish(Some(call));
+    (body, source_map)
+}
+
+/// BEP `@spec` spec mode: synthesize the direct-call body of a `tools`-bearing
+/// LLM function — run the default ai runner over the function's own spec and
+/// unwrap the value:
 ///
 /// ```baml
 /// ai.Agent.new(client = client).run(Fn@spec(p1, p2)).value
@@ -802,7 +940,6 @@ pub(crate) fn synthesize_spec_agent_run_body(
     span: TextRange,
 ) -> (ExprBody, AstSourceMap) {
     let mut ctx = LoweringContext::new();
-
     let (spec_callee, binds_receiver) =
         companion_callee(&mut ctx, function_name, params, owner_class_name, span);
     let spec_args = companion_param_call_args(
@@ -875,27 +1012,26 @@ pub(crate) fn synthesize_spec_agent_run_body(
     (body, source_map)
 }
 
-/// Synthesize PPIR's compiler-private `Fn@stream` body by delegating to the
-/// AST-level private ordinary `Fn@spec` companion:
+/// Synthesize the `@stream` companion body (built at PPIR level, where the
+/// stream-expanded return type is known) — one-turn streaming over the
+/// function's own spec:
 ///
 /// ```baml
-/// ai.stream.from_spec<PartialOut, Out>(
-///     Fn@spec(p1, p2),
-///     client = client,
-///     on_event = on_event,
-/// )
+/// ai.stream.from_spec<Out$stream, Out>(Fn@spec(p1, p2), client = client)
 /// ```
 ///
-/// The private function is an ordinary function after PPIR expansion. It owns
-/// the partial/final type arguments, so neither `FunctionSpec` nor host SDKs
-/// need a separate stream-composition type path.
+/// `type_args` is the explicit `<STREAM_EXPANDED, ORIGINAL>` pair, so the
+/// stdlib reifies both types from its own frame via `reflect.Type.of`.
+/// `client` is the companion's injected `ai.StreamingClient? = null`
+/// override; `from_spec` falls back to the spec's default client when it
+/// is null.
 pub fn synthesize_spec_stream_body(
     function_name: &str,
     params: &[Param],
     generic_param_names: &[Name],
     owner_class_name: Option<&Name>,
     owner_generic_param_names: &[Name],
-    type_args: Vec<TypeExpr>,
+    type_args: Vec<crate::ast::TypeExpr>,
     span: TextRange,
 ) -> (ExprBody, AstSourceMap) {
     let mut ctx = LoweringContext::new();
@@ -919,7 +1055,9 @@ pub fn synthesize_spec_stream_body(
         },
         span,
     );
-    let callee = ctx.alloc_expr(
+
+    // ai.stream.from_spec<TS, TF>(spec, client = client, on_event = on_event)
+    let stream_spec_callee = ctx.alloc_expr(
         Expr::Path(vec![
             Name::new("ai"),
             Name::new("stream"),
@@ -927,38 +1065,38 @@ pub fn synthesize_spec_stream_body(
         ]),
         span,
     );
-    let client = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
-    let on_event = ctx.alloc_expr(Expr::Path(vec![Name::new("on_event")]), span);
+    let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
+    let on_event_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("on_event")]), span);
     let call = ctx.alloc_expr(
         Expr::Call {
-            callee,
+            callee: stream_spec_callee,
             type_args,
             args: vec![
                 CallArg::positional(spec_call),
-                CallArg::named("client", client),
-                CallArg::named("on_event", on_event),
+                CallArg::named("client", client_ref),
+                CallArg::named("on_event", on_event_ref),
             ],
         },
         span,
     );
+
     let (body, source_map, _diags, _env_refs) = ctx.finish(Some(call));
     (body, source_map)
 }
 
-/// Re-apply a companion's enclosing generic parameters when it invokes the
-/// sibling spec companion. Some output-only parameters have no argument from
-/// which ordinary call inference could recover them.
+/// Re-apply a companion's enclosing generic parameters when it calls another
+/// companion. Some LLM type parameters occur only in the return type, so
+/// ordinary argument inference has no value-position evidence for them.
 fn companion_type_args(
     function_names: &[Name],
     owner_names: &[Name],
     include_owner: bool,
     span: TextRange,
 ) -> Vec<TypeExpr> {
-    let names = owner_names
+    owner_names
         .iter()
         .filter(|_| include_owner)
-        .chain(function_names);
-    names
+        .chain(function_names)
         .map(|name| {
             TypeExprKind::Path {
                 segments: vec![name.clone()],
@@ -971,9 +1109,9 @@ fn companion_type_args(
         .collect()
 }
 
-/// Select the ordinary sibling companion using the same spelling a user
-/// would write in that context. Instance methods bind `self`; static methods
-/// use their owning type; free functions stay unqualified.
+/// Select the sibling spec companion using the same receiver shape as a user
+/// call. Instance methods bind `self`; static methods use their owning class;
+/// free functions remain unqualified.
 fn companion_callee(
     ctx: &mut LoweringContext,
     function_name: &str,
@@ -1003,8 +1141,9 @@ fn companion_callee(
     (callee, binds_receiver)
 }
 
-/// Forward authored defaults by name so the spec companion retains the same
-/// optional-parameter semantics as the direct function.
+/// Re-apply parameter defaults when a generated companion calls its `@spec`.
+/// Required parameters can stay positional; defaulted parameters are named so
+/// the callee's default metadata remains visible to argument lowering.
 fn companion_param_call_args(
     ctx: &mut LoweringContext,
     params: &[Param],
@@ -1636,7 +1775,6 @@ impl LoweringContext {
             SyntaxKind::UPCAST_EXPR => self.lower_upcast_expr(node),
             SyntaxKind::QUALIFIED_PATH_EXPR => self.lower_qualified_path_expr(node),
             SyntaxKind::SPEC_EXPR => self.lower_spec_expr(node),
-            SyntaxKind::STREAM_EXPR => self.lower_stream_expr(node),
             SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => self.lower_optional_field_access_expr(node),
             SyntaxKind::ENV_ACCESS_EXPR => self.lower_env_access_expr(node),
             SyntaxKind::INDEX_EXPR => self.lower_index_expr(node),
@@ -3481,100 +3619,49 @@ impl LoweringContext {
         self.wrap_generic_apply(node, id, node.span_range())
     }
 
-    /// Lower the expression immediately before a postfix function projection.
-    /// Single identifiers remain raw tokens in the CST; paths and receiver
-    /// expressions are child nodes.
-    fn lower_function_projection_base(&mut self, node: &SyntaxNode) -> Option<ExprId> {
-        let mut base = None;
+    /// Lower an LLM companion postfix such as `MyFunc@spec` or `MyFunc@parse`
+    /// to the ordinary internal companion FQN. The base must be a plain path;
+    /// anything else lowers to `Missing` with a diagnostic-friendly span.
+    fn lower_spec_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let span = node.span_range();
+        // The base is either a PATH_EXPR child or a bare WORD token (single
+        // identifiers are tokens, not nodes, in postfix wrappers).
+        let mut segments: Vec<Name> = Vec::new();
+        let mut saw_at = false;
+        let mut suffix = None;
         for elem in node.children_with_tokens() {
             match elem {
-                rowan::NodeOrToken::Node(child) if base.is_none() => {
-                    base = Some(self.lower_expr_in_chain(&child));
+                rowan::NodeOrToken::Node(child) if child.kind() == SyntaxKind::PATH_EXPR => {
+                    for t in child
+                        .children_with_tokens()
+                        .filter_map(rowan::NodeOrToken::into_token)
+                    {
+                        if is_ident_token(t.kind()) {
+                            segments.push(Name::new(t.text()));
+                        }
+                    }
                 }
-                rowan::NodeOrToken::Token(token) if token.kind() == SyntaxKind::AT => break,
-                rowan::NodeOrToken::Token(token) if base.is_none() => {
-                    base = self.try_lower_bare_token(&token);
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::AT => {
+                    saw_at = true;
+                }
+                rowan::NodeOrToken::Token(t) if saw_at && is_ident_token(t.kind()) => {
+                    suffix = Some(t.text().to_string());
+                }
+                rowan::NodeOrToken::Token(t) if is_ident_token(t.kind()) => {
+                    segments.push(Name::new(t.text()));
                 }
                 _ => {}
             }
         }
-        base
-    }
-
-    fn function_projection_error(&mut self, projection: &str, span: TextRange) -> ExprId {
-        self.diags.push(LoweringDiagnostic::UnparseableType {
-            context: format!("`@{projection}` target (expected an LLM function reference)"),
-            span,
-        });
-        self.alloc_expr(Expr::Missing, span)
-    }
-
-    /// Lower `MyFunc@spec` to the compiler-private ordinary companion. The
-    /// resulting path/member expression uses normal function resolution,
-    /// including generic, bound-method, and qualified-method behavior.
-    fn lower_spec_expr(&mut self, node: &SyntaxNode) -> ExprId {
-        let span = node.span_range();
-        let Some(base) = self.lower_function_projection_base(node) else {
-            return self.function_projection_error("spec", span);
+        let (Some(last), Some(suffix)) = (segments.pop(), suffix) else {
+            self.diags.push(LoweringDiagnostic::UnparseableType {
+                context: "companion target (expected an LLM function reference)".to_string(),
+                span,
+            });
+            return self.alloc_expr(Expr::Missing, span);
         };
-        if !self.apply_function_projection(base, "spec") {
-            return self.function_projection_error("spec", span);
-        }
-        self.source_map.expr_spans[Idx::from_raw(base.into_raw())] = span;
-        base
-    }
-
-    /// Rename the terminal callable selected by a projection, retaining the
-    /// ordinary path/member expression shape and all of its source-map detail.
-    fn apply_function_projection(&mut self, expr: ExprId, projection: &str) -> bool {
-        let projected = match self.exprs[expr].clone() {
-            Expr::Path(mut path) => {
-                let Some(last) = path.last_mut() else {
-                    return false;
-                };
-                *last = Name::new(format!("{}@{projection}", last.as_str()));
-                Expr::Path(path)
-            }
-            Expr::MemberAccess { base, member } => Expr::MemberAccess {
-                base,
-                member: Name::new(format!("{}@{projection}", member.as_str())),
-            },
-            Expr::OptionalMemberAccess { base, member } => Expr::OptionalMemberAccess {
-                base,
-                member: Name::new(format!("{}@{projection}", member.as_str())),
-            },
-            Expr::QualifiedPath {
-                qself,
-                interface,
-                member,
-            } => Expr::QualifiedPath {
-                qself,
-                interface,
-                member: Name::new(format!("{}@{projection}", member.as_str())),
-            },
-            Expr::GenericApply { base, .. } => {
-                return self.apply_function_projection(base, projection);
-            }
-            _ => return false,
-        };
-        self.exprs[expr] = projected;
-        true
-    }
-
-    /// Lower `MyFunc@stream` to PPIR's compiler-private stream function. The
-    /// `@` spelling cannot collide with an authored declaration, and the
-    /// resulting expression otherwise follows ordinary function/member
-    /// resolution, including bound and qualified methods.
-    fn lower_stream_expr(&mut self, node: &SyntaxNode) -> ExprId {
-        let span = node.span_range();
-        let Some(base) = self.lower_function_projection_base(node) else {
-            return self.function_projection_error("stream", span);
-        };
-        if !self.apply_function_projection(base, "stream") {
-            return self.function_projection_error("stream", span);
-        }
-        self.source_map.expr_spans[Idx::from_raw(base.into_raw())] = span;
-        base
+        segments.push(Name::new(format!("{}@{suffix}", last.as_str())));
+        self.alloc_expr(Expr::Path(segments), span)
     }
 
     fn lower_field_access_expr(&mut self, node: &SyntaxNode) -> ExprId {

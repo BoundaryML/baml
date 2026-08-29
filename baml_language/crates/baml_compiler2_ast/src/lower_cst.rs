@@ -115,7 +115,7 @@ fn lower_file_with_path_and_test_owner_impl(
         match child.kind() {
             baml_compiler_syntax::SyntaxKind::FUNCTION_DEF => {
                 if let Some(func) = lower_function(&child, &mut diags, &mut env_var_refs, None) {
-                    let companions = expand_companions(&func);
+                    let companions = expand_companions(&func, None, &[]);
                     items.push(Item::Function(func));
                     items.extend(companions.into_iter().map(Item::Function));
                 }
@@ -447,9 +447,10 @@ fn lower_function(
             .collect();
         let param_names: Vec<Name> = user_params.iter().map(|p| p.name.clone()).collect();
 
-        // Build and stage the private ordinary spec companion's body while the
-        // CST prompt literal is in hand. Skipped when the prompt or client is
-        // unusable — the migration diagnostics above are authoritative then.
+        // Build and stash the `@spec` companion body while the CST prompt
+        // literal is in hand (read back by `companions::llm_spec`). Skipped
+        // when the prompt or client is unusable — the migration diagnostics
+        // above are the authoritative errors then.
         if let (Some(prompt), Some(client_spec)) = (&prompt_literal, client_spec) {
             let tools_value = tools_value_element(&llm);
             let (spec_body, spec_sm, mut spec_diags, mut spec_env_refs) =
@@ -464,16 +465,22 @@ fn lower_function(
                 );
             diags.append(&mut spec_diags);
             env_var_refs.append(&mut spec_env_refs);
-            llm_body_def.spec_body = Some((spec_body, spec_sm));
+            llm_body_def
+                .companion_bodies
+                .push(("spec".to_string(), (spec_body, spec_sm)));
         }
 
         // Every LLM function runs the ai Agent loop; `client: ai.Client? =
         // null` is the compiler-injected per-call override. When the spec
         // could not be synthesized (migration diagnostics fired), the body is
-        // omitted so the missing private `Fn@spec` companion never cascades.
+        // omitted so the missing `<Fn>@spec` reference never cascades.
         append_spec_client_param(&mut params, &mut defaults, llm_body_def.span);
         append_spec_on_event_param(&mut params, &mut defaults, llm_body_def.span);
-        let body = if llm_body_def.spec_body.is_some() {
+        let body = if llm_body_def
+            .companion_bodies
+            .iter()
+            .any(|(t, _)| t == "spec")
+        {
             let owner_generic_param_names = class_method
                 .map(|owner| {
                     owner
@@ -844,7 +851,7 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
     LlmBodyDef {
         client,
         // Filled in by the LLM-function branch once param names are known.
-        spec_body: None,
+        companion_bodies: Vec::new(),
         // Filled in by the LLM-function branch from the prompt literal.
         prompt_spans: None,
         has_tools: llm_tools_present(llm_body),
@@ -1050,7 +1057,7 @@ fn lower_class(
 
     let generic_params = extract_generic_params_with_bounds(node, diags);
     let class_name = name_token.text().to_string();
-    let class_name_ident = Name::new(&class_name);
+    let class_name_ident = Name::new(name_token.text());
 
     let fields = class
         .fields()
@@ -1143,9 +1150,14 @@ fn lower_class(
                 }),
             )
         })
-        .flat_map(|function| {
-            let companions = expand_companions(&function);
-            std::iter::once(function).chain(companions)
+        .flat_map(|func| {
+            let owner_generic_param_names = generic_params
+                .iter()
+                .map(|param| param.name.clone())
+                .collect::<Vec<_>>();
+            let companions =
+                expand_companions(&func, Some(&class_name_ident), &owner_generic_param_names);
+            std::iter::once(func).chain(companions)
         })
         .collect();
 

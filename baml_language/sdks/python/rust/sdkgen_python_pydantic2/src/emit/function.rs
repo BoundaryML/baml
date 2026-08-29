@@ -4,8 +4,6 @@ use std::collections::BTreeMap;
 
 use baml_codegen_types::{FunctionArgumentDefault, Ty};
 
-use crate::names::BindingRole;
-
 /// Async/sync marker carried by factory bindings. Each host projection fans
 /// out into one sync and one async binding.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,9 +24,6 @@ pub(crate) struct PyFunction {
     pub(crate) baml_fqn: String,
     /// `Sync` or `Async` — selects the mode literal in the call.
     pub(crate) mode: SyncAsync,
-    /// Host projection being invoked. The renderer passes this explicitly to
-    /// `define_function`; `baml_fqn` always remains the authored declaration.
-    pub(crate) role: BindingRole,
     /// Inline host parameter-name list passed to the factory.
     pub(crate) param_names: Vec<String>,
     /// Raw BAML parameter names matching `param_names`.

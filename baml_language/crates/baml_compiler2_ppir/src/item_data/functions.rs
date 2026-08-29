@@ -72,16 +72,13 @@ pub fn function_source_map<'db>(
 /// [`function_llm_meta`] wraps this in an `Option`, where `None` marks a non-LLM
 /// function — so a client name can never be attached to one.
 ///
-/// The full [`ast::LlmBodyDef`] (prompt template, interpolation spans, and the
-/// lowered body used to synthesize the private ordinary spec companion) carries
-/// spans, so it stays behind a body-ish read. Metadata consumers that only need
-/// these facts front the item tree through this projection and get early cutoff
-/// — editing an unrelated function no longer invalidates them.
+/// The full [`ast::LlmBodyDef`] (prompt template, interpolation spans, companion
+/// bodies) carries spans, so it stays behind a body-ish read. Metadata consumers
+/// that only need these facts front the item tree through this projection and get
+/// early cutoff — editing an unrelated function no longer invalidates them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionLlmMeta {
     pub client_name: Option<Name>,
-    pub has_spec: bool,
-    pub has_tools: bool,
 }
 
 /// The [`FunctionLlmMeta`] projection for one function, or `None` when it is not an
@@ -97,8 +94,6 @@ pub fn function_llm_meta<'db>(
         .as_ref()
         .map(|ast::DeclarativeMeta::Llm(llm)| FunctionLlmMeta {
             client_name: llm.client.clone(),
-            has_spec: llm.spec_body.is_some(),
-            has_tools: llm.has_tools,
         })
 }
 

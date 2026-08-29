@@ -7,8 +7,8 @@ package baml_bridge.cffi.v1;
 // their own file so baml_outbound.proto can import them without depending on
 // this inbound file.
 import "baml_bridge/cffi/v1/baml_handle.proto";
-import "baml_bridge/cffi/v1/baml_outbound.proto";
 import "baml_bridge/cffi/v1/baml_type.proto";
+import "baml_bridge/cffi/v1/baml_outbound.proto";
 
 option go_package = "./cffi";
 // C++ generates against the lite runtime (no descriptors/reflection);
@@ -98,14 +98,6 @@ message BamlTyArg {
   BamlTyDef type_definition = 3;
 }
 
-// Semantic projection of an authored function declaration. These are runtime
-// operations, not synthesized `$...` functions or host sync/async modes.
-enum FunctionOperation {
-  FUNCTION_OPERATION_DIRECT = 0;
-  FUNCTION_OPERATION_SPEC = 1;
-  FUNCTION_OPERATION_STREAM = 2;
-}
-
 message CallFunctionArgs {
   repeated InboundMapEntry kwargs = 1;
   uint64 call_id = 2;
@@ -122,7 +114,6 @@ message CallFunctionArgs {
     string function_name = 4;
     uint64 function_handle = 5;
   }
-  FunctionOperation operation = 6;
 }
 
 // CallAck is the engine's acknowledgment of an inbound call. It flows

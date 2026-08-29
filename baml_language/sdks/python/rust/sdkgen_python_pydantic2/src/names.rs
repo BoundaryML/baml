@@ -10,65 +10,29 @@ use baml_codegen_types::{Name, Symbol, SymbolPool};
 
 use crate::routing::{LeafPath, raw_route_segments};
 
-/// One public Python binding projected from an authored BAML function.
-///
-/// Projection and host execution mode are deliberately separate axes. Every
-/// role keeps the authored function FQN; the bridge selects Spec or the
-/// compiler-private `Fn@stream` entry without exposing a synthetic `$...`
-/// callable declaration.
+/// One sync or async Python binding for a concrete BAML callable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum BindingRole {
     DirectSync,
     DirectAsync,
-    SpecSync,
-    SpecAsync,
-    StreamSync,
-    StreamAsync,
 }
 
 impl BindingRole {
     pub(crate) const fn is_async(self) -> bool {
-        matches!(
-            self,
-            Self::DirectAsync | Self::SpecAsync | Self::StreamAsync
-        )
-    }
-
-    pub(crate) const fn projection(self) -> &'static str {
-        match self {
-            Self::DirectSync | Self::DirectAsync => "direct",
-            Self::SpecSync | Self::SpecAsync => "spec",
-            Self::StreamSync | Self::StreamAsync => "stream",
-        }
+        matches!(self, Self::DirectAsync)
     }
 
     pub(crate) const fn registry_key(self) -> &'static str {
         match self {
             Self::DirectSync => "direct",
             Self::DirectAsync => "direct_async",
-            Self::SpecSync => "spec",
-            Self::SpecAsync => "spec_async",
-            Self::StreamSync => "stream",
-            Self::StreamAsync => "stream_async",
         }
-    }
-
-    pub(crate) const fn is_spec(self) -> bool {
-        matches!(self, Self::SpecSync | Self::SpecAsync)
-    }
-
-    pub(crate) const fn is_stream(self) -> bool {
-        matches!(self, Self::StreamSync | Self::StreamAsync)
     }
 
     fn candidate(self, direct_name: &str) -> String {
         match self {
             Self::DirectSync => direct_name.to_string(),
             Self::DirectAsync => format!("{direct_name}_async"),
-            Self::SpecSync => format!("{direct_name}_spec"),
-            Self::SpecAsync => format!("{direct_name}_spec_async"),
-            Self::StreamSync => format!("{direct_name}_stream"),
-            Self::StreamAsync => format!("{direct_name}_stream_async"),
         }
     }
 
@@ -76,10 +40,6 @@ impl BindingRole {
         match self {
             Self::DirectSync => "direct binding",
             Self::DirectAsync => "async binding",
-            Self::SpecSync => "spec binding",
-            Self::SpecAsync => "spec async binding",
-            Self::StreamSync => "stream binding",
-            Self::StreamAsync => "stream async binding",
         }
     }
 }
@@ -576,14 +536,8 @@ impl PythonNames {
 }
 
 fn secondary_roles(function: &baml_codegen_types::Function) -> Vec<BindingRole> {
-    let mut roles = vec![BindingRole::DirectAsync];
-    if function.operations.spec.is_some() {
-        roles.extend([BindingRole::SpecSync, BindingRole::SpecAsync]);
-    }
-    if function.operations.stream.is_some() {
-        roles.extend([BindingRole::StreamSync, BindingRole::StreamAsync]);
-    }
-    roles
+    let _ = function;
+    vec![BindingRole::DirectAsync]
 }
 
 fn allocate(

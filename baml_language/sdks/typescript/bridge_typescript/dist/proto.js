@@ -120,14 +120,6 @@ export class BamlPrompt {
         return BamlValuePromptAst.decode(BamlValuePromptAst.encode(wire).finish());
     }
 }
-function wireFunctionOperation(operation) {
-    switch (operation ?? 'direct') {
-        case 'direct': return 0;
-        case 'spec': return 1;
-        case 'stream': return 2;
-        default: throw new TypeError(`unknown BAML function operation ${JSON.stringify(operation)}`);
-    }
-}
 function wireMedia(value) {
     const media = value instanceof BamlImage ? 1
         : value instanceof BamlAudio ? 2
@@ -380,12 +372,6 @@ export function encodeCallArgs(kwargs, options) {
     if (options.functionName !== undefined && options.functionHandle !== undefined) {
         throw new TypeError('exactly one BAML call target may be set');
     }
-    if (options.operation !== undefined
-        && options.operation !== 'direct'
-        && options.functionName === undefined
-        && options.functionHandle === undefined) {
-        throw new TypeError(`${options.operation} requires a function target`);
-    }
     const ctx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
         const entries = [];
@@ -405,7 +391,6 @@ export function encodeCallArgs(kwargs, options) {
             typeArgs,
             functionName: options.functionName,
             functionHandle: options.functionHandle,
-            operation: wireFunctionOperation(options.operation),
         });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     }

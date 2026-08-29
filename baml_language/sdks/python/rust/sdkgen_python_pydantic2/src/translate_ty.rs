@@ -7,10 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use baml_base::{
-    Literal, MediaKind,
-    qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM},
-};
+use baml_base::{Literal, MediaKind, qualified_name::AI_STREAM_STREAM};
 use baml_codegen_types::{Name, Ty};
 use indexmap::IndexMap;
 
@@ -114,16 +111,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                     translate_ty(final_value, ctx),
                 );
             }
-            let arg_strs: Vec<String> = if name.to_string() == AI_FUNCTION_SPEC
-                && let [partial, final_value] = args.as_slice()
-            {
-                vec![
-                    translate_stream_yield_ty(partial, ctx),
-                    translate_ty(final_value, ctx),
-                ]
-            } else {
-                args.iter().map(|a| translate_ty(a, ctx)).collect()
-            };
+            let arg_strs: Vec<String> = args.iter().map(|a| translate_ty(a, ctx)).collect();
             render_name_ref_or_self_ref(name, ctx, &arg_strs.join(", "))
         }
         Ty::TypeAlias(name, _) => render_name_ref_or_self_ref(name, ctx, ""),

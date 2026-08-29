@@ -28,7 +28,7 @@ use crate::{
         EmittedSymbol, SortKey,
         class::TypeScriptClass,
         enum_::TypeScriptEnum,
-        function::{BindingRole, SyncAsync, TypeScriptFunction},
+        function::{SyncAsync, TypeScriptFunction},
         method::{MethodKind, TypeScriptMethodBinding},
         type_alias::TypeScriptTypeAlias,
     },
@@ -49,7 +49,7 @@ impl LeafBody {
             let EmittedSymbol::Function(f) = sym else {
                 continue;
             };
-            if f.role == BindingRole::DirectSync && kids.contains(&f.name) {
+            if f.mode == SyncAsync::Sync && kids.contains(&f.name) {
                 out.insert(f.name.clone(), child_namespace_alias(&f.name));
             }
         }
@@ -865,7 +865,7 @@ fn render_method_binding_ts(
         MethodKind::Static => &[],
         MethodKind::Instance => class_generics,
     };
-    let tail = function_factory_tail(&optional_arg, &m.generic_params, class_type_params, m.role);
+    let tail = factory_tail(&optional_arg, &m.generic_params, class_type_params);
     match m.kind {
         MethodKind::Static => {
             state.uses_define_function = true;
@@ -928,7 +928,7 @@ fn render_function_ts(
     let required_params_lit = param_names_literal(&required_params);
     let optional_arg = optional_param_names_arg(&optional_params);
     // Free functions bind only their own `<...>` params (no generic receiver).
-    let tail = function_factory_tail(&optional_arg, &f.generic_params, &[], f.role);
+    let tail = factory_tail(&optional_arg, &f.generic_params, &[]);
     let mut factory = format!(
         "defineFunction(\"{}\", \"{}\", {required_params_lit}{tail}) as {sig}",
         f.baml_fqn,
@@ -946,27 +946,6 @@ fn render_function_ts(
     } else {
         let _ = writeln!(out, "export const {} = {factory};", f.name);
     }
-}
-
-fn function_factory_tail(
-    optional_arg: &str,
-    type_params: &[String],
-    class_type_params: &[String],
-    role: BindingRole,
-) -> String {
-    if matches!(role, BindingRole::DirectSync | BindingRole::DirectAsync) {
-        return factory_tail(optional_arg, type_params, class_type_params);
-    }
-
-    let optional = if optional_arg.is_empty() {
-        ", undefined".to_string()
-    } else {
-        optional_arg.to_string()
-    };
-    let generics = generics_object_literal(type_params, class_type_params)
-        .map_or_else(|| ", undefined".to_string(), |value| format!(", {value}"));
-    let projection = format!(", {}", crate::ts_string(role.projection()));
-    format!("{optional}{generics}{projection}")
 }
 
 fn param_names_literal(names: &[String]) -> String {
@@ -1122,10 +1101,6 @@ mod tests {
             name: n.to_string(),
             baml_fqn: fqn.to_string(),
             mode,
-            role: match mode {
-                SyncAsync::Sync => BindingRole::DirectSync,
-                SyncAsync::Async => BindingRole::DirectAsync,
-            },
             param_names,
             arg_defaults: vec![None; arg_tys.len()],
             arg_tys,
@@ -1147,10 +1122,6 @@ mod tests {
             name: n.to_string(),
             baml_fqn: fqn.to_string(),
             mode,
-            role: match mode {
-                SyncAsync::Sync => BindingRole::DirectSync,
-                SyncAsync::Async => BindingRole::DirectAsync,
-            },
             param_names: params.iter().map(|(n, _, _)| n.to_string()).collect(),
             arg_tys: params.iter().map(|(_, t, _)| t.clone()).collect(),
             arg_defaults: params.into_iter().map(|(_, _, d)| d).collect(),

@@ -7,11 +7,10 @@
 
 use std::{collections::HashMap, env, fs, path::PathBuf};
 
-use baml_base::{Literal, Name as BaseName};
+use baml_base::Name as BaseName;
 use baml_codegen_types::{
-    CallableParam, Class, ClassProperty, CodegenFunctionParamMode, DefaultLiteral, Enum,
-    EnumVariant, Function, FunctionArgument, FunctionArgumentDefault, FunctionOperations, Name,
-    NamingConvention, Origin, SpecOperation, StreamOperation, Symbol, SymbolPool, Ty, TypeAlias,
+    CallableParam, Class, ClassProperty, CodegenFunctionParamMode, Enum, EnumVariant, Function,
+    FunctionArgument, Name, NamingConvention, Origin, Symbol, SymbolPool, Ty, TypeAlias,
 };
 use baml_type::TyAttr;
 
@@ -215,11 +214,6 @@ fn stage_package_edges(manifest_dir: &std::path::Path, diagnostics: &mut BuildDi
         vec![],
         BaseName::new("call_cross_package_union_callback"),
     );
-    let defaulted_extract = Name::new(
-        BaseName::new("user"),
-        vec![],
-        BaseName::new("defaulted_extract"),
-    );
     let static_factory = Name::new(
         BaseName::new("user"),
         vec![],
@@ -291,7 +285,6 @@ fn stage_package_edges(manifest_dir: &std::path::Path, diagnostics: &mut BuildDi
                     default: None,
                 }],
                 return_type: ty_class(context, vec![]),
-                operations: Default::default(),
                 throws: None,
                 watchers: vec![],
                 origin: Origin {
@@ -323,7 +316,6 @@ fn stage_package_edges(manifest_dir: &std::path::Path, diagnostics: &mut BuildDi
                     },
                 ],
                 return_type: ty_class(models.clone(), vec![]),
-                operations: Default::default(),
                 throws: None,
                 watchers: vec![],
                 origin: Origin {
@@ -346,7 +338,6 @@ fn stage_package_edges(manifest_dir: &std::path::Path, diagnostics: &mut BuildDi
                     default: None,
                 }],
                 return_type: ty_class(envelope, vec![]),
-                operations: Default::default(),
                 throws: None,
                 watchers: vec![],
                 origin: Origin {
@@ -369,7 +360,6 @@ fn stage_package_edges(manifest_dir: &std::path::Path, diagnostics: &mut BuildDi
                     default: None,
                 }],
                 return_type: ty_class(enum_holder, vec![]),
-                operations: Default::default(),
                 throws: None,
                 watchers: vec![],
                 origin: Origin {
@@ -409,91 +399,6 @@ fn stage_package_edges(manifest_dir: &std::path::Path, diagnostics: &mut BuildDi
                     },
                 ],
                 return_type: ty_union(vec![ty_string(), ty_class(models, vec![])]),
-                operations: Default::default(),
-                throws: None,
-                watchers: vec![],
-                origin: Origin {
-                    source_file_path: "synthetic.baml".to_string(),
-                    span_start: 0,
-                },
-            }),
-        ),
-        (
-            defaulted_extract,
-            Symbol::Function(Function {
-                name: BaseName::new("defaulted_extract"),
-                generic_params: vec![],
-                docstring: None,
-                arguments: vec![
-                    FunctionArgument {
-                        injected: false,
-                        name: BaseName::new("text"),
-                        docstring: None,
-                        ty: ty_string(),
-                        default: None,
-                    },
-                    FunctionArgument {
-                        injected: false,
-                        name: BaseName::new("tone"),
-                        docstring: None,
-                        ty: ty_string(),
-                        default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
-                            Literal::String("neutral".to_string()),
-                        ))),
-                    },
-                ],
-                return_type: ty_string(),
-                operations: FunctionOperations {
-                    spec: Some(SpecOperation {
-                        return_type: ty_class(
-                            Name::new(BaseName::new("ai"), vec![], BaseName::new("FunctionSpec")),
-                            vec![ty_string()],
-                        ),
-                    }),
-                    stream: Some(StreamOperation {
-                        return_type: ty_class(
-                            Name::new(
-                                BaseName::new("ai"),
-                                vec![BaseName::new("stream")],
-                                BaseName::new("Stream"),
-                            ),
-                            vec![ty_string(), ty_string()],
-                        ),
-                        partial_type: ty_string(),
-                        item_type: ty_string(),
-                        control_arguments: vec![
-                            FunctionArgument {
-                                injected: true,
-                                name: BaseName::new("client"),
-                                docstring: None,
-                                ty: ty_union(vec![
-                                    ty_string(),
-                                    Ty::Null {
-                                        attr: TyAttr::default(),
-                                    },
-                                ]),
-                                default: Some(FunctionArgumentDefault::Null),
-                            },
-                            FunctionArgument {
-                                injected: true,
-                                name: BaseName::new("on_event"),
-                                docstring: None,
-                                ty: ty_union(vec![
-                                    ty_callable(
-                                        vec![ty_string()],
-                                        Ty::Void {
-                                            attr: TyAttr::default(),
-                                        },
-                                    ),
-                                    Ty::Null {
-                                        attr: TyAttr::default(),
-                                    },
-                                ]),
-                                default: Some(FunctionArgumentDefault::Null),
-                            },
-                        ],
-                    }),
-                },
                 throws: None,
                 watchers: vec![],
                 origin: Origin {
@@ -563,7 +468,6 @@ fn synthetic_method(name: &str, arguments: Vec<(&str, Ty, bool)>, return_type: T
             })
             .collect(),
         return_type,
-        operations: Default::default(),
         throws: None,
         watchers: vec![],
         origin: Origin {
@@ -619,7 +523,6 @@ fn round_trip_function(name: Name, ty: Ty) -> (Name, Symbol) {
             default: None,
         }],
         return_type: ty,
-        operations: Default::default(),
         throws: None,
         watchers: vec![],
         origin: Origin {

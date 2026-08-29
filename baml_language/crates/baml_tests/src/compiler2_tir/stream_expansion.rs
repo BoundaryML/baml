@@ -413,8 +413,8 @@ fn stream_companion_preserves_generic_args_for_llm_return_type() {
     // Reviewer's exact scenario: an LLM function returning `Box<int>` pulls
     // the stream-expanded `Box$stream<int>` type companion into play. With
     // generic-arg threading, the reference matches `Box$stream<T>`'s arity.
-    // The compiler-private LLM `@stream` function consumes this exact
-    // class-level `$stream` type expansion; no intrinsic partial type exists.
+    // (The legacy LLM `$stream`/`@parse_stream` function companions are gone;
+    // the class-level `$stream` type expansion is what this pins now.)
     let mut db = make_db();
     let file = db.file(
         "test.baml",

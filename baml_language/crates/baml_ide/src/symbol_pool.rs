@@ -25,136 +25,15 @@ fn name_from_qtn(qtn: &QualifiedTypeName) -> cg::Name {
 
 /// Is this lowered type function-shaped (directly or through union arms)?
 /// Used to keep the `injected` provenance mark off user parameters that merely
-/// reuse the `on_event` name. The compiler-injected listener is always
-/// function-typed.
+/// reuse the `on_event` NAME on a `$`-suffixed function: the compiler-injected
+/// listener is always function-typed, so a `Foo$stream(on_event: string)`
+/// param stays a public user parameter.
 fn ty_is_function_shaped(ty: &cg::Ty) -> bool {
     match ty {
         cg::Ty::Function { .. } => true,
         cg::Ty::Union(members, _) => members.iter().any(ty_is_function_shaped),
         _ => false,
     }
-}
-
-fn function_operations(
-    db: &ProjectDatabase,
-    function: FunctionLoc<'_>,
-    final_type: &cg::Ty,
-    alias_map: &HashMap<QualifiedTypeName, TirTy>,
-    recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
-) -> cg::FunctionOperations {
-    let Some(meta) = baml_compiler2_ppir::item_data::function_llm_meta(db, function) else {
-        return cg::FunctionOperations::DIRECT;
-    };
-    let partial_type = if meta.has_tools {
-        cg::Ty::Never {
-            attr: TyAttr::default(),
-        }
-    } else {
-        baml_compiler2_hir_ty::lower::function_stream_output_ty(db, function)
-            .map(|partial| convert_tir_to_codegen_ty(&partial, alias_map, recursive_aliases))
-            .unwrap_or(cg::Ty::Unknown {
-                attr: TyAttr::default(),
-            })
-    };
-    let spec = meta.has_spec.then(|| cg::SpecOperation {
-        return_type: cg::Ty::Class(
-            QualifiedTypeName::new(Name::new("ai"), Vec::new(), Name::new("FunctionSpec")),
-            vec![final_type.clone()],
-            TyAttr::default(),
-        ),
-    });
-    // The flat host stream projection invokes PPIR's compiler-private
-    // `Fn@stream` entry through the bridge. It is unavailable whenever the
-    // source function has no spec companion (even if it is otherwise tool-free).
-    let function_name = &baml_compiler2_ppir::item_data::function_data(db, function).name;
-    let stream = baml_compiler2_ppir::llm_stream_projection_available(
-        function_name,
-        meta.has_spec,
-        meta.has_tools,
-    )
-    .then(|| {
-        let optional = |ty: cg::Ty| {
-            cg::Ty::Union(
-                vec![
-                    ty,
-                    cg::Ty::Null {
-                        attr: TyAttr::default(),
-                    },
-                ],
-                TyAttr::default(),
-            )
-            .canonicalize()
-        };
-        let done = cg::Ty::Class(
-            QualifiedTypeName::new(
-                Name::new("ai"),
-                vec![Name::new("stream")],
-                Name::new("Done"),
-            ),
-            vec![],
-            TyAttr::default(),
-        );
-        cg::StreamOperation {
-            return_type: cg::Ty::Class(
-                QualifiedTypeName::new(
-                    Name::new("ai"),
-                    vec![Name::new("stream")],
-                    Name::new("Stream"),
-                ),
-                vec![partial_type.clone(), final_type.clone()],
-                TyAttr::default(),
-            ),
-            item_type: cg::Ty::Union(vec![partial_type.clone(), done], TyAttr::default())
-                .canonicalize(),
-            partial_type,
-            control_arguments: vec![
-                cg::FunctionArgument {
-                    name: Name::new("client"),
-                    docstring: None,
-                    ty: optional(cg::Ty::Interface(
-                        QualifiedTypeName::new(
-                            Name::new("ai"),
-                            vec![Name::new("stream")],
-                            Name::new("StreamingClient"),
-                        ),
-                        Vec::new(),
-                        Vec::new(),
-                        TyAttr::default(),
-                    )),
-                    default: Some(cg::FunctionArgumentDefault::Null),
-                    injected: true,
-                },
-                cg::FunctionArgument {
-                    name: Name::new("on_event"),
-                    docstring: None,
-                    ty: optional(cg::Ty::Function {
-                        params: vec![cg::CallableParam {
-                            name: None,
-                            ty: cg::Ty::TypeAlias(
-                                QualifiedTypeName::new(
-                                    Name::new("ai"),
-                                    vec![Name::new("events")],
-                                    Name::new("Event"),
-                                ),
-                                TyAttr::default(),
-                            ),
-                            mode: baml_type::FunctionParamMode::Required,
-                        }],
-                        ret: Box::new(cg::Ty::Void {
-                            attr: TyAttr::default(),
-                        }),
-                        throws: Box::new(cg::Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
-                        attr: TyAttr::default(),
-                    }),
-                    default: Some(cg::FunctionArgumentDefault::Null),
-                    injected: true,
-                },
-            ],
-        }
-    });
-    cg::FunctionOperations { spec, stream }
 }
 
 fn lower_codegen_default(
@@ -185,6 +64,23 @@ fn lower_codegen_default(
             source: Some(defaults.exprs.display_expr(default_ref.expr.expr())),
         }),
     }
+}
+
+/// If `name` contains an `@`, return `(parent_part, companion_suffix)`.
+/// For example `"extract_resume@build_request"` → `Some(("extract_resume", "build_request"))`.
+/// If there's no `@`, returns `None`.
+#[cfg(test)]
+fn split_companion(name: &str) -> Option<(&str, &str)> {
+    let pos = name.find('@')?;
+    Some((&name[..pos], &name[pos + 1..]))
+}
+
+/// Only the spec and stream callable companions are part of generated host
+/// SDKs. The remaining companions stay available inside BAML through their
+/// ordinary `@...` function symbols.
+fn hide_from_host_sdk(name: &str) -> bool {
+    name.split_once('@')
+        .is_some_and(|(_, suffix)| !matches!(suffix, "spec" | "stream"))
 }
 
 // ---------------------------------------------------------------------------
@@ -307,7 +203,10 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 
             // Methods — lower each into a `cg::Function`. Static vs.
             // instance is dispatched structurally on whether the first
-            // parameter is named `self`.
+            // parameter is named `self`. Companion methods (e.g.
+            // `@build_request`) are independent `Function` entries that
+            // sit alongside their parent method in the same vec; their
+            // shared span keeps them adjacent after sorting.
             for &method_loc in &class.methods {
                 let method = baml_compiler2_ppir::item_data::function_data(db, method_loc);
 
@@ -318,6 +217,10 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 if method.metadata.is_language_internal
                     || matches!(method.metadata.origin, FunctionOrigin::AutoDerive)
                 {
+                    continue;
+                }
+
+                if hide_from_host_sdk(method.name.as_str()) {
                     continue;
                 }
 
@@ -389,14 +292,17 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 let method_defaults =
                     baml_compiler2_ppir::function_parameter_defaults(db, method_loc);
 
-                // The compiler injects a `client` override on LLM methods. It
-                // is an interface-typed BAML implementation detail and must not leak
+                // The compiler injects a `client` override on LLM methods and
+                // on the `@build_request`/`@stream` companions. It is an
+                // interface-typed BAML implementation detail and must not leak
                 // into generated host SDK method signatures. Strip it BY NAME
                 // (the injected `on_event` listener sits after it, so it is no
                 // longer the last param); `on_event` stays — its function type
                 // is representable and part of the SDK surface.
                 let strips_injected_client =
-                    baml_compiler2_ppir::item_data::function_llm_meta(db, method_loc).is_some();
+                    baml_compiler2_ppir::item_data::function_llm_meta(db, method_loc).is_some()
+                        || method.name.as_str().ends_with("@stream")
+                        || method.name.as_str().ends_with("@build_request");
 
                 let arguments: Vec<cg::FunctionArgument> = sig
                     .params
@@ -435,13 +341,6 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     generic_params: method_own_generics,
                     docstring: method.docstring.clone(),
                     arguments,
-                    operations: function_operations(
-                        db,
-                        method_loc,
-                        &return_type,
-                        alias_map,
-                        recursive_aliases,
-                    ),
                     return_type,
                     throws: resolve_throws(db, method_loc, alias_map, recursive_aliases),
                     watchers: Vec::new(),
@@ -561,9 +460,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         }
 
         // Top-level functions — methods are skipped via `non_free_function_locs`
-        // so they don't double-emit. Compiler-private companion entries are
-        // language-internal and skipped below; their public host operations are
-        // attached to the authored function's structured metadata.
+        // so they don't double-emit. Companion functions (names containing `$`)
+        // flow through as their own pool entries; parent and companion alike are
+        // inserted directly, keyed on the suffixed name.
         for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, source_file) {
             if non_free_function_locs.contains(&func_loc) {
                 continue;
@@ -579,12 +478,24 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 continue;
             }
 
+            if hide_from_host_sdk(func.name.as_str()) {
+                continue;
+            }
+
             if matches!(
                 baml_compiler2_ppir::function_body(db, func_loc).as_ref(),
                 baml_compiler2_hir::body::FunctionBody::Builtin(ast::BuiltinKind::Intrinsic)
             ) {
                 continue;
             }
+
+            // Companion functions arrive as their own pool entries (names
+            // containing `$`); they share the parent's span so
+            // `group_and_sort` keeps them contiguous. No further
+            // parent-vs-companion gating needed: companion validity is
+            // encoded by the suffix; non-LLM parents (pure-expression
+            // bodies, etc.) are valid too. `FunctionOrigin::Internal` is
+            // already filtered above.
 
             // Source the signature from the *elaborated* HIR data, not the raw
             // item tree: elaboration mints a synthetic effect param for every
@@ -618,7 +529,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             };
             let func_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
             // The compiler injects a `client: ai.Client? = null` override onto
-            // every LLM function.
+            // every LLM function (and its `@stream`/`@build_request`
+            // companions, where it is retyped `ai.stream.StreamingClient?`).
             // It is a BAML-side concern typed as an INTERFACE, which no target
             // language can represent — leaving it in makes the whole function
             // "unsupported" and the generator drops it, so the SDK would
@@ -629,7 +541,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // function type is representable and it is part of the SDK
             // surface.
             let strips_injected_client =
-                baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some();
+                baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some()
+                    || func.name.as_str().ends_with("@stream")
+                    || func.name.as_str().ends_with("@build_request");
             let arguments: Vec<cg::FunctionArgument> = sig
                 .params
                 .iter()
@@ -664,13 +578,6 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 generic_params: func_generic_params,
                 docstring: func.docstring.clone(),
                 arguments,
-                operations: function_operations(
-                    db,
-                    func_loc,
-                    &return_type,
-                    alias_map,
-                    recursive_aliases,
-                ),
                 return_type,
                 throws: resolve_throws(db, func_loc, alias_map, recursive_aliases),
                 watchers: Vec::new(),
@@ -689,9 +596,10 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         }
     }
 
-    // Authored methods land on the owning class's `static_methods` /
-    // `instance_methods` vec. Private companions were filtered before they
-    // reached `pending_methods`.
+    // Methods land on the owning class's `static_methods` /
+    // `instance_methods` vec. Companion methods sit alongside their parents
+    // in the same vec; span-based ordering at fan-out time keeps them
+    // contiguous.
     for pm in pending_methods {
         if let Some(cg::Symbol::Class(class)) = pool.get_mut(&pm.parent_key) {
             match pm.kind {
@@ -907,6 +815,31 @@ mod tests {
     // ── Unit tests for pure helpers ─────────────────────────────────────────
 
     #[test]
+    fn test_split_companion_with_at() {
+        assert_eq!(
+            split_companion("extract_resume@build_request"),
+            Some(("extract_resume", "build_request"))
+        );
+        assert_eq!(split_companion("Foo@parse"), Some(("Foo", "parse")));
+        assert_eq!(
+            split_companion("extract_resume@render_prompt"),
+            Some(("extract_resume", "render_prompt"))
+        );
+    }
+
+    #[test]
+    fn test_split_companion_no_at() {
+        assert_eq!(split_companion("extract_resume"), None);
+        assert_eq!(split_companion("Foo"), None);
+        assert_eq!(split_companion(""), None);
+    }
+
+    #[test]
+    fn test_split_companion_at_stream_suffix() {
+        assert_eq!(split_companion("Resume@stream"), Some(("Resume", "stream")));
+    }
+
+    #[test]
     fn test_name_from_qtn_preserves_full_path() {
         let qtn = QualifiedTypeName::new(
             Name::new("user"),
@@ -935,12 +868,14 @@ mod tests {
 
     // ── Integration tests using ProjectDatabase ─────────────────────────────
 
-    /// An LLM declaration remains the sole function symbol. Its host projections
-    /// are structured operation metadata, while the concrete PPIR partial type
-    /// remains a normal `*$stream` type declaration.
+    /// Verifies that companions land in the pool as their own
+    /// `Symbol::Function` entries keyed on the suffixed name. A BAML
+    /// declarative function causes `@spec`, `@build_request`, `@render_prompt`,
+    /// `@parse`, and `@stream` companion functions to be synthesized by the
+    /// companion expander.
     #[test]
-    fn test_llm_operations_are_attached_without_function_companion_symbols() {
-        let root = Path::new("/tmp/llm_operations");
+    fn test_companions_inserted_as_independent_pool_entries() {
+        let root = Path::new("/tmp/bep030_companions");
         let mut db = ProjectDatabase::new();
         db.workspace(root);
         db.file(
@@ -950,29 +885,22 @@ mod tests {
 
         let pool = build_symbol_pool(&db);
 
-        let key = cg::Name::new(Name::new("user"), vec![], Name::new("extract_resume"));
-        let Some(cg::Symbol::Function(function)) = pool.get(&key) else {
-            panic!("extract_resume must be the authored Function symbol");
-        };
-        assert!(function.operations.spec.is_some());
-        assert!(function.operations.stream.is_some());
-        for removed in [
-            "extract_resume$spec",
-            "extract_resume$build_request",
-            "extract_resume$render_prompt",
-            "extract_resume$parse",
-            "extract_resume$stream",
+        // Only the parent, spec, and stream functions cross into generated
+        // host SDKs. The remaining companions stay internal BAML callables.
+        for expected in [
+            "extract_resume",
+            "extract_resume@spec",
             "extract_resume@stream",
         ] {
+            let key = pool
+                .keys()
+                .find(|k| k.name().as_str() == expected)
+                .unwrap_or_else(|| panic!("{expected} must be in the pool"));
             assert!(
-                !pool.keys().any(|key| key.name().as_str() == removed),
-                "synthetic function `{removed}` must not be emitted"
+                matches!(pool.get(key), Some(cg::Symbol::Function(_))),
+                "{expected} must be a Function symbol",
             );
         }
-        assert!(
-            pool.keys()
-                .any(|key| key.name().as_str() == "Resume$stream")
-        );
     }
 
     #[test]
@@ -999,49 +927,25 @@ function extract_resume(resume: string) -> Resume {
         // function. `ai.Client` is an interface, which no target language can
         // represent — leaving it in the pool made every generator classify
         // the function as unsupported and drop it entirely. `on_event` is a
-        // representable function type and IS part of the authored SDK surface.
-        let key = cg::Name::new(Name::new("user"), vec![], Name::new("extract_resume"));
-        let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
-            panic!("missing function extract_resume");
-        };
-        let arg_names: Vec<&str> = func.arguments.iter().map(|a| a.name.as_str()).collect();
-        assert_eq!(arg_names, ["resume", "on_event"]);
-        assert!(func.operations.spec.is_some());
-        let stream = func
-            .operations
-            .stream
-            .as_ref()
-            .expect("tool-free LLM function must expose stream metadata");
-        assert_eq!(
-            stream
-                .control_arguments
-                .iter()
-                .map(|argument| argument.name.as_str())
-                .collect::<Vec<_>>(),
-            ["client", "on_event"],
-        );
-        assert!(stream.control_arguments.iter().all(|argument| {
-            argument.injected && argument.default == Some(cg::FunctionArgumentDefault::Null)
-        }));
-        assert!(matches!(
-            &stream.control_arguments[0].ty,
-            cg::Ty::Union(members, _)
-                if members.iter().any(|member| matches!(
-                    member,
-                    cg::Ty::Interface(name, _, _, _)
-                        if name.render_dotted(false) == "ai.stream.StreamingClient"
-                ))
-        ));
-        assert!(matches!(
-            &stream.control_arguments[1].ty,
-            cg::Ty::Union(members, _)
-                if members.iter().any(|member| matches!(member, cg::Ty::Function { .. }))
-        ));
+        // representable function type and IS part of the SDK surface, on the
+        // function and its `@stream` companion only.
+        for (bare, expected) in [
+            ("extract_resume", &["resume", "on_event"][..]),
+            ("extract_resume@spec", &["resume"][..]),
+            ("extract_resume@stream", &["resume", "on_event"][..]),
+        ] {
+            let key = cg::Name::new(Name::new("user"), vec![], Name::new(bare));
+            let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
+                panic!("missing function {bare}");
+            };
+            let arg_names: Vec<&str> = func.arguments.iter().map(|a| a.name.as_str()).collect();
+            assert_eq!(arg_names, expected, "arguments for {bare}");
+        }
     }
 
     #[test]
-    fn test_llm_class_methods_attach_operations_and_hide_injected_client() {
-        let root = Path::new("/tmp/llm_class_method_operations");
+    fn test_llm_class_method_companions_hide_spec_and_injected_client() {
+        let root = Path::new("/tmp/llm_class_method_companions");
         let mut db = ProjectDatabase::new();
         db.workspace(root);
         db.file(
@@ -1075,7 +979,20 @@ class Extractor {
                 .unwrap_or_else(|| panic!("missing class method {name}"))
         };
 
-        for name in ["extract", "summarize"] {
+        assert!(
+            class
+                .instance_methods
+                .iter()
+                .any(|method| method.name.as_str() == "extract@stream")
+        );
+        assert!(
+            class
+                .static_methods
+                .iter()
+                .any(|method| method.name.as_str() == "summarize@stream")
+        );
+
+        for name in ["extract", "extract@spec"] {
             let method = find_method(name);
             assert!(
                 method
@@ -1090,9 +1007,22 @@ class Extractor {
                     .collect::<Vec<_>>()
             );
         }
+        assert!(
+            class
+                .instance_methods
+                .iter()
+                .chain(class.static_methods.iter())
+                .all(|method| !method.name.as_str().contains("$spec")),
+            "$spec must not appear in class SDK methods"
+        );
+
         let expected = [
             ("extract", vec!["text", "suffix", "on_event"]),
+            ("extract@spec", vec!["text", "suffix"]),
+            ("extract@stream", vec!["text", "suffix", "on_event"]),
             ("summarize", vec!["text", "suffix", "on_event"]),
+            ("summarize@spec", vec!["text", "suffix"]),
+            ("summarize@stream", vec!["text", "suffix", "on_event"]),
         ];
         for (name, expected_args) in expected {
             let actual: Vec<&str> = find_method(name)
@@ -1101,16 +1031,14 @@ class Extractor {
                 .map(|arg| arg.name.as_str())
                 .collect();
             assert_eq!(actual, expected_args, "arguments for {name}");
-            assert!(find_method(name).operations.spec.is_some());
-            assert!(find_method(name).operations.stream.is_some());
         }
     }
 
     #[test]
     fn test_user_on_event_params_are_never_marked_injected() {
         // A user may declare into the `$` suffix namespace and may name a
-        // parameter `on_event`; only the compiler-injected function-typed
-        // listener on an authored LLM function carries provenance.
+        // parameter `on_event`; only the compiler-injected listener (function
+        // typed, on an LLM function or real companion) carries provenance.
         let root = Path::new("/tmp/user_on_event_params");
         let mut db = ProjectDatabase::new();
         db.workspace(root);

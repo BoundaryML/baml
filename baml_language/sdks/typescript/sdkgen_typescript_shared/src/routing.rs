@@ -17,9 +17,11 @@
 //! `"baml"` and `"ai"` route under their public package names, anything else
 //! under `vendor/<pkg>/`.
 //!
-//! PPIR-generated `$stream` partial-output types do **not** get a separate
-//! leaf. Because `$` is a valid TypeScript identifier character, the partial
-//! type keeps its suffix and is emitted beside its final type.
+//! `$stream` companions do **not** get a separate leaf: because `$` is a
+//! valid TypeScript identifier character (spec2), a stream companion keeps
+//! its `$stream`-suffixed name and is emitted beside its base type in the
+//! same namespace leaf. Routing is therefore independent of the `$stream`
+//! suffix and of the symbol kind.
 
 #[cfg(test)]
 use std::path::PathBuf;
@@ -55,7 +57,8 @@ impl LeafPath {
 /// Route a pool entry to its leaf `index.ts` directory (under `baml_sdk/`).
 ///
 /// Routing depends only on the symbol's package + namespace path. The
-/// `$stream` suffix on a PPIR partial-output type does not influence placement.
+/// `$stream` suffix (on companion classes or function companions) does not
+/// influence placement — stream companions live beside their base type.
 pub(crate) fn route(name: &Name) -> LeafPath {
     route_inner(name)
 }
@@ -186,6 +189,20 @@ mod tests {
     fn user_deeper_ns() {
         let lp = route(&name("user", &["a", "b"], "Thing"));
         assert_eq!(lp.segments, vec!["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
+    fn function_stream_companion_routes_alongside_parent() {
+        // `extract$stream` is a function-level companion; it routes to its
+        // parent's leaf, same as every other symbol.
+        let lp = route(&name("user", &["lorem"], "extract$stream"));
+        assert_eq!(lp.segments, vec!["lorem".to_string()]);
+    }
+
+    #[test]
+    fn function_parse_companion_routes_alongside_parent() {
+        let lp = route(&name("user", &["lorem"], "extract$parse"));
+        assert_eq!(lp.segments, vec!["lorem".to_string()]);
     }
 
     #[test]

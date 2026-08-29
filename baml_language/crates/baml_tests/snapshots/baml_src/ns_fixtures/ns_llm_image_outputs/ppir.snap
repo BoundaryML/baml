@@ -5,6 +5,15 @@ source: crates/baml_tests/src/corpus.rs
 function user.fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> image  [llm] {
   ai.Agent.new(client = client, on_event = on_event).run(GenerateImage@spec(prompt)).value
 }
+function user.fixtures.llm_image_outputs.GenerateImage@build_request(prompt: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  GenerateImage@spec(prompt).build_request(client = client)
+}
+function user.fixtures.llm_image_outputs.GenerateImage@parse(json: string) -> image  [expr] {
+  baml.sap.parse(json)
+}
+function user.fixtures.llm_image_outputs.GenerateImage@render_prompt(prompt: string) -> ai.Prompt  [expr] {
+  GenerateImage@spec(prompt).prompt()
+}
 function user.fixtures.llm_image_outputs.GenerateImage@spec(prompt: string) -> ai.FunctionSpec<image>  [expr] {
   ai.FunctionSpec { spec_name: "GenerateImage", args: map { "prompt": prompt }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Generate an image...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } prompt);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ImageClient.new(model = "gpt-image-1") }
 }
@@ -14,6 +23,15 @@ function user.fixtures.llm_image_outputs.GenerateImage@stream(prompt: string, cl
 function user.fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> image[]  [llm] {
   ai.Agent.new(client = client, on_event = on_event).run(GenerateImageSet@spec(prompt)).value
 }
+function user.fixtures.llm_image_outputs.GenerateImageSet@build_request(prompt: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  GenerateImageSet@spec(prompt).build_request(client = client)
+}
+function user.fixtures.llm_image_outputs.GenerateImageSet@parse(json: string) -> image[]  [expr] {
+  baml.sap.parse(json)
+}
+function user.fixtures.llm_image_outputs.GenerateImageSet@render_prompt(prompt: string) -> ai.Prompt  [expr] {
+  GenerateImageSet@spec(prompt).prompt()
+}
 function user.fixtures.llm_image_outputs.GenerateImageSet@spec(prompt: string) -> ai.FunctionSpec<image[]>  [expr] {
   ai.FunctionSpec { spec_name: "GenerateImageSet", args: map { "prompt": prompt }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Generate multiple...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } prompt);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ImageClient.new(model = "gpt-image-1") }
 }
@@ -22,6 +40,15 @@ function user.fixtures.llm_image_outputs.GenerateImageSet@stream(prompt: string,
 }
 function user.fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> image | string[]  [llm] {
   ai.Agent.new(client = client, on_event = on_event).run(GenerateMixedImageNarrative@spec(prompt)).value
+}
+function user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@build_request(prompt: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  GenerateMixedImageNarrative@spec(prompt).build_request(client = client)
+}
+function user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@parse(json: string) -> image | string[]  [expr] {
+  baml.sap.parse(json)
+}
+function user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@render_prompt(prompt: string) -> ai.Prompt  [expr] {
+  GenerateMixedImageNarrative@spec(prompt).prompt()
 }
 function user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(prompt: string) -> ai.FunctionSpec<image | string[]>  [expr] {
   ai.FunctionSpec { spec_name: "GenerateMixedImag...", args: map { "prompt": prompt }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Generate a short ...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } prompt);  __tt_cur =  __tt_cur Add "\n\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format());  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ResponsesClient.new(model = "gpt-4.1") }

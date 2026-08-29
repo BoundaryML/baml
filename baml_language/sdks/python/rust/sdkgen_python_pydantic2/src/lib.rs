@@ -110,17 +110,6 @@ fn public_interface_tokens(pool: &SymbolPool) -> BTreeSet<Name> {
         for (_, watcher) in &function.watchers {
             collect_interface_tys(watcher, out);
         }
-        if let Some(operation) = &function.operations.spec {
-            collect_interface_tys(&operation.return_type, out);
-        }
-        if let Some(operation) = &function.operations.stream {
-            collect_interface_tys(&operation.return_type, out);
-            collect_interface_tys(&operation.partial_type, out);
-            collect_interface_tys(&operation.item_type, out);
-            for argument in &operation.control_arguments {
-                collect_interface_tys(&argument.ty, out);
-            }
-        }
     }
     let mut out = BTreeSet::new();
     for symbol in pool.values() {
@@ -528,7 +517,8 @@ fn to_source_code_internal(
     }
 }
 
-/// Data-only discovery table for authored LLM functions.
+/// Data-only discovery table for authored LLM functions and their public
+/// spec/stream bindings.
 ///
 /// Consumers such as request snapshotters must not infer capabilities by
 /// scanning generated suffixes: authored names can collide with projected
@@ -538,7 +528,14 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
     let mut functions: Vec<_> = pool
         .iter()
         .filter_map(|(name, symbol)| match symbol {
-            Symbol::Function(function) if function.operations.spec.is_some() => {
+            Symbol::Function(function)
+                if !name.name().as_str().contains('@')
+                    && pool.contains_key(&Name::new(
+                        name.package().clone(),
+                        name.namespace().to_vec(),
+                        baml_base::Name::new(format!("{}@spec", name.name())),
+                    )) =>
+            {
                 Some((name, symbol, function))
             }
             _ => None,
@@ -557,16 +554,6 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
         } else {
             format!("baml_sdk.{}", leaf.segments.join("."))
         };
-        let mut roles = vec![
-            BindingRole::DirectSync,
-            BindingRole::DirectAsync,
-            BindingRole::SpecSync,
-            BindingRole::SpecAsync,
-        ];
-        if function.operations.stream.is_some() {
-            roles.extend([BindingRole::StreamSync, BindingRole::StreamAsync]);
-        }
-
         let _ = writeln!(out, "    {}: {{", py_string(&fqn));
         let _ = writeln!(out, "        \"module\": {},", py_string(&module));
         out.push_str("        \"type_params\": (");
@@ -574,7 +561,7 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
             let _ = write!(out, "{}, ", py_string(param.as_str()));
         }
         out.push_str("),\n");
-        for role in roles {
+        for role in [BindingRole::DirectSync, BindingRole::DirectAsync] {
             let binding = names.callable(&fqn, role);
             let _ = writeln!(
                 out,
@@ -582,6 +569,26 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
                 py_string(role.registry_key()),
                 py_string(&binding),
             );
+        }
+        for suffix in ["spec", "stream"] {
+            let companion = Name::new(
+                name.package().clone(),
+                name.namespace().to_vec(),
+                baml_base::Name::new(format!("{}@{suffix}", name.name())),
+            );
+            let Some(Symbol::Function(_)) = pool.get(&companion) else {
+                continue;
+            };
+            let companion_fqn = companion.to_string();
+            for role in [BindingRole::DirectSync, BindingRole::DirectAsync] {
+                let key = if role.is_async() {
+                    format!("{suffix}_async")
+                } else {
+                    suffix.to_string()
+                };
+                let binding = names.callable(&companion_fqn, role);
+                let _ = writeln!(out, "        {}: {},", py_string(&key), py_string(&binding),);
+            }
         }
         out.push_str("    },\n");
     }
@@ -905,8 +912,7 @@ mod tests {
     use baml_base::Name as BaseName;
     use baml_codegen_types::{
         Class, ClassProperty, DefaultLiteral, Enum, EnumVariant, Function, FunctionArgument,
-        FunctionArgumentDefault, FunctionOperations, Origin, SpecOperation, StreamOperation, Ty,
-        TypeAlias,
+        FunctionArgumentDefault, Origin, Ty, TypeAlias,
     };
     use pretty_assertions::{assert_eq, assert_ne};
 
@@ -1005,7 +1011,6 @@ mod tests {
             generic_params: Vec::new(),
             name: BaseName::new(bare),
             docstring: None,
-            operations: Default::default(),
             arguments: vec![FunctionArgument {
                 injected: false,
                 name: BaseName::new("x"),
@@ -1026,42 +1031,6 @@ mod tests {
 
     fn func_sym(bare: &str, file: &str, span: u32) -> Symbol {
         Symbol::Function(bare_func(bare, file, span))
-    }
-
-    fn with_operations(
-        mut function: Function,
-        spec_return: Ty,
-        stream_return: Ty,
-        partial: Ty,
-    ) -> Function {
-        let mut control_arguments = vec![FunctionArgument {
-            injected: true,
-            name: BaseName::new("client"),
-            docstring: None,
-            ty: Ty::Unknown {
-                attr: baml_base::TyAttr::EMPTY,
-            },
-            default: Some(FunctionArgumentDefault::Null),
-        }];
-        control_arguments.extend(
-            function
-                .arguments
-                .iter()
-                .filter(|argument| argument.injected)
-                .cloned(),
-        );
-        function.operations = FunctionOperations {
-            spec: Some(SpecOperation {
-                return_type: spec_return,
-            }),
-            stream: Some(StreamOperation {
-                return_type: stream_return,
-                partial_type: partial.clone(),
-                item_type: partial,
-                control_arguments,
-            }),
-        };
-        function
     }
 
     fn zero_arg_func(bare: &str, return_type: Ty, file: &str, span: u32) -> Symbol {
@@ -1718,8 +1687,8 @@ mod tests {
 
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        let sync_line = "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"x\"], projection=\"direct\"";
-        let async_line = "extract_resume_async = _define_function(\"user.lorem.extract_resume\", \"async\", [\"x\"], projection=\"direct\"";
+        let sync_line = "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"x\"]";
+        let async_line = "extract_resume_async = _define_function(\"user.lorem.extract_resume\", \"async\", [\"x\"]";
         assert!(leaf.contains(sync_line), "missing sync line in:\n{leaf}");
         assert!(leaf.contains(async_line), "missing async line in:\n{leaf}");
         assert!(!leaf.contains("extract_resume_stream"));
@@ -1730,40 +1699,6 @@ mod tests {
         let sync_end = idx_sync + leaf[idx_sync..].find('\n').unwrap() + 1;
         let between = &leaf[sync_end..idx_async];
         assert_eq!(between, "");
-    }
-
-    #[test]
-    fn function_with_stream_operation_uses_authored_fqn() {
-        let mut pool: SymbolPool = HashMap::new();
-        let int = Ty::Int {
-            attr: baml_base::TyAttr::EMPTY,
-        };
-        let function = with_operations(
-            bare_func("extract_resume", "x.baml", 0),
-            int.clone(),
-            int.clone(),
-            int,
-        );
-        pool.insert(
-            cg_name("user", &["lorem"], "extract_resume"),
-            Symbol::Function(function),
-        );
-
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(
-            leaf.contains(
-                "extract_resume_stream       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"x\"], [\"client\"], projection=\"stream\"",
-            ),
-            "missing stream sync projection in:\n{leaf}"
-        );
-        assert!(
-            leaf.contains(
-                "extract_resume_stream_async = _define_function(\"user.lorem.extract_resume\", \"async\", [\"x\"], [\"client\"], projection=\"stream\"",
-            ),
-            "missing stream async projection in:\n{leaf}"
-        );
-        assert!(!leaf.contains("extract_resume$stream"), "{leaf}");
     }
 
     #[test]
@@ -2629,7 +2564,6 @@ mod tests {
             generic_params: Vec::new(),
             name: BaseName::new(bare),
             docstring: None,
-            operations: Default::default(),
             arguments: args
                 .iter()
                 .map(|n| FunctionArgument {
@@ -2671,12 +2605,8 @@ mod tests {
         insert_parent_only(&mut pool, "user", &["lorem"], "ping", &[], "x.baml", 0);
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(leaf.contains(
-            "ping       = _define_function(\"user.lorem.ping\", \"sync\",  [], projection=\"direct\""
-        ));
-        assert!(leaf.contains(
-            "ping_async = _define_function(\"user.lorem.ping\", \"async\", [], projection=\"direct\""
-        ));
+        assert!(leaf.contains("ping       = _define_function(\"user.lorem.ping\", \"sync\",  []"));
+        assert!(leaf.contains("ping_async = _define_function(\"user.lorem.ping\", \"async\", []"));
     }
 
     #[test]
@@ -2694,10 +2624,10 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.contains(
-            "make       = _define_function(\"user.lorem.make\", \"sync\",  [\"a\", \"b\", \"c\"], projection=\"direct\""
+            "make       = _define_function(\"user.lorem.make\", \"sync\",  [\"a\", \"b\", \"c\"]"
         ));
         assert!(leaf.contains(
-            "make_async = _define_function(\"user.lorem.make\", \"async\", [\"a\", \"b\", \"c\"], projection=\"direct\""
+            "make_async = _define_function(\"user.lorem.make\", \"async\", [\"a\", \"b\", \"c\"]"
         ));
     }
 
@@ -2711,7 +2641,6 @@ mod tests {
                 generic_params: Vec::new(),
                 name: BaseName::new("search"),
                 docstring: None,
-                operations: Default::default(),
                 arguments: vec![
                     FunctionArgument {
                         injected: false,
@@ -2795,10 +2724,10 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(py.contains(
-            "search       = _define_function(\"user.lorem.search\", \"sync\",  [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"], projection=\"direct\""
+            "search       = _define_function(\"user.lorem.search\", \"sync\",  [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"]"
         ));
         assert!(py.contains(
-            "search_async = _define_function(\"user.lorem.search\", \"async\", [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"], projection=\"direct\""
+            "search_async = _define_function(\"user.lorem.search\", \"async\", [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"]"
         ));
 
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
@@ -2824,7 +2753,6 @@ mod tests {
                 generic_params: Vec::new(),
                 name: BaseName::new("defaults"),
                 docstring: None,
-                operations: Default::default(),
                 arguments: vec![
                     FunctionArgument {
                         injected: false,
@@ -2886,104 +2814,13 @@ mod tests {
     }
 
     #[test]
-    fn operation_param_surfaces_partition_injected_controls() {
-        let mut pool: SymbolPool = HashMap::new();
-        let mut function = make_func("extract", &["a", "b"], "x.baml", 0);
-        function.arguments.push(FunctionArgument {
-            injected: true,
-            name: BaseName::new("on_event"),
-            docstring: None,
-            ty: Ty::Int {
-                attr: baml_base::TyAttr::EMPTY,
-            },
-            default: Some(FunctionArgumentDefault::Null),
-        });
-        let int = Ty::Int {
-            attr: baml_base::TyAttr::EMPTY,
-        };
-        function = with_operations(function, int.clone(), int.clone(), int);
-        pool.insert(
-            cg_name("user", &["lorem"], "extract"),
-            Symbol::Function(function),
-        );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(leaf.contains(
-            "extract       = _define_function(\"user.lorem.extract\", \"sync\",  [\"a\", \"b\"], [\"on_event\"], projection=\"direct\""
-        ));
-        assert!(leaf.contains(
-            "extract_spec       = _define_function(\"user.lorem.extract\", \"sync\",  [\"a\", \"b\"], projection=\"spec\""
-        ));
-        assert!(leaf.contains(
-            "extract_stream       = _define_function(\"user.lorem.extract\", \"sync\",  [\"a\", \"b\"], [\"client\", \"on_event\"], projection=\"stream\""
-        ));
-    }
-
-    #[test]
-    fn flat_operations_render_contiguously_after_direct_bindings() {
-        let mut pool: SymbolPool = HashMap::new();
-        let int = Ty::Int {
-            attr: baml_base::TyAttr::EMPTY,
-        };
-        let function = with_operations(
-            make_func("extract", &["t"], "x.baml", 0),
-            int.clone(),
-            int.clone(),
-            int,
-        );
-        pool.insert(
-            cg_name("user", &["lorem"], "extract"),
-            Symbol::Function(function),
-        );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        for needle in [
-            "extract       = ",
-            "extract_async = ",
-            "extract_spec       = ",
-            "extract_spec_async = ",
-            "extract_stream       = ",
-            "extract_stream_async = ",
-        ] {
-            assert!(leaf.contains(needle), "missing {needle} in:\n{leaf}");
-        }
-        let order = [
-            "extract       = _define_function",
-            "extract_async = _define_function",
-            "extract_spec       = _define_function",
-            "extract_spec_async = _define_function",
-            "extract_stream       = _define_function",
-            "extract_stream_async = _define_function",
-        ];
-        let mut last = 0usize;
-        for needle in order {
-            let i = leaf
-                .find(needle)
-                .unwrap_or_else(|| panic!("missing {needle} in:\n{leaf}"));
-            assert!(
-                i >= last,
-                "out-of-order binding: {needle} appears before previous"
-            );
-            last = i;
-        }
-        assert!(!leaf.contains("user.lorem.extract$"), "{leaf}");
-        let s = leaf.find("extract       = _define_function").unwrap();
-        let e = leaf.find("extract_stream_async").unwrap();
-        let block = &leaf[s..e];
-        assert!(
-            !block.contains("\n\n"),
-            "fan-out siblings should be tightly packed:\n{block}"
-        );
-    }
-
-    #[test]
     fn vendor_function_fqn_uses_vendor_pkg() {
         let mut pool: SymbolPool = HashMap::new();
         insert_parent_only(&mut pool, "aws", &["s3"], "create_bucket", &[], "x.baml", 0);
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
         assert!(leaf.contains(
-            "create_bucket       = _define_function(\"aws.s3.create_bucket\", \"sync\",  [], projection=\"direct\""
+            "create_bucket       = _define_function(\"aws.s3.create_bucket\", \"sync\",  []"
         ));
     }
 
@@ -2993,9 +2830,11 @@ mod tests {
         insert_parent_only(&mut pool, "baml", &["http"], "fetch", &["url"], "x.baml", 0);
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("baml/http/__init__.py")];
-        assert!(leaf.contains(
-            "fetch       = _define_function(\"baml.http.fetch\", \"sync\",  [\"url\"], projection=\"direct\""
-        ));
+        assert!(
+            leaf.contains(
+                "fetch       = _define_function(\"baml.http.fetch\", \"sync\",  [\"url\"]"
+            )
+        );
     }
 
     #[test]
@@ -3005,9 +2844,7 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
-            root.contains(
-                "ping       = _define_function(\"user.ping\", \"sync\",  [], projection=\"direct\""
-            ),
+            root.contains("ping       = _define_function(\"user.ping\", \"sync\",  []"),
             "missing root binding in:\n{root}"
         );
     }
@@ -3081,7 +2918,6 @@ mod tests {
             generic_params: Vec::new(),
             name: BaseName::new(bare),
             docstring: None,
-            operations: Default::default(),
             arguments: args
                 .iter()
                 .map(|n| FunctionArgument {
@@ -3126,13 +2962,13 @@ mod tests {
         );
         assert!(
             leaf.contains(
-                "    zero       = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"sync\",  [], projection=\"direct\""
+                "    zero       = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"sync\",  []"
             ),
             "missing static method sync line in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "    zero_async = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"async\", [], projection=\"direct\""
+                "    zero_async = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"async\", []"
             ),
             "missing static method async line in:\n{leaf}"
         );
@@ -3165,13 +3001,13 @@ mod tests {
         );
         assert!(
             leaf.contains(
-                "    bump       = _define_function(\"user.lorem.Counter.bump\", \"sync\",  [\"self\", \"by\"], projection=\"direct\""
+                "    bump       = _define_function(\"user.lorem.Counter.bump\", \"sync\",  [\"self\", \"by\"]"
             ),
             "missing instance method sync line in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "    bump_async = _define_function(\"user.lorem.Counter.bump\", \"async\", [\"self\", \"by\"], projection=\"direct\""
+                "    bump_async = _define_function(\"user.lorem.Counter.bump\", \"async\", [\"self\", \"by\"]"
             ),
             "missing instance method async line in:\n{leaf}"
         );
@@ -3379,7 +3215,6 @@ mod tests {
                 generic_params: Vec::new(),
                 name: BaseName::new("extract_resume"),
                 docstring: None,
-                operations: Default::default(),
                 arguments: vec![FunctionArgument {
                     injected: false,
                     name: BaseName::new("text"),
@@ -3410,55 +3245,6 @@ mod tests {
         // No factory call, no `_define_function`.
         assert!(!leaf.contains("_define_function"));
         assert!(!leaf.contains("baml_bridge"));
-    }
-
-    #[test]
-    fn pyi_spec_operation_uses_authored_signature_and_operation_return() {
-        let mut pool: SymbolPool = HashMap::new();
-        let parent_key = cg_name("user", &["lorem"], "extract_resume");
-        let resume = cg_name("user", &["lorem"], "Resume");
-        pool.insert(resume.clone(), class(resume.clone()));
-        pool.insert(
-            parent_key,
-            Symbol::Function(Function {
-                generic_params: Vec::new(),
-                name: BaseName::new("extract_resume"),
-                docstring: None,
-                operations: FunctionOperations {
-                    spec: Some(SpecOperation {
-                        return_type: class_ty(resume.clone(), vec![]),
-                    }),
-                    stream: None,
-                },
-                arguments: vec![FunctionArgument {
-                    injected: false,
-                    name: BaseName::new("text"),
-                    docstring: None,
-                    ty: Ty::String {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
-                    default: None,
-                }],
-                return_type: class_ty(resume, vec![]),
-                throws: None,
-                watchers: vec![],
-                origin: origin("x.baml", 100),
-            }),
-        );
-
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
-
-        assert!(leaf.contains("def extract_resume(text: str) -> Resume: ...\n"));
-        assert!(
-            leaf.contains("def extract_resume_spec(text: str) -> Resume: ...\n"),
-            "missing spec sync sig in:\n{leaf}"
-        );
-        assert!(
-            leaf.contains("async def extract_resume_spec_async(text: str) -> Resume: ...\n"),
-            "missing spec async sig in:\n{leaf}"
-        );
-        assert!(!leaf.contains("parse"), "{leaf}");
     }
 
     #[test]
@@ -4042,7 +3828,6 @@ mod tests {
                 generic_params: Vec::new(),
                 name: BaseName::new("classify"),
                 docstring: None,
-                operations: Default::default(),
                 arguments: vec![FunctionArgument {
                     injected: false,
                     name: BaseName::new("text"),
@@ -4073,53 +3858,6 @@ mod tests {
         assert!(py.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum\n"));
     }
 
-    #[test]
-    fn pyi_function_fan_out_siblings_tightly_packed() {
-        let mut pool: SymbolPool = HashMap::new();
-        let int = Ty::Int {
-            attr: baml_base::TyAttr::EMPTY,
-        };
-        let function = with_operations(
-            make_func("extract", &["t"], "x.baml", 0),
-            int.clone(),
-            int.clone(),
-            int,
-        );
-        pool.insert(
-            cg_name("user", &["lorem"], "extract"),
-            Symbol::Function(function),
-        );
-
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
-        let needles = [
-            "def extract(",
-            "async def extract_async(",
-            "def extract_spec(",
-            "async def extract_spec_async(",
-            "def extract_stream(",
-            "async def extract_stream_async(",
-        ];
-        let mut last = 0usize;
-        for needle in needles {
-            let i = leaf
-                .find(needle)
-                .unwrap_or_else(|| panic!("missing {needle} in:\n{leaf}"));
-            assert!(i >= last, "out-of-order signature: {needle}");
-            last = i;
-        }
-        let s = leaf.find("def extract(").unwrap();
-        let e = leaf.find("async def extract_stream_async(").unwrap();
-        let block = &leaf[s..e];
-        assert!(
-            !block.contains("\n\n"),
-            "fan-out signatures should be tightly packed:\n{block}"
-        );
-    }
-
-    /// 13a §4.1, §4.2, §4.5 — a generic class lands as a Pydantic
-    /// `Generic[T]` subclass with a leaf-level `T = typing.TypeVar(…)`
-    /// declaration at the top of the leaf, before the first body.
     #[test]
     fn generic_class_emits_typevar_and_generic_base() {
         let mut pool: SymbolPool = HashMap::new();
@@ -4239,7 +3977,6 @@ mod tests {
                 name: BaseName::new("echo"),
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
-                operations: Default::default(),
                 arguments: vec![FunctionArgument {
                     injected: false,
                     name: BaseName::new("value"),
@@ -4259,7 +3996,6 @@ mod tests {
                 name: BaseName::new("one_type_arg"),
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
-                operations: Default::default(),
                 arguments: vec![],
                 return_type: Ty::String {
                     attr: baml_base::TyAttr::EMPTY,
@@ -4323,7 +4059,6 @@ mod tests {
                 name: BaseName::new("identity_with_default"),
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
-                operations: Default::default(),
                 arguments: vec![
                     FunctionArgument {
                         injected: false,
@@ -4346,7 +4081,6 @@ mod tests {
                 name: BaseName::new("optional_only"),
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
-                operations: Default::default(),
                 arguments: vec![FunctionArgument {
                     injected: false,
                     name: BaseName::new("value"),
@@ -4371,7 +4105,6 @@ mod tests {
                 name: BaseName::new("apply"),
                 generic_params: vec![BaseName::new("T"), BaseName::new("R")],
                 docstring: None,
-                operations: Default::default(),
                 arguments: vec![
                     FunctionArgument {
                         injected: false,
@@ -4410,7 +4143,6 @@ mod tests {
                 name: BaseName::new("ambiguous"),
                 generic_params: vec![BaseName::new("T"), BaseName::new("U")],
                 docstring: None,
-                operations: Default::default(),
                 arguments: vec![FunctionArgument {
                     injected: false,
                     name: BaseName::new("value"),
@@ -4438,7 +4170,6 @@ mod tests {
                 name: BaseName::new("ambiguous_with_values"),
                 generic_params: vec![BaseName::new("T"), BaseName::new("U")],
                 docstring: None,
-                operations: Default::default(),
                 arguments: vec![
                     FunctionArgument {
                         injected: false,
@@ -4539,7 +4270,6 @@ mod tests {
             name: BaseName::new("pair_with"),
             generic_params: vec![BaseName::new("U")],
             docstring: None,
-            operations: Default::default(),
             arguments: vec![FunctionArgument {
                 injected: false,
                 name: BaseName::new("other"),
@@ -4556,7 +4286,6 @@ mod tests {
             name: BaseName::new("pair_with_default"),
             generic_params: vec![BaseName::new("U")],
             docstring: None,
-            operations: Default::default(),
             arguments: vec![
                 FunctionArgument {
                     injected: false,
@@ -4586,7 +4315,6 @@ mod tests {
             name: BaseName::new("static_type_name"),
             generic_params: vec![BaseName::new("V")],
             docstring: None,
-            operations: Default::default(),
             arguments: vec![],
             return_type: Ty::String {
                 attr: baml_base::TyAttr::EMPTY,
@@ -4599,7 +4327,6 @@ mod tests {
             name: BaseName::new("static_with_default"),
             generic_params: vec![BaseName::new("V")],
             docstring: None,
-            operations: Default::default(),
             arguments: vec![
                 FunctionArgument {
                     injected: false,
@@ -4726,278 +4453,6 @@ mod tests {
             !root.contains("sdk_root="),
             "root still passes sdk_root: {root}"
         );
-    }
-
-    #[test]
-    fn flat_function_operations_emit_authored_fqn_for_free_and_method_bindings() {
-        let mut pool = SymbolPool::new();
-        let out_name = cg_name("user", &["lorem"], "Out");
-        let partial_name = cg_name("user", &["lorem"], "Out$stream");
-        let function_spec_name = cg_name("ai", &[], "FunctionSpec");
-        let stream_name = cg_name("ai", &["stream"], "Stream");
-        let done_name = cg_name("ai", &["stream"], "Done");
-
-        for name in [
-            out_name.clone(),
-            partial_name.clone(),
-            function_spec_name.clone(),
-            stream_name.clone(),
-            done_name,
-        ] {
-            pool.insert(name.clone(), class(name));
-        }
-        if let Some(Symbol::Class(function_spec)) = pool.get_mut(&function_spec_name) {
-            function_spec.generic_params = vec![BaseName::new("Out")];
-        }
-
-        let final_ty = class_ty(out_name, Vec::new());
-        let partial_ty = class_ty(partial_name, Vec::new());
-        let spec_ty = class_ty(function_spec_name.clone(), vec![final_ty.clone()]);
-        let stream_ty = class_ty(
-            stream_name.clone(),
-            vec![partial_ty.clone(), final_ty.clone()],
-        );
-
-        let mut plan = bare_func("plan", "ops.baml", 10);
-        plan.arguments.push(FunctionArgument {
-            injected: true,
-            name: BaseName::new("on_event"),
-            docstring: None,
-            ty: Ty::Int {
-                attr: baml_base::TyAttr::EMPTY,
-            },
-            default: Some(FunctionArgumentDefault::Null),
-        });
-        let plan = with_operations(plan, spec_ty.clone(), stream_ty.clone(), partial_ty.clone());
-        pool.insert(cg_name("user", &["lorem"], "plan"), Symbol::Function(plan));
-
-        let mut generic = bare_func("map_value", "ops.baml", 20);
-        generic.generic_params = vec![BaseName::new("T")];
-        generic.arguments[0].ty = type_var(BaseName::new("T"));
-        generic.return_type = type_var(BaseName::new("T"));
-        let generic_spec = class_ty(function_spec_name, vec![type_var(BaseName::new("T"))]);
-        let generic_stream = class_ty(
-            stream_name,
-            vec![type_var(BaseName::new("T")), type_var(BaseName::new("T"))],
-        );
-        generic = with_operations(
-            generic,
-            generic_spec,
-            generic_stream,
-            type_var(BaseName::new("T")),
-        );
-        pool.insert(
-            cg_name("user", &["lorem"], "map_value"),
-            Symbol::Function(generic),
-        );
-
-        let class_name = cg_name("user", &["lorem"], "Workflow");
-        let static_method = with_operations(
-            method_func("classify", &["value"], "ops.baml", 40),
-            spec_ty.clone(),
-            stream_ty.clone(),
-            partial_ty.clone(),
-        );
-        let instance_method = with_operations(
-            method_func("revise", &["value"], "ops.baml", 50),
-            spec_ty,
-            stream_ty,
-            partial_ty,
-        );
-        pool.insert(
-            class_name.clone(),
-            class_with_methods(
-                class_name,
-                vec![static_method],
-                vec![instance_method],
-                "ops.baml",
-                30,
-            ),
-        );
-
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let py = &out[&PathBuf::from("lorem/__init__.py")];
-        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
-        let ai = &out[&PathBuf::from("ai/__init__.py")];
-        let ai_pyi = &out[&PathBuf::from("ai/__init__.pyi")];
-
-        for (binding, projection) in [
-            ("plan", "direct"),
-            ("plan_async", "direct"),
-            ("plan_spec", "spec"),
-            ("plan_spec_async", "spec"),
-            ("plan_stream", "stream"),
-            ("plan_stream_async", "stream"),
-        ] {
-            assert!(
-                py.contains(&format!("{binding}"))
-                    && py.contains(&format!("projection=\"{projection}\"")),
-                "missing {binding}/{projection} in:\n{py}",
-            );
-        }
-        assert_eq!(py.matches("\"user.lorem.plan\"").count(), 6, "{py}");
-        assert!(!py.contains("user.lorem.plan$"), "{py}");
-        for removed in [
-            "render_prompt",
-            "build_request",
-            "__parse",
-            "$spec",
-            "$stream",
-        ] {
-            assert!(
-                !py.contains(removed),
-                "found removed binding {removed}:\n{py}"
-            );
-        }
-
-        assert!(
-            py.contains(
-                "plan_stream       = _define_function(\"user.lorem.plan\", \"sync\",  [\"x\"], [\"client\", \"on_event\"], projection=\"stream\""
-            ),
-            "{py}",
-        );
-        assert!(
-            py.contains(
-                "classify_spec       = staticmethod(_define_function(\"user.lorem.Workflow.classify\""
-            ),
-            "{py}",
-        );
-        assert!(
-            py.contains("revise_stream       = _define_function(\"user.lorem.Workflow.revise\""),
-            "{py}",
-        );
-        assert!(
-            py.contains(
-                "binding_name=\"revise_stream\", binding_qualname=\"Workflow.revise_stream\""
-            ),
-            "{py}",
-        );
-        assert!(
-            py.contains("map_value_spec")
-                && py.contains("type_params=[\"T\"]")
-                && pyi.contains("def map_value_spec(x: T, *, _types:"),
-            "generic operation projection missing:\n{py}\n{pyi}",
-        );
-        assert!(
-            pyi.contains("def plan_spec(x: int) -> ai.FunctionSpec[Out]: ..."),
-            "{pyi}",
-        );
-        assert!(!pyi.contains("plan_spec(x: int, *, on_event"), "{pyi}");
-        assert!(
-            pyi.contains("def plan_stream(x: int, *, client:") && pyi.contains("on_event:"),
-            "{pyi}"
-        );
-        assert!(
-            pyi.contains(
-                ") -> _BamlStream[typing.Union[stream_types.lorem.Out, _BamlStreamDone], stream_types.lorem.Out, Out]: ..."
-            ),
-            "{pyi}",
-        );
-        assert!(
-            ai.contains("from baml_bridge import BamlFunctionSpec as FunctionSpec"),
-            "{ai}",
-        );
-        assert!(
-            ai_pyi.contains("from baml_bridge import BamlFunctionSpec as _BamlFunctionSpec")
-                && ai_pyi.contains(
-                    "class FunctionSpec(_BamlFunctionSpec[Out], typing.Generic[Out]): ...\n"
-                )
-                && !ai_pyi.contains("def stream(self"),
-            "FunctionSpec must be a declared generic class in the stub, not a private import alias:\n{ai_pyi}",
-        );
-    }
-
-    #[test]
-    fn function_registry_uses_raw_fqns_and_resolved_operation_bindings() {
-        let mut pool = SymbolPool::new();
-        let int = Ty::Int {
-            attr: baml_base::TyAttr::EMPTY,
-        };
-        let mut plan = bare_func("plan", "ops.baml", 0);
-        plan.generic_params = vec![BaseName::new("T")];
-        plan = with_operations(plan, int.clone(), int.clone(), int);
-        pool.insert(cg_name("user", &["lorem"], "plan"), Symbol::Function(plan));
-        // An authored primary wins the natural derived spelling. The registry
-        // must expose the allocator's actual result rather than inviting
-        // consumers to rediscover it with suffix scans.
-        pool.insert(
-            cg_name("user", &["lorem"], "plan_spec"),
-            Symbol::Function(bare_func("plan_spec", "ops.baml", 10)),
-        );
-
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let registry = &out[&PathBuf::from("_function_registry.py")];
-        assert!(registry.contains("\"user.lorem.plan\": {"), "{registry}");
-        assert!(
-            registry.contains("\"module\": \"baml_sdk.lorem\""),
-            "{registry}"
-        );
-        assert!(
-            registry.contains("\"type_params\": (\"T\", )"),
-            "{registry}"
-        );
-        assert!(registry.contains("\"direct\": \"plan\""), "{registry}");
-        assert!(registry.contains("\"spec\": \"plan_spec_\""), "{registry}");
-        assert!(
-            registry.contains("\"stream\": \"plan_stream\""),
-            "{registry}"
-        );
-        assert!(
-            !registry.contains("\"user.lorem.plan_spec\": {"),
-            "ordinary functions without Spec must not enter the LLM registry:\n{registry}"
-        );
-    }
-
-    #[test]
-    fn operation_role_collisions_are_suffixed_and_reported() {
-        let mut pool = SymbolPool::new();
-        let mut function = bare_func("fetch", "collisions.baml", 0);
-        let int = Ty::Int {
-            attr: baml_base::TyAttr::EMPTY,
-        };
-        function = with_operations(function, int.clone(), int.clone(), int);
-        pool.insert(cg_name("user", &[], "fetch"), Symbol::Function(function));
-        for (index, name) in ["fetch_async", "fetch_spec", "fetch_stream"]
-            .into_iter()
-            .enumerate()
-        {
-            let fqn = cg_name("user", &[], name);
-            pool.insert(
-                fqn.clone(),
-                Symbol::Class(Class {
-                    name: fqn,
-                    generic_params: Vec::new(),
-                    docstring: None,
-                    properties: Vec::new(),
-                    static_methods: Vec::new(),
-                    instance_methods: Vec::new(),
-                    origin: origin("collisions.baml", index as u32 + 1),
-                }),
-            );
-        }
-
-        let generated = to_source_code_internal(
-            &pool,
-            RuntimePayload::SourceFiles(&[]),
-            NamingConvention::PreserveCase,
-        );
-        let py = &generated.files[&PathBuf::from("__init__.py")];
-        for name in ["fetch_async_", "fetch_spec_", "fetch_stream_"] {
-            assert!(py.contains(&format!("{name}")), "{py}");
-        }
-        for (kind, original, generated_name) in [
-            ("function async binding", "fetch_async", "fetch_async_"),
-            ("function spec binding", "fetch_spec", "fetch_spec_"),
-            ("function stream binding", "fetch_stream", "fetch_stream_"),
-        ] {
-            assert!(generated.renames.iter().any(|rename| {
-                rename.kind == kind
-                    && rename.fqn == "user.fetch"
-                    && rename.original == original
-                    && rename.generated == generated_name
-                    && rename.reason == IdentifierRenameReason::Collision
-            }));
-        }
     }
 
     #[test]

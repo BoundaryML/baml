@@ -17,6 +17,15 @@ block user.GetBoxedInt@spec {
 }
 block user.GetBoxedInt@spec {
 }
+function user.GetBoxedInt@render_prompt() -> ai.Prompt throws never {
+  GetBoxedInt@spec().prompt() : ai.Prompt
+}
+function user.GetBoxedInt@build_request(client: ai.Client | null = null) -> baml.http.Request throws never {
+  GetBoxedInt@spec().build_request(client = client) : baml.http.Request
+}
+function user.GetBoxedInt@parse(json: string) -> user.Box<int> throws never {
+  baml.sap.parse(json) : user.Box<int>
+}
 class user.Box$stream {
   value: T | null
 }

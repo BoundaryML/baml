@@ -60,6 +60,76 @@ fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice(text: string, cl
     }
 }
 
+fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice@build_request(text: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<fixtures.llm_parse_catchable_parse_error.Invoice>
+    let _5: reflect.Type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice@spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(fixtures.llm_parse_catchable_parse_error.Invoice);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice@parse(json: string) -> fixtures.llm_parse_catchable_parse_error.Invoice {
+    // Locals:
+    let _0: fixtures.llm_parse_catchable_parse_error.Invoice // _0 // return
+    let _1: string // json // param
+    let _2: reflect.Type
+
+    bb0: {
+        _2 = load_type(fixtures.llm_parse_catchable_parse_error.Invoice);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice@render_prompt(text: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // text // param
+    let _2: ai.FunctionSpec<fixtures.llm_parse_catchable_parse_error.Invoice>
+    let _3: reflect.Type
+
+    bb0: {
+        _2 = call const fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice@spec(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(fixtures.llm_parse_catchable_parse_error.Invoice);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice@spec(text: string) -> ai.FunctionSpec<fixtures.llm_parse_catchable_parse_error.Invoice> {
     // Locals:
     let _0: ai.FunctionSpec<fixtures.llm_parse_catchable_parse_error.Invoice> // _0 // return
@@ -228,36 +298,29 @@ fn user.fixtures.llm_parse_catchable_parse_error.TryExtract(json: string) -> nul
     let _0: null | fixtures.llm_parse_catchable_parse_error.Invoice // _0 // return
     let _1: string // json // param
     let _2: unknown // _
-    let _3: ai.FunctionSpec<fixtures.llm_parse_catchable_parse_error.Invoice>
-    let _4: reflect.Type
-    let _5: bool
-    let _6: string
+    let _3: bool
+    let _4: string
 
     bb0: {
-        _3 = call const fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice@spec(const "") -> [bb1, unwind: bb2];
+        _0 = call const fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice@parse(copy _1) -> [bb4, unwind: bb1];
     }
 
     bb1: {
-        _4 = load_type(fixtures.llm_parse_catchable_parse_error.Invoice);
-        _0 = call const fn ai.FunctionSpec.parse<copy _4>(copy _3, copy _1) -> [bb5, unwind: bb2];
+        _3 = is_type(copy _2, baml.errors.ParseError);
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _5 = is_type(copy _2, baml.errors.ParseError);
-        branch copy _5 -> [bb4, bb3];
-    }
-
-    bb3: {
         rethrow copy _2;
     }
 
-    bb4: {
-        _6 = copy _2.0;
+    bb3: {
+        _4 = copy _2.0;
         _0 = const null;
-        goto -> bb5;
+        goto -> bb4;
     }
 
-    bb5: {
+    bb4: {
         return;
     }
 }

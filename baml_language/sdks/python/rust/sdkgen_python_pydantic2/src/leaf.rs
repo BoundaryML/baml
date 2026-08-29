@@ -1532,7 +1532,7 @@ fn render_factory_binding(f: &crate::emit::function::PyFunction) -> String {
         .map(|(host, wire)| (host.clone(), wire.clone()))
         .collect::<Vec<_>>();
     let param_aliases = render_param_aliases(&param_aliases);
-    let projection = format!(", projection={}", py_string(f.role.projection()));
+    let projection = String::new();
     let binding_metadata = render_binding_metadata(&f.py_name, &f.py_name);
     // Free functions have no enclosing class, so only their own `<...>` params
     // (bound via `_types=`) participate.
@@ -1561,7 +1561,7 @@ fn render_method_binding(
     let required_params = render_param_list(&required_params);
     let optional_params = optional_param_list_arg(&optional_params);
     let param_aliases = render_param_aliases(&m.param_aliases());
-    let projection = format!(", projection={}", py_string(m.role.projection()));
+    let projection = String::new();
     let binding_metadata =
         render_binding_metadata(&m.py_name, &format!("{class_py_name}.{}", m.py_name));
     // Instance methods recover the enclosing class's TypeVars from the `self`

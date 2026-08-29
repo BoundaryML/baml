@@ -38,9 +38,6 @@ pub(crate) struct Skip {
 /// the renderer's own order: generic coverage, then parameters, then
 /// the return type.
 pub(crate) fn callable_skip_reason(function: &Function, ctx: &TranslateCtx) -> String {
-    if function.name.as_str().contains('$') {
-        return "legacy synthetic callable companion (removed from the SDK surface)".to_string();
-    }
     for param in &function.generic_params {
         let covered = function
             .arguments
@@ -56,12 +53,6 @@ pub(crate) fn callable_skip_reason(function: &Function, ctx: &TranslateCtx) -> S
         }
     }
     for arg in &function.arguments {
-        // Compiler-owned controls may use an interface/callback existential
-        // that Swift projects through a bridge-erased value rather than a
-        // generated nominal type.
-        if arg.injected {
-            continue;
-        }
         let ok = if arg.default.is_some() {
             translate_optional_arg_inner(&arg.ty, ctx).is_some()
         } else {

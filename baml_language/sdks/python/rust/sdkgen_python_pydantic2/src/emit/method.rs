@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use baml_codegen_types::{FunctionArgumentDefault, Ty};
 
-use crate::{emit::function::SyncAsync, names::BindingRole};
+use crate::emit::function::SyncAsync;
 
 pub(crate) struct PyMethodBinding {
     /// Collision-allocated Python identifier for the method's direct, spec,
@@ -17,8 +17,6 @@ pub(crate) struct PyMethodBinding {
     /// FQN passed as the first arg to the factory call.
     pub(crate) baml_fqn: String,
     pub(crate) mode: SyncAsync,
-    /// Direct/spec/stream host projection plus sync/async execution mode.
-    pub(crate) role: BindingRole,
     /// Source arguments before the first defaulted parameter. Instance-method
     /// receiver `self` is not included here.
     pub(crate) required_args: Vec<RequiredArg>,

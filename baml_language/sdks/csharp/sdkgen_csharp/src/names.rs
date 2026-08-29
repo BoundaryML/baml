@@ -399,7 +399,7 @@ fn request_priority(request: &CSharpNameRequest) -> u8 {
 pub(crate) fn callable_source_identity(identity: &CallableIdentity) -> String {
     let family = identity.family_name.as_str();
     match identity.variant {
-        CallableVariant::Direct => family.to_string(),
+        CallableVariant::Execute => family.to_string(),
         CallableVariant::Spec => format!("{family}_spec"),
         CallableVariant::Stream => format!("{family}_stream"),
     }
@@ -960,14 +960,14 @@ mod tests {
 
         let identity = CallableIdentity {
             family_name: BaseName::new("classify_text"),
-            wire_name: BaseName::new("classify_text"),
-            variant: CallableVariant::Spec,
+            wire_name: BaseName::new("classify_text@stream"),
+            variant: CallableVariant::Stream,
             receiver: None,
         };
-        assert_eq!(callable_source_identity(&identity), "classify_text_spec");
+        assert_eq!(callable_source_identity(&identity), "classify_text_stream");
         assert_eq!(
             to_pascal_case(&callable_source_identity(&identity)),
-            "ClassifyTextSpec"
+            "ClassifyTextStream"
         );
         assert_eq!(type_fqn.symbol_name().name().as_str(), "invoice");
     }

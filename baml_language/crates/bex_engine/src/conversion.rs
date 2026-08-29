@@ -2296,14 +2296,10 @@ pub(crate) fn collect_type_var_bindings<N: Clone>(
     }
 }
 
-/// Recover type-variable bindings from a live VM type whose declaration heads
-/// are identity-carrying [`bex_vm_types::TypeHead`] values while the declared
-/// host-call signature still uses name heads.
-///
-/// Only the concrete side is retained. This prevents a tagged handle's
-/// host-facing `RuntimeTy` annotation from becoming semantic authority for a
-/// generic receiver such as `FunctionSpec<Out>` or
-/// `Stream<TPartial, Out>`.
+/// Recover type-variable bindings from a live VM type. The declared signature
+/// uses wire-name heads, while the concrete side retains identity-carrying
+/// `TypeHead`s from the rooted heap object. Keeping the concrete side prevents
+/// descriptive handle metadata from becoming authority for generic receivers.
 pub(crate) fn collect_live_type_var_bindings<DeclaredHead: Clone, ConcreteHead: Clone>(
     declared: &baml_type::RuntimeTy<DeclaredHead>,
     concrete: &baml_type::RuntimeTy<ConcreteHead>,
@@ -5928,17 +5924,11 @@ mod union_container_selection_tests {
             RuntimeTy::float(),
             RuntimeTy::bool(),
         ]);
-        let optional = RuntimeTy::Union(
-            vec![inner.clone(), RuntimeTy::null()],
-            TyAttr::default(),
-        );
+        let optional = RuntimeTy::Union(vec![inner.clone(), RuntimeTy::null()], TyAttr::default());
 
-        let wrapped = wrap_selected_union_member(
-            BexExternalValue::String("alias".into()),
-            &optional,
-            &inner,
-        )
-        .unwrap();
+        let wrapped =
+            wrap_selected_union_member(BexExternalValue::String("alias".into()), &optional, &inner)
+                .unwrap();
         let BexExternalValue::Union { metadata, .. } = wrapped else {
             panic!("expected the inner union envelope")
         };

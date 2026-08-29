@@ -4,10 +4,10 @@
 //!
 //! Every BAML top renders to real TS: `export class` with a typed
 //! constructor, `export enum`, `export type` aliases, and
-//! `defineFunction(...)` / `defineInstanceFunction(...)` bindings (direct,
-//! Spec, and Stream projections, with sync/async variants). Types come from
-//! `translate_ty`; cross-leaf references resolve through namespace imports.
-//! Runtime-owned stdlib capability/value classes re-export from the configured runtime
+//! `defineFunction(...)` / `defineInstanceFunction(...)` bindings (sync +
+//! async + companions). Types come from `translate_ty`; cross-leaf
+//! references resolve through namespace imports. The five runtime-owned
+//! stdlib types (media + `Stream`) re-export from the configured runtime
 //! package rather than getting a generated body.
 //!
 //! This is a close port of `sdkgen_python_pydantic2`, with two structural
@@ -105,14 +105,6 @@ fn public_interface_tokens(pool: &SymbolPool) -> BTreeSet<Name> {
         }
         for (_, watcher) in &value.watchers {
             collect_interface_tys(watcher, out);
-        }
-        if let Some(operation) = &value.operations.spec {
-            collect_interface_tys(&operation.return_type, out);
-        }
-        if let Some(operation) = &value.operations.stream {
-            collect_interface_tys(&operation.return_type, out);
-            collect_interface_tys(&operation.partial_type, out);
-            collect_interface_tys(&operation.item_type, out);
         }
     }
     let mut out = BTreeSet::new();
@@ -387,8 +379,7 @@ mod tests {
 
     use baml_base::Name as BaseName;
     use baml_codegen_types::{
-        Class, Enum, EnumVariant, Function, FunctionArgument, FunctionOperations, Name, Origin,
-        SpecOperation, StreamOperation, Symbol, SymbolPool, Ty,
+        Class, Enum, EnumVariant, Function, FunctionArgument, Name, Origin, Symbol, SymbolPool, Ty,
     };
 
     use super::*;
@@ -452,88 +443,10 @@ mod tests {
             return_type: Ty::Int {
                 attr: baml_base::TyAttr::EMPTY,
             },
-            operations: Default::default(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(span),
         })
-    }
-
-    fn llm_func_sym(span: u32) -> Symbol {
-        let partial = Ty::Unknown {
-            attr: baml_base::TyAttr::EMPTY,
-        };
-        let output = Ty::Int {
-            attr: baml_base::TyAttr::EMPTY,
-        };
-        let mut function = match func_sym(span) {
-            Symbol::Function(function) => function,
-            _ => unreachable!(),
-        };
-        function.arguments.push(FunctionArgument {
-            injected: true,
-            name: BaseName::new("on_event"),
-            docstring: None,
-            ty: Ty::Unknown {
-                attr: baml_base::TyAttr::EMPTY,
-            },
-            default: None,
-        });
-        function.operations = FunctionOperations {
-            spec: Some(SpecOperation {
-                return_type: Ty::Class(
-                    name("ai", &[], "FunctionSpec"),
-                    vec![output.clone()],
-                    baml_base::TyAttr::EMPTY,
-                ),
-            }),
-            stream: Some(StreamOperation {
-                return_type: Ty::Class(
-                    name("ai", &["stream"], "Stream"),
-                    vec![partial.clone(), output],
-                    baml_base::TyAttr::EMPTY,
-                ),
-                partial_type: partial.clone(),
-                item_type: partial,
-                control_arguments: vec![
-                    FunctionArgument {
-                        injected: true,
-                        name: BaseName::new("client"),
-                        docstring: None,
-                        ty: Ty::Unknown {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                        default: Some(baml_codegen_types::FunctionArgumentDefault::Null),
-                    },
-                    FunctionArgument {
-                        injected: true,
-                        name: BaseName::new("on_event"),
-                        docstring: None,
-                        ty: Ty::Unknown {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                        default: Some(baml_codegen_types::FunctionArgumentDefault::Null),
-                    },
-                ],
-            }),
-        };
-        Symbol::Function(function)
-    }
-
-    fn named_function(name: &str, span: u32) -> Function {
-        let Symbol::Function(mut function) = func_sym(span) else {
-            unreachable!()
-        };
-        function.name = BaseName::new(name);
-        function
-    }
-
-    fn named_llm_function(name: &str, span: u32) -> Function {
-        let Symbol::Function(mut function) = llm_func_sym(span) else {
-            unreachable!()
-        };
-        function.name = BaseName::new(name);
-        function
     }
 
     fn emit_sdk(pool: &SymbolPool) -> HashMap<PathBuf, String> {
@@ -604,169 +517,6 @@ mod tests {
         assert!(leaf.contains(
             "export const extract_resume_async = defineFunction(\"user.lorem.extract_resume\", \"async\", [\"x\"])"
         ));
-    }
-
-    #[test]
-    fn llm_function_operations_keep_typescript_stream_spelling_and_authored_fqn() {
-        let mut pool = SymbolPool::new();
-        let n = name("user", &["lorem"], "extract_resume");
-        pool.insert(n, llm_func_sym(0));
-        let out = emit_sdk(&pool);
-        let leaf = &out[&PathBuf::from("lorem/index.ts")];
-
-        assert!(leaf.contains(
-            "export const extract_resume_spec = defineFunction(\"user.lorem.extract_resume\", \"sync\", [\"x\"], undefined, undefined, \"spec\")"
-        ));
-        assert!(leaf.contains(
-            "export const extract_resume$stream = defineFunction(\"user.lorem.extract_resume\", \"sync\", [\"x\"], [\"client\", \"on_event\"], undefined, \"stream\")"
-        ));
-        assert!(leaf.contains("export const extract_resume_spec_async = defineFunction("));
-        assert!(leaf.contains("export const extract_resume$stream_async = defineFunction("));
-        assert!(!leaf.contains("extract_resume$spec"));
-        assert!(!leaf.contains("export const extract_resume_stream"));
-        assert!(!leaf.contains("defineFunction(\"user.lorem.extract_resume$"));
-    }
-
-    #[test]
-    fn derived_free_function_names_escape_authored_siblings_deterministically() {
-        fn pool(reverse: bool) -> SymbolPool {
-            let names = [
-                "ask",
-                "ask_async",
-                "ask_spec",
-                "ask_spec_async",
-                "ask$stream",
-                "ask$stream_async",
-            ];
-            let mut pool = SymbolPool::new();
-            let mut ordered: Vec<(usize, &&str)> = names.iter().enumerate().collect();
-            if reverse {
-                ordered.reverse();
-            }
-            for (index, function_name) in ordered {
-                let function = if *function_name == "ask" {
-                    named_llm_function(function_name, index as u32)
-                } else {
-                    named_function(function_name, index as u32)
-                };
-                pool.insert(
-                    name("user", &["lorem"], function_name),
-                    Symbol::Function(function),
-                );
-            }
-            pool
-        }
-
-        let first = emit_sdk(&pool(false));
-        let second = emit_sdk(&pool(true));
-        let path = PathBuf::from("lorem/index.ts");
-        assert_eq!(first[&path], second[&path]);
-        let leaf = &first[&path];
-
-        for binding in [
-            "ask_async$",
-            "ask_spec$",
-            "ask_spec_async$",
-            "ask$stream$",
-            "ask$stream_async$",
-        ] {
-            assert!(
-                leaf.contains(&format!(
-                    "export const {binding} = defineFunction(\"user.lorem.ask\""
-                )),
-                "missing escaped projection {binding}:\n{leaf}"
-            );
-        }
-        for authored in [
-            "ask_async",
-            "ask_spec",
-            "ask_spec_async",
-            "ask$stream",
-            "ask$stream_async",
-        ] {
-            assert!(
-                leaf.contains(&format!(
-                    "export const {authored} = defineFunction(\"user.lorem.{authored}\""
-                )),
-                "authored sibling lost its exact name {authored}:\n{leaf}"
-            );
-        }
-    }
-
-    #[test]
-    fn derived_free_function_names_do_not_shadow_child_namespaces() {
-        let mut pool = SymbolPool::new();
-        pool.insert(
-            name("user", &[], "ask"),
-            Symbol::Function(named_function("ask", 0)),
-        );
-        let child_type = name("user", &["ask_async"], "Result");
-        pool.insert(child_type.clone(), class_sym(&child_type, 1));
-
-        let out = emit_sdk(&pool);
-        let root = &out[&PathBuf::from("index.ts")];
-        assert!(root.contains("export * as ask_async from \"./ask_async/index.js\";"));
-        assert!(root.contains(
-            "export const ask_async$ = defineFunction(\"user.ask\", \"async\", [\"x\"])"
-        ));
-        assert!(!root.contains("export const ask_async = defineFunction("));
-    }
-
-    #[test]
-    fn llm_methods_project_spec_and_stream_with_receiver_and_collision_safety() {
-        let class_name = name("user", &["lorem"], "Extractor");
-        let mut instance = named_llm_function("extract", 1);
-        instance.arguments[0].name = BaseName::new("text");
-        let mut static_method = named_llm_function("summarize", 2);
-        static_method.arguments[0].name = BaseName::new("text");
-
-        let class = Class {
-            name: class_name.clone(),
-            generic_params: Vec::new(),
-            docstring: None,
-            properties: vec![baml_codegen_types::ClassProperty {
-                name: BaseName::new("extract_async"),
-                docstring: None,
-                ty: Ty::Int {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
-            }],
-            static_methods: vec![static_method, named_function("summarize_spec", 3)],
-            instance_methods: vec![
-                instance,
-                named_function("extract$stream", 4),
-                named_function("extract$stream_async", 5),
-            ],
-            origin: origin(0),
-        };
-        let mut pool = SymbolPool::new();
-        pool.insert(class_name, Symbol::Class(class));
-
-        let out = emit_sdk(&pool);
-        let leaf = &out[&PathBuf::from("lorem/index.ts")];
-
-        assert!(leaf.contains(
-            "static summarize_spec$ = defineFunction(\"user.lorem.Extractor.summarize\", \"sync\", [\"text\"], undefined, undefined, \"spec\")"
-        ));
-        assert!(leaf.contains(
-            "static summarize$stream = defineFunction(\"user.lorem.Extractor.summarize\", \"sync\", [\"text\"], [\"client\", \"on_event\"], undefined, \"stream\")"
-        ));
-        assert!(leaf.contains(
-            "extract_spec = defineInstanceFunction(\"user.lorem.Extractor.extract\", \"sync\", [\"self\", \"text\"], undefined, undefined, \"spec\").bind(this)"
-        ));
-        assert!(leaf.contains(
-            "extract$stream$ = defineInstanceFunction(\"user.lorem.Extractor.extract\", \"sync\", [\"self\", \"text\"], [\"client\", \"on_event\"], undefined, \"stream\").bind(this)"
-        ));
-        assert!(leaf.contains(
-            "extract$stream_async$ = defineInstanceFunction(\"user.lorem.Extractor.extract\", \"async\", [\"self\", \"text\"], [\"client\", \"on_event\"], undefined, \"stream\").bind(this)"
-        ));
-        assert!(leaf.contains(
-            "extract_async$ = defineInstanceFunction(\"user.lorem.Extractor.extract\", \"async\", [\"self\", \"text\", \"on_event\"]"
-        ));
-        assert!(leaf.contains(
-            "extract$stream = defineInstanceFunction(\"user.lorem.Extractor.extract$stream\", \"sync\""
-        ));
-        assert!(!leaf.contains("user.lorem.Extractor.extract@"));
     }
 
     #[test]

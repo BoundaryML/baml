@@ -925,10 +925,10 @@ pub(crate) fn template_position_at(
             }
         }
     }
-    // No `Expr::Template` at the cursor: check the synthesized spec companion.
+    // No `Expr::Template` at the cursor: check the SPEC-LOWERED prompt form.
     // An llm function's `prompt:` never becomes a template expression — the
-    // backtick flattens into its private spec companion body ("both lower through the
-    // same prompt`…` tagged template", lower_cst) — but the
+    // backtick flattens straight into the `@spec` companion ("both lower
+    // through the same prompt`…` tagged template", lower_cst) — but the
     // synthesized prompt lambda opens a scope MARKED `is_template_body`
     // whose range is exactly the literal. Inside it, code regions are the
     // NON-synthetic nodes (interpolations, `${for}` headers — original
@@ -1033,8 +1033,9 @@ pub(crate) fn template_driver_at(
 }
 
 /// The spec-lowered llm-prompt arm of [`template_position_at`]: an llm
-/// function's `prompt:` never becomes a template expression (the private
-/// recipe's spans alias the literal), so prose-vs-code comes from the RECORDED prompt geometry
+/// function's `prompt:` never becomes a template expression (the backtick
+/// flattens straight into the `@spec` companion, whose spans alias the
+/// literal), so prose-vs-code comes from the RECORDED prompt geometry
 /// (`llm_prompt_spans`, captured at CST lowering). Prose addresses the
 /// `ai.prompt` driver — the documented lowering contract ("both lower
 /// through the same prompt`…` tagged template").

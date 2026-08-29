@@ -775,7 +775,6 @@ def encode_call_args(
     *,
     function_name: Optional[str] = None,
     function_handle: Optional[int] = None,
-    operation: str = "direct",
 ) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
 
@@ -797,17 +796,6 @@ def encode_call_args(
             args.function_name = function_name
         elif function_handle is not None:
             args.function_handle = function_handle
-        operation_values = {
-            "direct": baml_inbound_pb2.FUNCTION_OPERATION_DIRECT,
-            "spec": baml_inbound_pb2.FUNCTION_OPERATION_SPEC,
-            "stream": baml_inbound_pb2.FUNCTION_OPERATION_STREAM,
-        }
-        try:
-            args.operation = operation_values[operation]
-        except KeyError as exc:
-            raise ValueError(
-                "wire operation must be 'direct', 'spec', or 'stream'"
-            ) from exc
         for key, value in kwargs.items():
             _set_inbound_map_entry(
                 args.kwargs.add(),

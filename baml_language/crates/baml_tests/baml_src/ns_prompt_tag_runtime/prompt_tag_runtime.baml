@@ -260,9 +260,9 @@ function PtRenderPerson() -> Person {
 }
 
 function pt_render_prompt_companion_output_format_fn() -> string {
-    // `FunctionSpec.prompt()` returns the structural prompt; use `.text()` only when
+    // `@render_prompt` returns the structural prompt; use `.text()` only when
     // this assertion intentionally wants its readable text projection.
-    PtRenderPerson@spec().prompt().text()
+    PtRenderPerson@render_prompt().text()
 }
 
 test "render_prompt_companion_interpolates_ctx_output_format" {
@@ -294,7 +294,7 @@ test "spec_prompt_render_preserves_structural_messages" {
 }
 
 function pt_render_prompt_messages_fn() -> ai.PromptMessage[] {
-    PtStructuredGreeting@spec(name = "Ada").prompt().messages()
+    PtStructuredGreeting@render_prompt(name = "Ada").messages()
 }
 
 test "render_prompt_companion_returns_promptast_messages" {

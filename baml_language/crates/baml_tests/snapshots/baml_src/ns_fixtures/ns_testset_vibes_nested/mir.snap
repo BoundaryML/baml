@@ -38,7 +38,7 @@ fn .<lambda($init_test_ns_fixtures_ns_testset_vibes_nested_main, 0)>(testset: te
     let _8: string // sentiments [captured]
     let _9: void
     let _10: string
-    let _11: (testing.TestCollector) -> void throws ai.errors.InvalidRequest | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.ParseError | baml.errors.Timeout | testing.InvalidTestName
+    let _11: (testing.TestCollector) -> void throws baml.errors.Io | baml.errors.LlmClient | baml.errors.Timeout | testing.InvalidTestName
     let _12: void
     let _13: (testing.TestCollector) -> void throws testing.InvalidTestName
 
@@ -91,18 +91,16 @@ fn .<lambda(<lambda($init_test_ns_fixtures_ns_testset_vibes_nested_main, 0)>, 1)
     let _4: string
     let _5: string // data
     let _6: string[] // tests
-    let _7: ai.FunctionSpec<string[]>
-    let _8: string
-    let _9: reflect.Type
-    let _10: string[]
-    let _11: baml.iter.Iterator<Error = never, Item = string>
-    let _12: unknown
-    let _13: bool
-    let _14: string
-    let _15: string // ex
-    let _16: void
-    let _17: string
-    let _18: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _7: string
+    let _8: string[]
+    let _9: baml.iter.Iterator<Error = never, Item = string>
+    let _10: unknown
+    let _11: bool
+    let _12: string
+    let _13: string // ex
+    let _14: void
+    let _15: string
+    let _16: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
 
     bb0: {
         _4 = copy capture[0];
@@ -115,44 +113,39 @@ fn .<lambda(<lambda($init_test_ns_fixtures_ns_testset_vibes_nested_main, 0)>, 1)
     }
 
     bb2: {
-        _7 = call const fn user.fixtures.testset_vibes_nested.GenerateTests@spec(const 0_i64, const "") -> [bb3];
+        _7 = copy _5;
+        _6 = call const fn user.fixtures.testset_vibes_nested.GenerateTests@parse(copy _7) -> [bb3];
     }
 
     bb3: {
-        _8 = copy _5;
-        _9 = load_type(string[]);
-        _6 = call const fn ai.FunctionSpec.parse<copy _9>(copy _7, copy _8) -> [bb4];
+        _8 = copy _6;
+        _9 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _8) -> [bb4];
     }
 
     bb4: {
-        _10 = copy _6;
-        _11 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _10) -> [bb5];
+        _10 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _9) -> [bb5];
     }
 
     bb5: {
-        _12 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _11) -> [bb6];
+        _11 = is_type(copy _10, baml.iter.Done);
+        branch copy _11 -> [bb7, bb6];
     }
 
     bb6: {
-        _13 = is_type(copy _12, baml.iter.Done);
-        branch copy _13 -> [bb8, bb7];
+        _12 = copy _10;
+        fresh_cell(_13);
+        _13 = copy _12;
+        _15 = copy _13;
+        _16 = make_closure lambda[0]();
+        _14 = call const fn testing.TestCollector.register_test(copy _1, copy _15, copy _16, const null) -> [bb4];
     }
 
     bb7: {
-        _14 = copy _12;
-        fresh_cell(_15);
-        _15 = copy _14;
-        _17 = copy _15;
-        _18 = make_closure lambda[0]();
-        _16 = call const fn testing.TestCollector.register_test(copy _1, copy _17, copy _18, const null) -> [bb5];
+        _0 = const null;
+        goto -> bb8;
     }
 
     bb8: {
-        _0 = const null;
-        goto -> bb9;
-    }
-
-    bb9: {
         return;
     }
 }
@@ -380,6 +373,76 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: nu
     }
 }
 
+fn user.fixtures.testset_vibes_nested.ClassifySentiment@build_request(text: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment>
+    let _5: reflect.Type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.testset_vibes_nested.ClassifySentiment@spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(fixtures.testset_vibes_nested.Sentiment);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.ClassifySentiment@parse(json: string) -> fixtures.testset_vibes_nested.Sentiment {
+    // Locals:
+    let _0: fixtures.testset_vibes_nested.Sentiment // _0 // return
+    let _1: string // json // param
+    let _2: reflect.Type
+
+    bb0: {
+        _2 = load_type(fixtures.testset_vibes_nested.Sentiment);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.ClassifySentiment@render_prompt(text: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // text // param
+    let _2: ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment>
+    let _3: reflect.Type
+
+    bb0: {
+        _2 = call const fn user.fixtures.testset_vibes_nested.ClassifySentiment@spec(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(fixtures.testset_vibes_nested.Sentiment);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.fixtures.testset_vibes_nested.ClassifySentiment@spec(text: string) -> ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment> {
     // Locals:
     let _0: ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment> // _0 // return
@@ -598,6 +661,78 @@ fn user.fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, c
     }
 
     bb8: {
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.GenerateTests@build_request(count: int, topic: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: int // count // param
+    let _2: string // topic // param
+    let _3: null | ai.Client // client // param
+    let _4: bool
+    let _5: ai.FunctionSpec<string[]>
+    let _6: reflect.Type
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = call const fn user.fixtures.testset_vibes_nested.GenerateTests@spec(copy _1, copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _6 = load_type(string[]);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _6>(copy _5, copy _3) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.GenerateTests@parse(json: string) -> string[] {
+    // Locals:
+    let _0: string[] // _0 // return
+    let _1: string // json // param
+    let _2: reflect.Type
+
+    bb0: {
+        _2 = load_type(string[]);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.GenerateTests@render_prompt(count: int, topic: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: int // count // param
+    let _2: string // topic // param
+    let _3: ai.FunctionSpec<string[]>
+    let _4: reflect.Type
+
+    bb0: {
+        _3 = call const fn user.fixtures.testset_vibes_nested.GenerateTests@spec(copy _1, copy _2) -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string[]);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
         return;
     }
 }
@@ -891,6 +1026,76 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: n
     }
 
     bb8: {
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.ClassifySentiment2@build_request(text: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<string>
+    let _5: reflect.Type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn user.fixtures.testset_vibes_nested.ClassifySentiment2@spec(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _5 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.ClassifySentiment2@parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+    let _2: reflect.Type
+
+    bb0: {
+        _2 = load_type(string);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.testset_vibes_nested.ClassifySentiment2@render_prompt(text: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // text // param
+    let _2: ai.FunctionSpec<string>
+    let _3: reflect.Type
+
+    bb0: {
+        _2 = call const fn user.fixtures.testset_vibes_nested.ClassifySentiment2@spec(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _3>(copy _2) -> [bb2];
+    }
+
+    bb2: {
         return;
     }
 }

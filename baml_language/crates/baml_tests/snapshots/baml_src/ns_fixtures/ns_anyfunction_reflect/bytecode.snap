@@ -41,6 +41,43 @@ function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.
     return
 }
 
+function fixtures.anyfunction_reflect.RuntimeClassify@build_request(input: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type #0
+    load_var input
+    call user.fixtures.anyfunction_reflect.RuntimeClassify@spec
+    store_var _4
+    load_type #0
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function fixtures.anyfunction_reflect.RuntimeClassify@parse(json: string) -> #0 {
+    load_type #0
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function fixtures.anyfunction_reflect.RuntimeClassify@render_prompt(input: string) -> ai.Prompt {
+    load_type #0
+    load_var input
+    call user.fixtures.anyfunction_reflect.RuntimeClassify@spec
+    store_var _2
+    load_type #0
+    load_var _2
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function fixtures.anyfunction_reflect.RuntimeClassify@spec(input: string) -> ai.FunctionSpec<#0> {
     load_var ?1
     make_cell
@@ -135,23 +172,16 @@ function fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> s
     call reflect.enum.new
     store_var category
     load_var category
-    bind_type 0
-    load_type #0
     load_const "sample"
-    call user.fixtures.anyfunction_reflect.RuntimeClassify@spec
-    store_var spec
-    load_type #0
-    load_var spec
-    call ai.FunctionSpec.prompt
+    call user.fixtures.anyfunction_reflect.RuntimeClassify@render_prompt
     call ai.Prompt.text
     store_var prompt
-    load_type #0
-    load_var spec
+    load_var category
     load_const "\"k7\""
-    call ai.FunctionSpec.parse
+    call user.fixtures.anyfunction_reflect.RuntimeClassify@parse
     call reflect.enum.get_value
-    store_var _13
-    load_var2 4 5
+    store_var _10
+    load_var2 3 4
     bin_op +
     return
 }

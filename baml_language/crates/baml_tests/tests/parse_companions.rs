@@ -17,7 +17,7 @@ async fn sap_parse_decodes_a_complete_top_level_json_string() {
         }
 
         function main() -> string {
-            ParseString@spec().parse(`"Fred"`)
+            ParseString@parse(`"Fred"`)
         }
         "##
     );
@@ -41,7 +41,7 @@ async fn sap_parse_preserves_plain_llm_text() {
         }
 
         function main() -> string {
-            ParseString@spec().parse("Fred says hello")
+            ParseString@parse("Fred says hello")
         }
         "##
     );

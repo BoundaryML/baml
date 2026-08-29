@@ -91,7 +91,7 @@ function EnvRefDesugarFn() -> string {
     prompt: `hi`
 }
 
-// The client expression is resolved when the function's `@spec` projection
+// The client expression is resolved when the FUNCTION is called (at `@spec`
 // construction), not at `$init` — reading it back exercises that path.
 function EnvRefDesugarFnClientId() -> string {
     EnvRefDesugarFn@spec().default_client.id()
@@ -127,9 +127,8 @@ function EnvRefBadClientFn() -> string {
     prompt: `hi`
 }
 
-// THE TIMING PROOF. The client expression lives in the compiler-generated
-// private `Fn@spec` companion body, so it runs when the function is CALLED, not
-// during `$init`.
+// THE TIMING PROOF. The client expression lives in the synthesized `<Fn>@spec`
+// companion body, so it runs when the function is CALLED, not during `$init`.
 // If it ran at `$init`, the throw above would abort this namespace's
 // initialization and take every other test in this file down with it. Instead
 // nothing happens until `@spec()` is invoked here.

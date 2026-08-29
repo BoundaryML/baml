@@ -411,7 +411,7 @@ pub(crate) fn render_class(
     // `final`: generated value classes carry exact-class value semantics — the
     // encoder keys its typemap on the concrete class, so a user subclass would
     // silently break inbound encode. This covers plain value classes, generic
-    // classes, and PPIR `$stream` partial models (all routed through here). Sealed-union
+    // classes, and `$stream` companions (all routed through here). Sealed-union
     // interfaces and their permitted records are emitted elsewhere (records are
     // already final).
     out.push_str(&format!("public final class {ident}{generics} {{\n"));
@@ -510,7 +510,6 @@ pub(crate) fn render_class(
             &mut pool,
             ctx,
             sink,
-            CallProjection::Direct,
         ));
     }
     let mut instances: Vec<&Function> = class.instance_methods.iter().collect();
@@ -533,7 +532,6 @@ pub(crate) fn render_class(
             &mut pool,
             ctx,
             sink,
-            CallProjection::Direct,
         ));
     }
     out.push_str(&pool.constants());
@@ -722,13 +720,6 @@ enum Receiver {
     This,
 }
 
-#[derive(Clone, Copy)]
-enum CallProjection {
-    Direct,
-    Spec,
-    Stream,
-}
-
 struct ReturnedCallable {
     raw_type: String,
     parameter_names: String,
@@ -745,7 +736,7 @@ fn render_function_pair(
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
-    let mut out = render_callable_pair(
+    render_callable_pair(
         fqn,
         function,
         Receiver::None,
@@ -755,53 +746,7 @@ fn render_function_pair(
         pool,
         ctx,
         sink,
-        CallProjection::Direct,
-    );
-
-    if let Some(spec) = &function.operations.spec {
-        let mut projected = function.clone();
-        projected.name = baml_base::Name::new(format!("{}_spec", function.name));
-        projected.arguments.retain(|argument| !argument.injected);
-        projected.return_type = spec.return_type.clone();
-        projected.operations = baml_codegen_types::FunctionOperations::DIRECT;
-        out.push_str(&render_callable_pair(
-            fqn,
-            &projected,
-            Receiver::None,
-            true,
-            &[],
-            sibling_idents,
-            pool,
-            ctx,
-            sink,
-            CallProjection::Spec,
-        ));
-    }
-
-    if let Some(stream) = &function.operations.stream {
-        let mut projected = function.clone();
-        projected.name = baml_base::Name::new(format!("{}_stream", function.name));
-        projected.arguments.retain(|argument| !argument.injected);
-        projected
-            .arguments
-            .extend(stream.control_arguments.iter().cloned());
-        projected.return_type = stream.return_type.clone();
-        projected.operations = baml_codegen_types::FunctionOperations::DIRECT;
-        out.push_str(&render_callable_pair(
-            fqn,
-            &projected,
-            Receiver::None,
-            true,
-            &[],
-            sibling_idents,
-            pool,
-            ctx,
-            sink,
-            CallProjection::Stream,
-        ));
-    }
-
-    out
+    )
 }
 
 /// One sync + one `_async` binding for a callable — a free function, a
@@ -824,7 +769,6 @@ fn render_callable_pair(
     pool: &mut DescriptorPool,
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
-    projection: CallProjection,
 ) -> String {
     // A callable with its OWN generic params (`fn map<U>(...)`) gains the
     // explicit-binding overloads that thread a trailing `baml_bridge.BamlTypes`
@@ -1050,7 +994,6 @@ fn render_callable_pair(
         receiver_guard.as_deref(),
         &taken,
         returned_callable.as_ref(),
-        projection,
     );
 
     // Optional-argument configurator base: the same overload family over a
@@ -1080,7 +1023,6 @@ fn render_callable_pair(
             sink,
             pool,
             returned_callable.as_ref(),
-            projection,
         ));
     }
 
@@ -1115,7 +1057,6 @@ fn render_overload_family(
     receiver_guard: Option<&str>,
     taken: &[String],
     returned_callable: Option<&ReturnedCallable>,
-    projection: CallProjection,
 ) -> String {
     // `types` and `ctx` derive from distinct base names, so their yield-to-user
     // escapes can never collide with each other.
@@ -1139,7 +1080,6 @@ fn render_overload_family(
         None,
         None,
         returned_callable,
-        projection,
     );
     out.push_str(&render_method_pair(
         doc,
@@ -1159,7 +1099,6 @@ fn render_overload_family(
         None,
         Some(&ctx_name),
         returned_callable,
-        projection,
     ));
 
     if is_generic {
@@ -1188,7 +1127,6 @@ fn render_overload_family(
             Some(&types_name),
             None,
             returned_callable,
-            projection,
         ));
         out.push_str(&render_method_pair(
             doc,
@@ -1208,7 +1146,6 @@ fn render_overload_family(
             Some(&types_name),
             Some(&ctx_name),
             returned_callable,
-            projection,
         ));
     }
 
@@ -1263,7 +1200,6 @@ fn render_method_pair(
     types_name: Option<&str>,
     ctx_name: Option<&str>,
     returned_callable: Option<&ReturnedCallable>,
-    projection: CallProjection,
 ) -> String {
     // Trailing synthetic params in fixed order: `types` (BamlTypes) then `ctx`
     // (BamlCallContext).
@@ -1290,25 +1226,9 @@ fn render_method_pair(
         (Some(c), Some(t)) => format!(", {c}, {t}"),
     };
 
-    let sync_call = match projection {
-        CallProjection::Direct => format!(
-            "baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
-        ),
-        CallProjection::Spec => {
-            format!(
-                "baml_bridge.BamlFfi.callSyncOperation({fqn:?}, {call_names}, {call_args}, {descriptor}, {}, {}, baml_bridge.BamlFunctionOperation.SPEC)",
-                ctx_name.unwrap_or("null"),
-                types_name.unwrap_or("null"),
-            )
-        }
-        CallProjection::Stream => {
-            format!(
-                "baml_bridge.BamlFfi.callSyncOperation({fqn:?}, {call_names}, {call_args}, {descriptor}, {}, {}, baml_bridge.BamlFunctionOperation.STREAM)",
-                ctx_name.unwrap_or("null"),
-                types_name.unwrap_or("null"),
-            )
-        }
-    };
+    let sync_call = format!(
+        "baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
+    );
     let sync_body = if ret_top == "void" {
         format!("{prologue}        {sync_call};")
     } else if let Some(callable) = returned_callable {
@@ -1319,37 +1239,17 @@ fn render_method_pair(
     } else {
         format!("{prologue}        return ({ret_boxed}) {sync_call};")
     };
-    let async_call = match projection {
-        CallProjection::Direct => format!(
-            "(java.util.concurrent.CompletableFuture<java.lang.Object>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
-        ),
-        CallProjection::Spec => {
-            format!(
-                "(java.util.concurrent.CompletableFuture<java.lang.Object>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsyncOperation({fqn:?}, {call_names}, {call_args}, {descriptor}, {}, {}, baml_bridge.BamlFunctionOperation.SPEC)",
-                ctx_name.unwrap_or("null"),
-                types_name.unwrap_or("null"),
-            )
-        }
-        CallProjection::Stream => {
-            format!(
-                "(java.util.concurrent.CompletableFuture<java.lang.Object>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsyncOperation({fqn:?}, {call_names}, {call_args}, {descriptor}, {}, {}, baml_bridge.BamlFunctionOperation.STREAM)",
-                ctx_name.unwrap_or("null"),
-                types_name.unwrap_or("null"),
-            )
-        }
-    };
+    let async_call = format!(
+        "(java.util.concurrent.CompletableFuture<java.lang.Object>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
+    );
     let async_body = if let Some(callable) = returned_callable {
         format!(
             "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.returnedClosureAsync({async_call}, {}.class, {}, {});",
             callable.raw_type, callable.parameter_names, callable.return_descriptor,
         )
-    } else if matches!(projection, CallProjection::Direct) {
-        format!(
-            "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix});"
-        )
     } else {
         format!(
-            "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) {async_call};"
+            "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix});"
         )
     };
 
@@ -1396,7 +1296,6 @@ fn render_optional_configurator(
     sink: &mut UnionSink,
     pool: &mut DescriptorPool,
     returned_callable: Option<&ReturnedCallable>,
-    projection: CallProjection,
 ) -> String {
     // A generic callable's optional arg may reference class/method type
     // vars; the (static) opts class must then re-declare exactly those, so
@@ -1454,7 +1353,6 @@ fn render_optional_configurator(
         receiver_guard,
         &taken_cfg,
         returned_callable,
-        projection,
     );
 
     // Fluent boxed setters. The wire key is the BAML arg name; the setter
@@ -1492,7 +1390,7 @@ fn render_optional_configurator(
     }
 
     out.push_str(&format!(
-        "\n    /**\n     * Configurator for the optional arguments of {{@code {ident}}}. Each\n     * fluent setter records one optional; only touched optionals reach the\n     * engine (untouched ⇒ BAML default, touched-with-{{@code null}} ⇒\n     * explicit BAML {{@code null}}).\n     */\n    public static final class {ident}$Opts{gu} {{\n        private final java.util.LinkedHashMap<java.lang.String, java.lang.Object> $values = new java.util.LinkedHashMap<>();\n        private final java.util.LinkedHashSet<java.lang.String> $touched = new java.util.LinkedHashSet<>();\n{setters}\n        java.lang.String[] $names(java.lang.String[] base) {{\n            return this.$namesExcept(base);\n        }}\n\n        java.lang.Object[] $args(java.lang.Object[] base) {{\n            return this.$argsExcept(base);\n        }}\n\n        java.lang.String[] $namesExcept(java.lang.String[] base, java.lang.String... excluded) {{\n            java.util.LinkedHashSet<java.lang.String> excluded$ = new java.util.LinkedHashSet<>(java.util.Arrays.asList(excluded));\n            java.util.ArrayList<java.lang.String> out$ = new java.util.ArrayList<>(java.util.Arrays.asList(base));\n            for (java.lang.String n$ : this.$touched) {{\n                if (!excluded$.contains(n$)) {{\n                    out$.add(n$);\n                }}\n            }}\n            return out$.toArray(new java.lang.String[0]);\n        }}\n\n        java.lang.Object[] $argsExcept(java.lang.Object[] base, java.lang.String... excluded) {{\n            java.util.LinkedHashSet<java.lang.String> excluded$ = new java.util.LinkedHashSet<>(java.util.Arrays.asList(excluded));\n            java.util.ArrayList<java.lang.Object> out$ = new java.util.ArrayList<>(java.util.Arrays.asList(base));\n            for (java.lang.String n$ : this.$touched) {{\n                if (!excluded$.contains(n$)) {{\n                    out$.add(this.$values.get(n$));\n                }}\n            }}\n            return out$.toArray(new java.lang.Object[0]);\n        }}\n\n        java.lang.Object $value(java.lang.String name) {{\n            return this.$values.get(name);\n        }}\n    }}\n"
+        "\n    /**\n     * Configurator for the optional arguments of {{@code {ident}}}. Each\n     * fluent setter records one optional; only touched optionals reach the\n     * engine (untouched ⇒ BAML default, touched-with-{{@code null}} ⇒\n     * explicit BAML {{@code null}}).\n     */\n    public static final class {ident}$Opts{gu} {{\n        private final java.util.LinkedHashMap<java.lang.String, java.lang.Object> $values = new java.util.LinkedHashMap<>();\n        private final java.util.LinkedHashSet<java.lang.String> $touched = new java.util.LinkedHashSet<>();\n{setters}\n        java.lang.String[] $names(java.lang.String[] base) {{\n            java.lang.String[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = n$;\n            }}\n            return out;\n        }}\n\n        java.lang.Object[] $args(java.lang.Object[] base) {{\n            java.lang.Object[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = this.$values.get(n$);\n            }}\n            return out;\n        }}\n    }}\n"
     ));
     out
 }
@@ -1519,16 +1417,6 @@ fn typed_callable_expr(
                 Some((inner, false)) => resolved = inner,
                 _ => return None,
             },
-            Ty::Union(items, _) => {
-                let mut non_null = items.iter().filter(|item| !matches!(item, Ty::Null { .. }));
-                let Some(inner) = non_null.next() else {
-                    return None;
-                };
-                if non_null.next().is_some() {
-                    return None;
-                }
-                resolved = inner;
-            }
             Ty::Function { .. } => break,
             _ => return None,
         }

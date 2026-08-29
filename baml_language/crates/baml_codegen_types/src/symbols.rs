@@ -36,12 +36,6 @@ pub struct Function {
     pub arguments: Vec<FunctionArgument>,
     pub return_type: super::Ty,
 
-    /// Host-callable projections of this authored declaration. Direct is
-    /// always available; declarative LLM functions additionally expose Spec
-    /// and, when tool-free, Stream. These are host operations, not additional
-    /// public function symbols.
-    pub operations: FunctionOperations,
-
     /// The function's inferred throws contract as a resolved `Ty`, or `None`
     /// when the function throws nothing (`callable_throws` → `Never`). A
     /// declared `throws` clause, when present, wins over inference; otherwise
@@ -58,52 +52,17 @@ pub struct Function {
     pub origin: Origin,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct FunctionOperations {
-    pub spec: Option<SpecOperation>,
-    pub stream: Option<StreamOperation>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SpecOperation {
-    /// Full host-visible result type of the flat `Fn_spec` projection.
-    pub return_type: super::Ty,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StreamOperation {
-    /// Full engine result type (`ai.stream.Stream<PartialOut, Final>`).
-    pub return_type: super::Ty,
-    /// Exact recursive PPIR expansion of the authored final output.
-    pub partial_type: super::Ty,
-    /// Value yielded by `Stream.next()` (`PartialOut | ai.stream.Done`).
-    pub item_type: super::Ty,
-    /// Standard controls accepted by the target's flat Stream shortcut after
-    /// the authored arguments. These belong to the compiler-private
-    /// `Fn@stream` signature, not to the authored function signature, so
-    /// generators must project them from this operation metadata rather than
-    /// infer them from `Function.arguments`.
-    pub control_arguments: Vec<FunctionArgument>,
-}
-
-impl FunctionOperations {
-    pub const DIRECT: Self = Self {
-        spec: None,
-        stream: None,
-    };
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct FunctionArgument {
     pub name: baml_base::Name,
     pub docstring: Option<String>,
     pub ty: super::Ty,
     pub default: Option<FunctionArgumentDefault>,
-    /// True for compiler-owned parameters. On authored LLM functions this is
-    /// the injected `on_event`; flat stream controls live separately on
-    /// `StreamOperation::control_arguments`. Generators that cannot represent
-    /// an injected parameter's type may omit it, but must never drop a
-    /// user-declared parameter, whatever its name or shape.
+    /// True for compiler-injected parameters (`on_event` on LLM functions and
+    /// their `$stream` companions; the injected `client` never reaches the
+    /// pool). Generators that cannot represent an injected parameter's type
+    /// may omit it — its default fills in at the VM boundary — but must never
+    /// drop a user-declared parameter, whatever its name or shape.
     pub injected: bool,
 }
 
@@ -209,24 +168,6 @@ impl Function {
             .iter()
             .flat_map(|args| args.ty.walk_all_unions().into_iter())
             .chain(self.return_type.walk_all_unions())
-            .chain(
-                self.operations
-                    .spec
-                    .iter()
-                    .flat_map(|op| op.return_type.walk_all_unions()),
-            )
-            .chain(self.operations.stream.iter().flat_map(|op| {
-                op.return_type
-                    .walk_all_unions()
-                    .into_iter()
-                    .chain(op.partial_type.walk_all_unions())
-                    .chain(op.item_type.walk_all_unions())
-                    .chain(
-                        op.control_arguments
-                            .iter()
-                            .flat_map(|argument| argument.ty.walk_all_unions()),
-                    )
-            }))
             .collect()
     }
 
@@ -235,17 +176,6 @@ impl Function {
             validate_map_keys_ty(&argument.ty, pool, &mut HashSet::new())?;
         }
         validate_map_keys_ty(&self.return_type, pool, &mut HashSet::new())?;
-        if let Some(op) = &self.operations.spec {
-            validate_map_keys_ty(&op.return_type, pool, &mut HashSet::new())?;
-        }
-        if let Some(op) = &self.operations.stream {
-            validate_map_keys_ty(&op.return_type, pool, &mut HashSet::new())?;
-            validate_map_keys_ty(&op.partial_type, pool, &mut HashSet::new())?;
-            validate_map_keys_ty(&op.item_type, pool, &mut HashSet::new())?;
-            for argument in &op.control_arguments {
-                validate_map_keys_ty(&argument.ty, pool, &mut HashSet::new())?;
-            }
-        }
         if let Some(throws) = &self.throws {
             validate_map_keys_ty(throws, pool, &mut HashSet::new())?;
         }

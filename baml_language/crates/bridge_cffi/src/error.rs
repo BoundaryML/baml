@@ -40,9 +40,6 @@ pub enum BridgeError {
     #[error("call_id must be a nonzero uint64")]
     InvalidCallId,
 
-    #[error("unknown FunctionOperation value {0}")]
-    InvalidFunctionOperation(i32),
-
     #[error("Internal error: {0}")]
     Internal(String),
 

@@ -465,7 +465,6 @@ def define_function(
     type_params: Optional[List[str]] = None,
     class_type_params: Optional[List[str]] = None,
     param_aliases: Optional[Dict[str, str]] = None,
-    projection: Literal["direct", "spec", "stream"] = "direct",
     binding_name: Optional[str] = None,
     binding_qualname: Optional[str] = None,
     binding_module: Optional[str] = None,
@@ -498,10 +497,6 @@ def define_function(
     class_type_param_names = list(class_type_params or [])
     host_to_wire_param_names = dict(param_aliases or {})
     is_generic = bool(type_param_names or class_type_param_names)
-    if projection not in ("direct", "spec", "stream"):
-        raise ValueError(
-            f"projection must be 'direct', 'spec', or 'stream', got {projection!r}"
-        )
 
     def _set_binding_metadata(call: Callable[..., Any]) -> None:
         if binding_name is not None:
@@ -541,7 +536,6 @@ def define_function(
                 call_id,
                 type_args,
                 function_name=baml_fqn,
-                operation=projection,
             )
             _attach_call_ctx(call_ctx, call_id)
             try:
@@ -582,7 +576,6 @@ def define_function(
                 call_id,
                 type_args,
                 function_name=baml_fqn,
-                operation=projection,
             )
             _attach_call_ctx(call_ctx, call_id)
             try:

@@ -1105,8 +1105,6 @@ pub struct CallFunctionArgs {
     /// non-generic calls.
     #[prost(message, repeated, tag = "3")]
     pub type_args: ::prost::alloc::vec::Vec<BamlTyArg>,
-    #[prost(enumeration = "FunctionOperation", tag = "6")]
-    pub operation: i32,
     #[prost(oneof = "call_function_args::CallTarget", tags = "4, 5")]
     pub call_target: ::core::option::Option<call_function_args::CallTarget>,
 }
@@ -1134,36 +1132,5 @@ pub mod call_ack {
     pub enum Response {
         #[prost(string, tag = "1")]
         Error(::prost::alloc::string::String),
-    }
-}
-/// Semantic projection of an authored function declaration. These are runtime
-/// operations, not synthesized `$...` functions or host sync/async modes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum FunctionOperation {
-    Direct = 0,
-    Spec = 1,
-    Stream = 2,
-}
-impl FunctionOperation {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Direct => "FUNCTION_OPERATION_DIRECT",
-            Self::Spec => "FUNCTION_OPERATION_SPEC",
-            Self::Stream => "FUNCTION_OPERATION_STREAM",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "FUNCTION_OPERATION_DIRECT" => Some(Self::Direct),
-            "FUNCTION_OPERATION_SPEC" => Some(Self::Spec),
-            "FUNCTION_OPERATION_STREAM" => Some(Self::Stream),
-            _ => None,
-        }
     }
 }

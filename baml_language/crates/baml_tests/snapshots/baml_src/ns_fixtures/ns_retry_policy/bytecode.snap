@@ -40,6 +40,41 @@ function fixtures.retry_policy.UseRetryClient(input: string, client: ai.Client |
     return
 }
 
+function fixtures.retry_policy.UseRetryClient@build_request(input: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var input
+    call user.fixtures.retry_policy.UseRetryClient@spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function fixtures.retry_policy.UseRetryClient@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function fixtures.retry_policy.UseRetryClient@render_prompt(input: string) -> ai.Prompt {
+    load_var input
+    call user.fixtures.retry_policy.UseRetryClient@spec
+    store_var _2
+    load_type string
+    load_var _2
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function fixtures.retry_policy.UseRetryClient@spec(input: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell

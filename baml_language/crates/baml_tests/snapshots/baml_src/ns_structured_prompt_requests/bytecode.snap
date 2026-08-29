@@ -4,21 +4,21 @@ source: crates/baml_tests/src/corpus.rs
 function structured_prompt_requests.$init_test_ns_structured_prompt_requests_structured_prompt_requests(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.structured_prompt_requests"
-    load_const "spec build_request is network-free and overridable"
+    load_const "generated build_request companion is network-free and overridable"
     make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 0)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.structured_prompt_requests"
-    load_const "spec methods apply defaulted llm arguments"
+    load_const "generated companions apply defaulted llm arguments"
     make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 1)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.structured_prompt_requests"
-    load_const "spec build_request method is reflection-visible"
+    load_const "generated build_request companion is reflection-visible"
     make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 2)>, 0
     load_const null
     call testing.TestCollector.register_test_at
@@ -32,7 +32,7 @@ function structured_prompt_requests.$init_test_ns_structured_prompt_requests_str
     pop 1
     load_var registry
     load_const "root.structured_prompt_requests"
-    load_const "generic spec build_request specializes nested output format"
+    load_const "generic build_request specializes nested output format"
     make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 4)>, 0
     load_const null
     call testing.TestCollector.register_test_at
@@ -192,6 +192,41 @@ function structured_prompt_requests.AudioShape(sound: audio, client: ai.Client |
     return
 }
 
+function structured_prompt_requests.AudioShape@build_request(sound: audio, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var sound
+    call user.structured_prompt_requests.AudioShape@spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.AudioShape@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.AudioShape@render_prompt(sound: audio) -> ai.Prompt {
+    load_var sound
+    call user.structured_prompt_requests.AudioShape@spec
+    store_var _2
+    load_type string
+    load_var _2
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function structured_prompt_requests.AudioShape@spec(sound: audio) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
@@ -297,6 +332,41 @@ function structured_prompt_requests.ChatMediaShape(photo: image, client: ai.Clie
     return
 }
 
+function structured_prompt_requests.ChatMediaShape@build_request(photo: image, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var photo
+    call user.structured_prompt_requests.ChatMediaShape@spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.ChatMediaShape@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.ChatMediaShape@render_prompt(photo: image) -> ai.Prompt {
+    load_var photo
+    call user.structured_prompt_requests.ChatMediaShape@spec
+    store_var _2
+    load_type string
+    load_var _2
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function structured_prompt_requests.ChatMediaShape@spec(photo: image) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
@@ -388,6 +458,39 @@ function structured_prompt_requests.ExplicitRolesShape(client: ai.Client | null,
     return
 }
 
+function structured_prompt_requests.ExplicitRolesShape@build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.ExplicitRolesShape@spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.ExplicitRolesShape@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.ExplicitRolesShape@render_prompt() -> ai.Prompt {
+    call user.structured_prompt_requests.ExplicitRolesShape@spec
+    store_var _1
+    load_type string
+    load_var _1
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function structured_prompt_requests.ExplicitRolesShape@spec() -> ai.FunctionSpec<string> {
     load_type ai.tools.Tool
     alloc_array 0
@@ -469,6 +572,39 @@ function structured_prompt_requests.FirstShape(client: ai.Client | null, on_even
     store_var _5
     load_var _5
     load_field .value
+    return
+}
+
+function structured_prompt_requests.FirstShape@build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.FirstShape@spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.FirstShape@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.FirstShape@render_prompt() -> ai.Prompt {
+    call user.structured_prompt_requests.FirstShape@spec
+    store_var _1
+    load_type string
+    load_var _1
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -554,6 +690,41 @@ function structured_prompt_requests.GenericShape(client: ai.Client | null, on_ev
     store_var _5
     load_var _5
     load_field .value
+    return
+}
+
+function structured_prompt_requests.GenericShape@build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type #0
+    call user.structured_prompt_requests.GenericShape@spec
+    store_var _3
+    load_type structured_prompt_requests.Outer<#0>
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.GenericShape@parse(json: string) -> structured_prompt_requests.Outer<#0> {
+    load_type structured_prompt_requests.Outer<#0>
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.GenericShape@render_prompt() -> ai.Prompt {
+    load_type #0
+    call user.structured_prompt_requests.GenericShape@spec
+    store_var _1
+    load_type structured_prompt_requests.Outer<#0>
+    load_var _1
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -649,6 +820,57 @@ function structured_prompt_requests.Greet(name: string, suffix: string, client: 
     store_var _8
     load_var _8
     load_field .value
+    return
+}
+
+function structured_prompt_requests.Greet@build_request(name: string, suffix: string, client: ai.Client | null) -> baml.http.Request {
+    load_var suffix
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "!"
+    store_var suffix
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var client
+
+  L1:
+    load_var2 1 2
+    call user.structured_prompt_requests.Greet@spec
+    store_var _6
+    load_type string
+    load_var2 4 3
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.Greet@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.Greet@render_prompt(name: string, suffix: string) -> ai.Prompt {
+    load_var suffix
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "!"
+    store_var suffix
+
+  L0:
+    load_var2 1 2
+    call user.structured_prompt_requests.Greet@spec
+    store_var _4
+    load_type string
+    load_var _4
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -766,6 +988,43 @@ function structured_prompt_requests.MediaAll(photo: image, sound: audio, documen
     store_var _9
     load_var _9
     load_field .value
+    return
+}
+
+function structured_prompt_requests.MediaAll@build_request(photo: image, sound: audio, document: pdf, movie: video, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var2 1 2
+    load_var2 3 4
+    call user.structured_prompt_requests.MediaAll@spec
+    store_var _7
+    load_type string
+    load_var2 6 5
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.MediaAll@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.MediaAll@render_prompt(photo: image, sound: audio, document: pdf, movie: video) -> ai.Prompt {
+    load_var2 1 2
+    load_var2 3 4
+    call user.structured_prompt_requests.MediaAll@spec
+    store_var _5
+    load_type string
+    load_var _5
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -892,6 +1151,43 @@ function structured_prompt_requests.MediaImageAudioPdf(photo: image, sound: audi
     return
 }
 
+function structured_prompt_requests.MediaImageAudioPdf@build_request(photo: image, sound: audio, document: pdf, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var2 1 2
+    load_var document
+    call user.structured_prompt_requests.MediaImageAudioPdf@spec
+    store_var _6
+    load_type string
+    load_var2 5 4
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.MediaImageAudioPdf@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.MediaImageAudioPdf@render_prompt(photo: image, sound: audio, document: pdf) -> ai.Prompt {
+    load_var2 1 2
+    load_var document
+    call user.structured_prompt_requests.MediaImageAudioPdf@spec
+    store_var _4
+    load_type string
+    load_var _4
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function structured_prompt_requests.MediaImageAudioPdf@spec(photo: image, sound: audio, document: pdf) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
@@ -1009,6 +1305,41 @@ function structured_prompt_requests.MediaImagePdf(photo: image, document: pdf, c
     return
 }
 
+function structured_prompt_requests.MediaImagePdf@build_request(photo: image, document: pdf, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var2 1 2
+    call user.structured_prompt_requests.MediaImagePdf@spec
+    store_var _5
+    load_type string
+    load_var2 4 3
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.MediaImagePdf@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.MediaImagePdf@render_prompt(photo: image, document: pdf) -> ai.Prompt {
+    load_var2 1 2
+    call user.structured_prompt_requests.MediaImagePdf@spec
+    store_var _3
+    load_type string
+    load_var _3
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function structured_prompt_requests.MediaImagePdf@spec(photo: image, document: pdf) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
@@ -1119,6 +1450,41 @@ function structured_prompt_requests.MediaShape(photo: image, client: ai.Client |
     return
 }
 
+function structured_prompt_requests.MediaShape@build_request(photo: image, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var photo
+    call user.structured_prompt_requests.MediaShape@spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.MediaShape@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.MediaShape@render_prompt(photo: image) -> ai.Prompt {
+    load_var photo
+    call user.structured_prompt_requests.MediaShape@spec
+    store_var _2
+    load_type string
+    load_var _2
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function structured_prompt_requests.MediaShape@spec(photo: image) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
@@ -1210,6 +1576,39 @@ function structured_prompt_requests.PreludeShape(client: ai.Client | null, on_ev
     return
 }
 
+function structured_prompt_requests.PreludeShape@build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.PreludeShape@spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.PreludeShape@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.PreludeShape@render_prompt() -> ai.Prompt {
+    call user.structured_prompt_requests.PreludeShape@spec
+    store_var _1
+    load_type string
+    load_var _1
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function structured_prompt_requests.PreludeShape@spec() -> ai.FunctionSpec<string> {
     load_type ai.tools.Tool
     alloc_array 0
@@ -1292,6 +1691,41 @@ function structured_prompt_requests.RequestShape(input: string, client: ai.Clien
     store_var _6
     load_var _6
     load_field .value
+    return
+}
+
+function structured_prompt_requests.RequestShape@build_request(input: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var input
+    call user.structured_prompt_requests.RequestShape@spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.RequestShape@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.RequestShape@render_prompt(input: string) -> ai.Prompt {
+    load_var input
+    call user.structured_prompt_requests.RequestShape@spec
+    store_var _2
+    load_type string
+    load_var _2
+    call ai.FunctionSpec.prompt
     return
 }
 
@@ -1402,6 +1836,39 @@ function structured_prompt_requests.RoledShape(client: ai.Client | null, on_even
     return
 }
 
+function structured_prompt_requests.RoledShape@build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.RoledShape@spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.RoledShape@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.RoledShape@render_prompt() -> ai.Prompt {
+    call user.structured_prompt_requests.RoledShape@spec
+    store_var _1
+    load_type string
+    load_var _1
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function structured_prompt_requests.RoledShape@spec() -> ai.FunctionSpec<string> {
     load_type ai.tools.Tool
     alloc_array 0
@@ -1503,6 +1970,41 @@ function structured_prompt_requests.RolelessImageShape(photo: image, client: ai.
     return
 }
 
+function structured_prompt_requests.RolelessImageShape@build_request(photo: image, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var photo
+    call user.structured_prompt_requests.RolelessImageShape@spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.RolelessImageShape@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.RolelessImageShape@render_prompt(photo: image) -> ai.Prompt {
+    load_var photo
+    call user.structured_prompt_requests.RolelessImageShape@spec
+    store_var _2
+    load_type string
+    load_var _2
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function structured_prompt_requests.RolelessImageShape@spec(photo: image) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
@@ -1594,6 +2096,39 @@ function structured_prompt_requests.RolelessShape(client: ai.Client | null, on_e
     return
 }
 
+function structured_prompt_requests.RolelessShape@build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.RolelessShape@spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.RolelessShape@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.RolelessShape@render_prompt() -> ai.Prompt {
+    call user.structured_prompt_requests.RolelessShape@spec
+    store_var _1
+    load_type string
+    load_var _1
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function structured_prompt_requests.RolelessShape@spec() -> ai.FunctionSpec<string> {
     load_type ai.tools.Tool
     alloc_array 0
@@ -1675,6 +2210,39 @@ function structured_prompt_requests.WhitespaceShape(client: ai.Client | null, on
     store_var _5
     load_var _5
     load_field .value
+    return
+}
+
+function structured_prompt_requests.WhitespaceShape@build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.WhitespaceShape@spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.WhitespaceShape@parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.WhitespaceShape@render_prompt() -> ai.Prompt {
+    call user.structured_prompt_requests.WhitespaceShape@spec
+    store_var _1
+    load_type string
+    load_var _1
+    call ai.FunctionSpec.prompt
     return
 }
 

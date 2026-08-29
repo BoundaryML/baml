@@ -129,48 +129,6 @@ static void TestOwnedBufferMove() {
   std::printf("owned buffer move ok\n");
 }
 
-static void TestFunctionOperationUsesAuthoredFQN() {
-  baml::detail::args_encoder encoder;
-  const std::string bytes = encoder.finish(
-      8, "user.Extract", baml::function_operation::spec);
-  baml::detail::pb::CallFunctionArgs decoded;
-  Require(decoded.ParseFromString(bytes), "operation call did not parse");
-  Require(decoded.function_name() == "user.Extract",
-          "operation call rewrote the authored FQN");
-  Require(decoded.function_name().find('$') == std::string::npos,
-          "operation call synthesized a companion name");
-  Require(static_cast<int>(decoded.operation()) == 1,
-          "spec operation did not use wire value 1");
-
-  baml::detail::args_encoder stream_encoder;
-  stream_encoder.add_arg(
-      "text", [](baml::detail::pb::InboundValue& value) {
-        baml::codec<std::string>::encode(value, "hello");
-      });
-  const std::string stream_bytes = stream_encoder.finish(
-      9, "user.Extract", baml::function_operation::stream);
-  baml::detail::pb::CallFunctionArgs stream_call;
-  Require(stream_call.ParseFromString(stream_bytes),
-          "stream operation call did not parse");
-  Require(stream_call.function_name() == "user.Extract",
-          "stream operation rewrote the authored FQN");
-  Require(static_cast<int>(stream_call.operation()) == 2,
-          "stream operation did not use wire value 2");
-  Require(stream_call.kwargs_size() == 1,
-          "stream operation dropped authored arguments");
-
-  baml::detail::args_encoder handle_encoder;
-  const std::string handle_bytes = handle_encoder.finish(
-      9, uint64_t{41}, baml::function_operation::spec);
-  baml::detail::pb::CallFunctionArgs handle_call;
-  Require(handle_call.ParseFromString(handle_bytes),
-          "handle operation call did not parse");
-  Require(handle_call.function_handle() == 41,
-          "handle operation changed the target");
-  Require(static_cast<int>(handle_call.operation()) == 1,
-          "spec handle operation did not use wire value 1");
-}
-
 static void TestPortableValuesTranscodeWithoutHandles() {
   baml::detail::pb::BamlOutboundValue media;
   media.mutable_media_value()->set_media(
@@ -304,8 +262,6 @@ int main() {
   RunTest("call registry", TestCallRegistryRoundTrip);
   RunTest("argument states", TestArgTwoState);
   RunTest("owned buffer move", TestOwnedBufferMove);
-  RunTest("function operation authored FQN",
-          TestFunctionOperationUsesAuthoredFQN);
   RunTest("portable prompt and media",
           TestPortableValuesTranscodeWithoutHandles);
   RunTest("typed spec, stream, prompt, and media codecs",

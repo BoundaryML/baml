@@ -11,7 +11,7 @@ use baml_compiler2_hir::{
 use baml_type::{BuiltinTypeName, Package};
 use text_size::TextSize;
 
-use crate::{line_index::LineIndex, symbols::is_language_internal_definition};
+use crate::line_index::LineIndex;
 
 // ── ResolvedTarget ────────────────────────────────────────────────────────────
 
@@ -107,7 +107,7 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def.filter(|def| !is_language_internal_definition(db, *def)) {
+        if let Some(def) = def.filter(|def| !def.is_language_internal(db)) {
             return Some(ResolvedTarget::Item(def));
         }
     }
@@ -120,7 +120,7 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def.filter(|def| !is_language_internal_definition(db, *def)) {
+        if let Some(def) = def.filter(|def| !def.is_language_internal(db)) {
             return Some(ResolvedTarget::Member {
                 parent: def,
                 member_name,
@@ -368,7 +368,7 @@ fn make_entry<'db>(
     item_name: Name,
     def: Definition<'db>,
 ) -> Option<ListingEntry> {
-    if is_language_internal_definition(db, def) {
+    if def.is_language_internal(db) {
         return None;
     }
     let (file, name_span) = crate::syntax::definition_span(db, def)?;
@@ -603,10 +603,11 @@ test "identity" {
         assert!(resolve_target(&project.db, pkg_id, internal_name.as_str()).is_none());
     }
 
-    /// An LLM function is the sole listed function declaration; its private
-    /// ordinary spec/stream companions and PPIR partial types remain hidden.
+    /// The AST-level LLM companions stay visible in listings. `@stream` is
+    /// synthesized in PPIR rather than lowered as an item, so it is
+    /// deliberately absent.
     #[test]
-    fn llm_function_listing_has_no_operation_companions() {
+    fn llm_companions_remain_visible_in_listing() {
         let mut builder = ProjectTest::builder();
         builder.source(
             "functions.baml",
@@ -621,28 +622,24 @@ function summarize(input: string) -> string {
         let pkg_id = sole_workspace_package(&project.db);
         let entries = list_package_items(&project.db, pkg_id);
 
-        assert!(
-            entries
-                .iter()
-                .any(|entry| entry.item_name.as_str() == "summarize")
-        );
         for name in [
             "summarize@spec",
-            "summarize$spec",
-            "summarize$render_prompt",
-            "summarize$parse",
-            "summarize$stream",
-            "summarize@stream",
+            "summarize@render_prompt",
+            "summarize@build_request",
+            "summarize@parse",
         ] {
             assert!(
-                entries.iter().all(|entry| entry.item_name.as_str() != name),
-                "unexpected synthetic function `{name}` in describe listing; got {:?}",
+                entries.iter().any(|entry| entry.item_name.as_str() == name),
+                "expected `{name}` in describe listing; got {:?}",
                 entries
                     .iter()
                     .map(|entry| entry.item_name.as_str())
                     .collect::<Vec<_>>()
             );
-            assert!(resolve_target(&project.db, pkg_id, name).is_none());
+            assert!(matches!(
+                resolve_target(&project.db, pkg_id, name),
+                Some(ResolvedTarget::Item(_))
+            ));
         }
     }
 

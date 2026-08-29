@@ -44,7 +44,7 @@ async fn static_never_specialization_throws_compilation_error() {
             {GENERIC_LIST}
 
             function main() -> string throws never {{
-                let rendered = GenericList@spec<never>("items").prompt() catch (e) {{
+                let rendered = GenericList@render_prompt<never>("items") catch (e) {{
                     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
@@ -71,8 +71,7 @@ async fn runtime_never_specialization_uses_the_same_diagnostic() {
 
             function main() -> string throws never {{
                 let runtime_t = reflect.Type.of<never>()
-                type RuntimeT = unreflect(runtime_t)
-                let rendered = GenericList@spec<RuntimeT>("items").prompt() catch (e) {{
+                let rendered = GenericList@render_prompt<unreflect(runtime_t)>("items") catch (e) {{
                     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
@@ -129,7 +128,7 @@ async fn ordinary_data_specialization_still_renders() {
             }}
 
             function main() -> string throws unknown {{
-                GenericList@spec<Item>("items").prompt().text()
+                GenericList@render_prompt<Item>("items").text()
             }}
             "#
     );
@@ -157,7 +156,7 @@ async fn unknown_class_field_reports_its_path() {
             }}
 
             function main() -> string throws never {{
-                let rendered = GenericValue@spec<Payload>("payload").prompt() catch (e) {{
+                let rendered = GenericValue@render_prompt<Payload>("payload") catch (e) {{
                     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
@@ -191,7 +190,7 @@ async fn nested_non_data_class_field_reports_the_full_path() {
             }}
 
             function main() -> string throws never {{
-                let rendered = GenericValue@spec<Envelope>("envelope").prompt() catch (e) {{
+                let rendered = GenericValue@render_prompt<Envelope>("envelope") catch (e) {{
                     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
@@ -223,8 +222,7 @@ async fn runtime_minted_nested_non_data_field_is_rejected() {
                 let outer = reflect.class.new("RuntimeOuter", {{
                     "inner": inner.as_type(),
                 }})
-                type RuntimeOuter = unreflect(outer.as_type())
-                let rendered = GenericValue@spec<RuntimeOuter>("runtime").prompt() catch (e) {{
+                let rendered = GenericValue@render_prompt<unreflect(outer.as_type())>("runtime") catch (e) {{
                     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
@@ -259,7 +257,7 @@ async fn skipped_non_data_and_open_interface_fields_do_not_block_rendering() {
             }}
 
             function main() -> string throws unknown {{
-                GenericValue@spec<SkipControl>("visible data").prompt().text()
+                GenericValue@render_prompt<SkipControl>("visible data").text()
             }}
             "#
     );
@@ -297,7 +295,7 @@ async fn generic_data_class_output_renders() {
             }}
 
             function main() -> string throws unknown {{
-                GenericValue@spec<Wrapper<Item>>("wrapped item").prompt().text()
+                GenericValue@render_prompt<Wrapper<Item>>("wrapped item").text()
             }}
             "#
     );
@@ -348,7 +346,7 @@ async fn generic_class_output_fails_before_provider_io() {
     );
 }
 
-/// B-1582 item 4, verification: `never[]` reached through a generic spec is
+/// B-1582 item 4, verification: `never[]` reached through a generic companion is
 /// the ticket's exact shape. #4470 already rejects it with a catchable E0164
 /// rather than panicking in `output_format`; this pins the nested-in-a-container
 /// case, which is the one that could have escaped `first_non_data_type`'s walk.
@@ -364,8 +362,7 @@ async fn never_nested_in_a_runtime_class_field_is_rejected_not_panicked() {
                 }}) catch (e) {{
                     _ => return "class.new threw",
                 }}
-                type RuntimeOuter = unreflect(outer.as_type())
-                let rendered = GenericValue@spec<RuntimeOuter>("runtime").prompt()
+                let rendered = GenericValue@render_prompt<unreflect(outer.as_type())>("runtime")
                     catch (e) {{
                         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                         _ => "wrong error",

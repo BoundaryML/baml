@@ -524,7 +524,7 @@ class Stream<TStream, TFinal> {
 // default runner's first turn would, require a streaming-capable client, and
 // return the typed partial stream. PPIR's compiler-private `Fn@stream` entry
 // calls this function with the exact existing `Out$stream` partial schema.
-// Host stream shortcuts select that entry through the Stream bridge operation.
+// Host stream helpers call that ordinary companion FQN through the normal bridge.
 //
 // Streaming does not run the tool loop yet: a spec with a non-empty toolbox
 // is rejected. The client override is typed as the capability, so passing a

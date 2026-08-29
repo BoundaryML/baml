@@ -155,15 +155,12 @@ function buildArgs(args, requiredParamNames, optionalParamNames) {
  * that maps positional args to kwargs, encodes, calls the runtime, and decodes.
  * `sync` returns the decoded value; `async` returns a `Promise` of it.
  */
-export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamNames, generics, operation = 'direct') {
+export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamNames, generics) {
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
     // A free function / static method binds only its OWN generic params (a
     // generic receiver is never in play here), so `classTypeParams` is unused.
     const typeParams = generics?.typeParams ?? [];
-    if (operation !== 'direct' && operation !== 'spec' && operation !== 'stream') {
-        throw new TypeError(`unknown function operation ${JSON.stringify(operation)}`);
-    }
     const isGeneric = typeParams.length > 0;
     // Eagerly reject `$types` on a non-generic call, matching the generic path's
     // strict binding contract (mirrors Python's `is_generic` gate).
@@ -174,13 +171,7 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
             const typeArgs = typeArgsFor(built);
             const rt = getRuntime();
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(built.kwargs, {
-                syncMode: true,
-                callId,
-                typeArgs,
-                functionName: bamlFqn,
-                operation,
-            });
+            const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn });
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {
                 const resultBytes = rt.callFunctionSync(argsProto, null, null);
@@ -197,12 +188,7 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
             const typeArgs = typeArgsFor(built);
             const rt = getRuntime();
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(built.kwargs, {
-                callId,
-                typeArgs,
-                functionName: bamlFqn,
-                operation,
-            });
+            const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn });
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {
                 const resultBytes = await rt.callFunction(argsProto, null, null);
@@ -222,7 +208,7 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
  * captures the instance at construction time; the synthetic `self` param never
  * appears in the surface type.
  */
-export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, optionalParamNames, generics, operation = 'direct') {
+export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, optionalParamNames, generics) {
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
     const selfName = requiredNames[0] ?? 'self';
@@ -247,7 +233,7 @@ export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, option
                     const typeArgs = typeArgsFor(built);
                     const rt = getRuntime();
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn, operation });
+                    const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn });
                     const callCtxBinding = attachCallContext(built.ctx, callId);
                     try {
                         const resultBytes = rt.callFunctionSync(argsProto, null, null);
@@ -264,7 +250,7 @@ export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, option
                     const typeArgs = typeArgsFor(built);
                     const rt = getRuntime();
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn, operation });
+                    const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn });
                     const callCtxBinding = attachCallContext(built.ctx, callId);
                     try {
                         const resultBytes = await rt.callFunction(argsProto, null, null);

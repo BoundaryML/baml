@@ -166,10 +166,10 @@ function main(id: boundary.LocalId) -> string {
 #[test]
 fn backtick_llm_function_compiles_to_agent_loop() {
     // Single-path world: a backtick prompt in an LLM function desugars to the
-    // ai Agent loop. Its prompt recipe lives in a private ordinary `@spec`
-    // companion, and the authored direct function delegates to that one
-    // canonical recipe. The `${name}` interpolation captures the function
-    // parameter inside the spec's prompt closure.
+    // ai Agent loop — the direct-call body runs
+    // `ai.Agent<Out>.new(client = client).run(Greet@spec(...))` and the
+    // `Greet@spec` companion builds the bound `ai.FunctionSpec`. The `${name}`
+    // interp captures the function param inside the spec's prompt closure.
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -188,13 +188,13 @@ function Greet(name: string) -> string {
         "backtick LLM function should compile clean, got:\n{tir}"
     );
     assert!(
-        tir.contains("FunctionSpec") && tir.contains("function user.Greet@spec"),
-        "the private ordinary companion should build the ai.FunctionSpec, got:\n{tir}"
+        tir.contains("Greet@spec") && tir.contains("FunctionSpec"),
+        "the spec companion should build an ai.FunctionSpec, got:\n{tir}"
     );
 }
 
 #[test]
-fn llm_spec_companion_applies_defaulted_arguments() {
+fn llm_companions_name_defaulted_spec_arguments() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -207,7 +207,7 @@ function Greet(name: string, suffix: string = "!") -> string {
 }
 
 function main() -> string {
-  Greet@spec("Ada").prompt().text()
+  Greet@render_prompt("Ada").text()
 }
 "#,
     );
@@ -215,16 +215,32 @@ function main() -> string {
     let tir = render_tir(&db, file);
     assert!(
         !tir.contains("!!"),
-        "defaulted LLM spec companion call should compile without diagnostics:\n{tir}"
+        "defaulted LLM companions should compile without diagnostics:\n{tir}"
     );
     assert!(
-        tir.contains("Greet@spec(\"Ada\")") && tir.contains("function user.Greet@spec"),
-        "the source projection should resolve to the private ordinary companion:\n{tir}"
+        tir.contains("Greet@render_prompt(name: string, suffix: string = \"!\")")
+            && tir.contains("Greet@build_request(name: string, suffix: string = \"!\", client:")
+            && tir.contains("suffix = suffix"),
+        "render-prompt/build-request companions must preserve the defaulted argument as named:\n{tir}"
     );
     assert!(
-        tir.contains("ai.Agent.new(client = client, on_event = on_event)")
-            && tir.contains("\"suffix\": suffix"),
-        "the direct call must bind the defaulted argument in its private recipe and thread on_event:\n{tir}"
+        tir.contains(
+            "ai.Agent.new(client = client, on_event = on_event).run(Greet@spec(name, suffix = suffix)).value"
+        ),
+        "the direct-call companion must name the defaulted spec argument and thread on_event:\n{tir}"
+    );
+    // Bind the argument tuple to the from_spec call itself: the tuple must
+    // appear right after this marker's generic args, not just anywhere in the
+    // rendered TIR.
+    let stream_call = tir
+        .split("ai.stream.from_spec<")
+        .nth(1)
+        .unwrap_or_else(|| panic!("stream companion must call ai.stream.from_spec:\n{tir}"));
+    let window = &stream_call[..stream_call.len().min(200)];
+    assert!(
+        window
+            .contains("(Greet@spec(name, suffix = suffix), client = client, on_event = on_event)"),
+        "the stream companion must pass spec, client, and on_event to from_spec:\n{tir}"
     );
 }
 
@@ -877,8 +893,8 @@ function f() -> string {
 fn llm_client_override_argument_is_callable_on_function() {
     // The compiler injects a `client: ai.Client? = null` override parameter on
     // every LLM function; a call site can pass any ai.Client value for it.
-    // `FunctionSpec.build_request` has its own client override; the authored
-    // direct call retains this injected override.
+    // The generated `@build_request` companion shares the client override with
+    // the parent LLM function.
     let mut db = make_db();
     let file = db.file(
         "test.baml",

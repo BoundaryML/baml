@@ -26,7 +26,6 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
-#include "google/protobuf/generated_enum_util.h"
 #include "baml_bridge/cffi/v1/baml_handle.pb.h"
 #include "baml_bridge/cffi/v1/baml_outbound.pb.h"
 #include "baml_bridge/cffi/v1/baml_type.pb.h"
@@ -53,8 +52,6 @@ struct TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5finbound_2eproto {
 namespace baml_bridge {
 namespace cffi {
 namespace v1 {
-enum FunctionOperation : int;
-extern const uint32_t FunctionOperation_internal_data_[];
 class BamlTyArg;
 struct BamlTyArgDefaultTypeInternal;
 extern BamlTyArgDefaultTypeInternal _BamlTyArg_default_instance_;
@@ -96,44 +93,12 @@ extern const ::google::protobuf::internal::ClassDataLite<33> InboundValue_class_
 }  // namespace baml_bridge
 namespace google {
 namespace protobuf {
-template <>
-internal::EnumTraitsT<::baml_bridge::cffi::v1::FunctionOperation_internal_data_>
-    internal::EnumTraitsImpl::value<::baml_bridge::cffi::v1::FunctionOperation>;
 }  // namespace protobuf
 }  // namespace google
 
 namespace baml_bridge {
 namespace cffi {
 namespace v1 {
-enum FunctionOperation : int {
-  FUNCTION_OPERATION_DIRECT = 0,
-  FUNCTION_OPERATION_SPEC = 1,
-  FUNCTION_OPERATION_STREAM = 2,
-  FunctionOperation_INT_MIN_SENTINEL_DO_NOT_USE_ =
-      ::std::numeric_limits<::int32_t>::min(),
-  FunctionOperation_INT_MAX_SENTINEL_DO_NOT_USE_ =
-      ::std::numeric_limits<::int32_t>::max(),
-};
-
-extern const uint32_t FunctionOperation_internal_data_[];
-inline constexpr FunctionOperation FunctionOperation_MIN =
-    static_cast<FunctionOperation>(0);
-inline constexpr FunctionOperation FunctionOperation_MAX =
-    static_cast<FunctionOperation>(2);
-inline bool FunctionOperation_IsValid(int value) {
-  return 0 <= value && value <= 2;
-}
-inline constexpr int FunctionOperation_ARRAYSIZE = 2 + 1;
-const ::std::string& FunctionOperation_Name(FunctionOperation value);
-template <typename T>
-const ::std::string& FunctionOperation_Name(T value) {
-  static_assert(::std::is_same<T, FunctionOperation>::value ||
-                    ::std::is_integral<T>::value,
-                "Incorrect type passed to FunctionOperation_Name().");
-  return FunctionOperation_Name(static_cast<FunctionOperation>(value));
-}
-bool FunctionOperation_Parse(
-    ::absl::string_view name, FunctionOperation* PROTOBUF_NONNULL value);
 
 // ===================================================================
 
@@ -2228,7 +2193,6 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
     kKwargsFieldNumber = 1,
     kTypeArgsFieldNumber = 3,
     kCallIdFieldNumber = 2,
-    kOperationFieldNumber = 6,
     kFunctionNameFieldNumber = 4,
     kFunctionHandleFieldNumber = 5,
   };
@@ -2276,16 +2240,6 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
   void _internal_set_call_id(::uint64_t value);
 
   public:
-  // .baml_bridge.cffi.v1.FunctionOperation operation = 6;
-  void clear_operation() ;
-  ::baml_bridge::cffi::v1::FunctionOperation operation() const;
-  void set_operation(::baml_bridge::cffi::v1::FunctionOperation value);
-
-  private:
-  ::baml_bridge::cffi::v1::FunctionOperation _internal_operation() const;
-  void _internal_set_operation(::baml_bridge::cffi::v1::FunctionOperation value);
-
-  public:
   // string function_name = 4;
   bool has_function_name() const;
   void clear_function_name() ;
@@ -2323,7 +2277,7 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
   inline bool has_call_target() const;
   inline void clear_has_call_target();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 6,
+  static const ::google::protobuf::internal::TcParseTable<2, 5,
                                    2, 58,
                                    2>
       _table_;
@@ -2348,7 +2302,6 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
     ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::InboundMapEntry > kwargs_;
     ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::BamlTyArg > type_args_;
     ::uint64_t call_id_;
-    int operation_;
     union CallTargetUnion {
       constexpr CallTargetUnion() : _constinit_{} {}
       ::google::protobuf::internal::ConstantInitialized _constinit_;
@@ -4660,30 +4613,6 @@ inline ::uint64_t CallFunctionArgs::_internal_function_handle() const {
   return ::uint64_t{0u};
 }
 
-// .baml_bridge.cffi.v1.FunctionOperation operation = 6;
-inline void CallFunctionArgs::clear_operation() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.operation_ = 0;
-  _impl_._has_bits_[0] &= ~0x00000002u;
-}
-inline ::baml_bridge::cffi::v1::FunctionOperation CallFunctionArgs::operation() const {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.CallFunctionArgs.operation)
-  return _internal_operation();
-}
-inline void CallFunctionArgs::set_operation(::baml_bridge::cffi::v1::FunctionOperation value) {
-  _internal_set_operation(value);
-  _impl_._has_bits_[0] |= 0x00000002u;
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.CallFunctionArgs.operation)
-}
-inline ::baml_bridge::cffi::v1::FunctionOperation CallFunctionArgs::_internal_operation() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return static_cast<::baml_bridge::cffi::v1::FunctionOperation>(_impl_.operation_);
-}
-inline void CallFunctionArgs::_internal_set_operation(::baml_bridge::cffi::v1::FunctionOperation value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.operation_ = value;
-}
-
 inline bool CallFunctionArgs::has_call_target() const {
   return call_target_case() != CALL_TARGET_NOT_SET;
 }
@@ -4800,15 +4729,6 @@ inline CallAck::ResponseCase CallAck::response_case() const {
 }  // namespace cffi
 }  // namespace baml_bridge
 
-
-namespace google {
-namespace protobuf {
-
-template <>
-struct is_proto_enum<::baml_bridge::cffi::v1::FunctionOperation> : std::true_type {};
-
-}  // namespace protobuf
-}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

@@ -20,8 +20,8 @@
 use std::{panic::AssertUnwindSafe, sync::Arc};
 
 use bex_project::{
-    Bex, BexArgs, BexExternalValue, EngineError, FunctionCallContext, FunctionOperation,
-    RuntimeError, UnhandledSpawnError,
+    Bex, BexArgs, BexExternalValue, EngineError, FunctionCallContext, RuntimeError,
+    UnhandledSpawnError,
 };
 use bridge_ctypes::{
     CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
@@ -252,7 +252,7 @@ pub fn unhandled_spawn_error_to_outbound(error: UnhandledSpawnError) -> Vec<u8> 
 /// `GenericSdkError` (setup / internal), reusing the same synthesis helpers —
 /// no new construction logic.
 pub fn error_to_outbound(err: BridgeError) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_in_process();
+    let options = CffiHandleTableOptions::for_wire();
     let inner = match err {
         // Reuse the engine-error mapping verbatim for the wrapped RuntimeError.
         BridgeError::Runtime(rt) => result_to_outbound(Err(rt), &options)
@@ -265,7 +265,6 @@ pub fn error_to_outbound(err: BridgeError) -> Vec<u8> {
         | BridgeError::FunctionHandleTypeArgs
         | BridgeError::FunctionNotFound { .. }
         | BridgeError::MissingArgument { .. }
-        | BridgeError::InvalidFunctionOperation(_)
         | BridgeError::InvalidCallId) => infra_error_arm(
             message_instance(INVALID_ARGUMENT_CLASS, err.to_string()),
             &options,
@@ -304,7 +303,7 @@ fn panic_message(panic_info: &(dyn std::any::Any + Send)) -> String {
 /// `BamlOutboundPanic` envelope as a call-time panic — uniform with every other
 /// result.
 pub fn panic_to_outbound(panic_info: &(dyn std::any::Any + Send)) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_in_process();
+    let options = CffiHandleTableOptions::for_wire();
     BamlOutboundResult {
         result: Some(sdk_panic_arm(panic_message(panic_info), &options)),
     }
@@ -326,73 +325,12 @@ pub async fn call_and_encode(
     args: BexArgs,
     call_ctx: FunctionCallContext,
 ) -> Vec<u8> {
-    call_operation_and_encode(
-        runtime,
-        function_name,
-        FunctionOperation::Direct,
-        args,
-        call_ctx,
-    )
-    .await
-}
-
-/// Invoke a semantic projection of an authored BAML function and encode the
-/// result. The operation is carried independently of the authored FQN; this
-/// path never constructs or looks up a suffixed companion name.
-pub async fn call_operation_and_encode(
-    runtime: Arc<dyn Bex>,
-    function_name: String,
-    operation: FunctionOperation,
-    args: BexArgs,
-    call_ctx: FunctionCallContext,
-) -> Vec<u8> {
     let options = CffiHandleTableOptions::for_wire();
-    call_operation_and_encode_with_options(
-        runtime,
-        function_name,
-        operation,
-        args,
-        call_ctx,
-        options,
-    )
-    .await
-}
-
-/// Python/PyO3 call path: encode media and prompt ASTs as owned payloads.
-pub async fn call_and_encode_portable_values(
-    runtime: Arc<dyn Bex>,
-    function_name: String,
-    args: BexArgs,
-    call_ctx: FunctionCallContext,
-) -> Vec<u8> {
-    call_operation_and_encode(
-        runtime,
-        function_name,
-        FunctionOperation::Direct,
-        args,
-        call_ctx,
-    )
-    .await
-}
-
-async fn call_operation_and_encode_with_options(
-    runtime: Arc<dyn Bex>,
-    function_name: String,
-    operation: FunctionOperation,
-    args: BexArgs,
-    call_ctx: FunctionCallContext,
-    options: CffiHandleTableOptions<'_>,
-) -> Vec<u8> {
     let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
 
-    let caught = AssertUnwindSafe(runtime.call_function_operation(
-        &function_name,
-        operation,
-        args,
-        call_ctx,
-    ))
-    .catch_unwind()
-    .await;
+    let caught = AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx))
+        .catch_unwind()
+        .await;
 
     let result = match caught {
         Ok(call_result) => result_to_outbound(call_result, &options),
@@ -439,60 +377,6 @@ pub async fn call_handle_and_encode(
     BexArgs { required, optional }: BexArgs,
     call_ctx: FunctionCallContext,
 ) -> Vec<u8> {
-    call_handle_operation_and_encode(
-        runtime,
-        handle_key,
-        FunctionOperation::Direct,
-        BexArgs { required, optional },
-        call_ctx,
-    )
-    .await
-}
-
-/// Invoke a semantic projection of a live authored function value.
-pub async fn call_handle_operation_and_encode(
-    runtime: Arc<dyn Bex>,
-    handle_key: u64,
-    operation: FunctionOperation,
-    args: BexArgs,
-    call_ctx: FunctionCallContext,
-) -> Vec<u8> {
-    call_handle_operation_and_encode_with_options(
-        runtime,
-        handle_key,
-        operation,
-        args,
-        call_ctx,
-        CffiHandleTableOptions::for_wire(),
-    )
-    .await
-}
-
-/// Python/PyO3 callable path: encode media and prompt ASTs as owned payloads.
-pub async fn call_handle_and_encode_portable_values(
-    runtime: Arc<dyn Bex>,
-    handle_key: u64,
-    args: BexArgs,
-    call_ctx: FunctionCallContext,
-) -> Vec<u8> {
-    call_handle_operation_and_encode(
-        runtime,
-        handle_key,
-        FunctionOperation::Direct,
-        args,
-        call_ctx,
-    )
-    .await
-}
-
-async fn call_handle_operation_and_encode_with_options(
-    runtime: Arc<dyn Bex>,
-    handle_key: u64,
-    operation: FunctionOperation,
-    BexArgs { required, optional }: BexArgs,
-    call_ctx: FunctionCallContext,
-    options: CffiHandleTableOptions<'_>,
-) -> Vec<u8> {
     let mut supplied = required;
     supplied.extend(optional);
     let (handle, args) = match HANDLE_TABLE.resolve(handle_key) {
@@ -530,11 +414,11 @@ async fn call_handle_operation_and_encode_with_options(
         }
     };
 
+    let options = CffiHandleTableOptions::for_wire();
     let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
-    let caught =
-        AssertUnwindSafe(runtime.call_callable_operation(handle, operation, args, call_ctx))
-            .catch_unwind()
-            .await;
+    let caught = AssertUnwindSafe(runtime.call_callable(handle, args, call_ctx))
+        .catch_unwind()
+        .await;
     let result = match caught {
         Ok(call_result) => result_to_outbound(call_result, &options),
         Err(panic_info) => BamlOutboundResult {

@@ -1,23 +1,13 @@
 from baml_bridge.cffi.v1 import baml_handle_pb2 as _baml_handle_pb2
-from baml_bridge.cffi.v1 import baml_outbound_pb2 as _baml_outbound_pb2
 from baml_bridge.cffi.v1 import baml_type_pb2 as _baml_type_pb2
+from baml_bridge.cffi.v1 import baml_outbound_pb2 as _baml_outbound_pb2
 from google.protobuf.internal import containers as _containers
-from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
 from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
-
-class FunctionOperation(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
-    __slots__ = ()
-    FUNCTION_OPERATION_DIRECT: _ClassVar[FunctionOperation]
-    FUNCTION_OPERATION_SPEC: _ClassVar[FunctionOperation]
-    FUNCTION_OPERATION_STREAM: _ClassVar[FunctionOperation]
-FUNCTION_OPERATION_DIRECT: FunctionOperation
-FUNCTION_OPERATION_SPEC: FunctionOperation
-FUNCTION_OPERATION_STREAM: FunctionOperation
 
 class InboundValue(_message.Message):
     __slots__ = ("value_type", "string_value", "int_value", "float_value", "bool_value", "list_value", "map_value", "class_value", "enum_value", "handle", "uint8array_value", "bigint_value", "ty_value", "ty_def_value", "media_value", "prompt_ast_value")
@@ -106,20 +96,18 @@ class BamlTyArg(_message.Message):
     def __init__(self, type_var: _Optional[str] = ..., type_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., type_definition: _Optional[_Union[_baml_type_pb2.BamlTyDef, _Mapping]] = ...) -> None: ...
 
 class CallFunctionArgs(_message.Message):
-    __slots__ = ("kwargs", "call_id", "type_args", "function_name", "function_handle", "operation")
+    __slots__ = ("kwargs", "call_id", "type_args", "function_name", "function_handle")
     KWARGS_FIELD_NUMBER: _ClassVar[int]
     CALL_ID_FIELD_NUMBER: _ClassVar[int]
     TYPE_ARGS_FIELD_NUMBER: _ClassVar[int]
     FUNCTION_NAME_FIELD_NUMBER: _ClassVar[int]
     FUNCTION_HANDLE_FIELD_NUMBER: _ClassVar[int]
-    OPERATION_FIELD_NUMBER: _ClassVar[int]
     kwargs: _containers.RepeatedCompositeFieldContainer[InboundMapEntry]
     call_id: int
     type_args: _containers.RepeatedCompositeFieldContainer[BamlTyArg]
     function_name: str
     function_handle: int
-    operation: FunctionOperation
-    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., call_id: _Optional[int] = ..., type_args: _Optional[_Iterable[_Union[BamlTyArg, _Mapping]]] = ..., function_name: _Optional[str] = ..., function_handle: _Optional[int] = ..., operation: _Optional[_Union[FunctionOperation, str]] = ...) -> None: ...
+    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., call_id: _Optional[int] = ..., type_args: _Optional[_Iterable[_Union[BamlTyArg, _Mapping]]] = ..., function_name: _Optional[str] = ..., function_handle: _Optional[int] = ...) -> None: ...
 
 class CallAck(_message.Message):
     __slots__ = ("error",)

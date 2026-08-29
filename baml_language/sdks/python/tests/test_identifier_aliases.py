@@ -107,9 +107,7 @@ def test_define_function_preserves_generated_callable_metadata_and_generic_wrapp
     assert generic_method.__wrapped__.__name__ == "map_async"
 
 
-def test_stream_shortcut_sends_authored_args_and_controls_to_stream_projection(
-    monkeypatch,
-):
+def test_stream_companion_calls_its_exact_fqn(monkeypatch):
     encoded_calls = []
 
     class FakeRuntime:
@@ -121,8 +119,8 @@ def test_stream_shortcut_sends_authored_args_and_controls_to_stream_projection(
             assert args == b"encoded"
             return b"stream"
 
-    def fake_encode(kwargs, call_id, type_args, *, function_name, operation):
-        encoded_calls.append((kwargs, call_id, type_args, function_name, operation))
+    def fake_encode(kwargs, call_id, type_args, *, function_name):
+        encoded_calls.append((kwargs, call_id, type_args, function_name))
         return b"encoded"
 
     monkeypatch.setattr(baml_bridge, "new_function_call", lambda: 42)
@@ -135,32 +133,27 @@ def test_stream_shortcut_sends_authored_args_and_controls_to_stream_projection(
 
     listener = object()
     sync_stream = baml_bridge.define_function(
-        "user.plan",
+        "user.plan@stream",
         "sync",
         ["prompt"],
         ["on_event"],
-        projection="stream",
     )
     async_stream = baml_bridge.define_function(
-        "user.plan",
+        "user.plan@stream",
         "async",
         ["prompt"],
         ["on_event"],
-        projection="stream",
     )
 
     assert sync_stream("hello", on_event=listener) == "stream"
     assert asyncio.run(async_stream("world", on_event=listener)) == "stream"
     assert encoded_calls == [
-        ({"prompt": "hello", "on_event": listener}, 42, None, "user.plan", "stream"),
-        ({"prompt": "world", "on_event": listener}, 42, None, "user.plan", "stream"),
+        ({"prompt": "hello", "on_event": listener}, 42, None, "user.plan@stream"),
+        ({"prompt": "world", "on_event": listener}, 42, None, "user.plan@stream"),
     ]
 
 
-def test_stream_is_a_boundary_function_operation():
-    encoded = baml_bridge.encode_call_args(
-        {}, 1, function_name="user.plan", operation="stream"
-    )
+def test_stream_exact_fqn_is_preserved_on_the_wire():
+    encoded = baml_bridge.encode_call_args({}, 1, function_name="user.plan@stream")
     decoded = baml_inbound_pb2.CallFunctionArgs.FromString(encoded)
-    assert decoded.function_name == "user.plan"
-    assert decoded.operation == baml_inbound_pb2.FUNCTION_OPERATION_STREAM
+    assert decoded.function_name == "user.plan@stream"

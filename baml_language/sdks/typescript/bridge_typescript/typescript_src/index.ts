@@ -13,7 +13,7 @@ import {
     cancelFunctionCall as nativeCancelFunctionCall,
     newFunctionCall as nativeNewFunctionCall,
 } from './native.js';
-import { encodeCallArgs, decodeCallResult, type FunctionOperation } from './proto.js';
+import { encodeCallArgs, decodeCallResult } from './proto.js';
 import { installFlushOnExit } from './exit_hook.js';
 import { wrapNativeError } from './errors.js';
 import { attachCallContext } from './call_context.js';
@@ -39,11 +39,7 @@ export { BamlStream } from './stream.js';
 export { BamlFunctionSpec } from './function_spec.js';
 export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from './function_spec.js';
 export { BamlPrompt, encodeCallArgs, decodeCallResult } from './proto.js';
-export type {
-    BamlPromptCallOptions,
-    BamlPromptMessage,
-    FunctionOperation,
-} from './proto.js';
+export type { BamlPromptCallOptions, BamlPromptMessage } from './proto.js';
 export { CtxManager } from './ctx_manager.js';
 // Codegen support: typemap + placeholder sentinel + free runtime initializer.
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
@@ -155,14 +151,13 @@ export function callFunctionSync(
     ctx?: HostSpanManager,
     collectors?: Collector[],
     callCtx?: BamlCallContext,
-    operation: FunctionOperation = 'direct',
 ): FunctionResult {
     // Encode in sync mode so a host callable in the kwargs fast-fails
     // with a clear error instead of registering a tsfn and then hanging —
     // the sync path blocks the Node main thread on a tokio `block_on`,
     // starving libuv so the dispatch could never run.
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId, functionName, operation });
+    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId, functionName });
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
@@ -190,10 +185,9 @@ export async function callFunction(
     ctx?: HostSpanManager,
     collectors?: Collector[],
     callCtx?: BamlCallContext,
-    operation: FunctionOperation = 'direct',
 ): Promise<FunctionResult> {
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { callId, functionName, operation });
+    const argsProto = encodeCallArgs(kwargs, { callId, functionName });
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`

@@ -203,20 +203,12 @@ impl<'a> GoTypeProjection<'a> {
 
     fn collect(&mut self) {
         fn function_tys(function: &baml_codegen_types::Function) -> Vec<&Ty> {
-            let mut tys = function
+            function
                 .arguments
                 .iter()
                 .map(|argument| &argument.ty)
                 .chain(std::iter::once(&function.return_type))
-                .collect::<Vec<_>>();
-            if let Some(spec) = &function.operations.spec {
-                tys.push(&spec.return_type);
-            }
-            if let Some(stream) = &function.operations.stream {
-                tys.extend([&stream.return_type, &stream.partial_type, &stream.item_type]);
-                tys.extend(stream.control_arguments.iter().map(|argument| &argument.ty));
-            }
-            tys
+                .collect()
         }
 
         let symbols = self

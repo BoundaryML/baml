@@ -603,9 +603,11 @@ fn editing_a_function_body_preserves_its_signature_data() {
 fn function_scope_index_agrees_with_the_span_join_it_replaces() {
     let mut test_db = IncrementalTestDb::new();
 
-    // Includes a declarative LLM function and its compiler-generated private
-    // companions. Every canonical function must have one unambiguous scope
-    // entry even when the companions share the authored declaration's span.
+    // Includes a declarative LLM function: those synthesize companion functions,
+    // and `scope_at_offset`'s own docs note companions "share the same span as
+    // their parent" — so the span-join was ambiguous exactly there. If the index
+    // and the scan disagree for any of these, migrating the call sites is a
+    // behavior change and needs to be handled deliberately.
     let file = test_db.db_mut().file(
         "test.baml",
         "function Add(x: int, y: int) -> int {\n  x + y\n}\n\n\
@@ -617,11 +619,24 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
 
     let db = test_db.db();
     let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    // Guard against a vacuous test: the declarative `Greet` must actually have
+    // synthesized companions, or the ambiguous case is not being exercised.
     let functions = baml_compiler2_ppir::item_data::file_functions(db, file);
-    assert_eq!(
-        functions.len(),
-        6,
-        "fixture should contain four authored functions plus both private LLM companions"
+    let companions = functions
+        .iter()
+        .filter(|&&loc| {
+            !matches!(
+                baml_compiler2_ppir::item_data::function_data(db, loc)
+                    .metadata
+                    .origin,
+                baml_compiler2_ast::FunctionOrigin::UserDefined
+            )
+        })
+        .count();
+    assert!(
+        companions > 0,
+        "fixture should synthesize companions; got {} functions, none synthetic",
+        functions.len()
     );
 
     for &loc in functions {

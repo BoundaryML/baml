@@ -2,7 +2,7 @@
 
 use baml_codegen_types::{
     Class, ClassProperty, CodegenFunctionParamMode, Enum, EnumVariant, Function, FunctionArgument,
-    FunctionOperations, SpecOperation, StreamOperation, Symbol, Ty, TypeAlias,
+    Symbol, Ty, TypeAlias,
 };
 
 use crate::model::CodegenModel;
@@ -81,7 +81,7 @@ fn normalize_symbol(symbol: &Symbol) -> Symbol {
 /// are never `injected`, whatever their name or shape. Remove this filter
 /// when the events family gets a C# projection.
 fn is_unrepresentable_on_event(argument: &FunctionArgument) -> bool {
-    argument.injected && argument.name.as_str() == "on_event"
+    argument.injected
 }
 
 fn normalize_function(function: &Function) -> Function {
@@ -102,36 +102,6 @@ fn normalize_function(function: &Function) -> Function {
             })
             .collect(),
         return_type: normalize_ty(&function.return_type),
-        operations: FunctionOperations {
-            spec: function
-                .operations
-                .spec
-                .as_ref()
-                .map(|operation| SpecOperation {
-                    return_type: normalize_ty(&operation.return_type),
-                }),
-            stream: function
-                .operations
-                .stream
-                .as_ref()
-                .map(|operation| StreamOperation {
-                    return_type: normalize_ty(&operation.return_type),
-                    partial_type: normalize_ty(&operation.partial_type),
-                    item_type: normalize_ty(&operation.item_type),
-                    control_arguments: operation
-                        .control_arguments
-                        .iter()
-                        .filter(|argument| !is_unrepresentable_on_event(argument))
-                        .map(|argument| FunctionArgument {
-                            injected: argument.injected,
-                            name: argument.name.clone(),
-                            docstring: argument.docstring.clone(),
-                            ty: normalize_ty(&argument.ty),
-                            default: argument.default.clone(),
-                        })
-                        .collect(),
-                }),
-        },
         throws: function.throws.as_ref().map(normalize_ty),
         watchers: function
             .watchers

@@ -274,7 +274,6 @@ mod tests {
                 default: None,
             }],
             return_type: int(),
-            operations: Default::default(),
             throws: Some(effect_var()),
             watchers: Vec::new(),
             origin: Origin {

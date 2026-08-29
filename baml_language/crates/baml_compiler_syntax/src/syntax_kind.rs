@@ -270,16 +270,9 @@ pub enum SyntaxKind {
     QUALIFIED_PATH_EXPR,
     /// LLM function spec reference: `MyFunc@spec` (postfix `@spec` on a path).
     ///
-    /// Structure: `<PATH_EXPR> AT WORD("spec")`. AST lowering rewrites the
-    /// terminal callable name and resolves the compiler-private ordinary spec
-    /// companion through the normal path/member machinery.
+    /// Structure: `<PATH_EXPR> AT WORD("spec")`. Lowered by renaming the
+    /// path's last segment to the `<name>@spec` companion function.
     SPEC_EXPR,
-    /// LLM function stream companion reference: `MyFunc@stream`.
-    ///
-    /// Structure: `<PATH_EXPR> AT WORD("stream")`. PPIR supplies the matching
-    /// compiler-private stream function; AST lowering resolves this syntax to
-    /// that ordinary function entry.
-    STREAM_EXPR,
     /// Optional field access: `obj?.field` — short-circuits to null if base is null.
     ///
     /// Structure: `<base_expr> QUESTION_DOT WORD`

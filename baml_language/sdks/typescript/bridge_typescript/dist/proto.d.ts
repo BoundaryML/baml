@@ -20,9 +20,6 @@ export interface EncodeCallArgsOptions {
     syncMode?: boolean;
     functionName?: string;
     functionHandle?: HandleKey;
-    /** Bridge operation for an authored BAML function. Omitted means the
-     * backwards-compatible direct call (wire value 0). */
-    operation?: FunctionOperation;
     /**
      * Call-level TypeVar bindings for a generic function/method, as
      * `[typeVarName, wireTy]` pairs in De Bruijn order (enclosing class params
@@ -32,7 +29,6 @@ export interface EncodeCallArgsOptions {
      */
     typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy | BamlType]>;
 }
-export type FunctionOperation = 'direct' | 'spec' | 'stream';
 export interface BamlPromptCallOptions {
     $ctx?: BamlCallContext;
 }

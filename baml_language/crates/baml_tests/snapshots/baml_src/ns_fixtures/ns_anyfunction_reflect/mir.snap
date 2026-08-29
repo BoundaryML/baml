@@ -406,6 +406,80 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null
     }
 }
 
+fn user.fixtures.anyfunction_reflect.RuntimeClassify@build_request(input: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // input // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<T>
+    let _5: reflect.Type
+    let _6: reflect.Type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = load_type(#0);
+        _4 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec<copy _5>(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _6 = load_type(#0);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _6>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.RuntimeClassify@parse(json: string) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: string // json // param
+    let _2: reflect.Type
+
+    bb0: {
+        _2 = load_type(#0);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.RuntimeClassify@render_prompt(input: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // input // param
+    let _2: ai.FunctionSpec<T>
+    let _3: reflect.Type
+    let _4: reflect.Type
+
+    bb0: {
+        _3 = load_type(#0);
+        _2 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(#0);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _4>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec(input: string) -> ai.FunctionSpec<T> {
     // Locals:
     let _0: ai.FunctionSpec<T> // _0 // return
@@ -606,17 +680,14 @@ fn user.fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> st
     let _1: reflect.enum.Type // category
     let _2: (string | reflect.enum.Value)[]
     let _3: reflect.enum.Value
-    let _4: reflect.enum.Type
-    let _5: ai.FunctionSpec<CategoryOutput> // spec
-    let _6: reflect.Type
-    let _7: string // prompt
-    let _8: ai.Prompt
-    let _9: reflect.Type
-    let _10: CategoryOutput // parsed
-    let _11: reflect.Type
-    let _12: string
-    let _13: string
-    let _14: CategoryOutput
+    let _4: string // prompt
+    let _5: ai.Prompt
+    let _6: reflect.enum.Type
+    let _7: unknown // parsed
+    let _8: reflect.enum.Type
+    let _9: string
+    let _10: string
+    let _11: unknown
 
     bb0: {
         _3 = call const fn reflect.enum.value(const "RED", const "k7", const "warm", const <omitted>, const <omitted>) -> [bb1];
@@ -628,38 +699,31 @@ fn user.fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> st
     }
 
     bb2: {
-        _4 = copy _1;
-        bind_type(0, [Copy(Local(Local(4)))]);
-        _6 = load_type(#0);
-        _5 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec<copy _6>(const "sample") -> [bb3];
+        _6 = copy _1;
+        _5 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@render_prompt<copy _6>(const "sample"; runtime_type_check) -> [bb3];
     }
 
     bb3: {
-        _9 = load_type(#0);
-        _8 = call const fn ai.FunctionSpec.prompt<copy _9>(copy _5) -> [bb4];
+        _4 = call const fn ai.Prompt.text(copy _5) -> [bb4];
     }
 
     bb4: {
-        _7 = call const fn ai.Prompt.text(copy _8) -> [bb5];
+        _8 = copy _1;
+        _7 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@parse<copy _8>(const "\"k7\""; runtime_type_check) -> [bb5];
     }
 
     bb5: {
-        _11 = load_type(#0);
-        _10 = call const fn ai.FunctionSpec.parse<copy _11>(copy _5, const "\"k7\"") -> [bb6];
+        _9 = copy _4;
+        _11 = copy _7;
+        _10 = call const fn reflect.enum.get_value(copy _11) -> [bb6];
     }
 
     bb6: {
-        _12 = copy _7;
-        _14 = copy _10;
-        _13 = call const fn reflect.enum.get_value(copy _14) -> [bb7];
+        _0 = copy _9 + copy _10;
+        goto -> bb7;
     }
 
     bb7: {
-        _0 = copy _12 + copy _13;
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }

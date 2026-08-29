@@ -475,7 +475,7 @@ mod tests {
             "project": "/tmp/project",
             "parentFunctionName": "Extract",
             "helper": "render_prompt",
-            "functionName": "Extract",
+            "functionName": "Extract@render_prompt",
             "argsBytes": ""
         }))
         .unwrap();
@@ -489,7 +489,7 @@ mod tests {
                 ..
             } if parent_function_name == "Extract"
                 && helper == "render_prompt"
-                && function_name == "Extract"
+                && function_name == "Extract@render_prompt"
         ));
 
         let test = serde_json::from_value::<WsInMessage>(json!({

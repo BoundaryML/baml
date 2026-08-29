@@ -1433,6 +1433,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         if let Some(ast::FunctionBodyDef::Expr(ref body, ref source_map)) = f.body {
             self.walk_expr_body(body, source_map);
         }
+
         self.pop_scope();
         local_id
     }

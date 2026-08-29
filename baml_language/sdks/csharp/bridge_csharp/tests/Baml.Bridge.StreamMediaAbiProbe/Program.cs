@@ -697,18 +697,15 @@ internal static class Program
     private static async Task<NativeHandle> StartStreamAsync(
         NativeBridge bridge)
     {
-        CallFunctionArgs streamArguments = Arguments(
-            ("text", new InboundValue
-            {
-                StringValue = "ignored-by-replay-server",
-            }));
-        streamArguments.Operation = FunctionOperation.Stream;
         BamlOutboundValue value = RequireOk(
             await bridge.CallAsync(
-                    "user.lorem.stream_e2e_extract",
-                    streamArguments)
+                    "user.lorem.stream_e2e_extract@stream",
+                    Arguments(
+                        ("text", new InboundValue
+                        {
+                            StringValue = "ignored-by-replay-server",
+                        })))
                 .ConfigureAwait(false));
-
         if (value.ValueCase
             != BamlOutboundValue.ValueOneofCase.HandleValue)
         {

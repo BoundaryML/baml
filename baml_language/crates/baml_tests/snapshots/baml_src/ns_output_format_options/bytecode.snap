@@ -65,6 +65,39 @@ function output_format_options.OfAllLegacyOptions(client: ai.Client | null, on_e
     return
 }
 
+function output_format_options.OfAllLegacyOptions@build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.output_format_options.OfAllLegacyOptions@spec
+    store_var _3
+    load_type output_format_options.OfOptionResult
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function output_format_options.OfAllLegacyOptions@parse(json: string) -> output_format_options.OfOptionResult {
+    load_type output_format_options.OfOptionResult
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function output_format_options.OfAllLegacyOptions@render_prompt() -> ai.Prompt {
+    call user.output_format_options.OfAllLegacyOptions@spec
+    store_var _1
+    load_type output_format_options.OfOptionResult
+    load_var _1
+    call ai.FunctionSpec.prompt
+    return
+}
+
 function output_format_options.OfAllLegacyOptions@spec() -> ai.FunctionSpec<output_format_options.OfOptionResult> {
     load_type ai.tools.Tool
     alloc_array 0

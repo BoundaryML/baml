@@ -3,11 +3,11 @@
 //! Removed with the legacy LLM path (see git history):
 //!   - `backtick_prompt_renders_into_provider_request` — asserted on the wire
 //!     request built by the legacy `call_llm_function` orchestrator; prompt
-//!     rendering is now covered by the `FunctionSpec.prompt` tests in
+//!     rendering is now covered by the `@render_prompt` companion tests in
 //!     `baml_src/ns_prompt_tag_runtime/`.
 //!
-//! The remaining tests exercise the compiler-private `Fn@stream` projection
-//! against a local OpenAI Responses API endpoint.
+//! The remaining tests exercise the ai-world `$stream` companion against a
+//! local OpenAI Responses API endpoint.
 
 #![allow(dead_code)]
 

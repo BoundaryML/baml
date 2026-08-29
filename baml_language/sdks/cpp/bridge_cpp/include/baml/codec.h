@@ -35,9 +35,7 @@ struct codec;  // primary template intentionally undefined
 namespace detail {
 
 template <typename Ret, typename ThrownU = void>
-Ret call_handle_sync(uint64_t handle_key, args_encoder&& args,
-                     function_operation operation =
-                         function_operation::direct);
+Ret call_handle_sync(uint64_t handle_key, args_encoder&& args);
 
 [[noreturn]] inline void kind_mismatch(const char* expected,
                                        const pb::BamlOutboundValue& got) {
@@ -126,11 +124,9 @@ struct codec<std::function<R(Args...)>> {
                        }),
        ...);
       if constexpr (std::is_void<R>::value) {
-        detail::call_handle_sync<void>(state->key, std::move(encoded),
-                                       function_operation::direct);
+        detail::call_handle_sync<void>(state->key, std::move(encoded));
       } else {
-        return detail::call_handle_sync<R>(state->key, std::move(encoded),
-                                           function_operation::direct);
+        return detail::call_handle_sync<R>(state->key, std::move(encoded));
       }
     };
   }

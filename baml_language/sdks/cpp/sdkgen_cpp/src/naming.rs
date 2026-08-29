@@ -32,12 +32,6 @@ use baml_codegen_types::Name;
 /// `vendor/<pkg>/` (mirroring the Python generator's routing rules).
 pub(crate) fn source_ns(symbol: &Name) -> Vec<Box<str>> {
     let mut out: Vec<Box<str>> = Vec::new();
-    // PPIR's `$stream` declarations are real partial-output schemas, not
-    // callable companions. Project them into a distinct host namespace while
-    // retaining their exact `$stream` wire identity.
-    if symbol.is_stream() {
-        out.push(Box::from("stream_types"));
-    }
     match symbol.package().as_str() {
         "user" => {}
         "baml" => out.push(Box::from("baml")),
@@ -205,18 +199,6 @@ impl NameRequest {
             fqn,
             kind,
             preferred: Some(preferred.into()),
-        }
-    }
-
-    fn scope(&self) -> NameScope {
-        // Free functions (including generated async/spec/stream spellings)
-        // are declared in a namespace even when their structured identity has
-        // synthesized member components. Methods and owner members remain in
-        // their BAML owner's scope.
-        if self.kind == CppNameKind::Function {
-            NameScope::Namespace(source_ns(&self.fqn.symbol))
-        } else {
-            self.fqn.scope()
         }
     }
 }
@@ -629,7 +611,7 @@ impl CppNames {
         if request.kind == CppNameKind::Namespace {
             return false;
         }
-        match request.scope() {
+        match request.fqn.scope() {
             NameScope::Namespace(path) => self
                 .ns_children
                 .get(&path)
@@ -692,7 +674,7 @@ fn group_by_scope_and_preferred<'a>(
     let mut grouped: BTreeMap<(NameScope, String), Vec<&'a NameRequest>> = BTreeMap::new();
     for request in requests {
         grouped
-            .entry((request.scope(), preferred_token(request)))
+            .entry((request.fqn.scope(), preferred_token(request)))
             .or_default()
             .push(request);
     }

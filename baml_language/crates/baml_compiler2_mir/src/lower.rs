@@ -723,11 +723,9 @@ fn runtime_ty_is_int_only(ty: &RuntimeTy) -> bool {
     }
 }
 
-/// Whether every value of `ty` has a discriminant belonging to `enum_name`.
-///
-/// `Rvalue::Discriminant` requires an enum value. Nullable and mixed-enum
-/// scrutinees must use the comparison chain so non-matching values can reach
-/// the wildcard arm instead of being read as variants.
+/// Whether every value admitted by `ty` has an enum discriminant belonging to
+/// `enum_name`. Nullable and mixed-enum scrutinees must use the comparison
+/// chain so non-matching values can reach a wildcard arm.
 fn runtime_ty_is_enum_only(ty: &RuntimeTy, enum_name: &TypeName) -> bool {
     match ty {
         RuntimeTy::Enum(name, _) | RuntimeTy::EnumVariant(name, _, _) => name == enum_name,
@@ -1787,7 +1785,7 @@ struct LoweringContext<'db> {
     file: baml_base::SourceFile,
     func_loc: Option<FunctionLoc<'db>>,
     source_param_scope: Option<FileScopeId>,
-    /// Raw function name from the item tree (e.g. `"Foo@spec"`).
+    /// Raw function name from the item tree (e.g. `"Foo@render_prompt"`).
     /// Used to disambiguate companion scopes that share the same span.
     scope_func_name: Option<Name>,
 
@@ -4734,8 +4732,10 @@ impl<'db> LoweringContext<'db> {
         let lambda_scope_id: FileScopeId = if let Some(ref sm) = self.source_map {
             let lambda_span = sm.expr_span(expr_id);
             let index = file_semantic_index(self.db, self.file);
-            // An authored function and its synthesized companions can carry a
-            // lambda at the same source span. A bare range match would pick
+            // Two functions can carry a lambda at the *same* source span — an
+            // LLM function and its synthesized companions all share the parent's
+            // ranges (e.g. the `@spec` companion's prompt closure vs the
+            // parent's prompt-tag closure). A bare range match would pick
             // whichever lambda scope appears first in the file, binding this
             // lambda to the *other* function's captures. Disambiguate by
             // preferring the lambda scope nested within the function currently
@@ -5378,12 +5378,15 @@ impl LoweringContext<'_> {
         let lambda_scope_id: FileScopeId = if let Some(ref sm) = self.source_map {
             let span = sm.expr_span(expr_id);
             let index = file_semantic_index(self.db, self.file);
-            // An authored function and its synthesized companions can carry a
-            // tagged template at the same source span. A bare range match would
-            // pick whichever lambda scope appears first in the file.
-            // Disambiguate by preferring the lambda scope nested within the
-            // function currently being lowered; fall back to the first range
-            // match.
+            // Two functions can carry a tagged template at the *same* source
+            // span — notably a new-mode LLM function and its `$stream`
+            // companion, both synthesized from the one `prompt`…`` at
+            // `llm_body_def.span`. A bare range match would pick whichever
+            // lambda scope appears first in the file (the oneshot body's),
+            // binding the companion's `${param}` interps to the *other*
+            // function's captures. Disambiguate by preferring the lambda scope
+            // nested within the function currently being lowered; fall back to
+            // the first range match.
             let found = index
                 .lambda_scope_for_within(self.current_scope, span)
                 .or_else(|| index.lambda_scope_for(span));
@@ -10185,8 +10188,9 @@ impl LoweringContext<'_> {
     fn lower_type_arg_to_tir(&self, type_arg: &AstTypeExpr, generic_params: &[ParamTy]) -> Tir2Ty {
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = PackageId::new(self.db, pkg_info.package);
-        // The canonical (PPIR-merged) package items, NOT HIR's: operation and
-        // stdlib type args can reference `*$stream` classes, which only exist in
+        // The canonical (PPIR-merged) package items, NOT HIR's: explicit type
+        // args synthesized by PPIR companions reference `*$stream` classes
+        // (e.g. `parse<Payload$stream | null, Payload>`), which only exist in
         // the PPIR-expanded item universe. Resolving against HIR's original
         // items lowered them to `Unknown` → `Void` and broke `ParseCache.new`
         // at runtime.
@@ -10565,10 +10569,12 @@ impl LoweringContext<'_> {
         })
     }
 
-    /// Lower `foo<int>` (a `GenericApply` value). A function with fully concrete
-    /// arguments becomes a pooled `Constant::GenericFunction`. Frame-dependent
-    /// functions use `MakeGenericFunction`, while non-item bases use
-    /// `MakeGenericFunctionFromValue`.
+    /// Lower `foo<int>` (a `GenericApply` value). If the base resolves to a
+    /// function `ItemRef` and all type args are fully concrete, emit a pooled,
+    /// interned `Constant::GenericFunction` (pointer-stable; seeds
+    /// `frame.type_args` when called). Otherwise fall back to lowering the base
+    /// value with type args erased — for exotic bases (bound methods, lambdas)
+    /// or param-dependent args (`foo<T>` inside a generic function).
     fn lower_generic_apply(
         &mut self,
         expr_id: AstExprId,
@@ -13844,10 +13850,8 @@ impl LoweringContext<'_> {
             return false;
         }
 
-        // Discriminant extraction is only valid when every value admitted by
-        // the scrutinee belongs to this enum. For nullable or mixed-enum
-        // scrutinees, fall back to the comparison chain so `_` can receive the
-        // non-matching value.
+        // Reading a discriminant is only valid when every possible scrutinee
+        // value belongs to this enum. Fall back for optionals and mixed unions.
         if let Some(SwitchKind::EnumDiscriminant(enum_name)) = &switch_kind
             && !runtime_ty_is_enum_only(&self.builder.local_ty(scrutinee), enum_name)
         {
