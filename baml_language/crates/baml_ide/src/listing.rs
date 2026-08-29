@@ -107,7 +107,9 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def.filter(|def| !def.is_language_internal(db)) {
+        if let Some(def) = def.filter(|def| {
+            !def.is_language_internal(db) && !is_hidden_synthesized_type(db, &item_name, *def)
+        }) {
             return Some(ResolvedTarget::Item(def));
         }
     }
@@ -120,7 +122,9 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def.filter(|def| !def.is_language_internal(db)) {
+        if let Some(def) = def.filter(|def| {
+            !def.is_language_internal(db) && !is_hidden_synthesized_type(db, &item_name, *def)
+        }) {
             return Some(ResolvedTarget::Member {
                 parent: def,
                 member_name,
@@ -359,6 +363,18 @@ fn is_local_package_name(package_name: &Name) -> bool {
     matches!(Package::from_name(package_name.clone()), Package::Local)
 }
 
+/// Generated partial-output types (`Foo$stream`) are compiler artifacts, not
+/// addressable describe targets. Callable `@...` companions remain visible so
+/// BAML source references such as `Foo@spec` continue to round-trip through
+/// listing and resolution.
+fn is_hidden_synthesized_type(
+    db: &dyn baml_compiler2_ppir::Db,
+    item_name: &Name,
+    def: Definition<'_>,
+) -> bool {
+    !matches!(def, Definition::Function(_)) && crate::symbols::is_synthesized(db, item_name, def)
+}
+
 /// Build a single `ListingEntry` from a definition.
 fn make_entry<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
@@ -368,7 +384,7 @@ fn make_entry<'db>(
     item_name: Name,
     def: Definition<'db>,
 ) -> Option<ListingEntry> {
-    if def.is_language_internal(db) {
+    if def.is_language_internal(db) || is_hidden_synthesized_type(db, &item_name, def) {
         return None;
     }
     let (file, name_span) = crate::syntax::definition_span(db, def)?;
@@ -616,6 +632,15 @@ function summarize(input: string) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `summarize ${input}`
 }
+
+class Summary {
+    text string
+}
+
+function summarize_structured(input: string) -> Summary {
+    client: "openai/gpt-4o-mini"
+    prompt: `summarize ${input}`
+}
 "##,
         );
         let project = builder.build();
@@ -641,6 +666,14 @@ function summarize(input: string) -> string {
                 Some(ResolvedTarget::Item(_))
             ));
         }
+
+        assert!(
+            entries
+                .iter()
+                .all(|entry| entry.item_name.as_str() != "Summary$stream"),
+            "generated partial types must not appear in describe listings"
+        );
+        assert!(resolve_target(&project.db, pkg_id, "Summary$stream").is_none());
     }
 
     // ── Namespace listing ────────────────────────────────────────────────────
