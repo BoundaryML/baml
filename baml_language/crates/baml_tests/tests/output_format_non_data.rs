@@ -127,7 +127,7 @@ async fn ordinary_data_specialization_still_renders() {
                 description string?
             }}
 
-            function main() -> string throws unknown {{
+            function main() -> string {{
                 GenericList@render_prompt<Item>("items").text()
             }}
             "#
@@ -215,7 +215,7 @@ async fn runtime_minted_nested_non_data_field_is_rejected() {
         r#"
             {GENERIC_VALUE}
 
-            function main() -> string throws unknown {{
+            function main() -> string {{
                 let inner = reflect.class.new("RuntimeInner", {{
                     "payload": reflect.Type.of<unknown>(),
                 }})
@@ -256,7 +256,7 @@ async fn skipped_non_data_and_open_interface_fields_do_not_block_rendering() {
                 open HiddenOpen? @skip
             }}
 
-            function main() -> string throws unknown {{
+            function main() -> string {{
                 GenericValue@render_prompt<SkipControl>("visible data").text()
             }}
             "#
@@ -294,7 +294,7 @@ async fn generic_data_class_output_renders() {
                 value T
             }}
 
-            function main() -> string throws unknown {{
+            function main() -> string {{
                 GenericValue@render_prompt<Wrapper<Item>>("wrapped item").text()
             }}
             "#

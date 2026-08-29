@@ -2101,6 +2101,17 @@ impl BexEngine {
             compile_time_objects,
             &bytecode.packages,
         );
+        // Interface bodies are absent from the image-symbol tables. A runtime
+        // compilation still consumes static impl methods — their SIGNATURES
+        // (possibly subtype refinements of the interface's) through the
+        // package-interface blob, and their bodies through the virtual road,
+        // whose rule tables carry body POINTERS (`MethodImpl::fqn`, bound at
+        // load) with adopted defaults on the interface's `default_fn`. No
+        // current lowering emits a name-addressed reference to a static body:
+        // mount stubs are class/enum skeletons (no impl blocks), so a mounted
+        // impl method has no source lane and every call to one is virtual. A
+        // future devirtualized direct call must reference the body
+        // rule-relatively, never through a revived name entry here.
         let image_objects = bytecode
             .resolved_function_names
             .iter()

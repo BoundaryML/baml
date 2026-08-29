@@ -90,7 +90,7 @@ function inferred_generic_type_args.$init_test_ns_inferred_generic_type_args_inf
     return
 }
 
-function inferred_generic_type_args.ArrBag.Bag<T>.first(self: inferred_generic_type_args.ArrBag<#0>) -> #0 {
+function inferred_generic_type_args.<(user.inferred_generic_type_args.ArrBag<#0> as user.inferred_generic_type_args.Bag<#0>)>.first(self: inferred_generic_type_args.ArrBag<#0>) -> #0 {
     load_var self
     load_field .arr
     load_const 0
@@ -98,15 +98,7 @@ function inferred_generic_type_args.ArrBag.Bag<T>.first(self: inferred_generic_t
     return
 }
 
-function inferred_generic_type_args.ArrBag.make(a: #0[]) -> inferred_generic_type_args.ArrBag<#0> {
-    load_var a
-    load_const 0
-    load_type #0
-    init_instance<1> user.inferred_generic_type_args.ArrBag .arr, .idx
-    return
-}
-
-function inferred_generic_type_args.ArrIter.NextIter<T, never>.next2(self: inferred_generic_type_args.ArrIter<#0>) -> #0 | inferred_generic_type_args.IterDone {
+function inferred_generic_type_args.<(user.inferred_generic_type_args.ArrIter<#0> as user.inferred_generic_type_args.NextIter<#0, never>)>.next2(self: inferred_generic_type_args.ArrIter<#0>) -> #0 | inferred_generic_type_args.IterDone {
     load_type #0
     load_var self
     load_field .arr
@@ -137,15 +129,7 @@ function inferred_generic_type_args.ArrIter.NextIter<T, never>.next2(self: infer
     return
 }
 
-function inferred_generic_type_args.ArrIter.of(a: #0[]) -> inferred_generic_type_args.ArrIter<#0> {
-    load_var a
-    load_const 0
-    load_type #0
-    init_instance<1> user.inferred_generic_type_args.ArrIter .arr, .idx
-    return
-}
-
-function inferred_generic_type_args.ArrNamed.Named<T>.first(self: inferred_generic_type_args.ArrNamed<#0>) -> #0 {
+function inferred_generic_type_args.<(user.inferred_generic_type_args.ArrNamed<#0> as user.inferred_generic_type_args.Named<#0>)>.first(self: inferred_generic_type_args.ArrNamed<#0>) -> #0 {
     load_var self
     load_field .arr
     load_const 0
@@ -153,7 +137,7 @@ function inferred_generic_type_args.ArrNamed.Named<T>.first(self: inferred_gener
     return
 }
 
-function inferred_generic_type_args.ArrayCursor.Cursor<T>.head(self: inferred_generic_type_args.ArrayCursor<#0>) -> #0 {
+function inferred_generic_type_args.<(user.inferred_generic_type_args.ArrayCursor<#0> as user.inferred_generic_type_args.Cursor<#0>)>.head(self: inferred_generic_type_args.ArrayCursor<#0>) -> #0 {
     load_var self
     load_field .arr
     load_const 0
@@ -161,66 +145,33 @@ function inferred_generic_type_args.ArrayCursor.Cursor<T>.head(self: inferred_ge
     return
 }
 
-function inferred_generic_type_args.ArrayCursor.of(items: #0[]) -> inferred_generic_type_args.ArrayCursor<#0> {
-    load_var items
-    load_const 0
-    load_type #0
-    init_instance<1> user.inferred_generic_type_args.ArrayCursor .arr, .idx
-    return
-}
-
-function inferred_generic_type_args.Boxed.Wrap<T>.first(self: inferred_generic_type_args.Boxed<#0>) -> #0 {
+function inferred_generic_type_args.<(user.inferred_generic_type_args.Boxed<#0> as user.inferred_generic_type_args.Wrap<#0>)>.first(self: inferred_generic_type_args.Boxed<#0>) -> #0 {
     load_var self
     load_field .val
     return
 }
 
-function inferred_generic_type_args.Cat.Animal.speak(self: inferred_generic_type_args.Cat) -> string {
+function inferred_generic_type_args.<(user.inferred_generic_type_args.Cat as user.inferred_generic_type_args.Animal)>.speak(self: inferred_generic_type_args.Cat) -> string {
     load_const "meow"
     return
 }
 
-function inferred_generic_type_args.Counter.element_type(self: inferred_generic_type_args.Counter<#1>) -> string {
-    load_type #1
-    call baml.root.ToString$for$reflect.Type.to_string
-    return
-}
-
-function inferred_generic_type_args.Cursor.take_one(self: inferred_generic_type_args.Cursor<#1>) -> inferred_generic_type_args.Cursor<#1> {
-    load_var self
-    load_type inferred_generic_type_args.Cursor<#1>
-    load_const "head"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _2
-    load_var _2
-    load_type #1
-    init_instance<1> user.inferred_generic_type_args.SingleCursor .value
-    return
-}
-
-function inferred_generic_type_args.Dog.Animal.speak(self: inferred_generic_type_args.Dog<#0>) -> string {
+function inferred_generic_type_args.<(user.inferred_generic_type_args.Dog<#0> as user.inferred_generic_type_args.Animal)>.speak(self: inferred_generic_type_args.Dog<#0>) -> string {
     load_const "woof"
     return
 }
 
-function inferred_generic_type_args.Dog.make(v: #0) -> inferred_generic_type_args.Dog<#0> {
-    load_var v
-    load_type #0
-    init_instance<1> user.inferred_generic_type_args.Dog .value
-    return
-}
-
-function inferred_generic_type_args.EchoA.SelfEcho.tag(self: inferred_generic_type_args.EchoA) -> string {
+function inferred_generic_type_args.<(user.inferred_generic_type_args.EchoA as user.inferred_generic_type_args.SelfEcho)>.tag(self: inferred_generic_type_args.EchoA) -> string {
     load_const "a"
     return
 }
 
-function inferred_generic_type_args.EchoB.SelfEcho.tag(self: inferred_generic_type_args.EchoB) -> string {
+function inferred_generic_type_args.<(user.inferred_generic_type_args.EchoB as user.inferred_generic_type_args.SelfEcho)>.tag(self: inferred_generic_type_args.EchoB) -> string {
     load_const "b"
     return
 }
 
-function inferred_generic_type_args.IntCounter.Counter<T>.describe(self: inferred_generic_type_args.IntCounter<#0>) -> string {
+function inferred_generic_type_args.<(user.inferred_generic_type_args.IntCounter<#0> as user.inferred_generic_type_args.Counter<#0>)>.describe(self: inferred_generic_type_args.IntCounter<#0>) -> string {
     load_type inferred_generic_type_args.IntCounter<#0>
     load_type #0
     load_var self
@@ -228,7 +179,7 @@ function inferred_generic_type_args.IntCounter.Counter<T>.describe(self: inferre
     return
 }
 
-function inferred_generic_type_args.LoneIter.NextIter<T, never>.next2(self: inferred_generic_type_args.LoneIter<#0>) -> #0 | inferred_generic_type_args.IterDone {
+function inferred_generic_type_args.<(user.inferred_generic_type_args.LoneIter<#0> as user.inferred_generic_type_args.NextIter<#0, never>)>.next2(self: inferred_generic_type_args.LoneIter<#0>) -> #0 | inferred_generic_type_args.IterDone {
     load_var self
     load_field .used
     pop_jump_if_false L0
@@ -249,9 +200,111 @@ function inferred_generic_type_args.LoneIter.NextIter<T, never>.next2(self: infe
     return
 }
 
+function inferred_generic_type_args.<(user.inferred_generic_type_args.OneBag<#0> as user.inferred_generic_type_args.Bag<#0>)>.first(self: inferred_generic_type_args.OneBag<#0>) -> #0 {
+    load_var self
+    load_field .only
+    return
+}
+
+function inferred_generic_type_args.<(user.inferred_generic_type_args.OneNamed<#0> as user.inferred_generic_type_args.Named<#0>)>.first(self: inferred_generic_type_args.OneNamed<#0>) -> #0 {
+    load_var self
+    load_field .only
+    return
+}
+
+function inferred_generic_type_args.<(user.inferred_generic_type_args.PlainThing as user.inferred_generic_type_args.Describable)>.describe(self: inferred_generic_type_args.PlainThing) -> string {
+    load_const "plain"
+    return
+}
+
+function inferred_generic_type_args.<(user.inferred_generic_type_args.ProbeA as user.inferred_generic_type_args.TypeProbe)>.seen(self: inferred_generic_type_args.ProbeA, value: #0) -> string {
+    load_type #0
+    call baml.<(reflect.Type as baml.ToString)>.to_string
+    return
+}
+
+function inferred_generic_type_args.<(user.inferred_generic_type_args.ProbeB as user.inferred_generic_type_args.TypeProbe)>.seen(self: inferred_generic_type_args.ProbeB, value: #0) -> string {
+    load_const "wrong"
+    return
+}
+
+function inferred_generic_type_args.<(user.inferred_generic_type_args.SingleCursor<#0> as user.inferred_generic_type_args.Cursor<#0>)>.head(self: inferred_generic_type_args.SingleCursor<#0>) -> #0 {
+    load_var self
+    load_field .value
+    return
+}
+
+function inferred_generic_type_args.<(user.inferred_generic_type_args.SrcWrap<#0> as user.inferred_generic_type_args.Wrap<#0>)>.first(self: inferred_generic_type_args.SrcWrap<#0>) -> #0 {
+    load_var self
+    load_field .arr
+    load_const 0
+    load_array_element
+    return
+}
+
+function inferred_generic_type_args.<(user.inferred_generic_type_args.StrCounter<#0> as user.inferred_generic_type_args.Counter<#0>)>.describe(self: inferred_generic_type_args.StrCounter<#0>) -> string {
+    load_const "str"
+    return
+}
+
+function inferred_generic_type_args.<(user.inferred_generic_type_args.TypedBox<#0> as user.inferred_generic_type_args.Describable)>.describe(self: inferred_generic_type_args.TypedBox<#0>) -> string {
+    load_type #0
+    call baml.<(reflect.Type as baml.ToString)>.to_string
+    return
+}
+
+function inferred_generic_type_args.ArrBag.make(a: #0[]) -> inferred_generic_type_args.ArrBag<#0> {
+    load_var a
+    load_const 0
+    load_type #0
+    init_instance<1> user.inferred_generic_type_args.ArrBag .arr, .idx
+    return
+}
+
+function inferred_generic_type_args.ArrIter.of(a: #0[]) -> inferred_generic_type_args.ArrIter<#0> {
+    load_var a
+    load_const 0
+    load_type #0
+    init_instance<1> user.inferred_generic_type_args.ArrIter .arr, .idx
+    return
+}
+
+function inferred_generic_type_args.ArrayCursor.of(items: #0[]) -> inferred_generic_type_args.ArrayCursor<#0> {
+    load_var items
+    load_const 0
+    load_type #0
+    init_instance<1> user.inferred_generic_type_args.ArrayCursor .arr, .idx
+    return
+}
+
+function inferred_generic_type_args.Counter.element_type(self: inferred_generic_type_args.Counter<#1>) -> string {
+    load_type #1
+    call baml.<(reflect.Type as baml.ToString)>.to_string
+    return
+}
+
+function inferred_generic_type_args.Cursor.take_one(self: inferred_generic_type_args.Cursor<#1>) -> inferred_generic_type_args.Cursor<#1> {
+    load_var self
+    load_type inferred_generic_type_args.Cursor<#1>
+    load_const "head"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _2
+    load_var _2
+    load_type #1
+    init_instance<1> user.inferred_generic_type_args.SingleCursor .value
+    return
+}
+
+function inferred_generic_type_args.Dog.make(v: #0) -> inferred_generic_type_args.Dog<#0> {
+    load_var v
+    load_type #0
+    init_instance<1> user.inferred_generic_type_args.Dog .value
+    return
+}
+
 function inferred_generic_type_args.Named.tname(self: inferred_generic_type_args.Named<#1>) -> string {
     load_type #1
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 
@@ -285,54 +338,12 @@ function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_typ
     return
 }
 
-function inferred_generic_type_args.OneBag.Bag<T>.first(self: inferred_generic_type_args.OneBag<#0>) -> #0 {
-    load_var self
-    load_field .only
-    return
-}
-
-function inferred_generic_type_args.OneNamed.Named<T>.first(self: inferred_generic_type_args.OneNamed<#0>) -> #0 {
-    load_var self
-    load_field .only
-    return
-}
-
-function inferred_generic_type_args.PlainThing.Describable.describe(self: inferred_generic_type_args.PlainThing) -> string {
-    load_const "plain"
-    return
-}
-
-function inferred_generic_type_args.ProbeA.TypeProbe.seen(self: inferred_generic_type_args.ProbeA, value: #0) -> string {
-    load_type #0
-    call baml.root.ToString$for$reflect.Type.to_string
-    return
-}
-
-function inferred_generic_type_args.ProbeB.TypeProbe.seen(self: inferred_generic_type_args.ProbeB, value: #0) -> string {
-    load_const "wrong"
-    return
-}
-
 function inferred_generic_type_args.SelfEcho.nested_self_type(self: inferred_generic_type_args.SelfEcho) -> string {
     load_type #0[]
     load_var self
     load_type #0
     alloc_array 1
     call user.inferred_generic_type_args.echo_type
-    return
-}
-
-function inferred_generic_type_args.SingleCursor.Cursor<T>.head(self: inferred_generic_type_args.SingleCursor<#0>) -> #0 {
-    load_var self
-    load_field .value
-    return
-}
-
-function inferred_generic_type_args.SrcWrap.Wrap<T>.first(self: inferred_generic_type_args.SrcWrap<#0>) -> #0 {
-    load_var self
-    load_field .arr
-    load_const 0
-    load_array_element
     return
 }
 
@@ -343,17 +354,6 @@ function inferred_generic_type_args.SrcWrap.boxed(self: inferred_generic_type_ar
     load_array_element
     load_type #0
     init_instance<1> user.inferred_generic_type_args.Boxed .val
-    return
-}
-
-function inferred_generic_type_args.StrCounter.Counter<T>.describe(self: inferred_generic_type_args.StrCounter<#0>) -> string {
-    load_const "str"
-    return
-}
-
-function inferred_generic_type_args.TypedBox.Describable.describe(self: inferred_generic_type_args.TypedBox<#0>) -> string {
-    load_type #0
-    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -407,7 +407,7 @@ function inferred_generic_type_args.default_method_typevar_name() -> string {
 
 function inferred_generic_type_args.echo_type(a: #0) -> string {
     load_type #0
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 
@@ -424,7 +424,7 @@ function inferred_generic_type_args.free_fn_inferred_t() -> string {
 
 function inferred_generic_type_args.free_fn_tname(a: #0[]) -> string {
     load_type #0
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 

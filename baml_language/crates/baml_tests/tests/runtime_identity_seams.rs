@@ -18,7 +18,7 @@ function Extract<T>() -> T {
   prompt: `${ctx.output_format()}`
 }
 
-function Check<T>(expected: reflect.Type, document: string) -> bool throws unknown {
+function Check<T>(expected: reflect.Type, document: string) -> bool {
   let direct = baml.sap.parse<T>(document)
   let companion = Extract@parse<T>(document)
   reflect.Type.of_value(direct) == expected
@@ -30,7 +30,7 @@ class StaticInner {
   x string
 }
 
-function main() -> bool throws unknown {
+function main() -> bool {
   let inner = reflect.class.new("Inner", { "x": reflect.Type.of<string>() })
   let inner_array = inner.as_type().array().as_type()
   let holder_array = reflect.class.new("HolderArray", { "bs": inner_array }).as_type()

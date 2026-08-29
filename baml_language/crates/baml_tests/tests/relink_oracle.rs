@@ -466,6 +466,54 @@ fn incremental_dirty_generic_value_shadows_clean() {
     );
 }
 
+/// A CLEAN file declaring an interface WITH a default method body. The fresh
+/// (dirty-only) emit still pools every interface object (Pass 3b has no
+/// skip-clean gate), but the default body's placement is `ReusedClean` — a
+/// past-the-pool placeholder. The default backfill must not write that
+/// placeholder into the pooled interface's `default` operand: decompose's
+/// operand walk indexes `obj_owner[target]` and would panic out of bounds.
+/// The clean unit already carries the real operand, so dropping the backfill
+/// stays byte-identical.
+#[test]
+fn incremental_clean_interface_with_default_body() {
+    const IFACE: &str = r#"interface Greeter {
+  function greet(self) -> string throws never {
+    "hello"
+  }
+}
+
+class Plain {
+  implements Greeter {}
+}
+
+function greet_plain(p: Plain) -> string {
+  p.greet()
+}
+"#;
+    const DIRTY: &str = r#"function dirty_fn() -> int {
+  1
+}
+"#;
+    let files = [("i_iface.baml", IFACE), ("i_dirty.baml", DIRTY)];
+    let base = generate_stdlib_program(&build_db(ROOT, &files), OptLevel::Two).expect("stdlib");
+    let prev = prev_units(&files);
+
+    let dirty_edit = DIRTY.replace("  1\n}", "  2\n}");
+    assert_ne!(dirty_edit, DIRTY, "edit must apply");
+    let edited = [
+        ("i_iface.baml", IFACE),
+        ("i_dirty.baml", dirty_edit.as_str()),
+    ];
+    assert_incremental_matches(
+        "clean interface with default body",
+        &edited,
+        &base,
+        &prev,
+        &["i_iface.baml"],
+        &["i_dirty.baml"],
+    );
+}
+
 /// Prove the reuse path actually draws the clean file from `prev_units`
 /// (byte-equality alone would also pass if "clean" files were silently
 /// recompiled): plant a probe in a cosmetic, serialized field of the previous

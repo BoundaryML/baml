@@ -220,11 +220,11 @@ fn logging_only_one_record(bencher: Bencher) {
 }
 
 const ONE_WAIT_PER_CALL_SOURCE: &str = r#"
-    function waited() -> int throws unknown {
+    function waited() -> int {
         baml.sys.sleep(baml.time.Duration.from_nanoseconds(0n));
         1
     }
-    function main() -> int throws unknown {
+    function main() -> int {
         let sum = 0;
         for (let i = 0; i < 100; i += 1) { sum += waited(); };
         sum
@@ -232,7 +232,7 @@ const ONE_WAIT_PER_CALL_SOURCE: &str = r#"
 "#;
 
 const MANY_WAITS_PER_CALL_SOURCE: &str = r#"
-    function waited() -> int throws unknown {
+    function waited() -> int {
         baml.sys.sleep(baml.time.Duration.from_nanoseconds(0n));
         baml.sys.sleep(baml.time.Duration.from_nanoseconds(0n));
         baml.sys.sleep(baml.time.Duration.from_nanoseconds(0n));
@@ -245,7 +245,7 @@ const MANY_WAITS_PER_CALL_SOURCE: &str = r#"
         baml.sys.sleep(baml.time.Duration.from_nanoseconds(0n));
         10
     }
-    function main() -> int throws unknown {
+    function main() -> int {
         let sum = 0;
         for (let i = 0; i < 10; i += 1) { sum += waited(); };
         sum

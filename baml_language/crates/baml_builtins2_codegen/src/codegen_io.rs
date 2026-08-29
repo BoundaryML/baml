@@ -89,19 +89,11 @@ fn io_package_name(builtin: &NativeBuiltin) -> &str {
 /// - `"ai.internal._gcp_access_token"` → `"internal"`
 /// - `"ai.OutputFormat._render"` -> `""` (top-level class method)
 fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
-    let after_package = builtin
-        .path
-        .split_once('.')
-        .map_or(builtin.path.as_str(), |(_, rest)| rest);
-    if let Some(receiver) = &builtin.receiver {
-        // The namespace is everything before the receiver class segment; a
-        // top-level class (`ai.Context`) has an empty namespace.
-        after_package
-            .split_once(&format!("{}.", receiver.class_name))
-            .map_or("", |(before, _)| before.trim_end_matches('.'))
-    } else {
-        after_package.split('.').next().unwrap_or("")
-    }
+    // Carried structurally from extraction ([`NativeBuiltin::namespace`]):
+    // the path alone cannot be split, because an impl-block class segment
+    // embeds the WRITTEN interface target, which may itself be dotted
+    // (`root.io.Read$for$FileHandle`).
+    &builtin.namespace
 }
 
 /// Key a namespace node (and every identifier derived from it) by package +
@@ -130,22 +122,30 @@ fn io_method_name(builtin: &NativeBuiltin) -> &str {
     builtin.path.rsplit('.').next().unwrap_or("")
 }
 
-/// The class-dispatch match key for an IO method: the path portion after
-/// `...{ClassName}.`.
+/// The class-dispatch match key for an IO method: the final path segment.
 ///
-/// A method declared inside an `implements I { ... }` block keeps the interface
-/// segment in its runtime path (`...{Class}.I.method`), so the key is
-/// `I.method`; a direct method is just `method`. The clean trait method name
-/// and glue still use the final segment (`io_method_name`).
+/// A method declared inside an `implements I { ... }` block carries its
+/// interface in the class segment (`...{I}$for${Class}.method`), so the
+/// method name alone keys the dispatch — same as a direct method.
 fn io_class_dispatch_key(builtin: &NativeBuiltin) -> String {
+    io_method_name(builtin).to_string()
+}
+
+/// The class segment of an IO method path (the second-to-last segment): the
+/// receiver's class name for a direct method (`baml.fs.File.read` → `"File"`),
+/// the synthetic `{Iface}$for${Class}` for an implements-block method
+/// (`baml.random.Rng$for$SystemRandom.random` → `"Rng$for$SystemRandom"`).
+/// The namespace router matches the routed path segment against these, so a
+/// class reached through both spellings needs every one as an arm key.
+fn io_class_segment(builtin: &NativeBuiltin) -> &str {
+    // Structural, like [`io_namespace_name`] — a dotted interface qualifier
+    // makes the path unsplittable. Only called for methods, which always
+    // carry their segment; an empty-string fallback would mint a router
+    // arm nothing can ever spell.
     builtin
-        .receiver
-        .as_ref()
-        .and_then(|r| builtin.path.split_once(&format!(".{}.", r.class_name)))
-        .map_or_else(
-            || io_method_name(builtin).to_string(),
-            |(_, rest)| rest.to_string(),
-        )
+        .class_segment
+        .as_deref()
+        .expect("a method builtin carries its class segment")
 }
 
 fn build_io_namespace_tree<'a>(
@@ -178,20 +178,18 @@ fn build_io_namespace_tree<'a>(
 // ============================================================================
 
 /// Collect the set of namespace prefixes that contain IO builtins.
+/// Structural, like [`io_namespace_name`]: the path alone cannot be
+/// dot-split once an impl-block class segment embeds a dotted written
+/// interface (`root.io.Read$for$File`).
 fn io_namespace_prefixes(io_builtins: &[NativeBuiltin]) -> BTreeSet<String> {
     io_builtins
         .iter()
         .map(|b| {
-            if b.receiver.is_some() {
-                // Class method: strip ".ClassName.method" → namespace prefix
-                let last = b.path.rfind('.').unwrap();
-                let before = &b.path[..last];
-                let second_last = before.rfind('.').unwrap();
-                b.path[..second_last].to_string()
+            let package = io_package_name(b);
+            if b.namespace.is_empty() {
+                package.to_string()
             } else {
-                // Free function: strip ".function" → namespace prefix
-                let last = b.path.rfind('.').unwrap();
-                b.path[..last].to_string()
+                format!("{package}.{}", b.namespace)
             }
         })
         .collect()
@@ -1482,7 +1480,26 @@ fn emit_one_class_trait(
         .map(|m| emit_glue_method(m, ns, class_name, class_ns_map, paths))
         .collect();
 
-    // Dispatch method — match arms
+    // Dispatch method — match arms. The key is the bare method name, so it
+    // must be INJECTIVE within the class node: the router strips the class
+    // segment before dispatching here, and two builtins sharing a method
+    // name (an inherent method plus an implements-block one, or two blocks)
+    // would silently first-arm-win. No such pair exists in the stdlib;
+    // enforce it instead of relying on that.
+    {
+        let mut seen = std::collections::BTreeMap::new();
+        for m in methods {
+            if let Some(prev) = seen.insert(io_class_dispatch_key(m), &m.path) {
+                panic!(
+                    "sys-op dispatch key `{}` is claimed by both `{prev}` and `{}`; \
+                     the class dispatcher matches the bare method name, so the two \
+                     cannot coexist on one class",
+                    io_class_dispatch_key(m),
+                    m.path,
+                );
+            }
+        }
+    }
     let dispatch_arms: Vec<TokenStream> = methods
         .iter()
         .map(|m| {
@@ -1796,14 +1813,31 @@ fn emit_one_namespace_trait(
             }
         }
     } else {
-        // Mix of classes and free functions — use split_once to route
-        let class_arms: Vec<TokenStream> = node
-            .classes
-            .keys()
-            .map(|cn| {
-                let cn_str = cn.as_str();
+        // Mix of classes and free functions. A class's methods route by
+        // stripping the class-segment prefix (with its trailing dot): the
+        // bare class name for direct methods, `{Iface}$for${Class}` for
+        // implements-block methods — the latter may itself be DOTTED
+        // (`root.io.Read$for$File`), so a `split_once('.')` peel can never
+        // match it and prefix-stripping is the one correct route. Longer
+        // segments strip first so a segment that extends another
+        // dot-for-dot cannot be shadowed.
+        let mut segment_routes: Vec<(String, &str)> = Vec::new();
+        for (cn, methods) in &node.classes {
+            let segments: BTreeSet<&str> = methods.iter().map(|m| io_class_segment(m)).collect();
+            for seg in segments {
+                segment_routes.push((format!("{seg}."), cn.as_str()));
+            }
+        }
+        sort_segment_routes(&mut segment_routes);
+        let class_routes: Vec<TokenStream> = segment_routes
+            .iter()
+            .map(|(prefix, cn)| {
                 let dispatch = format_ident!("__dispatch_{}_{}", ns_key, cn.to_lowercase());
-                quote! { Some((#cn_str, method)) => self.#dispatch(method, heap, permit, args, ctx, call_id) }
+                quote! {
+                    if let Some(method) = rest.strip_prefix(#prefix) {
+                        return self.#dispatch(method, heap, permit, args, ctx, call_id);
+                    }
+                }
             })
             .collect();
 
@@ -1818,12 +1852,9 @@ fn emit_one_namespace_trait(
             .collect();
 
         quote! {
-            match rest.split_once('.') {
-                #(#class_arms,)*
-                None => match rest {
-                    #(#free_fn_arms,)*
-                    _ => None,
-                },
+            #(#class_routes)*
+            match rest {
+                #(#free_fn_arms,)*
                 _ => None,
             }
         }
@@ -2069,6 +2100,36 @@ fn emit_root_trait(tree: &BTreeMap<String, IoNamespaceNode>) -> TokenStream {
         ));
     }
 
+    // The root router peels ONE dot-segment as the namespace before falling
+    // back to the package-root dispatcher, so an empty-namespace class whose
+    // segment is DOTTED (a relatively-written cross-namespace interface,
+    // `implements io.Read` → segment `io.Read$for$X`) would misroute into a
+    // same-named sibling namespace. The stdlib writes such targets
+    // absolutely (`root.io.Read`); enforce the convention instead of
+    // relying on it.
+    for node in tree.values() {
+        if !node.namespace.is_empty() {
+            continue;
+        }
+        for methods in node.classes.values() {
+            for m in methods {
+                let segment = io_class_segment(m);
+                if let Some((first, _)) = segment.split_once('.')
+                    && tree
+                        .values()
+                        .any(|n| n.package == node.package && n.namespace == first)
+                {
+                    panic!(
+                        "package-top-level class segment `{segment}` (from `{}`) starts \
+                         with sibling namespace `{first}`; the root router would peel \
+                         `{first}.` off it and misroute — write the interface target \
+                         absolutely (`root.{first}.…`)",
+                        m.path,
+                    );
+                }
+            }
+        }
+    }
     let package_arms: Vec<TokenStream> = by_package
         .iter()
         .map(|(package, namespaces)| {
@@ -2213,8 +2274,10 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
 /// package keeps it (`"ai.internal._gcp_access_token"` ->
 /// `"ai_internal__gcp_access_token"`) and can never collide with a `baml` one.
 fn runtime_io_method_name(builtin: &NativeBuiltin) -> String {
+    // `$` appears in impl-block method paths (`{iface}$for${Class}.method`)
+    // and is not a valid identifier character.
     let after_baml = builtin.path.strip_prefix("baml.").unwrap_or(&builtin.path);
-    after_baml.replace('.', "_").to_lowercase()
+    after_baml.replace(['.', '$'], "_").to_lowercase()
 }
 
 /// Derive the handle type name for a class (e.g. `"Response"` in namespace `"http"` -> `"HttpResponseHandle"`).
@@ -2832,8 +2895,37 @@ fn emit_build_runtime_io(io_builtins: &[NativeBuiltin]) -> TokenStream {
     }
 }
 
+/// Order class-segment routes LONGEST-FIRST (ties lexicographic): the
+/// dispatcher tries `strip_prefix` in this order, so a segment that extends
+/// another dot-for-dot (`root.io.Read$for$File` vs a hypothetical `root`)
+/// cannot be shadowed by its prefix.
+fn sort_segment_routes(routes: &mut [(String, &str)]) {
+    routes.sort_by(|a, b| b.0.len().cmp(&a.0.len()).then(a.0.cmp(&b.0)));
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn segment_routes_sort_longest_first() {
+        let mut routes = vec![
+            ("File.".to_string(), "File"),
+            ("root.io.Read$for$File.".to_string(), "File"),
+            ("root.io.Write$for$File.".to_string(), "File"),
+            ("Rng$for$SystemRandom.".to_string(), "SystemRandom"),
+        ];
+        super::sort_segment_routes(&mut routes);
+        let order: Vec<&str> = routes.iter().map(|(p, _)| p.as_str()).collect();
+        assert_eq!(
+            order,
+            [
+                "root.io.Write$for$File.",
+                "root.io.Read$for$File.",
+                "Rng$for$SystemRandom.",
+                "File.",
+            ]
+        );
+    }
+
     use std::collections::{BTreeMap, HashSet};
 
     use super::{CodegenPaths, emit_owned_struct, emit_view_struct};

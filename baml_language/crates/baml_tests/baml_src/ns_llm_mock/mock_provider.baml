@@ -96,13 +96,6 @@ function _merged_headers(content_type: string, extra: map<string, string>) -> ma
     out
 }
 
-// Timeout tests deliberately let the client disconnect before a delayed mock
-// body is ready. That is normal server cleanup, not an unhandled spawned-task
-// failure.
-function _write_delayed_body(response: baml.http.Response, body: string) -> null {
-    response.write(body.to_utf8()) catch (e) { _ => null }
-}
-
 // ─── JSON mock ───────────────────────────────────────────────────────────────
 
 // A non-streaming fake provider. `responses` are answered in order; once they
@@ -154,8 +147,27 @@ class MockJsonServer {
                 let body = canned.body;
                 spawn {
                     baml.sys.sleep(delay);
-                    root.llm_mock._write_delayed_body(response, body);
-                    response.end();
+                    // The delayed write races the client: a request-timeout
+                    // test hangs up before `delay` elapses, and if teardown
+                    // loses the race to cancel this task, writing into the
+                    // closed stream throws the hangup `Io` — the outcome the
+                    // test arranged, not a mock failure. Any OTHER I/O error
+                    // is a real mock failure and still propagates as an
+                    // unhandled spawn error (same filter as
+                    // `MockSseServer.handle`).
+                    {
+                        response.write(body.to_utf8());
+                        response.end();
+                        null
+                    } catch (e) {
+                        baml.errors.Io => {
+                            if (e.message == "streaming response could not be written: the client has hung up") {
+                                null
+                            } else {
+                                throw e
+                            }
+                        }
+                    };
                     null
                 };
                 response

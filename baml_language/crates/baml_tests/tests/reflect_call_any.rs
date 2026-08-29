@@ -315,12 +315,12 @@ async fn json_serializes_unknown_call_any_results_by_runtime_value() {
             image.from_url("https://example.com/a.png", "image/png")
         }
 
-        function serialize_unknown(f: reflect.AnyFunction) -> string throws unknown {
+        function serialize_unknown(f: reflect.AnyFunction) -> string {
             let value: unknown = reflect.call_any(f, {})
             baml.json.to_string(value) + "|" + baml.json.stringify(baml.json.to_json(value))
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             serialize_unknown(make_record)
                 + "\n" + serialize_unknown(make_wrapped_list)
                 + "\n" + serialize_unknown(make_state)
@@ -356,11 +356,11 @@ async fn json_serializes_unknown_call_any_results_by_runtime_value() {
 async fn json_rejects_unknown_uint8array_call_any_results() {
     let output = baml_test!(
         r#"
-        function make_bytes() -> uint8array throws unknown {
+        function make_bytes() -> uint8array {
             baml.Uint8Array.from_hex("00ff")
         }
 
-        function to_string_error(value: unknown) -> string throws unknown {
+        function to_string_error(value: unknown) -> string {
             {
                 let _ = baml.json.to_string(value)
                 "unexpected success"
@@ -369,7 +369,7 @@ async fn json_rejects_unknown_uint8array_call_any_results() {
             }
         }
 
-        function to_json_error(value: unknown) -> string throws unknown {
+        function to_json_error(value: unknown) -> string {
             {
                 let _ = baml.json.to_json(value)
                 "unexpected success"
@@ -378,7 +378,7 @@ async fn json_rejects_unknown_uint8array_call_any_results() {
             }
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let f: reflect.AnyFunction = make_bytes
             let value: unknown = reflect.call_any(f, {})
             to_string_error(value) + "|" + to_json_error(value)
@@ -1217,7 +1217,7 @@ async fn call_any_still_invokes_a_non_generic_companion() {
             `
         }
 
-        function main() -> bool throws unknown {
+        function main() -> bool {
             let package = reflect.Package.current()
             let callable = package.get_function<AnyCallable>("Plain@render_prompt")
                 ?? throw "expected the companion"
@@ -1308,7 +1308,7 @@ async fn get_function_still_extracts_a_non_generic_companion() {
             `
         }
 
-        function main() -> bool throws unknown {
+        function main() -> bool {
             let package = reflect.Package.current()
             let callable = package.get_function<PromptFn>("Plain@render_prompt")
                 ?? throw "expected the companion"

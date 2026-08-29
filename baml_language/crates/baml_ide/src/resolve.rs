@@ -1257,7 +1257,7 @@ fn declaration_name_at(
             .position(|binding| hit(binding.name_span))?;
         let data = item_data::impl_block_data(db, *block);
         let bound_name = &data.associated_type_bindings.get(binding_index)?.name;
-        let facts = baml_compiler2_hir_ty::impls::impl_facts(db, *block).as_ref()?;
+        let facts = baml_compiler2_hir_ty::impls::impl_facts(db, *block).resolved()?;
         let interface = &facts.interface.name;
         let package = baml_compiler2_hir::package::PackageId::new(db, interface.package().clone());
         let Some(Definition::Interface(iface)) = baml_compiler2_ppir::package_items(db, package)

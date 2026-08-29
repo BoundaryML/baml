@@ -332,7 +332,7 @@ async fn constructed_type_to_baml_compiles_to_equivalent_new_identity() {
             prompt: `${ctx.output_format()}`
         }
 
-        function main() -> bool throws unknown {
+        function main() -> bool {
             let scores_t = reflect.map.new(
                 reflect.Type.of<string>(),
                 reflect.Type.of<int>().optional().as_type(),
@@ -621,7 +621,7 @@ async fn a_runtime_compiled_class_instance_crosses_as_an_opaque_handle() {
             prompt: `${ctx.output_format()}`
         }
 
-        function main() -> unknown throws unknown {
+        function main() -> unknown {
             let pkg = reflect.Package.compile({
                 "schema.baml": "class ExtractedRecord { account string }"
             })

@@ -239,7 +239,7 @@ function reflect.AnyClass.list_fields(self: reflect.AnyClass) -> reflect.class.F
 function reflect.AnyClass.name(self: reflect.AnyClass) -> string {
     load_var self
     call reflect.Type.of_value
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 
@@ -415,13 +415,16 @@ function reflect.Type.to_baml(self: reflect.Type) -> string {
 function reflect._render_cause(value: unknown) -> string {
 }
 
+function reflect.array.<(reflect.array.Type as reflect.TypeView)>.as_type(self: reflect.array.Type) -> reflect.Type {
+}
+
 function reflect.array.Type.element_type(self: reflect.array.Type) -> reflect.Type {
 }
 
-function reflect.array.Type.reflect.TypeView.as_type(self: reflect.array.Type) -> reflect.Type {
+function reflect.call_any(f: reflect.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
 }
 
-function reflect.call_any(f: reflect.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
+function reflect.class.<(reflect.class.Type as reflect.TypeView)>.as_type(self: reflect.class.Type) -> reflect.Type {
 }
 
 function reflect.class.Builder._build(self: reflect.class.Builder, implementations: reflect.interface.Implementation[]) -> reflect.class.Type {
@@ -513,9 +516,6 @@ function reflect.class.Type.fields(self: reflect.class.Type) -> reflect.class.Fi
 function reflect.class.Type.meta(self: reflect.class.Type) -> reflect.Meta {
 }
 
-function reflect.class.Type.reflect.TypeView.as_type(self: reflect.class.Type) -> reflect.Type {
-}
-
 function reflect.class._new(name: string, fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>>, implementations: reflect.interface.Implementation[]) -> reflect.class.Type {
 }
 
@@ -541,10 +541,10 @@ function reflect.class.new(name: string, fields: map<string, reflect.Type | refl
     return
 }
 
-function reflect.enum.Type.meta(self: reflect.enum.Type) -> reflect.Meta {
+function reflect.enum.<(reflect.enum.Type as reflect.TypeView)>.as_type(self: reflect.enum.Type) -> reflect.Type {
 }
 
-function reflect.enum.Type.reflect.TypeView.as_type(self: reflect.enum.Type) -> reflect.Type {
+function reflect.enum.Type.meta(self: reflect.enum.Type) -> reflect.Meta {
 }
 
 function reflect.enum.Type.values(self: reflect.enum.Type) -> reflect.enum.Value[] {
@@ -559,13 +559,16 @@ function reflect.enum.new(name: string, values: (string | reflect.enum.Value)[])
 function reflect.enum.value(name: string, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> reflect.enum.Value {
 }
 
+function reflect.function.<(reflect.function.Type as reflect.TypeView)>.as_type(self: reflect.function.Type) -> reflect.Type {
+}
+
 function reflect.function.Type.params(self: reflect.function.Type) -> reflect.function.Parameter[] {
 }
 
-function reflect.function.Type.reflect.TypeView.as_type(self: reflect.function.Type) -> reflect.Type {
+function reflect.function.Type.return_type(self: reflect.function.Type) -> reflect.Type {
 }
 
-function reflect.function.Type.return_type(self: reflect.function.Type) -> reflect.Type {
+function reflect.interface.<(reflect.interface.Type as reflect.TypeView)>.as_type(self: reflect.interface.Type) -> reflect.Type {
 }
 
 function reflect.interface.Implementation.field(self: reflect.interface.Implementation, interface_field: string, class_field: string | null) -> reflect.interface.Implementation {
@@ -574,22 +577,19 @@ function reflect.interface.Implementation.field(self: reflect.interface.Implemen
 function reflect.interface.Type.implemented_by(self: reflect.interface.Type, other: reflect.Type) -> bool {
 }
 
-function reflect.interface.Type.reflect.TypeView.as_type(self: reflect.interface.Type) -> reflect.Type {
-}
-
 function reflect.interface.implementation() -> reflect.interface.Implementation {
 }
 
-function reflect.literal.Type.reflect.TypeView.as_type(self: reflect.literal.Type) -> reflect.Type {
+function reflect.literal.<(reflect.literal.Type as reflect.TypeView)>.as_type(self: reflect.literal.Type) -> reflect.Type {
 }
 
 function reflect.literal.new(value: string | int | bool) -> reflect.literal.Type {
 }
 
-function reflect.map.Type.key_type(self: reflect.map.Type) -> reflect.Type {
+function reflect.map.<(reflect.map.Type as reflect.TypeView)>.as_type(self: reflect.map.Type) -> reflect.Type {
 }
 
-function reflect.map.Type.reflect.TypeView.as_type(self: reflect.map.Type) -> reflect.Type {
+function reflect.map.Type.key_type(self: reflect.map.Type) -> reflect.Type {
 }
 
 function reflect.map.Type.value_type(self: reflect.map.Type) -> reflect.Type {
@@ -598,16 +598,16 @@ function reflect.map.Type.value_type(self: reflect.map.Type) -> reflect.Type {
 function reflect.map.new(key: reflect.Type, value: reflect.Type) -> reflect.map.Type {
 }
 
-function reflect.primitive.Type.reflect.TypeView.as_type(self: reflect.primitive.Type) -> reflect.Type {
+function reflect.primitive.<(reflect.primitive.Type as reflect.TypeView)>.as_type(self: reflect.primitive.Type) -> reflect.Type {
 }
 
 function reflect.signature(f: reflect.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
 }
 
-function reflect.union.Type.member_types(self: reflect.union.Type) -> reflect.Type[] {
+function reflect.union.<(reflect.union.Type as reflect.TypeView)>.as_type(self: reflect.union.Type) -> reflect.Type {
 }
 
-function reflect.union.Type.reflect.TypeView.as_type(self: reflect.union.Type) -> reflect.Type {
+function reflect.union.Type.member_types(self: reflect.union.Type) -> reflect.Type[] {
 }
 
 function reflect.union.new(types: reflect.Type[]) -> reflect.union.Type {

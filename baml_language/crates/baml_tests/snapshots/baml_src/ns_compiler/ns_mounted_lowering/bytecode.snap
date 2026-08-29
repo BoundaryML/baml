@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function compiler.mounted_lowering.$init_test_ns_compiler_ns_mounted_lowering_carrier_bridging(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.compiler.mounted_lowering"
+    load_const "mounted carrier classes bridge to their structural types"
+    make_closure .<lambda($init_test_ns_compiler_ns_mounted_lowering_carrier_bridging, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}

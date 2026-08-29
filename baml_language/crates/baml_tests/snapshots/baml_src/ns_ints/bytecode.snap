@@ -818,19 +818,19 @@ function ints.$init_test_ns_ints_ints(registry: testing.TestCollector) -> null {
     return
 }
 
-function ints.FixedBytesRng.baml.random.Rng.random(self: ints.FixedBytesRng, bytes: int) -> uint8array {
+function ints.<(user.ints.FixedBytesRng as baml.random.Rng)>.random(self: ints.FixedBytesRng, bytes: int) -> uint8array {
     load_var self
     load_field .draw
     return
 }
 
-function ints.RejectionThenAcceptedRng.baml.random.Rng.random(self: ints.RejectionThenAcceptedRng, bytes: int) -> uint8array {
+function ints.<(user.ints.RejectionThenAcceptedRng as baml.random.Rng)>.random(self: ints.RejectionThenAcceptedRng, bytes: int) -> uint8array {
     load_const b""
     call baml.deep_copy
     return
 }
 
-function ints.RejectionThenAcceptedRng.baml.random.Rng.random_int(self: ints.RejectionThenAcceptedRng) -> int {
+function ints.<(user.ints.RejectionThenAcceptedRng as baml.random.Rng)>.random_int(self: ints.RejectionThenAcceptedRng) -> int {
     load_var self
     copy 0
     load_field .calls

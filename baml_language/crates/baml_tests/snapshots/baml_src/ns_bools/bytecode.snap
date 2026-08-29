@@ -13,7 +13,7 @@ function bools.$init_test_ns_bools_bools(registry: testing.TestCollector) -> nul
     return
 }
 
-function bools.FixedBoolRng.baml.random.Rng.random(self: bools.FixedBoolRng, bytes: int) -> uint8array {
+function bools.<(user.bools.FixedBoolRng as baml.random.Rng)>.random(self: bools.FixedBoolRng, bytes: int) -> uint8array {
     load_var self
     load_field .draw
     return

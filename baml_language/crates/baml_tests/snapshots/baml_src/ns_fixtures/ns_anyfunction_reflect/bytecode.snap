@@ -192,11 +192,11 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     store_var sig
     load_var sig
     load_field .returns
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var _5
     load_var sig
     load_field .errors
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var _7
     load_var sig
     load_field .args
@@ -238,7 +238,7 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     store_var _19
     load_var arg
     load_field .type
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var _22
     load_var2 11 12
     bin_op +
@@ -287,7 +287,7 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     store_var _41
     load_var opt
     load_field .1
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var _44
     load_var2 17 18
     bin_op +

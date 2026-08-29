@@ -146,15 +146,13 @@ function mr_concrete(d: Dog) -> string throws never {
         resolutions.contains(&("n.describe".into(), "InterfaceVirtualMethod".into())),
         "existential method call is a virtual slot: {resolutions:?}"
     );
-    // The item tree hoists implements-block methods into the class's
-    // method list, so the class-inherent road resolves the concrete
-    // call and the record is BoundMethod carrying the impl method's
-    // FunctionLoc (the callable MIR must emit). TIR spells this
-    // InterfaceConcreteMethod with the impl block; whether MIR needs
-    // that distinction surfaces at the differential gate.
+    // An implements-block method is Impl-owned (never a class-inherent
+    // method), so a concrete receiver resolves through the impl tier and
+    // the record is InterfaceConcreteMethod carrying the impl block, the
+    // resolved body, and the carried owner frame.
     assert!(
-        resolutions.contains(&("d.describe".into(), "BoundMethod".into())),
-        "concrete receiver resolves through the hoisted class method: {resolutions:?}"
+        resolutions.contains(&("d.describe".into(), "InterfaceConcreteMethod".into())),
+        "concrete receiver resolves through the matched impl: {resolutions:?}"
     );
 }
 
@@ -459,11 +457,11 @@ function sc_stream(runtime_t: reflect.Type) -> int throws never {
 function sc_ordinary_contract() -> null throws never {
     sc_contract<(string) -> string>()
 }
-function sc_extract(pkg: reflect.Package) -> null throws unknown {
+function sc_extract(pkg: reflect.Package) -> null {
     let extracted = pkg.get_function<(string) -> string>("root.Target");
     null
 }
-function sc_session(session: reflect.Session) -> null throws unknown {
+function sc_session(session: reflect.Session) -> null {
     let value = session.eval("1");
     null
 }
@@ -1005,7 +1003,7 @@ fn call_plan_effect_solves_from_deferred_lambda() {
     // lower rides a deferred sub - draining goals first lands the lower
     // before E commits, so E = never, not the minimum-upper unknown.
     let source = r#"
-function ir_probe() -> int throws unknown {
+function ir_probe() -> int {
     let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
     it.reduce((a: int, x: int) -> int { a + x }, 0)
 }

@@ -12,7 +12,7 @@ fn user.fixtures.catch_interface_refinement.Failure.is_transient(_1: void) -> vo
     }
 }
 
-fn user.fixtures.catch_interface_refinement.QuotaExceeded.Failure.is_transient(self: fixtures.catch_interface_refinement.QuotaExceeded) -> bool {
+fn user.fixtures.catch_interface_refinement.<(user.fixtures.catch_interface_refinement.QuotaExceeded as user.fixtures.catch_interface_refinement.Failure)>.is_transient(self: fixtures.catch_interface_refinement.QuotaExceeded) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: fixtures.catch_interface_refinement.QuotaExceeded // self // param
@@ -27,7 +27,7 @@ fn user.fixtures.catch_interface_refinement.QuotaExceeded.Failure.is_transient(s
     }
 }
 
-fn user.fixtures.catch_interface_refinement.Throttled.Failure.is_transient(self: fixtures.catch_interface_refinement.Throttled) -> bool {
+fn user.fixtures.catch_interface_refinement.<(user.fixtures.catch_interface_refinement.Throttled as user.fixtures.catch_interface_refinement.Failure)>.is_transient(self: fixtures.catch_interface_refinement.Throttled) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: fixtures.catch_interface_refinement.Throttled // self // param

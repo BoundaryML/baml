@@ -142,11 +142,29 @@ impl From<CffiHandleTableEntry> for BexExternalValue {
     }
 }
 
+/// One table row: the value plus its outstanding ownership count.
+///
+/// Every crossing that hands the host a key — an outbound encode or an
+/// explicit clone — owes exactly one release. A refcount (rather than one key
+/// per crossing) is what lets the identity-bearing arm reuse a key without
+/// breaking that contract: the Nth crossing bumps the count, the Nth release
+/// balances it, and the row dies at zero.
+struct CffiHandleTableRow {
+    value: Arc<CffiHandleTableEntry>,
+    refcount: u64,
+}
+
 /// Global handle table mapping opaque u64 keys to `Arc<CffiHandleTableEntry>`.
 /// Single instance shared by all bridges.
 pub struct CffiHandleTable {
     next_key: AtomicU64,
-    entries: RwLock<HashMap<u64, Arc<CffiHandleTableEntry>>>,
+    /// Lock order: `entries` before `heap_keys`, always.
+    entries: RwLock<HashMap<u64, CffiHandleTableRow>>,
+    /// Dedup index for the identity-bearing arm: one live cffi key per heap
+    /// [`Handle`] (`Eq` = slab key + issuing heap), so a host-side key compare
+    /// answers object identity. `RustData`/`Adt` entries carry no identity and
+    /// never dedup.
+    heap_keys: RwLock<HashMap<Handle, u64>>,
 }
 
 impl CffiHandleTable {
@@ -154,55 +172,112 @@ impl CffiHandleTable {
         Self {
             next_key: AtomicU64::new(1), // start at 1; 0 = invalid
             entries: RwLock::new(HashMap::new()),
+            heap_keys: RwLock::new(HashMap::new()),
         }
     }
 
-    /// Insert a value and return its unique key.
+    /// Insert a value and return its key, adding one ownership.
+    ///
+    /// A `BexHeapHandle` naming an object that already has a live key returns
+    /// that key (host-side `==` on keys is an identity compare); every other
+    /// value gets a fresh key. Either way the caller now owes one release.
     pub fn insert(&self, value: CffiHandleTableEntry) -> u64 {
-        let key = self.next_key.fetch_add(1, Ordering::Relaxed);
         let mut entries = self
             .entries
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        entries.insert(key, Arc::new(value));
+        if let CffiHandleTableEntry::BexHeapHandle(handle) = &value {
+            let mut heap_keys = self
+                .heap_keys
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(&key) = heap_keys.get(handle) {
+                entries
+                    .get_mut(&key)
+                    .unwrap_or_else(|| unreachable!("heap_keys always names a live entry"))
+                    .refcount += 1;
+                return key;
+            }
+            let key = self.next_key.fetch_add(1, Ordering::Relaxed);
+            heap_keys.insert(handle.clone(), key);
+            entries.insert(
+                key,
+                CffiHandleTableRow {
+                    value: Arc::new(value),
+                    refcount: 1,
+                },
+            );
+            return key;
+        }
+        let key = self.next_key.fetch_add(1, Ordering::Relaxed);
+        entries.insert(
+            key,
+            CffiHandleTableRow {
+                value: Arc::new(value),
+                refcount: 1,
+            },
+        );
         key
     }
 
-    /// Clone a handle: creates a new key pointing to the same Arc.
+    /// Clone a handle: adds one ownership and returns the key to release it
+    /// through.
+    ///
+    /// The identity-bearing arm keeps its key (a copy is another owner of the
+    /// same identity); identity-free values get a fresh key sharing the Arc,
+    /// preserving the historical "each wrapper holds its own key" shape.
     pub fn clone_handle(&self, key: u64) -> Option<u64> {
-        let entries = self
+        let mut entries = self
             .entries
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let arc = entries.get(&key)?.clone();
-        drop(entries);
-        let new_key = self.next_key.fetch_add(1, Ordering::Relaxed);
-        self.entries
             .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(new_key, arc);
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let row = entries.get_mut(&key)?;
+        if matches!(&*row.value, CffiHandleTableEntry::BexHeapHandle(_)) {
+            row.refcount += 1;
+            return Some(key);
+        }
+        let value = row.value.clone();
+        let new_key = self.next_key.fetch_add(1, Ordering::Relaxed);
+        entries.insert(new_key, CffiHandleTableRow { value, refcount: 1 });
         Some(new_key)
     }
 
-    /// Resolve a key to its value (cheap Arc clone).
+    /// Resolve a key to its value (cheap Arc clone). Not an ownership change.
     pub fn resolve(&self, key: u64) -> Option<Arc<CffiHandleTableEntry>> {
         self.entries
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(&key)
-            .cloned()
+            .map(|row| row.value.clone())
     }
 
-    /// Release a handle. Returns true if the key was present.
+    /// Release one ownership of a key. Returns true if the key was live.
+    /// The row (and its dedup index entry) is removed when the last
+    /// ownership is released.
     pub fn release(&self, key: u64) -> bool {
-        self.entries
+        let mut entries = self
+            .entries
             .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&key)
-            .is_some()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(row) = entries.get_mut(&key) else {
+            return false;
+        };
+        row.refcount -= 1;
+        if row.refcount == 0 {
+            let row = entries
+                .remove(&key)
+                .unwrap_or_else(|| unreachable!("row was just read under the same write lock"));
+            if let CffiHandleTableEntry::BexHeapHandle(handle) = &*row.value {
+                self.heap_keys
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(handle);
+            }
+        }
+        true
     }
 
-    /// Return the number of currently owned handle-table keys.
+    /// Return the number of currently live handle-table keys.
     pub fn len(&self) -> usize {
         self.entries
             .read()
@@ -215,13 +290,27 @@ impl CffiHandleTable {
         self.len() == 0
     }
 
-    /// Atomically resolve and remove. Returns the entry or None if the
-    /// key was already absent.
+    /// Atomically resolve and release one ownership — the inbound
+    /// ownership-transfer lane (the host clones a key for the wire; decoding
+    /// the wire consumes that clone). Returns None if the key was absent.
     pub fn drain(&self, key: u64) -> Option<Arc<CffiHandleTableEntry>> {
-        self.entries
+        let mut entries = self
+            .entries
             .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&key)
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let row = entries.get_mut(&key)?;
+        let value = row.value.clone();
+        row.refcount -= 1;
+        if row.refcount == 0 {
+            entries.remove(&key);
+            if let CffiHandleTableEntry::BexHeapHandle(handle) = &*value {
+                self.heap_keys
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(handle);
+            }
+        }
+        Some(value)
     }
 }
 
@@ -388,5 +477,118 @@ mod tests {
             encoded.value,
             Some(BamlValueVariant::HandleValue(_))
         ));
+    }
+
+    /// A no-op heap for constructing real `Handle`s in-table without a VM.
+    struct StubHeap;
+
+    impl bex_project::WeakHeapRef for StubHeap {
+        fn release_handle(&self, _slab_key: usize) {}
+
+        fn resolve_handle_ptr(&self, _slab_key: usize) -> Option<bex_project::HeapPtr> {
+            None
+        }
+    }
+
+    fn stub_heap() -> Arc<dyn bex_project::WeakHeapRef> {
+        Arc::new(StubHeap)
+    }
+
+    #[test]
+    fn same_heap_handle_dedups_to_one_refcounted_key() {
+        let table = CffiHandleTable::new();
+        let heap = stub_heap();
+        let handle = bex_project::Handle::new(7, heap);
+
+        let key1 = table.insert(CffiHandleTableEntry::BexHeapHandle(handle.clone()));
+        let key2 = table.insert(CffiHandleTableEntry::BexHeapHandle(handle.clone()));
+        assert_eq!(key1, key2, "one object, one key");
+        assert_eq!(table.len(), 1);
+
+        // Two crossings owe two releases; the row survives the first.
+        assert!(table.release(key1));
+        assert!(table.resolve(key1).is_some());
+        assert!(table.release(key1));
+        assert!(table.resolve(key1).is_none());
+
+        // The dedup index is cleaned at zero: a later crossing mints fresh.
+        let key3 = table.insert(CffiHandleTableEntry::BexHeapHandle(handle));
+        assert_ne!(key3, key1);
+        assert!(table.release(key3));
+    }
+
+    #[test]
+    fn distinct_objects_and_heaps_get_distinct_keys() {
+        let table = CffiHandleTable::new();
+        let heap = stub_heap();
+        let key_a = table.insert(CffiHandleTableEntry::BexHeapHandle(
+            bex_project::Handle::new(1, heap.clone()),
+        ));
+        let key_b = table.insert(CffiHandleTableEntry::BexHeapHandle(
+            bex_project::Handle::new(2, heap),
+        ));
+        // Same slab key issued by a different heap is a different object.
+        let key_c = table.insert(CffiHandleTableEntry::BexHeapHandle(
+            bex_project::Handle::new(1, stub_heap()),
+        ));
+        assert_ne!(key_a, key_b);
+        assert_ne!(key_a, key_c);
+        assert_eq!(table.len(), 3);
+        for key in [key_a, key_b, key_c] {
+            assert!(table.release(key));
+        }
+    }
+
+    #[test]
+    fn clone_handle_identity_arm_keeps_its_key() {
+        let table = CffiHandleTable::new();
+        let handle = bex_project::Handle::new(7, stub_heap());
+        let key = table.insert(CffiHandleTableEntry::BexHeapHandle(handle));
+        assert_eq!(table.clone_handle(key), Some(key));
+        assert!(table.release(key));
+        assert!(table.resolve(key).is_some(), "clone's ownership keeps it");
+        assert!(table.release(key));
+        assert!(table.resolve(key).is_none());
+    }
+
+    #[test]
+    fn identity_free_entries_never_dedup() {
+        let table = CffiHandleTable::new();
+        let rust_data = BexRustData(Arc::new(42_u32));
+        let key1 = table.insert(CffiHandleTableEntry::RustData(rust_data.clone()));
+        let key2 = table.insert(CffiHandleTableEntry::RustData(rust_data));
+        assert_ne!(key1, key2, "RustData carries no identity");
+
+        // An ADT holding a heap handle is still identity-free at this layer.
+        let handle = bex_project::Handle::new(7, stub_heap());
+        let adt = |h: &bex_project::Handle| {
+            CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+                ty: bex_project::RuntimeTy::int(),
+                heap_handle: h.clone(),
+            })
+        };
+        let key3 = table.insert(adt(&handle));
+        let key4 = table.insert(adt(&handle));
+        assert_ne!(key3, key4, "Adt entries never dedup");
+        for key in [key1, key2, key3, key4] {
+            assert!(table.release(key));
+        }
+    }
+
+    #[test]
+    fn drain_consumes_one_ownership() {
+        let table = CffiHandleTable::new();
+        let handle = bex_project::Handle::new(7, stub_heap());
+        let key = table.insert(CffiHandleTableEntry::BexHeapHandle(handle.clone()));
+        assert_eq!(
+            table.insert(CffiHandleTableEntry::BexHeapHandle(handle)),
+            key
+        );
+
+        assert!(table.drain(key).is_some());
+        assert!(table.resolve(key).is_some(), "one ownership remains");
+        assert!(table.drain(key).is_some());
+        assert!(table.resolve(key).is_none());
+        assert!(table.drain(key).is_none());
     }
 }

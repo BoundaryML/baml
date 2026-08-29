@@ -38,11 +38,11 @@ pub(crate) enum StatementRef {
 
 /// Where a local is defined.
 #[derive(Clone, Debug)]
-pub(crate) struct DefLocation {
+pub(crate) struct DefLocation<'db> {
     pub block: BlockId,
     pub statement_ref: StatementRef,
     /// The rvalue that produces this local's value (for inlining).
-    pub rvalue: Rvalue,
+    pub rvalue: Rvalue<'db>,
 }
 
 /// Where a local is used.
@@ -54,9 +54,9 @@ pub(crate) struct UseLocation {
 
 /// Def-use information for a single local.
 #[derive(Clone, Debug)]
-pub(crate) struct LocalDefUse {
+pub(crate) struct LocalDefUse<'db> {
     /// Definition site (None for parameters, which are defined at entry).
-    pub def: Option<DefLocation>,
+    pub def: Option<DefLocation<'db>>,
     /// All use sites.
     pub uses: Vec<UseLocation>,
     /// All definition sites as `(block, statement_ref)` pairs.
@@ -134,11 +134,11 @@ impl Dominators {
 
 /// Complete analysis result for a function.
 #[derive(Debug)]
-pub(crate) struct AnalysisResult {
+pub(crate) struct AnalysisResult<'db> {
     /// Classification for each local.
     pub classifications: HashMap<Local, LocalClassification>,
     /// Def-use information for each local.
-    pub def_use: HashMap<Local, LocalDefUse>,
+    pub def_use: HashMap<Local, LocalDefUse<'db>>,
     /// Reverse postorder of blocks (for iteration).
     pub rpo: Vec<BlockId>,
     /// Jump threading: maps empty goto-only blocks to their final target.
@@ -153,9 +153,9 @@ pub(crate) struct AnalysisResult {
 // Analysis Entry Point
 // ============================================================================
 
-impl AnalysisResult {
+impl<'db> AnalysisResult<'db> {
     /// Analyze a MIR function and produce classification results.
-    pub(crate) fn analyze(body: &MirFunctionBody, arity: usize, opt: OptLevel) -> Self {
+    pub(crate) fn analyze(body: &MirFunctionBody<'db>, arity: usize, opt: OptLevel) -> Self {
         // Step 1: Build predecessor map
         let predecessors = build_predecessors(body);
 
@@ -246,7 +246,7 @@ impl AnalysisResult {
 // ============================================================================
 
 /// Build predecessor map for all blocks.
-fn build_predecessors(body: &MirFunctionBody) -> HashMap<BlockId, Vec<BlockId>> {
+fn build_predecessors(body: &MirFunctionBody<'_>) -> HashMap<BlockId, Vec<BlockId>> {
     let mut preds: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
 
     // Initialize with empty vecs
@@ -270,7 +270,7 @@ fn build_predecessors(body: &MirFunctionBody) -> HashMap<BlockId, Vec<BlockId>> 
 
 /// DFS helper for computing postorder.
 fn rpo_dfs(
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     block_id: BlockId,
     visited: &mut HashSet<BlockId>,
     postorder: &mut Vec<BlockId>,
@@ -290,7 +290,7 @@ fn rpo_dfs(
 }
 
 /// Compute reverse postorder (depth-first, postorder reversed).
-fn compute_rpo(body: &MirFunctionBody) -> Vec<BlockId> {
+fn compute_rpo(body: &MirFunctionBody<'_>) -> Vec<BlockId> {
     let mut visited = HashSet::new();
     let mut postorder = Vec::new();
 
@@ -335,7 +335,7 @@ pub(crate) fn is_dead_unreachable_block(block: &baml_compiler2_mir::BasicBlock) 
 ///
 /// Identifies empty blocks that only contain a Goto terminator and maps them
 /// to their final destination. This allows emission to skip intermediate jumps.
-fn build_redirect_targets(body: &MirFunctionBody) -> HashMap<BlockId, BlockId> {
+fn build_redirect_targets(body: &MirFunctionBody<'_>) -> HashMap<BlockId, BlockId> {
     // First pass: identify empty goto-only blocks
     let mut goto_targets: HashMap<BlockId, BlockId> = HashMap::new();
 
@@ -385,7 +385,7 @@ fn resolve_redirect_chain(start: BlockId, goto_targets: &HashMap<BlockId, BlockI
 /// assignments produce no bytecode during emission, making the block
 /// effectively empty.
 fn build_redirect_targets_with_classifications(
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     classifications: &HashMap<Local, LocalClassification>,
 ) -> HashMap<BlockId, BlockId> {
     let mut goto_targets: HashMap<BlockId, BlockId> = HashMap::new();
@@ -448,7 +448,7 @@ pub(crate) fn threadable_goto_target(
 /// This is a simple, efficient iterative algorithm that computes immediate
 /// dominators by repeatedly intersecting dominator sets until convergence.
 fn compute_dominators(
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     rpo: &[BlockId],
     preds: &HashMap<BlockId, Vec<BlockId>>,
 ) -> Dominators {
@@ -521,8 +521,8 @@ fn intersect(
 // ============================================================================
 
 /// Collect def-use information for all locals.
-fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
-    let mut def_use: HashMap<Local, LocalDefUse> = HashMap::new();
+fn collect_def_use<'db>(body: &MirFunctionBody<'db>) -> HashMap<Local, LocalDefUse<'db>> {
+    let mut def_use: HashMap<Local, LocalDefUse<'db>> = HashMap::new();
 
     // Initialize for all locals
     for (idx, _) in body.locals.iter().enumerate() {
@@ -671,7 +671,7 @@ fn walk_place_locals(place: &Place, f: &mut impl FnMut(Local)) {
 }
 
 /// Walk all locals referenced by an operand, calling `f` for each.
-fn walk_operand_locals(operand: &Operand, f: &mut impl FnMut(Local)) {
+fn walk_operand_locals(operand: &Operand<'_>, f: &mut impl FnMut(Local)) {
     match operand {
         Operand::Copy(place) | Operand::Move(place) => walk_place_locals(place, f),
         Operand::Constant(_) => {}
@@ -679,7 +679,7 @@ fn walk_operand_locals(operand: &Operand, f: &mut impl FnMut(Local)) {
 }
 
 /// Walk all locals referenced by an rvalue, calling `f` for each.
-fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
+fn walk_rvalue_locals(rvalue: &Rvalue<'_>, f: &mut impl FnMut(Local)) {
     match rvalue {
         Rvalue::Use(operand) => walk_operand_locals(operand, f),
         Rvalue::BinaryOp { left, right, .. } => {
@@ -743,7 +743,7 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
 
 /// Record a use of every local referenced by an rvalue.
 fn collect_uses_in_rvalue(
-    rvalue: &Rvalue,
+    rvalue: &Rvalue<'_>,
     block: BlockId,
     stmt_ref: StatementRef,
     def_use: &mut HashMap<Local, LocalDefUse>,
@@ -760,7 +760,7 @@ fn collect_uses_in_rvalue(
 
 /// Record a use of every local referenced by an operand.
 fn collect_uses_in_operand(
-    operand: &Operand,
+    operand: &Operand<'_>,
     block: BlockId,
     stmt_ref: StatementRef,
     def_use: &mut HashMap<Local, LocalDefUse>,
@@ -793,10 +793,10 @@ fn collect_uses_in_place(
 }
 
 /// Collect uses (and defs for Call/Await) in a terminator.
-fn collect_uses_in_terminator(
-    term: &Terminator,
+fn collect_uses_in_terminator<'db>(
+    term: &Terminator<'db>,
     block: BlockId,
-    def_use: &mut HashMap<Local, LocalDefUse>,
+    def_use: &mut HashMap<Local, LocalDefUse<'db>>,
 ) {
     match term {
         Terminator::Goto { .. } | Terminator::Unreachable => {}
@@ -1004,7 +1004,7 @@ fn collect_uses_in_terminator(
 ///
 /// Returns both the classifications and the `copy_sources` map for copy propagation.
 fn classify_locals(
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     arity: usize,
     def_use: &HashMap<Local, LocalDefUse>,
     dominators: &Dominators,
@@ -1143,7 +1143,7 @@ fn classify_locals(
 fn is_stack_covered_phi(
     local: Local,
     du: &LocalDefUse,
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
 ) -> bool {
     if du.uses.len() != 1 || du.all_defs.is_empty() {
@@ -1203,7 +1203,7 @@ fn is_stack_covered_phi(
 fn predecessors_cover_block(
     local: Local,
     block: BlockId,
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
     visited: &mut HashSet<BlockId>,
     covered_defs: &mut HashSet<(BlockId, StatementRef)>,
@@ -1318,7 +1318,7 @@ fn predecessors_cover_block(
 /// stack simulation has to recognize the *defining* terminator to know which
 /// block to start simulating from, and its match has no `VirtualCall` arm. The
 /// `PhiLike` simulation starts at the use block and never looks at the def.
-fn call_result_carried_into(terminator: Option<&Terminator>, block: BlockId) -> Option<Local> {
+fn call_result_carried_into(terminator: Option<&Terminator<'_>>, block: BlockId) -> Option<Local> {
     let (Terminator::Call {
         destination,
         target,
@@ -1353,7 +1353,7 @@ fn call_result_carried_into(terminator: Option<&Terminator>, block: BlockId) -> 
 /// Stack-neutral statements can safely execute while a value meant for return sits on
 /// the stack, enabling optimizations like `ReturnPhi` even when there are statements
 /// between the assignment to `_0` and the `Return` terminator.
-fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
+fn is_stack_neutral_statement(kind: &StatementKind<'_>) -> bool {
     match kind {
         // These don't touch the stack at all - just update external state
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true,
@@ -1383,7 +1383,7 @@ fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
 /// This eliminates the redundant `StoreVar("_0"); LoadVar("_0"); Return` pattern.
 fn is_return_phi(
     local: Local,
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     def_use: &HashMap<Local, LocalDefUse>,
     redirect_targets: &HashMap<BlockId, BlockId>,
 ) -> bool {
@@ -1489,7 +1489,7 @@ fn is_return_phi(
 fn can_be_virtual(
     du: &LocalDefUse,
     dominators: &Dominators,
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     arity: usize,
     def_use: &HashMap<Local, LocalDefUse>,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
@@ -1674,7 +1674,7 @@ fn can_be_virtual(
 /// observable (mutable containers, class instances, and callable objects).
 ///
 /// Matched exhaustively on purpose: a wrong `false` silently miscompiles.
-fn rvalue_allocates_with_identity(rvalue: &Rvalue) -> bool {
+fn rvalue_allocates_with_identity(rvalue: &Rvalue<'_>) -> bool {
     match rvalue {
         Rvalue::Map(..)
         | Rvalue::Array(..)
@@ -1709,7 +1709,7 @@ fn rvalue_allocates_with_identity(rvalue: &Rvalue) -> bool {
 /// wrong for an allocation with observable identity, so its cross-block
 /// virtualization must reject the shape.
 fn use_repeats_without_definition(
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     def_block: BlockId,
     use_block: BlockId,
 ) -> bool {
@@ -1743,7 +1743,7 @@ fn use_repeats_without_definition(
 /// Cross-block virtual inlining re-evaluates the rvalue at use site. Projection
 /// reads are difficult to prove safe with local-only def-use, so we conservatively
 /// block cross-block virtualization when they appear.
-fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
+fn rvalue_has_projection_reads(rvalue: &Rvalue<'_>) -> bool {
     fn place_has_projection(place: &Place) -> bool {
         match place {
             Place::Local(_) => false,
@@ -1752,7 +1752,7 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         }
     }
 
-    fn operand_has_projection(operand: &Operand) -> bool {
+    fn operand_has_projection(operand: &Operand<'_>) -> bool {
         match operand {
             Operand::Copy(place) | Operand::Move(place) => place_has_projection(place),
             Operand::Constant(_) => false,
@@ -1802,12 +1802,12 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
 /// - Assignments to variables that the rvalue reads from (transitively)
 ///
 /// Checks the half-open range `[start, end)`.
-fn has_side_effects_between(
-    body: &MirFunctionBody,
+fn has_side_effects_between<'db>(
+    body: &MirFunctionBody<'db>,
     block_id: BlockId,
     start: usize,
     end: usize,
-    rvalue: &Rvalue,
+    rvalue: &Rvalue<'db>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
     let block = body.block(block_id);
@@ -1835,7 +1835,7 @@ fn has_side_effects_between(
 /// We only follow definitions that occur before `def_block:def_stmt_idx` to
 /// avoid including dependencies on values computed later.
 fn collect_transitive_reads(
-    rvalue: &Rvalue,
+    rvalue: &Rvalue<'_>,
     def_use: &HashMap<Local, LocalDefUse>,
     def_block: BlockId,
     def_stmt_idx: usize,
@@ -1869,7 +1869,7 @@ fn collect_transitive_reads(
 }
 
 /// Check if a statement has side effects that would prevent inlining.
-fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool {
+fn has_side_effect(kind: &StatementKind<'_>, rvalue_reads: &HashSet<Local>) -> bool {
     match kind {
         StatementKind::Assign { destination, value } => {
             // Check if this assignment modifies a variable (or field/index of a variable)
@@ -1900,7 +1900,7 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
 ///
 /// Pure constants have no side effects and always produce the same value,
 /// so they can be re-emitted at every use site even with multiple uses.
-fn is_pure_constant(rvalue: &Rvalue) -> bool {
+fn is_pure_constant(rvalue: &Rvalue<'_>) -> bool {
     matches!(rvalue, Rvalue::Use(Operand::Constant(_)))
 }
 
@@ -1926,7 +1926,7 @@ fn is_pure_constant(rvalue: &Rvalue) -> bool {
 /// Matched exhaustively on purpose. This is a soundness predicate, and a
 /// wrong `false` miscompiles silently — so a new `Rvalue` variant must fail to
 /// compile here rather than default into the infallible group.
-fn rvalue_can_panic(body: &MirFunctionBody, rvalue: &Rvalue) -> bool {
+fn rvalue_can_panic<'db>(body: &MirFunctionBody<'db>, rvalue: &Rvalue<'db>) -> bool {
     match rvalue {
         Rvalue::BinaryOp { op, left, right } => match op {
             // `/` rejects a zero divisor on both numeric paths — BAML throws
@@ -1988,7 +1988,7 @@ fn rvalue_can_panic(body: &MirFunctionBody, rvalue: &Rvalue) -> bool {
 /// pinned down — a union, a type variable, a value read through a projection, a
 /// type family variant added later. Only a type that provably never holds an
 /// `int` answers `false`.
-fn operand_could_be_int(body: &MirFunctionBody, operand: &Operand) -> bool {
+fn operand_could_be_int<'db>(body: &MirFunctionBody<'db>, operand: &Operand<'db>) -> bool {
     match operand {
         Operand::Constant(c) => matches!(c, Constant::Int(_)),
         Operand::Copy(place) | Operand::Move(place) => match place {
@@ -2040,7 +2040,7 @@ fn ty_could_be_int(ty: &RuntimeTy) -> bool {
 /// - At use site: don't emit `LoadVar` (value already on stack from Call)
 ///
 /// This eliminates the redundant `StoreVar("_X"); LoadVar("_X")` pattern for call results.
-fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBody) -> bool {
+fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBody<'_>) -> bool {
     // Must have exactly one use
     if du.uses.len() != 1 {
         return false;
@@ -2118,7 +2118,7 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
 fn is_call_result_aggregate_operand(
     local: Local,
     du: &LocalDefUse,
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
     if !is_call_like_result_local(local, du, body) {
@@ -2172,7 +2172,9 @@ fn is_call_result_aggregate_operand(
     found_local
 }
 
-fn aggregate_stack_prefix_operands(rvalue: &Rvalue) -> Option<Vec<&Operand>> {
+fn aggregate_stack_prefix_operands<'a, 'db>(
+    rvalue: &'a Rvalue<'db>,
+) -> Option<Vec<&'a Operand<'db>>> {
     match rvalue {
         Rvalue::Array(_, elements) => Some(elements.iter().collect()),
         // Map lowering emits all values first, then all keys, because the VM
@@ -2195,7 +2197,7 @@ fn aggregate_stack_prefix_operands(rvalue: &Rvalue) -> Option<Vec<&Operand>> {
     }
 }
 
-fn is_class_field_copy_operand(operand: &Operand) -> bool {
+fn is_class_field_copy_operand(operand: &Operand<'_>) -> bool {
     let place = match operand {
         Operand::Copy(place) | Operand::Move(place) => place,
         Operand::Constant(_) => return false,
@@ -2203,14 +2205,14 @@ fn is_class_field_copy_operand(operand: &Operand) -> bool {
     matches!(place, Place::Field { .. })
 }
 
-fn operand_local(operand: &Operand) -> Option<Local> {
+fn operand_local(operand: &Operand<'_>) -> Option<Local> {
     match operand {
         Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => Some(*local),
         _ => None,
     }
 }
 
-fn is_call_like_result_local(local: Local, du: &LocalDefUse, body: &MirFunctionBody) -> bool {
+fn is_call_like_result_local(local: Local, du: &LocalDefUse, body: &MirFunctionBody<'_>) -> bool {
     if du.uses.len() != 1 {
         return false;
     }
@@ -2497,7 +2499,7 @@ mod tests {
     fn nested_short_circuit_body(
         name: Option<&str>,
         with_prior_definition: bool,
-    ) -> MirFunctionBody {
+    ) -> MirFunctionBody<'static> {
         let destination = Local(1);
         let prior_definition = with_prior_definition.then(|| assign_bool(destination, false));
 
@@ -2561,7 +2563,7 @@ mod tests {
         }
     }
 
-    fn assign_bool(destination: Local, value: bool) -> Statement {
+    fn assign_bool(destination: Local, value: bool) -> Statement<'static> {
         Statement {
             kind: StatementKind::Assign {
                 destination: Place::Local(destination),
@@ -2572,7 +2574,7 @@ mod tests {
     }
 
     /// `_0 = copy destination; return` — the single use of the carried local.
-    fn return_local_block(id: BlockId, destination: Local) -> BasicBlock {
+    fn return_local_block(id: BlockId, destination: Local) -> BasicBlock<'static> {
         BasicBlock {
             id,
             statements: vec![Statement {
@@ -2588,7 +2590,7 @@ mod tests {
         }
     }
 
-    fn bool_body(blocks: Vec<BasicBlock>, name: Option<&str>) -> MirFunctionBody {
+    fn bool_body(blocks: Vec<BasicBlock<'static>>, name: Option<&str>) -> MirFunctionBody<'static> {
         MirFunctionBody {
             blocks,
             entry: BlockId(0),
@@ -2598,14 +2600,14 @@ mod tests {
         }
     }
 
-    fn is_stack_covered(body: &MirFunctionBody, local: Local) -> bool {
+    fn is_stack_covered(body: &MirFunctionBody<'_>, local: Local) -> bool {
         let def_use = collect_def_use(body);
         let predecessors = build_predecessors(body);
 
         is_stack_covered_phi(local, &def_use[&local], body, &predecessors)
     }
 
-    fn analyzed_classification(body: &MirFunctionBody, local: Local) -> LocalClassification {
+    fn analyzed_classification(body: &MirFunctionBody<'_>, local: Local) -> LocalClassification {
         AnalysisResult::analyze(body, 0, OptLevel::One).classifications[&local]
     }
 
@@ -2661,7 +2663,7 @@ mod tests {
     /// own join into the `if` join, so the `ShortCircuit`'s `join` really is the
     /// use block. The `Branch` false edge still reaches that block without
     /// pushing anything, so the local has to stay in its slot.
-    fn merged_join_body(name: Option<&str>) -> MirFunctionBody {
+    fn merged_join_body(name: Option<&str>) -> MirFunctionBody<'static> {
         let destination = Local(1);
 
         bool_body(
@@ -2765,7 +2767,10 @@ mod tests {
 
     /// `a && f(b)`: the short circuit joins at bb2, and the rhs block reaches
     /// that same join through `rhs`, a terminator that defines the destination.
-    fn short_circuit_over_call_body(name: Option<&str>, rhs: Terminator) -> MirFunctionBody {
+    fn short_circuit_over_call_body(
+        name: Option<&str>,
+        rhs: Terminator<'static>,
+    ) -> MirFunctionBody<'static> {
         let destination = Local(1);
 
         bool_body(
@@ -2796,7 +2801,7 @@ mod tests {
         )
     }
 
-    fn call_into(target: BlockId, unwind: Option<BlockId>) -> Terminator {
+    fn call_into(target: BlockId, unwind: Option<BlockId>) -> Terminator<'static> {
         Terminator::Call {
             callee: Operand::Constant(Constant::Null),
             args: vec![],
@@ -2809,7 +2814,7 @@ mod tests {
         }
     }
 
-    fn virtual_call_into(target: BlockId) -> Terminator {
+    fn virtual_call_into(target: BlockId) -> Terminator<'static> {
         Terminator::VirtualCall {
             iface: baml_type::TyTemplateInterface::new(
                 baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
@@ -2941,7 +2946,7 @@ mod tests {
     }
 
     /// The classic phi-like diamond: both arms assign and fall through.
-    fn diamond_body(with_prior_definition: bool) -> MirFunctionBody {
+    fn diamond_body(with_prior_definition: bool) -> MirFunctionBody<'static> {
         let destination = Local(1);
         let prior_definition = with_prior_definition.then(|| assign_bool(destination, false));
 

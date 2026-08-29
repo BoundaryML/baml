@@ -432,6 +432,12 @@ pub enum MemberResolution<'db> {
     InterfaceConcreteMethod {
         impl_block: baml_compiler2_hir::loc::ImplLoc<'db>,
         func: baml_compiler2_hir::loc::FunctionLoc<'db>,
+        /// The callee's OWNER frame, carried from resolution (see
+        /// `MemberDeclarer::ImplMethod::frame_type_args`): impl generic
+        /// bindings for an override, `[Self, iface args..]` for a default.
+        frame_type_args: Vec<Ty>,
+        /// `true` when `func` is the interface's default body.
+        from_interface_default: bool,
     },
     /// A VIRTUAL interface-field access: read through the realized
     /// declaring-interface view (`view`, the runtime resolver's key)
@@ -908,10 +914,15 @@ enum PendingDiag<'db> {
         expected_input: Ty,
         got: Ty,
     },
-    /// E0097: declared throws members the body can never throw (warning).
+    /// E0097: declared throws members the body can never throw.
     ExtraneousThrows {
         at: ExprId,
         extra_types: Vec<String>,
+    },
+    /// E0097: an `unknown`-containing contract without an escaping `unknown`.
+    ImpreciseUnknownThrows {
+        at: ExprId,
+        inferred_types: Vec<String>,
     },
     /// Control flow that would escape a `defer` body (BEP-042): `return`
     /// always; `break`/`continue` unless a loop opened INSIDE the defer.
@@ -1418,17 +1429,20 @@ fn infer_body_impl<'db>(
         BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
             // BODY-position `Self` is a PLAIN-class-method error (the
             // ratified rule: signatures resolve it, bodies do not);
-            // implements-block bodies (Self substitutes to the subject),
-            // interface default bodies (frame slot 0), and free-impl
-            // bodies keep theirs.
+            // implements-block bodies (`Self` substitutes to the subject,
+            // and they are Impl-owned — in-class and out-of-body alike)
+            // and interface default bodies (frame slot 0) keep theirs.
             match baml_compiler2_ppir::item_data::method_owner(db, function) {
-                Some(baml_compiler2_ppir::item_data::MethodOwner::Class(_))
-                    if baml_compiler2_ppir::item_data::method_interface_target(db, function)
-                        .is_none() =>
-                {
+                Some(baml_compiler2_ppir::item_data::MethodOwner::Class(_)) => {
+                    debug_assert!(
+                        baml_compiler2_ppir::item_data::method_interface_target(db, function)
+                            .is_none(),
+                        "interface targets are recorded on impl-block methods, which are \
+                         Impl-owned",
+                    );
                     None
                 }
-                _ => crate::lower::owner_self_ty(db, function, &frame),
+                _ => crate::lower::owner_self_ty(db, function),
             }
         }
         BodyOwnerId::Let(_) => None,
@@ -5882,61 +5896,6 @@ impl<'db> InferenceContext<'db> {
         (self.infer_expr(body, callee, &Expectation::None), false)
     }
 
-    fn heterogeneous_union_class_method_callee(
-        &self,
-        members: &[Ty],
-        member: &baml_type::Name,
-    ) -> Option<Ty> {
-        let mut has_interface_provider = false;
-        let mut joined: Option<Ty> = None;
-        for arm in members {
-            let TyKind::Class(qtn, _, _) = arm.kind() else {
-                return None;
-            };
-            if matches!(
-                crate::method_resolution::lookup_interface_member(
-                    self.db,
-                    &self.facts,
-                    arm,
-                    member,
-                ),
-                crate::method_resolution::InterfaceMemberLookup::Found(_)
-            ) {
-                has_interface_provider = true;
-            }
-            let Definition::Class(expected_class) = self.facts.definition_of(qtn)? else {
-                return None;
-            };
-            let candidate =
-                crate::method_resolution::lookup_method(self.db, &self.facts, arm, member)?;
-            let crate::method_resolution::MethodCandidateSource::Source { method, class } =
-                candidate.source
-            else {
-                return None;
-            };
-            if class != expected_class
-                || !baml_compiler2_ppir::item_data::class_data(self.db, class)
-                    .methods
-                    .contains(&method)
-            {
-                return None;
-            }
-            let signature = function_signature(self.db, method);
-            if signature.generic_params.len() != candidate.class_args.len() {
-                return None;
-            }
-            let ty = bind_receiver(function_value_ty(signature, &candidate.class_args));
-            if joined
-                .as_ref()
-                .is_some_and(|current| !self.cached_equivalent(current, &ty))
-            {
-                return None;
-            }
-            joined = Some(ty);
-        }
-        if has_interface_provider { joined } else { None }
-    }
-
     /// `receiver.member` in callee position: a method (instantiated - the
     /// receiver pins the class generics, the call site's turbofish or
     /// fresh variables fill the method's own; bound iff it takes `self`),
@@ -6013,16 +5972,12 @@ impl<'db> InferenceContext<'db> {
                     return (field_ty, false, None, false);
                 }
                 crate::method_resolution::UnionMemberLookup::NoCommonInterface => {
-                    // One arm may provide an owned method through an
-                    // interface while another owns an equivalent inherent
-                    // method. MIR retains that heterogeneous case as a
-                    // guarded class-tag switch; class-only unions continue
-                    // to require a common interface.
-                    if let Some(ty) =
-                        self.heterogeneous_union_class_method_callee(&union_members, member)
-                    {
-                        return (ty, true, None, false);
-                    }
+                    // RULING: a union-typed receiver exposes ONLY the
+                    // interface methods of interfaces every member
+                    // implements — inherent methods never participate, so
+                    // there is no per-arm fallback. Fall through to the
+                    // total operator-style sugars; a full miss reports
+                    // "no common interface".
                 }
             }
         }
@@ -6274,8 +6229,8 @@ impl<'db> InferenceContext<'db> {
     /// The `default` receiver's meaning inside an `implements` block:
     /// the block's target interface (its written args and associated
     /// bindings lowered in the owner's frame) plus the IMPLEMENTOR as
-    /// `Self` - the class's self type, or a free impl's for-target.
-    /// `None` anywhere else; the caller falls back to ordinary
+    /// `Self`, off the uniform [`impl_self_ty`](crate::lower::impl_self_ty)
+    /// surface. `None` anywhere else; the caller falls back to ordinary
     /// resolution.
     fn default_receiver_target(&mut self) -> Option<(InterfaceRef, Ty)> {
         let function = self.body_owner?;
@@ -6290,20 +6245,12 @@ impl<'db> InferenceContext<'db> {
             return None;
         };
         let self_ty = match baml_compiler2_ppir::item_data::method_owner(self.db, function) {
-            Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class)) => {
-                crate::lower::class_self_ty(self.db, class)
+            Some(baml_compiler2_ppir::item_data::MethodOwner::Impl(impl_loc)) => {
+                crate::lower::impl_self_ty(self.db, impl_loc)
             }
-            Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) => {
-                let data = baml_compiler2_ppir::item_data::impl_block_data(self.db, impl_loc);
-                match &data.subject {
-                    baml_compiler2_ppir::item_data::ImplSubjectData::Free {
-                        for_target, ..
-                    } => self.lower.lower_type_ref(&data.type_refs, *for_target),
-                    baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
-                        crate::lower::class_self_ty(self.db, *class)
-                    }
-                }
-            }
+            // A recorded interface target pairs with an Impl owner —
+            // class-owned methods never carry one, and interface default
+            // bodies have no target.
             _ => return None,
         };
         Some((
@@ -7045,16 +6992,16 @@ impl<'db> InferenceContext<'db> {
             "interface method frame must open with the `Self` slot"
         );
 
-        // The frame is `[Self] ++ interface generics ++ associated slots ++ the
-        // method's own generics` (`lower::interface_frame`). A written
-        // qualifier realizes the middle two groups and they are PINNED from it:
-        // `Conv<int>` and `Conv<string>` are different interfaces a type may
-        // implement both of, so leaving their slots to inference would let two
-        // calls in one body unify against the same hole. Associated slots come
-        // from the same realization rather than from the source - they need not
-        // be written, being determined once `Self` is known.
+        // The frame is `[Self] ++ interface generics ++ the method's own
+        // generics` (`lower::interface_frame`). A written qualifier realizes
+        // the generics group and it is PINNED from it: `Conv<int>` and
+        // `Conv<string>` are different interfaces a type may implement both
+        // of, so leaving their slots to inference would let two calls in one
+        // body unify against the same hole. Associated types are not slots -
+        // signature references to them are projections over `Self`, reduced
+        // once `Self` is known.
         let interface_data = baml_compiler2_ppir::item_data::interface_data(self.db, interface);
-        let pinned = interface_data.generic_params.len() + interface_data.associated_types.len();
+        let pinned = interface_data.generic_params.len();
         // `lower::function_generic_frame` builds an interface method's frame
         // from this same `interface_data`, appending the method's own generics
         // after the two groups, so the frame is always at least this long.
@@ -7121,24 +7068,11 @@ impl<'db> InferenceContext<'db> {
             // an unrealized slot (the `Interface.item` spelling, which has no
             // subject to realize against) stays a fresh variable the call's
             // arguments solve.
-            let realized_arg = realized.and_then(|realized| {
-                // The frame's middle groups follow the DECLARED shape, so the
-                // declared generic count is the branch boundary; a realization
-                // that comes up short leaves that slot fresh rather than
-                // shifting the associated-type offset.
-                let generic_count = interface_data.generic_params.len();
-                if index < generic_count {
-                    return realized.generics.get(index).map(Ty::from_plain);
-                }
-                let assoc = interface_data
-                    .associated_types
-                    .get(index.checked_sub(generic_count)?)?;
-                realized
-                    .associated_types
-                    .iter()
-                    .find(|(name, _)| *name == assoc.name)
-                    .map(|(_, ty)| Ty::from_plain(ty))
-            });
+            // The pinned group IS the declared generics — associated types
+            // are not frame slots, so the index maps 1:1; a realization that
+            // comes up short leaves the slot fresh.
+            let realized_arg =
+                realized.and_then(|realized| realized.generics.get(index).map(Ty::from_plain));
             instantiation.push(match realized_arg {
                 Some(arg) => arg,
                 None => {
@@ -7155,13 +7089,36 @@ impl<'db> InferenceContext<'db> {
                 }
             });
         }
-        instantiation.extend(self.own_instantiation_with_bounds(
+        let own_args = self.own_instantiation_with_bounds(
             own,
             own_params,
             member,
             &bounds,
             crate::lower::TypePosition::Existential,
-        ));
+        );
+        if matches!(own, OwnArgs::Fresh) {
+            // Same discipline as the `Self` and pinned slots: a fresh own
+            // generic nothing solves is a hard error, never an Error type
+            // reaching emission. This lane is reachable from a CALL too —
+            // a consumed type-arg channel (`Bin<int>.pick()`, and equally
+            // the turbofish spelling `Bin.pick<int>()`, which the channel
+            // cannot distinguish from it) hands the written args to the
+            // CLASS frame and leaves the member's own generics with no
+            // written source at all.
+            for (param, arg) in own_params.iter().zip(&own_args) {
+                // Synthetic effect params are elaboration's, never spelled,
+                // and legitimately default when unconstrained.
+                if baml_type::is_synthetic_effect_param(param.name()) {
+                    continue;
+                }
+                self.pending_diags.push(PendingDiag::UninferredCtorParam {
+                    expr: anchor,
+                    var: arg.clone(),
+                    name: param.name().clone(),
+                });
+            }
+        }
+        instantiation.extend(own_args);
         match own {
             OwnArgs::Call(call) => {
                 instantiation = self.write_call_type_args(call, &instantiation, 0);
@@ -7547,7 +7504,142 @@ impl<'db> InferenceContext<'db> {
                 return Some(fn_ty);
             }
         }
-        None
+        // TIER: a type-qualified implements-block member on a SOURCE class -
+        // the bare spelling of the `(C as I).item` projection with the
+        // interface INFERRED.
+        self.class_impl_static_value(prefix, member, own, anchor, record_at)
+    }
+
+    /// The impl tier of [`Self::class_static_value`]: `C.item` /
+    /// `C<args>.item` where `item` lives in an implements block (in-class or
+    /// free alike - the block spelling is metadata, not semantics). Mirrors
+    /// [`Self::qualified_path_value`] with the qualifier inferred: the
+    /// determination must be UNIQUE - two declaring interfaces need the
+    /// `(C as I).item` spelling (E0121's rule) - and the resolved member
+    /// types exactly as the qualified spelling would, so self-less statics
+    /// dispatch type-keyed and UFCS methods keep `self` as the written
+    /// first argument.
+    ///
+    /// The receiver must be GROUND before determination runs (the impl
+    /// matcher admits no inference variables), so the class arguments come
+    /// only from the spelling: an alias expansion's pinned args, the hoisted
+    /// receiver args (`Bin<int>.build(2)` - BEP-039 moves `<int>` onto the
+    /// call channel), or an empty frame. A generic class with no written
+    /// arguments does not reach this tier - which interface declares the
+    /// member could depend on the very arguments inference has not solved.
+    fn class_impl_static_value(
+        &mut self,
+        prefix: &[baml_type::Name],
+        member: &baml_type::Name,
+        own: OwnArgs,
+        anchor: ExprId,
+        record_at: Option<ExprId>,
+    ) -> Option<Ty> {
+        let (class, pinned) = self.static_class_for(prefix)?;
+        let frame = crate::lower::class_generic_frame(self.db, class);
+        // The class arguments and whether the call's written type-arg channel
+        // was consumed for them (the hoisted-receiver-args spelling).
+        let (args, channel_consumed) = match pinned {
+            Some(args) => (args, false),
+            None if frame.is_empty() => (Vec::new(), false),
+            None => {
+                let OwnArgs::Call(call) = own else {
+                    return None;
+                };
+                let written = self.type_refs.expr_type_args.get(&call)?.clone();
+                // The whole prefix must be written and static: a partial or
+                // runtime instantiation cannot ground the receiver here.
+                if written.len() != frame.len()
+                    || written
+                        .iter()
+                        .any(|slot| matches!(slot, BodyTypeArgRef::Runtime { .. }))
+                {
+                    return None;
+                }
+                // Lowered WITHOUT call-plan slot recording: these args live
+                // inside the `Self` template, and the interface-item road
+                // reads recorded slots as the method's OWN suffix.
+                let args: Vec<Ty> = written
+                    .iter()
+                    .map(|slot| {
+                        let BodyTypeArgRef::Static(type_ref) = slot else {
+                            unreachable!("runtime slots were rejected above");
+                        };
+                        let (lowered, diagnostics) = self.lower_body_type_ref_at(
+                            *type_ref,
+                            crate::lower::TypePosition::Existential,
+                        );
+                        self.queue_body_lowering_diagnostics(diagnostics);
+                        self.reject_expr_position_holes(&lowered, anchor)
+                    })
+                    .collect();
+                (args, true)
+            }
+        };
+        let qself =
+            crate::lower::class_ty(crate::lower::class_qualified_name(self.db, class), args);
+        if qself.has_infer() || qself.has_error() {
+            return None;
+        }
+        let (determination, _) = crate::interfaces::determine_member_interface_with_facts(
+            self.db,
+            &self.facts,
+            &qself.to_plain(),
+            None,
+            member,
+            crate::interfaces::MemberNamespace::Value,
+        );
+        let realized = match determination {
+            crate::interfaces::Determination::Determined(realized) => realized,
+            crate::interfaces::Determination::Ambiguous(candidates) => {
+                if self.member_probe_depth == 0 {
+                    self.pending_diags.push(PendingDiag::AmbiguousMember {
+                        expr: anchor,
+                        base: qself,
+                        member: member.clone(),
+                        sources: candidates
+                            .iter()
+                            .map(|iface| {
+                                InterfaceRef::new(
+                                    iface.name.clone(),
+                                    iface.generics.iter().map(Ty::from_plain).collect(),
+                                    iface
+                                        .associated_types
+                                        .iter()
+                                        .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
+                                        .collect(),
+                                )
+                            })
+                            .collect(),
+                        is_field: false,
+                    });
+                }
+                return Some(Ty::error());
+            }
+            crate::interfaces::Determination::Undeclared { .. }
+            | crate::interfaces::Determination::SubjectDoesNotImplementQualifier { .. }
+            | crate::interfaces::Determination::InvalidBase
+            | crate::interfaces::Determination::Poisoned => return None,
+        };
+        let interface_loc = self.interface_loc_for(&realized.name)?;
+        // A consumed channel holds the CLASS args, so the member's own
+        // generics (if any) instantiate fresh instead of re-reading it.
+        let own = if channel_consumed {
+            OwnArgs::Fresh
+        } else {
+            own
+        };
+        self.item_projection_value(
+            interface_loc,
+            Some(&WrittenQualifier {
+                qself,
+                realized: &realized,
+            }),
+            member,
+            own,
+            anchor,
+            record_at,
+        )
     }
 
     fn source_class_static_value(
@@ -9531,12 +9623,17 @@ impl<'db> InferenceContext<'db> {
                     method: member.clone(),
                 })
             }
-            MemberDeclarer::ImplMethod { block, func } => {
-                Some(MemberResolution::InterfaceConcreteMethod {
-                    impl_block: *block,
-                    func: *func,
-                })
-            }
+            MemberDeclarer::ImplMethod {
+                block,
+                func,
+                frame_type_args,
+                from_interface_default,
+            } => Some(MemberResolution::InterfaceConcreteMethod {
+                impl_block: *block,
+                func: *func,
+                frame_type_args: frame_type_args.clone(),
+                from_interface_default: *from_interface_default,
+            }),
             MemberDeclarer::ImplField { .. } => None,
             MemberDeclarer::ExternalMethod(callable) => {
                 Some(MemberResolution::External(callable.clone()))
@@ -9706,7 +9803,7 @@ impl<'db> InferenceContext<'db> {
     /// The interface a resolved member was declared by, for the diagnostic
     /// that names it. Both METHOD declarers can answer: a symbolic receiver
     /// carries the interface directly, and a concrete one carries the impl's
-    /// method, whose interface target is recorded (an inherited default body
+    /// method, whose interface target is recorded (an adopted default body
     /// is owned by the interface itself). The FIELD declarers cannot occur
     /// here — the only caller has already required `member.is_method`.
     fn member_declaring_interface(
@@ -10797,20 +10894,30 @@ impl<'db> InferenceContext<'db> {
         };
         // E0097: with a CLOSED declared clause, a declared fact nothing
         // thrown matches exactly (interface-implementor coverage aside)
-        // is extraneous - a warning, anchored at the body root (the
-        // clause itself lives in the signature store).
+        // is extraneous, anchored at the body root (the clause itself
+        // lives in the signature store). An imprecise `unknown` contract
+        // is an error; other extraneous members remain warnings.
         if let Some(declared) = self.declared_throws.clone()
             && !self.declared_throws_open
             && !declared.has_error()
-            && !crate::lower::is_open_throws_contract(self.db, &declared)
             && let Some(root) = self.body_root
         {
+            let is_open_contract = crate::lower::is_open_throws_contract(self.db, &declared);
             // Coverage compares WIDENED facts (TIR's fact grain: a thrown
             // `"boom"` covers a declared `string`) while the report keeps
             // the declared spelling.
-            let declared_facts = crate::package_interface::flatten_ty_to_facts(
-                &self.finalize_ty(&declared).to_plain(),
-            );
+            // An open union needs its preserved written surface: finalizing
+            // `unknown | SomeError` canonicalizes it to semantic `unknown`
+            // and erases `SomeError` before coverage can report it. Other
+            // contracts still need finalization so projections and solved
+            // variables compare against the effective facts correctly.
+            let declared_for_coverage = if is_open_contract {
+                declared.to_plain()
+            } else {
+                self.finalize_ty(&declared).to_plain()
+            };
+            let declared_facts =
+                crate::package_interface::flatten_ty_to_facts(&declared_for_coverage);
             let effective: std::collections::BTreeSet<baml_type::Ty> = self.throws_channels[0]
                 .clone()
                 .iter()
@@ -10820,7 +10927,7 @@ impl<'db> InferenceContext<'db> {
                     )
                 })
                 .collect();
-            let mut extraneous: Vec<String> = declared_facts
+            let extraneous: Vec<baml_type::Ty> = declared_facts
                 .iter()
                 .filter(|decl| {
                     let widened_decl: std::collections::BTreeSet<baml_type::Ty> =
@@ -10832,14 +10939,55 @@ impl<'db> InferenceContext<'db> {
                                 baml_type::normalize::is_subtype(eff, decl, &self.facts)
                             }))
                 })
-                .map(baml_type::Ty::render_user_facing)
+                .cloned()
                 .collect();
-            extraneous.sort();
-            if !extraneous.is_empty() {
-                self.pending_diags.push(PendingDiag::ExtraneousThrows {
-                    at: root,
-                    extra_types: extraneous,
-                });
+            if is_open_contract {
+                let throws_unknown = effective
+                    .iter()
+                    .any(|ty| crate::lower::is_open_throws_contract(self.db, &Ty::from_plain(ty)));
+                if !throws_unknown {
+                    let inferred_types = effective
+                        .iter()
+                        .map(baml_type::Ty::render_user_facing)
+                        .collect();
+                    self.pending_diags
+                        .push(PendingDiag::ImpreciseUnknownThrows {
+                            at: root,
+                            inferred_types,
+                        });
+                } else {
+                    // The `unknown` member is meaningful, but any other
+                    // uncovered members remain ordinary E0097 warnings. Do
+                    // not report an alias that expands to `unknown` as an
+                    // extraneous member merely because coverage compares the
+                    // alias's written surface with the resolved thrown type.
+                    let mut extra_types: Vec<String> = extraneous
+                        .iter()
+                        .filter(|ty| {
+                            !crate::lower::is_open_throws_contract(self.db, &Ty::from_plain(ty))
+                        })
+                        .map(baml_type::Ty::render_user_facing)
+                        .collect();
+                    extra_types.sort();
+                    if !extra_types.is_empty() {
+                        self.pending_diags.push(PendingDiag::ExtraneousThrows {
+                            at: root,
+                            extra_types,
+                        });
+                    }
+                }
+            } else if !extraneous.is_empty() {
+                let mut extra_types: Vec<String> = extraneous
+                    .iter()
+                    .map(baml_type::Ty::render_user_facing)
+                    .collect();
+                extra_types.sort();
+                if !extra_types.is_empty() {
+                    self.pending_diags.push(PendingDiag::ExtraneousThrows {
+                        at: root,
+                        extra_types,
+                    });
+                }
             }
         }
         let mut result = std::mem::take(&mut self.result);
@@ -11595,6 +11743,15 @@ impl<'db> InferenceContext<'db> {
                         diags.push(TirDiagnostic {
                             error: TirTypeError::ExtraneousThrowsDeclaration { extra_types },
                             severity: DiagnosticSeverity::Warning,
+                            primary: DiagnosticLocation::Expr(at),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::ImpreciseUnknownThrows { at, inferred_types } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::ImpreciseUnknownThrows { inferred_types },
+                            severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Expr(at),
                             related: Vec::new(),
                         });
@@ -12817,8 +12974,9 @@ fn same_head_constructor(source: &Ty, target: &Ty) -> bool {
 /// (`Type.method`) keep the full signature; there the receiver arrives
 /// as the written first argument. Non-methods pass through untouched.
 /// Whether `param` occurs anywhere inside `ty` (the phantom-param test
-/// for constructor inference slots).
-fn ty_mentions_param(ty: &Ty, param: &baml_type::ParamTy) -> bool {
+/// for constructor inference slots, and for `impl_facts`' poisoned-header
+/// gate).
+pub(crate) fn ty_mentions_param(ty: &Ty, param: &baml_type::ParamTy) -> bool {
     fn walk(ty: &Ty, param: &baml_type::ParamTy, found: &mut bool) {
         if *found {
             return;

@@ -398,6 +398,9 @@ pub enum TirTypeError {
     },
     /// Declared throws contains extra types that never escape.
     ExtraneousThrowsDeclaration { extra_types: Vec<String> },
+    /// An `unknown`-containing throws contract without an escaping value typed
+    /// `unknown`.
+    ImpreciseUnknownThrows { inferred_types: Vec<String> },
     /// A type parameter could not be inferred at a call site.
     CannotInferTypeParameter { name: Name },
     /// A method's generic type parameter shadows a type-level parameter (generic
@@ -1524,6 +1527,20 @@ impl fmt::Display for TirTypeError {
                     "extraneous throws declaration: {}",
                     extra_types.join(", ")
                 )
+            }
+            TirTypeError::ImpreciseUnknownThrows { inferred_types } => {
+                if inferred_types.is_empty() {
+                    write!(
+                        f,
+                        "`throws unknown` is unnecessary: BAML infers thrown types automatically, and this function does not throw. Remove the declaration; write an explicit `throws` type only to bound what may escape"
+                    )
+                } else {
+                    let inferred = inferred_types.join(" | ");
+                    write!(
+                        f,
+                        "`throws unknown` is imprecise: this function only throws `{inferred}`. BAML infers thrown types automatically, so remove the declaration; write `throws {inferred}` only to explicitly bound what may escape"
+                    )
+                }
             }
             TirTypeError::CannotInferTypeParameter { name } => {
                 write!(f, "cannot infer type parameter `{name}`")

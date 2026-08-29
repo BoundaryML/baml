@@ -47,6 +47,16 @@ impl std::ops::Deref for RuntimeImplRuleCandidate<'_> {
     }
 }
 
+/// One resolved method of a [`RuntimeImplRule`]: the callee row plus whether
+/// the rule ADOPTED the interface's default body rather than providing its
+/// own. See [`ImplResolver::rule_method_impl`].
+pub(crate) struct RuleMethodImpl<'r> {
+    pub method: Cow<'r, bex_vm_types::types::MethodImpl>,
+    /// The rule has no provided row for this method: the interface's default
+    /// body serves (Rust-trait adoption, not inheritance).
+    pub is_default: bool,
+}
+
 /// The runtime impl resolver over a running VM. Holding the `&BexVm` here —
 /// rather than threading it through every helper — keeps the whole selection
 /// machinery able to reach VM facts at any depth: candidate collection reads the
@@ -201,9 +211,10 @@ impl<'vm> ImplResolver<'vm> {
     /// Resolve `(Self, Iface<Args>)` to the single applicable `implements` rule, plus
     /// the impl's bound type args — its generics realized by matching `concrete_ty`
     /// against the rule's `for` pattern. That rule is the canonical handle: read the
-    /// concrete method off `rule.methods` (defaults are merged in at bake time,
-    /// overrides winning), the associated bindings off `rule.interface_assoc`, etc.;
-    /// the returned type args are the realization env for them.
+    /// concrete method via [`Self::rule_method_impl`] (`rule.methods` carries
+    /// only what the impl block provides; a miss adopts the interface's
+    /// default body), the associated bindings off `rule.interface_assoc`,
+    /// etc.; the returned type args are the realization env for them.
     ///
     /// Selection is keyed on `Self` (`concrete_ty`, including its own type args) and
     /// the interface's **input** args only. Associated types are *outputs*
@@ -270,11 +281,66 @@ impl<'vm> ImplResolver<'vm> {
             .then_some(type_args)
     }
 
+    /// Resolve `method` on `rule`: the provided row, or the adopted interface
+    /// default constructed on the fly.
+    ///
+    /// A rule's method table carries ONLY what its impl block provides. A miss
+    /// ADOPTS the interface's default body (Rust-trait adoption, not
+    /// inheritance): the callee is the interface's bound
+    /// [`default_fn`](bex_vm_types::types::InterfaceMethodDef::default_fn) and
+    /// the frame is the adopted-default convention `[Self, interface args..]`,
+    /// spelled over the rule's own templates (`for_ty_pattern` ++
+    /// `interface_args`) so it realizes against the match exactly like a
+    /// provided row's frame (see the frame law on
+    /// [`MethodImpl`](bex_vm_types::types::MethodImpl)). `None` means the
+    /// interface has no such method, or the method is required and unprovided
+    /// — unreachable for accepted programs.
+    pub(crate) fn rule_method_impl<'r>(
+        self,
+        rule: &'r RuntimeImplRule,
+        method: &str,
+    ) -> Option<RuleMethodImpl<'r>> {
+        use bex_vm_types::types::MethodImpl;
+        if let Some(provided) = rule.methods.get(method) {
+            return Some(RuleMethodImpl {
+                method: Cow::Borrowed(provided),
+                is_default: false,
+            });
+        }
+        let bex_vm_types::Object::Interface(iface) = self.vm.get_object(rule.interface_head) else {
+            return None;
+        };
+        let method_def = iface.methods.iter().find(|m| m.name.as_str() == method)?;
+        // A wire-declared default must have been bound to its pointer at
+        // load/graft; a null alongside `default: Some(..)` is a binding bug,
+        // not an absent default.
+        debug_assert!(
+            method_def.default.is_none() || !method_def.default_fn.is_null(),
+            "interface default for `{method}` declared but unbound"
+        );
+        let default_fn = method_def.default_fn;
+        if default_fn.is_null() {
+            return None;
+        }
+        let mut frame = Vec::with_capacity(1 + rule.interface_args.len());
+        frame.push(rule.for_ty_pattern.clone());
+        frame.extend(rule.interface_args.iter().cloned());
+        Some(RuleMethodImpl {
+            method: Cow::Owned(MethodImpl {
+                fqn: default_fn,
+                frame,
+            }),
+            is_default: true,
+        })
+    }
+
     /// Realize a [`MethodImpl`](bex_vm_types::types::MethodImpl) frame template (De
     /// Bruijn over the impl's generic params) against the impl's bound type args
     /// (from [`Self::resolve_implements_rule`]). The result is the `frame.type_args`
-    /// to seed the resolved callee with: the impl's own generics for an impl method,
-    /// or `Self` + the interface's args + associated types for an inherited default.
+    /// to seed the resolved callee with — the owner half of the frame convention
+    /// (see `MethodImpl`): the impl's own generics for a provided method,
+    /// `[Self, interface args..]` for an adopted default (associated types are
+    /// not frame slots — a default body's `Self.Assoc` reduces as a projection).
     pub(crate) fn realize_frame(
         self,
         template: &[TyTemplate],
