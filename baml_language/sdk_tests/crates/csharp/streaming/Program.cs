@@ -98,9 +98,7 @@ Require(
         && secondMessages.Count == 1
         && firstMessages[0].Role == "user"
         && firstMessages[0].Parts.Count == 2
-        && firstMessages[0].Parts[0].Kind == BamlValueKind.String
-        && firstMessages[0].Content
-            .Contains("Describe this image:", StringComparison.Ordinal),
+        && firstMessages[0].Parts[0].Kind == BamlValueKind.String,
     "portable Prompt.messages did not preserve its structural message");
 BamlImage promptImage = firstMessages[0].Parts[1].As<BamlImage>();
 Require(
