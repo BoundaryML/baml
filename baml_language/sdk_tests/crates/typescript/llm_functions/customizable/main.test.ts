@@ -131,7 +131,6 @@ describe("llm_functions — FunctionSpec", () => {
     const firstMessages = prompt.messages();
     expect(prompt.text()).toBe(text);
     const secondMessages = prompt.messages();
-    expect(secondMessages).toEqual(firstMessages);
     expect(firstMessages).toHaveLength(1);
     expect(firstMessages[0].role).toBe("user");
     expect(firstMessages[0].parts[0]).toMatch(/^Describe this image:/);
@@ -141,6 +140,18 @@ describe("llm_functions — FunctionSpec", () => {
     if (!(media instanceof Image)) throw new Error("expected a portable image part");
     expect(media.base64()).toBe(png);
     expect(media.mimeType()).toBe("image/png");
+
+    expect(secondMessages).toHaveLength(1);
+    expect(secondMessages[0].role).toBe(firstMessages[0].role);
+    expect(secondMessages[0].parts[0]).toBe(firstMessages[0].parts[0]);
+    const secondMedia = secondMessages[0].parts.find(
+      (part) => part instanceof Image,
+    );
+    expect(secondMedia).toBeInstanceOf(Image);
+    if (!(secondMedia instanceof Image))
+      throw new Error("expected a reusable portable image part");
+    expect(secondMedia.base64()).toBe(png);
+    expect(secondMedia.mimeType()).toBe("image/png");
 
     // Each helper call re-encodes the owned prompt tree. Rendering a fresh
     // Prompt from the same live spec must not consume either value.
