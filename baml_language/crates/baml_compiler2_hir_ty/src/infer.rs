@@ -914,10 +914,15 @@ enum PendingDiag<'db> {
         expected_input: Ty,
         got: Ty,
     },
-    /// E0097: declared throws members the body can never throw (warning).
+    /// E0097: declared throws members the body can never throw.
     ExtraneousThrows {
         at: ExprId,
         extra_types: Vec<String>,
+    },
+    /// E0097: an `unknown`-containing contract without an escaping `unknown`.
+    ImpreciseUnknownThrows {
+        at: ExprId,
+        inferred_types: Vec<String>,
     },
     /// Control flow that would escape a `defer` body (BEP-042): `return`
     /// always; `break`/`continue` unless a loop opened INSIDE the defer.
@@ -10889,20 +10894,30 @@ impl<'db> InferenceContext<'db> {
         };
         // E0097: with a CLOSED declared clause, a declared fact nothing
         // thrown matches exactly (interface-implementor coverage aside)
-        // is extraneous - a warning, anchored at the body root (the
-        // clause itself lives in the signature store).
+        // is extraneous, anchored at the body root (the clause itself
+        // lives in the signature store). An imprecise `unknown` contract
+        // is an error; other extraneous members remain warnings.
         if let Some(declared) = self.declared_throws.clone()
             && !self.declared_throws_open
             && !declared.has_error()
-            && !crate::lower::is_open_throws_contract(self.db, &declared)
             && let Some(root) = self.body_root
         {
+            let is_open_contract = crate::lower::is_open_throws_contract(self.db, &declared);
             // Coverage compares WIDENED facts (TIR's fact grain: a thrown
             // `"boom"` covers a declared `string`) while the report keeps
             // the declared spelling.
-            let declared_facts = crate::package_interface::flatten_ty_to_facts(
-                &self.finalize_ty(&declared).to_plain(),
-            );
+            // An open union needs its preserved written surface: finalizing
+            // `unknown | SomeError` canonicalizes it to semantic `unknown`
+            // and erases `SomeError` before coverage can report it. Other
+            // contracts still need finalization so projections and solved
+            // variables compare against the effective facts correctly.
+            let declared_for_coverage = if is_open_contract {
+                declared.to_plain()
+            } else {
+                self.finalize_ty(&declared).to_plain()
+            };
+            let declared_facts =
+                crate::package_interface::flatten_ty_to_facts(&declared_for_coverage);
             let effective: std::collections::BTreeSet<baml_type::Ty> = self.throws_channels[0]
                 .clone()
                 .iter()
@@ -10912,7 +10927,7 @@ impl<'db> InferenceContext<'db> {
                     )
                 })
                 .collect();
-            let mut extraneous: Vec<String> = declared_facts
+            let extraneous: Vec<baml_type::Ty> = declared_facts
                 .iter()
                 .filter(|decl| {
                     let widened_decl: std::collections::BTreeSet<baml_type::Ty> =
@@ -10924,14 +10939,55 @@ impl<'db> InferenceContext<'db> {
                                 baml_type::normalize::is_subtype(eff, decl, &self.facts)
                             }))
                 })
-                .map(baml_type::Ty::render_user_facing)
+                .cloned()
                 .collect();
-            extraneous.sort();
-            if !extraneous.is_empty() {
-                self.pending_diags.push(PendingDiag::ExtraneousThrows {
-                    at: root,
-                    extra_types: extraneous,
-                });
+            if is_open_contract {
+                let throws_unknown = effective
+                    .iter()
+                    .any(|ty| crate::lower::is_open_throws_contract(self.db, &Ty::from_plain(ty)));
+                if !throws_unknown {
+                    let inferred_types = effective
+                        .iter()
+                        .map(baml_type::Ty::render_user_facing)
+                        .collect();
+                    self.pending_diags
+                        .push(PendingDiag::ImpreciseUnknownThrows {
+                            at: root,
+                            inferred_types,
+                        });
+                } else {
+                    // The `unknown` member is meaningful, but any other
+                    // uncovered members remain ordinary E0097 warnings. Do
+                    // not report an alias that expands to `unknown` as an
+                    // extraneous member merely because coverage compares the
+                    // alias's written surface with the resolved thrown type.
+                    let mut extra_types: Vec<String> = extraneous
+                        .iter()
+                        .filter(|ty| {
+                            !crate::lower::is_open_throws_contract(self.db, &Ty::from_plain(ty))
+                        })
+                        .map(baml_type::Ty::render_user_facing)
+                        .collect();
+                    extra_types.sort();
+                    if !extra_types.is_empty() {
+                        self.pending_diags.push(PendingDiag::ExtraneousThrows {
+                            at: root,
+                            extra_types,
+                        });
+                    }
+                }
+            } else if !extraneous.is_empty() {
+                let mut extra_types: Vec<String> = extraneous
+                    .iter()
+                    .map(baml_type::Ty::render_user_facing)
+                    .collect();
+                extra_types.sort();
+                if !extra_types.is_empty() {
+                    self.pending_diags.push(PendingDiag::ExtraneousThrows {
+                        at: root,
+                        extra_types,
+                    });
+                }
             }
         }
         let mut result = std::mem::take(&mut self.result);
@@ -11687,6 +11743,15 @@ impl<'db> InferenceContext<'db> {
                         diags.push(TirDiagnostic {
                             error: TirTypeError::ExtraneousThrowsDeclaration { extra_types },
                             severity: DiagnosticSeverity::Warning,
+                            primary: DiagnosticLocation::Expr(at),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::ImpreciseUnknownThrows { at, inferred_types } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::ImpreciseUnknownThrows { inferred_types },
+                            severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Expr(at),
                             related: Vec::new(),
                         });

@@ -53,7 +53,7 @@ async fn agent_implements_runner_and_custom_runners_dispatch() {
             r.run(spec).value
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let out = drive(CannedRunner { payload: "7" }, SpecDonor@spec(x = 1));
             if (out != 7) {
                 throw `canned runner returned ${out}, expected 7`
@@ -100,7 +100,7 @@ async fn turnstream_backlog_drains_in_one_batch_with_boundaries() {
             }
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let ts = make_backlog(100);
             // pull 1: the entire backlog as ONE batch, boundaries preserved
             match (ts.next()) {
@@ -137,7 +137,7 @@ async fn turnstream_backlog_drains_in_one_batch_with_boundaries() {
 #[tokio::test]
 async fn turnstream_scripted_chunks_stay_per_chunk() {
     let source = r####"
-        function main() -> string throws unknown {
+        function main() -> string {
             let ts = ai.stream.TurnStream.from_chunks(["a", "b"]);
             match (ts.next()) {
                 let b: string[] => {

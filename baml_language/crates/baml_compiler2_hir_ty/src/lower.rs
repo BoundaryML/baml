@@ -2219,9 +2219,9 @@ fn extend_lowering_diagnostics(
 }
 
 /// Whether a declared throws clause is an open contract: it names `unknown`
-/// directly, through a union member, or through a type alias. An open
-/// contract deliberately admits any thrown value, so throws-coverage
-/// analysis (E0097 extraneous-declaration warnings) does not apply to it.
+/// directly, through a union member, or through a type alias. Open contracts
+/// still participate in coverage: an escaping `unknown` must justify the open
+/// bound, while uncovered concrete members remain ordinary E0097 warnings.
 pub(crate) fn is_open_throws_contract(db: &dyn baml_compiler2_ppir::Db, ty: &Ty) -> bool {
     fn visit(
         facts: &crate::facts::Facts<'_>,

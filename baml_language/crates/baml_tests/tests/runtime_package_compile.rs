@@ -20,7 +20,7 @@ function Extract<T>(document: string) -> T {
   prompt: `Extract the document using this schema:\n${ctx.output_format()}`
 }
 
-function main() -> string throws unknown {
+function main() -> string {
   let source = `
 class ExtractedRecord {
   account string
@@ -34,7 +34,7 @@ class ExtractedRecord {
   json.to_string(record)
 }
 
-function rendered_schema() -> string throws unknown {
+function rendered_schema() -> string {
   let pkg = reflect.Package.compile({
     "schema.baml": "class ExtractedRecord { account string amount int }"
   })
@@ -42,7 +42,7 @@ function rendered_schema() -> string throws unknown {
   Extract$render_prompt<unreflect(record_t.as_type())>("sample document").text()
 }
 
-function declaration_identity_properties() -> bool throws unknown {
+function declaration_identity_properties() -> bool {
   let files = { "schema.baml": "class ExtractedRecord { account string amount int }" }
   let first = reflect.Package.compile(files)
   let second = reflect.Package.compile(files)
@@ -52,7 +52,7 @@ function declaration_identity_properties() -> bool throws unknown {
   a.as_type() == a_again.as_type() && a.as_type() != b.as_type()
 }
 
-function package_survives_gc() -> bool throws unknown {
+function package_survives_gc() -> bool {
   let pkg = reflect.Package.compile({
     "schema.baml": "class ExtractedRecord { account string amount int }"
   })
@@ -62,7 +62,7 @@ function package_survives_gc() -> bool throws unknown {
   before.as_type() == after.as_type()
 }
 
-function namespace_and_dependency_mounts() -> bool throws unknown {
+function namespace_and_dependency_mounts() -> bool {
   let base = reflect.Package.compile({
     "ns_models/base.baml": "class Base { id string }"
   })
@@ -75,7 +75,7 @@ function namespace_and_dependency_mounts() -> bool throws unknown {
     child.diagnostics().length() == 0
 }
 
-function mounted_runtime_interface_and_return_types_stay_hidden() -> bool throws unknown {
+function mounted_runtime_interface_and_return_types_stay_hidden() -> bool {
   let runtime_minted = reflect.class.new("RuntimeMinted", {
     "value": reflect.Type.of<string>(),
   })
@@ -102,7 +102,7 @@ function make_runtime_minted() -> app.RuntimeMinted {
 "####;
 
 const SUCCESSFUL_INIT_SOURCE: &str = r####"
-function main() -> bool throws unknown {
+function main() -> bool {
   let pkg = reflect.Package.compile({ "schema.baml": `
 client InitClient = openai.ResponsesClient.new(
     model = "unused-network-free-init-check",
@@ -120,7 +120,7 @@ class Ready { value string }
 "####;
 
 const REJECTED_INIT_SOURCE: &str = r####"
-function main() -> null throws unknown {
+function main() -> null {
   reflect.Package.compile({ "schema.baml": `
 client InitClient = openai.ResponsesClient.new(
     model = "unused-network-free-init-check",
@@ -136,7 +136,7 @@ class Broken { value MissingType }
 async fn package_finish_refuses_session_compile_artifact() {
     let output = baml_test!(
         r####"
-function main() -> bool throws unknown {
+function main() -> bool {
   let session = reflect.Session.new()
   let artifact = session._compile<int>(`1`)
   let rejected = false
@@ -165,7 +165,7 @@ function Plan(state: AgentState) -> string {
   "planned " + state.goal
 }
 
-function main() -> string throws unknown {
+function main() -> string {
   let skill_source = `
 class PlanThenAct {
   summary string
@@ -192,14 +192,14 @@ function Run(state: app.AgentState) -> PlanThenAct {
   action.summary
 }
 
-function absent_function_is_null() -> bool throws unknown {
+function absent_function_is_null() -> bool {
   let pkg = reflect.Package.compile({
     "main.baml": "function Present(value: string) -> string { value }"
   })
   pkg.get_function<(string) -> string>("root.Missing") == null
 }
 
-function mismatched_function_contract() -> null throws unknown {
+function mismatched_function_contract() -> null {
   let pkg = reflect.Package.compile({
     "main.baml": "function Present(value: string) -> string { value }"
   })
@@ -207,7 +207,7 @@ function mismatched_function_contract() -> null throws unknown {
   null
 }
 
-function unspecialized_generic_function_cannot_be_extracted() -> null throws unknown {
+function unspecialized_generic_function_cannot_be_extracted() -> null {
   let pkg = reflect.Package.compile({
     "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
@@ -223,7 +223,7 @@ function Extract<T>(document: string) -> T {
   null
 }
 
-function function_listing_omits_unspecialized_generics() -> bool throws unknown {
+function function_listing_omits_unspecialized_generics() -> bool {
   let pkg = reflect.Package.compile({
     "main.baml": `
 function identity<T>(value: T) -> T { value }
@@ -234,7 +234,7 @@ function Present(value: string) -> string { value }
   functions.get("root.identity") == null && functions.get("root.Present") != null
 }
 
-function generic_function_companion_extraction_is_refused() -> string throws unknown {
+function generic_function_companion_extraction_is_refused() -> string {
   let pkg = reflect.Package.compile({
     "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
@@ -258,7 +258,7 @@ function Extract<T>(document: string) -> T {
   "did not throw"
 }
 
-function generic_function_companion_is_listed() -> bool throws unknown {
+function generic_function_companion_is_listed() -> bool {
   let pkg = reflect.Package.compile({
     "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
@@ -273,7 +273,7 @@ function Extract<T>(document: string) -> T {
   pkg.functions().get("root.Extract$render_prompt") != null
 }
 
-function alias_order_and_reserved_names() -> bool throws unknown {
+function alias_order_and_reserved_names() -> bool {
   let root_package = reflect.Package.current()
   let generated = reflect.Package.compile(
     { "main.baml": `
@@ -302,7 +302,7 @@ test "enumerated package test" {
   assert.equal(1, 1)
 }
 
-function enumerated_test_runs() -> bool throws unknown {
+function enumerated_test_runs() -> bool {
   let tests = reflect.Package.current().tests()
   let run = tests.get("root::enumerated package test") ?? throw "test not enumerated"
   run()
@@ -363,7 +363,7 @@ function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws
   count
 }
 
-function main() -> bool throws unknown {
+function main() -> bool {
   let package = reflect.Package.compile({ "dispatch.baml": `
 function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws never {
   let count = 0
@@ -393,7 +393,7 @@ class User {
   age int
 }
 
-function main() -> string throws unknown {
+function main() -> string {
   let original = User { name: "Ada", age: 30 }
   let encoded = original.to_json()
   let decoded = User.from_json(encoded)
