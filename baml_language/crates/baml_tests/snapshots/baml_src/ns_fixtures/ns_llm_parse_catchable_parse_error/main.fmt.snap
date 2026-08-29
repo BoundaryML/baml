@@ -12,13 +12,6 @@ source: crates/baml_tests/src/corpus.rs
 // (shared with the network/streaming path), so the documented
 // `catch (baml.errors.ParseError)` pattern was flagged E0063 `unreachable arm`.
 //
-// TODO(llm-migration): the new `@parse` companion desugars to
-// `baml.sap.parse`, which is declared `throws baml.errors.LlmClient` again —
-// so the E0063 `unreachable arm` warning is BACK and currently captured in the
-// diagnostics snapshot (warnings are allowed in compiles/). When the stdlib
-// types `baml.sap.parse` with a parse-flavored throw, this project should
-// return to ZERO diagnostics.
-
 client GPT4o = openai.ResponsesClient.new(
     model = "gpt-4o",
     api_key = "test-key",

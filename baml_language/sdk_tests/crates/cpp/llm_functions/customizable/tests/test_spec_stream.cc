@@ -61,8 +61,7 @@ static_assert(
 
 }  // namespace
 
-// SDK_PARITY_LINT(skip): C++-only integration test pins generated flat-stream
-// spelling and exact companion dispatch.
+// SDK_PARITY_LINT(skip): C++-only exact flat-stream companion dispatch check.
 BAML_TEST(flat_stream_calls_exact_companion_fqn) {
   std::ifstream input("baml_sdk/src/bindings.cc");
   const std::string bindings((std::istreambuf_iterator<char>(input)),

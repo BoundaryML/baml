@@ -110,8 +110,7 @@ fn test_streaming_e2e_stream_doc() {
     use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream};
 
     replay_server("replay_extract_doc", || {
-        let stream =
-            stream_e2e_extract_doc_stream("ignored-by-replay-server".to_string()).unwrap();
+        let stream = stream_e2e_extract_doc_stream("ignored-by-replay-server".to_string()).unwrap();
         let mut results = 0;
         while let Some(v) = stream.next().unwrap() {
             results += 1;
@@ -136,10 +135,9 @@ async fn test_streaming_e2e_stream_doc_async() {
     use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream_async};
 
     replay_server_async("replay_extract_doc", async {
-        let stream =
-            stream_e2e_extract_doc_stream_async("ignored-by-replay-server".to_string())
-                .await
-                .unwrap();
+        let stream = stream_e2e_extract_doc_stream_async("ignored-by-replay-server".to_string())
+            .await
+            .unwrap();
         let mut results = 0;
         while let Some(v) = stream.next_async().await.unwrap() {
             results += 1;

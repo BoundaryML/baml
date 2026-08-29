@@ -478,8 +478,16 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/lit.h"),
     ),
     (
+        "include/baml/media.h",
+        include_str!("../../bridge_cpp/include/baml/media.h"),
+    ),
+    (
         "include/baml/runtime.h",
         include_str!("../../bridge_cpp/include/baml/runtime.h"),
+    ),
+    (
+        "include/baml/spec.h",
+        include_str!("../../bridge_cpp/include/baml/spec.h"),
     ),
     (
         "include/baml/version.h",
@@ -2478,11 +2486,14 @@ mod bytecode_escape_tests {
 
     #[test]
     fn generated_sdk_vendors_the_public_version_header() {
-        let version_header = BRIDGE_HEADERS
-            .iter()
-            .find(|(path, _)| *path == "include/baml/version.h");
-
-        assert!(version_header.is_some());
+        for header in ["media.h", "spec.h", "version.h"] {
+            assert!(
+                BRIDGE_HEADERS
+                    .iter()
+                    .any(|(path, _)| *path == format!("include/baml/{header}")),
+                "missing vendored public header {header}"
+            );
+        }
     }
 
     #[test]
