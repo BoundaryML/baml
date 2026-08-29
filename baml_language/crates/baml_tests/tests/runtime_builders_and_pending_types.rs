@@ -214,7 +214,7 @@ async fn unreflect_runtime_escape_does_not_accept_ordinary_values() {
 async fn recursive_pending_fields_carry_metadata() {
     let output = baml_test!(
         r#"
-        function main() -> string throws unknown {
+        function main() -> string {
             let node = reflect.class.builder("Node")
             let next = node.type().optional()
             node.field("label", reflect.Type.of<string>())
@@ -260,7 +260,7 @@ async fn recursive_pending_field_metadata_reaches_the_rendered_schema() {
             prompt: `${ctx.output_format()}`
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let node = reflect.class.builder("Node")
             let next = node.type().optional()
             node.field("label", reflect.Type.of<string>())
@@ -294,7 +294,7 @@ async fn recursive_pending_field_metadata_reaches_the_rendered_schema() {
 async fn metadata_survives_an_already_resolved_pending_reference() {
     let output = baml_test!(
         r#"
-        function main() -> string throws unknown {
+        function main() -> string {
             let inner = reflect.class.builder("Inner")
             inner.field("value", reflect.Type.of<string>())
             let pending = inner.type()

@@ -1134,7 +1134,7 @@ fn package_impls<'db>(
 ) -> Vec<(ImplLoc<'db>, &'db ImplFacts<'db>)> {
     package_impl_locs(db, pkg)
         .iter()
-        .filter_map(|&loc| impl_facts(db, loc).as_ref().map(|facts| (loc, facts)))
+        .filter_map(|&loc| impl_facts(db, loc).resolved().map(|facts| (loc, facts)))
         .collect()
 }
 

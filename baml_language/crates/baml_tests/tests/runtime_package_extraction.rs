@@ -8,7 +8,7 @@ use bex_engine::BexExternalValue;
 async fn p7_omitted_throws_contract_infers_a_wildcard() {
     let output = baml_test!(
         r####"
-function main() -> string throws unknown {
+function main() -> string {
   let pkg = reflect.Package.compile({ "main.baml": `
 function Risky(value: string) -> string throws string {
   value
@@ -33,7 +33,7 @@ async fn extraction_uses_function_subtyping_and_throw_wildcard() {
         r####"
 type NeverThrowContract = (string) -> (string | int) throws never
 
-function main() -> string throws unknown {
+function main() -> string {
   let pkg = reflect.Package.compile({ "main.baml": `
 function Flexible(value: unknown) -> string throws string {
   "accepted"

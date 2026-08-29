@@ -91,7 +91,7 @@ async fn off_session_preserves_identity_logging_and_existing_store_bytes() {
     let source = r#"
         function helper(x: int) -> int { x + 1 }
         function fail() -> int throws string { throw "expected" }
-        function main() -> string throws unknown {
+        function main() -> string {
             log.info("off-mode log")
             let capture_id = boundary.id().capture(inputs = true, output = true, error = true)
             let captured = helper(1, $id = capture_id)
@@ -418,11 +418,11 @@ async fn one_unwind_fans_out_and_rethrow_gets_a_new_error_id() {
     let source = r#"
         function leaf() -> int throws string { throw "boom" }
         function selected_middle() -> int throws string { leaf() }
-        function fanout_main() -> int throws unknown {
+        function fanout_main() -> int {
             let error_id = boundary.id().capture(inputs = false, output = false, error = true)
             selected_middle($id = error_id)
         }
-        function rethrow_main() -> int throws unknown {
+        function rethrow_main() -> int {
             let error_id = boundary.id().capture(inputs = false, output = false, error = true)
             selected_middle($id = error_id) catch (e) { _ => throw e }
         }

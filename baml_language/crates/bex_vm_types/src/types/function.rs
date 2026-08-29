@@ -287,6 +287,29 @@ pub struct Function {
     /// Provenance of this function in the compiler/runtime pipeline.
     pub origin: FunctionOrigin,
 
+    /// True for interface-machinery bodies: impl-block methods (in-class or
+    /// free) and interface default-method bodies.
+    ///
+    /// An interface body is pooled and slotted like any function —
+    /// statically resolved
+    /// calls stay direct `Call(GlobalIndex)` — but it is not itself a logical
+    /// item, so it has no name anywhere: bodies are excluded from
+    /// `Program::function_indices` / `function_global_indices` and every
+    /// runtime name scan skips them; compile boundaries recover a body's
+    /// coordinates structurally (Pass-1 slot replay + the globals array).
+    /// [`Self::name`] on an interface body is display-only (traces,
+    /// snapshots).
+    pub is_interface_body: bool,
+
+    /// Native-dispatch key for `$rust_function` bodies (stdlib-only): the key
+    /// `attach_builtins` resolves through each package's generated
+    /// `get_native_fn` table. `None` for every bytecode/sys-op function.
+    ///
+    /// This is deliberately separate from [`Self::name`]: the display string
+    /// is not an identity, while this key must match the codegen-produced
+    /// dispatch tables exactly.
+    pub native_key: Option<Box<str>>,
+
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
 
@@ -358,9 +381,10 @@ pub struct BoundMethod {
     /// `MakeBoundMethod` curries `[class generics (→ Self), method fn generics]`
     /// — the exact vector a direct `receiver.method<…>(…)` call would seed.
     /// `MakeVirtualBoundMethod` instead curries the resolved impl's realized
-    /// frame — the impl's own generics, or the interface's args + associated
-    /// types for an inherited default (which the receiver's class args cannot
-    /// express, e.g. a blanket `implement<T> I for T[]` bound at `int[]`) —
+    /// frame — the impl's own generics for a provided method,
+    /// `[Self, interface args..]` for an adopted default (which the receiver's
+    /// class args cannot express, e.g. a blanket `implement<T> I for T[]`
+    /// bound at `int[]`) —
     /// followed by any method-level type args from the reference site.
     ///
     /// `RuntimeTy` (not `RealizedTy`) mirrors [`Closure::captured_type_args`]

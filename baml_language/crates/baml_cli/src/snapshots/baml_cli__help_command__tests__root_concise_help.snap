@@ -21,7 +21,7 @@ Commands:
   run         Run a BAML function or script
   pack        Package a BAML target as a standalone executable
   ide         Install or manage IDE integration assets
-  agent       Install BAML agent skills for this project
+  agent       Install the toolchain's BAML agent skill for this project
   playground  Open the BAML playground in a browser
   lsp         Start a language server
   help        Display documentation for a command

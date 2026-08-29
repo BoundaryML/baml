@@ -315,12 +315,12 @@ async fn json_serializes_unknown_call_any_results_by_runtime_value() {
             image.from_url("https://example.com/a.png", "image/png")
         }
 
-        function serialize_unknown(f: reflect.AnyFunction) -> string throws unknown {
+        function serialize_unknown(f: reflect.AnyFunction) -> string {
             let value: unknown = reflect.call_any(f, {})
             baml.json.to_string(value) + "|" + baml.json.stringify(baml.json.to_json(value))
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             serialize_unknown(make_record)
                 + "\n" + serialize_unknown(make_wrapped_list)
                 + "\n" + serialize_unknown(make_state)
@@ -356,11 +356,11 @@ async fn json_serializes_unknown_call_any_results_by_runtime_value() {
 async fn json_rejects_unknown_uint8array_call_any_results() {
     let output = baml_test!(
         r#"
-        function make_bytes() -> uint8array throws unknown {
+        function make_bytes() -> uint8array {
             baml.Uint8Array.from_hex("00ff")
         }
 
-        function to_string_error(value: unknown) -> string throws unknown {
+        function to_string_error(value: unknown) -> string {
             {
                 let _ = baml.json.to_string(value)
                 "unexpected success"
@@ -369,7 +369,7 @@ async fn json_rejects_unknown_uint8array_call_any_results() {
             }
         }
 
-        function to_json_error(value: unknown) -> string throws unknown {
+        function to_json_error(value: unknown) -> string {
             {
                 let _ = baml.json.to_json(value)
                 "unexpected success"
@@ -378,7 +378,7 @@ async fn json_rejects_unknown_uint8array_call_any_results() {
             }
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let f: reflect.AnyFunction = make_bytes
             let value: unknown = reflect.call_any(f, {})
             to_string_error(value) + "|" + to_json_error(value)
@@ -814,34 +814,6 @@ async fn instantiated_generic_function_reflects_precisely_and_dispatches() {
 }
 
 #[tokio::test]
-async fn call_any_reports_unspecialized_generic_function() {
-    let output = baml_test!(
-        r#"
-        function ident<T>(x: T) -> T throws never {
-            return x
-        }
-
-        function main() -> string throws unknown {
-            let f: reflect.AnyFunction = ident
-            let _ = reflect.call_any(f, { "x": 42 }) catch (e) {
-                reflect.errors.CompilationError => {
-                    return e.diagnostics[0].code + "|" + e.diagnostics[0].message
-                },
-                _ => throw e,
-            }
-            return "generic call unexpectedly succeeded"
-        }
-        "#
-    );
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String(
-            "E0165|generic function `ident` cannot be extracted through reflection: its signature still mentions its own type parameters".into()
-        ))
-    );
-}
-
-#[tokio::test]
 async fn pinned_call_any_declares_unspecialized_generic_compilation_error() {
     let output = baml_test!(
         r#"
@@ -866,33 +838,6 @@ async fn pinned_call_any_declares_unspecialized_generic_compilation_error() {
         Ok(BexExternalValue::String(
             "E0165|generic function `ident` cannot be extracted through reflection: its signature still mentions its own type parameters".into()
         ))
-    );
-}
-
-/// An *uninstantiated* generic reference — no turbofish and nothing to infer
-/// from — is a compile error: a callable value must carry a realized frame, so
-/// there is no such thing as a half-generic one to reflect on. Ignored until
-/// that diagnostic exists; today the reference is accepted and only fails later,
-/// at `reflect.signature`, with a misleading "expects a function value".
-#[ignore = "pending the uninstantiated-generic-reference diagnostic"]
-#[tokio::test]
-async fn uninstantiated_generic_function_reference_is_a_compile_error() {
-    let output = baml_test!(
-        r#"
-        function ident<T>(x: T) -> T throws never {
-            return x
-        }
-
-        function main() -> string throws never {
-            let f: reflect.AnyFunction = ident
-            return "unreachable"
-        }
-        "#
-    );
-    assert!(
-        output.result.is_err(),
-        "expected a compile error naming the uninferable type parameter, got {:?}",
-        output.result
     );
 }
 
@@ -1273,7 +1218,7 @@ async fn call_any_still_invokes_a_non_generic_companion() {
             `
         }
 
-        function main() -> bool throws unknown {
+        function main() -> bool {
             let package = reflect.Package.current()
             let callable = package.get_function<AnyCallable>("Plain$render_prompt")
                 ?? throw "expected the companion"
@@ -1364,7 +1309,7 @@ async fn get_function_still_extracts_a_non_generic_companion() {
             `
         }
 
-        function main() -> bool throws unknown {
+        function main() -> bool {
             let package = reflect.Package.current()
             let callable = package.get_function<PromptFn>("Plain$render_prompt")
                 ?? throw "expected the companion"

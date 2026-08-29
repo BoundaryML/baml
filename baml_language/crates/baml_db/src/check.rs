@@ -765,7 +765,7 @@ fn check_interfaces(
     // editable source side and retaining a structural description of its
     // mounted partner in the message.
     for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, file) {
-        let Some(source) = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc) else {
+        let Some(source) = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc).resolved() else {
             continue;
         };
         for mounted_package in baml_compiler2_hir::package::mounted_package_names(db) {
@@ -820,7 +820,7 @@ dependency's `{partner}`)"
         // interface declaration. Replay its name-level conformance from the
         // exported row so mounted and source dependency modes retain the same
         // required/default/override surface.
-        if let Some(source) = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc)
+        if let Some(source) = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc).resolved()
             && let Some(baml_compiler2_hir_ty::package_interface::ExportedType::Interface {
                 fields,
                 required_methods,
@@ -1895,7 +1895,8 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::CallbackThrowsContractViolation { .. } => {
             DiagnosticId::ThrowsContractViolation
         }
-        TirTypeError::ExtraneousThrowsDeclaration { .. } => DiagnosticId::ThrowsContractExtraneous,
+        TirTypeError::ExtraneousThrowsDeclaration { .. }
+        | TirTypeError::ImpreciseUnknownThrows { .. } => DiagnosticId::ThrowsContractExtraneous,
         TirTypeError::CannotInferTypeParameter { .. } => DiagnosticId::UnknownType,
         TirTypeError::TypeParamShadowed { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,

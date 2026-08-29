@@ -1,0 +1,14 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+method decode  interfaces.baml:10-12
+
+        function decode(self, raw: string) -> Self.Output {
+            return 1
+        }
+
+container:
+  class            IntDecoder                       interfaces.baml:7
+
+references (0):

@@ -195,15 +195,16 @@ impl ItemTreeBuilder {
         match &block.subject {
             ImplSubject::InClass { class, .. } => {
                 self.tree.class_to_impls.entry(*class).or_default().push(id);
-                // No owner recording: in-body impl methods are flattened into
-                // `Class::methods`, so `set_class_methods` owns them.
             }
             ImplSubject::Free { .. } => {
                 self.tree.free_impls.push(id);
-                for method in &block.methods {
-                    self.record_method_owner(*method, MethodOwner::FreeImpl(id));
-                }
             }
+        }
+        // A method belongs to its impl block regardless of where the block
+        // is written — the in-class spelling is pure syntax (TYPE_SYSTEM.md:
+        // "the implementation should use a unified path for both forms").
+        for method in &block.methods {
+            self.record_method_owner(*method, MethodOwner::Impl(id));
         }
         self.tree.impls.insert(id, block);
         id

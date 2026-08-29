@@ -1200,45 +1200,136 @@ function interfaces.$init_test_ns_interfaces_interfaces_3(registry: testing.Test
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
-    load_var registry
-    load_const "root.interfaces"
-    load_const "heterogeneous_union_dispatch_calls_inherent_non_implementor_method"
-    make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 28)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
     load_const null
     return
 }
 
-function interfaces.ApssHybrid.ApssBinarySerializer.encode(self: interfaces.ApssHybrid) -> string {
+function interfaces.<(#0 as user.interfaces.BtviPrintable)>.display(self: #0) -> string {
+    load_var self
+    load_type interfaces.BtviNamed
+    virtual_load_field .name
+    return
+}
+
+function interfaces.<(#0 as user.interfaces.BtvsPrintable)>.display(self: #0) -> string {
+    load_var self
+    load_type interfaces.BtvsNamed
+    virtual_load_field .name
+    return
+}
+
+function interfaces.<(#0 as user.interfaces.F2amPrintable)>.display(self: #0) -> string {
+    load_var self
+    load_type interfaces.F2amNamed
+    virtual_load_field .name
+    return
+}
+
+function interfaces.<(#0 as user.interfaces.F2dPrintable)>.display(self: #0) -> string {
+    load_const "named:"
+    load_var self
+    load_type interfaces.F2dNamed
+    virtual_load_field .name
+    bin_op +
+    return
+}
+
+function interfaces.<(#0 as user.interfaces.F2riPrintable)>.display(self: #0) -> string {
+    load_var self
+    load_type interfaces.F2riNamed
+    virtual_load_field .name
+    return
+}
+
+function interfaces.<(#0 as user.interfaces.F2rsPrintable)>.display(self: #0) -> string {
+    load_var self
+    load_type interfaces.F2rsNamed
+    virtual_load_field .name
+    return
+}
+
+function interfaces.<(#0 as user.interfaces.F2saLabeled)>.label(self: #0) -> string {
+    load_var self
+    load_type interfaces.F2saNamed
+    virtual_load_field .name
+    return
+}
+
+function interfaces.<(#0 as user.interfaces.W302Loud)>.shout(self: #0) -> string {
+    load_const "loud"
+    return
+}
+
+function interfaces.<(#0 as user.interfaces.W302Printable)>.display(self: #0) -> string {
+    load_var self
+    load_type interfaces.W302Named
+    virtual_load_field .name
+    return
+}
+
+function interfaces.<(#0[] as user.interfaces.GrlrLabel)>.label(self: #0[]) -> string {
+    load_const "list"
+    return
+}
+
+function interfaces.<(int as user.interfaces.GrptParent<int>)>.describeGrpt(self: int) -> string {
+    load_const "parent-int"
+    return
+}
+
+function interfaces.<(int as user.interfaces.OobpDebuggable)>.debugOobp(self: int) -> string {
+    load_const "int"
+    return
+}
+
+function interfaces.<(int as user.interfaces.W315Debuggable)>.debugW315(self: int) -> string {
+    load_const "int"
+    return
+}
+
+function interfaces.<(int as user.interfaces.W3ooDebuggable)>.debugW3oo(self: int) -> string {
+    load_const "int"
+    return
+}
+
+function interfaces.<(map<string, #0> as user.interfaces.GrmrLabel)>.label(self: map<string, #0>) -> string {
+    load_const "map"
+    return
+}
+
+function interfaces.<(string as user.interfaces.Uf10Debuggable)>.debugUf10(self: string) -> string {
+    load_const "str"
+    return
+}
+
+function interfaces.<(user.interfaces.ApssHybrid as user.interfaces.ApssBinarySerializer)>.encode(self: interfaces.ApssHybrid) -> string {
     load_const "binary"
     return
 }
 
-function interfaces.ApssHybrid.ApssSerializer.encode(self: interfaces.ApssHybrid) -> string {
+function interfaces.<(user.interfaces.ApssHybrid as user.interfaces.ApssSerializer)>.encode(self: interfaces.ApssHybrid) -> string {
     load_const "json:{}"
     return
 }
 
-function interfaces.ApwuDog.ApwuAnimal.speak(self: interfaces.ApwuDog) -> string {
+function interfaces.<(user.interfaces.ApwuDog as user.interfaces.ApwuAnimal)>.speak(self: interfaces.ApwuDog) -> string {
     load_const "Woof!"
     return
 }
 
-function interfaces.B1180IntValue.B1180Getter<int>.get(self: interfaces.B1180IntValue) -> int {
+function interfaces.<(user.interfaces.B1180IntValue as user.interfaces.B1180Getter<int>)>.get(self: interfaces.B1180IntValue) -> int {
     load_var self
     load_field .value
     return
 }
 
-function interfaces.B1180Person.B1180Named.name(self: interfaces.B1180Person) -> string {
+function interfaces.<(user.interfaces.B1180Person as user.interfaces.B1180Named)>.name(self: interfaces.B1180Person) -> string {
     load_var self
     load_field .value
     return
 }
 
-function interfaces.BgfbPair.BgfbEquatable.eq(self: interfaces.BgfbPair, other: interfaces.BgfbPair) -> bool {
+function interfaces.<(user.interfaces.BgfbPair as user.interfaces.BgfbEquatable)>.eq(self: interfaces.BgfbPair, other: interfaces.BgfbPair) -> bool {
     load_var self
     load_field .a
     load_var other
@@ -1247,7 +1338,7 @@ function interfaces.BgfbPair.BgfbEquatable.eq(self: interfaces.BgfbPair, other: 
     return
 }
 
-function interfaces.BsmvAcc.BsmvAdder.addOne(self: interfaces.BsmvAcc, other: interfaces.BsmvAcc) -> int {
+function interfaces.<(user.interfaces.BsmvAcc as user.interfaces.BsmvAdder)>.addOne(self: interfaces.BsmvAcc, other: interfaces.BsmvAcc) -> int {
     load_var self
     load_field .base
     load_var other
@@ -1256,17 +1347,840 @@ function interfaces.BsmvAcc.BsmvAdder.addOne(self: interfaces.BsmvAcc, other: in
     return
 }
 
-function interfaces.BtviPrintable$for$T.display(self: #0) -> string {
+function interfaces.<(user.interfaces.ComcServer as user.interfaces.ComcConfigurable)>.configure(self: interfaces.ComcServer) -> string {
     load_var self
-    load_type interfaces.BtviNamed
+    call user.interfaces.ComcServer.address
+    return
+}
+
+function interfaces.<(user.interfaces.CridNum as user.interfaces.CridEquals)>.eq(self: interfaces.CridNum, other: interfaces.CridNum) -> bool {
+    load_var self
+    load_field .v
+    load_var other
+    load_field .v
+    cmp_int_op ==
+    return
+}
+
+function interfaces.<(user.interfaces.CtpiEmployee as user.interfaces.CtpiPerson)>.introduce(self: interfaces.CtpiEmployee) -> string {
+    load_const "hi"
+    return
+}
+
+function interfaces.<(user.interfaces.DcfoTimestampLogger as user.interfaces.DcfoLogger)>.log(self: interfaces.DcfoTimestampLogger, msg: string) -> string {
+    load_type interfaces.DcfoTimestampLogger
+    load_var2 1 2
+    call user.interfaces.DcfoLogger.log
+    store_var _5
+    load_var self
+    load_field .prefix
+    load_const " "
+    bin_op +
+    load_var _5
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.DcgoBox<#0> as user.interfaces.DcgoLogger)>.log(self: interfaces.DcgoBox<#0>, msg: string) -> string {
+    load_var self
+    load_field .prefix
+    store_var _3
+    load_type interfaces.DcgoBox<#0>
+    load_var2 1 2
+    call user.interfaces.DcgoLogger.log
+    store_var _4
+    load_var2 3 4
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.DcmrCat as user.interfaces.DcmrAnimal)>.speak(self: interfaces.DcmrCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.DcobPrefixLogger as user.interfaces.DcobLogger)>.log(self: interfaces.DcobPrefixLogger, msg: string) -> string {
+    load_var self
+    load_field .prefix
+    store_var _3
+    load_type interfaces.DcobPrefixLogger
+    load_var2 1 2
+    call user.interfaces.DcobLogger.log
+    store_var _4
+    load_var2 3 4
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.DctfCat as user.interfaces.DctfAnimal)>.speak(self: interfaces.DctfCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.DctioDoubleLogger as user.interfaces.DctioLogger)>.log(self: interfaces.DctioDoubleLogger, msg: string) -> string {
+    load_var self
+    load_field .prefix
+    store_var _5
+    load_type interfaces.DctioDoubleLogger
+    load_var2 1 2
+    call user.interfaces.DctioLogger.log
+    store_var _6
+    load_type interfaces.DctioDoubleLogger
+    load_var self
+    load_const "END"
+    call user.interfaces.DctioLogger.log
+    store_var _8
+    load_var2 3 4
+    bin_op +
+    load_const " "
+    bin_op +
+    load_var _8
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.DcwcStamp as user.interfaces.DcwcWrapper)>.decorate(self: interfaces.DcwcStamp, body: string) -> string {
+    load_type interfaces.DcwcStamp
+    load_var2 1 1
+    load_field .mark
+    load_const ":"
+    bin_op +
+    load_var body
+    bin_op +
+    call user.interfaces.DcwcWrapper.decorate
+    return
+}
+
+function interfaces.<(user.interfaces.DdtiHub as user.interfaces.DdtiLeft)>.left_tag(self: interfaces.DdtiHub) -> string {
+    load_const "L"
+    return
+}
+
+function interfaces.<(user.interfaces.DdtiHub as user.interfaces.DdtiRight)>.right_tag(self: interfaces.DdtiHub) -> string {
+    load_const "R"
+    return
+}
+
+function interfaces.<(user.interfaces.DdtiHub as user.interfaces.DdtiX)>.x_note(self: interfaces.DdtiHub) -> string {
+    load_const "X"
+    return
+}
+
+function interfaces.<(user.interfaces.DdtiHub as user.interfaces.DdtiY)>.y_note(self: interfaces.DdtiHub) -> string {
+    load_const "Y"
+    return
+}
+
+function interfaces.<(user.interfaces.DfloCat as user.interfaces.DfloAnimal)>.speak(self: interfaces.DfloCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.DfloDog as user.interfaces.DfloAnimal)>.speak(self: interfaces.DfloDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.DfloDuck as user.interfaces.DfloAnimal)>.speak(self: interfaces.DfloDuck) -> string {
+    load_const "Quack!"
+    return
+}
+
+function interfaces.<(user.interfaces.DkslL as user.interfaces.DkslLogger)>.log(self: interfaces.DkslL, msg: string) -> string {
+    load_const "shadow"
+    return
+}
+
+function interfaces.<(user.interfaces.DmdtDog as user.interfaces.DmdtAnimal)>.speak(self: interfaces.DmdtDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.DrtcX as user.interfaces.DrtcA)>.tag(self: interfaces.DrtcX) -> string {
+    load_type interfaces.DrtcX
+    load_var self
+    call user.interfaces.DrtcA.tag
+    load_const "!"
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.DslrDeep as user.interfaces.DslrA)>.tag(self: interfaces.DslrDeep) -> string {
+    load_const "deep"
+    return
+}
+
+function interfaces.<(user.interfaces.DtaiCat as user.interfaces.DtaiAnimal)>.speak(self: interfaces.DtaiCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.DtbaCat as user.interfaces.DtbaAnimal)>.speak(self: interfaces.DtbaCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.DtbaDog as user.interfaces.DtbaAnimal)>.speak(self: interfaces.DtbaDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.DtfaCat as user.interfaces.DtfaAnimal)>.speak(self: interfaces.DtfaCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.DtfcCat as user.interfaces.DtfcAnimal)>.speak(self: interfaces.DtfcCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.DtflCat as user.interfaces.DtflAnimal)>.speak(self: interfaces.DtflCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.DtfoCat as user.interfaces.DtfoAnimal)>.speak(self: interfaces.DtfoCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.DtfoDog as user.interfaces.DtfoAnimal)>.speak(self: interfaces.DtfoDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.DtmvCat as user.interfaces.DtmvAnimal)>.speak(self: interfaces.DtmvCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.DtnaCat as user.interfaces.DtnaAnimal)>.speak(self: interfaces.DtnaCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.DtnaDog as user.interfaces.DtnaAnimal)>.speak(self: interfaces.DtnaDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.F1bgWrapper<#0> as user.interfaces.F1bgPrintable)>.display(self: interfaces.F1bgWrapper<#0>) -> string {
+    load_var self
+    load_field .inner
+    load_type interfaces.F1bgNamed
     virtual_load_field .name
     return
 }
 
-function interfaces.BtvsPrintable$for$T.display(self: #0) -> string {
+function interfaces.<(user.interfaces.F1dBox<#0> as user.interfaces.F1dPrintable)>.display(self: interfaces.F1dBox<#0>) -> string {
+    load_const "a box"
+    return
+}
+
+function interfaces.<(user.interfaces.F1diBox<#0> as user.interfaces.F1diPrintable)>.display(self: interfaces.F1diBox<#0>) -> string {
+    load_const "a box"
+    return
+}
+
+function interfaces.<(user.interfaces.F1gWrapper<#0> as user.interfaces.F1gContainer<#0>)>.get(self: interfaces.F1gWrapper<#0>) -> #0 {
     load_var self
-    load_type interfaces.BtvsNamed
+    load_field .value
+    return
+}
+
+function interfaces.<(user.interfaces.F1saPair<#0> as user.interfaces.F1saDescribable)>.describe(self: interfaces.F1saPair<#0>) -> string {
+    load_var self
+    load_field .label
+    return
+}
+
+function interfaces.<(user.interfaces.Fz03Dog as user.interfaces.Fz03Animal)>.speak(self: interfaces.Fz03Dog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.Fz04Cat as user.interfaces.Fz04Animal)>.speak(self: interfaces.Fz04Cat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.Fz04Dog as user.interfaces.Fz04Animal)>.speak(self: interfaces.Fz04Dog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.Fz05C as user.interfaces.Fz05B)>.foo(self: interfaces.Fz05C) -> string {
+    load_const "B-override"
+    return
+}
+
+function interfaces.<(user.interfaces.Fz10IntBox as user.interfaces.Fz10Box<int>)>.get(self: interfaces.Fz10IntBox) -> int {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces.<(user.interfaces.Fz15IntBox as user.interfaces.Fz15Container<int>)>.size(self: interfaces.Fz15IntBox) -> int {
+    load_var self
+    load_field .items
+    container_len
+    return
+}
+
+function interfaces.<(user.interfaces.Fz16IntBox as user.interfaces.Fz16Container<int>)>.get(self: interfaces.Fz16IntBox) -> int {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces.<(user.interfaces.Fz24IntBag as user.interfaces.Fz24Container<int>)>.get(self: interfaces.Fz24IntBag) -> int {
+    load_var self
+    load_field .items
+    load_const 0
+    load_array_element
+    return
+}
+
+function interfaces.<(user.interfaces.Fz29Dog as user.interfaces.Fz29Animal)>.speak(self: interfaces.Fz29Dog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.Fz31Cat as user.interfaces.Fz31Animal)>.speak(self: interfaces.Fz31Cat) -> string {
+    load_const "Meow!"
+    return
+}
+
+function interfaces.<(user.interfaces.Fz31Dog as user.interfaces.Fz31Animal)>.speak(self: interfaces.Fz31Dog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.Fz32Dog as user.interfaces.Fz32Animal)>.speak(self: interfaces.Fz32Dog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.Fz33Dog as user.interfaces.Fz33Animal)>.speak(self: interfaces.Fz33Dog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.Fz34IntBox as user.interfaces.Fz34Box<int>)>.get(self: interfaces.Fz34IntBox) -> int {
+    load_const 1
+    return
+}
+
+function interfaces.<(user.interfaces.Fz35IntBox as user.interfaces.Fz35Box<int>)>.get(self: interfaces.Fz35IntBox) -> int {
+    load_const 1
+    return
+}
+
+function interfaces.<(user.interfaces.Fz38DatabaseError as user.interfaces.Fz38IError)>.describe(self: interfaces.Fz38DatabaseError) -> string {
+    load_const "db: "
+    load_var self
+    load_field .msg
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.Fz38MyFetcher as user.interfaces.Fz38DataFetcher)>.fetch(self: interfaces.Fz38MyFetcher, key: string) -> string {
+    load_var key
+    load_const "net"
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "data:"
+    load_var key
+    bin_op +
+    return
+
+  L1:
+    load_const "connection refused"
+    init_instance user.interfaces.Fz38NetworkError .msg
+    throw
+}
+
+function interfaces.<(user.interfaces.Fz38NetworkError as user.interfaces.Fz38IError)>.describe(self: interfaces.Fz38NetworkError) -> string {
+    load_const "network: "
+    load_var self
+    load_field .msg
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.Fz39ConcreteErr as user.interfaces.Fz39IError)>.describe(self: interfaces.Fz39ConcreteErr) -> string {
+    load_var self
+    load_field .msg
+    return
+}
+
+function interfaces.<(user.interfaces.Fz40Dog as user.interfaces.Fz40Animal)>.speak(self: interfaces.Fz40Dog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.Fz41Dog as user.interfaces.Fz41Animal)>.speak(self: interfaces.Fz41Dog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.Fz43IntProducer as user.interfaces.Fz43Producer<int>)>.produce(self: interfaces.Fz43IntProducer) -> int {
+    load_var self
+    load_field .val
+    return
+}
+
+function interfaces.<(user.interfaces.Fz45Dog as user.interfaces.Fz45Animal)>.speak(self: interfaces.Fz45Dog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.GbapMultiFormat as user.interfaces.GbapConverter<float>)>.convert(self: interfaces.GbapMultiFormat) -> float {
+    load_const 42.5
+    return
+}
+
+function interfaces.<(user.interfaces.GbapMultiFormat as user.interfaces.GbapConverter<int>)>.convert(self: interfaces.GbapMultiFormat) -> int {
+    load_const 42
+    return
+}
+
+function interfaces.<(user.interfaces.GbdmIntBox as user.interfaces.GbdmConverter<int>)>.convert(self: interfaces.GbdmIntBox) -> int {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces.<(user.interfaces.GbspPair as user.interfaces.GbspEquatable)>.eq(self: interfaces.GbspPair, other: interfaces.GbspPair) -> bool {
+    load_var self
+    load_field .a
+    load_var other
+    load_field .a
+    cmp_int_op ==
+    return
+}
+
+function interfaces.<(user.interfaces.GictIntStack as user.interfaces.GictContainer<int>)>.add(self: interfaces.GictIntStack, item: int) -> void {
+    load_type int
+    load_var self
+    load_field .items
+    load_var item
+    call baml.Array.push
+    return
+}
+
+function interfaces.<(user.interfaces.GictIntStack as user.interfaces.GictContainer<int>)>.get(self: interfaces.GictIntStack, index: int) -> int | null {
+    load_var self
+    load_field .items
+    load_var index
+    load_array_element
+    return
+}
+
+function interfaces.<(user.interfaces.GictIntStack as user.interfaces.GictContainer<int>)>.size(self: interfaces.GictIntStack) -> int {
+    load_var self
+    load_field .items
+    container_len
+    return
+}
+
+function interfaces.<(user.interfaces.GimpEchoer as user.interfaces.GimpEcho<int>)>.echo(self: interfaces.GimpEchoer, value: #0) -> #0 {
+    load_var value
+    return
+}
+
+function interfaces.<(user.interfaces.GoopBox<#0> as user.interfaces.GoopDescriber<#0>)>.describe(self: interfaces.GoopBox<#0>, value: #1) -> string {
+    load_type #0
+    call baml.<(reflect.Type as baml.ToString)>.to_string
+    store_var _4
+    load_type #1
+    call baml.<(reflect.Type as baml.ToString)>.to_string
+    store_var _6
+    load_var _4
+    load_const ":"
+    bin_op +
+    load_var _6
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.GrpaBox as user.interfaces.GrpaParent<int>)>.describe(self: interfaces.GrpaBox) -> string {
+    load_const "parent-int"
+    return
+}
+
+function interfaces.<(user.interfaces.HiadCat as user.interfaces.HiadAnimal)>.speak(self: interfaces.HiadCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.HiadDog as user.interfaces.HiadAnimal)>.speak(self: interfaces.HiadDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.IdmcPair as user.interfaces.IdmcEquatable)>.eq(self: interfaces.IdmcPair, other: interfaces.IdmcPair) -> bool {
+    load_var self
+    load_field .a
+    load_var other
+    load_field .a
+    cmp_int_op ==
+    return
+}
+
+function interfaces.<(user.interfaces.ItampBoth as user.interfaces.ItampConv<int, string>)>.tag(self: interfaces.ItampBoth) -> string {
+    load_const "int->string"
+    return
+}
+
+function interfaces.<(user.interfaces.ItampBoth as user.interfaces.ItampConv<string, int>)>.tag(self: interfaces.ItampBoth) -> string {
+    load_const "string->int"
+    return
+}
+
+function interfaces.<(user.interfaces.IticDog as user.interfaces.IticAnimal)>.speak(self: interfaces.IticDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.IticDog as user.interfaces.IticSwimmer)>.swim(self: interfaces.IticDog) -> string {
+    load_const "splash"
+    return
+}
+
+function interfaces.<(user.interfaces.ItvdCat as user.interfaces.ItvdAnimal)>.speak(self: interfaces.ItvdCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.MdciCat as user.interfaces.MdciAnimal)>.speak(self: interfaces.MdciCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.MdciDog as user.interfaces.MdciAnimal)>.speak(self: interfaces.MdciDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.MdidCat as user.interfaces.MdidAnimal)>.speak(self: interfaces.MdidCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.MdidDog as user.interfaces.MdidAnimal)>.speak(self: interfaces.MdidDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.MdifDog as user.interfaces.MdifAnimal)>.speak(self: interfaces.MdifDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.MntcDog as user.interfaces.MntcAnimal)>.speak(self: interfaces.MntcDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.MoiwDog as user.interfaces.MoiwAnimal)>.speak(self: interfaces.MoiwDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.MoiwDuck as user.interfaces.MoiwAnimal)>.speak(self: interfaces.MoiwDuck) -> string {
+    load_const "Quack!"
+    return
+}
+
+function interfaces.<(user.interfaces.MsmaBox as user.interfaces.MsmaEquatable)>.same(self: interfaces.MsmaBox, other: interfaces.MsmaBox) -> bool {
+    load_var self
+    load_field .value
+    load_var other
+    load_field .value
+    cmp_int_op ==
+    return
+}
+
+function interfaces.<(user.interfaces.OdndCat as user.interfaces.OdndAnimal)>.describe(self: interfaces.OdndCat) -> string {
+    load_const "cat:"
+    load_var self
+    load_field .name
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.OobvDog as user.interfaces.OobvAnimal)>.speak(self: interfaces.OobvDog) -> string {
+    load_const "woof"
+    return
+}
+
+function interfaces.<(user.interfaces.PtuMulti<#0, #1> as user.interfaces.PtuPipe<#0 | #1>)>.run(self: interfaces.PtuMulti<#0, #1>) -> string {
+    load_const "multi:"
+    load_var self
+    load_field .tag
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.RcflLeaf as user.interfaces.RcflA)>.tag(self: interfaces.RcflLeaf) -> string {
+    load_const "leaf"
+    return
+}
+
+function interfaces.<(user.interfaces.RcpmBox as user.interfaces.RcpmParent<int>)>.describe(self: interfaces.RcpmBox) -> string {
+    load_const "int"
+    return
+}
+
+function interfaces.<(user.interfaces.RcpmBox as user.interfaces.RcpmParent<string>)>.describe(self: interfaces.RcpmBox) -> string {
+    load_const "string"
+    return
+}
+
+function interfaces.<(user.interfaces.RibiDog as user.interfaces.RibiAnimal)>.speak(self: interfaces.RibiDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.RiigDog as user.interfaces.RiigAnimal)>.speak(self: interfaces.RiigDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.RitfDog as user.interfaces.RitfAnimal)>.speak(self: interfaces.RitfDog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.RitvEmployee as user.interfaces.RitvPerson)>.introduce(self: interfaces.RitvEmployee) -> string {
+    load_const "hi"
+    return
+}
+
+function interfaces.<(user.interfaces.SapcPolite as user.interfaces.SapcFarewell)>.bye(self: interfaces.SapcPolite) -> string {
+    load_var self
+    load_type interfaces.SapcGreeter
+    load_const "greet"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _2
+    load_var _2
+    load_const " — and goodbye!"
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.SapcPolite as user.interfaces.SapcGreeter)>.greet(self: interfaces.SapcPolite) -> string {
+    load_const "Hello, I'm "
+    load_var self
+    load_field .name
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.SgidMultiFormat as user.interfaces.SgidConverter<float>)>.convert(self: interfaces.SgidMultiFormat) -> float {
+    load_const 42.5
+    return
+}
+
+function interfaces.<(user.interfaces.SgidMultiFormat as user.interfaces.SgidConverter<int>)>.convert(self: interfaces.SgidMultiFormat) -> int {
+    load_const 42
+    return
+}
+
+function interfaces.<(user.interfaces.SpmaAcc as user.interfaces.SpmaAdder)>.addAll(self: interfaces.SpmaAcc, others: interfaces.SpmaAcc[]) -> int {
+    load_var self
+    load_field .base
+    load_var others
+    load_const 0
+    load_array_element
+    load_field .base
+    add_int
+    return
+}
+
+function interfaces.<(user.interfaces.SritBox as user.interfaces.SritCloneable)>.clone(self: interfaces.SritBox) -> interfaces.SritBox {
+    load_var self
+    load_field .value
+    init_instance user.interfaces.SritBox .value
+    return
+}
+
+function interfaces.<(user.interfaces.SrtcBox as user.interfaces.SrtcCloneable)>.clone(self: interfaces.SrtcBox) -> interfaces.SrtcBox {
+    load_var self
+    load_field .value
+    init_instance user.interfaces.SrtcBox .value
+    return
+}
+
+function interfaces.<(user.interfaces.TiduWorker as user.interfaces.TiduFallible)>.run(self: interfaces.TiduWorker) -> string {
+    load_const "caught"
+    init_instance user.interfaces.TiduBoom .message
+    throw
+}
+
+function interfaces.<(user.interfaces.Uf06UBox as user.interfaces.Uf06Box<int | string>)>.get(self: interfaces.Uf06UBox) -> int | string {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces.<(user.interfaces.Uf08Dog as user.interfaces.Uf08Animal)>.speak(self: interfaces.Uf08Dog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.Uf09Cat as user.interfaces.Uf09Animal)>.speak(self: interfaces.Uf09Cat) -> string {
+    load_const "Meow"
+    return
+}
+
+function interfaces.<(user.interfaces.Uf09Dog as user.interfaces.Uf09Animal)>.speak(self: interfaces.Uf09Dog) -> string {
+    load_const "Woof"
+    return
+}
+
+function interfaces.<(user.interfaces.Ufp2UBox as user.interfaces.Ufp2Box<int | string | null>)>.get(self: interfaces.Ufp2UBox) -> int | string | null {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces.<(user.interfaces.Ufp5UBox as user.interfaces.Ufp5Box<int | int>)>.get(self: interfaces.Ufp5UBox) -> int | int {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces.<(user.interfaces.UricBox<#0> as user.interfaces.UricPrintable)>.display(self: interfaces.UricBox<#0>) -> string {
+    load_const "box"
+    return
+}
+
+function interfaces.<(user.interfaces.UriiBox<#0> as user.interfaces.UriiPrintable)>.display(self: interfaces.UriiBox<#0>) -> string {
+    load_const "box"
+    return
+}
+
+function interfaces.<(user.interfaces.UrisBox<#0> as user.interfaces.UrisPrintable)>.display(self: interfaces.UrisBox<#0>) -> string {
+    load_const "box"
+    return
+}
+
+function interfaces.<(user.interfaces.UrniWrapper<#0> as user.interfaces.UrniContainer<#0[]>)>.get(self: interfaces.UrniWrapper<#0>) -> #0[] {
+    load_var self
+    load_field .values
+    return
+}
+
+function interfaces.<(user.interfaces.UrrcWrapper<#0> as user.interfaces.UrrcParent<#0>)>.get(self: interfaces.UrrcWrapper<#0>) -> #0 {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces.<(user.interfaces.UrrsBox<#0> as user.interfaces.UrrsPrintable)>.display(self: interfaces.UrrsBox<#0>) -> string {
+    load_const "box"
+    return
+}
+
+function interfaces.<(user.interfaces.UrrtPair<#0, #0> as user.interfaces.UrrtSame)>.tag(self: interfaces.UrrtPair<#0, #0>) -> string {
+    load_const "same"
+    return
+}
+
+function interfaces.<(user.interfaces.VdcBoth as user.interfaces.VdcTagged<user.interfaces.VdcAnimal | user.interfaces.VdcDog>)>.tag(self: interfaces.VdcBoth) -> string {
+    load_const "animal-or-dog"
+    return
+}
+
+function interfaces.<(user.interfaces.VdcBoth as user.interfaces.VdcTagged<user.interfaces.VdcAnimal>)>.tag(self: interfaces.VdcBoth) -> string {
+    load_const "animal"
+    return
+}
+
+function interfaces.<(user.interfaces.W301IntThing as user.interfaces.W301Base<int>)>.base_get(self: interfaces.W301IntThing) -> int {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces.<(user.interfaces.W304P as user.interfaces.W304Named)>.describe(self: interfaces.W304P) -> string {
+    load_const "default.name=["
+    load_var self
+    load_field .name
+    bin_op +
+    load_const "] self.name=["
+    bin_op +
+    load_var self
+    load_field .name
+    bin_op +
+    load_const "] as=["
+    bin_op +
+    load_var self
+    load_type interfaces.W304Named
     virtual_load_field .name
+    bin_op +
+    load_const "]"
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.W307IntBox as user.interfaces.W307Box<int>)>.get(self: interfaces.W307IntBox) -> int {
+    load_const 1
+    return
+}
+
+function interfaces.<(user.interfaces.W307StringBox as user.interfaces.W307Box<string>)>.get(self: interfaces.W307StringBox) -> string {
+    load_const "hi"
+    return
+}
+
+function interfaces.<(user.interfaces.W312Cat as user.interfaces.W312Animal)>.speak(self: interfaces.W312Cat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.W312Dog as user.interfaces.W312Animal)>.speak(self: interfaces.W312Dog) -> string {
+    load_const "Woof!"
+    return
+}
+
+function interfaces.<(user.interfaces.W3bgIntBox as user.interfaces.W3bgBox<int>)>.get(self: interfaces.W3bgIntBox) -> int {
+    load_const 1
+    return
+}
+
+function interfaces.<(user.interfaces.W3bgStringBox as user.interfaces.W3bgBox<string>)>.get(self: interfaces.W3bgStringBox) -> string {
+    load_const "hi"
+    return
+}
+
+function interfaces.<(user.interfaces.W3bmBox<#0> as user.interfaces.W3bmPrintable)>.display(self: interfaces.W3bmBox<#0>) -> string {
+    load_const "box"
+    return
+}
+
+function interfaces.<(user.interfaces.W3spPerson as user.interfaces.W3spNamed)>.greet(self: interfaces.W3spPerson) -> string {
+    load_const "Hi "
+    load_var self
+    load_type interfaces.W3spNamed
+    virtual_load_field .name
+    bin_op +
+    return
+}
+
+function interfaces.<(user.interfaces.W3umCat as user.interfaces.W3umAnimal)>.speak(self: interfaces.W3umCat) -> string {
+    load_const "Meow."
+    return
+}
+
+function interfaces.<(user.interfaces.W3umDog as user.interfaces.W3umAnimal)>.speak(self: interfaces.W3umDog) -> string {
+    load_const "Woof!"
     return
 }
 
@@ -1278,12 +2192,6 @@ function interfaces.CimdGreeter.greet(self: interfaces.CimdGreeter) -> string {
 function interfaces.CimdPerson.greet(self: interfaces.CimdPerson) -> string {
     load_var self
     load_field .name
-    return
-}
-
-function interfaces.ComcServer.ComcConfigurable.configure(self: interfaces.ComcServer) -> string {
-    load_var self
-    call user.interfaces.ComcServer.address
     return
 }
 
@@ -1301,20 +2209,6 @@ function interfaces.CridEquals.neq(self: interfaces.CridEquals, other: #0) -> bo
     store_var _3
     load_var _3
     unary_op !
-    return
-}
-
-function interfaces.CridNum.CridEquals.eq(self: interfaces.CridNum, other: interfaces.CridNum) -> bool {
-    load_var self
-    load_field .v
-    load_var other
-    load_field .v
-    cmp_int_op ==
-    return
-}
-
-function interfaces.CtpiEmployee.CtpiPerson.introduce(self: interfaces.CtpiEmployee) -> string {
-    load_const "hi"
     return
 }
 
@@ -1340,33 +2234,6 @@ function interfaces.DcfoLogger.log(self: interfaces.DcfoLogger, msg: string) -> 
     return
 }
 
-function interfaces.DcfoTimestampLogger.DcfoLogger.log(self: interfaces.DcfoTimestampLogger, msg: string) -> string {
-    load_type interfaces.DcfoTimestampLogger
-    load_var2 1 2
-    call user.interfaces.DcfoLogger.log
-    store_var _5
-    load_var self
-    load_field .prefix
-    load_const " "
-    bin_op +
-    load_var _5
-    bin_op +
-    return
-}
-
-function interfaces.DcgoLogger$for$DcgoBox<T>.log(self: interfaces.DcgoBox<#0>, msg: string) -> string {
-    load_var self
-    load_field .prefix
-    store_var _3
-    load_type interfaces.DcgoBox<#0>
-    load_var2 1 2
-    call user.interfaces.DcgoLogger.log
-    store_var _4
-    load_var2 3 4
-    bin_op +
-    return
-}
-
 function interfaces.DcgoLogger.log(self: interfaces.DcgoLogger, msg: string) -> string {
     load_const "[L] "
     load_var msg
@@ -1379,33 +2246,10 @@ function interfaces.DcmrAnimal.next(self: interfaces.DcmrAnimal) -> interfaces.D
     return
 }
 
-function interfaces.DcmrCat.DcmrAnimal.speak(self: interfaces.DcmrCat) -> string {
-    load_const "Meow."
-    return
-}
-
 function interfaces.DcobLogger.log(self: interfaces.DcobLogger, msg: string) -> string {
     load_const "[L] "
     load_var msg
     bin_op +
-    return
-}
-
-function interfaces.DcobPrefixLogger.DcobLogger.log(self: interfaces.DcobPrefixLogger, msg: string) -> string {
-    load_var self
-    load_field .prefix
-    store_var _3
-    load_type interfaces.DcobPrefixLogger
-    load_var2 1 2
-    call user.interfaces.DcobLogger.log
-    store_var _4
-    load_var2 3 4
-    bin_op +
-    return
-}
-
-function interfaces.DctfCat.DctfAnimal.speak(self: interfaces.DctfCat) -> string {
-    load_const "Meow."
     return
 }
 
@@ -1424,44 +2268,10 @@ function interfaces.DctiRight.foo(self: interfaces.DctiRight) -> string {
     return
 }
 
-function interfaces.DctioDoubleLogger.DctioLogger.log(self: interfaces.DctioDoubleLogger, msg: string) -> string {
-    load_var self
-    load_field .prefix
-    store_var _5
-    load_type interfaces.DctioDoubleLogger
-    load_var2 1 2
-    call user.interfaces.DctioLogger.log
-    store_var _6
-    load_type interfaces.DctioDoubleLogger
-    load_var self
-    load_const "END"
-    call user.interfaces.DctioLogger.log
-    store_var _8
-    load_var2 3 4
-    bin_op +
-    load_const " "
-    bin_op +
-    load_var _8
-    bin_op +
-    return
-}
-
 function interfaces.DctioLogger.log(self: interfaces.DctioLogger, msg: string) -> string {
     load_const "[L] "
     load_var msg
     bin_op +
-    return
-}
-
-function interfaces.DcwcStamp.DcwcWrapper.decorate(self: interfaces.DcwcStamp, body: string) -> string {
-    load_type interfaces.DcwcStamp
-    load_var2 1 1
-    load_field .mark
-    load_const ":"
-    bin_op +
-    load_var body
-    bin_op +
-    call user.interfaces.DcwcWrapper.decorate
     return
 }
 
@@ -1471,46 +2281,6 @@ function interfaces.DcwcWrapper.decorate(self: interfaces.DcwcWrapper, body: str
     bin_op +
     load_const "]"
     bin_op +
-    return
-}
-
-function interfaces.DdtiHub.DdtiLeft.left_tag(self: interfaces.DdtiHub) -> string {
-    load_const "L"
-    return
-}
-
-function interfaces.DdtiHub.DdtiRight.right_tag(self: interfaces.DdtiHub) -> string {
-    load_const "R"
-    return
-}
-
-function interfaces.DdtiHub.DdtiX.x_note(self: interfaces.DdtiHub) -> string {
-    load_const "X"
-    return
-}
-
-function interfaces.DdtiHub.DdtiY.y_note(self: interfaces.DdtiHub) -> string {
-    load_const "Y"
-    return
-}
-
-function interfaces.DfloCat.DfloAnimal.speak(self: interfaces.DfloCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.DfloDog.DfloAnimal.speak(self: interfaces.DfloDog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.DfloDuck.DfloAnimal.speak(self: interfaces.DfloDuck) -> string {
-    load_const "Quack!"
-    return
-}
-
-function interfaces.DkslL.DkslLogger.log(self: interfaces.DkslL, msg: string) -> string {
-    load_const "shadow"
     return
 }
 
@@ -1528,11 +2298,6 @@ function interfaces.DmdtAnimal.describe(self: interfaces.DmdtAnimal) -> string {
     return
 }
 
-function interfaces.DmdtDog.DmdtAnimal.speak(self: interfaces.DmdtDog) -> string {
-    load_const "Woof!"
-    return
-}
-
 function interfaces.DrtcA.tag(self: interfaces.DrtcA) -> string {
     load_const "A"
     return
@@ -1540,75 +2305,6 @@ function interfaces.DrtcA.tag(self: interfaces.DrtcA) -> string {
 
 function interfaces.DrtcB.tag(self: interfaces.DrtcB) -> string {
     load_const "B"
-    return
-}
-
-function interfaces.DrtcX.DrtcA.tag(self: interfaces.DrtcX) -> string {
-    load_type interfaces.DrtcX
-    load_var self
-    call user.interfaces.DrtcA.tag
-    load_const "!"
-    bin_op +
-    return
-}
-
-function interfaces.DslrDeep.DslrA.tag(self: interfaces.DslrDeep) -> string {
-    load_const "deep"
-    return
-}
-
-function interfaces.DtaiCat.DtaiAnimal.speak(self: interfaces.DtaiCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.DtbaCat.DtbaAnimal.speak(self: interfaces.DtbaCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.DtbaDog.DtbaAnimal.speak(self: interfaces.DtbaDog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.DtfaCat.DtfaAnimal.speak(self: interfaces.DtfaCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.DtfcCat.DtfcAnimal.speak(self: interfaces.DtfcCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.DtflCat.DtflAnimal.speak(self: interfaces.DtflCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.DtfoCat.DtfoAnimal.speak(self: interfaces.DtfoCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.DtfoDog.DtfoAnimal.speak(self: interfaces.DtfoDog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.DtmvCat.DtmvAnimal.speak(self: interfaces.DtmvCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.DtnaCat.DtnaAnimal.speak(self: interfaces.DtnaCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.DtnaDog.DtnaAnimal.speak(self: interfaces.DtnaDog) -> string {
-    load_const "Woof!"
     return
 }
 
@@ -1627,88 +2323,6 @@ function interfaces.DwoaTip.name(self: interfaces.DwoaTip) -> string {
     return
 }
 
-function interfaces.F1bgPrintable$for$F1bgWrapper<T>.display(self: interfaces.F1bgWrapper<#0>) -> string {
-    load_var self
-    load_field .inner
-    load_type interfaces.F1bgNamed
-    virtual_load_field .name
-    return
-}
-
-function interfaces.F1dPrintable$for$F1dBox<T>.display(self: interfaces.F1dBox<#0>) -> string {
-    load_const "a box"
-    return
-}
-
-function interfaces.F1diPrintable$for$F1diBox<T>.display(self: interfaces.F1diBox<#0>) -> string {
-    load_const "a box"
-    return
-}
-
-function interfaces.F1gContainer<T>$for$F1gWrapper<T>.get(self: interfaces.F1gWrapper<#0>) -> #0 {
-    load_var self
-    load_field .value
-    return
-}
-
-function interfaces.F1saDescribable$for$F1saPair<T>.describe(self: interfaces.F1saPair<#0>) -> string {
-    load_var self
-    load_field .label
-    return
-}
-
-function interfaces.F2amPrintable$for$T.display(self: #0) -> string {
-    load_var self
-    load_type interfaces.F2amNamed
-    virtual_load_field .name
-    return
-}
-
-function interfaces.F2dPrintable$for$T.display(self: #0) -> string {
-    load_const "named:"
-    load_var self
-    load_type interfaces.F2dNamed
-    virtual_load_field .name
-    bin_op +
-    return
-}
-
-function interfaces.F2riPrintable$for$T.display(self: #0) -> string {
-    load_var self
-    load_type interfaces.F2riNamed
-    virtual_load_field .name
-    return
-}
-
-function interfaces.F2rsPrintable$for$T.display(self: #0) -> string {
-    load_var self
-    load_type interfaces.F2rsNamed
-    virtual_load_field .name
-    return
-}
-
-function interfaces.F2saLabeled$for$T.label(self: #0) -> string {
-    load_var self
-    load_type interfaces.F2saNamed
-    virtual_load_field .name
-    return
-}
-
-function interfaces.Fz03Dog.Fz03Animal.speak(self: interfaces.Fz03Dog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.Fz04Cat.Fz04Animal.speak(self: interfaces.Fz04Cat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.Fz04Dog.Fz04Animal.speak(self: interfaces.Fz04Dog) -> string {
-    load_const "Woof!"
-    return
-}
-
 function interfaces.Fz05A.foo(self: interfaces.Fz05A) -> string {
     load_const "A"
     return
@@ -1719,19 +2333,8 @@ function interfaces.Fz05B.foo(self: interfaces.Fz05B) -> string {
     return
 }
 
-function interfaces.Fz05C.Fz05B.foo(self: interfaces.Fz05C) -> string {
-    load_const "B-override"
-    return
-}
-
 function interfaces.Fz07Echo.echo(self: interfaces.Fz07Echo<#1>, x: #1) -> #1 {
     load_var x
-    return
-}
-
-function interfaces.Fz10IntBox.Fz10Box<int>.get(self: interfaces.Fz10IntBox) -> int {
-    load_var self
-    load_field .value
     return
 }
 
@@ -1745,13 +2348,6 @@ function interfaces.Fz15Container.describe_with_self_call(self: interfaces.Fz15C
     return
 }
 
-function interfaces.Fz15IntBox.Fz15Container<int>.size(self: interfaces.Fz15IntBox) -> int {
-    load_var self
-    load_field .items
-    container_len
-    return
-}
-
 function interfaces.Fz16Container.get_or(self: interfaces.Fz16Container<#1>, fallback: #1) -> #1 {
     load_var self
     load_type interfaces.Fz16Container<#1>
@@ -1759,12 +2355,6 @@ function interfaces.Fz16Container.get_or(self: interfaces.Fz16Container<#1>, fal
     virtual_call nargs=1 ntypeargs=0
     store_var _0
     load_var _0
-    return
-}
-
-function interfaces.Fz16IntBox.Fz16Container<int>.get(self: interfaces.Fz16IntBox) -> int {
-    load_var self
-    load_field .value
     return
 }
 
@@ -1791,227 +2381,13 @@ function interfaces.Fz24Container.identity(self: interfaces.Fz24Container<#1>, x
     return
 }
 
-function interfaces.Fz24IntBag.Fz24Container<int>.get(self: interfaces.Fz24IntBag) -> int {
-    load_var self
-    load_field .items
-    load_const 0
-    load_array_element
-    return
-}
-
-function interfaces.Fz29Dog.Fz29Animal.speak(self: interfaces.Fz29Dog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.Fz31Cat.Fz31Animal.speak(self: interfaces.Fz31Cat) -> string {
-    load_const "Meow!"
-    return
-}
-
-function interfaces.Fz31Dog.Fz31Animal.speak(self: interfaces.Fz31Dog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.Fz32Dog.Fz32Animal.speak(self: interfaces.Fz32Dog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.Fz33Dog.Fz33Animal.speak(self: interfaces.Fz33Dog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.Fz34IntBox.Fz34Box<int>.get(self: interfaces.Fz34IntBox) -> int {
-    load_const 1
-    return
-}
-
-function interfaces.Fz35IntBox.Fz35Box<int>.get(self: interfaces.Fz35IntBox) -> int {
-    load_const 1
-    return
-}
-
-function interfaces.Fz38DatabaseError.Fz38IError.describe(self: interfaces.Fz38DatabaseError) -> string {
-    load_const "db: "
-    load_var self
-    load_field .msg
-    bin_op +
-    return
-}
-
-function interfaces.Fz38MyFetcher.Fz38DataFetcher.fetch(self: interfaces.Fz38MyFetcher, key: string) -> string {
-    load_var key
-    load_const "net"
-    cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "data:"
-    load_var key
-    bin_op +
-    return
-
-  L1:
-    load_const "connection refused"
-    init_instance user.interfaces.Fz38NetworkError .msg
-    throw
-}
-
-function interfaces.Fz38NetworkError.Fz38IError.describe(self: interfaces.Fz38NetworkError) -> string {
-    load_const "network: "
-    load_var self
-    load_field .msg
-    bin_op +
-    return
-}
-
-function interfaces.Fz39ConcreteErr.Fz39IError.describe(self: interfaces.Fz39ConcreteErr) -> string {
-    load_var self
-    load_field .msg
-    return
-}
-
-function interfaces.Fz40Dog.Fz40Animal.speak(self: interfaces.Fz40Dog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.Fz41Dog.Fz41Animal.speak(self: interfaces.Fz41Dog) -> string {
-    load_const "Woof!"
-    return
-}
-
 function interfaces.Fz42Printable.print(self: interfaces.Fz42Printable) -> string {
     load_const "printable"
     return
 }
 
-function interfaces.Fz43IntProducer.Fz43Producer<int>.produce(self: interfaces.Fz43IntProducer) -> int {
-    load_var self
-    load_field .val
-    return
-}
-
 function interfaces.Fz44Wrapper.wrap(self: interfaces.Fz44Wrapper<#1>, x: #1) -> #1 {
     load_var x
-    return
-}
-
-function interfaces.Fz45Dog.Fz45Animal.speak(self: interfaces.Fz45Dog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.GbapMultiFormat.GbapConverter<float>.convert(self: interfaces.GbapMultiFormat) -> float {
-    load_const 42.5
-    return
-}
-
-function interfaces.GbapMultiFormat.GbapConverter<int>.convert(self: interfaces.GbapMultiFormat) -> int {
-    load_const 42
-    return
-}
-
-function interfaces.GbdmIntBox.GbdmConverter<int>.convert(self: interfaces.GbdmIntBox) -> int {
-    load_var self
-    load_field .value
-    return
-}
-
-function interfaces.GbspPair.GbspEquatable.eq(self: interfaces.GbspPair, other: interfaces.GbspPair) -> bool {
-    load_var self
-    load_field .a
-    load_var other
-    load_field .a
-    cmp_int_op ==
-    return
-}
-
-function interfaces.GictIntStack.GictContainer<int>.add(self: interfaces.GictIntStack, item: int) -> void {
-    load_type int
-    load_var self
-    load_field .items
-    load_var item
-    call baml.Array.push
-    return
-}
-
-function interfaces.GictIntStack.GictContainer<int>.get(self: interfaces.GictIntStack, index: int) -> int | null {
-    load_var self
-    load_field .items
-    load_var index
-    load_array_element
-    return
-}
-
-function interfaces.GictIntStack.GictContainer<int>.size(self: interfaces.GictIntStack) -> int {
-    load_var self
-    load_field .items
-    container_len
-    return
-}
-
-function interfaces.GimpEchoer.GimpEcho<int>.echo(self: interfaces.GimpEchoer, value: #0) -> #0 {
-    load_var value
-    return
-}
-
-function interfaces.GoopDescriber<T>$for$GoopBox<T>.describe(self: interfaces.GoopBox<#0>, value: #1) -> string {
-    load_type #0
-    call baml.root.ToString$for$reflect.Type.to_string
-    store_var _4
-    load_type #1
-    call baml.root.ToString$for$reflect.Type.to_string
-    store_var _6
-    load_var _4
-    load_const ":"
-    bin_op +
-    load_var _6
-    bin_op +
-    return
-}
-
-function interfaces.GrlrLabel$for$T[].label(self: #0[]) -> string {
-    load_const "list"
-    return
-}
-
-function interfaces.GrmrLabel$for$map<string, T>.label(self: map<string, #0>) -> string {
-    load_const "map"
-    return
-}
-
-function interfaces.GrpaBox.GrpaParent<int>.describe(self: interfaces.GrpaBox) -> string {
-    load_const "parent-int"
-    return
-}
-
-function interfaces.GrptParent<int>$for$int.describeGrpt(self: int) -> string {
-    load_const "parent-int"
-    return
-}
-
-function interfaces.HiadCat.HiadAnimal.speak(self: interfaces.HiadCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.HiadDog.HiadAnimal.speak(self: interfaces.HiadDog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.HudA.HudSpeaker.speak(self: interfaces.HudA) -> string {
-    load_const "interface"
-    return
-}
-
-function interfaces.HudB.speak(self: interfaces.HudB) -> string {
-    load_const "inherent"
     return
 }
 
@@ -2026,91 +2402,8 @@ function interfaces.IdmcEquatable.neq(self: interfaces.IdmcEquatable, other: #0)
     return
 }
 
-function interfaces.IdmcPair.IdmcEquatable.eq(self: interfaces.IdmcPair, other: interfaces.IdmcPair) -> bool {
-    load_var self
-    load_field .a
-    load_var other
-    load_field .a
-    cmp_int_op ==
-    return
-}
-
 function interfaces.IdmrDescribable.describe(self: interfaces.IdmrDescribable) -> string {
     load_const "default"
-    return
-}
-
-function interfaces.ItampBoth.ItampConv<int, string>.tag(self: interfaces.ItampBoth) -> string {
-    load_const "int->string"
-    return
-}
-
-function interfaces.ItampBoth.ItampConv<string, int>.tag(self: interfaces.ItampBoth) -> string {
-    load_const "string->int"
-    return
-}
-
-function interfaces.IticDog.IticAnimal.speak(self: interfaces.IticDog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.IticDog.IticSwimmer.swim(self: interfaces.IticDog) -> string {
-    load_const "splash"
-    return
-}
-
-function interfaces.ItvdCat.ItvdAnimal.speak(self: interfaces.ItvdCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.MdciCat.MdciAnimal.speak(self: interfaces.MdciCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.MdciDog.MdciAnimal.speak(self: interfaces.MdciDog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.MdidCat.MdidAnimal.speak(self: interfaces.MdidCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.MdidDog.MdidAnimal.speak(self: interfaces.MdidDog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.MdifDog.MdifAnimal.speak(self: interfaces.MdifDog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.MntcDog.MntcAnimal.speak(self: interfaces.MntcDog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.MoiwDog.MoiwAnimal.speak(self: interfaces.MoiwDog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.MoiwDuck.MoiwAnimal.speak(self: interfaces.MoiwDuck) -> string {
-    load_const "Quack!"
-    return
-}
-
-function interfaces.MsmaBox.MsmaEquatable.same(self: interfaces.MsmaBox, other: interfaces.MsmaBox) -> bool {
-    load_var self
-    load_field .value
-    load_var other
-    load_field .value
-    cmp_int_op ==
     return
 }
 
@@ -2120,37 +2413,6 @@ function interfaces.OdndAnimal.describe(self: interfaces.OdndAnimal) -> string {
     load_type interfaces.OdndAnimal
     virtual_load_field .name
     bin_op +
-    return
-}
-
-function interfaces.OdndCat.OdndAnimal.describe(self: interfaces.OdndCat) -> string {
-    load_const "cat:"
-    load_var self
-    load_field .name
-    bin_op +
-    return
-}
-
-function interfaces.OobpDebuggable$for$int.debugOobp(self: int) -> string {
-    load_const "int"
-    return
-}
-
-function interfaces.OobvDog.OobvAnimal.speak(self: interfaces.OobvDog) -> string {
-    load_const "woof"
-    return
-}
-
-function interfaces.PtuMulti.PtuPipe<E | E2>.run(self: interfaces.PtuMulti<#0, #1>) -> string {
-    load_const "multi:"
-    load_var self
-    load_field .tag
-    bin_op +
-    return
-}
-
-function interfaces.RcflLeaf.RcflA.tag(self: interfaces.RcflLeaf) -> string {
-    load_const "leaf"
     return
 }
 
@@ -2167,125 +2429,8 @@ function interfaces.RcpfPerson.introduce(self: interfaces.RcpfPerson) -> string 
     return
 }
 
-function interfaces.RcpmBox.RcpmParent<int>.describe(self: interfaces.RcpmBox) -> string {
-    load_const "int"
-    return
-}
-
-function interfaces.RcpmBox.RcpmParent<string>.describe(self: interfaces.RcpmBox) -> string {
-    load_const "string"
-    return
-}
-
-function interfaces.RibiDog.RibiAnimal.speak(self: interfaces.RibiDog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.RiigDog.RiigAnimal.speak(self: interfaces.RiigDog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.RitfDog.RitfAnimal.speak(self: interfaces.RitfDog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.RitvEmployee.RitvPerson.introduce(self: interfaces.RitvEmployee) -> string {
-    load_const "hi"
-    return
-}
-
-function interfaces.SapcPolite.SapcFarewell.bye(self: interfaces.SapcPolite) -> string {
-    load_var self
-    load_type interfaces.SapcGreeter
-    load_const "greet"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _2
-    load_var _2
-    load_const " — and goodbye!"
-    bin_op +
-    return
-}
-
-function interfaces.SapcPolite.SapcGreeter.greet(self: interfaces.SapcPolite) -> string {
-    load_const "Hello, I'm "
-    load_var self
-    load_field .name
-    bin_op +
-    return
-}
-
-function interfaces.SgidMultiFormat.SgidConverter<float>.convert(self: interfaces.SgidMultiFormat) -> float {
-    load_const 42.5
-    return
-}
-
-function interfaces.SgidMultiFormat.SgidConverter<int>.convert(self: interfaces.SgidMultiFormat) -> int {
-    load_const 42
-    return
-}
-
-function interfaces.SpmaAcc.SpmaAdder.addAll(self: interfaces.SpmaAcc, others: interfaces.SpmaAcc[]) -> int {
-    load_var self
-    load_field .base
-    load_var others
-    load_const 0
-    load_array_element
-    load_field .base
-    add_int
-    return
-}
-
-function interfaces.SritBox.SritCloneable.clone(self: interfaces.SritBox) -> interfaces.SritBox {
-    load_var self
-    load_field .value
-    init_instance user.interfaces.SritBox .value
-    return
-}
-
-function interfaces.SrtcBox.SrtcCloneable.clone(self: interfaces.SrtcBox) -> interfaces.SrtcBox {
-    load_var self
-    load_field .value
-    init_instance user.interfaces.SrtcBox .value
-    return
-}
-
-function interfaces.TiduWorker.TiduFallible.run(self: interfaces.TiduWorker) -> string {
-    load_const "caught"
-    init_instance user.interfaces.TiduBoom .message
-    throw
-}
-
-function interfaces.Uf06UBox.Uf06Box<int | string>.get(self: interfaces.Uf06UBox) -> int | string {
-    load_var self
-    load_field .value
-    return
-}
-
-function interfaces.Uf08Dog.Uf08Animal.speak(self: interfaces.Uf08Dog) -> string {
-    load_const "Woof!"
-    return
-}
-
 function interfaces.Uf08Dog.fetch(self: interfaces.Uf08Dog) -> string {
     load_const "fetched"
-    return
-}
-
-function interfaces.Uf09Cat.Uf09Animal.speak(self: interfaces.Uf09Cat) -> string {
-    load_const "Meow"
-    return
-}
-
-function interfaces.Uf09Dog.Uf09Animal.speak(self: interfaces.Uf09Dog) -> string {
-    load_const "Woof"
-    return
-}
-
-function interfaces.Uf10Debuggable$for$string.debugUf10(self: string) -> string {
-    load_const "str"
     return
 }
 
@@ -2294,73 +2439,8 @@ function interfaces.Ufp1Greeter.greet(self: interfaces.Ufp1Greeter) -> string {
     return
 }
 
-function interfaces.Ufp2UBox.Ufp2Box<(int | string)?>.get(self: interfaces.Ufp2UBox) -> int | string | null {
-    load_var self
-    load_field .value
-    return
-}
-
-function interfaces.Ufp5UBox.Ufp5Box<int | int>.get(self: interfaces.Ufp5UBox) -> int | int {
-    load_var self
-    load_field .value
-    return
-}
-
 function interfaces.UrdmPrintable.display(self: interfaces.UrdmPrintable) -> string {
     load_const "default"
-    return
-}
-
-function interfaces.UricPrintable$for$UricBox<T>.display(self: interfaces.UricBox<#0>) -> string {
-    load_const "box"
-    return
-}
-
-function interfaces.UriiPrintable$for$UriiBox<T>.display(self: interfaces.UriiBox<#0>) -> string {
-    load_const "box"
-    return
-}
-
-function interfaces.UrisPrintable$for$UrisBox<T>.display(self: interfaces.UrisBox<#0>) -> string {
-    load_const "box"
-    return
-}
-
-function interfaces.UrniContainer<T[]>$for$UrniWrapper<T>.get(self: interfaces.UrniWrapper<#0>) -> #0[] {
-    load_var self
-    load_field .values
-    return
-}
-
-function interfaces.UrrcParent<T>$for$UrrcWrapper<T>.get(self: interfaces.UrrcWrapper<#0>) -> #0 {
-    load_var self
-    load_field .value
-    return
-}
-
-function interfaces.UrrsPrintable$for$UrrsBox<T>.display(self: interfaces.UrrsBox<#0>) -> string {
-    load_const "box"
-    return
-}
-
-function interfaces.UrrtSame$for$UrrtPair<T, T>.tag(self: interfaces.UrrtPair<#0, #0>) -> string {
-    load_const "same"
-    return
-}
-
-function interfaces.VdcBoth.VdcTagged<VdcAnimal | VdcDog>.tag(self: interfaces.VdcBoth) -> string {
-    load_const "animal-or-dog"
-    return
-}
-
-function interfaces.VdcBoth.VdcTagged<VdcAnimal>.tag(self: interfaces.VdcBoth) -> string {
-    load_const "animal"
-    return
-}
-
-function interfaces.W301IntThing.W301Base<int>.base_get(self: interfaces.W301IntThing) -> int {
-    load_var self
-    load_field .value
     return
 }
 
@@ -2374,110 +2454,13 @@ function interfaces.W301Sub.sub_get(self: interfaces.W301Sub<#1>) -> #1 {
     return
 }
 
-function interfaces.W302Loud$for$T.shout(self: #0) -> string {
-    load_const "loud"
-    return
-}
-
-function interfaces.W302Printable$for$T.display(self: #0) -> string {
-    load_var self
-    load_type interfaces.W302Named
-    virtual_load_field .name
-    return
-}
-
 function interfaces.W304Named.describe(self: interfaces.W304Named) -> string {
     load_const "x"
     return
 }
 
-function interfaces.W304P.W304Named.describe(self: interfaces.W304P) -> string {
-    load_const "default.name=["
-    load_var self
-    load_field .name
-    bin_op +
-    load_const "] self.name=["
-    bin_op +
-    load_var self
-    load_field .name
-    bin_op +
-    load_const "] as=["
-    bin_op +
-    load_var self
-    load_type interfaces.W304Named
-    virtual_load_field .name
-    bin_op +
-    load_const "]"
-    bin_op +
-    return
-}
-
-function interfaces.W307IntBox.W307Box<int>.get(self: interfaces.W307IntBox) -> int {
-    load_const 1
-    return
-}
-
-function interfaces.W307StringBox.W307Box<string>.get(self: interfaces.W307StringBox) -> string {
-    load_const "hi"
-    return
-}
-
 function interfaces.W311Base.id(self: interfaces.W311Base) -> string {
     load_const "base"
-    return
-}
-
-function interfaces.W312Cat.W312Animal.speak(self: interfaces.W312Cat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.W312Dog.W312Animal.speak(self: interfaces.W312Dog) -> string {
-    load_const "Woof!"
-    return
-}
-
-function interfaces.W315Debuggable$for$int.debugW315(self: int) -> string {
-    load_const "int"
-    return
-}
-
-function interfaces.W3bgIntBox.W3bgBox<int>.get(self: interfaces.W3bgIntBox) -> int {
-    load_const 1
-    return
-}
-
-function interfaces.W3bgStringBox.W3bgBox<string>.get(self: interfaces.W3bgStringBox) -> string {
-    load_const "hi"
-    return
-}
-
-function interfaces.W3bmPrintable$for$W3bmBox<T>.display(self: interfaces.W3bmBox<#0>) -> string {
-    load_const "box"
-    return
-}
-
-function interfaces.W3ooDebuggable$for$int.debugW3oo(self: int) -> string {
-    load_const "int"
-    return
-}
-
-function interfaces.W3spPerson.W3spNamed.greet(self: interfaces.W3spPerson) -> string {
-    load_const "Hi "
-    load_var self
-    load_type interfaces.W3spNamed
-    virtual_load_field .name
-    bin_op +
-    return
-}
-
-function interfaces.W3umCat.W3umAnimal.speak(self: interfaces.W3umCat) -> string {
-    load_const "Meow."
-    return
-}
-
-function interfaces.W3umDog.W3umAnimal.speak(self: interfaces.W3umDog) -> string {
-    load_const "Woof!"
     return
 }
 
@@ -4155,31 +4138,6 @@ function interfaces.hiad_main() -> string {
     return
 }
 
-function interfaces.hud_speak(x: interfaces.HudA | interfaces.HudB) -> string {
-    load_var x
-    is_type interfaces.HudA
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var x
-    is_type interfaces.HudB
-    pop_jump_if_false L3
-    load_var x
-    call user.interfaces.HudB.speak
-    jump L2
-
-  L1:
-    load_var x
-    call user.interfaces.HudA.HudSpeaker.speak
-
-  L2:
-    return
-
-  L3:
-    unreachable
-}
-
 function interfaces.idmc_differ(x: #0, y: #0) -> bool {
     load_var2 1 2
     load_type interfaces.IdmcEquatable
@@ -4740,7 +4698,7 @@ function interfaces.ritv_main() -> bool {
 
 function interfaces.rtit_main() -> string {
     load_type interfaces.RtitAnimal
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 
@@ -5478,10 +5436,10 @@ function interfaces.w306_main() -> string {
 
 function interfaces.w306_names() -> string {
     load_type #0
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var naked
     load_type interfaces.W306Box<#0>
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var wrapped
     load_const "naked="
     load_var naked

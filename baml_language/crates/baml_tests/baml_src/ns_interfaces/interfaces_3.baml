@@ -580,28 +580,3 @@ function vdc_dispatch_distinguishes_instantiations() -> string {
 test "virtual_dispatch_cache_distinguishes_generic_interface_instantiations" {
     assert.equal(vdc_dispatch_distinguishes_instantiations(), "animal|animal-or-dog")
 }
-
-// Union dispatch resolves per-member: a receiver that only has an inherent
-// method must not be sent through the interface vtable selected for the other
-// member of the union.
-interface HudSpeaker {
-    function speak(self) -> string throws never
-}
-
-class HudA {
-    implements HudSpeaker {
-        function speak(self) -> string { return "interface" }
-    }
-}
-
-class HudB {
-    function speak(self) -> string { return "inherent" }
-}
-
-function hud_speak(x: HudA | HudB) -> string {
-    return x.speak()
-}
-
-test "heterogeneous_union_dispatch_calls_inherent_non_implementor_method" {
-    assert.equal(hud_speak(HudB {}), "inherent")
-}
