@@ -447,7 +447,9 @@ public sealed class BamlValue : IEquatable<BamlValue>
         {
             fields = new ReadOnlyCollection<KeyValuePair<string, BamlValue>>(
                 value.ReadClassFields()
-                    .Select(pair => new KeyValuePair<string, BamlValue>(pair.Key, new BamlValue(pair.Value)))
+                    .Select(pair => new KeyValuePair<string, BamlValue>(
+                        pair.Key,
+                        new BamlValue(pair.Value, promptRegistry)))
                     .ToArray());
             return true;
         }
@@ -473,7 +475,7 @@ public sealed class BamlValue : IEquatable<BamlValue>
         {
             payload = payload.WithOccurrenceType(selectedType);
         }
-        BamlValue selected = new(payload);
+        BamlValue selected = new(payload, promptRegistry);
         int[] matchingCases = value.UnionSelectedTypeMetadata is { Length: > 0 }
             ? Type.Arguments
                 .Select((argument, index) => (argument, index))
@@ -500,7 +502,9 @@ public sealed class BamlValue : IEquatable<BamlValue>
             && UnionOptionMetadata(value.UnionSelfTypeMetadata, matchingCases[0])
                 is { } inferredSelectedType)
         {
-            selected = new BamlValue(payload.WithOccurrenceType(inferredSelectedType));
+            selected = new BamlValue(
+                payload.WithOccurrenceType(inferredSelectedType),
+                promptRegistry);
         }
 
         selectedValue = selected;
@@ -779,19 +783,23 @@ public sealed class BamlValue : IEquatable<BamlValue>
     }
 
     internal IReadOnlyList<BamlValue> ReadListValues() =>
-        value.ReadList().Select(item => new BamlValue(item)).ToArray();
+        value.ReadList().Select(item => new BamlValue(item, promptRegistry)).ToArray();
 
     internal IReadOnlyList<KeyValuePair<string, BamlValue>> ReadMapValues() =>
         value.ReadMapEntries()
-            .Select(pair => new KeyValuePair<string, BamlValue>(pair.Key, new BamlValue(pair.Value)))
+            .Select(pair => new KeyValuePair<string, BamlValue>(
+                pair.Key,
+                new BamlValue(pair.Value, promptRegistry)))
             .ToArray();
 
     internal IReadOnlyList<KeyValuePair<string, BamlValue>> ReadClassValues() =>
         value.ReadClassFields()
-            .Select(pair => new KeyValuePair<string, BamlValue>(pair.Key, new BamlValue(pair.Value)))
+            .Select(pair => new KeyValuePair<string, BamlValue>(
+                pair.Key,
+                new BamlValue(pair.Value, promptRegistry)))
             .ToArray();
 
-    internal BamlValue ReadUnionValue() => new(value.ReadUnionPayload());
+    internal BamlValue ReadUnionValue() => new(value.ReadUnionPayload(), promptRegistry);
 
     private static TItem[] SnapshotBounded<TItem>(
         IEnumerable<TItem> values,

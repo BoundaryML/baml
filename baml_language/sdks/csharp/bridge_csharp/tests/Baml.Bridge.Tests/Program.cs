@@ -2302,6 +2302,54 @@ internal static unsafe class Program
         BamlValue promptValue = BamlValue.From(prompt);
         BamlPrompt roundTrippedPrompt = promptValue.As<BamlPrompt>();
 
+        var promptEntries = new[]
+        {
+            new KeyValuePair<string, BamlGeneratedValue>(
+                "prompt",
+                promptValue.GeneratedValue),
+        };
+        var nestedPromptList = new BamlValue(
+            BamlGeneratedValue.CreateList([promptValue.GeneratedValue]),
+            registry);
+        var nestedPromptMap = new BamlValue(
+            BamlGeneratedValue.CreateMap(promptEntries),
+            registry);
+        var nestedPromptClass = new BamlValue(
+            BamlGeneratedValue.CreateClass(
+                "test.PromptHolder",
+                promptEntries,
+                []),
+            registry);
+        BamlTy promptType = new() { PromptAst = new BamlTyPromptAst() };
+        BamlTy promptUnionType = new() { Union = new BamlTyUnion() };
+        promptUnionType.Union.Options.Add(promptType.Clone());
+        promptUnionType.Union.Options.Add(PrimitiveType(
+            BamlTyPrimitiveKind.BamlTyPrimitiveString));
+        var nestedPromptUnion = new BamlValue(
+            BamlGeneratedValue.CreateUnion(
+                promptUnionType.ToByteArray(),
+                promptType.ToByteArray(),
+                "ai.Prompt",
+                promptValue.GeneratedValue),
+            registry);
+        Require(
+            nestedPromptList.ReadListValues()[0].TryGet(out BamlPrompt? listPrompt)
+                && nestedPromptMap.ReadMapValues()[0].Value.TryGet(out BamlPrompt? mapPrompt)
+                && nestedPromptClass.ReadClassValues()[0].Value.TryGet(out BamlPrompt? classPrompt)
+                && nestedPromptClass.TryGetClassFields(out var promptFields)
+                && promptFields[0].Value.TryGet(out BamlPrompt? publicClassPrompt)
+                && nestedPromptUnion.ReadUnionValue().TryGet(out BamlPrompt? unionPrompt)
+                && nestedPromptUnion.TryGetUnion(out int promptCase, out BamlValue? selectedPrompt)
+                && promptCase == 0
+                && selectedPrompt.TryGet(out BamlPrompt? publicUnionPrompt)
+                && listPrompt is not null
+                && mapPrompt is not null
+                && classPrompt is not null
+                && publicClassPrompt is not null
+                && unionPrompt is not null
+                && publicUnionPrompt is not null,
+            "nested portable Prompt values lost their generated registry");
+
         SetFakeResult(new BamlOutboundValue { StringValue = "user: Describe image" });
         Require(
             roundTrippedPrompt.Text() == "user: Describe image"

@@ -46,6 +46,7 @@ def _drain_runtime_stream(label: str, stream: Any) -> dict[str, Any]:
         if isinstance(partial, Done):
             break
         next_calls += 1
+        assert next_calls < 10_000, "dynamic runtime stream failed to terminate"
         if partial is None:
             print(f"{label} partial[{next_calls}]=None")
             continue
@@ -59,7 +60,6 @@ def _drain_runtime_stream(label: str, stream: Any) -> dict[str, Any]:
         if not checked_pass_back:
             _assert_repeated_pass_back(partial, hs7_echo_runtime_value, data)
             checked_pass_back = True
-        assert next_calls < 10_000, "dynamic runtime stream failed to terminate"
 
     assert non_null_partials > 0
     final = stream.final()

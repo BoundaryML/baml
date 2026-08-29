@@ -64,21 +64,10 @@ pub(crate) fn translate(ty: &Ty, ctx: &TyCtx<'_>) -> Result<TokenStream, Unsuppo
 /// its class name, message, and trace) while retaining the typed Rust surface
 /// for every representable concrete arm.
 pub(crate) fn translate_throws(ty: &Ty, ctx: &TyCtx<'_>) -> Result<TokenStream, Unsupported> {
-    match ty {
-        Ty::Interface(..) => Ok(quote! { ::core::convert::Infallible }),
-        Ty::Union(items, attr) => {
-            let representable: Vec<_> = items
-                .iter()
-                .filter(|item| unions::arm_is_representable(item, ctx.analysis))
-                .cloned()
-                .collect();
-            translate(&Ty::Union(representable, attr.clone()), ctx)
-        }
-        Ty::Class(..) | Ty::TypeAlias(..) if !unions::arm_is_representable(ty, ctx.analysis) => {
-            Ok(quote! { ::core::convert::Infallible })
-        }
-        _ => translate(ty, ctx),
-    }
+    let Some(filtered) = unions::filter_throws_type(ty, ctx.analysis) else {
+        return Ok(quote! { ::core::convert::Infallible });
+    };
+    translate(&filtered, ctx)
 }
 
 /// The absolute `crate::…` path of an emitted nominal type.
@@ -383,6 +372,107 @@ mod tests {
         translate(ty, &ctx)
             .map(|t| t.to_string())
             .unwrap_or_else(|u| panic!("expected {ty} to translate, got: {}", u.reason))
+    }
+
+    fn rendered_throws(ty: &Ty, pool: &SymbolPool) -> String {
+        let (analysis, warnings) = analyze(pool);
+        assert!(warnings.is_empty(), "unexpected analysis warnings");
+        let unions = crate::unions::collect(pool, &analysis);
+        let ctx = TyCtx {
+            analysis: &analysis,
+            unions: &unions,
+            leaf: &[],
+            boxing_for: None,
+            generic_params: &[],
+        };
+        translate_throws(ty, &ctx)
+            .map(|t| t.to_string())
+            .unwrap_or_else(|u| panic!("expected throws {ty} to translate, got: {}", u.reason))
+    }
+
+    fn open_interface() -> Ty {
+        Ty::Interface(
+            name("user", &[], "OpenError"),
+            Vec::new(),
+            Vec::new(),
+            baml_base::TyAttr::EMPTY,
+        )
+    }
+
+    fn concrete_or_open_interface() -> Ty {
+        Ty::Union(
+            vec![
+                Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                open_interface(),
+            ],
+            baml_base::TyAttr::EMPTY,
+        )
+    }
+
+    #[test]
+    fn throws_with_no_representable_union_arms_is_infallible() {
+        let throws = Ty::Union(vec![open_interface()], baml_base::TyAttr::EMPTY);
+        assert_eq!(
+            rendered_throws(&throws, &SymbolPool::default()),
+            ":: core :: convert :: Infallible"
+        );
+    }
+
+    #[test]
+    fn throws_filtering_recurses_through_lists_and_maps() {
+        let list = Ty::List(
+            Box::new(concrete_or_open_interface()),
+            baml_base::TyAttr::EMPTY,
+        );
+        let map = Ty::Map {
+            key: Box::new(Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            }),
+            value: Box::new(concrete_or_open_interface()),
+            attr: baml_base::TyAttr::EMPTY,
+        };
+        let pool = SymbolPool::default();
+
+        assert_eq!(
+            rendered_throws(&list, &pool),
+            ":: std :: vec :: Vec < :: core :: primitive :: i64 >"
+        );
+        assert_eq!(
+            rendered_throws(&map, &pool),
+            ":: baml_bridge :: Map < :: std :: string :: String , :: core :: primitive :: i64 >"
+        );
+    }
+
+    #[test]
+    fn throws_filtering_recurses_through_class_arguments() {
+        let envelope = name("user", &[], "Envelope");
+        let mut envelope_symbol = class(
+            &envelope,
+            vec![(
+                "value",
+                Ty::TypeVar(
+                    baml_codegen_types::ParamTy::new(0, baml_base::Name::new("T")),
+                    baml_base::TyAttr::EMPTY,
+                ),
+            )],
+        );
+        let Symbol::Class(envelope_class) = &mut envelope_symbol else {
+            unreachable!()
+        };
+        envelope_class.generic_params = vec![baml_base::Name::new("T")];
+        let pool = SymbolPool::from([(envelope.clone(), envelope_symbol)]);
+        let throws = Ty::Class(
+            envelope,
+            vec![concrete_or_open_interface()],
+            baml_base::TyAttr::EMPTY,
+        );
+
+        assert_eq!(
+            rendered_throws(&throws, &pool),
+            "crate :: Envelope < :: core :: primitive :: i64 >"
+        );
     }
 
     #[test]

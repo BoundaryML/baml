@@ -3,6 +3,7 @@ package generated_test
 import (
 	"context"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -80,6 +81,11 @@ func Test_function_spec_prompt_uses_generated_ai_prompt_type_and_is_reusable(t *
 	}
 	if len(firstMessages) == 0 || len(secondMessages) != len(firstMessages) {
 		t.Fatalf("repeated prompt message counts = %d then %d", len(firstMessages), len(secondMessages))
+	}
+	for i := range firstMessages {
+		if !reflect.DeepEqual(secondMessages[i], firstMessages[i]) {
+			t.Fatalf("repeated prompt message[%d] = %#v then %#v", i, firstMessages[i], secondMessages[i])
+		}
 	}
 }
 

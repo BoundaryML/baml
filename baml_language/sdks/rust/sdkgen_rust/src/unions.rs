@@ -143,7 +143,9 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
             register_unions_in(ty, &leaf, analysis, &mut registry);
         }
         for ty in throws_tys {
-            register_throws_unions_in(ty, &leaf, analysis, &mut registry);
+            if let Some(filtered) = filter_throws_type(ty, analysis) {
+                register_unions_in(&filtered, &leaf, analysis, &mut registry);
+            }
         }
     }
 
@@ -164,46 +166,45 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
     registry
 }
 
-/// Register unions as they appear on Rust's typed error surface. Interface
-/// arms are intentionally omitted: open interfaces cannot become a closed
-/// Rust enum, and values selecting those arms are preserved by
-/// `baml_bridge::Error::Runtime` instead.
-fn register_throws_unions_in(
-    ty: &Ty,
-    leaf: &[String],
-    analysis: &Analysis,
-    registry: &mut UnionRegistry,
-) {
+/// Project a throws contract onto Rust's typed error surface. Open interfaces
+/// are omitted recursively; values selecting those arms remain available as
+/// `baml_bridge::Error::Runtime` instead of entering a misleading typed arm.
+pub(crate) fn filter_throws_type(ty: &Ty, analysis: &Analysis) -> Option<Ty> {
     match ty {
-        Ty::Union(items, _) => {
-            let representable: Vec<_> = items
+        Ty::Interface(..) => None,
+        Ty::Union(items, attr) => {
+            let representable = items
                 .iter()
+                .filter_map(|item| filter_throws_type(item, analysis))
                 .filter(|item| arm_is_representable(item, analysis))
-                .cloned()
-                .collect();
-            let (arms, _) = strip_null(&representable);
-            if arms.len() >= 2
-                && let Some(union_enum) = synthesize(&arms, analysis)
-            {
-                registry
-                    .by_leaf
-                    .entry(leaf.to_vec())
-                    .or_default()
-                    .entry(shape_key(&arms))
-                    .or_insert(union_enum);
-            }
-            for item in &representable {
-                register_throws_unions_in(item, leaf, analysis, registry);
+                .collect::<Vec<_>>();
+            if representable.is_empty() {
+                None
+            } else {
+                Some(Ty::Union(representable, attr.clone()))
             }
         }
-        Ty::List(inner, _) => register_throws_unions_in(inner, leaf, analysis, registry),
-        Ty::Map { value, .. } => register_throws_unions_in(value, leaf, analysis, registry),
-        Ty::Class(_, args, _) => {
-            for arg in args {
-                register_throws_unions_in(arg, leaf, analysis, registry);
+        Ty::List(inner, attr) => Some(Ty::List(
+            Box::new(filter_throws_type(inner, analysis)?),
+            attr.clone(),
+        )),
+        Ty::Map { key, value, attr } => Some(Ty::Map {
+            key: key.clone(),
+            value: Box::new(filter_throws_type(value, analysis)?),
+            attr: attr.clone(),
+        }),
+        Ty::Class(name, args, attr) => {
+            if !analysis.is_emitted(name) {
+                return None;
             }
+            let args = args
+                .iter()
+                .map(|arg| filter_throws_type(arg, analysis))
+                .collect::<Option<Vec<_>>>()?;
+            Some(Ty::Class(name.clone(), args, attr.clone()))
         }
-        _ => {}
+        Ty::TypeAlias(name, _) if !analysis.is_emitted(name) => None,
+        _ => Some(ty.clone()),
     }
 }
 
