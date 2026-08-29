@@ -298,6 +298,110 @@ function escape(literal: string) -> string throws never {
     $rust_function
 }
 
+// ─── Replacement plumbing ────────────────────────────────────────────────────
+//
+// `string.replace` and `string.replace_all` differ only in a `bool`, so the
+// four-way search × replacement dispatch lives in one place. It sits here
+// rather than on `String` so the class that every BAML program touches does
+// not carry three private helpers written against types it does not own.
+//
+// Each leaf is the cheapest form of the job: two literal-only native calls,
+// two engine-side template expansions, and two BAML scan loops for the
+// callback forms, which are the only ones that have to re-enter user code per
+// match.
+
+/// Shared body of `string.replace` (`all = false`) and `string.replace_all`.
+function _replace<E>(
+    haystack: string,
+    search: string | Regex,
+    replacement: string | ((Match) -> string throws E),
+    all: bool,
+) -> string throws E {
+    match (search) {
+        string => match (replacement) {
+            string => if (all) {
+                haystack._replace_all_literal(search, replacement)
+            } else {
+                haystack._replace_literal(search, replacement)
+            },
+            let f: (Match) -> string throws E => {
+                _replace_literal_with(haystack, search, f, all)
+            },
+        },
+        Regex => match (replacement) {
+            string => if (all) {
+                search._replace_all_template(haystack, replacement)
+            } else {
+                search._replace_template(haystack, replacement)
+            },
+            let f: (Match) -> string throws E => {
+                _replace_pattern_with(haystack, search, f, all)
+            },
+        },
+    }
+}
+
+/// Literal `search`, replacement computed per occurrence by `f`.
+function _replace_literal_with<E>(
+    haystack: string,
+    search: string,
+    f: (Match) -> string throws E,
+    all: bool,
+) -> string throws E {
+    let length = haystack.length();
+    let width = search.length();
+    let pieces: string[] = [];
+    let pos = 0;
+    let scanning = true;
+    while (scanning && pos <= length) {
+        match (haystack.slice(pos, length).index_of(search)) {
+            null => {
+                scanning = false;
+            },
+            let offset: int => {
+                let at = pos + offset;
+                pieces.push(haystack.slice(pos, at));
+                pieces.push(f(_literal_match(search, at)));
+                // An empty `search` matches between every pair of characters.
+                // Stepping one codepoint past it terminates the scan and
+                // carries the stepped-over character through; the `slice` is
+                // empty when the match was at the very end.
+                pieces.push(if (width == 0) { haystack.slice(at, at + 1) } else { "" });
+                pos = if (width == 0) { at + 1 } else { at + width };
+                scanning = all;
+            },
+        }
+    }
+    pieces.push(haystack.slice(pos, length));
+    pieces.join("")
+}
+
+/// Pattern `search`, replacement computed per match by `f`.
+function _replace_pattern_with<E>(
+    haystack: string,
+    search: Regex,
+    f: (Match) -> string throws E,
+    all: bool,
+) -> string throws E {
+    let matches: Match[] = if (all) {
+        search.match_all(haystack)
+    } else {
+        match (search.match(haystack)) {
+            null => [],
+            let first: Match => [first],
+        }
+    };
+    let pieces: string[] = [];
+    let pos = 0;
+    for (let m in matches) {
+        pieces.push(haystack.slice(pos, m.start));
+        pieces.push(f(m));
+        pos = m.end;
+    }
+    pieces.push(haystack.slice(pos, haystack.length()));
+    pieces.join("")
+}
+
 /// Builds the `Match` that a literal (non-pattern) search reports.
 ///
 /// A literal search has no capture groups, so `groups` holds only the whole

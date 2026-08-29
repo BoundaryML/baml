@@ -1075,310 +1075,7 @@ function baml.String._as_string(self: string) -> string {
 function baml.String._replace_all_literal(self: string, search: string, replacement: string) -> string {
 }
 
-function baml.String._replace_impl(self: string, search: string | baml.regex.Regex, replacement: string | ((baml.regex.Match) -> string throws #0), all: bool) -> string {
-    load_var search
-    is_type string
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
-    load_var replacement
-    is_type string
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_type #0
-    load_var2 1 2
-    load_var2 3 4
-    call baml.String._replace_pattern_with
-    jump L10
-
-  L2:
-    load_var all
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_var self
-    call baml.String._as_string
-    store_var _12
-    load_var2 2 6
-    load_var replacement
-    call baml.regex.Regex._replace_template
-    jump L10
-
-  L4:
-    load_var self
-    call baml.String._as_string
-    store_var _11
-    load_var2 2 5
-    load_var replacement
-    call baml.regex.Regex._replace_all_template
-    jump L10
-
-  L5:
-    load_var replacement
-    is_type string
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
-    load_type #0
-    load_var2 1 2
-    load_var2 3 4
-    call baml.String._replace_literal_with
-    jump L10
-
-  L7:
-    load_var all
-    pop_jump_if_false L8
-    jump L9
-
-  L8:
-    load_var2 1 2
-    load_var replacement
-    call baml.String._replace_literal
-    jump L10
-
-  L9:
-    load_var2 1 2
-    load_var replacement
-    call baml.String._replace_all_literal
-
-  L10:
-    return
-}
-
 function baml.String._replace_literal(self: string, search: string, replacement: string) -> string {
-}
-
-function baml.String._replace_literal_with(self: string, search: string, f: (baml.regex.Match) -> string throws #0, all: bool) -> string {
-    load_var self
-    call baml.String.length
-    store_var length
-    load_var search
-    call baml.String.length
-    store_var width
-    load_type string
-    alloc_array 0
-    store_var pieces
-    load_const 0
-    store_var pos
-    load_const true
-
-  L0:
-    jump_if_false L1
-    pop 1
-    load_var2 8 5
-    cmp_int_op <=
-
-  L1:
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var2 1 8
-    load_var length
-    call baml.String.slice
-    store_var _47
-    load_type string
-    load_var2 7 14
-    call baml.Array.push
-    pop 1
-    load_type string
-    load_var pieces
-    load_const ""
-    call baml.Array.join
-    return
-
-  L3:
-    load_var2 1 8
-    load_var length
-    call baml.String.slice
-    load_var search
-    call baml.String.index_of
-    store_var _14
-    load_var _14
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L4
-    jump L11
-
-  L4:
-    load_var2 8 9
-    add_int
-    store_var at
-    load_var2 1 8
-    load_var at
-    call baml.String.slice
-    store_var _24
-    load_type string
-    load_var2 7 11
-    call baml.Array.push
-    pop 1
-    load_var2 2 10
-    call baml.regex._literal_match
-    load_var f
-    call_indirect
-    store_var _29
-    load_type string
-    load_var2 7 12
-    call baml.Array.push
-    pop 1
-    load_var width
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
-    load_const ""
-    store_var _34
-    jump L7
-
-  L6:
-    load_var2 1 10
-    load_var at
-    load_const 1
-    add_int
-    call baml.String.slice
-    store_var _34
-
-  L7:
-    load_type string
-    load_var2 7 13
-    call baml.Array.push
-    pop 1
-    load_var width
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L8
-    jump L9
-
-  L8:
-    load_var2 10 6
-    add_int
-    store_var pos
-    jump L10
-
-  L9:
-    load_var at
-    load_const 1
-    add_int
-    store_var pos
-
-  L10:
-    load_var all
-    jump L0
-
-  L11:
-    load_const false
-    jump L0
-}
-
-function baml.String._replace_pattern_with(self: string, search: baml.regex.Regex, f: (baml.regex.Match) -> string throws #0, all: bool) -> string {
-    load_var self
-    call baml.String._as_string
-    store_var text
-    load_var all
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_var2 2 5
-    call baml.regex.Regex.match
-    store_var _8
-    load_var _8
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var _8
-    load_type baml.regex.Match
-    alloc_array 1
-    store_var matches
-    jump L4
-
-  L2:
-    load_type baml.regex.Match
-    alloc_array 0
-    store_var matches
-    jump L4
-
-  L3:
-    load_var2 2 5
-    call baml.regex.Regex.match_all
-    store_var matches
-
-  L4:
-    load_type string
-    alloc_array 0
-    store_var pieces
-    load_const 0
-    store_var pos
-    load_var matches
-    load_type baml.iter.Iterable<Error = never, Item = baml.regex.Match>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _16
-
-  L5:
-    load_var _16
-    load_type baml.iter.Iterator<Error = never, Item = baml.regex.Match>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _17
-    load_var _17
-    is_type baml.iter.Done
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
-    load_var _17
-    store_var m
-    load_var2 1 9
-    load_var m
-    load_field .start
-    call baml.String.slice
-    store_var _22
-    load_type string
-    load_var2 8 13
-    call baml.Array.push
-    pop 1
-    load_var2 12 3
-    call_indirect
-    store_var _27
-    load_type string
-    load_var2 8 14
-    call baml.Array.push
-    pop 1
-    load_var m
-    load_field .end
-    store_var pos
-    jump L5
-
-  L7:
-    load_var pos
-    store_var _32
-    load_var self
-    call baml.String.length
-    store_var _33
-    load_var2 1 16
-    load_var _33
-    call baml.String.slice
-    store_var _31
-    load_type string
-    load_var2 8 15
-    call baml.Array.push
-    pop 1
-    load_type string
-    load_var pieces
-    load_const ""
-    call baml.Array.join
-    return
 }
 
 function baml.String.at(self: string, index: int) -> string | null {
@@ -1493,20 +1190,26 @@ function baml.String.repeat(self: string, count: int) -> string {
 }
 
 function baml.String.replace(self: string, search: string | baml.regex.Regex, replacement: string | ((baml.regex.Match) -> string throws #0)) -> string {
+    load_var self
+    call baml.String._as_string
+    store_var _4
     load_type #0
-    load_var2 1 2
+    load_var2 4 2
     load_var replacement
     load_const false
-    call baml.String._replace_impl
+    call baml.regex._replace
     return
 }
 
 function baml.String.replace_all(self: string, search: string | baml.regex.Regex, replacement: string | ((baml.regex.Match) -> string throws #0)) -> string {
+    load_var self
+    call baml.String._as_string
+    store_var _4
     load_type #0
-    load_var2 1 2
+    load_var2 4 2
     load_var replacement
     load_const true
-    call baml.String._replace_impl
+    call baml.regex._replace
     return
 }
 
@@ -6382,6 +6085,300 @@ function baml.regex._literal_match(text: string, start: int) -> baml.regex.Match
     load_type baml.regex.Group | null
     alloc_map 0
     init_instance baml.regex.Match .text, .start, .end, .groups, .named
+    return
+}
+
+function baml.regex._replace(haystack: string, search: string | baml.regex.Regex, replacement: string | ((baml.regex.Match) -> string throws #0), all: bool) -> string {
+    load_var search
+    is_type string
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_var replacement
+    is_type string
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_type #0
+    load_var2 1 2
+    load_var2 3 4
+    call baml.regex._replace_pattern_with
+    jump L10
+
+  L2:
+    load_var all
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var2 2 1
+    load_var replacement
+    call baml.regex.Regex._replace_template
+    jump L10
+
+  L4:
+    load_var2 2 1
+    load_var replacement
+    call baml.regex.Regex._replace_all_template
+    jump L10
+
+  L5:
+    load_var replacement
+    is_type string
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_type #0
+    load_var2 1 2
+    load_var2 3 4
+    call baml.regex._replace_literal_with
+    jump L10
+
+  L7:
+    load_var all
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
+    load_var2 1 2
+    load_var replacement
+    call baml.String._replace_literal
+    jump L10
+
+  L9:
+    load_var2 1 2
+    load_var replacement
+    call baml.String._replace_all_literal
+
+  L10:
+    return
+}
+
+function baml.regex._replace_literal_with(haystack: string, search: string, f: (baml.regex.Match) -> string throws #0, all: bool) -> string {
+    load_var haystack
+    call baml.String.length
+    store_var length
+    load_var search
+    call baml.String.length
+    store_var width
+    load_type string
+    alloc_array 0
+    store_var pieces
+    load_const 0
+    store_var pos
+    load_const true
+
+  L0:
+    jump_if_false L1
+    pop 1
+    load_var2 8 5
+    cmp_int_op <=
+
+  L1:
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var2 1 8
+    load_var length
+    call baml.String.slice
+    store_var _47
+    load_type string
+    load_var2 7 14
+    call baml.Array.push
+    pop 1
+    load_type string
+    load_var pieces
+    load_const ""
+    call baml.Array.join
+    return
+
+  L3:
+    load_var2 1 8
+    load_var length
+    call baml.String.slice
+    load_var search
+    call baml.String.index_of
+    store_var _14
+    load_var _14
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    jump L11
+
+  L4:
+    load_var2 8 9
+    add_int
+    store_var at
+    load_var2 1 8
+    load_var at
+    call baml.String.slice
+    store_var _24
+    load_type string
+    load_var2 7 11
+    call baml.Array.push
+    pop 1
+    load_var2 2 10
+    call baml.regex._literal_match
+    load_var f
+    call_indirect
+    store_var _29
+    load_type string
+    load_var2 7 12
+    call baml.Array.push
+    pop 1
+    load_var width
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_const ""
+    store_var _34
+    jump L7
+
+  L6:
+    load_var2 1 10
+    load_var at
+    load_const 1
+    add_int
+    call baml.String.slice
+    store_var _34
+
+  L7:
+    load_type string
+    load_var2 7 13
+    call baml.Array.push
+    pop 1
+    load_var width
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
+    load_var2 10 6
+    add_int
+    store_var pos
+    jump L10
+
+  L9:
+    load_var at
+    load_const 1
+    add_int
+    store_var pos
+
+  L10:
+    load_var all
+    jump L0
+
+  L11:
+    load_const false
+    jump L0
+}
+
+function baml.regex._replace_pattern_with(haystack: string, search: baml.regex.Regex, f: (baml.regex.Match) -> string throws #0, all: bool) -> string {
+    load_var all
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var2 2 1
+    call baml.regex.Regex.match
+    store_var _6
+    load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _6
+    load_type baml.regex.Match
+    alloc_array 1
+    store_var matches
+    jump L4
+
+  L2:
+    load_type baml.regex.Match
+    alloc_array 0
+    store_var matches
+    jump L4
+
+  L3:
+    load_var2 2 1
+    call baml.regex.Regex.match_all
+    store_var matches
+
+  L4:
+    load_type string
+    alloc_array 0
+    store_var pieces
+    load_const 0
+    store_var pos
+    load_var matches
+    load_type baml.iter.Iterable<Error = never, Item = baml.regex.Match>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _13
+
+  L5:
+    load_var _13
+    load_type baml.iter.Iterator<Error = never, Item = baml.regex.Match>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _14
+    load_var _14
+    is_type baml.iter.Done
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var _14
+    store_var m
+    load_var2 1 8
+    load_var m
+    load_field .start
+    call baml.String.slice
+    store_var _19
+    load_type string
+    load_var2 7 12
+    call baml.Array.push
+    pop 1
+    load_var2 11 3
+    call_indirect
+    store_var _24
+    load_type string
+    load_var2 7 13
+    call baml.Array.push
+    pop 1
+    load_var m
+    load_field .end
+    store_var pos
+    jump L5
+
+  L7:
+    load_var pos
+    store_var _29
+    load_var haystack
+    call baml.String.length
+    store_var _30
+    load_var2 1 15
+    load_var _30
+    call baml.String.slice
+    store_var _28
+    load_type string
+    load_var2 7 14
+    call baml.Array.push
+    pop 1
+    load_type string
+    load_var pieces
+    load_const ""
+    call baml.Array.join
     return
 }
 

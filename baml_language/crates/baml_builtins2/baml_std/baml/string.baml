@@ -242,7 +242,10 @@ class String {
         search: string | root.regex.Regex,
         replacement: string | ((root.regex.Match) -> string throws E),
     ) -> string throws E {
-        self._replace_impl(search, replacement, false)
+        // The dispatch and the two callback scan loops live in `baml.regex`,
+        // next to the types they are written against, rather than adding three
+        // private helpers to the surface of the class every program touches.
+        root.regex._replace(self._as_string(), search, replacement, false)
     }
 
     /// Returns the **character index** of the first occurrence of `search`, or
@@ -344,108 +347,7 @@ class String {
         search: string | root.regex.Regex,
         replacement: string | ((root.regex.Match) -> string throws E),
     ) -> string throws E {
-        self._replace_impl(search, replacement, true)
-    }
-
-    // ─── Replacement plumbing ─────────────────────────────────────────────────
-    //
-    // `replace` and `replace_all` differ only in a `bool`, so the four-way
-    // search × replacement dispatch lives in one place. Each leaf is the
-    // cheapest form of the job: two literal-only native calls, two engine-side
-    // template expansions, and two BAML scan loops for the callback forms,
-    // which are the only ones that have to re-enter user code per match.
-
-    /// Shared body of `replace` (`all = false`) and `replace_all`.
-    function _replace_impl<E>(
-        self,
-        search: string | root.regex.Regex,
-        replacement: string | ((root.regex.Match) -> string throws E),
-        all: bool,
-    ) -> string throws E {
-        match (search) {
-            string => match (replacement) {
-                string => if (all) {
-                    self._replace_all_literal(search, replacement)
-                } else {
-                    self._replace_literal(search, replacement)
-                },
-                let f: (root.regex.Match) -> string throws E => {
-                    self._replace_literal_with(search, f, all)
-                },
-            },
-            root.regex.Regex => match (replacement) {
-                string => if (all) {
-                    search._replace_all_template(self._as_string(), replacement)
-                } else {
-                    search._replace_template(self._as_string(), replacement)
-                },
-                let f: (root.regex.Match) -> string throws E => {
-                    self._replace_pattern_with(search, f, all)
-                },
-            },
-        }
-    }
-
-    /// Literal `search`, replacement computed per occurrence by `f`.
-    function _replace_literal_with<E>(
-        self,
-        search: string,
-        f: (root.regex.Match) -> string throws E,
-        all: bool,
-    ) -> string throws E {
-        let length = self.length();
-        let width = search.length();
-        let pieces: string[] = [];
-        let pos = 0;
-        let scanning = true;
-        while (scanning && pos <= length) {
-            match (self.slice(pos, length).index_of(search)) {
-                null => {
-                    scanning = false;
-                },
-                let offset: int => {
-                    let at = pos + offset;
-                    pieces.push(self.slice(pos, at));
-                    pieces.push(f(root.regex._literal_match(search, at)));
-                    // An empty `search` matches between every pair of
-                    // characters. Stepping one codepoint past it terminates the
-                    // scan and carries the stepped-over character through; the
-                    // `slice` is empty when the match was at the very end.
-                    pieces.push(if (width == 0) { self.slice(at, at + 1) } else { "" });
-                    pos = if (width == 0) { at + 1 } else { at + width };
-                    scanning = all;
-                },
-            }
-        }
-        pieces.push(self.slice(pos, length));
-        pieces.join("")
-    }
-
-    /// Pattern `search`, replacement computed per match by `f`.
-    function _replace_pattern_with<E>(
-        self,
-        search: root.regex.Regex,
-        f: (root.regex.Match) -> string throws E,
-        all: bool,
-    ) -> string throws E {
-        let text = self._as_string();
-        let matches: root.regex.Match[] = if (all) {
-            search.match_all(text)
-        } else {
-            match (search.match(text)) {
-                null => [],
-                let first: root.regex.Match => [first],
-            }
-        };
-        let pieces: string[] = [];
-        let pos = 0;
-        for (let m in matches) {
-            pieces.push(self.slice(pos, m.start));
-            pieces.push(f(m));
-            pos = m.end;
-        }
-        pieces.push(self.slice(pos, self.length()));
-        pieces.join("")
+        root.regex._replace(self._as_string(), search, replacement, true)
     }
 
     /// `self` as the `string` primitive.
@@ -460,11 +362,13 @@ class String {
     }
 
     /// `replace` restricted to a literal search and a literal replacement.
+    /// Called from `baml.regex._replace`, which owns the dispatch.
     function _replace_literal(self, search: string, replacement: string) -> string throws never {
         $rust_function
     }
 
     /// `replace_all` restricted to a literal search and a literal replacement.
+    /// Called from `baml.regex._replace`, which owns the dispatch.
     function _replace_all_literal(self, search: string, replacement: string) -> string throws never {
         $rust_function
     }

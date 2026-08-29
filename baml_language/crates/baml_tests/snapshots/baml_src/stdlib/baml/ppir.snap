@@ -1888,7 +1888,16 @@ function baml.regex._compile(pattern: string, backtracking: bool) -> baml.regex.
 function baml.regex._literal_match(text: string, start: int) -> baml.regex.Match  [expr] {
   { let end = start Add text.length() } baml.regex.Match { text: text, start: start, end: end, groups: [baml.regex.Group { text: text, start: start, end: end }], named: map {  } }
 }
+function baml.regex._replace(haystack: string, search: string | baml.regex.Regex, replacement: string | (baml.regex.Match) -> string throws E, all: bool) -> string  [expr] {
+  {  } match (search) { string => match (replacement) { string => if (all) {  } haystack._replace_all_literal(search, replacement) else {  } haystack._replace_literal(search, replacement), f: (baml.regex.Match) -> string throws E => {  } _replace_literal_with(haystack, search, f, all) }, baml.regex.Regex => match (replacement) { string => if (all) {  } search._replace_all_template(haystack, replacement) else {  } search._replace_template(haystack, replacement), f: (baml.regex.Match) -> string throws E => {  } _replace_pattern_with(haystack, search, f, all) } }
+}
 function baml.regex._replace_all_template(self: ?, haystack: string, template: string) -> string  [builtin]
+function baml.regex._replace_literal_with(haystack: string, search: string, f: (baml.regex.Match) -> string throws E, all: bool) -> string  [expr] {
+  { let length = haystack.length(); let width = search.length(); let pieces: string[] = []; let pos = 0; let scanning = true; while scanning And pos Le length {  } match (haystack.slice(pos, length).index_of(search)) { null => { scanning = false }, offset: int => { let at = pos Add offset; pieces.push(haystack.slice(pos, at)); pieces.push(f(_literal_match(search, at))); pieces.push(if (width Eq 0) {  } haystack.slice(at, at Add 1) else {  } ""); pos = if (width Eq 0) {  } at Add 1 else {  } at Add width; scanning = all } }; pieces.push(haystack.slice(pos, length)) } pieces.join("")
+}
+function baml.regex._replace_pattern_with(haystack: string, search: baml.regex.Regex, f: (baml.regex.Match) -> string throws E, all: bool) -> string  [expr] {
+  { let matches: baml.regex.Match[] = if (all) {  } search.match_all(haystack) else {  } match (search.match(haystack)) { null => [], first: baml.regex.Match => [first] }; let pieces: string[] = []; let pos = 0; for m in matches { pieces.push(haystack.slice(pos, m.start)); pieces.push(f(m)); pos = m.end }; pieces.push(haystack.slice(pos, haystack.length())) } pieces.join("")
+}
 function baml.regex._replace_template(self: ?, haystack: string, template: string) -> string  [builtin]
 function baml.regex._word(literal: string, ignore_case: bool) -> baml.regex.Regex  [builtin]
 function baml.regex.compile(pattern: string, backtracking: bool = false) -> baml.regex.Regex  [expr] {
@@ -2551,16 +2560,7 @@ function baml._as_string(self: ?) -> string  [expr] {
   {  } self.slice(0, self.length())
 }
 function baml._replace_all_literal(self: ?, search: string, replacement: string) -> string  [builtin]
-function baml._replace_impl(self: ?, search: string | root.regex.Regex, replacement: string | (root.regex.Match) -> string throws E, all: bool) -> string  [expr] {
-  {  } match (search) { string => match (replacement) { string => if (all) {  } self._replace_all_literal(search, replacement) else {  } self._replace_literal(search, replacement), f: (root.regex.Match) -> string throws E => {  } self._replace_literal_with(search, f, all) }, root.regex.Regex => match (replacement) { string => if (all) {  } search._replace_all_template(self._as_string(), replacement) else {  } search._replace_template(self._as_string(), replacement), f: (root.regex.Match) -> string throws E => {  } self._replace_pattern_with(search, f, all) } }
-}
 function baml._replace_literal(self: ?, search: string, replacement: string) -> string  [builtin]
-function baml._replace_literal_with(self: ?, search: string, f: (root.regex.Match) -> string throws E, all: bool) -> string  [expr] {
-  { let length = self.length(); let width = search.length(); let pieces: string[] = []; let pos = 0; let scanning = true; while scanning And pos Le length {  } match (self.slice(pos, length).index_of(search)) { null => { scanning = false }, offset: int => { let at = pos Add offset; pieces.push(self.slice(pos, at)); pieces.push(f(root.regex._literal_match(search, at))); pieces.push(if (width Eq 0) {  } self.slice(at, at Add 1) else {  } ""); pos = if (width Eq 0) {  } at Add 1 else {  } at Add width; scanning = all } }; pieces.push(self.slice(pos, length)) } pieces.join("")
-}
-function baml._replace_pattern_with(self: ?, search: root.regex.Regex, f: (root.regex.Match) -> string throws E, all: bool) -> string  [expr] {
-  { let text = self._as_string(); let matches: root.regex.Match[] = if (all) {  } search.match_all(text) else {  } match (search.match(text)) { null => [], first: root.regex.Match => [first] }; let pieces: string[] = []; let pos = 0; for m in matches { pieces.push(self.slice(pos, m.start)); pieces.push(f(m)); pos = m.end }; pieces.push(self.slice(pos, self.length())) } pieces.join("")
-}
 function baml.add(self: ?, rhs: string) -> string  [expr] {
   {  } `...`
 }
@@ -2603,10 +2603,10 @@ function baml.length(self: ?) -> int  [builtin]
 function baml.lines(self: ?) -> string[]  [builtin]
 function baml.repeat(self: ?, count: int) -> string  [builtin]
 function baml.replace(self: ?, search: string | root.regex.Regex, replacement: string | (root.regex.Match) -> string throws E) -> string  [expr] {
-  {  } self._replace_impl(search, replacement, false)
+  {  } root.regex._replace(self._as_string(), search, replacement, false)
 }
 function baml.replace_all(self: ?, search: string | root.regex.Regex, replacement: string | (root.regex.Match) -> string throws E) -> string  [expr] {
-  {  } self._replace_impl(search, replacement, true)
+  {  } root.regex._replace(self._as_string(), search, replacement, true)
 }
 function baml.slice(self: ?, start: int, end: int) -> string  [builtin]
 function baml.split(self: ?, delimiter: string) -> string[]  [builtin]
