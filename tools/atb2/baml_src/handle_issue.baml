@@ -363,8 +363,8 @@ function design_budget_s(d: Difficulty) -> int {
 function time_budget_s(d: Difficulty) -> int {
     match (d) {
         Difficulty.Trivial => 1800,
-        Difficulty.Easy => 1800,
-        Difficulty.Medium => 3600,
+        Difficulty.Easy => 3600,
+        Difficulty.Medium => 7200,
         Difficulty.Hard => 1800,
     }
 }
@@ -800,10 +800,10 @@ function checkpoint_uncommitted(sb: Sandbox) -> null {
 // Only so implement_fix / write_design_doc are LLM functions: their
 // $render_prompt / $parse companions render the prompt and parse the reply.
 // The CLI itself is run by run_claude, not through this client.
-client Handle = claude_code.ClaudeCodeClient.new(model = "opus");
+client Handle = claude_code.ClaudeCodeClient.new(model = "claude-fable-5");
 
 function agent_model() -> string {
-    baml.env.get("ATB2_MODEL") ?? "opus"
+    baml.env.get("ATB2_MODEL") ?? "claude-fable-5"
 }
 
 class AgentRun {
@@ -2107,8 +2107,10 @@ testset "handle_issue" {
     }
 
     test "time budgets" {
-        assert.equal(time_budget_s(Difficulty.Easy), 1800);
-        assert.equal(time_budget_s(Difficulty.Medium), 3600);
+        assert.equal(time_budget_s(Difficulty.Trivial), 1800);
+        assert.equal(time_budget_s(Difficulty.Easy), 3600);
+        assert.equal(time_budget_s(Difficulty.Medium), 7200);
+        assert.equal(time_budget_s(Difficulty.Hard), 1800);
     }
 
     test "changed crates come from crates/<name>/ paths" {
