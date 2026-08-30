@@ -11585,8 +11585,19 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    // A warning, not an error: this is a guess about intent.
+                    // A backspace is a legal thing to want in a pattern (a
+                    // protocol, terminal output), and the guess is only
+                    // *usually* right — so it must not block the caller who
+                    // meant it.
                     PendingDiag::RegexPatternBackspaceEscape { expr } => {
-                        (TirTypeError::RegexPatternBackspaceEscape, expr)
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::RegexPatternBackspaceEscape,
+                            severity: DiagnosticSeverity::Warning,
+                            primary: DiagnosticLocation::Expr(expr),
+                            related: Vec::new(),
+                        });
+                        continue;
                     }
                     PendingDiag::RuntimeTypeArgumentOnStreamingCall { expr, callee } => (
                         TirTypeError::RuntimeTypeArgumentOnStreamingCall {

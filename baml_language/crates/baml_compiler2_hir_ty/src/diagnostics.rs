@@ -165,6 +165,11 @@ pub enum TirTypeError {
     },
     /// A constant pattern argument contains a literal backspace (U+0008),
     /// which is almost always `"\b"` written where `"\\b"` was meant.
+    ///
+    /// Reported as a *warning*: a backspace is a legal thing to match, so this
+    /// reads intent and can be wrong. `"\x08"` is the unambiguous spelling and
+    /// carries no warning, because BAML leaves that escape's backslash intact
+    /// and the regex engine reads the hex escape itself.
     RegexPatternBackspaceEscape,
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
@@ -1174,8 +1179,9 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::RegexPatternBackspaceEscape => f.write_str(
                 "this pattern contains a backspace character (U+0008): `\\b` in a string \
-                 literal is a backspace, not a word boundary. Write `\\\\b` for a word \
-                 boundary, or `\\x08` for the backspace character itself",
+                 literal is a backspace, not a word boundary. Write `\\\\b` if you meant a \
+                 word boundary; if you meant the character, `\\x08` says so and does not \
+                 warn",
             ),
             TirTypeError::DeadCode {
                 unreachable_count, ..
