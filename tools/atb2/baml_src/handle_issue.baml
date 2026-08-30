@@ -1203,6 +1203,10 @@ class GateStep {
     ok: bool,
     seconds: int,
     tail: string,
+    /// The process exit code; used to tell "ran, some tests failed" (nextest
+    /// 100) apart from "did not complete" (compile error / timeout 124), so a
+    /// non-completed step cannot be waved through on test-controllable output.
+    exit_code: int,
 }
 
 class GateResult {
@@ -1273,6 +1277,7 @@ function gate_step(name: string, c: Cmd) -> GateStep {
             },
             60,
         ),
+        exit_code: r.exit_code,
     };
     log.info({ "gate": name, "ok": r.ok, "seconds": step.seconds });
     step
@@ -1331,18 +1336,21 @@ function run_gate(worktree: string) -> GateResult {
             },
         );
         let real = unexpected_failures(s.tail, flaky_tests());
-        // a completed nextest run prints a "Summary [" line; its absence means
-        // the run timed out, failed to compile or crashed -> not a pass
-        let completed = s.tail.includes("Summary [");
+        // nextest exits 100 only when it compiled and ran and some tests
+        // failed; a compile error / timeout (124) exits otherwise. Gate the
+        // known-flaky pass on that code, not on captured stdout, so a
+        // non-completed run cannot be waved through with injected output.
+        let ran_tests = s.exit_code == 100;
         let step = GateStep {
             name: s.name,
-            ok: s.ok || (completed && real.length() == 0),
+            ok: s.ok || (ran_tests && real.length() == 0),
             seconds: s.seconds,
-            tail: if (s.ok || real.length() > 0) {
+            tail: if (s.ok || !ran_tests || real.length() > 0) {
                 s.tail
             } else {
                 "only known-flaky failures: " + s.tail
             },
+            exit_code: s.exit_code,
         };
         steps.push(step);
         ok = step.ok;
@@ -1361,9 +1369,18 @@ function run_gate(worktree: string) -> GateResult {
                 timeout_ms: 1800000,
             },
         );
-        let snapshots_settled = s.ok || s.tail.includes("no snapshots to review") || s.tail.includes("snapshots accepted");
+        // settled = the run completed (exit 0, or 100 = test failures only, e.g.
+        // the known-flaky test); a compile error / timeout does not count. The
+        // tree-clean check below catches any real snapshot churn.
+        let snapshots_settled = s.ok || s.exit_code == 100;
         steps.push(
-            GateStep { name: s.name, ok: snapshots_settled, seconds: s.seconds, tail: s.tail },
+            GateStep {
+                name: s.name,
+                ok: snapshots_settled,
+                seconds: s.seconds,
+                tail: s.tail,
+                exit_code: s.exit_code,
+            },
         );
         ok = snapshots_settled;
     };
@@ -1373,7 +1390,17 @@ function run_gate(worktree: string) -> GateResult {
         let status = git(worktree, ["status", "--porcelain"]);
         let clean = status.stdout.trim().length() == 0;
         steps.push(
-            GateStep { name: "insta clean", ok: clean, seconds: 0, tail: tail(status.stdout, 15) },
+            GateStep {
+                name: "insta clean",
+                ok: clean,
+                seconds: 0,
+                tail: tail(status.stdout, 15),
+                exit_code: if (clean) {
+                    0
+                } else {
+                    1
+                },
+            },
         );
         ok = clean;
     };
@@ -1877,8 +1904,8 @@ function gh_issue(number: int, difficulty: Difficulty?) -> Issue {
 function sample_gate() -> GateResult {
     GateResult {
         steps: [
-            GateStep { name: "fmt", ok: true, seconds: 3, tail: "" },
-            GateStep { name: "clippy", ok: true, seconds: 400, tail: "" },
+            GateStep { name: "fmt", ok: true, seconds: 3, tail: "", exit_code: 0 },
+            GateStep { name: "clippy", ok: true, seconds: 400, tail: "", exit_code: 0 },
         ],
         ok: true,
         changed_crates: ["baml_compiler2_hir"],
