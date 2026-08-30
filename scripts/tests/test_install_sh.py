@@ -16,6 +16,7 @@ INSTALLER = ROOT / "scripts" / "install.sh"
 
 class InstallShTests(unittest.TestCase):
     def test_platforms_select_bootstrap_compatible_wrappers_offline(self) -> None:
+        """Verify that every supported Unix host selects its bootstrap-safe wrapper."""
         cases = (
             ("Linux", "x86_64", "x86_64-unknown-linux-musl"),
             ("Linux", "aarch64", "aarch64-unknown-linux-musl"),
