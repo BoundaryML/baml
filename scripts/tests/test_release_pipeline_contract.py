@@ -1059,6 +1059,7 @@ class WorkflowGraphTests(unittest.TestCase):
     def test_release_graph_has_early_preflight_parallel_producers_and_complete_fanin(
         self,
     ) -> None:
+        """Keep the release graph complete and its wrapper compatibility gates enforced."""
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         build_matrix = job_block(workflow, "build-matrix")
         wrapper = job_block(workflow, "build-wrapper")
