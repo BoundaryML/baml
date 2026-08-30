@@ -469,11 +469,7 @@ fn simulate_statement_stack<'db>(
             };
             pull_semantics::walk_drop_statement(&mut sink, place).is_ok()
         }
-        StatementKind::FreshCell(_)
-        | StatementKind::VizEnter(_)
-        | StatementKind::VizExit(_)
-        | StatementKind::Intrinsic { .. }
-        | StatementKind::Nop => true,
+        StatementKind::FreshCell(_) | StatementKind::Intrinsic { .. } | StatementKind::Nop => true,
     }
 }
 
@@ -1593,7 +1589,6 @@ mod tests {
             entry: baml_compiler2_mir::BlockId(0),
             locals: local_tys.into_iter().map(local_decl).collect(),
             catch_regions: vec![],
-            viz_nodes: vec![],
         }
     }
 

@@ -1491,12 +1491,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             StatementKind::Drop(place) => {
                 unwrap_infallible(pull_semantics::walk_drop_statement(self, place));
             }
-            StatementKind::VizEnter(_node_idx) => {
-                // Viz observability is not emitted to bytecode.
-            }
-            StatementKind::VizExit(_node_idx) => {
-                // Viz observability is not emitted to bytecode.
-            }
             StatementKind::FreshCell(local) => {
                 if self.captured_locals.contains(local) {
                     if let Some(&slot) = self.local_slots.get(local) {
@@ -3952,7 +3946,6 @@ mod tests {
             entry: BlockId(0),
             locals: vec![local(RuntimeTy::int()), local(RuntimeTy::bool())],
             catch_regions: Vec::new(),
-            viz_nodes: Vec::new(),
         };
 
         let globals = HashMap::new();

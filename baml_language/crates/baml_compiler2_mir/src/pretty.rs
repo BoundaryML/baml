@@ -172,12 +172,6 @@ fn write_statement(f: &mut impl Write, stmt: &Statement<'_>) -> fmt::Result {
         StatementKind::Drop(place) => {
             write!(f, "drop({place});")
         }
-        StatementKind::VizEnter(idx) => {
-            write!(f, "viz_enter({idx});")
-        }
-        StatementKind::VizExit(idx) => {
-            write!(f, "viz_exit({idx});")
-        }
         StatementKind::FreshCell(local) => {
             write!(f, "fresh_cell({local});")
         }
