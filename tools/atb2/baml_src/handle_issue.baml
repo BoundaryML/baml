@@ -1723,7 +1723,7 @@ function read_outcome(issue: Issue) -> HandleOutcome? {
 //                  reference (LLM-judged similarity >= 0.7).
 //
 // Both are hours of wall-clock and are opt-in:
-//   ATB2_ISSUES=4587 tools/atb2/setup_database.sh -- baml test -i 'root::fix_in_budget::*'
+//   ATB2_ISSUES=4587 tools/atb2/run_tests.sh -- baml test -i 'root::fix_in_budget::*'
 
 function judge_design_doc(ours: string, reference: string) -> IssueJudgment {
     client: Triage
