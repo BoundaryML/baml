@@ -220,11 +220,23 @@ function check_on_canary(r: Repro, n: int) -> Verdict {
 /// Where a repro file goes in the scratch project: repros name files
 /// either bare ("main.baml") or already under "baml_src/"; sources land in
 /// baml_src/ either way, and baml.toml stays at the root.
+/// Collapse a dataset/LLM-supplied path to a safe repo-relative one: drop
+/// empty, "." and ".." segments and any leading "/", so it can never escape
+/// the directory it is joined onto (check_on_canary writes <dir>/<name>).
+function sanitize_rel_path(p: string) -> string {
+    p.split("/")
+        .filter((s: string) -> bool {
+            s != "" && s != "." && s != ".."
+        })
+        .join("/")
+}
+
 function repro_file_path(name: string, any_prefixed: bool) -> string {
-    if (name == "baml.toml" || name.starts_with("baml_src/") || any_prefixed) {
-        name
+    let safe = sanitize_rel_path(name);
+    if (safe == "baml.toml" || safe.starts_with("baml_src/") || any_prefixed) {
+        safe
     } else {
-        "baml_src/" + name
+        "baml_src/" + safe
     }
 }
 
@@ -456,21 +468,21 @@ function sandbox_env(with_gh: bool) -> map<string, string> {
         "CARGO_INCREMENTAL": "0",
     };
     // USER + TMPDIR: the Claude Code CLI finds its keychain login through them
-    for (
-        let k in [
-            "USER",
-            "LOGNAME",
-            "TMPDIR",
-            "CARGO_HOME",
-            "RUSTUP_HOME",
-            "RUSTUP_TOOLCHAIN",
-            "SSH_AUTH_SOCK",
-        ]
-    ) {
+    for (let k in ["USER", "LOGNAME", "TMPDIR", "CARGO_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN"]) {
         let v = baml.env.get(k);
         if (v != null) {
             env.set(k, v ?? "");
         };
+    }
+    if (!with_gh) {
+        // the agent has arbitrary Bash; keep it away from the host's git
+        // credentials (osxkeychain holds a live github token) and from any
+        // hook planted in the shared .git dir. SSH_AUTH_SOCK is withheld for
+        // the same reason (ssh-based push / remote auth).
+        env.set("GIT_CONFIG_GLOBAL", "/dev/null");
+        env.set("GIT_CONFIG_SYSTEM", "/dev/null");
+        env.set("GIT_CONFIG_NOSYSTEM", "1");
+        env.set("GIT_TERMINAL_PROMPT", "0");
     }
     if (with_gh) {
         let tok = baml.env.get("GH_TOKEN") ?? baml.env.get("GITHUB_TOKEN");
@@ -594,9 +606,9 @@ function ensure_cache() -> null {
         if (!clone.ok) {
             baml.sys.panic("clone failed: " + tail(clone.stderr, 5));
         };
-        //# config the git extensions
-        git(repo, ["config", "extensions.worktreeConfig", "true"]);
     };
+    //# worktree config must be on or the --worktree pushurl guard is a no-op
+    git(repo, ["config", "extensions.worktreeConfig", "true"]);
     //# fetch canary (retried: parallel tests share the cache)
     let tries = 0;
     //# while the tries are less than 3
@@ -1319,9 +1331,12 @@ function run_gate(worktree: string) -> GateResult {
             },
         );
         let real = unexpected_failures(s.tail, flaky_tests());
+        // a completed nextest run prints a "Summary [" line; its absence means
+        // the run timed out, failed to compile or crashed -> not a pass
+        let completed = s.tail.includes("Summary [");
         let step = GateStep {
             name: s.name,
-            ok: s.ok || real.length() == 0,
+            ok: s.ok || (completed && real.length() == 0),
             seconds: s.seconds,
             tail: if (s.ok || real.length() > 0) {
                 s.tail
@@ -1538,7 +1553,15 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
     let push = run_with(
         Cmd {
             program: "git",
-            args: ["push", "--force-with-lease", "-u", "origin", sb.branch],
+            args: [
+                "-c",
+                "core.hooksPath=/dev/null",
+                "push",
+                "--force-with-lease",
+                "-u",
+                "origin",
+                sb.branch,
+            ],
             cwd: sb.worktree,
             timeout_ms: 600000,
         },
@@ -1946,6 +1969,19 @@ testset "handle_issue" {
                 && !env.has("FEEDBACK_SUPABASE_KEY")
                 && !env.has("ANTHROPIC_API_KEY"),
         );
+        // no ambient git credentials or ssh agent for the agent, and the host
+        // git config (osxkeychain helper, planted hooks) is neutralized
+        assert.is_true(!env.has("SSH_AUTH_SOCK"));
+        assert.equal(env.get("GIT_CONFIG_GLOBAL") ?? "", "/dev/null");
+        assert.equal(env.get("GIT_CONFIG_SYSTEM") ?? "", "/dev/null");
+    }
+
+    test "repro paths cannot escape their directory" {
+        assert.equal(sanitize_rel_path("baml_src/../../../.zshrc"), "baml_src/.zshrc");
+        assert.equal(sanitize_rel_path("/etc/passwd"), "etc/passwd");
+        assert.equal(sanitize_rel_path("../../x"), "x");
+        assert.is_true(!repro_file_path("baml_src/../../x", false).includes(".."));
+        assert.is_true(!repro_file_path("../../../etc/passwd", true).includes(".."));
     }
 
     test "claude argv mirrors the client's flags plus --tools" {
