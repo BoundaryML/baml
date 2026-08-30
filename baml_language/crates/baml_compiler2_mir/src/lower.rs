@@ -15942,7 +15942,6 @@ fn lower_function_impl<'db>(
                     })
                     .collect(),
                 catch_regions: vec![],
-                viz_nodes: vec![],
             }),
             lambdas: vec![],
             signature: None,

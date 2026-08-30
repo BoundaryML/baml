@@ -147,7 +147,6 @@ mod tests {
             ],
             entry: BlockId(0),
             locals: vec![local("ret")],
-            viz_nodes: vec![],
         };
         // Ensure IDs/indexes stay coherent for this synthetic MIR.
         for (i, block) in body.blocks.iter_mut().enumerate() {
@@ -194,7 +193,6 @@ mod tests {
             ],
             entry: BlockId(0),
             locals: vec![local("ret")],
-            viz_nodes: vec![],
         };
         for (i, block) in body.blocks.iter_mut().enumerate() {
             block.id = BlockId(i);

@@ -32,7 +32,6 @@ use baml_type::{RuntimeTy, TyTemplate};
 use crate::{
     BasicBlock, BlockId, CatchRegion, Constant, ItemRef, Local, LocalDecl, MirFunction,
     MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, Terminator,
-    VizNode,
 };
 
 /// Builder for constructing MIR functions.
@@ -43,7 +42,6 @@ pub(crate) struct MirBuilder<'db> {
     locals: Vec<LocalDecl>,
     current_block: Option<BlockId>,
     span: Option<Span>,
-    viz_nodes: Vec<VizNode>,
     /// Current source span for tagging statements/terminators.
     pub(crate) current_source_span: Option<Span>,
     /// Catch regions recorded during lowering for exception table construction.
@@ -62,7 +60,6 @@ impl<'db> MirBuilder<'db> {
             locals: Vec::new(),
             current_block: None,
             span: None,
-            viz_nodes: Vec::new(),
             current_source_span: None,
             catch_regions: Vec::new(),
         }
@@ -712,7 +709,6 @@ impl<'db> MirBuilder<'db> {
                 entry: BlockId(0),
                 locals: self.locals,
                 catch_regions: self.catch_regions.clone(),
-                viz_nodes: self.viz_nodes,
             }),
             lambdas: vec![],
             signature: None,
@@ -733,7 +729,6 @@ impl<'db> MirBuilder<'db> {
             entry: BlockId(0),
             locals: self.locals,
             catch_regions: self.catch_regions,
-            viz_nodes: self.viz_nodes,
         }
     }
 
@@ -755,21 +750,9 @@ impl<'db> MirBuilder<'db> {
                 entry: BlockId(0),
                 locals: self.locals,
                 catch_regions: self.catch_regions.clone(),
-                viz_nodes: self.viz_nodes,
             }),
             lambdas: vec![],
             signature: None,
         }
-    }
-
-    // ========================================================================
-    // Visualization Helpers
-    // ========================================================================
-
-    /// Add a visualization node and return its index.
-    pub(crate) fn add_viz_node(&mut self, node: VizNode) -> usize {
-        let idx = self.viz_nodes.len();
-        self.viz_nodes.push(node);
-        idx
     }
 }
