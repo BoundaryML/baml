@@ -37,8 +37,11 @@ system="$(uname -s)"
 case "$system:$machine" in
   Darwin:arm64) target="aarch64-apple-darwin" ;;
   Darwin:x86_64) target="x86_64-apple-darwin" ;;
-  Linux:aarch64|Linux:arm64) target="aarch64-unknown-linux-gnu" ;;
-  Linux:x86_64) target="x86_64-unknown-linux-gnu" ;;
+  # The musl wrappers are static and can bootstrap both glibc and musl hosts.
+  # GNU wrappers inherit the build runner's glibc floor and may not start on
+  # supported stable distributions before they can select a toolchain.
+  Linux:aarch64|Linux:arm64) target="aarch64-unknown-linux-musl" ;;
+  Linux:x86_64) target="x86_64-unknown-linux-musl" ;;
   *) echo "error: unsupported platform $system $machine" >&2; exit 2 ;;
 esac
 

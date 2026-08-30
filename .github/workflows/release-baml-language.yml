@@ -474,6 +474,46 @@ jobs:
           if test -f "staging/bin/baml-cli$EXECUTABLE_SUFFIX"; then
             exit 1
           fi
+      - name: Verify Linux installer wrapper on Debian bookworm
+        if: ${{ matrix.libc == 'musl' }}
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          wrapper="$PWD/baml_language/target/$TARGET/release/baml"
+          fixture="$(mktemp -d)"
+          trap 'rm -rf "$fixture"' EXIT
+
+          readelf --wide --dynamic "$wrapper" > "$fixture/dynamic.txt"
+          readelf --wide --version-info "$wrapper" > "$fixture/version-info.txt"
+          if grep -Fq '(NEEDED)' "$fixture/dynamic.txt" || grep -Eq 'GLIBC_[0-9]' "$fixture/version-info.txt"; then
+            echo "installer wrapper is not libc-independent: $TARGET" >&2
+            cat "$fixture/dynamic.txt" >&2
+            cat "$fixture/version-info.txt" >&2
+            exit 1
+          fi
+
+          mkdir -p "$fixture/staging/bin" "$fixture/manifest/v1"
+          cp "$wrapper" "$fixture/staging/bin/baml"
+          tar -C "$fixture/staging" -czf "$fixture/wrapper.tar.gz" .
+          sha256="$(sha256sum "$fixture/wrapper.tar.gz" | awk '{print $1}')"
+          printf '{"schema":1,"version":"test","released_at":"2026-08-28T00:00:00Z","artifacts":{"%s":{"url":"file:///fixtures/wrapper.tar.gz","sha256":"%s"}}}\n' \
+            "$TARGET" "$sha256" > "$fixture/manifest/v1/wrapper.json"
+
+          docker build --tag baml-bookworm-installer-smoke - <<'DOCKERFILE'
+          FROM debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
+          RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
+          DOCKERFILE
+          docker run --rm --network none \
+            --volume "$PWD:/repo:ro" \
+            --volume "$fixture:/fixtures:ro" \
+            baml-bookworm-installer-smoke \
+            sh -ceu '
+              BAML_HOME=/tmp/baml \
+              BAML_MANIFEST_BASE_URL=file:///fixtures/manifest/v1 \
+                sh /repo/scripts/install.sh --wrapper-only --no-modify-path
+              /tmp/baml/bin/baml --version
+            '
       - name: Build no-self-update wrapper
         if: ${{ matrix.no_self_update }}
         env:
