@@ -329,6 +329,39 @@ test "regex_recursion_depth_limit_fails_to_match" {
     assert.equal(nested.exact_match(deep), null)
 }
 
+// ─── `match` as a name ───────────────────────────────────────────────────────
+
+// `match` is a keyword, so naming a method with it has to be accepted in every
+// name position independently. These are the two the simple `re.match(hay)`
+// spelling does not reach.
+
+// A qualified receiver: the path parser has to stop at `match` and hand the
+// `.` to member access rather than consuming it as another segment.
+test "regex_match_through_a_qualified_path" {
+    let re = baml.regex.compile("\\d");
+    assert.equal(baml.regex.Regex.match(re, "a7")?.text, "7");
+    assert.equal(baml.regex.Regex.is_match(re, "ab"), false)
+}
+
+// A required (body-less) interface method is parsed on its own path, separate
+// from a declaration with a body.
+interface Matcher {
+    function match(self, haystack: string) -> string throws never
+}
+
+class Shouty {
+    implements Matcher {
+        function match(self, haystack: string) -> string throws never {
+            haystack.to_upper_case()
+        }
+    }
+}
+
+test "regex_match_names_a_required_interface_method" {
+    let s = Shouty {  };
+    assert.equal(s.match("hi"), "HI")
+}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 // Indirection past the constant-pattern check: the compiler only inspects a

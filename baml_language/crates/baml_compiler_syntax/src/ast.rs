@@ -2140,6 +2140,7 @@ impl MethodSig {
                     || kind == SyntaxKind::KW_EXTENDS
                     || kind == SyntaxKind::KW_REQUIRES
                     || kind == SyntaxKind::KW_INTERFACE
+                    || kind == SyntaxKind::KW_MATCH
             })
     }
 

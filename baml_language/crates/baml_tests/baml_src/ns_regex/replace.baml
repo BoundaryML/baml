@@ -131,7 +131,15 @@ test "replace_literal_callback_match_shape" {
 }
 
 test "replace_literal_callback_first_and_all" {
-    assert.equal("aXbXc".replace("X", upper), "aXbXc");
+    // Both arms report each match's offset, so first-only and every-match give
+    // different answers. A callback that mapped "X" back to "X" would not: the
+    // assertion would hold even if nothing were replaced.
+    assert.equal(
+        "aXbXc".replace("X", (m: baml.regex.Match) -> string {
+            string.from(m.start)
+        }),
+        "a1bXc",
+    );
     assert.equal(
         "aXbXc".replace_all("X", (m: baml.regex.Match) -> string {
             string.from(m.start)

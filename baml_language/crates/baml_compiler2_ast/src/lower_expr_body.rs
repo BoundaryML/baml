@@ -69,14 +69,18 @@ pub(crate) fn is_ident_token(kind: SyntaxKind) -> bool {
     )
 }
 
-/// Tokens that can name a member after a `.`.
+/// Tokens that can name a member after a `.` — in a `FIELD_ACCESS_EXPR`, or as
+/// a non-leading segment of a `PATH_EXPR`.
 ///
 /// Wider than [`is_ident_token`]: a keyword that could never start an
-/// expression is unambiguous in member position, so the parser admits it there
-/// and the name lowers by text. `match` is the case that needs it —
-/// `re.match(haystack)` on `baml.regex.Regex` — and it is deliberately *not* in
+/// expression is unambiguous after a dot, so the parser admits it there and the
+/// name lowers by text. `match` is the case that needs it — `re.match(haystack)`
+/// and `baml.regex.Regex.match(re, haystack)` — and it is deliberately *not* in
 /// `is_ident_token`, where it would also make a bare `match` token lower as an
 /// identifier and shadow the match expression.
+///
+/// Mirrors the `segment` allowlist in `parse_path_or_ident` and
+/// `kind_is_member_name`, both in `baml_compiler_parser`.
 pub(crate) fn is_member_name_token(kind: SyntaxKind) -> bool {
     is_ident_token(kind) || matches!(kind, SyntaxKind::KW_MATCH)
 }
@@ -3502,7 +3506,10 @@ impl LoweringContext {
 
         for elem in node.children_with_tokens() {
             if let rowan::NodeOrToken::Token(token) = elem {
-                if is_ident_token(token.kind()) {
+                // `is_member_name_token`, not `is_ident_token`: the parser
+                // admits `match` as a non-leading segment, and a segment
+                // dropped here would silently shorten the path.
+                if is_member_name_token(token.kind()) {
                     segments.push((Name::new(token.text()), token.text_range()));
                 }
             }

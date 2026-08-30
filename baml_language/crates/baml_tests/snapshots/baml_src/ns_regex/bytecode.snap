@@ -228,36 +228,50 @@ function regex.$init_test_ns_regex_regex(registry: testing.TestCollector) -> nul
     pop 1
     load_var registry
     load_const "root.regex"
-    load_const "regex_dynamic_pattern_errors_reach_runtime"
+    load_const "regex_match_through_a_qualified_path"
     make_closure .<lambda($init_test_ns_regex_regex, 34)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.regex"
-    load_const "regex_unsupported_is_distinct_from_syntax"
+    load_const "regex_match_names_a_required_interface_method"
     make_closure .<lambda($init_test_ns_regex_regex, 35)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.regex"
-    load_const "regex_unbounded_recursion_is_rejected"
+    load_const "regex_dynamic_pattern_errors_reach_runtime"
     make_closure .<lambda($init_test_ns_regex_regex, 36)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.regex"
-    load_const "regex_error_carries_pattern_and_span"
+    load_const "regex_unsupported_is_distinct_from_syntax"
     make_closure .<lambda($init_test_ns_regex_regex, 37)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.regex"
-    load_const "regex_matching_never_throws"
+    load_const "regex_unbounded_recursion_is_rejected"
     make_closure .<lambda($init_test_ns_regex_regex, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_error_carries_pattern_and_span"
+    make_closure .<lambda($init_test_ns_regex_regex, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_matching_never_throws"
+    make_closure .<lambda($init_test_ns_regex_regex, 40)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
@@ -360,46 +374,52 @@ function regex.$init_test_ns_regex_replace(registry: testing.TestCollector) -> n
     load_var registry
     load_const "root.regex"
     load_const "replace_empty_search_agrees_across_roads"
-    make_closure .<lambda($init_test_ns_regex_replace, 18)>, 0
+    make_closure .<lambda($init_test_ns_regex_replace, 19)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.regex"
     load_const "replace_empty_haystack"
-    make_closure .<lambda($init_test_ns_regex_replace, 21)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.regex"
-    load_const "replace_is_codepoint_correct"
     make_closure .<lambda($init_test_ns_regex_replace, 22)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.regex"
-    load_const "replace_callback_error_propagates"
-    make_closure .<lambda($init_test_ns_regex_replace, 24)>, 0
+    load_const "replace_is_codepoint_correct"
+    make_closure .<lambda($init_test_ns_regex_replace, 23)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.regex"
-    load_const "replace_string_replacement_infers_no_effect"
+    load_const "replace_callback_error_propagates"
     make_closure .<lambda($init_test_ns_regex_replace, 25)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.regex"
-    load_const "replace_dynamic_vocabulary"
+    load_const "replace_string_replacement_infers_no_effect"
     make_closure .<lambda($init_test_ns_regex_replace, 26)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_dynamic_vocabulary"
+    make_closure .<lambda($init_test_ns_regex_replace, 27)>, 0
     load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function regex.<(user.regex.Shouty as user.regex.Matcher)>.match(self: regex.Shouty, haystack: string) -> string {
+    load_var haystack
+    call baml.String.to_upper_case
     return
 }
 
