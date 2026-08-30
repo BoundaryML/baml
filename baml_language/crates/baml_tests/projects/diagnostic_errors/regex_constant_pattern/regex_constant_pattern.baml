@@ -17,20 +17,6 @@ function backreference_without_opt_in() -> baml.regex.Regex {
     baml.regex.compile("(\\w+) \\1")
 }
 
-// BAML decodes `"\b"` as U+0008, so this pattern silently means a backspace
-// character rather than a word boundary. A *warning*, not an error: matching a
-// backspace is a legal thing to want, so this reads intent and can be wrong.
-function backspace_instead_of_word_boundary() -> baml.regex.Regex {
-    baml.regex.compile("\bword\b")
-}
-
-// `\x08` is not a BAML string escape, so its backslash survives and the engine
-// reads the hex escape itself. That is the unambiguous way to ask for the
-// character, and it does not warn.
-function deliberate_backspace_does_not_warn() -> baml.regex.Regex {
-    baml.regex.compile("\x08+")
-}
-
 // A recursive subroutine that could re-enter itself without consuming input
 // is rejected by the backtracking engine too.
 function unbounded_recursion() -> baml.regex.Regex {

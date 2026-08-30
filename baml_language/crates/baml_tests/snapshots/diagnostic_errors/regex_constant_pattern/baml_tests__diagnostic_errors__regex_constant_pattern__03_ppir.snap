@@ -5,14 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.backreference_without_opt_in() -> baml.regex.Regex  [expr] {
   {  } baml.regex.compile("(\\w+) \\1")
 }
-function user.backspace_instead_of_word_boundary() -> baml.regex.Regex  [expr] {
-  {  } baml.regex.compile("\u{8}word\u{8}")
-}
 function user.computed_dialect(on: bool) -> baml.regex.Regex  [expr] {
   {  } baml.regex.compile("\\d+(?= USD)", backtracking = on)
-}
-function user.deliberate_backspace_does_not_warn() -> baml.regex.Regex  [expr] {
-  {  } baml.regex.compile("\\x08+")
 }
 function user.dynamic_pattern(p: string) -> baml.regex.Regex  [expr] {
   {  } baml.regex.compile(p)

@@ -359,8 +359,7 @@ pub enum DiagnosticId {
     InterfaceMethodMissingThrows,
 
     // Regex diagnostics (E0171+).
-    /// A constant pattern passed to `baml.regex.compile` does not compile, or
-    /// contains a literal backspace where `\\b` was meant.
+    /// A constant pattern passed to `baml.regex.compile` does not compile.
     InvalidRegexPattern,
 
     /// A runtime reflection union constructor received no members. Static

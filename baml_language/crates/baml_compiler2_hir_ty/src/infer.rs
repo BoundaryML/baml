@@ -830,10 +830,6 @@ enum PendingDiag<'db> {
         message: String,
         offset: Option<usize>,
     },
-    /// A constant pattern argument holding a literal backspace character.
-    RegexPatternBackspaceEscape {
-        expr: ExprId,
-    },
     MountedPackageCallUnsupported {
         expr: ExprId,
         path: baml_type::Name,
@@ -5126,15 +5122,6 @@ impl<'db> InferenceContext<'db> {
             return;
         }
         let expr = pattern_arg.expr;
-
-        // BAML decodes `"\b"` in a string literal as U+0008, so a pattern
-        // written with a single backslash silently means a backspace character
-        // rather than a word boundary. Nothing else produces a bare backspace
-        // in a pattern, so it is worth calling out on its own.
-        if pattern.contains('\u{8}') {
-            self.pending_diags
-                .push(PendingDiag::RegexPatternBackspaceEscape { expr });
-        }
 
         // The dialect follows the `backtracking` argument when it is itself
         // constant. When it is computed, only a pattern *both* dialects reject
@@ -11585,20 +11572,6 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
-                    // A warning, not an error: this is a guess about intent.
-                    // A backspace is a legal thing to want in a pattern (a
-                    // protocol, terminal output), and the guess is only
-                    // *usually* right — so it must not block the caller who
-                    // meant it.
-                    PendingDiag::RegexPatternBackspaceEscape { expr } => {
-                        diags.push(TirDiagnostic {
-                            error: TirTypeError::RegexPatternBackspaceEscape,
-                            severity: DiagnosticSeverity::Warning,
-                            primary: DiagnosticLocation::Expr(expr),
-                            related: Vec::new(),
-                        });
-                        continue;
-                    }
                     PendingDiag::RuntimeTypeArgumentOnStreamingCall { expr, callee } => (
                         TirTypeError::RuntimeTypeArgumentOnStreamingCall {
                             callee_name: callee,
