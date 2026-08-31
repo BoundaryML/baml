@@ -128,6 +128,35 @@ test "a lambda receives context from the function arm of a union" {
     assert.equal(package.diagnostics().length(), 0)
 }
 
+test "a union callback lowers an optional function adapter" {
+    let package = reflect.Package.compile(
+        {
+            "case.baml": `
+                type NarrowCallback = (x: int, b?: int) -> int throws never
+
+                function combine(x: int, a: int = 10, b: int = 100) -> int throws never {
+                    x + a + b
+                }
+
+                function apply_optional(f: NarrowCallback?) -> int throws never {
+                    if f == null {
+                        -1
+                    } else {
+                        f(1, b = 5)
+                    }
+                }
+
+                function adapter_demo() -> int throws never {
+                    apply_optional(combine)
+                }
+            `,
+        },
+    );
+    let adapter_demo = package.get_function<() -> int>("root.adapter_demo")
+        ?? baml.sys.panic("missing root.adapter_demo");
+    assert.equal(adapter_demo(), 16)
+}
+
 test "a lambda does not guess between multiple function arms" {
     root.compiler.AssertRejected(
         {

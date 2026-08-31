@@ -2182,7 +2182,7 @@ impl<'db> InferenceContext<'db> {
                     arg: expr,
                     expected: expected.clone(),
                 });
-                self.record_function_adapter(expr, &ty, expected);
+                self.record_checked_function_adapter(expr, &ty, expected);
             } else {
                 self.result
                     .type_mismatches
@@ -2208,7 +2208,7 @@ impl<'db> InferenceContext<'db> {
                 self.provisional_checks
                     .push((expr, expected.clone(), ty.clone()));
             }
-            self.record_function_adapter(expr, &ty, expected);
+            self.record_checked_function_adapter(expr, &ty, expected);
         }
         ty
     }
@@ -2231,8 +2231,26 @@ impl<'db> InferenceContext<'db> {
     /// recording sites. Fires only on an ACCEPTED check whose value and
     /// expectation are both function-shaped but runtime-incompatible
     /// (TIR's `function_coercion_for`): lowering must synthesize an
-    /// adapter closure. Read-only on inference state (no var forcing -
-    /// alias expansion only), so recording cannot perturb typing.
+    /// adapter closure. Expected-shape resolution runs only after the subtype
+    /// check succeeds and follows the same unique-callback selection used by
+    /// lambda inference.
+    fn record_checked_function_adapter(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
+        let got_shape = self.table.resolve_completely(got);
+        let got_shape = self.expand_alias_ty(&got_shape);
+        if !matches!(got_shape.kind(), TyKind::Function { .. }) {
+            return;
+        }
+
+        // Subtyping above still judges against the declared union. Adapter
+        // lowering instead needs the unique concrete callback arm whose
+        // runtime parameter shape the accepted function must implement.
+        let expected_shape = self.table.resolve_completely(expected);
+        let adapter_expected = self
+            .callback_root_fn(&expected_shape)
+            .unwrap_or(expected_shape);
+        self.record_function_adapter(expr, got, &adapter_expected);
+    }
+
     fn record_function_adapter(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
         let got = self.table.resolve_completely(got);
         let got = self.expand_alias_ty(&got);
