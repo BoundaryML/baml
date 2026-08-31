@@ -3,28 +3,17 @@ name: BAML Release
 on:
   workflow_dispatch:
     inputs:
-      force_publish_vscode:
-        description: "Force publish to VSCode Marketplace and Open VSX"
+      dry_run:
+        description: "Build and verify without creating tags or publishing"
         type: boolean
         required: false
         default: false
-  # need to run this periodically on the default branch to populate the build cache
-  schedule:
-    # daily at 2am PST
-    - cron: 0 10 * * *
-  push:
-    tags:
-      - "test-release/*.*"
-      - "*.*"
-    branches:
-      - tool-update
-      - aaron/fixbuild
-      # - aaron/promptfiddle-fix
+
 concurrency:
   # No suffix specified - in reusable workflows we need a statically-defined suffix
   # to prevent workflow_call workflows from triggering a concurrency deadlock
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ inputs.dry_run && format('dry-run-{0}', github.sha) || 'release' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -41,40 +30,81 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       version_string: ${{ steps.set-version.outputs.version }}
-      is_release_tag: ${{ steps.set-version.outputs.is_release_tag }}
+      is_release: ${{ steps.set-version.outputs.is_release }}
     steps:
+      - uses: actions/checkout@v6
       - name: Set Version Info
         id: set-version
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          REF: ${{ github.ref }}
         run: |
-          VERSION="0.1.0" # Default version
-          IS_RELEASE="false"
-          REF_NAME="${{ github.ref_name }}"
-          REF_TYPE="${{ github.ref_type }}"
+          set -euo pipefail
 
-          if [[ "$REF_TYPE" == "branch" ]]; then
-            # If it's a branch, keep the version as the default
-            : # No-op, version remains "canary"
-          elif [[ "$REF_TYPE" == "tag" ]];
-          then
-            # Use sanitized tag name for version initially
-            VERSION=$(echo "$REF_NAME" | sed 's|/|-|g')
-            # Check if it's a release tag matching vX.Y.Z
-            if [[ "$REF_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              IS_RELEASE="true"
-              # Use the exact tag name for releases
-              VERSION="$REF_NAME"
-            fi
+          if [[ "$REF" != "refs/heads/canary" ]]; then
+            echo "Engine releases must be dispatched from the canary branch, not $REF" >&2
+            exit 1
           fi
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "is_release_tag=$IS_RELEASE" >> $GITHUB_OUTPUT
-          echo "Determined version: $VERSION"
-          echo "Is release tag: $IS_RELEASE"
+          VERSION="$(awk '/^current_version =/ { print $3; exit }' tools/versions/engine.cfg)"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "tools/versions/engine.cfg must contain an unprefixed semantic current_version such as 0.226.2" >&2
+            exit 1
+          fi
+
+          IS_RELEASE="true"
+          if [[ "$DRY_RUN" == "true" ]]; then
+            IS_RELEASE="false"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "is_release=$IS_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+          echo "Production release: $IS_RELEASE"
+          {
+            echo "### Engine release plan"
+            echo
+            echo "- Version: \`$VERSION\`"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Production release: \`$IS_RELEASE\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify source versions
+        env:
+          VERSION: ${{ steps.set-version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          for config in tools/versions/*.cfg; do
+            configured_version="$(awk '/^current_version =/ { print $3; exit }' "$config")"
+            if [[ "$configured_version" != "$VERSION" ]]; then
+              echo "$config contains $configured_version, expected $VERSION" >&2
+              exit 1
+            fi
+          done
+
+          if ! grep -Fq "## [$VERSION]" CHANGELOG.md; then
+            echo "CHANGELOG.md does not contain a $VERSION release entry" >&2
+            exit 1
+          fi
+      - name: Verify release tags do not exist
+        env:
+          VERSION: ${{ steps.set-version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          refs="$(git ls-remote --tags origin "refs/tags/$VERSION" "refs/tags/v$VERSION")"
+          if [[ -n "$refs" ]]; then
+            echo "A release tag for $VERSION already exists. Re-run failed jobs in the original workflow run, or use a new patch version." >&2
+            echo "$refs" >&2
+            exit 1
+          fi
 
   build-python-release:
+    needs: determine-version
     uses: ./.github/workflows/build-python-release.reusable.yaml
 
   build-typescript-release:
+    needs: determine-version
     uses: ./.github/workflows/build-typescript-release.reusable.yaml
 
   build-cli:
@@ -89,12 +119,14 @@ jobs:
     uses: ./.github/workflows/build-vscode-release.reusable.yaml
     with:
       version: ${{ needs.determine-version.outputs.version_string }}
-      is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+      is_release_build: true
 
   build-jetbrains-release:
+    needs: determine-version
     uses: ./.github/workflows/build-jetbrains-release.reusable.yaml
 
   integ-tests:
+    needs: determine-version
     uses: ./.github/workflows/integ-tests.yml
 
   all-builds:
@@ -110,10 +142,102 @@ jobs:
     steps:
       - run: echo "::do-nothing::" >/dev/null
 
+  create-release-tag:
+    name: Create annotated release tags
+    environment: release
+    permissions:
+      contents: write
+    needs: [all-builds, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.determine-version.outputs.version_string }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+          ref: ${{ github.sha }}
+      - name: Create or verify annotated tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          verify_remote_tag() {
+            local tag="$1"
+            local tag_ref="refs/tags/${tag}"
+            local refs
+            local object
+            local peeled
+
+            if ! refs="$(git ls-remote --tags origin "$tag_ref" "${tag_ref}^{}")"; then
+              echo "Failed to read remote tag $tag" >&2
+              exit 1
+            fi
+
+            object="$(awk -v ref="$tag_ref" '$2 == ref { print $1 }' <<<"$refs")"
+            peeled="$(awk -v ref="${tag_ref}^{}" '$2 == ref { print $1 }' <<<"$refs")"
+
+            if [[ -z "$object" ]]; then
+              return 1
+            fi
+            if [[ -z "$peeled" ]]; then
+              echo "Remote tag $tag is lightweight; refusing to replace it" >&2
+              exit 1
+            fi
+            if [[ "$peeled" != "$GITHUB_SHA" ]]; then
+              echo "Remote tag $tag peels to $peeled, expected $GITHUB_SHA; refusing to move it" >&2
+              exit 1
+            fi
+
+            git fetch --no-tags origin "+${tag_ref}:${tag_ref}"
+            if [[ "$(git cat-file -t "$tag_ref")" != "tag" ]]; then
+              echo "Remote tag $tag is not annotated; refusing to replace it" >&2
+              exit 1
+            fi
+            if ! git cat-file tag "$tag_ref" | grep -Fqx "Workflow: $RUN_URL"; then
+              echo "Remote tag $tag was not created by this workflow run; refusing to reuse it" >&2
+              exit 1
+            fi
+
+            echo "Verified existing annotated tag $tag at $GITHUB_SHA"
+          }
+
+          tags=("$VERSION" "v$VERSION")
+          missing_tags=()
+          for tag in "${tags[@]}"; do
+            if ! verify_remote_tag "$tag"; then
+              missing_tags+=("$tag")
+            fi
+          done
+
+          if (( ${#missing_tags[@]} > 0 )); then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            message="$(printf 'BAML v0 release: %s\n\nSource: %s\nWorkflow: %s' "$VERSION" "$GITHUB_SHA" "$RUN_URL")"
+            refs_to_push=()
+            for tag in "${missing_tags[@]}"; do
+              git tag --annotate "$tag" "$GITHUB_SHA" --message "$message"
+              refs_to_push+=("refs/tags/${tag}:refs/tags/${tag}")
+            done
+
+            if ! git push --atomic origin "${refs_to_push[@]}"; then
+              echo "Tag push failed; checking whether the remote accepted the tags before the connection failed" >&2
+            fi
+          fi
+
+          for tag in "${tags[@]}"; do
+            if ! verify_remote_tag "$tag"; then
+              echo "Remote tag $tag is still absent" >&2
+              exit 1
+            fi
+          done
+
   publish-to-pypi:
     environment: release
-    needs: [all-builds, determine-version]
-    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+    needs: [create-release-tag, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     steps:
@@ -144,8 +268,8 @@ jobs:
 
   publish-to-npm:
     environment: release
-    needs: [all-builds, determine-version]
-    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+    needs: [create-release-tag, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     permissions:
@@ -215,8 +339,8 @@ jobs:
 
   publish-to-crates-io:
     environment: release
-    needs: [all-builds, determine-version]
-    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+    needs: [create-release-tag, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     steps:
@@ -237,7 +361,7 @@ jobs:
         run: |
           # Use cargo-release to publish all crates in dependency order
           # Version is explicitly set from the git tag (e.g., 0.216.0)
-          # --no-tag: Don't create git tags (release is triggered by existing tag)
+          # --no-tag: Don't create git tags (create-release-tag owns both release tags)
           # --no-push: Don't push to remote
           # --no-confirm: Non-interactive mode
           # --execute: Actually perform the release (not a dry run)
@@ -246,10 +370,10 @@ jobs:
 
   publish-to-open-vsx:
     environment: release
-    needs: [determine-version, all-builds]
+    needs: [create-release-tag, determine-version]
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
-    if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     steps:
       - uses: actions/checkout@v6
       - name: Setup Tools
@@ -258,8 +382,7 @@ jobs:
         uses: ./.github/actions/setup-node
         with:
           node-action-version: "v6"
-          install_dependencies: false
-          npm-token: ${{ secrets.NPM_TOKEN }}
+          install-dependencies: false
       - name: Download VSIX artifacts
         uses: actions/download-artifact@v8
         with:
@@ -275,10 +398,10 @@ jobs:
 
   publish-to-vscode-marketplace:
     environment: release
-    needs: [determine-version, all-builds]
+    needs: [create-release-tag, determine-version]
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
-    if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     steps:
       - uses: actions/checkout@v6
       - name: Setup Tools
@@ -287,8 +410,7 @@ jobs:
         uses: ./.github/actions/setup-node
         with:
           node-action-version: "v6"
-          install_dependencies: false
-          npm-token: ${{ secrets.NPM_TOKEN }}
+          install-dependencies: false
       - name: Download VSIX artifacts
         uses: actions/download-artifact@v8
         with:
@@ -304,10 +426,10 @@ jobs:
 
   publish-to-jetbrains-marketplace:
     environment: release
-    needs: [determine-version, all-builds]
+    needs: [create-release-tag, determine-version]
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
-    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     steps:
       - uses: actions/checkout@v6
       - name: Setup Tools
@@ -331,7 +453,8 @@ jobs:
     environment: release
     permissions:
       contents: write
-    needs: [all-builds, determine-version]
+    needs: [create-release-tag, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     steps:
@@ -365,17 +488,15 @@ jobs:
       - name: Prepare changelog
         run: |
           touch CHANGELOG.txt
-          if [[ "${{ needs.determine-version.outputs.is_release_tag }}" == "true" ]]; then
-            awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d' > CHANGELOG.txt
-          fi
+          awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d' > CHANGELOG.txt
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: BAML v0 ${{ needs.determine-version.outputs.version_string }}
           tag_name: ${{ needs.determine-version.outputs.version_string }}
           body_path: CHANGELOG.txt
-          draft: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
-          prerelease: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
+          draft: false
+          prerelease: false
           files: |
             cli-artifacts/**/*
             cffi-artifacts/**/*
@@ -386,8 +507,8 @@ jobs:
           generate_release_notes: false
 
   publish-to-zed-extensions:
-    needs: [all-builds, determine-version]
-    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+    needs: [create-release-tag, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     uses: ./.github/workflows/publish-zed-release.reusable.yaml
     secrets:
       SAM_BAML_ZED_GITHUB_TOKEN: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
