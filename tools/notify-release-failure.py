@@ -133,6 +133,7 @@ def format_failure(failure: Failure) -> str:
 
 
 def main() -> int:
+    """Notify Slack of the current release result."""
     try:
         repository = required_env("GITHUB_REPOSITORY")
         run_id = required_env("GITHUB_RUN_ID")

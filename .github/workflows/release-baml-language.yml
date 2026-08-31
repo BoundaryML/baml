@@ -2342,7 +2342,7 @@ jobs:
       - smoke-swift-release
     # Use the dispatch input so a failure in plan itself is still reportable.
     # This job must run after failed dependencies. Every production release result notifies Slack, including successful nightlies.
-    if: ${{ always() && inputs.dry_run == false && needs.plan.outputs.source_branch == 'canary' }}
+    if: ${{ always() && inputs.dry_run == false && (needs.plan.outputs.source_branch == 'canary' || (needs.plan.result == 'failure' && github.ref_type == 'tag' && github.ref_name == format('baml-language-source-{0}', inputs.source_sha))) }}
     runs-on: ubuntu-latest
     environment: boundary-tools-dev
     permissions:
