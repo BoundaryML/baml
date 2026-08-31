@@ -59,11 +59,18 @@ class WrapperReleasePlatformTests(unittest.TestCase):
         self.assertEqual(windows["executable_suffix"], ".exe")
         self.assertTrue(windows["no_self_update"])
 
-        for triple in (
-            "aarch64-unknown-linux-gnu",
-            "x86_64-unknown-linux-gnu",
-        ):
+        cross_images = {
+            "aarch64-unknown-linux-gnu": "ghcr.io/rust-cross/manylinux2014-cross:aarch64",
+            "x86_64-unknown-linux-gnu": "ghcr.io/rust-cross/manylinux2014-cross:x86_64",
+        }
+        for triple, cross_image in cross_images.items():
             self.assertEqual(targets[triple].runner, "ubuntu-latest")
+            self.assertEqual(targets[triple].cross_image, cross_image)
+            self.assertEqual(targets[triple].matrix_entry()["cross_image"], cross_image)
+        for triple, target in targets.items():
+            if triple not in cross_images:
+                self.assertIsNone(target.cross_image)
+                self.assertNotIn("cross_image", target.matrix_entry())
 
     def test_expected_assets_include_both_linux_libcs_and_windows_variants(
         self,
@@ -141,6 +148,18 @@ class WrapperReleasePlatformTests(unittest.TestCase):
                 "wrapper runner .* does not match macos",
                 lambda contract: contract["targets"][0]["artifacts"]["wrapper"].update(
                     runner="windows-latest"
+                ),
+            ),
+            (
+                "wrapper.cross_image must be a non-empty string",
+                lambda contract: contract["targets"][2]["artifacts"]["wrapper"].pop(
+                    "cross_image"
+                ),
+            ),
+            (
+                "wrapper.cross_image is only valid for GNU targets",
+                lambda contract: contract["targets"][3]["artifacts"]["wrapper"].update(
+                    cross_image="example.invalid/image@sha256:" + "0" * 64
                 ),
             ),
         )

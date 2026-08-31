@@ -1,5 +1,5 @@
 {
-  "description": "Repository-owned platform contract: the single machine-readable source for the BAML language release target set, per-target per-artifact support, and each artifact's build config. The wrapper, cffi, toolchain, python, java, and C# matrices are generated from this file. Wrapper entries own their runners and published variants. CFFI entries own language-neutral native production; sibling C# entries own .NET RID projection, package-native filenames, native consumer runners, support tier, and package policy. C# requires CFFI, while CFFI support does not imply C# support. A missing artifact key means unsupported; `experimental: true` means best-effort; absent/false means required.",
+  "description": "Repository-owned platform contract: the single machine-readable source for the BAML language release target set, per-target per-artifact support, and each artifact's build config. The wrapper, cffi, toolchain, python, java, and C# matrices are generated from this file. Wrapper entries own their runners, published variants, and GNU cross images. CFFI entries own language-neutral native production; sibling C# entries own .NET RID projection, package-native filenames, native consumer runners, support tier, and package policy. C# requires CFFI, while CFFI support does not imply C# support. A missing artifact key means unsupported; `experimental: true` means best-effort; absent/false means required.",
   "schema": 1,
   "targets": [
     {
@@ -42,7 +42,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "ubuntu-24.04-arm" },
-        "wrapper": { "runner": "ubuntu-latest", "variants": ["self-update", "no-self-update"] },
+        "wrapper": { "runner": "ubuntu-latest", "variants": ["self-update", "no-self-update"], "cross_image": "ghcr.io/rust-cross/manylinux2014-cross:aarch64" },
         "python": { "runner": "ubuntu-latest", "manylinux": "2_24" },
         "nodejs": {},
         "java": { "platform": "linux-aarch64", "runner": "ubuntu-24.04-arm" },
@@ -74,7 +74,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "ubuntu-latest" },
-        "wrapper": { "runner": "ubuntu-latest", "variants": ["self-update", "no-self-update"] },
+        "wrapper": { "runner": "ubuntu-latest", "variants": ["self-update", "no-self-update"], "cross_image": "ghcr.io/rust-cross/manylinux2014-cross:x86_64" },
         "python": { "runner": "ubuntu-latest", "manylinux": "2_17" },
         "nodejs": {},
         "java": { "platform": "linux-x86_64", "runner": "ubuntu-latest" },

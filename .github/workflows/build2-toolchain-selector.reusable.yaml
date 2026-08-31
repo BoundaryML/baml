@@ -51,12 +51,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CARGO: cargo
-      # The stock cross 0.2.5 GNU images link against GLIBC 2.23. These pinned
-      # manylinux2014 cross images use GLIBC 2.17 sysroots for their target
-      # linkers, so GNU wrappers work on GLIBC 2.18 by construction. The image's
-      # host ldd is newer; the target compiler sysroot is the compatibility floor.
-      CROSS_TARGET_AARCH64_UNKNOWN_LINUX_GNU_IMAGE: "ghcr.io/rust-cross/manylinux2014-cross:aarch64@sha256:32c92568ebee8db53e0598c21bcd06a6dd1649d45d507646a8a49313c50325f8"
-      CROSS_TARGET_X86_64_UNKNOWN_LINUX_GNU_IMAGE: "ghcr.io/rust-cross/manylinux2014-cross:x86_64@sha256:13670ccc63c35e072661938181c046243c01d7bca7976b3914177fb9b162998d"
     strategy:
       fail-fast: false
       matrix:
@@ -85,9 +79,22 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           install_args: cargo:cross
-      - name: Select cross for GNU wrapper
+      - name: Configure cross for GNU wrapper
         if: ${{ matrix.libc == 'gnu' }}
-        run: echo 'CARGO=cross' >> "$GITHUB_ENV"
+        env:
+          CROSS_IMAGE: ${{ matrix.cross_image }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          # The plan's manylinux2014 image uses a GLIBC 2.17 target
+          # sysroot. CROSS_CONFIG makes that image control linking; the image's
+          # newer host ldd does not determine the wrapper's compatibility floor.
+          cross_config="$RUNNER_TEMP/baml-wrapper-cross.toml"
+          printf '[target.%s]\nimage = "%s"\n' "$TARGET" "$CROSS_IMAGE" > "$cross_config"
+          {
+            echo 'CARGO=cross'
+            echo "CROSS_CONFIG=$cross_config"
+          } >> "$GITHUB_ENV"
       - name: Build wrapper
         env:
           EXECUTABLE_SUFFIX: ${{ matrix.executable_suffix }}
