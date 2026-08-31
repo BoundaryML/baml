@@ -285,11 +285,13 @@ jobs:
         id: gen
         run: |
           set -euo pipefail
-          # target + toolchain runner (as `os`); `libc` rides along so the musl
-          # setup step can key on it.
+          # target + toolchain runner (as `os`); `libc` rides along so Linux
+          # setup can select musl or the plan's GNU cross image.
           toolchain="$(jq -c '[.targets[]
             | select(.artifacts.toolchain != null)
-            | {target: .triple, os: .artifacts.toolchain.runner, libc: .libc}]' release/platforms.json)"
+            | .artifacts.toolchain as $toolchain
+            | {target: .triple, os: $toolchain.runner, libc: .libc}
+              + (if $toolchain.cross_image then {cross_image: $toolchain.cross_image} else {} end)]' release/platforms.json)"
           echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
           jq . <<<"$toolchain"
           csharp="$(scripts/baml-csharp-release-contract matrix)"
@@ -300,6 +302,8 @@ jobs:
     name: Build toolchain (${{ matrix.target }})
     needs: [plan, build-vsix, build-matrix]
     runs-on: ${{ matrix.os }}
+    env:
+      CARGO: cargo
     strategy:
       fail-fast: false
       matrix:
@@ -336,8 +340,27 @@ jobs:
         uses: ./.github/actions/setup-musl-cross
         with:
           target: ${{ matrix.target }}
+      - name: Setup cross for backward-compatible GNU toolchain
+        if: ${{ matrix.libc == 'gnu' }}
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: cargo:cross
+      - name: Configure cross for GNU toolchain
+        if: ${{ matrix.libc == 'gnu' }}
+        env:
+          CROSS_IMAGE: ${{ matrix.cross_image }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          cross_config="$RUNNER_TEMP/baml-toolchain-cross.toml"
+          printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = ["BAML_WORKOS_CLIENT_ID"]\n' \
+            "$TARGET" "$CROSS_IMAGE" "$TARGET" > "$cross_config"
+          {
+            echo 'CARGO=cross'
+            echo "CROSS_CONFIG=$cross_config"
+          } >> "$GITHUB_ENV"
       - name: Build CLI and pack host
-        run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml-cli --bin baml-pack-host --target "${{ matrix.target }}"
+        run: ${CARGO} build --manifest-path baml_language/Cargo.toml --release --bin baml-cli --bin baml-pack-host --target "${{ matrix.target }}"
       - name: Archive layout smoke
         run: |
           set -euo pipefail

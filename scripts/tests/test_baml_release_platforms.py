@@ -37,6 +37,12 @@ class WrapperReleasePlatformTests(unittest.TestCase):
 
     def test_wrapper_matrix_carries_variants_and_platform_suffixes(self) -> None:
         targets = {target.triple: target for target in load_wrapper_targets()}
+        platform_targets = {
+            target["triple"]: target
+            for target in json.loads(DEFAULT_PLATFORMS.read_text(encoding="utf-8"))[
+                "targets"
+            ]
+        }
 
         self.assertEqual(len(targets), 8)
         for triple in (
@@ -67,6 +73,10 @@ class WrapperReleasePlatformTests(unittest.TestCase):
             self.assertEqual(targets[triple].runner, "ubuntu-latest")
             self.assertEqual(targets[triple].cross_image, cross_image)
             self.assertEqual(targets[triple].matrix_entry()["cross_image"], cross_image)
+            self.assertEqual(
+                platform_targets[triple]["artifacts"]["toolchain"]["cross_image"],
+                cross_image,
+            )
         for triple, target in targets.items():
             if triple not in cross_images:
                 self.assertIsNone(target.cross_image)
