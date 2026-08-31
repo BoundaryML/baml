@@ -96,6 +96,29 @@ test "a later use cannot retroactively specialize a stored value" {
     )
 }
 
+test "a lambda receives context from the function arm of a union" {
+    let package = reflect.Package.compile(
+        {
+            "case.baml": `
+                class Box { text string }
+
+                function bare(f: (Box) -> string throws never) -> int throws never { 0 }
+                function unioned(f: string | ((Box) -> string throws never)) -> int throws never { 0 }
+
+                function demo() -> int[] throws never {
+                    [
+                        bare((z) -> { z.text }),
+                        bare((z) -> { z.text.to_upper_case() }),
+                        unioned((z) -> { z.text }),
+                        unioned((z) -> { z.text.to_upper_case() }),
+                    ]
+                }
+            `,
+        },
+    );
+    assert.equal(package.diagnostics().length(), 0)
+}
+
 // Both function arms are plausible, so a union does not provide one concrete
 // function type to specialize against.
 test "ambiguous callback union does not guess a specialization" {
