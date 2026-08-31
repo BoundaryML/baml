@@ -23,6 +23,7 @@ class InstallShTests(unittest.TestCase):
             ("Linux", "aarch64", "gnu", "aarch64-unknown-linux-gnu"),
             ("Linux", "aarch64", "musl", "aarch64-unknown-linux-musl"),
             ("Linux", "arm64", "musl", "aarch64-unknown-linux-musl"),
+            ("Linux", "x86_64", "unknown", "x86_64-unknown-linux-musl"),
             ("Darwin", "x86_64", "", "x86_64-apple-darwin"),
             ("Darwin", "arm64", "", "aarch64-apple-darwin"),
         )
@@ -99,7 +100,11 @@ class InstallShTests(unittest.TestCase):
                     "  printf '%s\\n' 'musl libc (x86_64)' >&2\n"
                     "  exit 1\n"
                     "fi\n"
-                    "printf '%s\\n' 'ldd (GNU libc) 2.18'\n",
+                    'if [ "$FAKE_LIBC" = gnu ]; then\n'
+                    "  printf '%s\\n' 'ldd (GNU libc) 2.18'\n"
+                    "  exit 0\n"
+                    "fi\n"
+                    "exit 1\n",
                     encoding="utf-8",
                 )
                 ldd.chmod(0o755)

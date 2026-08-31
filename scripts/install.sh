@@ -40,21 +40,10 @@ detect_linux_libc() {
     printf '%s\n' musl
     return 0
   fi
-  for loader in /lib/ld-musl-*.so.1 /usr/lib/ld-musl-*.so.1; do
-    if [ -e "$loader" ]; then
-      printf '%s\n' musl
-      return 0
-    fi
-  done
-  for loader in /lib64/ld-linux-*.so.* /lib/ld-linux-*.so.* /lib/*-linux-gnu/ld-linux-*.so.*; do
-    if [ -e "$loader" ]; then
-      printf '%s\n' gnu
-      return 0
-    fi
-  done
 
-  echo "error: could not determine whether this Linux host uses glibc or musl" >&2
-  return 1
+  # The musl wrapper is self-contained, so it is the safe bootstrap fallback
+  # when a minimal Linux environment exposes neither getconf nor a useful ldd.
+  printf '%s\n' musl
 }
 
 while [ "$#" -gt 0 ]; do
