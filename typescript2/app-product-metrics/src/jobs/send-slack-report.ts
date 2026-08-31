@@ -49,7 +49,7 @@ export function dashboardReportText(
   dashboardUrl: string,
   date: string,
 ): string {
-  return `<${new URL(dashboardUrl).href}|Product metrics dashboard> · <${productMetricsReadmeUrl}|Maintainer README> · ${date}`;
+  return `<${new URL(dashboardUrl).href}|Product metrics dashboard> · ${date}\n_This report is sent every Monday at 8 AM PT. To update it, see <${productMetricsReadmeUrl}|docs>._`;
 }
 
 export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
