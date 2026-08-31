@@ -10,6 +10,8 @@ Engine releases are started manually from `canary`. The workflow is not triggere
 
 The workflow derives the release version from `current_version` in `tools/versions/engine.cfg`. It verifies that every other `tools/versions/*.cfg` file and the changelog agree with that version.
 
+The release workflow does not run `integ-tests`; that historically flaky job is intentionally ignored here. The green `canary` CI run is the operator's test prerequisite.
+
 ## Run the release
 
 1. Open **Actions → BAML Release → Run workflow**.

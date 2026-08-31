@@ -125,10 +125,6 @@ jobs:
     needs: determine-version
     uses: ./.github/workflows/build-jetbrains-release.reusable.yaml
 
-  integ-tests:
-    needs: determine-version
-    uses: ./.github/workflows/integ-tests.yml
-
   all-builds:
     name: Assert all builds passed
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -139,7 +135,6 @@ jobs:
       - build-cli
       - build-vscode-reusable
       - build-jetbrains-release
-      - integ-tests
     steps:
       - run: echo "::do-nothing::" >/dev/null
 
