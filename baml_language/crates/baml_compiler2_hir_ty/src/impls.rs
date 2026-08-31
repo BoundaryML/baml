@@ -1867,6 +1867,48 @@ pub(crate) fn head_matches(
             .all(|(a, b)| eq_admitted(a, b, eq))
 }
 
+/// Whether `have` SATISFIES `want`: the shared head relation, plus the
+/// associated-type pins `want` demands.
+///
+/// The pin layer is what makes this a satisfaction relation rather than a
+/// head lookup. `have` may pin MORE than `want` asks (pinning is a
+/// promise, and a stronger promise still discharges a weaker one), but a
+/// pin `want` names must be present on `have` AND equal to it — so a bare
+/// `have` does NOT satisfy a pinned requirement, and a differently-pinned
+/// one does not either.
+///
+/// Distinct from [`head_matches`], which stays deliberately pin-blind: a
+/// projection candidate is FOUND by its head and then has its pin READ off
+/// (facts.rs), so demanding the pin there would be circular. Every relation
+/// that instead ASKS "does this reference discharge that requirement" wants
+/// this one.
+pub(crate) fn head_satisfies(
+    db: &dyn baml_compiler2_ppir::Db,
+    have: &InferInterface,
+    want: &InferInterface,
+    eq: &AliasOnlyFacts<'_>,
+) -> bool {
+    head_matches(have, want, eq)
+        && want.associated_types.iter().all(|(name, want_pin)| {
+            have.associated_types.iter().any(|(have_name, have_pin)| {
+                if have_name != name {
+                    return false;
+                }
+                // Normalize-then-compare, the same discipline `match_impl_head`
+                // applies to impl bindings: a REALIZED requires-pin is often a
+                // projection over the subject rather than a ground type - the
+                // stdlib's `interface Iterator requires Iterable<Item =
+                // Self.Item>` realizes to `Item = (subject as Iterator).Item`,
+                // which meets a wanted `Item = int` by VALUE and never by
+                // spelling. Comparing syntactically rejects every Self-pinned
+                // `requires` edge in the stdlib.
+                let have_pin = reduce_ground_projections(db, have_pin, 8);
+                let want_pin = reduce_ground_projections(db, want_pin, 8);
+                eq_admitted(&have_pin, &want_pin, eq)
+            })
+        })
+}
+
 /// The realized DIRECT-plus-transitive `requires` closure of an
 /// interface reference (excluding itself), fuel-bounded. `self_ty` is
 /// the SUBJECT the closure is elaborated for (the rigid var, the
@@ -2025,7 +2067,12 @@ fn interface_requires_inner(
     let eq = AliasOnlyFacts::new(db);
     let mut holds = false;
     for required in direct_requires(db, sub, self_ty) {
-        if head_matches(&required, sup, &eq) {
+        // SATISFIES, not merely matches: a required reference discharges
+        // `sup` only if it also carries every pin `sup` demands. Comparing
+        // heads alone let `Child requires Parent<Item = string>` pass for
+        // `Parent<Item = int>`, and an unpinned `requires Parent` pass for
+        // any pin at all.
+        if head_satisfies(db, &required, sup, &eq) {
             holds = true;
             break;
         }

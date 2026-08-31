@@ -1049,7 +1049,12 @@ fn exported_impls<'db>(
         let param_bounds = facts
             .generic_params
             .iter()
-            .map(|(_, bounds)| bounds.iter().map(baml_type::interned::ClosedInterface::to_plain).collect())
+            .map(|(_, bounds)| {
+                bounds
+                    .iter()
+                    .map(baml_type::interned::ClosedInterface::to_plain)
+                    .collect()
+            })
             .collect();
         let methods = facts
             .methods

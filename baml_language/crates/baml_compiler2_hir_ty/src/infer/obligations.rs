@@ -558,13 +558,13 @@ impl<'db> InferenceContext<'db> {
                 let carried = baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
                 carried.iter().any(|have| {
                     let have = InferInterface::from_constraint(have);
-                    carried_satisfies(&have, &target, &eq)
+                    crate::impls::head_satisfies(self.db, &have, &target, &eq)
                         || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
                 })
             }
             InferTy::Interface(name, args, pins, _) => {
                 let have = InferInterface::new(name.clone(), args.clone(), pins.clone());
-                carried_satisfies(&have, &target, &eq)
+                crate::impls::head_satisfies(self.db, &have, &target, &eq)
                     || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
             }
             // A projection: a reducible one reduces inside the canonical
@@ -603,24 +603,4 @@ fn interface_has_infer(interface: &InferInterface) -> bool {
             .associated_types
             .iter()
             .any(|(_, ty)| ty.has_infer())
-}
-
-/// `have` satisfies `want` when heads and args agree and `have` pins
-/// everything `want` pins to the same type (it may pin MORE; a bare
-/// `have` does not satisfy a pinned requirement).
-fn carried_satisfies(
-    have: &InferInterface,
-    want: &InferInterface,
-    eq: &crate::impls::AliasOnlyFacts<'_>,
-) -> bool {
-    // The shared head relation, plus the pin-superset this consumer
-    // layers on (a bare carried bound does not satisfy a pinned
-    // requirement). Args and pins compare under the alias oracle -
-    // the `==` drift an alias-spelled bound used to trip is gone.
-    crate::impls::head_matches(have, want, eq)
-        && want.associated_types.iter().all(|(name, want_pin)| {
-            have.associated_types.iter().any(|(have_name, have_pin)| {
-                have_name == name && crate::impls::eq_admitted(have_pin, want_pin, eq)
-            })
-        })
 }
