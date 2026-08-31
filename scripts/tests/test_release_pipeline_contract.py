@@ -1063,7 +1063,7 @@ class WorkflowGraphTests(unittest.TestCase):
     def test_release_graph_has_early_preflight_parallel_producers_and_complete_fanin(
         self,
     ) -> None:
-        """Keep the release graph complete and its wrapper compatibility gates enforced."""
+        """Keep the release graph complete and its wrapper build-plan wiring intact."""
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         wrapper_workflow = TOOLCHAIN_SELECTOR_BUILDER.read_text(encoding="utf-8")
         mise = MISE_CONFIG.read_text(encoding="utf-8")
@@ -1105,22 +1105,9 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("CROSS_CONFIG=$cross_config", wrapper)
         self.assertNotIn("CROSS_TARGET_AARCH64_UNKNOWN_LINUX_GNU_IMAGE", wrapper)
         self.assertNotIn("CROSS_TARGET_X86_64_UNKNOWN_LINUX_GNU_IMAGE", wrapper)
-        self.assertIn("Verify Linux wrapper ABI and installer selection", wrapper)
-        self.assertIn("readelf --wide --dynamic", wrapper)
-        self.assertIn("GLIBC_[0-9]+", wrapper)
-        self.assertIn('glibc_ceiling="2.18"', wrapper)
-        self.assertNotIn("GLIBC_MAX", wrapper)
-        self.assertNotIn("matrix.glibc_max", wrapper)
-        self.assertIn("--network none", wrapper)
-        self.assertIn("sh /repo/scripts/install.sh --wrapper-only", wrapper)
-        self.assertIn(
-            "debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241",
-            wrapper,
-        )
-        self.assertIn(
-            "alpine@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce",
-            wrapper,
-        )
+        self.assertNotIn("Verify Linux wrapper ABI and installer selection", wrapper)
+        self.assertNotIn("readelf", wrapper)
+        self.assertNotIn("scripts/install.sh", wrapper)
         self.assertIn("verify-wrapper-artifacts", wrapper_release)
         self.assertNotIn("unknown-linux-gnu' ||", wrapper)
         self.assertNotIn("windows-msvc", wrapper)
