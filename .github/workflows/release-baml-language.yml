@@ -267,8 +267,8 @@ jobs:
 
   # The toolchain and C# build matrices are generated from the repository's
   # platform contract (`release/platforms.json`) so the target set + per-target
-  # runners live in one machine-readable place. The reusable wrapper workflow
-  # owns its matrix generation alongside its build.
+  # runners live in one machine-readable place. The reusable toolchain-selector
+  # workflow owns its wrapper matrix generation alongside its build.
   build-matrix:
     name: Compute build matrices
     needs: [plan]
@@ -432,9 +432,9 @@ jobs:
           path: typescript2/app-vscode-webview/dist
 
   build-wrapper:
-    name: Build wrapper
+    name: Build toolchain selector
     needs: [plan]
-    uses: ./.github/workflows/build2-wrapper.reusable.yaml
+    uses: ./.github/workflows/build2-toolchain-selector.reusable.yaml
     permissions:
       contents: read
     with:

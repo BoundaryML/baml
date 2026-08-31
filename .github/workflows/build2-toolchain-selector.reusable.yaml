@@ -1,4 +1,4 @@
-name: BAML Release - Build wrapper
+name: BAML Release - Build toolchain selector
 
 on:
   workflow_call:

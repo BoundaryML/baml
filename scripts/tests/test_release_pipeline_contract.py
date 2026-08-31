@@ -18,8 +18,8 @@ GO_RELEASE_SMOKE = ROOT / "scripts" / "smoke-go-release.py"
 GO_SDK_ASSEMBLER = ROOT / "scripts" / "assemble-go-sdk-mirror"
 PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
-WRAPPER_BUILDER = (
-    ROOT / ".github" / "workflows" / "build2-wrapper.reusable.yaml"
+TOOLCHAIN_SELECTOR_BUILDER = (
+    ROOT / ".github" / "workflows" / "build2-toolchain-selector.reusable.yaml"
 )
 MISE_CONFIG = ROOT / "mise.toml"
 RELEASE_NOTIFIER = ROOT / "tools" / "notify-release-failure.py"
@@ -1065,7 +1065,7 @@ class WorkflowGraphTests(unittest.TestCase):
     ) -> None:
         """Keep the release graph complete and its wrapper compatibility gates enforced."""
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
-        wrapper_workflow = WRAPPER_BUILDER.read_text(encoding="utf-8")
+        wrapper_workflow = TOOLCHAIN_SELECTOR_BUILDER.read_text(encoding="utf-8")
         mise = MISE_CONFIG.read_text(encoding="utf-8")
         build_matrix = job_block(workflow, "build-matrix")
         wrapper_call = job_block(workflow, "build-wrapper")
@@ -1088,7 +1088,7 @@ class WorkflowGraphTests(unittest.TestCase):
 
         self.assertIn("baml-csharp-release-contract matrix", build_matrix)
         self.assertNotIn("baml-release-platforms wrapper-matrix", build_matrix)
-        self.assertIn("uses: ./.github/workflows/build2-wrapper.reusable.yaml", wrapper_call)
+        self.assertIn("uses: ./.github/workflows/build2-toolchain-selector.reusable.yaml", wrapper_call)
         self.assertIn("source_sha: ${{ needs.plan.outputs.source_sha }}", wrapper_call)
         self.assertIn("wrapper_version: ${{ needs.plan.outputs.wrapper_version }}", wrapper_call)
         self.assertIn("baml-release-platforms wrapper-matrix", wrapper_matrix)
