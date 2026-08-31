@@ -1769,6 +1769,113 @@ function read_outcome(issue: Issue) -> HandleOutcome? {
     baml.json.from_string<HandleOutcome>(baml.fs.read(path))
 }
 
+// ==================== Eval ====================
+//
+//   fix_in_budget  Easy/Medium reference issues, DryRun: the agent must land
+//                  a fix that passes the gate inside its time budget.
+//   design_doc     Hard reference issues: the design doc must match the
+//                  reference (LLM-judged similarity >= 0.7).
+//
+// Both are hours of wall-clock and are opt-in:
+//   ATB2_ISSUES=4587 tools/atb2/run_tests.sh -- baml test -i 'root::fix_in_budget::*'
+
+function judge_design_doc(ours: string, reference: string) -> IssueJudgment {
+    client: Triage
+    prompt: `
+        Two design docs for the same BAML toolchain bug, each a suggested fix plus a
+        write-up. REFERENCE is the maintainers'; OURS was produced by an agent from the
+        ticket. Score how well OURS stands in for REFERENCE: same root cause, same
+        proposed change and files, same test plan. Wording and length do not matter.
+        1.0 = interchangeable; 0.7 = same plan, minor gaps; 0.4 = related but a shepherd
+        would rewrite it; 0.0 = wrong root cause.
+
+        REFERENCE:
+        ${reference}
+
+        OURS:
+        ${ours}
+
+        ${ctx.output_format()}
+    `
+}
+
+/// ATB2_ISSUES="4587,4335" limits the eval to those issues; unset = all.
+function handle_issues_selected() -> string[]? {
+    let raw = baml.env.get("ATB2_ISSUES");
+    if (raw == null) {
+        return null;
+    };
+    (raw ?? "").split(",")
+        .map((s: string) -> string {
+            s.trim()
+        })
+        .filter((s: string) -> bool {
+            s.length() > 0
+        })
+}
+
+function selected(only: string[]?, key: string) -> bool {
+    only == null || (only ?? []).includes(key)
+}
+
+testset "fix_in_budget" with testing.PassRate(0.6) {
+    if (supabase_configured()) {
+        ensure_cache();
+        let issues = load_issues();
+        let only = handle_issues_selected();
+        for (let key in issues.keys()) {
+            let row = issues.get(key) ?? baml.sys.panic("unreachable");
+            if (row.reference_issue.time_budget_s != null && selected(only, key)) {
+                test ("#" + key) {
+                    // everything derived from `key` in here (loop-capture caveat)
+                    let issue = load_issues().get(key) ?? baml.sys.panic("no triage_issues row for #" + key);
+                    let r = issue.reference_issue;
+                    let target = with_difficulty(reference_as_issue(issue.number, r), r.difficulty);
+                    handle_issue(target, mode = HandleMode.DryRun);
+                    let out = read_outcome(target) ?? baml.sys.panic("no outcome for #" + key);
+                    log.info(
+                        {
+                            "issue": key,
+                            "kind": out.kind,
+                            "seconds": out.seconds,
+                            "budget": issue.reference_issue.time_budget_s,
+                            "turns": out.turns,
+                            "gate": match (out.gate) {
+                                null => "not run",
+                                let g: GateResult => gate_summary(g),
+                            },
+                        },
+                    );
+                    assert.equal(out.kind, "fixed");
+                }
+            };
+        }
+    };
+}
+
+testset "design_doc" with testing.PassRate(0.5) {
+    if (supabase_configured()) {
+        ensure_cache();
+        let issues = load_issues();
+        let only = handle_issues_selected();
+        for (let key in issues.keys()) {
+            let row = issues.get(key) ?? baml.sys.panic("unreachable");
+            if (row.reference_issue.design_doc != null && selected(only, key)) {
+                test ("#" + key) {
+                    let issue = load_issues().get(key) ?? baml.sys.panic("no triage_issues row for #" + key);
+                    let r = issue.reference_issue;
+                    let target = with_difficulty(reference_as_issue(issue.number, r), Difficulty.Hard);
+                    let handled = handle_issue(target, mode = HandleMode.DryRun);
+                    let ours = handled.design_doc ?? baml.sys.panic("no design doc produced for #" + key);
+                    let j = judge_design_doc(ours, issue.reference_issue.design_doc ?? "");
+                    log.info({ "issue": key, "similarity": j.similarity, "missing": j.missing });
+                    assert.is_true(j.similarity >= 0.7);
+                }
+            };
+        }
+    };
+}
+
 // ==================== Unit tests (token-free) ====================
 
 function sample_stream() -> string {
@@ -2108,5 +2215,7 @@ testset "handle_issue" {
         assert.equal(r.tests_added.length(), 1);
         let d = write_design_doc@parse(`{ "suggested_fix": "f", "doc": "## Problem\\nx" }`);
         assert.contains(render_design_doc(d), "## Suggested fix");
+        let j = judge_design_doc@parse(`{ "similarity": 0.7, "missing": null }`);
+        assert.equal(j.similarity, 0.7);
     }
 }
