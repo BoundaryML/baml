@@ -105,6 +105,7 @@ test "a lambda receives context from the function arm of a union" {
                 type BoxCallback = (Box) -> string throws never
 
                 function bare(f: BoxCallback) -> int throws never { 0 }
+                function union_inline(f: string | ((Box) -> string throws never)) -> int throws never { 0 }
                 function union_before(f: string | BoxCallback) -> int throws never { 0 }
                 function union_after(f: BoxCallback | string) -> int throws never { 0 }
                 function union_many(f: int | BoxCallback | bool | string) -> int throws never { 0 }
@@ -113,6 +114,8 @@ test "a lambda receives context from the function arm of a union" {
                     [
                         bare((z) -> { z.text }),
                         bare((z) -> { z.text.to_upper_case() }),
+                        union_inline((z) -> { z.text }),
+                        union_inline((z) -> { z.text.to_upper_case() }),
                         union_before((z) -> { z.text }),
                         union_before((z) -> { z.text.to_upper_case() }),
                         union_after((z) -> { z.text }),

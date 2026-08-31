@@ -100,8 +100,22 @@ function compiler.generics.function_values.$init_test_ns_compiler_ns_generics_ns
     pop 1
     load_var registry
     load_const "root.compiler.generics.function_values"
-    load_const "ambiguous callback union does not guess a specialization"
+    load_const "a lambda receives context from the function arm of a union"
     make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_contextual_specialization, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "a lambda does not guess between multiple function arms"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_contextual_specialization, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "ambiguous callback union does not guess a specialization"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_contextual_specialization, 7)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
