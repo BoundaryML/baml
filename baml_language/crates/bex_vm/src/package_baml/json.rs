@@ -993,7 +993,7 @@ fn serialize_class_instance(
     // Per BEP-038 (`@alias` / `@skip` are LLM-path-only): JSON interchange
     // always uses raw field names and includes every declared field, even
     // those marked `@skip`.  Aliased keys live exclusively on the
-    // `ctx.output_format()` / `$parse` LLM path.
+    // `ctx.output_format()` / FunctionSpec.parse LLM path.
     let mut out = serde_json::Map::with_capacity(class_fields.len());
     for (i, cf) in class_fields.iter().enumerate() {
         let Some(field_value) = field_values.get(i).copied() else {

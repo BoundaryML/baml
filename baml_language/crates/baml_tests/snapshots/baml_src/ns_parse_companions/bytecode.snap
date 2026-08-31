@@ -45,7 +45,7 @@ function parse_companions.ParseCompanionsParseAliasPayload(client: ai.Client | n
     load_var on_event
     call ai.Agent.new
     store_var _6
-    call user.parse_companions.ParseCompanionsParseAliasPayload$spec
+    call user.parse_companions.ParseCompanionsParseAliasPayload@spec
     store_var _8
     load_type parse_companions.ParseCompanionsAliasPayload
     load_var2 4 5
@@ -58,7 +58,7 @@ function parse_companions.ParseCompanionsParseAliasPayload(client: ai.Client | n
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$build_request(client: ai.Client | null) -> baml.http.Request {
+function parse_companions.ParseCompanionsParseAliasPayload@build_request(client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -67,7 +67,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$build_request(client:
     store_var client
 
   L0:
-    call user.parse_companions.ParseCompanionsParseAliasPayload$spec
+    call user.parse_companions.ParseCompanionsParseAliasPayload@spec
     store_var _3
     load_type parse_companions.ParseCompanionsAliasPayload
     load_var2 2 1
@@ -75,15 +75,15 @@ function parse_companions.ParseCompanionsParseAliasPayload$build_request(client:
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$parse(json: string) -> parse_companions.ParseCompanionsAliasPayload {
+function parse_companions.ParseCompanionsParseAliasPayload@parse(json: string) -> parse_companions.ParseCompanionsAliasPayload {
     load_type parse_companions.ParseCompanionsAliasPayload
     load_var json
     call baml.sap.parse
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$render_prompt() -> ai.Prompt {
-    call user.parse_companions.ParseCompanionsParseAliasPayload$spec
+function parse_companions.ParseCompanionsParseAliasPayload@render_prompt() -> ai.Prompt {
+    call user.parse_companions.ParseCompanionsParseAliasPayload@spec
     store_var _1
     load_type parse_companions.ParseCompanionsAliasPayload
     load_var _1
@@ -91,7 +91,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$render_prompt() -> ai
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$spec() -> ai.FunctionSpec<parse_companions.ParseCompanionsAliasPayload> {
+function parse_companions.ParseCompanionsParseAliasPayload@spec() -> ai.FunctionSpec<parse_companions.ParseCompanionsAliasPayload> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -103,14 +103,14 @@ function parse_companions.ParseCompanionsParseAliasPayload$spec() -> ai.Function
     load_type string
     load_type unknown
     alloc_map 0
-    make_closure .<lambda(ParseCompanionsParseAliasPayload$spec, 0)>, 0
+    make_closure .<lambda(ParseCompanionsParseAliasPayload@spec, 0)>, 0
     load_var2 1 2
     load_type parse_companions.ParseCompanionsAliasPayload
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<parse_companions.ParseCompanionsAliasPayload$stream | null, parse_companions.ParseCompanionsAliasPayload> {
+function parse_companions.ParseCompanionsParseAliasPayload@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<parse_companions.ParseCompanionsAliasPayload$stream | null, parse_companions.ParseCompanionsAliasPayload> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -127,7 +127,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$stream(client: ai.str
     store_var on_event
 
   L1:
-    call user.parse_companions.ParseCompanionsParseAliasPayload$spec
+    call user.parse_companions.ParseCompanionsParseAliasPayload@spec
     store_var _5
     load_type parse_companions.ParseCompanionsAliasPayload$stream | null
     load_type parse_companions.ParseCompanionsAliasPayload
@@ -162,7 +162,7 @@ function parse_companions.ParseCompanionsParseOptPayload(client: ai.Client | nul
     load_var on_event
     call ai.Agent.new
     store_var _6
-    call user.parse_companions.ParseCompanionsParseOptPayload$spec
+    call user.parse_companions.ParseCompanionsParseOptPayload@spec
     store_var _8
     load_type parse_companions.ParseCompanionsOptPayload
     load_var2 4 5
@@ -175,7 +175,7 @@ function parse_companions.ParseCompanionsParseOptPayload(client: ai.Client | nul
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$build_request(client: ai.Client | null) -> baml.http.Request {
+function parse_companions.ParseCompanionsParseOptPayload@build_request(client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -184,7 +184,7 @@ function parse_companions.ParseCompanionsParseOptPayload$build_request(client: a
     store_var client
 
   L0:
-    call user.parse_companions.ParseCompanionsParseOptPayload$spec
+    call user.parse_companions.ParseCompanionsParseOptPayload@spec
     store_var _3
     load_type parse_companions.ParseCompanionsOptPayload
     load_var2 2 1
@@ -192,15 +192,15 @@ function parse_companions.ParseCompanionsParseOptPayload$build_request(client: a
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$parse(json: string) -> parse_companions.ParseCompanionsOptPayload {
+function parse_companions.ParseCompanionsParseOptPayload@parse(json: string) -> parse_companions.ParseCompanionsOptPayload {
     load_type parse_companions.ParseCompanionsOptPayload
     load_var json
     call baml.sap.parse
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$render_prompt() -> ai.Prompt {
-    call user.parse_companions.ParseCompanionsParseOptPayload$spec
+function parse_companions.ParseCompanionsParseOptPayload@render_prompt() -> ai.Prompt {
+    call user.parse_companions.ParseCompanionsParseOptPayload@spec
     store_var _1
     load_type parse_companions.ParseCompanionsOptPayload
     load_var _1
@@ -208,7 +208,7 @@ function parse_companions.ParseCompanionsParseOptPayload$render_prompt() -> ai.P
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$spec() -> ai.FunctionSpec<parse_companions.ParseCompanionsOptPayload> {
+function parse_companions.ParseCompanionsParseOptPayload@spec() -> ai.FunctionSpec<parse_companions.ParseCompanionsOptPayload> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -220,14 +220,14 @@ function parse_companions.ParseCompanionsParseOptPayload$spec() -> ai.FunctionSp
     load_type string
     load_type unknown
     alloc_map 0
-    make_closure .<lambda(ParseCompanionsParseOptPayload$spec, 0)>, 0
+    make_closure .<lambda(ParseCompanionsParseOptPayload@spec, 0)>, 0
     load_var2 1 2
     load_type parse_companions.ParseCompanionsOptPayload
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<parse_companions.ParseCompanionsOptPayload$stream | null, parse_companions.ParseCompanionsOptPayload> {
+function parse_companions.ParseCompanionsParseOptPayload@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<parse_companions.ParseCompanionsOptPayload$stream | null, parse_companions.ParseCompanionsOptPayload> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -244,7 +244,7 @@ function parse_companions.ParseCompanionsParseOptPayload$stream(client: ai.strea
     store_var on_event
 
   L1:
-    call user.parse_companions.ParseCompanionsParseOptPayload$spec
+    call user.parse_companions.ParseCompanionsParseOptPayload@spec
     store_var _5
     load_type parse_companions.ParseCompanionsOptPayload$stream | null
     load_type parse_companions.ParseCompanionsOptPayload
@@ -256,7 +256,7 @@ function parse_companions.ParseCompanionsParseOptPayload$stream(client: ai.strea
 
 function parse_companions.parse_companions_missing_alias_fn() -> bool {
     load_const "{}"
-    call user.parse_companions.ParseCompanionsParseAliasPayload$parse
+    call user.parse_companions.ParseCompanionsParseAliasPayload@parse
     store_var parsed
     load_var parsed
     load_const null
@@ -267,7 +267,7 @@ function parse_companions.parse_companions_missing_alias_fn() -> bool {
 
 function parse_companions.parse_companions_missing_optional_fn() -> bool {
     load_const "{}"
-    call user.parse_companions.ParseCompanionsParseOptPayload$parse
+    call user.parse_companions.ParseCompanionsParseOptPayload@parse
     store_var parsed
     load_var parsed
     load_const null

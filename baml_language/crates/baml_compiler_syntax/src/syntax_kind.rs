@@ -268,10 +268,12 @@ pub enum SyntaxKind {
     /// implemented interfaces, or one whose `Self` appears only in return
     /// position.
     QUALIFIED_PATH_EXPR,
-    /// LLM function spec reference: `MyFunc@spec` (postfix `@spec` on a path).
+    /// LLM function companion reference: a postfix `@` selector on a path,
+    /// such as `MyFunc@spec`, `MyFunc@stream`, `MyFunc@render_prompt`,
+    /// `MyFunc@build_request`, or `MyFunc@parse`.
     ///
-    /// Structure: `<PATH_EXPR> AT WORD("spec")`. Lowered by renaming the
-    /// path's last segment to the `<name>$spec` companion function.
+    /// Structure: `<PATH_EXPR> AT WORD(selector)`. Lowered by renaming the
+    /// path's last segment to `<name>@<selector>` for the matched selector.
     SPEC_EXPR,
     /// Optional field access: `obj?.field` — short-circuits to null if base is null.
     ///

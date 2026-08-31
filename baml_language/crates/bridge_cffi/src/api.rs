@@ -54,6 +54,8 @@ pub enum BamlCffiHandleType {
     TaggedHeapHandle = 14,
     HostValueCallable = 15,
     HostValueOpaque = 16,
+    FunctionSpec = 17,
+    RuntimeValue = 18,
 }
 
 /// Receives the completed result of `call_function`.
@@ -456,6 +458,14 @@ mod tests {
             (
                 BamlCffiHandleType::HostValueOpaque,
                 BamlHandleType::HostValueOpaque,
+            ),
+            (
+                BamlCffiHandleType::FunctionSpec,
+                BamlHandleType::AdtFunctionSpec,
+            ),
+            (
+                BamlCffiHandleType::RuntimeValue,
+                BamlHandleType::AdtRuntimeValue,
             ),
         ];
         for (public, wire) in handle_pairs {

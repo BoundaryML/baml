@@ -19,6 +19,8 @@ fn type_name(ht: BamlHandleType) -> &'static str {
         BamlHandleType::AdtCollector => "collector",
         BamlHandleType::AdtType => "type",
         BamlHandleType::AdtTaggedHeapHandle => "tagged_heap_handle",
+        BamlHandleType::AdtFunctionSpec => "function_spec",
+        BamlHandleType::AdtRuntimeValue => "runtime_value",
         // Host-owned callables are tracked per-bridge, not in HANDLE_TABLE.
         // The key here is the bridge-side identity passed in from the host.
         BamlHandleType::HostValueCallable => "host_value_callable",
@@ -123,5 +125,16 @@ impl Drop for BamlHandle {
                 let _ = HANDLE_TABLE.release(self.key);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capability_handle_type_names_are_stable() {
+        assert_eq!(type_name(BamlHandleType::AdtFunctionSpec), "function_spec");
+        assert_eq!(type_name(BamlHandleType::AdtRuntimeValue), "runtime_value");
     }
 }

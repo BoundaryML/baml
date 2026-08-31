@@ -274,7 +274,7 @@ fn user.fixtures.optional_function_parameters.AskDocs(query: string, max_results
     }
 
     bb5: {
-        _11 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb6];
+        _11 = call const fn user.fixtures.optional_function_parameters.AskDocs@spec(copy _1, copy _2, copy _3) -> [bb6];
     }
 
     bb6: {
@@ -292,7 +292,7 @@ fn user.fixtures.optional_function_parameters.AskDocs(query: string, max_results
     }
 }
 
-fn user.fixtures.optional_function_parameters.AskDocs$build_request(query: string, max_results: int, filter: string, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.optional_function_parameters.AskDocs@build_request(query: string, max_results: int, filter: string, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // query // param
@@ -314,7 +314,7 @@ fn user.fixtures.optional_function_parameters.AskDocs$build_request(query: strin
     }
 
     bb2: {
-        _6 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb3];
+        _6 = call const fn user.fixtures.optional_function_parameters.AskDocs@spec(copy _1, copy _2, copy _3) -> [bb3];
     }
 
     bb3: {
@@ -327,7 +327,7 @@ fn user.fixtures.optional_function_parameters.AskDocs$build_request(query: strin
     }
 }
 
-fn user.fixtures.optional_function_parameters.AskDocs$parse(json: string) -> string {
+fn user.fixtures.optional_function_parameters.AskDocs@parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
@@ -343,7 +343,7 @@ fn user.fixtures.optional_function_parameters.AskDocs$parse(json: string) -> str
     }
 }
 
-fn user.fixtures.optional_function_parameters.AskDocs$render_prompt(query: string, max_results: int, filter: string) -> ai.Prompt {
+fn user.fixtures.optional_function_parameters.AskDocs@render_prompt(query: string, max_results: int, filter: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // query // param
@@ -353,7 +353,7 @@ fn user.fixtures.optional_function_parameters.AskDocs$render_prompt(query: strin
     let _5: reflect.Type
 
     bb0: {
-        _4 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb1];
+        _4 = call const fn user.fixtures.optional_function_parameters.AskDocs@spec(copy _1, copy _2, copy _3) -> [bb1];
     }
 
     bb1: {
@@ -366,7 +366,7 @@ fn user.fixtures.optional_function_parameters.AskDocs$render_prompt(query: strin
     }
 }
 
-fn user.fixtures.optional_function_parameters.AskDocs$spec(query: string, max_results: int, filter: string) -> ai.FunctionSpec<string> {
+fn user.fixtures.optional_function_parameters.AskDocs@spec(query: string, max_results: int, filter: string) -> ai.FunctionSpec<string> {
     // Locals:
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // query // param [captured]
@@ -400,7 +400,7 @@ fn user.fixtures.optional_function_parameters.AskDocs$spec(query: string, max_re
 }
 
 // lambda[0]
-fn .<lambda(AskDocs$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(AskDocs@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -529,7 +529,7 @@ fn .<lambda(AskDocs$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prom
     }
 }
 
-fn user.fixtures.optional_function_parameters.AskDocs$stream(query: string, max_results: int, filter: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.optional_function_parameters.AskDocs@stream(query: string, max_results: int, filter: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: string // query // param
@@ -564,7 +564,7 @@ fn user.fixtures.optional_function_parameters.AskDocs$stream(query: string, max_
     }
 
     bb4: {
-        _8 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb5];
+        _8 = call const fn user.fixtures.optional_function_parameters.AskDocs@spec(copy _1, copy _2, copy _3) -> [bb5];
     }
 
     bb5: {

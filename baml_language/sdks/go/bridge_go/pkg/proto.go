@@ -94,6 +94,20 @@ func goToInboundValueTracking(v any, registered *[]uint64) (*pb.InboundValue, er
 		return &pb.InboundValue{Value: &pb.InboundValue_BoolValue{BoolValue: val}}, nil
 	case []byte:
 		return &pb.InboundValue{Value: &pb.InboundValue_Uint8ArrayValue{Uint8ArrayValue: val}}, nil
+	case *pb.BamlValueMedia:
+		if val == nil {
+			return &pb.InboundValue{}, nil
+		}
+		return &pb.InboundValue{Value: &pb.InboundValue_MediaValue{
+			MediaValue: proto.Clone(val).(*pb.BamlValueMedia),
+		}}, nil
+	case *pb.BamlValuePromptAst:
+		if val == nil {
+			return &pb.InboundValue{}, nil
+		}
+		return &pb.InboundValue{Value: &pb.InboundValue_PromptAstValue{
+			PromptAstValue: proto.Clone(val).(*pb.BamlValuePromptAst),
+		}}, nil
 	case []any:
 		var items []*pb.InboundValue
 		for _, item := range val {
@@ -322,6 +336,16 @@ func outboundToGo(val *pb.BamlOutboundValue) (any, error) {
 			Key:        v.HandleValue.Key,
 			HandleType: int32(v.HandleValue.HandleType),
 		}, nil
+	case *pb.BamlOutboundValue_MediaValue:
+		if v.MediaValue == nil {
+			return (*pb.BamlValueMedia)(nil), nil
+		}
+		return proto.Clone(v.MediaValue).(*pb.BamlValueMedia), nil
+	case *pb.BamlOutboundValue_PromptAstValue:
+		if v.PromptAstValue == nil {
+			return (*pb.BamlValuePromptAst)(nil), nil
+		}
+		return proto.Clone(v.PromptAstValue).(*pb.BamlValuePromptAst), nil
 	case *pb.BamlOutboundValue_LiteralValue:
 		lit := v.LiteralValue
 		switch l := lit.Literal.(type) {

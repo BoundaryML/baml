@@ -274,7 +274,7 @@ function         baml.sap.__new_parse_cache       <builtin>/baml/ns_sap/sap.baml
 function         baml.sap.__parse_final           <builtin>/baml/ns_sap/sap.baml:28
 function         baml.sap.__parse_partial         <builtin>/baml/ns_sap/sap.baml:36
 function         baml.sap.parse                   <builtin>/baml/ns_sap/sap.baml:44
-function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:51
+function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:55
 class            baml.spawn.SpawnParams           <builtin>/baml/ns_spawn/spawn.baml:19
 class            baml.spawn.TaskGroup             <builtin>/baml/ns_spawn/spawn.baml:31
 class            baml.spawn.CancelToken           <builtin>/baml/ns_spawn/spawn.baml:85

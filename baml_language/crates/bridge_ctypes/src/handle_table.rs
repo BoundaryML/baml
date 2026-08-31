@@ -81,11 +81,18 @@ impl CffiHandleTableEntry {
                     MediaKind::Pdf => BamlHandleType::AdtMediaPdf,
                     MediaKind::Generic => BamlHandleType::AdtMediaGeneric,
                 },
-                BexExternalAdt::TaggedHeapHandle {
-                    ty: bex_project::RuntimeTy::Function { .. },
-                    ..
-                } => BamlHandleType::FunctionRef,
-                BexExternalAdt::TaggedHeapHandle { .. } => BamlHandleType::AdtTaggedHeapHandle,
+                BexExternalAdt::TaggedHeapHandle { kind, .. } => match kind {
+                    bex_project::TaggedHeapHandleKind::Callable => BamlHandleType::FunctionRef,
+                    bex_project::TaggedHeapHandleKind::Stream => {
+                        BamlHandleType::AdtTaggedHeapHandle
+                    }
+                    bex_project::TaggedHeapHandleKind::FunctionSpec => {
+                        BamlHandleType::AdtFunctionSpec
+                    }
+                    bex_project::TaggedHeapHandleKind::RuntimeValue => {
+                        BamlHandleType::AdtRuntimeValue
+                    }
+                },
             },
         }
     }
@@ -556,6 +563,7 @@ mod tests {
         let handle = bex_project::Handle::new(7, stub_heap());
         let adt = |h: &bex_project::Handle| {
             CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+                kind: bex_project::TaggedHeapHandleKind::RuntimeValue,
                 ty: bex_project::RuntimeTy::int(),
                 heap_handle: h.clone(),
             })

@@ -1081,8 +1081,7 @@ impl ToolsField {
 }
 
 impl SpecExpr {
-    /// The base expression the postfix `@spec` was applied to (a `PATH_EXPR`
-    /// naming an LLM function).
+    /// The base expression a companion postfix was applied to.
     pub fn base(&self) -> Option<SyntaxNode> {
         self.syntax.children().next()
     }

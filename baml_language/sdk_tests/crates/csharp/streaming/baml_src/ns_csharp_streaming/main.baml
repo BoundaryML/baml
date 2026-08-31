@@ -32,3 +32,8 @@ function Structured(text: string) -> StreamEnvelope {
     ${ctx.output_format()}
   `
 }
+
+function InspectMedia(photo: image) -> string {
+  client: DeterministicReplayClient
+  prompt: `${role("user")}Describe this image: ${photo}`
+}

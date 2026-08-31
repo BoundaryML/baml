@@ -155,6 +155,9 @@ fn generate_fixture(
     if fixture_name == "host_callables" {
         verify_host_callables_surface(&fixture);
     }
+    if fixture_name == "streaming" {
+        verify_streaming_surface(&fixture);
+    }
     if fixture_name == "stdlib_resources" {
         verify_stdlib_resources_surface(&fixture);
     }
@@ -166,6 +169,73 @@ fn generate_fixture(
             fixture.join(path).display()
         ));
     }
+}
+
+fn verify_streaming_surface(fixture: &std::path::Path) {
+    let generated = fixture.join("baml_sdk");
+    let functions = fs::read_to_string(generated.join("CsharpStreaming").join("Functions.g.cs"))
+        .expect("failed to read generated streaming function surface");
+    let program = fs::read_to_string(
+        generated
+            .join("Baml")
+            .join("Generated")
+            .join("BamlProgram.g.cs"),
+    )
+    .expect("failed to read generated streaming program registry");
+
+    for expected in [
+        "BamlFunctionSpec<string> DeterministicSpec(",
+        "BamlStream<string?, string> DeterministicStream(",
+        "BamlFunctionSpec<global::CsharpStreaming.StreamEnvelope> StructuredSpec(",
+        "BamlStream<global::CsharpStreaming.StreamEnvelopeStream?, global::CsharpStreaming.StreamEnvelope> StructuredStream(",
+        "BamlGeneratedContract.CreateStream(",
+        "BamlOptional<global::Baml.BamlValue> client = default",
+    ] {
+        assert!(
+            functions.contains(expected),
+            "generated streaming surface omitted `{expected}`"
+        );
+    }
+    for forbidden in ["$spec", ").Stream("] {
+        assert!(
+            !functions.contains(forbidden) && !program.contains(forbidden),
+            "generated streaming surface retained forbidden companion `{forbidden}`"
+        );
+    }
+    for forbidden in [
+        "user.csharp_streaming.Deterministic$stream",
+        "user.csharp_streaming.InspectMedia$stream",
+        "user.csharp_streaming.Structured$stream",
+    ] {
+        assert!(
+            !functions.contains(forbidden) && !program.contains(forbidden),
+            "generated streaming registry retained synthetic function `{forbidden}`"
+        );
+    }
+    assert!(
+        !functions.contains("onEvent"),
+        "generated C# stream surface exposed the unsupported injected event listener"
+    );
+    for expected in [
+        "\"user.csharp_streaming.Deterministic\",\n            \"call\"",
+        "\"user.csharp_streaming.Deterministic@spec\",\n            \"call\"",
+        "\"user.csharp_streaming.Deterministic@stream\",\n            \"stream\"",
+        "\"user.csharp_streaming.Structured\",\n            \"call\"",
+        "\"user.csharp_streaming.Structured@spec\",\n            \"call\"",
+        "\"user.csharp_streaming.Structured@stream\",\n            \"stream\"",
+    ] {
+        assert!(
+            program.contains(expected),
+            "generated streaming registry omitted exact callable `{expected}`"
+        );
+    }
+    assert!(
+        generated
+            .join("CsharpStreaming")
+            .join("StreamEnvelopeStream.g.cs")
+            .is_file(),
+        "generated streaming SDK dropped the PPIR Out$stream model"
+    );
 }
 
 fn verify_generics_surface(fixture: &std::path::Path) {

@@ -454,10 +454,7 @@ fn collect_place_index_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                 // declines to write into the `Local`-typed position, while the
                 // defining assignment is dropped regardless — leaving the
                 // projection pointing at a local nothing defines.
-                crate::StatementKind::FreshCell(_)
-                | crate::StatementKind::VizEnter(_)
-                | crate::StatementKind::VizExit(_)
-                | crate::StatementKind::Nop => {}
+                crate::StatementKind::FreshCell(_) | crate::StatementKind::Nop => {}
             }
         }
         if let Some(term) = &block.terminator {
@@ -759,9 +756,7 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
         crate::StatementKind::FreshCell(l) => {
             uses[l.0] += 1;
         }
-        crate::StatementKind::VizEnter(_)
-        | crate::StatementKind::VizExit(_)
-        | crate::StatementKind::Nop => {}
+        crate::StatementKind::Nop => {}
         crate::StatementKind::Intrinsic { args, .. } => {
             for arg in args {
                 count_in_operand(arg, uses);
@@ -1136,8 +1131,6 @@ fn apply_subst_to_statement<'db>(
         // propagation has already retired, and the emitter then loads a slot
         // nothing ever stored to.
         crate::StatementKind::Drop(_)
-        | crate::StatementKind::VizEnter(_)
-        | crate::StatementKind::VizExit(_)
         | crate::StatementKind::FreshCell(_)
         | crate::StatementKind::Nop => {}
     }
@@ -1442,9 +1435,7 @@ fn rewrite_locals_in_statement(stmt: &mut crate::Statement, map: &[Option<Local>
         }
         crate::StatementKind::Drop(p) => remap_place(p, map),
         crate::StatementKind::FreshCell(l) => remap_local(l, map),
-        crate::StatementKind::VizEnter(_)
-        | crate::StatementKind::VizExit(_)
-        | crate::StatementKind::Nop => {}
+        crate::StatementKind::Nop => {}
         crate::StatementKind::Intrinsic { args, .. } => {
             for arg in args {
                 remap_operand(arg, map);
@@ -1729,9 +1720,7 @@ fn verify_mir(body: &MirFunctionBody<'_>, name: &crate::ItemRef) {
                 // Exhaustive rather than wildcarded: an operand-carrying
                 // statement kind that skips this check loses the one cheap
                 // tripwire for a reference to a retired local.
-                crate::StatementKind::VizEnter(_)
-                | crate::StatementKind::VizExit(_)
-                | crate::StatementKind::Nop => {}
+                crate::StatementKind::Nop => {}
             }
         }
     }

@@ -909,8 +909,8 @@ async fn runtime_enum_renders_and_alias_round_trips_through_sap() {
                 reflect.enum.value("RED", alias = "k7", description = "warm"),
                 reflect.enum.value("BLUE", description = "cool"),
             ])
-            let prompt = Classify$render_prompt<unreflect(t)>("sample").text()
-            let parsed = Classify$parse<unreflect(t)>(`"k7"`)
+            let prompt = Classify@render_prompt<unreflect(t)>("sample").text()
+            let parsed = Classify@parse<unreflect(t)>(`"k7"`)
             return prompt + "\n<PARSED>" + reflect.enum.get_value(parsed)
         }
         "##
@@ -964,7 +964,7 @@ function main() -> string {
         "speaker": reflect.Type.of<string>(),
         "words": reflect.Type.of<string[]>(),
     })
-    Extract$render_prompt<Wrapper<unreflect(runtime_class.as_type())>>("sample").text()
+    Extract@render_prompt<Wrapper<unreflect(runtime_class.as_type())>>("sample").text()
 }
 "##
     );
@@ -1001,8 +1001,8 @@ async fn runtime_enum_identity_and_metadata_are_preserved() {
             // rather than the enum-kind view's zero-argument metadata reader.
             let left: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"]).as_type()
             let right: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"]).as_type()
-            let left_prompt = Classify$render_prompt<unreflect(left)>("sample").text()
-            let right_prompt = Classify$render_prompt<unreflect(right)>("sample").text()
+            let left_prompt = Classify@render_prompt<unreflect(left)>("sample").text()
+            let right_prompt = Classify@render_prompt<unreflect(right)>("sample").text()
             let tagged = left.meta(
                 alias = "category_code",
                 description = "A generated category",
@@ -1080,7 +1080,7 @@ async fn empty_runtime_enum_fails_at_the_render_boundary() {
             let t = reflect.enum.new("Category", []) catch (e) {
                 _ => return "constructor threw"
             }
-            let rendered = Classify$render_prompt<unreflect(t)>("sample") catch (e) {
+            let rendered = Classify@render_prompt<unreflect(t)>("sample") catch (e) {
                 reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                 _ => "wrong render error",
             }
@@ -1106,7 +1106,7 @@ async fn empty_runtime_enum_fails_at_the_render_boundary() {
 }
 
 #[test]
-fn runtime_type_arguments_are_rejected_on_streaming_companions() {
+fn runtime_type_arguments_on_streaming_companions_obey_escape_rules() {
     let db = setup_test_db(
         r##"
         client TestClient = openai.ResponsesClient.new(
@@ -1121,7 +1121,7 @@ fn runtime_type_arguments_are_rejected_on_streaming_companions() {
 
         function main() -> null {
             let t = reflect.enum.new("Category", ["RED"])
-            Classify$stream<unreflect(t)>("sample")
+            Classify@stream<unreflect(t)>("sample")
             return null
         }
         "##,
@@ -1130,14 +1130,13 @@ fn runtime_type_arguments_are_rejected_on_streaming_companions() {
     assert!(
         diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.message.contains(
-                "runtime type arguments are not supported on streaming call `Classify$stream`"
-            )),
-        "missing streaming firewall diagnostic: {diagnostics:#?}"
+            .flat_map(|diagnostic| &diagnostic.related_info)
+            .any(|related| related.message.contains("Classify@stream<Out>(\"sample\")")),
+        "missing runtime-type escape diagnostic with an @stream repair: {diagnostics:#?}"
     );
 }
 
-/// B-1582 item 3: a generic LLM function's `$render_prompt` companion has a
+/// B-1582 item 3: a generic LLM function's `@render_prompt` companion has a
 /// signature free of `T` (it takes the parent's value arguments and returns an
 /// `ai.Prompt`), so it reconstructs and `Package.get_function` used to hand it
 /// out. Its *body* still materializes `T` for the output-format schema, and
@@ -1168,7 +1167,7 @@ async fn get_function_refuses_an_unspecialized_generic_through_any_function() {
         function main() -> string throws never {
             let package = reflect.Package.current()
             let callable: AnyCallable = package.get_function<AnyCallable>(
-                "GenericList$render_prompt",
+                "GenericList@render_prompt",
             ) catch (e) {
                 reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
@@ -1189,7 +1188,7 @@ async fn get_function_refuses_an_unspecialized_generic_through_any_function() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "E0165|generic function `GenericList$render_prompt` cannot be invoked through \
+            "E0165|generic function `GenericList@render_prompt` cannot be invoked through \
              reflection: its body needs type arguments"
                 .into()
         ))
@@ -1220,7 +1219,7 @@ async fn call_any_still_invokes_a_non_generic_companion() {
 
         function main() -> bool {
             let package = reflect.Package.current()
-            let callable = package.get_function<AnyCallable>("Plain$render_prompt")
+            let callable = package.get_function<AnyCallable>("Plain@render_prompt")
                 ?? throw "expected the companion"
             let rendered = reflect.call_any<unknown, unknown>(callable, { "topic": "hello" })
             rendered is ai.Prompt
@@ -1258,7 +1257,7 @@ async fn get_function_refuses_an_unspecialized_generic_companion() {
         function main() -> string throws never {
             let package = reflect.Package.current()
             let callable: PromptFn = package.get_function<PromptFn>(
-                "GenericList$render_prompt",
+                "GenericList@render_prompt",
             ) catch (e) {
                 reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
@@ -1279,7 +1278,7 @@ async fn get_function_refuses_an_unspecialized_generic_companion() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "E0165|generic function `GenericList$render_prompt` cannot be invoked through \
+            "E0165|generic function `GenericList@render_prompt` cannot be invoked through \
              reflection: its body needs type arguments"
                 .into()
         ))
@@ -1311,7 +1310,7 @@ async fn get_function_still_extracts_a_non_generic_companion() {
 
         function main() -> bool {
             let package = reflect.Package.current()
-            let callable = package.get_function<PromptFn>("Plain$render_prompt")
+            let callable = package.get_function<PromptFn>("Plain@render_prompt")
                 ?? throw "expected the companion"
             let rendered = callable("hello")
             rendered.text().length() > 0

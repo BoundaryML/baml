@@ -12,7 +12,7 @@ import baml_bridge.BamlMedia;
  * BAML engine.
  */
 public final class Image implements BamlMedia {
-    /** BAML stdlib FQN, emitted on the inbound {@code class_value}. */
+    /** BAML stdlib FQN used to choose the portable media kind. */
     public static final String FQN = "baml.media.Image";
     /** Proto {@code MediaTypeEnum.IMAGE}. */
     private static final int KIND = 1;

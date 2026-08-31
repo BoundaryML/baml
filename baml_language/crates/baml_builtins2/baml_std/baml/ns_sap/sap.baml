@@ -41,14 +41,22 @@ function __parse_partial<TStream, TFinal>(
 }
 
 /// Parse an LLM's raw text output into `T` with Schema-Aligned Parsing.
-function parse<T>(text: string) -> T throws root.errors.LlmClient {
+function parse<T>(text: string) -> T throws root.errors.ParseError {
     let cache = __new_parse_cache<T, T>();
-    __parse_final<T, T>(text, cache)
+    __parse_final<T, T>(text, cache) catch (_) {
+        root.errors.LlmClient { message } => {
+            throw root.errors.ParseError { message: message }
+        },
+    }
 }
 
 /// Parse against a runtime `type` value when the schema is data rather than a
 /// lexical type parameter. Narrow the returned `unknown` at the call site.
-function parse_type(t: reflect.Type, text: string) -> unknown throws root.errors.LlmClient {
+function parse_type(t: reflect.Type, text: string) -> unknown throws root.errors.ParseError {
     let cache: ParseCache<unknown, unknown> = ParseCache.new(t, t);
-    __parse_final<unknown, unknown>(text, cache)
+    __parse_final<unknown, unknown>(text, cache) catch (_) {
+        root.errors.LlmClient { message } => {
+            throw root.errors.ParseError { message: message }
+        },
+    }
 }

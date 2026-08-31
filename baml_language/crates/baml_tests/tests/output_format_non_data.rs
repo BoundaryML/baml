@@ -44,7 +44,7 @@ async fn static_never_specialization_throws_compilation_error() {
             {GENERIC_LIST}
 
             function main() -> string throws never {{
-                let rendered = GenericList$render_prompt<never>("items") catch (e) {{
+                let rendered = GenericList@render_prompt<never>("items") catch (e) {{
                     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
@@ -71,7 +71,7 @@ async fn runtime_never_specialization_uses_the_same_diagnostic() {
 
             function main() -> string throws never {{
                 let runtime_t = reflect.Type.of<never>()
-                let rendered = GenericList$render_prompt<unreflect(runtime_t)>("items") catch (e) {{
+                let rendered = GenericList@render_prompt<unreflect(runtime_t)>("items") catch (e) {{
                     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
@@ -128,7 +128,7 @@ async fn ordinary_data_specialization_still_renders() {
             }}
 
             function main() -> string {{
-                GenericList$render_prompt<Item>("items").text()
+                GenericList@render_prompt<Item>("items").text()
             }}
             "#
     );
@@ -156,7 +156,7 @@ async fn unknown_class_field_reports_its_path() {
             }}
 
             function main() -> string throws never {{
-                let rendered = GenericValue$render_prompt<Payload>("payload") catch (e) {{
+                let rendered = GenericValue@render_prompt<Payload>("payload") catch (e) {{
                     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
@@ -190,7 +190,7 @@ async fn nested_non_data_class_field_reports_the_full_path() {
             }}
 
             function main() -> string throws never {{
-                let rendered = GenericValue$render_prompt<Envelope>("envelope") catch (e) {{
+                let rendered = GenericValue@render_prompt<Envelope>("envelope") catch (e) {{
                     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
@@ -222,7 +222,7 @@ async fn runtime_minted_nested_non_data_field_is_rejected() {
                 let outer = reflect.class.new("RuntimeOuter", {{
                     "inner": inner.as_type(),
                 }})
-                let rendered = GenericValue$render_prompt<unreflect(outer.as_type())>("runtime") catch (e) {{
+                let rendered = GenericValue@render_prompt<unreflect(outer.as_type())>("runtime") catch (e) {{
                     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
@@ -257,7 +257,7 @@ async fn skipped_non_data_and_open_interface_fields_do_not_block_rendering() {
             }}
 
             function main() -> string {{
-                GenericValue$render_prompt<SkipControl>("visible data").text()
+                GenericValue@render_prompt<SkipControl>("visible data").text()
             }}
             "#
     );
@@ -295,7 +295,7 @@ async fn generic_data_class_output_renders() {
             }}
 
             function main() -> string {{
-                GenericValue$render_prompt<Wrapper<Item>>("wrapped item").text()
+                GenericValue@render_prompt<Wrapper<Item>>("wrapped item").text()
             }}
             "#
     );
@@ -362,7 +362,7 @@ async fn never_nested_in_a_runtime_class_field_is_rejected_not_panicked() {
                 }}) catch (e) {{
                     _ => return "class.new threw",
                 }}
-                let rendered = GenericValue$render_prompt<unreflect(outer.as_type())>("runtime")
+                let rendered = GenericValue@render_prompt<unreflect(outer.as_type())>("runtime")
                     catch (e) {{
                         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                         _ => "wrong error",

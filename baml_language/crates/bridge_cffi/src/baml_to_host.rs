@@ -226,7 +226,7 @@ pub fn result_to_outbound(
 }
 
 pub fn unhandled_spawn_error_to_outbound(error: UnhandledSpawnError) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_in_process();
+    let options = CffiHandleTableOptions::for_wire();
     let trace = bridge_ctypes::format_traceback_lines(error.trace.iter().map(|frame| {
         (
             frame.file_path.as_str(),
@@ -252,7 +252,7 @@ pub fn unhandled_spawn_error_to_outbound(error: UnhandledSpawnError) -> Vec<u8> 
 /// `GenericSdkError` (setup / internal), reusing the same synthesis helpers —
 /// no new construction logic.
 pub fn error_to_outbound(err: BridgeError) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_in_process();
+    let options = CffiHandleTableOptions::for_wire();
     let inner = match err {
         // Reuse the engine-error mapping verbatim for the wrapped RuntimeError.
         BridgeError::Runtime(rt) => result_to_outbound(Err(rt), &options)
@@ -303,7 +303,7 @@ fn panic_message(panic_info: &(dyn std::any::Any + Send)) -> String {
 /// `BamlOutboundPanic` envelope as a call-time panic — uniform with every other
 /// result.
 pub fn panic_to_outbound(panic_info: &(dyn std::any::Any + Send)) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_in_process();
+    let options = CffiHandleTableOptions::for_wire();
     BamlOutboundResult {
         result: Some(sdk_panic_arm(panic_message(panic_info), &options)),
     }
@@ -325,7 +325,7 @@ pub async fn call_and_encode(
     args: BexArgs,
     call_ctx: FunctionCallContext,
 ) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_in_process();
+    let options = CffiHandleTableOptions::for_wire();
     let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
 
     let caught = AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx))
@@ -382,6 +382,7 @@ pub async fn call_handle_and_encode(
     let (handle, args) = match HANDLE_TABLE.resolve(handle_key) {
         Some(entry) => match &*entry {
             CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+                kind: bex_project::TaggedHeapHandleKind::Callable,
                 ty: bex_project::RuntimeTy::Function { params, .. },
                 heap_handle,
             }) => {
@@ -413,7 +414,7 @@ pub async fn call_handle_and_encode(
         }
     };
 
-    let options = CffiHandleTableOptions::for_in_process();
+    let options = CffiHandleTableOptions::for_wire();
     let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
     let caught = AssertUnwindSafe(runtime.call_callable(handle, args, call_ctx))
         .catch_unwind()

@@ -28,8 +28,8 @@ async fn self_recursive_employee_renders_and_parses() {
             ))
             employee.field("manager", pending.optional())
             let employee_t = employee.build()
-            let prompt = Extract$render_prompt<unreflect(employee_t.as_type())>().text()
-            let value = Extract$parse<unreflect(employee_t.as_type())>(
+            let prompt = Extract@render_prompt<unreflect(employee_t.as_type())>().text()
+            let value = Extract@parse<unreflect(employee_t.as_type())>(
                 `{"full_name":"Ada","manager":{"full_name":"Grace","manager":null}}`,
             )
             let manager = reflect.class.get_field<unknown>(value, "manager")
@@ -126,7 +126,7 @@ async fn frozen_mutation_and_unresolved_call_name_the_builder() {
 
             let unresolved = reflect.class.builder("UnbuiltTenant")
             let erased: unknown = unresolved.type()
-            let pending_error = Extract$render_prompt<unreflect(erased)>() catch (e) {
+            let pending_error = Extract@render_prompt<unreflect(erased)>() catch (e) {
                 reflect.errors.CompilationError => e.diagnostics[0].message
             }
 
@@ -269,7 +269,7 @@ async fn recursive_pending_field_metadata_reaches_the_rendered_schema() {
                 next.meta(alias = "child", description = "Recursive child"),
             )
             let built = node.build().as_type()
-            Extract$render_prompt<unreflect(built)>().text()
+            Extract@render_prompt<unreflect(built)>().text()
         }
         "##
     );

@@ -1034,7 +1034,7 @@ function Items() -> Item[] { [Item { value: "bound", next: null }] }
             // `~~` and not `|`: `to_baml()` and the LLM schema both spell a
             // union with `|`, so a `|` join could split *inside* a surface and
             // leave the assertions below silently comparing the wrong text.
-            let schema = Render$render_prompt<Item[]>()
+            let schema = Render@render_prompt<Item[]>()
             `${item_type.to_string()}~~${item_type.to_baml()}~~${schema}~~${diagnostic}`
         }
         "##
@@ -1183,8 +1183,8 @@ fn error_surfaces_source(origin: &str) -> String {
             type Item = unreflect(item_type)
 
             let sap = baml.sap.parse<Item>("null") catch (e) {{
-                baml.errors.LlmClient => e.message,
-                _ => "not an LlmClient error",
+                baml.errors.ParseError => e.message,
+                _ => "not a ParseError",
             }}
             let sap_message = if sap is string {{ sap }} else {{ "sap accepted a null" }}
 
@@ -1349,7 +1349,7 @@ class Item { beta int, next Item? }
             type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
             type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
 
-            `${Render$render_prompt<First[]>()}~${Render$render_prompt<Second[]>()}`
+            `${Render@render_prompt<First[]>()}~${Render@render_prompt<Second[]>()}`
         }
         "##
     );

@@ -66,13 +66,21 @@ fn lower_codegen_default(
     }
 }
 
-/// If `name` contains a `$`, return `(parent_part, suffix_after_dollar)`.
-/// For example `"extract_resume$build_request"` → `Some(("extract_resume", "build_request"))`.
-/// If there's no `$`, returns `None`.
+/// If `name` contains an `@`, return `(parent_part, companion_suffix)`.
+/// For example `"extract_resume@build_request"` → `Some(("extract_resume", "build_request"))`.
+/// If there's no `@`, returns `None`.
 #[cfg(test)]
 fn split_companion(name: &str) -> Option<(&str, &str)> {
-    let pos = name.find('$')?;
+    let pos = name.find('@')?;
     Some((&name[..pos], &name[pos + 1..]))
+}
+
+/// Only the spec and stream callable companions are part of generated host
+/// SDKs. The remaining companions stay available inside BAML through their
+/// ordinary `@...` function symbols.
+fn hide_from_host_sdk(name: &str) -> bool {
+    name.split_once('@')
+        .is_some_and(|(_, suffix)| !matches!(suffix, "spec" | "stream"))
 }
 
 // ---------------------------------------------------------------------------
@@ -198,7 +206,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // Methods — lower each into a `cg::Function`. Static vs.
             // instance is dispatched structurally on whether the first
             // parameter is named `self`. Companion methods (e.g.
-            // `$build_request`) are independent `Function` entries that
+            // `@build_request`) are independent `Function` entries that
             // sit alongside their parent method in the same vec; their
             // shared span keeps them adjacent after sorting.
             for &method_loc in &class.methods {
@@ -214,11 +222,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     continue;
                 }
 
-                // `$spec` is a BAML-side recipe value, not a host-callable
-                // SDK method. Keep class methods in lockstep with the
-                // top-level function path below: `$build_request`,
-                // `$render_prompt`, `$parse`, and `$stream` remain visible.
-                if method.name.as_str().ends_with("$spec") {
+                if hide_from_host_sdk(method.name.as_str()) {
                     continue;
                 }
 
@@ -282,7 +286,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     baml_compiler2_ppir::function_parameter_defaults(db, method_loc);
 
                 // The compiler injects a `client` override on LLM methods and
-                // on the `$build_request`/`$stream` companions. It is an
+                // on the `@build_request`/`@stream` companions. It is an
                 // interface-typed BAML implementation detail and must not leak
                 // into generated host SDK method signatures. Strip it BY NAME
                 // (the injected `on_event` listener sits after it, so it is no
@@ -290,8 +294,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 // is representable and part of the SDK surface.
                 let strips_injected_client =
                     baml_compiler2_ppir::item_data::function_llm_meta(db, method_loc).is_some()
-                        || method.name.as_str().ends_with("$stream")
-                        || method.name.as_str().ends_with("$build_request");
+                        || method.name.as_str().ends_with("@stream")
+                        || method.name.as_str().ends_with("@build_request");
 
                 let arguments: Vec<cg::FunctionArgument> = sig
                     .params
@@ -467,13 +471,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 continue;
             }
 
-            // The `$spec` companion returns `ai.FunctionSpec<Out>` — a BAML-side
-            // recipe value for custom runners, not something a host language can
-            // use (and not something every generator can even classify: the C#
-            // generator hard-errors on it rather than skipping). The request
-            // builder is host-callable and stays with the other useful
-            // companions — `$render_prompt`, `$parse`, `$stream`.
-            if func.name.as_str().ends_with("$spec") {
+            if hide_from_host_sdk(func.name.as_str()) {
                 continue;
             }
 
@@ -524,7 +522,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             };
             let func_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
             // The compiler injects a `client: ai.Client? = null` override onto
-            // every LLM function (and its `$stream`/`$build_request`
+            // every LLM function (and its `@stream`/`@build_request`
             // companions, where it is retyped `ai.stream.StreamingClient?`).
             // It is a BAML-side concern typed as an INTERFACE, which no target
             // language can represent — leaving it in makes the whole function
@@ -537,8 +535,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // surface.
             let strips_injected_client =
                 baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some()
-                    || func.name.as_str().ends_with("$stream")
-                    || func.name.as_str().ends_with("$build_request");
+                    || func.name.as_str().ends_with("@stream")
+                    || func.name.as_str().ends_with("@build_request");
             let arguments: Vec<cg::FunctionArgument> = sig
                 .params
                 .iter()
@@ -810,29 +808,28 @@ mod tests {
     // ── Unit tests for pure helpers ─────────────────────────────────────────
 
     #[test]
-    fn test_split_companion_with_dollar() {
+    fn test_split_companion_with_at() {
         assert_eq!(
-            split_companion("extract_resume$build_request"),
+            split_companion("extract_resume@build_request"),
             Some(("extract_resume", "build_request"))
         );
-        assert_eq!(split_companion("Foo$parse"), Some(("Foo", "parse")));
+        assert_eq!(split_companion("Foo@parse"), Some(("Foo", "parse")));
         assert_eq!(
-            split_companion("extract_resume$render_prompt"),
+            split_companion("extract_resume@render_prompt"),
             Some(("extract_resume", "render_prompt"))
         );
     }
 
     #[test]
-    fn test_split_companion_no_dollar() {
+    fn test_split_companion_no_at() {
         assert_eq!(split_companion("extract_resume"), None);
         assert_eq!(split_companion("Foo"), None);
         assert_eq!(split_companion(""), None);
     }
 
     #[test]
-    fn test_split_companion_dollar_stream_suffix() {
-        // $stream is also handled as a companion split.
-        assert_eq!(split_companion("Resume$stream"), Some(("Resume", "stream")));
+    fn test_split_companion_at_stream_suffix() {
+        assert_eq!(split_companion("Resume@stream"), Some(("Resume", "stream")));
     }
 
     #[test]
@@ -866,8 +863,8 @@ mod tests {
 
     /// Verifies that companions land in the pool as their own
     /// `Symbol::Function` entries keyed on the suffixed name. A BAML
-    /// declarative function causes `$build_request`, `$render_prompt`,
-    /// and `$parse` companion functions to be synthesized by the
+    /// declarative function causes `@spec`, `@build_request`, `@render_prompt`,
+    /// `@parse`, and `@stream` companion functions to be synthesized by the
     /// companion expander.
     #[test]
     fn test_companions_inserted_as_independent_pool_entries() {
@@ -881,15 +878,12 @@ mod tests {
 
         let pool = build_symbol_pool(&db);
 
-        // The parent and each host-facing companion must be present as their
-        // own `Symbol::Function` entry, keyed on the suffixed name. `$spec` is
-        // deliberately absent — it returns a BAML-side `ai.FunctionSpec`.
+        // Only the parent, spec, and stream functions cross into generated
+        // host SDKs. The remaining companions stay internal BAML callables.
         for expected in [
             "extract_resume",
-            "extract_resume$build_request",
-            "extract_resume$render_prompt",
-            "extract_resume$parse",
-            "extract_resume$stream",
+            "extract_resume@spec",
+            "extract_resume@stream",
         ] {
             let key = pool
                 .keys()
@@ -927,13 +921,11 @@ function extract_resume(resume: string) -> Resume {
         // represent — leaving it in the pool made every generator classify
         // the function as unsupported and drop it entirely. `on_event` is a
         // representable function type and IS part of the SDK surface, on the
-        // function and its `$stream` companion only.
+        // function and its `@stream` companion only.
         for (bare, expected) in [
             ("extract_resume", &["resume", "on_event"][..]),
-            ("extract_resume$build_request", &["resume"][..]),
-            ("extract_resume$render_prompt", &["resume"][..]),
-            ("extract_resume$parse", &["json"][..]),
-            ("extract_resume$stream", &["resume", "on_event"][..]),
+            ("extract_resume@spec", &["resume"][..]),
+            ("extract_resume@stream", &["resume", "on_event"][..]),
         ] {
             let key = cg::Name::new(Name::new("user"), vec![], Name::new(bare));
             let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
@@ -984,21 +976,16 @@ class Extractor {
             class
                 .instance_methods
                 .iter()
-                .any(|method| method.name.as_str() == "extract$stream")
+                .any(|method| method.name.as_str() == "extract@stream")
         );
         assert!(
             class
                 .static_methods
                 .iter()
-                .any(|method| method.name.as_str() == "summarize$stream")
+                .any(|method| method.name.as_str() == "summarize@stream")
         );
 
-        for name in [
-            "extract",
-            "extract$build_request",
-            "extract$render_prompt",
-            "extract$parse",
-        ] {
+        for name in ["extract", "extract@spec"] {
             let method = find_method(name);
             assert!(
                 method
@@ -1018,21 +1005,17 @@ class Extractor {
                 .instance_methods
                 .iter()
                 .chain(class.static_methods.iter())
-                .all(|method| !method.name.as_str().ends_with("$spec")),
-            "$spec must stay out of class SDK methods"
+                .all(|method| !method.name.as_str().contains("$spec")),
+            "$spec must not appear in class SDK methods"
         );
 
         let expected = [
             ("extract", vec!["text", "suffix", "on_event"]),
-            ("extract$build_request", vec!["text", "suffix"]),
-            ("extract$render_prompt", vec!["text", "suffix"]),
-            ("extract$parse", vec!["json"]),
-            ("extract$stream", vec!["text", "suffix", "on_event"]),
+            ("extract@spec", vec!["text", "suffix"]),
+            ("extract@stream", vec!["text", "suffix", "on_event"]),
             ("summarize", vec!["text", "suffix", "on_event"]),
-            ("summarize$build_request", vec!["text", "suffix"]),
-            ("summarize$render_prompt", vec!["text", "suffix"]),
-            ("summarize$parse", vec!["json"]),
-            ("summarize$stream", vec!["text", "suffix", "on_event"]),
+            ("summarize@spec", vec!["text", "suffix"]),
+            ("summarize@stream", vec!["text", "suffix", "on_event"]),
         ];
         for (name, expected_args) in expected {
             let actual: Vec<&str> = find_method(name)

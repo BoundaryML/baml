@@ -606,9 +606,6 @@ fn collect_def_use<'db>(body: &MirFunctionBody<'db>) -> HashMap<Local, LocalDefU
                         });
                     }
                 }
-                StatementKind::VizEnter(_) | StatementKind::VizExit(_) => {
-                    // VizEnter/VizExit don't use any locals
-                }
                 StatementKind::Nop => {}
             }
         }
@@ -1355,8 +1352,7 @@ fn call_result_carried_into(terminator: Option<&Terminator<'_>>, block: BlockId)
 /// between the assignment to `_0` and the `Return` terminator.
 fn is_stack_neutral_statement(kind: &StatementKind<'_>) -> bool {
     match kind {
-        // These don't touch the stack at all - just update external state
-        StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true,
+        // Replaces a captured cell in place - doesn't touch the stack
         StatementKind::FreshCell(_) => true,
         // Intrinsics push args then SendEvent consumes them - net neutral
         StatementKind::Intrinsic { .. } => true,
@@ -1375,7 +1371,7 @@ fn is_stack_neutral_statement(kind: &StatementKind<'_>) -> bool {
 /// Check if `_0` (the return place) is a "return-phi" local.
 ///
 /// Return-phi applies when `_0` is assigned before Return in each defining block,
-/// with only stack-neutral statements (like `VizExit`) between the assignment
+/// with only stack-neutral statements (like `FreshCell`) between the assignment
 /// and Return. This allows us to:
 /// - At def sites: emit rvalue but NOT `StoreVar` (leave value on stack)
 /// - At Return: skip `LoadVar` for _0 (value already on stack)
@@ -1888,7 +1884,6 @@ fn has_side_effect(kind: &StatementKind<'_>, rvalue_reads: &HashSet<Local>) -> b
         }
         StatementKind::Drop(_) => true,
         StatementKind::FreshCell(local) => rvalue_reads.contains(local),
-        StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Intrinsic { .. } => true, // Intrinsics emit events — observable side effect
         // A write through an interface field mutates the receiver.
         StatementKind::VirtualFieldStore { .. } => true,
@@ -2381,7 +2376,6 @@ mod tests {
             entry: BlockId(0),
             locals: vec![],
             catch_regions: vec![],
-            viz_nodes: vec![],
         };
         let du = LocalDefUse {
             def: Some(DefLocation {
@@ -2453,7 +2447,6 @@ mod tests {
             entry: BlockId(0),
             locals: vec![],
             catch_regions: vec![],
-            viz_nodes: vec![],
         };
         let du = LocalDefUse {
             def: Some(DefLocation {
@@ -2596,7 +2589,6 @@ mod tests {
             entry: BlockId(0),
             locals: vec![bool_local_decl(None), bool_local_decl(name)],
             catch_regions: vec![],
-            viz_nodes: vec![],
         }
     }
 
@@ -3052,7 +3044,6 @@ mod tests {
                 int_local_decl(Some("result")),
             ],
             catch_regions: vec![],
-            viz_nodes: vec![],
         };
 
         let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
@@ -3105,7 +3096,6 @@ mod tests {
                 int_list_local_decl(Some("items")),
             ],
             catch_regions: vec![],
-            viz_nodes: vec![],
         };
 
         let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
@@ -3157,7 +3147,6 @@ mod tests {
                 int_local_decl(Some("n")),
             ],
             catch_regions: vec![],
-            viz_nodes: vec![],
         };
 
         let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);

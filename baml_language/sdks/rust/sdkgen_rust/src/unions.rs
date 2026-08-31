@@ -106,12 +106,13 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
     for (name, symbol) in symbols {
         let leaf = analysis.renamed(&routing::route(name).segments).to_vec();
         let mut tys: Vec<&Ty> = Vec::new();
+        let mut throws_tys: Vec<&Ty> = Vec::new();
         match symbol {
             Symbol::Function(function) => {
                 tys.extend(function.arguments.iter().map(|a| &a.ty));
                 tys.push(&function.return_type);
                 if let Some(throws) = &function.throws {
-                    tys.push(throws);
+                    throws_tys.push(throws);
                 }
             }
             Symbol::Class(class) => {
@@ -126,7 +127,7 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
                     tys.extend(method.arguments.iter().map(|a| &a.ty));
                     tys.push(&method.return_type);
                     if let Some(throws) = &method.throws {
-                        tys.push(throws);
+                        throws_tys.push(throws);
                     }
                 }
             }
@@ -140,6 +141,11 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
         }
         for ty in tys {
             register_unions_in(ty, &leaf, analysis, &mut registry);
+        }
+        for ty in throws_tys {
+            if let Some(filtered) = filter_throws_type(ty, analysis) {
+                register_unions_in(&filtered, &leaf, analysis, &mut registry);
+            }
         }
     }
 
@@ -158,6 +164,48 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
     }
 
     registry
+}
+
+/// Project a throws contract onto Rust's typed error surface. Open interfaces
+/// are omitted recursively; values selecting those arms remain available as
+/// `baml_bridge::Error::Runtime` instead of entering a misleading typed arm.
+pub(crate) fn filter_throws_type(ty: &Ty, analysis: &Analysis) -> Option<Ty> {
+    match ty {
+        Ty::Interface(..) => None,
+        Ty::Union(items, attr) => {
+            let representable = items
+                .iter()
+                .filter_map(|item| filter_throws_type(item, analysis))
+                .filter(|item| arm_is_representable(item, analysis))
+                .collect::<Vec<_>>();
+            if representable.is_empty() {
+                None
+            } else {
+                Some(Ty::Union(representable, attr.clone()))
+            }
+        }
+        Ty::List(inner, attr) => Some(Ty::List(
+            Box::new(filter_throws_type(inner, analysis)?),
+            attr.clone(),
+        )),
+        Ty::Map { key, value, attr } => Some(Ty::Map {
+            key: key.clone(),
+            value: Box::new(filter_throws_type(value, analysis)?),
+            attr: attr.clone(),
+        }),
+        Ty::Class(name, args, attr) => {
+            if !analysis.is_emitted(name) {
+                return None;
+            }
+            let args = args
+                .iter()
+                .map(|arg| filter_throws_type(arg, analysis))
+                .collect::<Option<Vec<_>>>()?;
+            Some(Ty::Class(name.clone(), args, attr.clone()))
+        }
+        Ty::TypeAlias(name, _) if !analysis.is_emitted(name) => None,
+        _ => Some(ty.clone()),
+    }
 }
 
 /// Walk a type and register every representable multi-arm union in it.
@@ -308,7 +356,7 @@ fn collect_arm_type_vars(ty: &Ty, out: &mut Vec<String>, seen: &mut HashSet<Stri
 
 /// Whether a payload arm's type is representable given the emitted set
 /// (the structural checks live in [`shape_error`]).
-fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
+pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
     match ty {
         Ty::Int { .. }
         | Ty::Bigint { .. }
@@ -364,7 +412,13 @@ fn variant_name(arm: &Ty) -> Option<String> {
         Ty::Class(name, _, _)
         | Ty::Enum(name, _)
         | Ty::EnumVariant(name, _, _)
-        | Ty::TypeAlias(name, _) => Some(name.name().as_str().to_string()),
+        | Ty::TypeAlias(name, _) => {
+            let mut variant = name.bare_name().to_string();
+            if name.name().as_str().ends_with("$stream") {
+                variant.push_str("Stream");
+            }
+            Some(variant)
+        }
         // A `TypeVar` arm's variant is named after the type parameter
         // (`T | string` → `TOrString { T(T), String(String) }`).
         Ty::TypeVar(var, _) => Some(var.as_str().to_string()),
