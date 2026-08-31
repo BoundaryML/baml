@@ -18,16 +18,18 @@ class InstallShTests(unittest.TestCase):
     def test_platforms_select_bootstrap_compatible_wrappers_offline(self) -> None:
         """Verify that every supported Unix host selects its bootstrap-safe wrapper."""
         cases = (
-            ("Linux", "x86_64", "x86_64-unknown-linux-musl"),
-            ("Linux", "aarch64", "aarch64-unknown-linux-musl"),
-            ("Linux", "arm64", "aarch64-unknown-linux-musl"),
-            ("Darwin", "x86_64", "x86_64-apple-darwin"),
-            ("Darwin", "arm64", "aarch64-apple-darwin"),
+            ("Linux", "x86_64", "gnu", "x86_64-unknown-linux-gnu"),
+            ("Linux", "x86_64", "musl", "x86_64-unknown-linux-musl"),
+            ("Linux", "aarch64", "gnu", "aarch64-unknown-linux-gnu"),
+            ("Linux", "aarch64", "musl", "aarch64-unknown-linux-musl"),
+            ("Linux", "arm64", "musl", "aarch64-unknown-linux-musl"),
+            ("Darwin", "x86_64", "", "x86_64-apple-darwin"),
+            ("Darwin", "arm64", "", "aarch64-apple-darwin"),
         )
 
-        for system, machine, expected_target in cases:
+        for system, machine, libc, expected_target in cases:
             with (
-                self.subTest(system=system, machine=machine),
+                self.subTest(system=system, machine=machine, libc=libc),
                 tempfile.TemporaryDirectory() as temporary,
             ):
                 temp = Path(temporary)
@@ -78,6 +80,30 @@ class InstallShTests(unittest.TestCase):
                 )
                 uname.chmod(0o755)
 
+                getconf = fake_bin / "getconf"
+                getconf.write_text(
+                    "#!/bin/sh\n"
+                    'if [ "$FAKE_LIBC" = gnu ] && [ "${1:-}" = GNU_LIBC_VERSION ]; then\n'
+                    "  printf '%s\\n' 'glibc 2.18'\n"
+                    "  exit 0\n"
+                    "fi\n"
+                    "exit 1\n",
+                    encoding="utf-8",
+                )
+                getconf.chmod(0o755)
+
+                ldd = fake_bin / "ldd"
+                ldd.write_text(
+                    "#!/bin/sh\n"
+                    'if [ "$FAKE_LIBC" = musl ]; then\n'
+                    "  printf '%s\\n' 'musl libc (x86_64)' >&2\n"
+                    "  exit 1\n"
+                    "fi\n"
+                    "printf '%s\\n' 'ldd (GNU libc) 2.18'\n",
+                    encoding="utf-8",
+                )
+                ldd.chmod(0o755)
+
                 env = os.environ.copy()
                 env.update(
                     {
@@ -85,6 +111,7 @@ class InstallShTests(unittest.TestCase):
                         "BAML_MANIFEST_BASE_URL": manifest_dir.as_uri(),
                         "FAKE_UNAME_SYSTEM": system,
                         "FAKE_UNAME_MACHINE": machine,
+                        "FAKE_LIBC": libc,
                         "HOME": str(temp / "home"),
                         "PATH": f"{fake_bin}{os.pathsep}{env['PATH']}",
                     }

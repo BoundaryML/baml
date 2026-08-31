@@ -1084,13 +1084,20 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("matrix.no_self_update", wrapper)
         self.assertIn("matrix.archive_suffix", wrapper)
         self.assertIn("matrix.executable_suffix", wrapper)
-        self.assertIn("Verify Linux installer wrapper on Debian bookworm", wrapper)
+        self.assertIn("Install cross for backward-compatible GNU wrapper", wrapper)
+        self.assertIn("cargo install cross --locked --version 0.2.5", wrapper)
+        self.assertIn("Verify Linux wrapper ABI and installer selection", wrapper)
         self.assertIn("readelf --wide --dynamic", wrapper)
-        self.assertIn("GLIBC_[0-9]", wrapper)
+        self.assertIn("GLIBC_[0-9]+", wrapper)
+        self.assertIn('matrix.glibc_max', wrapper)
         self.assertIn("--network none", wrapper)
         self.assertIn("sh /repo/scripts/install.sh --wrapper-only", wrapper)
         self.assertIn(
             "debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241",
+            wrapper,
+        )
+        self.assertIn(
+            "alpine@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce",
             wrapper,
         )
         self.assertIn("verify-wrapper-artifacts", wrapper_release)
