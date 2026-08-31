@@ -906,3 +906,36 @@ function fip_probe(x: (FipBoth as FipConv<float>).Out) -> string throws never {
 test "foreign_instantiation_projection_keeps_its_own_realization" {
     assert.equal(fip_probe("ok"), "ok")
 }
+
+// ── `Self.X` stays a projection under a name-colliding own generic ───────────
+// Associated types are not frame slots, so `Self.Item` in a default body must
+// lower as a projection over `Self` and reduce through the receiver's rule —
+// even when an OWN generic shares the associated type's name. Regression: a
+// slot-by-name shortcut in MIR template lowering matched the innermost frame
+// slot named `Item`, silently substituting the own generic (int at the call
+// below) for the projection (string), which flipped the `if let` arm.
+
+interface NcpBox {
+    type Item
+    function classify<Item>(self, val: unknown, tag: Item) -> string throws never {
+        if let v: Self.Item = val {
+            return "assoc"
+        } else {
+            return "other"
+        }
+    }
+}
+
+class NcpHolder {
+    implements NcpBox {
+        type Item = string;
+    }
+}
+
+function ncp_probe(h: NcpHolder) -> string throws never {
+    return h.classify("s", 1) + "|" + h.classify(2, 3)
+}
+
+test "self_projection_survives_name_colliding_own_generic" {
+    assert.equal(ncp_probe(NcpHolder {}), "assoc|other")
+}

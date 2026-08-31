@@ -467,31 +467,40 @@ fn lower_tir_template(
             interface,
             member,
             ..
-        } => Some(TyTemplate::AssociatedTypeProjection {
-            base: Box::new(lower_tir_template(base, resolved, generic_layout, mode)?),
-            interface: Box::new(baml_type::TyTemplateInterface {
-                name: resolved.wire(&interface.name),
-                generics: interface
-                    .generics
-                    .iter()
-                    .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
-                    .collect::<Option<Vec<_>>>()?
-                    .into(),
-                associated_types: interface
-                    .associated_types
-                    .iter()
-                    .map(|(name, ty)| {
-                        Some((
-                            name.clone(),
-                            lower_tir_template(ty, resolved, generic_layout, mode)?,
-                        ))
-                    })
-                    .collect::<Option<Vec<_>>>()?
-                    .into(),
-            }),
-            member: member.clone(),
-            attr: TyAttr::default(),
-        }),
+        } => {
+            // Always a projection template, never a frame slot: associated
+            // types are not frame slots, so a `Self.X` here has no slot to
+            // reference. (A name-based `slot_by_name(member)` shortcut lived
+            // here from the slotted era; after de-slotting it could only ever
+            // match a GENERIC that happens to share the member's name —
+            // `function pick<Item>(...) -> Self.Item` — silently substituting
+            // the own generic for the projection.)
+            Some(TyTemplate::AssociatedTypeProjection {
+                base: Box::new(lower_tir_template(base, resolved, generic_layout, mode)?),
+                interface: Box::new(baml_type::TyTemplateInterface {
+                    name: resolved.wire(&interface.name),
+                    generics: interface
+                        .generics
+                        .iter()
+                        .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
+                        .collect::<Option<Vec<_>>>()?
+                        .into(),
+                    associated_types: interface
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| {
+                            Some((
+                                name.clone(),
+                                lower_tir_template(ty, resolved, generic_layout, mode)?,
+                            ))
+                        })
+                        .collect::<Option<Vec<_>>>()?
+                        .into(),
+                }),
+                member: member.clone(),
+                attr: TyAttr::default(),
+            })
+        }
         Tir2Ty::TypeVar(param, _) => {
             if let Some(index) = generic_layout.slot(param) {
                 Some(TyTemplate::TypeArgRef(index))
@@ -6334,6 +6343,18 @@ impl<'db> LoweringContext<'db> {
                         | MemberResolution::External(_),
                     ) => {
                         // Unbound method or free function reference — emit a plain function constant.
+                        //
+                        // BUG: for `InterfaceConcreteMethod` (and an External
+                        // interface target) this constant carries NO owner
+                        // frame — calling it seeds `type_args = []`, violating
+                        // the `[owner ++ own]` frame law for any non-frame-free
+                        // impl. Local-rooted refs take the virtual-bound arms
+                        // above and type-rooted refs take the recorded-frame
+                        // road, so the residual reachable shape is a
+                        // non-local, non-type-rooted value reference (e.g.
+                        // mounted UFCS `let f = app.Widget.describe;`). Close
+                        // by routing those through `MakeVirtualFunction` with
+                        // the resolution's carried frame.
                         let resolution = member_resolutions.into_iter().last().unwrap();
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             self.builder.assign(
@@ -6474,6 +6495,13 @@ impl<'db> LoweringContext<'db> {
                     | MemberResolution::Free { .. }
                     | MemberResolution::InterfaceConcreteMethod { .. }
                     | MemberResolution::External(_) => {
+                        // BUG: same frameless-constant hole as the
+                        // `member_resolutions` arm above — an
+                        // `InterfaceConcreteMethod` reaching this bare
+                        // constant loses its owner frame (the guards above
+                        // route local- and type-rooted refs to the virtual
+                        // roads; what remains is the mounted-UFCS value
+                        // shape). See that arm's note for the fix.
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             self.builder.assign(
                                 dest,
