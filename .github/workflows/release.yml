@@ -149,6 +149,7 @@ jobs:
     environment: release
     permissions:
       contents: write
+    # All release builds must succeed before either tag is created.
     needs: [all-builds, determine-version]
     if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     runs-on: ubuntu-latest
@@ -247,8 +248,17 @@ jobs:
               }
             }
 
+            // This job is the publishing barrier: it succeeds only after both refs exist and are verified.
+            for (const tag of tags) {
+              if (!(await verifyTag(tag))) {
+                throw new Error(`Remote tag ${tag} is absent after tag creation`);
+              }
+            }
+            core.info(`Both annotated release tags exist at ${sourceSha}; publishing may proceed`);
+
   publish-to-pypi:
     environment: release
+    # create-release-tag guarantees that both annotated refs exist before any publishing begins.
     needs: [create-release-tag, determine-version]
     if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
