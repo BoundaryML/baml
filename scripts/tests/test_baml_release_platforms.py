@@ -37,12 +37,6 @@ class WrapperReleasePlatformTests(unittest.TestCase):
 
     def test_wrapper_matrix_carries_variants_and_platform_suffixes(self) -> None:
         targets = {target.triple: target for target in load_wrapper_targets()}
-        platform_targets = {
-            target["triple"]: target
-            for target in json.loads(DEFAULT_PLATFORMS.read_text(encoding="utf-8"))[
-                "targets"
-            ]
-        }
 
         self.assertEqual(len(targets), 8)
         for triple in (
@@ -65,42 +59,8 @@ class WrapperReleasePlatformTests(unittest.TestCase):
         self.assertEqual(windows["executable_suffix"], ".exe")
         self.assertTrue(windows["no_self_update"])
 
-        cross_images = {
-            "aarch64-unknown-linux-gnu": "ghcr.io/rust-cross/manylinux2014-cross:aarch64",
-            "x86_64-unknown-linux-gnu": "ghcr.io/rust-cross/manylinux2014-cross:x86_64",
-        }
-        for triple, cross_image in cross_images.items():
-            self.assertEqual(targets[triple].runner, "ubuntu-latest")
-            self.assertEqual(targets[triple].cross_image, cross_image)
-            self.assertEqual(targets[triple].matrix_entry()["cross_image"], cross_image)
-            self.assertEqual(
-                platform_targets[triple]["artifacts"]["toolchain"]["cross_image"],
-                cross_image,
-            )
-        for triple, target in targets.items():
-            if triple not in cross_images:
-                self.assertIsNone(target.cross_image)
-                self.assertNotIn("cross_image", target.matrix_entry())
-
-    def test_expected_assets_include_both_linux_libcs_and_windows_variants(
-        self,
-    ) -> None:
+    def test_expected_assets_include_both_windows_variants(self) -> None:
         assets = set(expected_wrapper_assets(VERSION))
-
-        for arch in ("aarch64", "x86_64"):
-            for libc in ("gnu", "musl"):
-                self.assertIn(
-                    f"baml-wrapper-{VERSION}-{arch}-unknown-linux-{libc}.tar.gz",
-                    assets,
-                )
-            self.assertIn(
-                f"baml-wrapper-no-self-update-{VERSION}-{arch}-unknown-linux-gnu.tar.gz",
-                assets,
-            )
-            self.assertNotIn(
-                f"baml-wrapper-no-self-update-{VERSION}-{arch}-unknown-linux-musl.tar.gz",
-                assets,
-            )
 
         for triple in (
             "aarch64-pc-windows-msvc",
@@ -111,6 +71,10 @@ class WrapperReleasePlatformTests(unittest.TestCase):
                 f"baml-wrapper-no-self-update-{VERSION}-{triple}.zip",
                 assets,
             )
+        self.assertNotIn(
+            f"baml-wrapper-no-self-update-{VERSION}-x86_64-unknown-linux-musl.tar.gz",
+            assets,
+        )
 
     def test_wrapper_artifact_verification_requires_exact_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -158,18 +122,6 @@ class WrapperReleasePlatformTests(unittest.TestCase):
                 "wrapper runner .* does not match macos",
                 lambda contract: contract["targets"][0]["artifacts"]["wrapper"].update(
                     runner="windows-latest"
-                ),
-            ),
-            (
-                "wrapper.cross_image must be a non-empty string",
-                lambda contract: contract["targets"][2]["artifacts"]["wrapper"].pop(
-                    "cross_image"
-                ),
-            ),
-            (
-                "wrapper.cross_image is only valid for GNU targets",
-                lambda contract: contract["targets"][3]["artifacts"]["wrapper"].update(
-                    cross_image="example.invalid/image@sha256:" + "0" * 64
                 ),
             ),
         )

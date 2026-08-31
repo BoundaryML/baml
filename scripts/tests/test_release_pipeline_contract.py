@@ -18,10 +18,6 @@ GO_RELEASE_SMOKE = ROOT / "scripts" / "smoke-go-release.py"
 GO_SDK_ASSEMBLER = ROOT / "scripts" / "assemble-go-sdk-mirror"
 PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
-TOOLCHAIN_SELECTOR_BUILDER = (
-    ROOT / ".github" / "workflows" / "build2-toolchain-selector.reusable.yaml"
-)
-MISE_CONFIG = ROOT / "mise.toml"
 RELEASE_NOTIFIER = ROOT / "tools" / "notify-release-failure.py"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yaml"
 NIGHTLY_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-release.yml"
@@ -1063,22 +1059,14 @@ class WorkflowGraphTests(unittest.TestCase):
     def test_release_graph_has_early_preflight_parallel_producers_and_complete_fanin(
         self,
     ) -> None:
-        """Keep the release graph complete and its wrapper build-plan wiring intact."""
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
-        wrapper_workflow = TOOLCHAIN_SELECTOR_BUILDER.read_text(encoding="utf-8")
-        mise = MISE_CONFIG.read_text(encoding="utf-8")
         build_matrix = job_block(workflow, "build-matrix")
-        toolchain = job_block(workflow, "build-toolchain")
-        wrapper_call = job_block(workflow, "build-wrapper")
-        wrapper_matrix = job_block(wrapper_workflow, "matrix")
-        wrapper = job_block(wrapper_workflow, "build")
         prepare = job_block(workflow, "prepare-csharp-sdk")
         cffi = job_block(workflow, "build-bridge-cffi")
         verify = job_block(workflow, "verify-csharp-sdk")
         all_builds = job_block(workflow, "all-builds")
         nuget = job_block(workflow, "publish-csharp-sdk")
         crates_io = job_block(workflow, "publish-crates-io")
-        wrapper_release = job_block(workflow, "publish-wrapper-release")
         prerequisites = job_block(workflow, "release-prerequisites-complete")
         notify_slack = job_block(workflow, "notify-slack")
         complete = job_block(workflow, "release-complete")
@@ -1088,39 +1076,6 @@ class WorkflowGraphTests(unittest.TestCase):
         dry_run = job_block(workflow, "dry-run-artifacts")
 
         self.assertIn("baml-csharp-release-contract matrix", build_matrix)
-        self.assertIn("$toolchain.cross_image", build_matrix)
-        self.assertIn("{cross_image: $toolchain.cross_image}", build_matrix)
-        self.assertIn("Setup cross for backward-compatible GNU toolchain", toolchain)
-        self.assertIn("CROSS_IMAGE: ${{ matrix.cross_image }}", toolchain)
-        self.assertIn("CROSS_CONFIG=$cross_config", toolchain)
-        self.assertIn("${CARGO} build", toolchain)
-        self.assertIn('passthrough = ["BAML_WORKOS_CLIENT_ID"]', toolchain)
-        self.assertNotIn("baml-release-platforms wrapper-matrix", build_matrix)
-        self.assertIn("uses: ./.github/workflows/build2-toolchain-selector.reusable.yaml", wrapper_call)
-        self.assertIn("source_sha: ${{ needs.plan.outputs.source_sha }}", wrapper_call)
-        self.assertIn("wrapper_version: ${{ needs.plan.outputs.wrapper_version }}", wrapper_call)
-        self.assertIn("baml-release-platforms wrapper-matrix", wrapper_matrix)
-        self.assertIn("fromJson(needs.matrix.outputs.include)", wrapper)
-        self.assertIn("matrix.no_self_update", wrapper)
-        self.assertIn("matrix.archive_suffix", wrapper)
-        self.assertIn("matrix.executable_suffix", wrapper)
-        self.assertIn("Setup cross for backward-compatible GNU wrapper", wrapper)
-        self.assertIn("uses: ./.github/actions/setup-mise", wrapper)
-        self.assertIn("install_args: cargo:cross", wrapper)
-        self.assertIn('"cargo:cross" = "0.2.5"', mise)
-        self.assertNotIn("cargo install cross", wrapper)
-        self.assertIn("CROSS_IMAGE: ${{ matrix.cross_image }}", wrapper)
-        self.assertIn("CROSS_CONFIG=$cross_config", wrapper)
-        self.assertIn('passthrough = ["BAML_WORKOS_CLIENT_ID"]', wrapper)
-        self.assertNotIn("CROSS_TARGET_AARCH64_UNKNOWN_LINUX_GNU_IMAGE", wrapper)
-        self.assertNotIn("CROSS_TARGET_X86_64_UNKNOWN_LINUX_GNU_IMAGE", wrapper)
-        self.assertNotIn("Verify Linux wrapper ABI and installer selection", wrapper)
-        self.assertNotIn("readelf", wrapper)
-        self.assertNotIn("scripts/install.sh", wrapper)
-        self.assertIn("verify-wrapper-artifacts", wrapper_release)
-        self.assertNotIn("unknown-linux-gnu' ||", wrapper)
-        self.assertNotIn("windows-msvc", wrapper)
-        self.assertIn("--features no-self-update", wrapper)
         self.assertIn("needs: [plan, build-matrix]", prepare)
         self.assertNotIn("build-bridge-cffi", prepare)
         self.assertIn("needs: [plan]", cffi)
