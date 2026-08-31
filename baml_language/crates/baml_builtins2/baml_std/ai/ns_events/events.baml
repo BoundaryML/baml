@@ -58,8 +58,8 @@ class Timing {
     ttft_ms: bigint?,
 }
 
-// Response snapshot; baml.http.Response holds a native body handle and
-// cannot ride events.
+/// Response snapshot; baml.http.Response holds a native body handle and
+/// cannot ride events.
 class HttpResponse {
     status: int,
     headers: map<string, string>,
@@ -67,8 +67,8 @@ class HttpResponse {
     body: string?,
 }
 
-// Raw SSE data field, streams only. Duplicates ai.stream.SseEvent's shape so
-// ns_events does not depend on ns_stream.
+/// Raw SSE data field, streams only. Duplicates ai.stream.SseEvent's shape so
+/// ns_events does not depend on ns_stream.
 class SseEventRecord {
     event: string?,
     data: string?,
@@ -100,10 +100,10 @@ type Event = RunStarted
     | LLMCall
     | FinalProduced;
 
-// Wrap a listener so a listener error can never fail or alter a run.
-// A null listener stays null; callers `if let` and skip emission entirely.
-// `E` accepts fallible listeners (host callables included); the wrapper
-// swallows whatever they throw, hence the `throws never` on the returned type.
+/// Wrap a listener so a listener error can never fail or alter a run.
+/// A null listener stays null; callers `if let` and skip emission entirely.
+/// `E` accepts fallible listeners (host callables included); the wrapper
+/// swallows whatever they throw, hence the `throws never` on the returned type.
 function guard<E>(listener: ((Event) -> void throws E)?) -> ((Event) -> void throws never)? {
     if let cb: (Event) -> void throws E = listener {
         (e: Event) -> void {

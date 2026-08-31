@@ -18,17 +18,17 @@ interface Compare requires Equals {
     }
 }
 
-// The broad `==` / `!=` operator driver.
-//
-// Unlike `Equals` (which is only available on types that implement it), `==`
-// works on any pair of compatible types. The compiler emits specialized
-// comparison bytecode or a direct `Equals.eq` call whenever the operand types
-// are statically known; `equals_equals` is the runtime fallback for erased
-// operands (`unknown`, unions, interfaces) and the recursion target for structural
-// comparison. It compares by the operands' concrete runtime types: a type that
-// implements `Equals` uses its `eq`; a class without `Equals` compares
-// structurally (field by field); enums compare by identity; and operands whose
-// concrete runtime types differ are never equal.
+/// The broad `==` / `!=` operator driver.
+///
+/// Unlike `Equals` (which is only available on types that implement it), `==`
+/// works on any pair of compatible types. The compiler emits specialized
+/// comparison bytecode or a direct `Equals.eq` call whenever the operand types
+/// are statically known; `equals_equals` is the runtime fallback for erased
+/// operands (`unknown`, unions, interfaces) and the recursion target for structural
+/// comparison. It compares by the operands' concrete runtime types: a type that
+/// implements `Equals` uses its `eq`; a class without `Equals` compares
+/// structurally (field by field); enums compare by identity; and operands whose
+/// concrete runtime types differ are never equal.
 //baml:mut_vm
 //baml:may_yield
 function equals_equals(a: unknown, b: unknown) -> bool throws never {

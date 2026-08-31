@@ -1,7 +1,7 @@
 // Internal helpers. Nothing here is part of the public ai surface.
 
-// One JSON Schema object for a function's parameters, derived from the
-// signature: every parameter typed via baml.json.schema.
+/// (internal) One JSON Schema object for a function's parameters, derived from the
+/// signature: every parameter typed via baml.json.schema.
 function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unknown> {
     let sig = reflect.signature(handler);
     let props: map<string, unknown> = {};
@@ -13,8 +13,8 @@ function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unkn
     { "type": "object", "properties": props, "required": required, "additionalProperties": false }
 }
 
-// Bound as `ctx` inside a compiler-desugared `@spec` prompt template.
-// `output_format` is the one placeholder the BEP allows.
+/// Bound as `ctx` inside a compiler-desugared `@spec` prompt template.
+/// `output_format` is the one placeholder the BEP allows.
 class SpecCtx {
     _output_format: root.OutputFormat,
 

@@ -359,20 +359,20 @@ implement Remainder<bigint> for int {
     }
 }
 
-// ==== operator dispatch drivers ====
-//
-// Internal: the compiler emits a `__union_<op>` call for a binary operator whose
-// operands' static types are erased to an abstract form (a union, an
-// interface-existential, or a type variable), where the `implement` rule can
-// only be chosen from the operands' *runtime* types — double dispatch a static
-// call cannot express. Primitive operands keep their fast-path bytecode and a
-// statically-pinned pair calls the impl directly; only the abstract case lands
-// here.
-//
-// `unknown` in and out: the type checker has already proved every runtime
-// operand pair is implemented (so an unresolved dispatch is an internal error,
-// not a user error), and supplies the real operand types; the caller re-applies
-// the statically-computed result type to the `unknown` the driver returns.
+/// (internal) ==== operator dispatch drivers ====
+///
+/// Internal: the compiler emits a `__union_<op>` call for a binary operator whose
+/// operands' static types are erased to an abstract form (a union, an
+/// interface-existential, or a type variable), where the `implement` rule can
+/// only be chosen from the operands' *runtime* types — double dispatch a static
+/// call cannot express. Primitive operands keep their fast-path bytecode and a
+/// statically-pinned pair calls the impl directly; only the abstract case lands
+/// here.
+///
+/// `unknown` in and out: the type checker has already proved every runtime
+/// operand pair is implemented (so an unresolved dispatch is an internal error,
+/// not a user error), and supplies the real operand types; the caller re-applies
+/// the statically-computed result type to the `unknown` the driver returns.
 //baml:mut_vm
 //baml:may_yield
 function __union_add(a: unknown, b: unknown) -> unknown throws never {
@@ -403,7 +403,7 @@ function __union_rem(a: unknown, b: unknown) -> unknown throws never {
     $rust_function
 }
 
-// Unary `-a`: single dispatch on `a`'s runtime type through `baml.ops.Negate`.
+/// (internal) Unary `-a`: single dispatch on `a`'s runtime type through `baml.ops.Negate`.
 //baml:mut_vm
 //baml:may_yield
 function __union_neg(a: unknown) -> unknown throws never {

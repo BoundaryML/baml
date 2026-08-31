@@ -22,15 +22,15 @@ function _shorthand_prefixes() -> string {
         .join(", ")
 }
 
-// !!! DRIFT HAZARD !!!
-// This is the RUNTIME half of the "provider/model" shorthand map. Its
-// compile-time twin is `spec_client_provider` in
-// `crates/baml_compiler2_ast/src/lower_cst.rs`, which lowers a literal
-// `client "openai/gpt-4o-mini"` straight to a constructor call. The two maps
-// must list the SAME prefixes and pick the SAME class for each one — a
-// `client:` written as a literal and the identical string arriving here at
-// runtime have to select the same client. Change one, change the other, and
-// update `_shorthand_prefixes` above.
+/// (internal) !!! DRIFT HAZARD !!!
+/// This is the RUNTIME half of the "provider/model" shorthand map. Its
+/// compile-time twin is `spec_client_provider` in
+/// `crates/baml_compiler2_ast/src/lower_cst.rs`, which lowers a literal
+/// `client "openai/gpt-4o-mini"` straight to a constructor call. The two maps
+/// must list the SAME prefixes and pick the SAME class for each one — a
+/// `client:` written as a literal and the identical string arriving here at
+/// runtime have to select the same client. Change one, change the other, and
+/// update `_shorthand_prefixes` above.
 function _from_shorthand(shorthand: string) -> root.Client {
     let separator = shorthand.index_of("/");
     if let index: int = separator {

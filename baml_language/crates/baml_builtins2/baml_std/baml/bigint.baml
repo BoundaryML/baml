@@ -116,8 +116,8 @@ class Bigint {
     /// (10n).pow(100n)    // a very large number
     /// (-2n).pow(3n)      // -8n
     /// ```
-    // Raises `baml.panics.AllocFailure` (a panic, not a catchable `throws`) when
-    // the estimated result exceeds `MAX_BIGINT_BITS`.
+    /// Raises `baml.panics.AllocFailure` (a panic, not a catchable `throws`) when
+    /// the estimated result exceeds `MAX_BIGINT_BITS`.
     //baml:fallible
     function pow(self, exp: bigint) -> bigint throws never {
         $rust_function

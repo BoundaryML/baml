@@ -1,27 +1,27 @@
-// The Vercel AI Gateway image client: POST {base_url}/image-model.
-//
-// `client "ai-gateway-images/bfl/flux-2-pro"` in an LLM function constructs
-// this class. The gateway fronts many image providers behind one endpoint; the
-// model id — including its provider prefix — rides in the `ai-model-id` header,
-// not in the body.
-//
-//     function DrawLamp(subject: string) -> image {
-//         client "ai-gateway-images/bfl/flux-2-pro"
-//         prompt `A studio photograph of ${subject}.`
-//     }
-//
-// Image inputs ARE supported: an image prompt part becomes a `files[]` entry,
-// which is how the endpoint does editing and variations —
-//
-//     function Restyle(source: image) -> image {
-//         client "ai-gateway-images/openai/gpt-image-1"
-//         prompt `Redraw ${source} in watercolor.`
-//     }
-//
-// Audio/video/pdf inputs have no representation and are rejected, as is tool
-// calling. (`mask`, the other editing input, has no first-class field yet; pass
-// it through `request_body` as `{"mask": {"type": "file", "mediaType": …,
-// "data": …}}`.)
+/// The Vercel AI Gateway image client: POST {base_url}/image-model.
+///
+/// `client "ai-gateway-images/bfl/flux-2-pro"` in an LLM function constructs
+/// this class. The gateway fronts many image providers behind one endpoint; the
+/// model id — including its provider prefix — rides in the `ai-model-id` header,
+/// not in the body.
+///
+///     function DrawLamp(subject: string) -> image {
+///         client "ai-gateway-images/bfl/flux-2-pro"
+///         prompt `A studio photograph of ${subject}.`
+///     }
+///
+/// Image inputs ARE supported: an image prompt part becomes a `files[]` entry,
+/// which is how the endpoint does editing and variations —
+///
+///     function Restyle(source: image) -> image {
+///         client "ai-gateway-images/openai/gpt-image-1"
+///         prompt `Redraw ${source} in watercolor.`
+///     }
+///
+/// Audio/video/pdf inputs have no representation and are rejected, as is tool
+/// calling. (`mask`, the other editing input, has no first-class field yet; pass
+/// it through `request_body` as `{"mask": {"type": "file", "mediaType": …,
+/// "data": …}}`.)
 class AiGatewayImageClient {
     // The gateway model id, e.g. "bfl/flux-2-pro" — sent as `ai-model-id`.
     model: string,
@@ -84,11 +84,11 @@ class AiGatewayImageClient {
         }
     }
 
-    // The request-time credential: an explicit value, else the gateway's
-    // conventional variable. (sys_llm had no env default here and required
-    // `api_key: env.AI_GATEWAY_API_KEY` in every client declaration.)
-    // A missing credential is a catchable ai.errors.InvalidRequest rather than
-    // a panic, so the caller's `catch_all` can fall back to another client.
+    /// The request-time credential: an explicit value, else the gateway's
+    /// conventional variable. (sys_llm had no env default here and required
+    /// `api_key: env.AI_GATEWAY_API_KEY` in every client declaration.)
+    /// A missing credential is a catchable ai.errors.InvalidRequest rather than
+    /// a panic, so the caller's `catch_all` can fall back to another client.
     function resolved_api_key(self) -> string {
         if let key: string = ai.wire.resolve_credential(self.api_key, "AI_GATEWAY_API_KEY") {
             return key;
@@ -101,7 +101,7 @@ class AiGatewayImageClient {
         }
     }
 
-    // The request-time base URL, or null for the gateway default.
+    /// The request-time base URL, or null for the gateway default.
     function resolved_base_url(self) -> string? {
         ai.wire.resolve_credential(self.base_url, null)
     }

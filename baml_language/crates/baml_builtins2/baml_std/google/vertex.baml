@@ -109,13 +109,13 @@ class VertexClient {
         }
     }
 
-    // The express-mode key, or null for OAuth2. Unlike the other providers
-    // this may legitimately be absent: credentials are the normal path.
+    /// The express-mode key, or null for OAuth2. Unlike the other providers
+    /// this may legitimately be absent: credentials are the normal path.
     function resolved_api_key(self) -> string? {
         ai.wire.resolve_credential(self.api_key, null)
     }
 
-    // The request-time base URL, or null to build one from project + location.
+    /// The request-time base URL, or null to build one from project + location.
     function resolved_base_url(self) -> string? {
         ai.wire.resolve_credential(self.base_url, null)
     }

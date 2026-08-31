@@ -52,7 +52,10 @@ class PlainDate {
     /// Combines with a time-of-day into a `PlainDateTime`. Defaults to
     /// midnight when `time` is omitted (pass by name to override:
     /// `d.to_plain_datetime(time = t)`).
-    function to_plain_datetime(self, time: PlainTime = PlainTime { _nanoseconds: 0 }) -> PlainDateTime throws never {
+    function to_plain_datetime(
+        self,
+        time: PlainTime = PlainTime { _nanoseconds: 0 },
+    ) -> PlainDateTime throws never {
         self._to_plain_datetime(time._nanoseconds)
     }
     /// (internal) all-required native behind `to_plain_datetime` (native

@@ -39,9 +39,7 @@ function _gcp_access_token(
 ///
 /// The project id, or `null` when it is not discoverable — the caller decides
 /// whether that is fatal.
-function _gcp_project_id(
-    credentials_json: string?,
-) -> string? throws never {
+function _gcp_project_id(credentials_json: string?) -> string? throws never {
     $rust_io_function
 }
 
@@ -55,9 +53,7 @@ function _gcp_project_id(
 /// # Returns
 ///
 /// The quota project id, or `null` when it is not discoverable.
-function _gcp_quota_project_id(
-    credentials_json: string?,
-) -> string? throws never {
+function _gcp_quota_project_id(credentials_json: string?) -> string? throws never {
     $rust_io_function
 }
 
@@ -93,9 +89,6 @@ function _aws_sign_request(
 /// # Returns
 ///
 /// The region, or `null` when it is not discoverable.
-function _aws_resolve_region(
-    region: string?,
-    profile: string?,
-) -> string? throws never {
+function _aws_resolve_region(region: string?, profile: string?) -> string? throws never {
     $rust_io_function
 }

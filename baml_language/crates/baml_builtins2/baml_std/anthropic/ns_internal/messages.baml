@@ -39,8 +39,8 @@ function _reject(detail: string) -> ai.errors.InvalidRequest {
 // ---------------------------------------------------------------------------
 // Request: the typed wire model of POST /v1/messages.
 
-// A media payload source. `type` selects which of the other fields the API
-// reads: "url" -> url; "base64" -> media_type + data.
+/// A media payload source. `type` selects which of the other fields the API
+/// reads: "url" -> url; "base64" -> media_type + data.
 class AnthSource {
     type: string,
     media_type: string?,
@@ -57,8 +57,8 @@ class AnthTextBlock {
     cache_control: baml.json.json?,
 }
 
-// "image" or "document": one {source} shape, different tags. (There is no
-// audio block: the Messages API has no audio input modality at all.)
+/// "image" or "document": one {source} shape, different tags. (There is no
+/// audio block: the Messages API has no audio input modality at all.)
 class AnthMediaBlock {
     type: string,
     source: AnthSource,
@@ -108,8 +108,8 @@ class AnthThinkingParam {
     budget_tokens: int?,
 }
 
-// The complete request body. Optional fields are dropped before serialization
-// (see _anth_drop_nulls), so an unset option never reaches the wire.
+/// The complete request body. Optional fields are dropped before serialization
+/// (see _anth_drop_nulls), so an unset option never reaches the wire.
 class AnthropicMessagesRequest {
     model: string,
     max_tokens: int,
@@ -143,9 +143,9 @@ class AnthropicContentBlock {
     input: map<string, unknown>?,
 }
 
-// `usage.output_tokens_details`: the breakdown of `output_tokens`. Under
-// extended thinking (this client's own `ThinkingConfig`) `thinking_tokens` is
-// the count the model generated as internal reasoning.
+/// `usage.output_tokens_details`: the breakdown of `output_tokens`. Under
+/// extended thinking (this client's own `ThinkingConfig`) `thinking_tokens` is
+/// the count the model generated as internal reasoning.
 class AnthOutputTokensDetails {
     thinking_tokens: int?,
 }
@@ -187,25 +187,25 @@ class AnthropicResponse {
 // ---------------------------------------------------------------------------
 // Serialization helpers.
 
-// Drop null-valued map entries, recursively. BAML serializes an unset optional
-// field as an explicit `null`, which the Messages API rejects for several
-// parameters; the typed request classes above therefore go through this on
-// their way to the wire, which is exactly serde's `skip_serializing_if =
-// "Option::is_none"` in the Rust builders this replaces.
-//
-// Nulls INSIDE arrays are preserved (a JSON Schema `"enum": [null]` survives),
-// and the two OPAQUE subtrees below are copied verbatim. The passthrough merge —
-// where `null` means "delete this key" — still runs AFTER this, on the
-// already-pruned base.
-//
-// `input` (a replayed tool call's arguments) and `input_schema` (a tool's JSON
-// Schema) are user/model JSON whose keys are DATA, not request parameters: a
-// null there means "the model answered null" / `"default": null`, not "unset
-// option". Pruning them rewrote conversation history on replay — every optional
-// tool parameter the model answered with null silently vanished from the
-// replayed tool_use, and the generated schema types optionals as
-// `["string","null"]` and marks them required, so a null answer is the
-// schema-conformant one.
+/// (internal) Drop null-valued map entries, recursively. BAML serializes an unset optional
+/// field as an explicit `null`, which the Messages API rejects for several
+/// parameters; the typed request classes above therefore go through this on
+/// their way to the wire, which is exactly serde's `skip_serializing_if =
+/// "Option::is_none"` in the Rust builders this replaces.
+///
+/// Nulls INSIDE arrays are preserved (a JSON Schema `"enum": [null]` survives),
+/// and the two OPAQUE subtrees below are copied verbatim. The passthrough merge —
+/// where `null` means "delete this key" — still runs AFTER this, on the
+/// already-pruned base.
+///
+/// `input` (a replayed tool call's arguments) and `input_schema` (a tool's JSON
+/// Schema) are user/model JSON whose keys are DATA, not request parameters: a
+/// null there means "the model answered null" / `"default": null`, not "unset
+/// option". Pruning them rewrote conversation history on replay — every optional
+/// tool parameter the model answered with null silently vanished from the
+/// replayed tool_use, and the generated schema types optionals as
+/// `["string","null"]` and marks them required, so a null answer is the
+/// schema-conformant one.
 function _anth_verbatim_subtree(key: string) -> bool {
     key == "input" || key == "input_schema"
 }
@@ -245,26 +245,26 @@ function _anth_drop_nulls(j: baml.json.json) -> baml.json.json {
 // ---------------------------------------------------------------------------
 // ai.Prompt lowering.
 
-// An intermediate lowered message: role plus typed wire content blocks.
-// tool_results marks a user message that is an open tool_result group.
+/// An intermediate lowered message: role plus typed wire content blocks.
+/// tool_results marks a user message that is an open tool_result group.
 class AnthropicMessage {
     role: string,
     tool_results: bool,
     blocks: AnthBlock[],
 }
 
-// Anthropic carries system content outside the alternating messages list.
-// Keep that split provider-local while preserving the authored prompt roles.
+/// Anthropic carries system content outside the alternating messages list.
+/// Keep that split provider-local while preserving the authored prompt roles.
 class AnthropicPrompt {
     system: AnthBlock[],
     messages: AnthropicMessage[],
 }
 
-// Anthropic places a cache breakpoint on a CONTENT BLOCK, but the authored
-// directive lives on a MESSAGE (`${ai.Role { name: "user", metadata:
-// { "cache_control": ... } }}`). The engine's rule, ported: the directive
-// attaches to that message's LAST content block, so everything up to and
-// including it is the cached prefix.
+/// (internal) Anthropic places a cache breakpoint on a CONTENT BLOCK, but the authored
+/// directive lives on a MESSAGE (`${ai.Role { name: "user", metadata:
+/// { "cache_control": ... } }}`). The engine's rule, ported: the directive
+/// attaches to that message's LAST content block, so everything up to and
+/// including it is the cached prefix.
 function _anth_apply_cache_control(blocks: AnthBlock[], cache_control: baml.json.json?) -> void {
     match (cache_control) {
         null => null,
@@ -289,16 +289,16 @@ function _anth_apply_cache_control(blocks: AnthBlock[], cache_control: baml.json
     };
 }
 
-// One media part -> its `{type, source}` block. `resolve_media(_, false)`
-// passes an ordinary http(s) URL straight through as `source.type: "url"`
-// (Anthropic fetches it itself) and inlines everything else as base64 —
-// sys_llm's `send_url` default for this provider.
-// The four image media types the Messages API accepts on a base64 source. It
-// validates the declared `media_type` against the actual bytes, so anything
-// else is a 400 — including `image/svg+xml` (which `ai.internal._media_mime_type`
-// produces for an `.svg` source) and `image/png` guessed for an unknown
-// extension. Checking here keeps the error client-side and specific; the check
-// is per-provider because the allowed set is.
+/// (internal) One media part -> its `{type, source}` block. `resolve_media(_, false)`
+/// passes an ordinary http(s) URL straight through as `source.type: "url"`
+/// (Anthropic fetches it itself) and inlines everything else as base64 —
+/// sys_llm's `send_url` default for this provider.
+/// The four image media types the Messages API accepts on a base64 source. It
+/// validates the declared `media_type` against the actual bytes, so anything
+/// else is a 400 — including `image/svg+xml` (which `ai.internal._media_mime_type`
+/// produces for an `.svg` source) and `image/png` guessed for an unknown
+/// extension. Checking here keeps the error client-side and specific; the check
+/// is per-provider because the allowed set is.
 function _anth_supported_image_mime(mime: string) -> bool {
     let m = mime.to_lower_case();
     m == "image/jpeg" || m == "image/png" || m == "image/gif" || m == "image/webp"
@@ -457,7 +457,7 @@ function _anthropic_assistant_blocks(content: ai.content.Block[]) -> AnthBlock[]
     out
 }
 
-// Append one tool_result block, extending the trailing group when open.
+/// (internal) Append one tool_result block, extending the trailing group when open.
 function _anthropic_push_tool_result(
     msgs: AnthropicMessage[],
     id: string,
@@ -483,8 +483,8 @@ function _anthropic_push_tool_result(
     }
 }
 
-// ai.RunStarted/ai.ToolRequested/ai.Usage/ai.FinalProduced are not promptable and skip;
-// skipped events never close an open tool_result group.
+/// (internal) ai.RunStarted/ai.ToolRequested/ai.Usage/ai.FinalProduced are not promptable and skip;
+/// skipped events never close an open tool_result group.
 function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
     let msgs: AnthropicMessage[] = [];
     for (let e in j.entries()) {
@@ -524,17 +524,17 @@ function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
     msgs
 }
 
-// The API wants user and assistant to alternate, and several paths here can
-// leave two of the same role side by side: a dropped assistant turn (a
-// reasoning-only reply lowers to no blocks) leaves the user turns that
-// bracketed it adjacent, and the rendered prompt can end on the role the
-// journal opens with. The leading-role repair above only fixes an
-// assistant-FIRST list, so a mid-conversation clash reached the wire.
-//
-// Concatenating the block lists of same-role neighbours repairs every such
-// shape. Block order is preserved and messages are joined in order, so a
-// `cache_control` marker still sits on exactly the block it was placed on.
-// `_anthropic_push_tool_result`'s grouping becomes a special case of this.
+/// (internal) The API wants user and assistant to alternate, and several paths here can
+/// leave two of the same role side by side: a dropped assistant turn (a
+/// reasoning-only reply lowers to no blocks) leaves the user turns that
+/// bracketed it adjacent, and the rendered prompt can end on the role the
+/// journal opens with. The leading-role repair above only fixes an
+/// assistant-FIRST list, so a mid-conversation clash reached the wire.
+///
+/// Concatenating the block lists of same-role neighbours repairs every such
+/// shape. Block order is preserved and messages are joined in order, so a
+/// `cache_control` marker still sits on exactly the block it was placed on.
+/// `_anthropic_push_tool_result`'s grouping becomes a special case of this.
 function _anthropic_render_messages(msgs: AnthropicMessage[]) -> AnthMessageParam[] {
     let out: AnthMessageParam[] = [];
     for (let m in msgs) {
@@ -555,8 +555,8 @@ function _anthropic_render_messages(msgs: AnthropicMessage[]) -> AnthMessagePara
 // Body construction, factored away from URL/auth so a Vertex `rawPredict`
 // client can reuse it verbatim.
 
-// Everything the body builder needs that is not in ai.ModelTurnInput. A host
-// that is not root.AnthropicClient (Vertex, Bedrock) builds one of these.
+/// Everything the body builder needs that is not in ai.ModelTurnInput. A host
+/// that is not `anthropic.AnthropicClient` (Vertex, Bedrock) builds one of these.
 class AnthropicBodyParams {
     model: string,
     max_tokens: int,
@@ -735,8 +735,8 @@ function anthropic_messages_body(
 // ---------------------------------------------------------------------------
 // The client: URL, headers, auth.
 
-// `?a=1&b=2` for the client's query_params, or "" when there are none.
-// Values are used verbatim: the stdlib has no percent-encoder yet.
+/// (internal) `?a=1&b=2` for the client's query_params, or "" when there are none.
+/// Values are used verbatim: the stdlib has no percent-encoder yet.
 function _anthropic_query_suffix(query_params: map<string, string>?) -> string {
     match (query_params) {
         null => "",
@@ -754,10 +754,10 @@ function _anthropic_query_suffix(query_params: map<string, string>?) -> string {
     }
 }
 
-// Defaults, then the caller's headers, then auth. User headers come FIRST so
-// `anthropic-beta` (and `anthropic-dangerous-direct-browser-access`, which the
-// WASM playground needs) are reachable and `anthropic-version` is overridable;
-// `x-api-key` is applied last so a stray header cannot break authentication.
+/// (internal) Defaults, then the caller's headers, then auth. User headers come FIRST so
+/// `anthropic-beta` (and `anthropic-dangerous-direct-browser-access`, which the
+/// WASM playground needs) are reachable and `anthropic-version` is overridable;
+/// `x-api-key` is applied last so a stray header cannot break authentication.
 function _anthropic_headers(c: root.AnthropicClient, preview: bool = false) -> map<string, string> {
     let headers: map<string, string> = { "anthropic-version": "2023-06-01", "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
@@ -771,8 +771,8 @@ function _anthropic_headers(c: root.AnthropicClient, preview: bool = false) -> m
     headers
 }
 
-// The shared request builder: identical body for both paths, plus the
-// `stream: true` flag on the streaming one.
+/// (internal) The shared request builder: identical body for both paths, plus the
+/// `stream: true` flag on the streaming one.
 function _anthropic_request(
     c: root.AnthropicClient,
     input: ai.ModelTurnInput,
@@ -799,13 +799,13 @@ function anthropic_preview(c: root.AnthropicClient, input: ai.ModelTurnInput) ->
     _anthropic_request(c, input, false, preview = true)
 }
 
-// One wire stop_reason string -> the canonical stop reason.
-//
-// `end_turn`/`stop_sequence` are the only reasons that mean "the model said
-// everything it meant to say". `pause_turn`, `model_context_window_exceeded`
-// and anything Anthropic ships next are TRUNCATIONS, so they map to MaxTokens
-// (the runner's "incomplete answer" outcome) rather than silently reporting a
-// truncated candidate as a successful completion.
+/// (internal) One wire stop_reason string -> the canonical stop reason.
+///
+/// `end_turn`/`stop_sequence` are the only reasons that mean "the model said
+/// everything it meant to say". `pause_turn`, `model_context_window_exceeded`
+/// and anything Anthropic ships next are TRUNCATIONS, so they map to MaxTokens
+/// (the runner's "incomplete answer" outcome) rather than silently reporting a
+/// truncated candidate as a successful completion.
 function _anthropic_stop_reason(s: string) -> ai.content.StopReason {
     match (s) {
         "end_turn" | "stop_sequence" => ai.content.StopReason.Complete,
@@ -871,7 +871,7 @@ function anthropic_parse(resp: AnthropicResponse) -> ai.ModelTurn {
     ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
 }
 
-// The one internal entry point: render, send, normalize — one model turn.
+/// The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = _anthropic_request(c, input, false, preview = false);
     let sent = ai.wire.send_as_with_wire<AnthropicResponse>(
@@ -896,8 +896,8 @@ function invoke(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.ModelTu
 // the turn; `ping` is a keepalive; `error` is a MID-STREAM failure that must
 // not be mistaken for a short but successful turn.
 
-// Streaming usage objects carry only some fields per event, so every field
-// is optional (unlike the non-streaming AnthropicUsage).
+/// Streaming usage objects carry only some fields per event, so every field
+/// is optional (unlike the non-streaming AnthropicUsage).
 class AnthStreamUsage {
     input_tokens: int?,
     output_tokens: int?,
@@ -917,7 +917,7 @@ class AnthStreamDelta {
     stop_sequence: string?,
 }
 
-// The block `content_block_start` opens.
+/// The block `content_block_start` opens.
 class AnthStreamContentBlock {
     type: string?,
     id: string?,
@@ -938,7 +938,7 @@ class AnthStreamError {
     message: string?,
 }
 
-// The envelope of one SSE `data:` payload.
+/// The envelope of one SSE `data:` payload.
 class AnthStreamEvent {
     type: string?,
     index: int?,
@@ -949,7 +949,7 @@ class AnthStreamEvent {
     error: AnthStreamError?,
 }
 
-// One tool call being assembled across `input_json_delta` events.
+/// One tool call being assembled across `input_json_delta` events.
 class AnthStreamToolCall {
     index: int,
     id: string,
@@ -1017,10 +1017,10 @@ function _anth_stream_call_at(state: AnthStreamState, index: int?) -> AnthStream
     null
 }
 
-// A mid-stream `error` event -> the precise failure. Same discipline as
-// ai.errors.classify_http: only genuinely transient conditions get a
-// retry-safe transport classification; a bad request stays a bad request so
-// ai.clients.Retry does not replay it.
+/// (internal) A mid-stream `error` event -> the precise failure. Same discipline as
+/// ai.errors.classify_http: only genuinely transient conditions get a
+/// retry-safe transport classification; a bad request stays a bad request so
+/// ai.clients.Retry does not replay it.
 function _anth_stream_failure(error: AnthStreamError?, raw: string) -> ai.errors.Failure {
     let kind = error?.type ?? "";
     let detail = error?.message ?? kind;
@@ -1210,11 +1210,11 @@ function anthropic_decode_batch(batch: string, state: AnthStreamState) -> ai.str
     out
 }
 
-// `fetch_sse` fails a non-2xx status itself, throwing baml.errors.Io with the
-// status and body in its message ("SSE request failed with status 401: …").
-// Recover the status and route it through the SAME classifier the non-streaming
-// path uses: a 400 or 401 must never come back as a retry-safe NetworkFailure,
-// or ai.clients.Retry cheerfully replays a request that can never succeed.
+/// (internal) `fetch_sse` fails a non-2xx status itself, throwing baml.errors.Io with the
+/// status and body in its message ("SSE request failed with status 401: …").
+/// Recover the status and route it through the SAME classifier the non-streaming
+/// path uses: a 400 or 401 must never come back as a retry-safe NetworkFailure,
+/// or ai.clients.Retry cheerfully replays a request that can never succeed.
 function _anthropic_sse_failure(message: string) -> ai.errors.Failure {
     let prefix = "SSE request failed with status ";
     if (message.starts_with(prefix)) {
@@ -1247,8 +1247,8 @@ function _anthropic_stream_open_failure(error: baml.errors.Io | baml.errors.Time
     }
 }
 
-// The streaming entry point: the same request as `invoke` with
-// `stream: true`, wrapped in an ai.TurnStream over the SSE connection.
+/// The streaming entry point: the same request as `invoke` with
+/// `stream: true`, wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     let req = _anthropic_request(c, input, true, preview = false);
     let started = baml.time.Instant.now();

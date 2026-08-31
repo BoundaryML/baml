@@ -207,46 +207,32 @@ class ZonedDateTime {
     }
 
     /// The calendar year, resolved through the timezone.
-    function year(
-        self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
+    function year(self) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().year()
     }
     /// The calendar month, in `[1, 12]`, resolved through the timezone.
-    function month(
-        self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
+    function month(self) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().month()
     }
     /// The day of the month, in `[1, 31]`, resolved through the timezone.
-    function day(
-        self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
+    function day(self) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().day()
     }
     /// The hour of the day, in `[0, 23]`, resolved through the timezone.
-    function hour(
-        self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
+    function hour(self) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().hour()
     }
     /// The minute of the hour, in `[0, 59]`, resolved through the timezone.
-    function minute(
-        self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
+    function minute(self) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().minute()
     }
     /// The second of the minute, in `[0, 59]`, resolved through the timezone.
-    function second(
-        self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
+    function second(self) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().second()
     }
     /// The millisecond of the second, in `[0, 999]`, resolved through the
     /// timezone.
-    function millisecond(
-        self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
+    function millisecond(self) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().millisecond()
     }
 

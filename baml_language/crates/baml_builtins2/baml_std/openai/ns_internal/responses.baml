@@ -95,15 +95,15 @@ class OaFunctionTool {
     strict: bool,
 }
 
-// A provider-side tool the request only names, e.g. `{"type":"image_generation"}`.
+/// A provider-side tool the request only names, e.g. `{"type":"image_generation"}`.
 class OaBuiltinTool {
     type: string,
 }
 
 type OaTool = OaFunctionTool | OaBuiltinTool;
 
-// `tool_choice` is either a mode string ("auto"/"none"/"required") or an object
-// naming one tool.
+/// `tool_choice` is either a mode string ("auto"/"none"/"required") or an object
+/// naming one tool.
 class OaToolChoiceObject {
     type: string,
 }
@@ -113,7 +113,7 @@ class OaReasoningParams {
     summary: string?,
 }
 
-// `text` carries `verbosity` only: `text.format` stays unset by design (G15).
+/// `text` carries `verbosity` only: `text.format` stays unset by design (G15).
 class OaTextParams {
     verbosity: string?,
 }
@@ -203,18 +203,18 @@ class OaResponse {
 // ---------------------------------------------------------------------------
 // Serialization helpers.
 
-// Drop every null-valued map entry, recursively. The typed request classes
-// declare optional fields for everything the provider treats as absent, and
-// `to_json` renders an unset optional as an explicit null — which is not the
-// same request. This runs on the serialized typed request only, BEFORE the
-// user's `request_body` merge (where a null legitimately means "delete").
-//
-// It is a TYPED-LAYER pass and must never be the last word on an open-ended
-// subtree: a tool's `parameters` is the caller's own JSON Schema, where
-// `"default": null` / `"const": null` are legitimate members rather than unset
-// optionals. Those subtrees are written back verbatim afterwards by
-// `_openai_restore_tool_schemas`; `request_body` is merged after the prune and
-// never sees it at all.
+/// (internal) Drop every null-valued map entry, recursively. The typed request classes
+/// declare optional fields for everything the provider treats as absent, and
+/// `to_json` renders an unset optional as an explicit null — which is not the
+/// same request. This runs on the serialized typed request only, BEFORE the
+/// user's `request_body` merge (where a null legitimately means "delete").
+///
+/// It is a TYPED-LAYER pass and must never be the last word on an open-ended
+/// subtree: a tool's `parameters` is the caller's own JSON Schema, where
+/// `"default": null` / `"const": null` are legitimate members rather than unset
+/// optionals. Those subtrees are written back verbatim afterwards by
+/// `_openai_restore_tool_schemas`; `request_body` is merged after the prune and
+/// never sees it at all.
 function _openai_prune_nulls(value: baml.json.json) -> baml.json.json {
     match (value) {
         let object: map<string, baml.json.json> => {
@@ -242,10 +242,10 @@ function _openai_prune_nulls(value: baml.json.json) -> baml.json.json {
     }
 }
 
-// Put the caller's tool schemas back over the pruned body, verbatim. The
-// pruned `tools` array is positionally identical to the typed one (prune drops
-// map ENTRIES, never array elements), so tool i's schema goes back at index i.
-// Only `OaFunctionTool` carries a schema; a builtin tool has nothing to restore.
+/// (internal) Put the caller's tool schemas back over the pruned body, verbatim. The
+/// pruned `tools` array is positionally identical to the typed one (prune drops
+/// map ENTRIES, never array elements), so tool i's schema goes back at index i.
+/// Only `OaFunctionTool` carries a schema; a builtin tool has nothing to restore.
 function _openai_restore_tool_schemas(body: baml.json.json, tools: OaTool[]?) -> baml.json.json {
     let list: OaTool[] = tools ?? [];
     if (list.length() == 0) {
@@ -283,7 +283,7 @@ function _openai_restore_tool_schemas(body: baml.json.json, tools: OaTool[]?) ->
     body
 }
 
-// Percent-encode one query-string component (RFC 3986 unreserved set kept).
+/// (internal) Percent-encode one query-string component (RFC 3986 unreserved set kept).
 function _openai_percent_encode(raw: string) -> string {
     let out = "";
     for (let byte in raw.to_utf8().to_array()) {
@@ -306,8 +306,8 @@ function _openai_percent_encode(raw: string) -> string {
 // ---------------------------------------------------------------------------
 // Prompt lowering.
 
-// The filename an `input_file` part carries. The API wants one alongside
-// `file_data`, and the basename of the source is more useful than a constant.
+/// (internal) The filename an `input_file` part carries. The API wants one alongside
+/// `file_data`, and the basename of the source is more useful than a constant.
 function _openai_file_name(source: string?) -> string {
     if let raw: string = source {
         let without_query = raw.split("?").at(0) ?? raw;
@@ -320,9 +320,9 @@ function _openai_file_name(source: string?) -> string {
     "document.pdf"
 }
 
-// The Responses API's `input_audio.format`. mp3 and wav are the documented
-// formats; the remaining mappings are carried over from sys_llm so a provider
-// that widens the set keeps working.
+/// (internal) The Responses API's `input_audio.format`. mp3 and wav are the documented
+/// formats; the remaining mappings are carried over from sys_llm so a provider
+/// that widens the set keeps working.
 function _openai_audio_format(mime_type: string) -> string {
     match (mime_type) {
         "audio/wav" | "audio/x-wav" => "wav",
@@ -344,7 +344,7 @@ function _openai_media_role_error(kind: string, role: string) -> ai.errors.Failu
     }
 }
 
-// A rendered structural prompt message becomes typed Responses content parts.
+/// (internal) A rendered structural prompt message becomes typed Responses content parts.
 function _openai_prompt_content(
     message: ai.PromptMessage,
     role: string,
@@ -462,9 +462,9 @@ function _openai_prompt_content(
     content
 }
 
-// Role-less content uses the ordinary user role; `tool` is not a valid
-// free-standing Responses message role, so authored tool context is user
-// content (actual tool outputs come from the journal path below).
+/// Role-less content uses the ordinary user role; `tool` is not a valid
+/// free-standing Responses message role, so authored tool context is user
+/// content (actual tool outputs come from the journal path below).
 function openai_lower_prompt(prompt: ai.Prompt, preview: bool = false) -> OaInputItem[] {
     let items: OaInputItem[] = [];
     for (let message in prompt.messages()) {
@@ -482,17 +482,17 @@ function openai_lower_prompt(prompt: ai.Prompt, preview: bool = false) -> OaInpu
     items
 }
 
-// Per-message provider directives (`ai.PromptMessage.metadata`, authored as
-// `${ai.Role { name: "user", metadata: { … } }}`), in prompt order and
-// aligned one-to-one with the items `openai_lower_prompt` produced — the prompt
-// items are always the FIRST items of `input`, the journal's are appended after.
-//
-// The Responses API has no per-message directive slot, so PLAN §5's accepted
-// placement for this provider is the CONTENT PART: the keys are forwarded
-// verbatim onto the LAST content item of the message they were authored on
-// (the same "everything up to and including this block" rule the engine used).
-// Applied to the SERIALIZED body, after the null-prune, because a directive is
-// a provider shape: an explicit null in it is the caller's, not an unset field.
+/// Per-message provider directives (`ai.PromptMessage.metadata`, authored as
+/// `${ai.Role { name: "user", metadata: { … } }}`), in prompt order and
+/// aligned one-to-one with the items `openai_lower_prompt` produced — the prompt
+/// items are always the FIRST items of `input`, the journal's are appended after.
+///
+/// The Responses API has no per-message directive slot, so PLAN §5's accepted
+/// placement for this provider is the CONTENT PART: the keys are forwarded
+/// verbatim onto the LAST content item of the message they were authored on
+/// (the same "everything up to and including this block" rule the engine used).
+/// Applied to the SERIALIZED body, after the null-prune, because a directive is
+/// a provider shape: an explicit null in it is the caller's, not an unset field.
 function openai_prompt_metadata(prompt: ai.Prompt) -> map<string, baml.json.json>[] {
     let out: map<string, baml.json.json>[] = [];
     for (let message in prompt.messages()) {
@@ -552,9 +552,9 @@ function _openai_apply_message_metadata(
     body
 }
 
-// ai.Journal -> Responses API input items. Only promptable events lower;
-// ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are
-// journal-only. Callers pass the SANITIZED journal (see _openai_request).
+/// ai.Journal -> Responses API input items. Only promptable events lower;
+/// ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are
+/// journal-only. Callers pass the SANITIZED journal (see _openai_request).
 function openai_lower_journal(j: ai.Journal) -> OaInputItem[] {
     let items: OaInputItem[] = [];
     for (let e in j.entries()) {
@@ -631,11 +631,11 @@ function openai_lower_journal(j: ai.Journal) -> OaInputItem[] {
 // ---------------------------------------------------------------------------
 // Request assembly.
 
-// Does the declared output type ask for images? This is the port of sys_llm's
-// `image_generation_mode` (lib.rs:465-508): every media shape that can hold an
-// `image` enables the provider-side image_generation tool. sys_llm set
-// `tool_choice` for both Required and Available, so the two modes only ever
-// differed in that one is unreachable — one predicate is enough.
+/// (internal) Does the declared output type ask for images? This is the port of sys_llm's
+/// `image_generation_mode` (lib.rs:465-508): every media shape that can hold an
+/// `image` enables the provider-side image_generation tool. sys_llm set
+/// `tool_choice` for both Required and Available, so the two modes only ever
+/// differed in that one is unreachable — one predicate is enough.
 function _openai_wants_image(output_type: reflect.Type) -> bool {
     ai.internal._media_shape(output_type).ends_with(":image")
 }
@@ -692,8 +692,8 @@ function _openai_text(c: root.ResponsesClient) -> OaTextParams? {
     }
 }
 
-// content-type, then the caller's headers (lowercased), then authorization —
-// credentials are the client's own business and always win.
+/// (internal) content-type, then the caller's headers (lowercased), then authorization —
+/// credentials are the client's own business and always win.
 function _openai_headers(c: root.ResponsesClient, preview: bool = false) -> map<string, string> {
     let headers: map<string, string> = { "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
@@ -729,19 +729,19 @@ function _openai_url(c: root.ResponsesClient) -> string {
     url
 }
 
-// ai.ModelTurnInput -> one Responses API request.
+/// ai.ModelTurnInput -> one Responses API request.
 function openai_render(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.Request {
     _openai_request(c, input, false, preview = false)
 }
 
-// The request one `render` would send. This path never reads local media or
-// downloads URLs; provider-unsupported URL forms return PreviewUnsupported.
+/// The request one `render` would send. This path never reads local media or
+/// downloads URLs; provider-unsupported URL forms return PreviewUnsupported.
 function openai_preview(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.Request {
     _openai_request(c, input, false, preview = true)
 }
 
-// The shared request builder: identical body for both paths, plus the
-// `stream: true` flag on the streaming one.
+/// (internal) The shared request builder: identical body for both paths, plus the
+/// `stream: true` flag on the streaming one.
 function _openai_request(
     c: root.ResponsesClient,
     input: ai.ModelTurnInput,
@@ -795,7 +795,7 @@ function _openai_request(
 // ---------------------------------------------------------------------------
 // Response parsing.
 
-// The mime type of an image_generation_call payload.
+/// (internal) The mime type of an image_generation_call payload.
 function _openai_image_mime(output_format: string?) -> string {
     let format = (output_format ?? "").trim().to_lower_case();
     match (format) {
@@ -805,13 +805,13 @@ function _openai_image_mime(output_format: string?) -> string {
     }
 }
 
-// Error codes that name a TRANSIENT provider-side failure. The Responses API's
-// own `response.failed` example is `{"code":"server_error", …}` — a 500
-// delivered inside a 200 body — and the same failure arriving as an HTTP status
-// classifies as ai.errors.NetworkFailure (ai.errors.classify_http maps >=500
-// there). Classifying the in-body form as InvalidRequest instead would make it
-// permanently non-retryable under ai.Retry's default judgment, purely because
-// of which envelope the provider chose.
+/// (internal) Error codes that name a TRANSIENT provider-side failure. The Responses API's
+/// own `response.failed` example is `{"code":"server_error", …}` — a 500
+/// delivered inside a 200 body — and the same failure arriving as an HTTP status
+/// classifies as ai.errors.NetworkFailure (ai.errors.classify_http maps >=500
+/// there). Classifying the in-body form as InvalidRequest instead would make it
+/// permanently non-retryable under ai.Retry's default judgment, purely because
+/// of which envelope the provider chose.
 function _openai_transient_code(code: string) -> bool {
     code.includes("server_error")
         || code.includes("timeout")
@@ -821,9 +821,9 @@ function _openai_transient_code(code: string) -> bool {
         || code.includes("try_again")
 }
 
-// A provider-reported error becomes the precise ai.errors class, never a
-// blanket NetworkFailure: a retry-safe classification on a 400-shaped failure
-// is what makes a Retry policy replay an invalid request forever.
+/// (internal) A provider-reported error becomes the precise ai.errors class, never a
+/// blanket NetworkFailure: a retry-safe classification on a 400-shaped failure
+/// is what makes a Retry policy replay an invalid request forever.
 function _openai_error_failure(err: OaErrorBody) -> ai.errors.Failure {
     // Billing errors split the signal across `type` ("insufficient_quota")
     // and `code` ("credit_balance_exhausted"), so classify on both.
@@ -870,7 +870,7 @@ function _openai_response_failure(resp: OaResponse) -> ai.errors.Failure {
     }
 }
 
-// One decoded response -> canonical content blocks and a stop reason.
+/// One decoded response -> canonical content blocks and a stop reason.
 function openai_parse(resp: OaResponse) -> ai.ModelTurn {
     // A 200 whose response object failed (background mode, and every
     // `response.failed` stream event) is an error, not an empty turn.
@@ -980,7 +980,7 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
     ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
 }
 
-// The one internal entry point: render, send, normalize — one model turn.
+/// The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = openai_render(c, input);
     let sent = ai.wire.send_as_with_wire<OaResponse>(
@@ -1025,9 +1025,9 @@ class OaStreamEvent {
     error: OaErrorBody?,
 }
 
-// What the decoder must remember ACROSS batches: which text items already
-// streamed deltas (so a trailing `output_text.done` does not duplicate them),
-// the assembled function-call arguments, and the model name the API resolved.
+/// What the decoder must remember ACROSS batches: which text items already
+/// streamed deltas (so a trailing `output_text.done` does not duplicate them),
+/// the assembled function-call arguments, and the model name the API resolved.
 class OaStreamState {
     model: string?,
     text_started: map<string, bool>,
@@ -1040,11 +1040,11 @@ class OaStreamState {
     }
 }
 
-// Which CONTENT PART an event belongs to. `item_id` is the API's own item key
-// (`output_index` is the fallback for events that omit it), and `content_index`
-// distinguishes the parts within one item: a message may carry several text
-// parts, and keying by item alone would let a delta on part 0 suppress the
-// `output_text.done` that is the only delivery of part 1.
+/// (internal) Which CONTENT PART an event belongs to. `item_id` is the API's own item key
+/// (`output_index` is the fallback for events that omit it), and `content_index`
+/// distinguishes the parts within one item: a message may carry several text
+/// parts, and keying by item alone would let a delta on part 0 suppress the
+/// `output_text.done` that is the only delivery of part 1.
 function _openai_event_key(event: OaStreamEvent) -> string {
     let item = if let id: string = event.item_id {
         id
@@ -1070,7 +1070,7 @@ function _openai_stream_failure(event: OaStreamEvent) -> ai.errors.Failure {
     _openai_error_failure(OaErrorBody { code: event.code, message: event.message, type: null })
 }
 
-// One decoded SSE event -> provider-agnostic stream events.
+/// (internal) One decoded SSE event -> provider-agnostic stream events.
 function _openai_stream_events(
     event: OaStreamEvent,
     sse_name: string?,
@@ -1152,7 +1152,7 @@ function _openai_stream_events(
     out
 }
 
-// One SseStream batch -> provider-agnostic stream events.
+/// (internal) One SseStream batch -> provider-agnostic stream events.
 function _openai_decode_batch(batch: string, state: OaStreamState) -> ai.stream.StreamEvent[] {
     let out: ai.stream.StreamEvent[] = [];
     for (let raw in ai.stream.decode_sse_batch(batch)) {
@@ -1171,11 +1171,11 @@ function _openai_decode_batch(batch: string, state: OaStreamState) -> ai.stream.
     out
 }
 
-// A failure opening the SSE connection. `baml.http.fetch_sse` reports a non-2xx
-// status as an Io error whose message carries the status and body, so the
-// status is recovered and classified exactly like ai.wire.send_as does — a 401
-// or 429 on the streaming path must NOT be reported as a retry-safe transport
-// failure.
+/// (internal) A failure opening the SSE connection. `baml.http.fetch_sse` reports a non-2xx
+/// status as an Io error whose message carries the status and body, so the
+/// status is recovered and classified exactly like ai.wire.send_as does — a 401
+/// or 429 on the streaming path must NOT be reported as a retry-safe transport
+/// failure.
 function _openai_sse_failure(error: unknown) -> ai.errors.Failure {
     let text = match (error) {
         let io: baml.errors.Io => io.message,
@@ -1213,8 +1213,8 @@ function _openai_stream_open_failure(error: unknown) -> never {
     }
 }
 
-// The streaming entry point: the same request as `invoke` with `stream: true`,
-// wrapped in an ai.TurnStream over the SSE connection.
+/// The streaming entry point: the same request as `invoke` with `stream: true`,
+/// wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     let req = _openai_request(c, input, true, preview = false);
     let started = baml.time.Instant.now();

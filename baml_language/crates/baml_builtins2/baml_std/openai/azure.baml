@@ -101,7 +101,7 @@ class AzureClient {
         ai.wire.resolve_credential(self.api_key, "AZURE_OPENAI_API_KEY")
     }
 
-    // The deployment segment: the caller's `deployment_id`, else the model.
+    /// The deployment segment: the caller's `deployment_id`, else the model.
     function resolved_deployment_id(self) -> string {
         self.deployment_id ?? self.model
     }

@@ -52,8 +52,8 @@ function _azure_reject(detail: string) -> ai.errors.InvalidRequest {
 // ---------------------------------------------------------------------------
 // Compat record + per-request parameters.
 
-// How the endpoint authenticates. Sniffing the scheme from the key's shape (the
-// pi-ai smell) is deliberately not an option: each wrapper states it.
+/// How the endpoint authenticates. Sniffing the scheme from the key's shape (the
+/// pi-ai smell) is deliberately not an option: each wrapper states it.
 enum ChatAuth {
     // `authorization: Bearer <key>` — openai, generic, ollama, openrouter.
     Bearer,
@@ -63,9 +63,9 @@ enum ChatAuth {
     NoAuth,
 }
 
-// Everything that differs between OpenAI-compatible endpoints, as data.
-// `base_url` arrives already resolved by the wrapper (explicit option, then the
-// named env var, then the provider default), so the core never reads env for it.
+/// Everything that differs between OpenAI-compatible endpoints, as data.
+/// `base_url` arrives already resolved by the wrapper (explicit option, then the
+/// named env var, then the provider default), so the core never reads env for it.
 class ChatCompat {
     // The wire identity: the `ai.errors.*` provider tag and the `id()` prefix.
     provider: string,
@@ -108,8 +108,8 @@ class ChatCompat {
     // User query params are merged over these.
     compat_query: map<string, string>,
 
-    // Every field defaults to the plain-OpenAI shape; a wrapper overrides the
-    // handful that differ.
+    /// Every field defaults to the plain-OpenAI shape; a wrapper overrides the
+    /// handful that differ.
     function new(
         provider: string,
         base_url: string,
@@ -144,9 +144,9 @@ class ChatCompat {
     }
 }
 
-// The per-request knobs a caller configured on the wrapper client. Typed
-// parameters lower into the typed request only when non-null; `request_body` is
-// the deep-merge escape hatch applied last (PLAN P0.3).
+/// The per-request knobs a caller configured on the wrapper client. Typed
+/// parameters lower into the typed request only when non-null; `request_body` is
+/// the deep-merge escape hatch applied last (PLAN P0.3).
 class ChatParams {
     model: string,
     // Already resolved by the wrapper's `resolved_api_key()`.
@@ -223,7 +223,7 @@ class ChatAudioPart {
     input_audio: ChatInputAudio,
 }
 
-// Inline document: base64 data URL plus a filename (the API requires one).
+/// Inline document: base64 data URL plus a filename (the API requires one).
 class ChatFileData {
     filename: string,
     file_data: string,
@@ -234,26 +234,26 @@ class ChatFilePart {
     file: ChatFileData,
 }
 
-// A content part carrying the per-message provider directives authored on
-// `${ai.Role { name: …, metadata: { … } }}`. Chat completions places
-// such directives ON A CONTENT PART (`prompt_cache_breakpoint` for OpenAI,
-// OpenRouter's Anthropic-style `cache_control`), while the authored directive
-// lives on the MESSAGE — so, exactly as the Anthropic client does, the metadata
-// attaches to the message's LAST part and everything up to and including it is
-// the cached prefix.
-//
-// The keys are forwarded VERBATIM: this file does not maintain an allow-list of
-// which directives an OpenAI-compatible endpoint understands, and "verbatim"
-// includes an explicitly authored `null`.
-//
-// Getting that last part right is why `to_json` PARKS the directives under
-// `_chat_directives_key()` rather than splatting them onto the part: the body
-// then goes through `_chat_prune_nulls`, whose job is to drop the CLIENT's
-// unset options, and it would take an authored `{"cache_control": null}` with
-// them. The parked key is opaque to that pass and `_chat_apply_directives`
-// splices it back onto the part immediately afterwards, so the key never
-// reaches the wire. (The sibling Responses client gets the same result by
-// applying its directives to the serialized body after its own prune.)
+/// A content part carrying the per-message provider directives authored on
+/// `${ai.Role { name: …, metadata: { … } }}`. Chat completions places
+/// such directives ON A CONTENT PART (`prompt_cache_breakpoint` for OpenAI,
+/// OpenRouter's Anthropic-style `cache_control`), while the authored directive
+/// lives on the MESSAGE — so, exactly as the Anthropic client does, the metadata
+/// attaches to the message's LAST part and everything up to and including it is
+/// the cached prefix.
+///
+/// The keys are forwarded VERBATIM: this file does not maintain an allow-list of
+/// which directives an OpenAI-compatible endpoint understands, and "verbatim"
+/// includes an explicitly authored `null`.
+///
+/// Getting that last part right is why `to_json` PARKS the directives under
+/// `_chat_directives_key()` rather than splatting them onto the part: the body
+/// then goes through `_chat_prune_nulls`, whose job is to drop the CLIENT's
+/// unset options, and it would take an authored `{"cache_control": null}` with
+/// them. The parked key is opaque to that pass and `_chat_apply_directives`
+/// splices it back onto the part immediately afterwards, so the key never
+/// reaches the wire. (The sibling Responses client gets the same result by
+/// applying its directives to the serialized body after its own prune.)
 class ChatExtraPart {
     part: ChatContentPart,
     extra: map<string, baml.json.json>,
@@ -278,16 +278,16 @@ class ChatExtraPart {
     }
 }
 
-// The reserved key `ChatExtraPart` parks per-message directives under between
-// serialization and `_chat_apply_directives`. It exists only inside that
-// window; nothing with this key is ever sent.
+/// (internal) The reserved key `ChatExtraPart` parks per-message directives under between
+/// serialization and `_chat_apply_directives`. It exists only inside that
+/// window; nothing with this key is ever sent.
 function _chat_directives_key() -> string {
     "__baml_directives"
 }
 
 type ChatContentPart = ChatTextPart | ChatImagePart | ChatAudioPart | ChatFilePart | ChatExtraPart;
 
-// Chat completions accepts either a bare string or an array of typed parts.
+/// Chat completions accepts either a bare string or an array of typed parts.
 type ChatMessageContent = string | ChatContentPart[];
 
 class ChatToolCallFunction {
@@ -295,7 +295,7 @@ class ChatToolCallFunction {
     arguments: string, // the arguments object, as a JSON *string*
 }
 
-// `{"id":…,"type":"function","function":{"name":…,"arguments":…}}`.
+/// `{"id":…,"type":"function","function":{"name":…,"arguments":…}}`.
 class ChatToolCall {
     id: string,
     type: string,
@@ -345,8 +345,8 @@ class ChatStreamOptions {
     include_usage: bool,
 }
 
-// The complete request body. Null-valued fields are pruned before the body is
-// serialized, so an unset option never reaches the wire as `"temperature": null`.
+/// The complete request body. Null-valued fields are pruned before the body is
+/// serialized, so an unset option never reaches the wire as `"temperature": null`.
 class ChatRequest {
     model: string,
     messages: ChatMessage[],
@@ -395,26 +395,26 @@ class CcImageUrl {
     url: string?,
 }
 
-// A response content part. Servers that return image output (Ollama,
-// OpenRouter) use `image_url` parts alongside `text` ones.
+/// A response content part. Servers that return image output (Ollama,
+/// OpenRouter) use `image_url` parts alongside `text` ones.
 class CcContentPart {
     type: string?,
     text: string?,
     image_url: CcImageUrl?,
 }
 
-// Ollama/OpenRouter also report generated images in a sibling `images` array.
+/// Ollama/OpenRouter also report generated images in a sibling `images` array.
 class CcMessageImage {
     type: string?,
     image_url: CcImageUrl?,
     url: string?,
 }
 
-// Audio output (`gpt-4o-audio-*`), requested through the `request_body`
-// passthrough with `{"modalities":["text","audio"],"audio":{"voice":…,"format":…}}`.
-// The response carries the spoken bytes and their transcript; the format is NOT
-// echoed back, so the mime type is recovered from the request (see
-// `_chat_audio_output_mime`).
+/// Audio output (`gpt-4o-audio-*`), requested through the `request_body`
+/// passthrough with `{"modalities":["text","audio"],"audio":{"voice":…,"format":…}}`.
+/// The response carries the spoken bytes and their transcript; the format is NOT
+/// echoed back, so the mime type is recovered from the request (see
+/// `_chat_audio_output_mime`).
 class CcMessageAudio {
     id: string?,
     data: string?,
@@ -466,14 +466,14 @@ class CcResponse {
 // ---------------------------------------------------------------------------
 // Prompt lowering.
 
-// One prompt message after role resolution, before the content encoding is
-// chosen (string vs parts) — merging adjacent same-role messages happens here.
+/// One prompt message after role resolution, before the content encoding is
+/// chosen (string vs parts) — merging adjacent same-role messages happens here.
 class ChatPromptMessage {
     role: string,
     parts: ChatContentPart[],
 }
 
-// `data:<mime>;base64,<data>` for inline payloads, the original URL otherwise.
+/// (internal) `data:<mime>;base64,<data>` for inline payloads, the original URL otherwise.
 function _chat_media_url(resolved: ai.wire.ResolvedMedia) -> string {
     if let url: string = resolved.url {
         return url;
@@ -481,10 +481,10 @@ function _chat_media_url(resolved: ai.wire.ResolvedMedia) -> string {
     `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`
 }
 
-// `input_audio.format` is the mime subtype, with the one alias the API needs.
-// Unknown subtypes are forwarded rather than rejected: OpenAI documents wav/mp3
-// but transcodes others, and a compatible server may accept more (this is the
-// engine's behaviour; sys_llm hard-errored on anything but wav/mp3).
+/// (internal) `input_audio.format` is the mime subtype, with the one alias the API needs.
+/// Unknown subtypes are forwarded rather than rejected: OpenAI documents wav/mp3
+/// but transcodes others, and a compatible server may accept more (this is the
+/// engine's behaviour; sys_llm hard-errored on anything but wav/mp3).
 function _chat_audio_format(mime_type: string) -> string {
     let subtype = if (mime_type.starts_with("audio/")) {
         mime_type.slice(6, mime_type.length())
@@ -498,12 +498,12 @@ function _chat_audio_format(mime_type: string) -> string {
     }
 }
 
-// The mime type of an audio OUTPUT payload. The response's `message.audio`
-// object carries the bytes but never says what they are — the format is
-// whatever the request asked for, so it is read back out of the passthrough
-// body (`{"audio":{"format":"wav"}}`). OpenAI accepts wav|mp3|flac|opus|pcm16
-// and defaults to nothing, so wav is the assumption when the caller enabled the
-// modality some other way.
+/// (internal) The mime type of an audio OUTPUT payload. The response's `message.audio`
+/// object carries the bytes but never says what they are — the format is
+/// whatever the request asked for, so it is read back out of the passthrough
+/// body (`{"audio":{"format":"wav"}}`). OpenAI accepts wav|mp3|flac|opus|pcm16
+/// and defaults to nothing, so wav is the assumption when the caller enabled the
+/// modality some other way.
 function _chat_audio_output_mime(request_body: baml.json.json?) -> string {
     let format = baml.json.path_or<string>(request_body, ".audio.format", "wav");
     match (format) {
@@ -513,9 +513,9 @@ function _chat_audio_output_mime(request_body: baml.json.json?) -> string {
     }
 }
 
-// One media prompt part -> one typed content part. Media is allowed in any
-// role: the chat endpoint imposes no role restriction (the engine imposes none
-// either; sys_llm's hard error was stricter than the API).
+/// (internal) One media prompt part -> one typed content part. Media is allowed in any
+/// role: the chat endpoint imposes no role restriction (the engine imposes none
+/// either; sys_llm's hard error was stricter than the API).
 function _chat_media_part(
     media: ai.MediaPart,
     compat: ChatCompat,
@@ -646,9 +646,9 @@ function _chat_prompt_parts(
     parts
 }
 
-// Attach a message's authored `metadata` to its LAST content part (see
-// ChatExtraPart). A message that lowered to no parts has nowhere to put the
-// directive, and an empty metadata map is the common case, so both are no-ops.
+/// (internal) Attach a message's authored `metadata` to its LAST content part (see
+/// ChatExtraPart). A message that lowered to no parts has nowhere to put the
+/// directive, and an empty metadata map is the common case, so both are no-ops.
 function _chat_apply_metadata(
     parts: ChatContentPart[],
     metadata: map<string, baml.json.json>,
@@ -661,9 +661,9 @@ function _chat_apply_metadata(
     }
 }
 
-// Every part is text — the precondition for `collapse_text_content`. A
-// `ChatExtraPart` never qualifies even when it wraps text: collapsing to a bare
-// string would drop the directive it carries.
+/// (internal) Every part is text — the precondition for `collapse_text_content`. A
+/// `ChatExtraPart` never qualifies even when it wraps text: collapsing to a bare
+/// string would drop the directive it carries.
 function _chat_all_text(parts: ChatContentPart[]) -> bool {
     let all = true;
     for (let part in parts) {
@@ -678,7 +678,7 @@ function _chat_all_text(parts: ChatContentPart[]) -> bool {
     all
 }
 
-// Render the accumulated parts into the wire `content` value.
+/// (internal) Render the accumulated parts into the wire `content` value.
 function _chat_content(parts: ChatContentPart[], collapse: bool) -> ChatMessageContent {
     if (collapse && _chat_all_text(parts)) {
         let text = "";
@@ -853,13 +853,13 @@ function chat_lower_journal(j: ai.Journal) -> ChatMessage[] {
 // ---------------------------------------------------------------------------
 // Request rendering.
 
-// Keys whose value is a document AUTHORED BY THE CALLER rather than a wire
-// field this file owns. Inside them a `null` is data, not an unset option:
-//   * `parameters` — a tool's JSON Schema, where `{"default": null}` and
-//     `{"type": ["string", "null"]}` sibling nulls are meaningful, and where a
-//     strict-schema server validates what it was given.
-// The `request_body` passthrough needs no entry here: it is merged AFTER the
-// prune (`chat_render_body`), so it is never walked.
+/// (internal) Keys whose value is a document AUTHORED BY THE CALLER rather than a wire
+/// field this file owns. Inside them a `null` is data, not an unset option:
+///   * `parameters` — a tool's JSON Schema, where `{"default": null}` and
+///     `{"type": ["string", "null"]}` sibling nulls are meaningful, and where a
+///     strict-schema server validates what it was given.
+/// The `request_body` passthrough needs no entry here: it is merged AFTER the
+/// prune (`chat_render_body`), so it is never walked.
 function _chat_is_opaque_key(key: string) -> bool {
     // `parameters` is a caller-authored tool schema; the directives subtree is
     // caller-authored too, and both mean exactly what they say — including a
@@ -867,10 +867,10 @@ function _chat_is_opaque_key(key: string) -> bool {
     key == "parameters" || key == _chat_directives_key()
 }
 
-// Splice each parked directives object back onto the content part that carries
-// it, dropping the reserved key. Runs right after `_chat_prune_nulls` and
-// before the `request_body` passthrough merge, so the authored directives sit
-// on the wire exactly as written and the caller's passthrough still wins last.
+/// (internal) Splice each parked directives object back onto the content part that carries
+/// it, dropping the reserved key. Runs right after `_chat_prune_nulls` and
+/// before the `request_body` passthrough merge, so the authored directives sit
+/// on the wire exactly as written and the caller's passthrough still wins last.
 function _chat_apply_directives(j: baml.json.json) -> baml.json.json {
     match (j) {
         let object: map<string, baml.json.json> => {
@@ -900,11 +900,11 @@ function _chat_apply_directives(j: baml.json.json) -> baml.json.json {
     }
 }
 
-// Drop every null-valued map entry, recursively. Typed request classes declare
-// their optional fields, and this is what keeps an unset one off the wire
-// instead of sending `"seed": null`. Runs BEFORE the passthrough merge, so a
-// user's explicit `null` override still deletes a key the client did set.
-// `_chat_is_opaque_key` subtrees are copied verbatim (the aws/google rule).
+/// (internal) Drop every null-valued map entry, recursively. Typed request classes declare
+/// their optional fields, and this is what keeps an unset one off the wire
+/// instead of sending `"seed": null`. Runs BEFORE the passthrough merge, so a
+/// user's explicit `null` override still deletes a key the client did set.
+/// `_chat_is_opaque_key` subtrees are copied verbatim (the aws/google rule).
 function _chat_prune_nulls(j: baml.json.json) -> baml.json.json {
     match (j) {
         let object: map<string, baml.json.json> => {
@@ -935,9 +935,9 @@ function _chat_prune_nulls(j: baml.json.json) -> baml.json.json {
     }
 }
 
-// Does the passthrough body mention `key` at all (even as an explicit null)?
-// Used for the Azure max_tokens guard, where "the caller said something about
-// this key" is the question, not "what did they say".
+/// (internal) Does the passthrough body mention `key` at all (even as an explicit null)?
+/// Used for the Azure max_tokens guard, where "the caller said something about
+/// this key" is the question, not "what did they say".
 function _chat_body_mentions(overrides: baml.json.json?, key: string) -> bool {
     match (overrides) {
         let object: map<string, baml.json.json> => object.has(key),
@@ -945,10 +945,10 @@ function _chat_body_mentions(overrides: baml.json.json?, key: string) -> bool {
     }
 }
 
-// Percent-encode one query value per RFC 3986 (unreserved characters survive,
-// everything else becomes %XX over its UTF-8 bytes). The stdlib has no URL
-// encoder, and Azure's `api-version` plus arbitrary user query params both need
-// one.
+/// (internal) Percent-encode one query value per RFC 3986 (unreserved characters survive,
+/// everything else becomes %XX over its UTF-8 bytes). The stdlib has no URL
+/// encoder, and Azure's `api-version` plus arbitrary user query params both need
+/// one.
 function _chat_percent_encode(value: string) -> string {
     let unreserved = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~";
     let out = "";
@@ -967,7 +967,7 @@ function _chat_percent_encode(value: string) -> string {
     out
 }
 
-// Endpoint-required query params first, user params merged over them.
+/// (internal) Endpoint-required query params first, user params merged over them.
 function _chat_url(compat: ChatCompat, params: ChatParams) -> string {
     let query: map<string, string> = {};
     for (let key in compat.compat_query.keys()) {
@@ -989,8 +989,8 @@ function _chat_url(compat: ChatCompat, params: ChatParams) -> string {
     `${url}?${pairs.join("&")}`
 }
 
-// content-type, then the caller's headers, then the credential — so the
-// endpoint's own auth header always wins over a user override of the same name.
+/// (internal) content-type, then the caller's headers, then the credential — so the
+/// endpoint's own auth header always wins over a user override of the same name.
 function _chat_headers(
     compat: ChatCompat,
     params: ChatParams,
@@ -1027,7 +1027,7 @@ function _chat_headers(
     headers
 }
 
-// The typed tool declarations for this turn, or null when the toolbox is empty.
+/// (internal) The typed tool declarations for this turn, or null when the toolbox is empty.
 function _chat_tools(toolbox: ai.tools.Toolbox) -> ChatTool[]? {
     if (toolbox.is_empty()) {
         return null;
@@ -1171,7 +1171,7 @@ function chat_preview(
 // ---------------------------------------------------------------------------
 // Response parsing.
 
-// One wire `finish_reason` -> the canonical stop reason.
+/// One wire `finish_reason` -> the canonical stop reason.
 function chat_stop_reason(reason: string) -> ai.content.StopReason {
     match (reason) {
         "tool_calls" | "function_call" => ai.content.StopReason.ToolUse,
@@ -1181,8 +1181,8 @@ function chat_stop_reason(reason: string) -> ai.content.StopReason {
     }
 }
 
-// A response image reference -> a media block. Data URLs become inline base64;
-// everything else is kept as a URL so the caller can fetch it.
+/// (internal) A response image reference -> a media block. Data URLs become inline base64;
+/// everything else is kept as a URL so the caller can fetch it.
 function _chat_media_block(url: string) -> ai.content.Media {
     if (url.starts_with("data:")) {
         if let separator: int = url.index_of(";base64,") {
@@ -1197,11 +1197,11 @@ function _chat_media_block(url: string) -> ai.content.Media {
     ai.content.Media.new(value = baml.media.Image.from_url(url, null))
 }
 
-// A tool call's `arguments` is a JSON *string* the model produced, so it can be
-// malformed (a truncated call, a model that emitted prose). Degrading to `{}`
-// would hand the runner an empty-argument invocation of a real tool and tell
-// nobody the arguments were discarded, so an undecodable payload is a
-// `ParseFailed` carrying the raw string.
+/// (internal) A tool call's `arguments` is a JSON *string* the model produced, so it can be
+/// malformed (a truncated call, a model that emitted prose). Degrading to `{}`
+/// would hand the runner an empty-argument invocation of a real tool and tell
+/// nobody the arguments were discarded, so an undecodable payload is a
+/// `ParseFailed` carrying the raw string.
 function _chat_tool_args(raw: string, provider: string) -> map<string, unknown> {
     baml.json.from_string<map<string, unknown>>(raw) catch_all (e) {
         _ => throw ai.errors.ParseFailed { provider: provider, raw_output: raw },
@@ -1344,11 +1344,11 @@ function chat_parse(
     ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
 }
 
-// Transport + classification for the non-streaming path. This mirrors
-// `ai.wire.send_as_with_wire` but decodes through `baml.json.to`, which honours
-// the `baml.FromJson` override that maps the `function` wire key onto
-// `CcToolCall.fn` — so the LLMCall wire record is built inline here with the
-// same shape `send_as_with_wire` produces.
+/// (internal) Transport + classification for the non-streaming path. This mirrors
+/// `ai.wire.send_as_with_wire` but decodes through `baml.json.to`, which honours
+/// the `baml.FromJson` override that maps the `function` wire key onto
+/// `CcToolCall.fn` — so the LLMCall wire record is built inline here with the
+/// same shape `send_as_with_wire` produces.
 function _chat_send(
     request: baml.http.Request,
     provider: string,
@@ -1479,8 +1479,8 @@ class CcStreamChunk {
     usage: CcUsage?,
 }
 
-// One tool call being assembled across chunks. The wire sends the id and name
-// once, then the arguments JSON in fragments.
+/// One tool call being assembled across chunks. The wire sends the id and name
+/// once, then the arguments JSON in fragments.
 class ChatToolCallBuffer {
     index: int,
     id: string,
@@ -1504,7 +1504,7 @@ class ChatStreamDecoder {
         ChatStreamDecoder { provider: provider, calls: [] }
     }
 
-    // Extend (or open) the buffer for one tool-call delta.
+    /// (internal) Extend (or open) the buffer for one tool-call delta.
     function _absorb_call(self, delta: CcToolCall, position: int) -> void {
         let index = delta.index ?? position;
         let existing: ChatToolCallBuffer? = self.calls.find((call) -> {
@@ -1609,11 +1609,11 @@ class ChatStreamDecoder {
     }
 }
 
-// `baml.http.fetch_sse` reports a non-2xx as `baml.errors.Io` whose message
-// embeds the status and body: "SSE request failed with status 400: {…}". The
-// status is the only thing standing between a 400 and a retry-safe
-// NetworkFailure that a Retry wrapper would happily replay, so it is recovered
-// here and run through the same classifier the non-streaming path uses.
+/// (internal) `baml.http.fetch_sse` reports a non-2xx as `baml.errors.Io` whose message
+/// embeds the status and body: "SSE request failed with status 400: {…}". The
+/// status is the only thing standing between a 400 and a retry-safe
+/// NetworkFailure that a Retry wrapper would happily replay, so it is recovered
+/// here and run through the same classifier the non-streaming path uses.
 function _chat_stream_failure(provider: string, detail: string) -> ai.errors.Failure {
     let marker = "SSE request failed with status ";
     if let start: int = detail.index_of(marker) {

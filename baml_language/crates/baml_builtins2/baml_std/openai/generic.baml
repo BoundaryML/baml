@@ -72,16 +72,16 @@ class GenericClient {
         }
     }
 
-    // No canonical variable: an unauthenticated request is the normal case for
-    // a self-hosted server, so a missing key is not an error here.
+    /// No canonical variable: an unauthenticated request is the normal case for
+    /// a self-hosted server, so a missing key is not an error here.
     function resolved_api_key(self) -> string? {
         ai.wire.resolve_credential(self.api_key, null)
     }
 
-    // Throws `ai.errors.InvalidRequest` when no base_url resolves. A
-    // `base_url = env.NAME` naming an UNSET variable resolves to null and lands
-    // here too, so it reports the same clear configuration error rather than a
-    // mystery request to nowhere.
+    /// Throws `ai.errors.InvalidRequest` when no base_url resolves. A
+    /// `base_url = env.NAME` naming an UNSET variable resolves to null and lands
+    /// here too, so it reports the same clear configuration error rather than a
+    /// mystery request to nowhere.
     function resolved_base_url(self) -> string {
         if let explicit: string = ai.wire.resolve_credential(self.base_url, null) {
             return explicit;

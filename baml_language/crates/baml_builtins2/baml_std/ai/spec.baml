@@ -94,11 +94,11 @@ function prompt(
     render
 }
 
-// One unit of model work, bound and unrun. Immutable; getters only.
-// `MyFunc@spec(args)` desugars to a constructor like this: the compiler
-// synthesizes a `MyFunc$spec` companion for every spec-mode LLM function
-// (backtick prompt, "provider/model" client string, and a `tools` field —
-// `tools []` opts a tool-less function in).
+/// One unit of model work, bound and unrun. Immutable; getters only.
+/// `MyFunc@spec(args)` desugars to a constructor like this: the compiler
+/// synthesizes a `MyFunc$spec` companion for every spec-mode LLM function
+/// (backtick prompt, "provider/model" client string, and a `tools` field —
+/// `tools []` opts a tool-less function in).
 class FunctionSpec<Out> {
     spec_name: string,
     args: map<string, unknown>,
@@ -106,8 +106,8 @@ class FunctionSpec<Out> {
     toolbox: root.tools.Toolbox,
     default_client: Client,
 
-    // Build the provider HTTP request shape for this spec without invoking the model.
-    // A supplied client overrides the spec's default; null uses the default.
+    /// Build the provider HTTP request shape for this spec without invoking the model.
+    /// A supplied client overrides the spec's default; null uses the default.
     function build_request(self, override_client: Client? = null) -> baml.http.Request {
         let selected = override_client ?? self.default_client;
         selected.render(

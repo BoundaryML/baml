@@ -187,7 +187,7 @@ fn throw_err(vm: &mut BexVm, e: &ErrInfo) -> VmRustFnError {
 }
 
 fn need_data_value(vm: &mut BexVm) -> Value {
-    let class_ptr = vm.resolve_class("baml.csv.CsvNeedData");
+    let class_ptr = vm.resolve_class("baml.csv._CsvNeedData");
     Value::object(vm.alloc_instance(class_ptr, vec![]))
 }
 

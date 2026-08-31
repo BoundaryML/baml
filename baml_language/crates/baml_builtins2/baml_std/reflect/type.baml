@@ -103,10 +103,10 @@ class Type {
         $rust_function
     }
 
-    // `baml.ToString` is implemented for `reflect.Type` by an out-of-body
-    // `implement` block beside the interface (baml/conversions.baml): the
-    // `reflect` package deliberately references nothing from `baml`, so the
-    // stdlib dependency graph stays acyclic by construction.
+    /// (internal) `baml.ToString` is implemented for `reflect.Type` by an out-of-body
+    /// `implement` block beside the interface (baml/conversions.baml): the
+    /// `reflect` package deliberately references nothing from `baml`, so the
+    /// stdlib dependency graph stays acyclic by construction.
     //baml:vm
     function _to_string_impl(self) -> string throws never {
         $rust_function

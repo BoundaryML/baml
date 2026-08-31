@@ -158,18 +158,18 @@ type CsvValue = null | bool | int | bigint | float | string;
 
 /// (internal) Marker: the reader needs more input bytes before it can make
 /// progress. Do not use directly.
-class CsvNeedData {
+class _CsvNeedData {
 }
 
 /// (internal) Marker: a record was skipped under `on_error = "skip"`.
 /// Do not use directly.
-class CsvSkip {
+class _CsvSkip {
     error: CsvError,
 }
 
 /// (internal) Marker: resolved header names (`null` when there are none).
 /// Do not use directly.
-class CsvHeaders {
+class _CsvHeaders {
     names: string[]?,
 }
 
@@ -273,13 +273,13 @@ class CsvReader {
                     let d: root.iter.Done => {
                         return d;
                     },
-                    let s: CsvSkip => {
+                    let s: _CsvSkip => {
                         match (self._on_skip) {
                             null => null,
                             let cb: (CsvError) -> null throws never => cb(s.error),
                         };
                     },
-                    CsvNeedData => {
+                    _CsvNeedData => {
                         self._read_chunk();
                     },
                 }
@@ -299,10 +299,10 @@ class CsvReader {
     function headers(self) -> string[]? throws CsvError | root.errors.Io {
         while (true) {
             match (self._poll_headers()) {
-                let h: CsvHeaders => {
+                let h: _CsvHeaders => {
                     return h.names;
                 },
-                CsvNeedData => {
+                _CsvNeedData => {
                     self._read_chunk();
                 },
             }
@@ -366,13 +366,13 @@ class CsvReader {
 
     /// (internal) Advance the native parser by one step.
     //baml:mut_vm
-    function _poll(self) -> CsvRecord | CsvSkip | CsvNeedData | root.iter.Done throws CsvError {
+    function _poll(self) -> CsvRecord | _CsvSkip | _CsvNeedData | root.iter.Done throws CsvError {
         $rust_function
     }
 
     /// (internal) Resolve headers, or request more input.
     //baml:mut_vm
-    function _poll_headers(self) -> CsvHeaders | CsvNeedData throws CsvError {
+    function _poll_headers(self) -> _CsvHeaders | _CsvNeedData throws CsvError {
         $rust_function
     }
 
@@ -451,7 +451,7 @@ class CsvRows<T> {
                     },
                     let rec: CsvRecord => {
                         match (_try_decode<T>(rec, self.reader)) {
-                            let s: CsvSkip => {
+                            let s: _CsvSkip => {
                                 match (self.reader._on_skip) {
                                     null => null,
                                     let cb: (CsvError) -> null throws never => cb(s.error),
@@ -822,9 +822,9 @@ function _validate_columns<T>(r: CsvReader) -> void throws CsvError {
 }
 
 /// (internal) Decode one record into `T`, honoring the reader's `on_error`
-/// policy: returns `CsvSkip` instead of throwing under `"skip"`.
+/// policy: returns `_CsvSkip` instead of throwing under `"skip"`.
 //baml:mut_vm
-function _try_decode<T>(rec: CsvRecord, r: CsvReader) -> T | CsvSkip throws CsvError {
+function _try_decode<T>(rec: CsvRecord, r: CsvReader) -> T | _CsvSkip throws CsvError {
     $rust_function
 }
 

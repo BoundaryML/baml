@@ -45,8 +45,8 @@ function resolve(selector: ClientSelector) -> root.Client {
     }
 }
 
-// The default judgment: a request the provider rejected does not become
-// valid by resending.
+/// The default judgment: a request the provider rejected does not become
+/// valid by resending.
 function default_retry_judgment(f: root.errors.Failure) -> bool {
     match (f) {
         let r: root.errors.Refused => false,
@@ -66,8 +66,8 @@ class Backoff {
         Backoff { initial_ms: initial_ms, multiplier: multiplier, max_ms: max_ms }
     }
 
-    // The delay before attempt N (first retry is attempt 1). A
-    // root.errors.RateLimited.retry_after_ms hint overrides the computed value.
+    /// The delay before attempt N (first retry is attempt 1). A
+    /// `ai.errors.RateLimited.retry_after_ms` hint overrides the computed value.
     function delay_ms(self, attempt: int, f: root.errors.Failure) -> int {
         let hinted = match (f) {
             let r: root.errors.RateLimited => r.retry_after_ms,
@@ -192,8 +192,8 @@ class Retry {
             self.inner.id()
         }
 
-        // Rendering is a pure preview of the inner client. It deliberately
-        // does not apply retry policy or backoff because no request is sent.
+        /// Rendering is a pure preview of the inner client. It deliberately
+        /// does not apply retry policy or backoff because no request is sent.
         function render(self, input: root.ModelTurnInput) -> baml.http.Request {
             self.inner.render(input) catch_all (e) {
                 _ => throw root.errors.normalize(e),
@@ -267,12 +267,12 @@ class Retry {
     }
 }
 
-// Rotates invocations across members. Replaces the legacy round-robin
-// provider: distribution is a client-boundary concern, exactly like Retry
-// and Fallback. The counter mutates on the shared value, so every call
-// site holding this client participates in one rotation. A streaming call
-// selects and advances the counter exactly once; a failure from that selected
-// stream never rotates again within the same call.
+/// Rotates invocations across members. Replaces the legacy round-robin
+/// provider: distribution is a client-boundary concern, exactly like Retry
+/// and Fallback. The counter mutates on the shared value, so every call
+/// site holding this client participates in one rotation. A streaming call
+/// selects and advances the counter exactly once; a failure from that selected
+/// stream never rotates again within the same call.
 class RoundRobin {
     members: root.Client[],
     counter: int,
@@ -298,8 +298,8 @@ class RoundRobin {
             }
         }
 
-        // Rendering is deterministic and side-effect free: preview the first
-        // member rather than mutating the invocation rotation counter.
+        /// Rendering is deterministic and side-effect free: preview the first
+        /// member rather than mutating the invocation rotation counter.
         function render(self, input: root.ModelTurnInput) -> baml.http.Request {
             match (self.members.at(0)) {
                 let c: root.Client => c.render(input),
@@ -381,8 +381,8 @@ class RoundRobin {
     }
 }
 
-// Streaming fallback advances in member order only for a typed, safely
-// retryable failure that occurs before the first text delta is returned.
+/// Streaming fallback advances in member order only for a typed, safely
+/// retryable failure that occurs before the first text delta is returned.
 class Fallback {
     members: root.Client[],
 
@@ -431,8 +431,8 @@ class Fallback {
             }
         }
 
-        // Rendering previews the first fallback member. It never probes later
-        // members because request construction itself must remain pure.
+        /// Rendering previews the first fallback member. It never probes later
+        /// members because request construction itself must remain pure.
         function render(self, input: root.ModelTurnInput) -> baml.http.Request {
             match (self.members.at(0)) {
                 let c: root.Client => c.render(input),
@@ -511,11 +511,11 @@ class Fallback {
     }
 }
 
-// Pulls one selected stream through a reliability policy. A typed, safely
-// retryable failure may replace the selected stream only before the first text
-// delta has been returned. Once any delta is visible, every later failure is
-// terminal: replaying would duplicate a prefix and there is no resumable-stream
-// contract at the client boundary.
+/// Pulls one selected stream through a reliability policy. A typed, safely
+/// retryable failure may replace the selected stream only before the first text
+/// delta has been returned. Once any delta is visible, every later failure is
+/// terminal: replaying would duplicate a prefix and there is no resumable-stream
+/// contract at the client boundary.
 class StreamRelay {
     open: () -> root.stream.TurnStream throws root.errors.InvokeError,
     retry: (root.errors.Failure) -> bool throws root.errors.InvokeError,

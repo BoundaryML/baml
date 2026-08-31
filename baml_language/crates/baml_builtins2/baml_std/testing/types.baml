@@ -45,8 +45,8 @@ class NamedChildReport {
     report: ChildReport,
 }
 
-// Runner type aliases — lambda transformers.
-// TestRunner wraps "run test once" into a new execution lambda.
+/// Runner type aliases — lambda transformers.
+/// TestRunner wraps "run test once" into a new execution lambda.
 type TestBody = () -> void throws unknown;
 
 type TestSetBody = (TestCollector) -> void throws unknown;
@@ -71,7 +71,7 @@ class TestSetChild {
     is_container: bool,
 }
 
-// TestSetRunner receives lazy children and returns the aggregate report.
+/// TestSetRunner receives lazy children and returns the aggregate report.
 type TestSetRunner = (TestSetChild[]) -> TestSetReport throws never;
 
 // --- Flat report type for the CLI test runner ---

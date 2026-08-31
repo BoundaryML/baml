@@ -1,13 +1,12 @@
-// openai.ChatClient — one model turn against OpenAI's Chat Completions API
-// (`POST https://api.openai.com/v1/chat/completions`).
-//
-// The sibling of `openai.ResponsesClient`: same provider, older and far more
-// widely-cloned endpoint. Reach for this one when you want chat-completions
-// semantics from OpenAI itself; for any other OpenAI-compatible server use
-// `openai.GenericClient`, `openai.OllamaClient`, `openai.OpenRouterClient` or
-// `openai.AzureClient`, which are the same wire core with different compat
-// flags (`openai/ns_internal/chat.baml`).
-
+/// One model turn against OpenAI's Chat Completions API
+/// (`POST https://api.openai.com/v1/chat/completions`).
+///
+/// The sibling of `openai.ResponsesClient`: same provider, older and far more
+/// widely-cloned endpoint. Reach for this one when you want chat-completions
+/// semantics from OpenAI itself; for any other OpenAI-compatible server use
+/// `openai.GenericClient`, `openai.OllamaClient`, `openai.OpenRouterClient` or
+/// `openai.AzureClient`, which are the same wire core with different compat
+/// flags (`openai/ns_internal/chat.baml`).
 class ChatClient {
     model: string,
     // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
@@ -78,22 +77,22 @@ class ChatClient {
         }
     }
 
-    // The request-time credential: the explicit value (a literal, or the value
-    // of the variable an `env.NAME` ref points at), else the provider's
-    // canonical variable. Null is reported as a configuration error when the
-    // request is built, naming OPENAI_API_KEY.
+    /// The request-time credential: the explicit value (a literal, or the value
+    /// of the variable an `env.NAME` ref points at), else the provider's
+    /// canonical variable. Null is reported as a configuration error when the
+    /// request is built, naming OPENAI_API_KEY.
     function resolved_api_key(self) -> string? {
         ai.wire.resolve_credential(self.api_key, "OPENAI_API_KEY")
     }
 
-    // The request-time base URL, or the provider default.
+    /// The request-time base URL, or the provider default.
     function resolved_base_url(self) -> string {
         ai.wire.resolve_credential(self.base_url, null) ?? "https://api.openai.com/v1"
     }
 
-    // The provider record: everything the shared core needs to know about this
-    // endpoint. Only `stream_options` distinguishes first-party OpenAI from a
-    // bare compatible server.
+    /// The provider record: everything the shared core needs to know about this
+    /// endpoint. Only `stream_options` distinguishes first-party OpenAI from a
+    /// bare compatible server.
     function compat(self) -> root.internal.ChatCompat {
         root.internal.ChatCompat.new(
             provider = "openai-chat",

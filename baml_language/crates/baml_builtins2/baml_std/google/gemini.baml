@@ -105,11 +105,11 @@ class GoogleClient {
         }
     }
 
-    // The request-time credential: an explicit value, else the provider's
-    // canonical one. A missing key is a CATCHABLE configuration error, not a
-    // panic: `baml.env.get_or_panic` unwinds past the `catch_all` +
-    // `ai.errors.normalize` wrapper below, so an unset variable would take the
-    // process down instead of surfacing as an `ai.errors.Failure`.
+    /// The request-time credential: an explicit value, else the provider's
+    /// canonical one. A missing key is a CATCHABLE configuration error, not a
+    /// panic: `baml.env.get_or_panic` unwinds past the `catch_all` +
+    /// `ai.errors.normalize` wrapper below, so an unset variable would take the
+    /// process down instead of surfacing as an `ai.errors.Failure`.
     function resolved_api_key(self) -> string {
         if let k: string = ai.wire.resolve_credential(self.api_key, "GOOGLE_API_KEY") {
             return k;
@@ -122,7 +122,7 @@ class GoogleClient {
         }
     }
 
-    // The request-time base URL, or null for the provider default.
+    /// The request-time base URL, or null for the provider default.
     function resolved_base_url(self) -> string? {
         ai.wire.resolve_credential(self.base_url, null)
     }

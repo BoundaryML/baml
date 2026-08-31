@@ -104,9 +104,9 @@ function credential_sources(cred: root.Credential?, canonical_env: string?) -> s
     }
 }
 
-// Send, classify non-2xx via root.errors.classify_http, decode the body as T.
-// T = json-shaped envelope class; unknown fields are ignored by the decoder.
-// A null or non-positive timeout preserves the transport's unbounded default.
+/// Send, classify non-2xx via `ai.errors.classify_http`, decode the body as T.
+/// T = json-shaped envelope class; unknown fields are ignored by the decoder.
+/// A null or non-positive timeout preserves the transport's unbounded default.
 function send_as<T>(
     req: baml.http.Request,
     provider: string,
@@ -234,8 +234,8 @@ function send_as_with_wire<T>(
     SentAs { value: value, call: call }
 }
 
-// The return type's schema as prompt text, in the standard dialect —
-// exactly what ${ctx.output_format()} renders in an LLM function block.
+/// The return type's schema as prompt text, in the standard dialect —
+/// exactly what ${ctx.output_format()} renders in an LLM function block.
 function render_output_format(t: reflect.Type) -> string throws reflect.errors.CompilationError {
     root.internal.validate_output_type(t);
     root.internal.render_output_format(t)

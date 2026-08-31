@@ -14,9 +14,9 @@ class TestSetRegistration {
     runner: TestSetRunner?,
 }
 
-// Registration failures are structural discovery errors, not failed tests.
-// Callers must let this typed error escape instead of converting it into a
-// synthetic "(failed to expand)" leaf.
+/// Registration failures are structural discovery errors, not failed tests.
+/// Callers must let this typed error escape instead of converting it into a
+/// synthetic "(failed to expand)" leaf.
 class InvalidTestName {
     message: string,
 }
@@ -93,9 +93,9 @@ class TestCollector {
         );
     }
 
-    // Compiler-only top-level registration entry points. The owner is derived
-    // from the declaring file (`root` plus its BAML namespaces); nested items use
-    // the ordinary methods above and inherit this canonical prefix.
+    /// Compiler-only top-level registration entry points. The owner is derived
+    /// from the declaring file (`root` plus its BAML namespaces); nested items use
+    /// the ordinary methods above and inherit this canonical prefix.
     function register_test_at(
         self,
         owner: string,
@@ -169,11 +169,11 @@ class TestRegistry {
         TestRegistry { collector: collector, expansions: {}, loading_time_ms: 0 }
     }
 
-    // Serialize registry to pure-data list for the UI.
-    // Checks expansions map to determine lazy vs expanded for each testset.
-    //
-    // Tests are serialized before testsets by design — tests are leaf items,
-    // testsets are containers.
+    /// Serialize registry to pure-data list for the UI.
+    /// Checks expansions map to determine lazy vs expanded for each testset.
+    ///
+    /// Tests are serialized before testsets by design — tests are leaf items,
+    /// testsets are containers.
     function serialize(self) -> SerializedTestDef[] {
         let items: SerializedTestDef[] = [];
         for (let t in self.collector.tests) {
@@ -199,7 +199,7 @@ class TestRegistry {
         return items;
     }
 
-    // Find test by name in root collector, then recurse into expanded sub-registries.
+    /// Find test by name in root collector, then recurse into expanded sub-registries.
     function run_test(self, name: string) -> TestReport {
         // Check tests in this registry's collector
         for (let t in self.collector.tests) {
@@ -254,11 +254,11 @@ class TestRegistry {
         root.run_testset(root.testset_children_selected(self, names, pool), null, pool)
     }
 
-    // CLI entry point: glob-filter in BAML, run (honoring testset runners), and
-    // flatten into a tolerated-aware flat report the Rust driver prints directly.
-    //   * no filters -> run_all (whole tree)
-    //   * any filter -> glob the leaf names, then run_selected (parent runners
-    //                   still apply to the selected subset)
+    /// CLI entry point: glob-filter in BAML, run (honoring testset runners), and
+    /// flatten into a tolerated-aware flat report the Rust driver prints directly.
+    ///   * no filters -> run_all (whole tree)
+    ///   * any filter -> glob the leaf names, then run_selected (parent runners
+    ///                   still apply to the selected subset)
     function run_filtered(
         self,
         profile_include: string[],
@@ -285,7 +285,7 @@ class TestRegistry {
         root.flatten_with_tolerated(report, selected_names)
     }
 
-    // CLI `--list` support: the selected leaf names, without running anything.
+    /// CLI `--list` support: the selected leaf names, without running anything.
     function list_filtered(
         self,
         profile_include: string[],
@@ -296,8 +296,8 @@ class TestRegistry {
         root.select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude)
     }
 
-    // Expand a lazy testset by name. Searches recursively through expanded
-    // sub-registries so nested testsets can be expanded too.
+    /// Expand a lazy testset by name. Searches recursively through expanded
+    /// sub-registries so nested testsets can be expanded too.
     function expand_set(self, name: string) -> SerializedTestDef[] {
         // Try root collector first
         for (let ts in self.collector.testsets) {
@@ -512,11 +512,11 @@ function aggregate_reports(named_results: NamedChildReport[]) -> TestSetReport {
     }
 }
 
-// Global gate on concurrently RUNNING leaf test bodies. A leaf acquires a
-// slot BEFORE its body is spawned, so a gated test costs nothing — no VM
-// thread, no watchdog timer — until a slot frees. One pool is shared by the
-// whole run (threaded down through every nested testset), so the limit is a
-// run-wide invariant rather than a per-testset one.
+/// Global gate on concurrently RUNNING leaf test bodies. A leaf acquires a
+/// slot BEFORE its body is spawned, so a gated test costs nothing — no VM
+/// thread, no watchdog timer — until a slot frees. One pool is shared by the
+/// whole run (threaded down through every nested testset), so the limit is a
+/// run-wide invariant rather than a per-testset one.
 class TestPool {
     // Token bucket. `pop` and `push` are single locked array operations, so
     // concurrent dispatchers race safely; an empty `pop` means "no slot free".
@@ -543,10 +543,10 @@ class TestPool {
     }
 }
 
-// A pool admitting `max_concurrency` leaves at once. Zero or negative means
-// "no explicit budget": fall back to a bound that keeps a pathological
-// fan-out from creating thousands of live VM threads while staying above any
-// real machine's core count (the CLI always passes an explicit budget).
+/// A pool admitting `max_concurrency` leaves at once. Zero or negative means
+/// "no explicit budget": fall back to a bound that keeps a pathological
+/// fan-out from creating thousands of live VM threads while staying above any
+/// real machine's core count (the CLI always passes an explicit budget).
 function test_pool(max_concurrency: int) -> TestPool {
     let limit = if (max_concurrency > 0) {
         max_concurrency
@@ -593,13 +593,13 @@ function run_children_parallel(
     root.aggregate_reports(named_results)
 }
 
-// Run a single test with error handling and optional runner middleware.
-// Every test races against a deadline (default 5 minutes; override with the
-// BAML_TEST_TIMEOUT_MS env var): a hung test — a stalled network read, a
-// deadlocked await — becomes a FAIL with a "timed out" message instead of
-// hanging the whole run. `baml.future.race` cancels the losers when one
-// side settles (BEP-034), so a timed-out body is actively cancelled and a
-// finished test's leftover timer doesn't linger.
+/// Run a single test with error handling and optional runner middleware.
+/// Every test races against a deadline (default 5 minutes; override with the
+/// BAML_TEST_TIMEOUT_MS env var): a hung test — a stalled network read, a
+/// deadlocked await — becomes a FAIL with a "timed out" message instead of
+/// hanging the whole run. `baml.future.race` cancels the losers when one
+/// side settles (BEP-034), so a timed-out body is actively cancelled and a
+/// finished test's leftover timer doesn't linger.
 function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
     let base_run: TestReportThunk = () -> TestReport {
         let start = baml.time.Instant.now();
@@ -699,11 +699,11 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
     }
 }
 
-// Run all children of a testset with optional runner middleware.
-//
-// A custom `TestSetRunner` receives the children as a plain closure and runs
-// them however it likes, outside the pool's budget — the built-in runners are
-// sequential (inherently capped) or take a local fallback pool (`PassRate`).
+/// Run all children of a testset with optional runner middleware.
+///
+/// A custom `TestSetRunner` receives the children as a plain closure and runs
+/// them however it likes, outside the pool's budget — the built-in runners are
+/// sequential (inherently capped) or take a local fallback pool (`PassRate`).
 function run_testset(
     children: TestSetChild[],
     runner: TestSetRunner?,
@@ -721,8 +721,8 @@ function run_testset(
 // include/exclude patterns and prints the returned FlatTestReport directly.
 // ---------------------------------------------------------------------------
 
-// The report for a testset that errored (e.g. its generator threw or panicked
-// during expansion): one error with no per-leaf detail.
+/// The report for a testset that errored (e.g. its generator threw or panicked
+/// during expansion): one error with no per-leaf detail.
 function expansion_error_report(name: string) -> TestSetReport {
     TestSetReport {
         outcome: "error",
@@ -741,9 +741,9 @@ function expansion_error_report(name: string) -> TestSetReport {
     }
 }
 
-// Match a CLI selector against a canonical test id. Plain selectors are
-// case-sensitive substrings. A selector containing '*' is an anchored glob
-// where '*' matches any run of characters (including '::').
+/// Match a CLI selector against a canonical test id. Plain selectors are
+/// case-sensitive substrings. A selector containing '*' is an anchored glob
+/// where '*' matches any run of characters (including '::').
 function glob_match(subject: string, pattern: string) -> bool {
     let parts = pattern.split("*");
     let n = parts.length();
@@ -786,8 +786,8 @@ function any_pattern_matches(pats: string[], canonical_id: string) -> bool {
     false
 }
 
-// Replicates TestFilter::includes: exclude wins; with includes present only
-// included leaves are selected; with no includes everything not excluded is.
+/// Replicates TestFilter::includes: exclude wins; with includes present only
+/// included leaves are selected; with no includes everything not excluded is.
 function leaf_selected(name: string, include: string[], exclude: string[]) -> bool {
     if (root.any_pattern_matches(exclude, name)) {
         return false;
@@ -798,9 +798,9 @@ function leaf_selected(name: string, include: string[], exclude: string[]) -> bo
     root.any_pattern_matches(include, name)
 }
 
-// Apply a profile and an explicit CLI layer independently. This is deliberately
-// not equivalent to concatenating their include arrays: profile AND CLI is the
-// contract, while includes within either layer remain OR.
+/// Apply a profile and an explicit CLI layer independently. This is deliberately
+/// not equivalent to concatenating their include arrays: profile AND CLI is the
+/// contract, while includes within either layer remain OR.
 function leaf_selected_layered(
     name: string,
     profile_include: string[],
@@ -812,9 +812,9 @@ function leaf_selected_layered(
         && root.leaf_selected(name, cli_include, cli_exclude)
 }
 
-// A trailing-star exclusion that matches the canonical descendant prefix proves
-// that every leaf below a lazy testset is excluded. This intentionally handles
-// only the provable/common case and otherwise expands conservatively.
+/// A trailing-star exclusion that matches the canonical descendant prefix proves
+/// that every leaf below a lazy testset is excluded. This intentionally handles
+/// only the provable/common case and otherwise expands conservatively.
 function subtree_excluded(prefix: string, excludes: string[]) -> bool {
     let descendant_prefix = prefix + "::";
     for (let pattern in excludes) {
@@ -832,10 +832,10 @@ function subtree_excluded(prefix: string, excludes: string[]) -> bool {
     false
 }
 
-// Whether an include selector could match at least one leaf below `prefix`.
-// A plain substring can always occur in a future leaf name, so it expands
-// conservatively. For an explicit glob, the literal portion before the first
-// `*` must be compatible with the canonical descendant prefix.
+/// Whether an include selector could match at least one leaf below `prefix`.
+/// A plain substring can always occur in a future leaf name, so it expands
+/// conservatively. For an explicit glob, the literal portion before the first
+/// `*` must be compatible with the canonical descendant prefix.
 function pattern_may_match_descendant(pattern: string, prefix: string) -> bool {
     let descendant_prefix = prefix + "::";
     match (pattern.index_of("*")) {
@@ -862,8 +862,8 @@ function subtree_may_be_selected(prefix: string, include: string[], exclude: str
     false
 }
 
-// Glob-filter the registry while traversing it. Profile-excluded lazy subtrees
-// are pruned before their executable testset collectors are invoked.
+/// Glob-filter the registry while traversing it. Profile-excluded lazy subtrees
+/// are pruned before their executable testset collectors are invoked.
 function select_names_layered(
     registry: TestRegistry,
     profile_include: string[],
@@ -908,12 +908,12 @@ function select_names_layered(
     out
 }
 
-// Compatibility helper for internal callers: one ordinary filter layer.
+/// Compatibility helper for internal callers: one ordinary filter layer.
 function select_names(registry: TestRegistry, include: string[], exclude: string[]) -> string[] {
     root.select_names_layered(registry, [], [], include, exclude)
 }
 
-// Fully expand the registry and collect every leaf test's canonical id.
+/// Fully expand the registry and collect every leaf test's canonical id.
 function collect_leaf_names(registry: TestRegistry) -> string[] {
     let out: string[] = [];
     for (let t in registry.collector.tests) {
@@ -927,11 +927,11 @@ function collect_leaf_names(registry: TestRegistry) -> string[] {
     out
 }
 
-// Expand one testset to its leaf names, containing failures: a testset whose
-// generator throws or panics during expansion is represented by a sentinel leaf
-// *under* its own path ("root::suite::(failed to expand)") so canonical-id
-// filters select it like a real
-// leaf, then `run_selected` runs it and surfaces the error.
+/// Expand one testset to its leaf names, containing failures: a testset whose
+/// generator throws or panics during expansion is represented by a sentinel leaf
+/// *under* its own path ("root::suite::(failed to expand)") so canonical-id
+/// filters select it like a real
+/// leaf, then `run_selected` runs it and surfaces the error.
 function collect_subtree_names(registry: TestRegistry, ts: TestSetRegistration) -> string[] {
     root.collect_leaf_names(registry.expand_testset_registry(ts)) catch_all (e) {
         let err: InvalidTestName => throw err,
@@ -991,7 +991,7 @@ function collect_subtree_names_layered(
     }
 }
 
-// Leaf tallies split into hard failures vs. runner-tolerated failures.
+/// Leaf tallies split into hard failures vs. runner-tolerated failures.
 class LeafCounts {
     passed: int,
     failed: int,
@@ -1011,9 +1011,9 @@ class LeafIdentities {
     tolerated_ms: int[],
 }
 
-// Classify each leaf in a child-report list as passed / hard-failed /
-// tolerated. A failing leaf is tolerated iff some enclosing testset's runner
-// passed (tolerated_by_parent flows down). Replaces the Rust extract_leaf_summary.
+/// Classify each leaf in a child-report list as passed / hard-failed /
+/// tolerated. A failing leaf is tolerated iff some enclosing testset's runner
+/// passed (tolerated_by_parent flows down). Replaces the Rust extract_leaf_summary.
 function count_leaves(results: ChildReport[], tolerated_by_parent: bool) -> LeafCounts {
     let passed = 0;
     let failed = 0;
@@ -1059,10 +1059,10 @@ function count_leaves(results: ChildReport[], tolerated_by_parent: bool) -> Leaf
     LeafCounts { passed: passed, failed: failed, tolerated: tolerated, total: total }
 }
 
-// Flatten a run_all()/run_selected() TestSetReport into the CLI flat report.
-// Aggregate outcome is preserved (honoring testset runners); counts split hard
-// vs tolerated failures; failed_names are the report's (hard) failed names; and
-// failure messages are gathered from every failing run.
+/// Flatten a run_all()/run_selected() TestSetReport into the CLI flat report.
+/// Aggregate outcome is preserved (honoring testset runners); counts split hard
+/// vs tolerated failures; failed_names are the report's (hard) failed names; and
+/// failure messages are gathered from every failing run.
 function flatten_with_tolerated(report: TestSetReport, selected_names: string[]) -> FlatTestReport {
     let top_tolerated = report.outcome == "pass";
     let counts = if (report.results.length() > 0) {
@@ -1250,8 +1250,8 @@ function collect_leaf_identities(
     }
 }
 
-// Collect failures from every nested report, including failures hidden from a
-// parent aggregate because a testset runner tolerated them.
+/// Collect failures from every nested report, including failures hidden from a
+/// parent aggregate because a testset runner tolerated them.
 function collect_all_failed_names(report: TestSetReport, out: string[]) -> void {
     for (let name in report.failed_names) {
         if (!root.name_in(name, out)) {
@@ -1266,8 +1266,8 @@ function collect_all_failed_names(report: TestSetReport, out: string[]) -> void 
     }
 }
 
-// Gather failure messages from every failing run of every leaf, recursing into
-// nested testsets.
+/// Gather failure messages from every failing run of every leaf, recursing into
+/// nested testsets.
 function collect_leaf_messages(results: ChildReport[], out: string[]) -> void {
     for (let r in results) {
         match (r) {
