@@ -208,6 +208,21 @@ jobs:
               return true;
             }
 
+            async function verifyTagWithRetry(tag) {
+              const maxAttempts = 5;
+              for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                if (await verifyTag(tag)) {
+                  return true;
+                }
+                if (attempt < maxAttempts) {
+                  const delayMs = 2000 * attempt;
+                  core.info(`Tag ${tag} is not visible yet; retrying verification in ${delayMs}ms`);
+                  await new Promise((resolve) => setTimeout(resolve, delayMs));
+                }
+              }
+              return false;
+            }
+
             for (const tag of tags) {
               if (await verifyTag(tag)) {
                 continue;
@@ -240,11 +255,11 @@ jobs:
                 core.warning(`Creating ref for ${tag} failed; verifying remote state before failing`);
               }
 
-              if (!(await verifyTag(tag))) {
+              if (!(await verifyTagWithRetry(tag))) {
                 if (createRefError !== null) {
                   throw createRefError;
                 }
-                throw new Error(`Remote tag ${tag} is still absent`);
+                throw new Error(`Remote tag ${tag} is still absent after verification retries`);
               }
             }
 
