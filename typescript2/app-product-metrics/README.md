@@ -54,7 +54,7 @@ The always-on process aggregates the current week every day at 6:00 AM in `Ameri
 infisical run --projectId=bdd280e2-259c-4750-9b16-a8597a67214c --env=prod-product-metrics -- sh -c 'curl --fail-with-body --request POST --header "Authorization: Bearer $SLACK_POST_TRIGGER_TOKEN" --header "Content-Type: application/json" --data '\''{"start":"2026-08-17","end":"2026-08-24"}'\'' https://boundary-product-metrics.fly.dev/aggregate-weekly-metric'
 ```
 
-The `Product metrics Slack report` GitHub Actions workflow runs on `ubuntu-latest` every Monday at 8:00 AM in `America/Los_Angeles`. It installs Playwright's matching Chromium build, screenshots the live `GET /` dashboard after the primary PostHog chart renders, and uploads the PNG to `#general` using `SLACK_BOUNDARY_BOT_TOKEN` from the `boundary-tools-prod` GitHub environment. Fly serves the dashboard but does not run Chromium. The workflow can also be triggered manually after it is present on the repository's default branch.
+The `Product metrics Slack report` GitHub Actions workflow runs on `ubuntu-latest` every Friday at 8:00 AM in `America/Los_Angeles`. It installs Playwright's matching Chromium build, screenshots the live `GET /` dashboard after the primary PostHog chart renders, and uploads the PNG to `#general` using `SLACK_BOUNDARY_BOT_TOKEN` from the `boundary-tools-prod` GitHub environment. Fly serves the dashboard but does not run Chromium. The workflow can also be triggered manually after it is present on the repository's default branch.
 
 ```bash
 gh workflow run product-metrics-slack-report.yml

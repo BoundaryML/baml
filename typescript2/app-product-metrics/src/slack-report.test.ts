@@ -31,7 +31,7 @@ test('dashboardReportBlocks renders update guidance in a context block', () => {
     {
       elements: [
         {
-          text: `This report is sent every Monday at 8 AM PT. To update it, see ${readmeLink}.`,
+          text: `This report is sent every Friday at 8am PT. To update it, see ${readmeLink}.`,
           type: 'mrkdwn',
         },
       ],

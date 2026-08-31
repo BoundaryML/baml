@@ -50,7 +50,7 @@ function dashboardReportHeading(dashboardUrl: string, date: string): string {
 }
 
 function dashboardReportGuidance(): string {
-  return `This report is sent every Monday at 8 AM PT. To update it, see <${productMetricsReadmeUrl}|docs>.`;
+  return `This report is sent every Friday at 8am PT. To update it, see <${productMetricsReadmeUrl}|docs>.`;
 }
 
 export function dashboardReportText(
