@@ -457,7 +457,7 @@ jobs:
   build-wrapper:
     name: Build toolchain selector
     needs: [plan]
-    uses: ./.github/workflows/build2-toolchain-selector.reusable.yaml
+    uses: ./.github/workflows/build2-wrapper.reusable.yaml
     permissions:
       contents: read
     with:
