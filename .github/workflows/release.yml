@@ -156,85 +156,96 @@ jobs:
       VERSION: ${{ needs.determine-version.outputs.version_string }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-          persist-credentials: true
-          ref: ${{ github.sha }}
       - name: Create or verify annotated tags
-        shell: bash
-        run: |
-          set -euo pipefail
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const version = process.env.VERSION;
+            const runUrl = process.env.RUN_URL;
+            const sourceSha = context.sha;
+            const tags = [version, `v${version}`];
+            const message = `BAML v0 release: ${version}\n\nSource: ${sourceSha}\nWorkflow: ${runUrl}`;
 
-          verify_remote_tag() {
-            local tag="$1"
-            local tag_ref="refs/tags/${tag}"
-            local refs
-            local object
-            local peeled
+            async function getRef(tag) {
+              try {
+                return await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
+              } catch (error) {
+                if (error.status === 404) {
+                  return null;
+                }
+                throw error;
+              }
+            }
 
-            if ! refs="$(git ls-remote --tags origin "$tag_ref" "${tag_ref}^{}")"; then
-              echo "Failed to read remote tag $tag" >&2
-              exit 1
-            fi
+            async function verifyTag(tag) {
+              const ref = await getRef(tag);
+              if (ref === null) {
+                return false;
+              }
+              if (ref.data.object.type !== "tag") {
+                throw new Error(`Remote tag ${tag} is lightweight; refusing to replace it`);
+              }
 
-            object="$(awk -v ref="$tag_ref" '$2 == ref { print $1 }' <<<"$refs")"
-            peeled="$(awk -v ref="${tag_ref}^{}" '$2 == ref { print $1 }' <<<"$refs")"
+              const tagObject = await github.rest.git.getTag({
+                owner,
+                repo,
+                tag_sha: ref.data.object.sha,
+              });
+              if (tagObject.data.tag !== tag) {
+                throw new Error(`Remote tag ${tag} points to an annotated tag object named ${tagObject.data.tag}`);
+              }
+              if (tagObject.data.object.type !== "commit" || tagObject.data.object.sha !== sourceSha) {
+                throw new Error(`Remote tag ${tag} does not target expected commit ${sourceSha}; refusing to move it`);
+              }
+              if (!tagObject.data.message.split(/\r?\n/).includes(`Workflow: ${runUrl}`)) {
+                throw new Error(`Remote tag ${tag} was not created by this workflow run; refusing to reuse it`);
+              }
 
-            if [[ -z "$object" ]]; then
-              return 1
-            fi
-            if [[ -z "$peeled" ]]; then
-              echo "Remote tag $tag is lightweight; refusing to replace it" >&2
-              exit 1
-            fi
-            if [[ "$peeled" != "$GITHUB_SHA" ]]; then
-              echo "Remote tag $tag peels to $peeled, expected $GITHUB_SHA; refusing to move it" >&2
-              exit 1
-            fi
+              core.info(`Verified existing annotated tag ${tag} at ${sourceSha}`);
+              return true;
+            }
 
-            git fetch --no-tags origin "+${tag_ref}:${tag_ref}"
-            if [[ "$(git cat-file -t "$tag_ref")" != "tag" ]]; then
-              echo "Remote tag $tag is not annotated; refusing to replace it" >&2
-              exit 1
-            fi
-            if ! git cat-file tag "$tag_ref" | grep -Fqx "Workflow: $RUN_URL"; then
-              echo "Remote tag $tag was not created by this workflow run; refusing to reuse it" >&2
-              exit 1
-            fi
+            for (const tag of tags) {
+              if (await verifyTag(tag)) {
+                continue;
+              }
 
-            echo "Verified existing annotated tag $tag at $GITHUB_SHA"
-          }
+              const tagObject = await github.rest.git.createTag({
+                owner,
+                repo,
+                tag,
+                message,
+                object: sourceSha,
+                type: "commit",
+                tagger: {
+                  name: "github-actions[bot]",
+                  email: "41898282+github-actions[bot]@users.noreply.github.com",
+                  date: new Date().toISOString(),
+                },
+              });
 
-          tags=("$VERSION" "v$VERSION")
-          missing_tags=()
-          for tag in "${tags[@]}"; do
-            if ! verify_remote_tag "$tag"; then
-              missing_tags+=("$tag")
-            fi
-          done
+              let createRefError = null;
+              try {
+                await github.rest.git.createRef({
+                  owner,
+                  repo,
+                  ref: `refs/tags/${tag}`,
+                  sha: tagObject.data.sha,
+                });
+              } catch (error) {
+                createRefError = error;
+                core.warning(`Creating ref for ${tag} failed; verifying remote state before failing`);
+              }
 
-          if (( ${#missing_tags[@]} > 0 )); then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            message="$(printf 'BAML v0 release: %s\n\nSource: %s\nWorkflow: %s' "$VERSION" "$GITHUB_SHA" "$RUN_URL")"
-            refs_to_push=()
-            for tag in "${missing_tags[@]}"; do
-              git tag --annotate "$tag" "$GITHUB_SHA" --message "$message"
-              refs_to_push+=("refs/tags/${tag}:refs/tags/${tag}")
-            done
-
-            if ! git push --atomic origin "${refs_to_push[@]}"; then
-              echo "Tag push failed; checking whether the remote accepted the tags before the connection failed" >&2
-            fi
-          fi
-
-          for tag in "${tags[@]}"; do
-            if ! verify_remote_tag "$tag"; then
-              echo "Remote tag $tag is still absent" >&2
-              exit 1
-            fi
-          done
+              if (!(await verifyTag(tag))) {
+                if (createRefError !== null) {
+                  throw createRefError;
+                }
+                throw new Error(`Remote tag ${tag} is still absent`);
+              }
+            }
 
   publish-to-pypi:
     environment: release

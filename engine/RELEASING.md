@@ -19,7 +19,7 @@ The release workflow runs `integ-tests` for informational signal, but its failur
 3. Leave `dry_run` unchecked for a real release. Check it only to build and verify artifacts without creating tags or publishing.
 4. Start the workflow, confirm the derived version and commit in the workflow summary, and approve the `release` environment when requested.
 
-The workflow builds all release artifacts from the selected `canary` commit before making external changes. The `create-release-tag` job then atomically pushes annotated `<version>` and `v<version>` tags. Publishing jobs, including the GitHub Release, run only after those tags exist; this prevents the GitHub Release API from implicitly creating a lightweight tag.
+The workflow builds all release artifacts from the selected `canary` commit before making external changes. The `create-release-tag` job then creates annotated `<version>` and `v<version>` tags through the GitHub API, verifying each tag before proceeding. Publishing jobs, including the GitHub Release, run only after both tags exist; this prevents the GitHub Release API from implicitly creating a lightweight tag.
 
 ## Recover from a transient failure
 
