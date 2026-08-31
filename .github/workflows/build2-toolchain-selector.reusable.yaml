@@ -86,9 +86,8 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          # The plan's manylinux2014 image uses a GLIBC 2.17 target
-          # sysroot. CROSS_CONFIG makes that image control linking; the image's
-          # newer host ldd does not determine the wrapper's compatibility floor.
+          # CROSS_CONFIG makes the plan's image control linking; the image's
+          # host ldd does not determine the wrapper's compatibility floor.
           cross_config="$RUNNER_TEMP/baml-wrapper-cross.toml"
           printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = ["BAML_WORKOS_CLIENT_ID"]\n' \
             "$TARGET" "$CROSS_IMAGE" "$TARGET" > "$cross_config"
