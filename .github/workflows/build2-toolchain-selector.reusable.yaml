@@ -51,6 +51,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CARGO: cargo
+      # The stock cross 0.2.5 GNU images link against GLIBC 2.23. These pinned
+      # manylinux2014 cross images use GLIBC 2.17 sysroots for their target
+      # linkers, so GNU wrappers work on GLIBC 2.18 by construction. The image's
+      # host ldd is newer; the target compiler sysroot is the compatibility floor.
+      CROSS_TARGET_AARCH64_UNKNOWN_LINUX_GNU_IMAGE: "ghcr.io/rust-cross/manylinux2014-cross:aarch64@sha256:32c92568ebee8db53e0598c21bcd06a6dd1649d45d507646a8a49313c50325f8"
+      CROSS_TARGET_X86_64_UNKNOWN_LINUX_GNU_IMAGE: "ghcr.io/rust-cross/manylinux2014-cross:x86_64@sha256:13670ccc63c35e072661938181c046243c01d7bca7976b3914177fb9b162998d"
     strategy:
       fail-fast: false
       matrix:
@@ -98,7 +104,6 @@ jobs:
       - name: Verify Linux wrapper ABI and installer selection
         if: ${{ matrix.libc == 'gnu' || matrix.libc == 'musl' }}
         env:
-          GLIBC_MAX: "2.18"
           LIBC: ${{ matrix.libc }}
           TARGET: ${{ matrix.target }}
         run: |
@@ -122,9 +127,10 @@ jobs:
               echo "GNU wrapper has no GLIBC symbol requirements: $TARGET" >&2
               exit 1
             fi
-            highest="$(printf '%s\n' "$GLIBC_MAX" "$max_required" | sort -V | tail -n 1)"
-            if [[ "$highest" != "$GLIBC_MAX" ]]; then
-              echo "GNU wrapper requires GLIBC $max_required, above contracted maximum $GLIBC_MAX: $TARGET" >&2
+            glibc_ceiling="2.18"
+            highest="$(printf '%s\n' "$glibc_ceiling" "$max_required" | sort -V | tail -n 1)"
+            if [[ "$highest" != "$glibc_ceiling" ]]; then
+              echo "GNU wrapper requires GLIBC $max_required, above contracted maximum $glibc_ceiling: $TARGET" >&2
               cat "$fixture/version-info.txt" >&2
               exit 1
             fi
