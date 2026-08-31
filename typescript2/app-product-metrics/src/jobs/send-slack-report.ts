@@ -42,12 +42,14 @@ const nativePanelTitles = [
 ];
 
 const dashboardSettleTimeMs = 20_000;
+const productMetricsReadmeUrl =
+  'https://github.com/BoundaryML/baml/blob/canary/typescript2/app-product-metrics/README.md';
 
 export function dashboardReportText(
   dashboardUrl: string,
   date: string,
 ): string {
-  return `<${new URL(dashboardUrl).href}|Product metrics dashboard> · ${date}`;
+  return `<${new URL(dashboardUrl).href}|Product metrics dashboard> · <${productMetricsReadmeUrl}|Maintainer README> · ${date}`;
 }
 
 export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
