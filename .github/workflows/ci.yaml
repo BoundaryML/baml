@@ -466,7 +466,7 @@ jobs:
           install_args: "cargo:prek python uv node clang-format"
 
       - name: "Cache prek"
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -1005,7 +1005,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -1085,7 +1085,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -1100,7 +1100,7 @@ jobs:
       # re-cloning git deps on the bare codspeed-macro runner (~24 min). Comes
       # via artifact, not cache — see the build job for why cache misses here.
       - name: "Download cargo home"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: codspeed-cargo-home
           path: /tmp/cargo-home
@@ -1113,7 +1113,7 @@ jobs:
           tool: cargo-codspeed@4.7.0
 
       - name: "Download prebuilt benchmark binaries"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: codspeed-walltime-benches
           path: baml_language/target/codspeed/walltime
@@ -1124,7 +1124,7 @@ jobs:
         run: chmod -R +x baml_language/target/codspeed/walltime
 
       - name: "Run benchmarks (walltime)"
-        uses: CodSpeedHQ/action@v4
+        uses: CodSpeedHQ/action@v5
         # Benchmarks are advisory — never block a merge on a measurement blip.
         continue-on-error: true
         env:
@@ -1177,7 +1177,7 @@ jobs:
       pull-requests: write
     steps:
       - name: "Comment perf opt-in instructions"
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           RUN_PERF: ${{ needs.determine_changes.outputs.run_perf }}
         with:

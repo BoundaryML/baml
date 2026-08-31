@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Rust (MSRV 1.70)
         uses: dtolnay/rust-toolchain@stable
@@ -51,7 +51,7 @@ jobs:
           prefix-key: rust-sdk
 
       - name: Setup Go (for protoc-gen-go)
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: "1.22"
           cache: false
@@ -106,7 +106,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Rust (MSRV 1.70)
         uses: dtolnay/rust-toolchain@stable
@@ -126,7 +126,7 @@ jobs:
           prefix-key: rust-sdk
 
       - name: Setup Go (for protoc-gen-go)
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: "1.22"
           cache: false

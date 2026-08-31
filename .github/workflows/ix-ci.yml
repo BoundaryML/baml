@@ -43,7 +43,7 @@ jobs:
       code: ${{ steps.check_code.outputs.changed }}
       webview: ${{ steps.check_webview.outputs.changed }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
