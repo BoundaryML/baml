@@ -148,7 +148,7 @@ jobs:
           enable-cross: false
           skip-protoc: true
 
-      - name: Install cross (musl targets)
+      - name: Setup cross (musl targets)
         # musl builds run inside `cross` containers (mirroring
         # build2-bridge-cffi): the container image carries the full musl
         # toolchain, so the JNI cdylib links against musl libc cleanly —
@@ -156,10 +156,13 @@ jobs:
         # the cdylib link (rehearsal run 29862339596). `Cross.toml` at the
         # workspace root forwards RUSTFLAGS into the container.
         if: ${{ matrix._.libc == 'musl' }}
-        run: |
-          set -euo pipefail
-          cargo install cross --locked --version 0.2.5
-          echo 'CARGO=cross' >> "$GITHUB_ENV"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: cargo:cross
+
+      - name: Select cross (musl targets)
+        if: ${{ matrix._.libc == 'musl' }}
+        run: echo 'CARGO=cross' >> "$GITHUB_ENV"
 
       - name: Build bridge_java cdylib
         working-directory: baml_language

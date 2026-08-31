@@ -1,0 +1,205 @@
+name: BAML Release - Build wrapper
+
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        description: "Exact repository commit to build"
+        type: string
+        required: true
+      wrapper_version:
+        description: "Wrapper version used in archive names"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+  BAML_WORKOS_CLIENT_ID: ${{ vars.BAML_WORKOS_CLIENT_ID }}
+
+jobs:
+  matrix:
+    name: Compute wrapper matrix
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.gen.outputs.include }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - name: Generate wrapper matrix from the platform contract
+        id: gen
+        run: |
+          set -euo pipefail
+          include="$(scripts/baml-release-platforms wrapper-matrix)"
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+          jq . <<<"$include"
+
+  build:
+    name: Build wrapper (${{ matrix.target }})
+    needs: matrix
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO: cargo
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.matrix.outputs.include) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: ${{ matrix.target }}
+          workspace: baml_language
+          prefix-key: v5-rust-baml-wrapper-${{ matrix.target }}
+          cache-on-failure: true
+          enable-cross: false
+          skip-protoc: true
+      - name: Setup musl cross toolchain
+        if: ${{ matrix.libc == 'musl' }}
+        uses: ./.github/actions/setup-musl-cross
+        with:
+          target: ${{ matrix.target }}
+      - name: Setup cross for backward-compatible GNU wrapper
+        if: ${{ matrix.libc == 'gnu' }}
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: cargo:cross
+      - name: Select cross for GNU wrapper
+        if: ${{ matrix.libc == 'gnu' }}
+        run: echo 'CARGO=cross' >> "$GITHUB_ENV"
+      - name: Build wrapper
+        env:
+          EXECUTABLE_SUFFIX: ${{ matrix.executable_suffix }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          ${CARGO} build --manifest-path baml_language/Cargo.toml --release --bin baml --target "$TARGET"
+          mkdir -p staging/bin
+          cp "baml_language/target/$TARGET/release/baml$EXECUTABLE_SUFFIX" \
+            "staging/bin/baml$EXECUTABLE_SUFFIX"
+          if test -f "staging/bin/baml-cli$EXECUTABLE_SUFFIX"; then
+            exit 1
+          fi
+      - name: Verify Linux wrapper ABI and installer selection
+        if: ${{ matrix.libc == 'gnu' || matrix.libc == 'musl' }}
+        env:
+          GLIBC_MAX: ${{ matrix.glibc_max }}
+          LIBC: ${{ matrix.libc }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          wrapper="$PWD/baml_language/target/$TARGET/release/baml"
+          fixture="$(mktemp -d)"
+          trap 'rm -rf "$fixture"' EXIT
+
+          readelf --wide --version-info "$wrapper" > "$fixture/version-info.txt"
+          if [[ "$LIBC" == "musl" ]]; then
+            readelf --wide --dynamic "$wrapper" > "$fixture/dynamic.txt"
+            if grep -Fq '(NEEDED)' "$fixture/dynamic.txt" || grep -Eq 'GLIBC_[0-9]' "$fixture/version-info.txt"; then
+              echo "musl wrapper is not libc-independent: $TARGET" >&2
+              cat "$fixture/dynamic.txt" >&2
+              cat "$fixture/version-info.txt" >&2
+              exit 1
+            fi
+          else
+            max_required="$(grep -oE 'GLIBC_[0-9]+(\.[0-9]+)*' "$fixture/version-info.txt" | sed 's/^GLIBC_//' | sort -Vu | tail -n 1)"
+            if [[ -z "$max_required" ]]; then
+              echo "GNU wrapper has no GLIBC symbol requirements: $TARGET" >&2
+              exit 1
+            fi
+            highest="$(printf '%s\n' "$GLIBC_MAX" "$max_required" | sort -V | tail -n 1)"
+            if [[ "$highest" != "$GLIBC_MAX" ]]; then
+              echo "GNU wrapper requires GLIBC $max_required, above contracted maximum $GLIBC_MAX: $TARGET" >&2
+              cat "$fixture/version-info.txt" >&2
+              exit 1
+            fi
+          fi
+
+          mkdir -p "$fixture/staging/bin" "$fixture/manifest/v1"
+          cp "$wrapper" "$fixture/staging/bin/baml"
+          tar -C "$fixture/staging" -czf "$fixture/wrapper.tar.gz" .
+          sha256="$(sha256sum "$fixture/wrapper.tar.gz" | awk '{print $1}')"
+          printf '{"schema":1,"version":"test","released_at":"2026-08-28T00:00:00Z","artifacts":{"%s":{"url":"file:///fixtures/wrapper.tar.gz","sha256":"%s"}}}\n' \
+            "$TARGET" "$sha256" > "$fixture/manifest/v1/wrapper.json"
+
+          if [[ "$LIBC" == "musl" ]]; then
+            cat > "$fixture/Dockerfile" <<'DOCKERFILE'
+          FROM alpine@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
+          RUN apk add --no-cache ca-certificates curl
+          DOCKERFILE
+          else
+            cat > "$fixture/Dockerfile" <<'DOCKERFILE'
+          FROM debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
+          RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
+          DOCKERFILE
+          fi
+          docker build --tag baml-linux-installer-smoke --file "$fixture/Dockerfile" "$fixture"
+          docker run --rm --network none \
+            --volume "$PWD:/repo:ro" \
+            --volume "$fixture:/fixtures:ro" \
+            baml-linux-installer-smoke \
+            sh -ceu '
+              BAML_HOME=/tmp/baml \
+              BAML_MANIFEST_BASE_URL=file:///fixtures/manifest/v1 \
+                sh /repo/scripts/install.sh --wrapper-only --no-modify-path
+              /tmp/baml/bin/baml --version
+            '
+      - name: Build no-self-update wrapper
+        if: ${{ matrix.no_self_update }}
+        env:
+          EXECUTABLE_SUFFIX: ${{ matrix.executable_suffix }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          ${CARGO} build \
+            --manifest-path baml_language/Cargo.toml \
+            --release \
+            --bin baml \
+            --features no-self-update \
+            --target "$TARGET"
+          mkdir -p staging-no-self-update/bin
+          cp "baml_language/target/$TARGET/release/baml$EXECUTABLE_SUFFIX" \
+            "staging-no-self-update/bin/baml$EXECUTABLE_SUFFIX"
+      - name: Archive wrapper
+        env:
+          ARCHIVE_SUFFIX: ${{ matrix.archive_suffix }}
+          NO_SELF_UPDATE: ${{ matrix.no_self_update }}
+          TARGET: ${{ matrix.target }}
+          WRAPPER_VERSION: ${{ inputs.wrapper_version }}
+        run: |
+          set -euo pipefail
+          archive() {
+            local staging="$1"
+            local product="$2"
+            local destination="$product-$WRAPPER_VERSION-$TARGET$ARCHIVE_SUFFIX"
+            case "$ARCHIVE_SUFFIX" in
+              .zip) (cd "$staging" && 7z a "../$destination" .) ;;
+              .tar.gz) tar -C "$staging" -czf "$destination" . ;;
+              *) echo "unsupported archive suffix: $ARCHIVE_SUFFIX" >&2; exit 1 ;;
+            esac
+          }
+          archive staging baml-wrapper
+          if [[ "$NO_SELF_UPDATE" == "true" ]]; then
+            archive staging-no-self-update baml-wrapper-no-self-update
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wrapper-${{ matrix.target }}
+          path: |
+            baml-wrapper-${{ inputs.wrapper_version }}-${{ matrix.target }}.*
+            baml-wrapper-no-self-update-${{ inputs.wrapper_version }}-${{ matrix.target }}.*

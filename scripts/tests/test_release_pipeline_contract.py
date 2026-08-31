@@ -18,6 +18,10 @@ GO_RELEASE_SMOKE = ROOT / "scripts" / "smoke-go-release.py"
 GO_SDK_ASSEMBLER = ROOT / "scripts" / "assemble-go-sdk-mirror"
 PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
+WRAPPER_BUILDER = (
+    ROOT / ".github" / "workflows" / "build2-wrapper.reusable.yaml"
+)
+MISE_CONFIG = ROOT / "mise.toml"
 RELEASE_NOTIFIER = ROOT / "tools" / "notify-release-failure.py"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yaml"
 NIGHTLY_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-release.yml"
@@ -1061,8 +1065,12 @@ class WorkflowGraphTests(unittest.TestCase):
     ) -> None:
         """Keep the release graph complete and its wrapper compatibility gates enforced."""
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        wrapper_workflow = WRAPPER_BUILDER.read_text(encoding="utf-8")
+        mise = MISE_CONFIG.read_text(encoding="utf-8")
         build_matrix = job_block(workflow, "build-matrix")
-        wrapper = job_block(workflow, "build-wrapper")
+        wrapper_call = job_block(workflow, "build-wrapper")
+        wrapper_matrix = job_block(wrapper_workflow, "matrix")
+        wrapper = job_block(wrapper_workflow, "build")
         prepare = job_block(workflow, "prepare-csharp-sdk")
         cffi = job_block(workflow, "build-bridge-cffi")
         verify = job_block(workflow, "verify-csharp-sdk")
@@ -1079,13 +1087,20 @@ class WorkflowGraphTests(unittest.TestCase):
         dry_run = job_block(workflow, "dry-run-artifacts")
 
         self.assertIn("baml-csharp-release-contract matrix", build_matrix)
-        self.assertIn("baml-release-platforms wrapper-matrix", build_matrix)
-        self.assertIn("needs.build-matrix.outputs.wrapper", wrapper)
+        self.assertNotIn("baml-release-platforms wrapper-matrix", build_matrix)
+        self.assertIn("uses: ./.github/workflows/build2-wrapper.reusable.yaml", wrapper_call)
+        self.assertIn("source_sha: ${{ needs.plan.outputs.source_sha }}", wrapper_call)
+        self.assertIn("wrapper_version: ${{ needs.plan.outputs.wrapper_version }}", wrapper_call)
+        self.assertIn("baml-release-platforms wrapper-matrix", wrapper_matrix)
+        self.assertIn("fromJson(needs.matrix.outputs.include)", wrapper)
         self.assertIn("matrix.no_self_update", wrapper)
         self.assertIn("matrix.archive_suffix", wrapper)
         self.assertIn("matrix.executable_suffix", wrapper)
-        self.assertIn("Install cross for backward-compatible GNU wrapper", wrapper)
-        self.assertIn("cargo install cross --locked --version 0.2.5", wrapper)
+        self.assertIn("Setup cross for backward-compatible GNU wrapper", wrapper)
+        self.assertIn("uses: ./.github/actions/setup-mise", wrapper)
+        self.assertIn("install_args: cargo:cross", wrapper)
+        self.assertIn('"cargo:cross" = "0.2.5"', mise)
+        self.assertNotIn("cargo install cross", wrapper)
         self.assertIn("Verify Linux wrapper ABI and installer selection", wrapper)
         self.assertIn("readelf --wide --dynamic", wrapper)
         self.assertIn("GLIBC_[0-9]+", wrapper)

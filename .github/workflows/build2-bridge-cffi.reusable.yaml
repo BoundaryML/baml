@@ -172,12 +172,15 @@ jobs:
           # remains the selected crypto backend and uses Windows OS entropy.
           echo 'AWS_LC_SYS_NO_JITTER_ENTROPY=1' >> "$GITHUB_ENV"
 
-      - name: Install cross (Linux targets)
+      - name: Setup cross (Linux targets)
         if: matrix._.use_cross
-        run: |
-          set -euo pipefail
-          cargo install cross --locked --version 0.2.5
-          echo 'CARGO=cross' >> "$GITHUB_ENV"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: cargo:cross
+
+      - name: Select cross (Linux targets)
+        if: matrix._.use_cross
+        run: echo 'CARGO=cross' >> "$GITHUB_ENV"
 
       - name: Build bridge_cffi cdylib
         working-directory: baml_language
