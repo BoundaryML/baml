@@ -223,7 +223,6 @@ namespace baml.net:
   class TcpListener { methods: [bind, accept, close] }
   class TcpStream { methods: [connect, _connect, close, read, write_some, flush] }
   class UdpSocket { methods: [bind, send_to, _send_to, recv_from, _recv_from, close] }
-  function _timeout_nanos
 namespace baml.ops:
   type Add
   type BitAnd
@@ -309,7 +308,7 @@ namespace baml.time:
   class PlainTime { methods: [from_components, _from_components, parse, _to_string_impl, to_plain_datetime, hour, minute, second, millisecond, to_string, from_json, to_json, add, sub, sub] }
   class TimeZoneOffset { methods: [utc, new, from_timezone, local, from_duration, to_duration, hours, minutes] }
   class UnknownTimezoneError { methods: [] }
-  class ZonedDateTime { methods: [now, now_in, from_instant, to_instant, from_components, parse, _to_string_impl, max, min, with_timezone, timezone, timezone_offset, to_plain, year, month, day, hour, minute, second, millisecond, to_string, from_json, to_json, add, sub, sub] }
+  class ZonedDateTime { methods: [now, now_in, from_instant, to_instant, from_components, parse, max, min, with_timezone, timezone, timezone_offset, to_plain, year, month, day, hour, minute, second, millisecond, to_string, from_json, to_json, add, sub, sub] }
   function _format_zoned
   function _tz_offset_at
   function _tz_to_instant

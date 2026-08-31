@@ -24,7 +24,7 @@
 // ---------------------------------------------------------------------------
 // Local rejections.
 
-/// Every LOCAL, pre-send rejection in the chat family throws ONE error
+/// (internal) Every LOCAL, pre-send rejection in the chat family throws ONE error
 /// identity: `ai.errors.InvalidRequest` with a null status code — the class
 /// `ResponsesClient`, `GoogleClient`, `ImageClient` and the Bedrock client
 /// already use.
@@ -43,7 +43,7 @@ function _reject(provider: string, detail: string) -> ai.errors.InvalidRequest {
     }
 }
 
-/// `_reject` for the Azure wrapper, whose config errors are raised before a
+/// (internal) `_reject` for the Azure wrapper, whose config errors are raised before a
 /// `ChatCompat` exists to name the provider.
 function _azure_reject(detail: string) -> ai.errors.InvalidRequest {
     _reject("azure", detail)

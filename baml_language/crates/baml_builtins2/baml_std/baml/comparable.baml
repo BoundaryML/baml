@@ -96,7 +96,7 @@ implements<T extends Comparable> Sortable for T[] {
   }
 }
 
-/// Three-way compares two `Comparable` values by their natural order, resolving
+/// (internal) Three-way compares two `Comparable` values by their natural order, resolving
 /// `Comparable.compare` on the values' runtime class.
 ///
 /// This is the dispatch shim for the `Sortable` blanket `sort` (above):
@@ -128,7 +128,7 @@ implements Comparable for float {
   }
 }
 
-/// Three-way compares two floats by IEEE 754 `totalOrder` (`f64::total_cmp`).
+/// (internal) Three-way compares two floats by IEEE 754 `totalOrder` (`f64::total_cmp`).
 ///
 /// Internal shim backing `Comparable for float` (above) and kept bit-exact
 /// with the float comparator inside the native `_rust_sort`; not part of the
@@ -137,7 +137,7 @@ function _float_total_cmp(a: float, b: float) -> int throws never {
     $rust_function
 }
 
-/// Whether `arr` is a homogeneous primitive array (`int`/`bigint`/`string`/
+/// (internal) Whether `arr` is a homogeneous primitive array (`int`/`bigint`/`string`/
 /// `float`) that the native `_rust_sort` fast path can natural-sort, decided
 /// by the first element's runtime type tag (a `T[]`'s homogeneity plus the
 /// `T extends Comparable` bound at the call sites guarantee the first element
@@ -152,7 +152,7 @@ function _is_primitive_array<T extends Comparable>(arr: T[]) -> bool throws neve
     $rust_function
 }
 
-/// Sorts a primitive array (`int`/`bigint`/`string`/`float`) in place by its
+/// (internal) Sorts a primitive array (`int`/`bigint`/`string`/`float`) in place by its
 /// natural order and returns it (the same array object — no copy). Total and
 /// infallible for every supported element type — `float` uses
 /// `f64::total_cmp`, a total order over all doubles including NaN, so it

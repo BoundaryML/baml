@@ -85,7 +85,7 @@ class Type {
         $rust_function
     }
 
-    /// Internal shared-render-boundary guard for BEP-066 R-1 and R-3.
+    /// (internal) Internal shared-render-boundary guard for BEP-066 R-1 and R-3.
     //baml:mut_vm
     function _validate_renderable(self) -> void throws reflect.errors.CompilationError {
         $rust_function

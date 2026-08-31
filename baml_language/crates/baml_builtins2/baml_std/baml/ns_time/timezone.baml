@@ -35,8 +35,9 @@ class TimeZoneOffset {
     /// Both components must carry the same sign (e.g. `new(-7, 0)`,
     /// `new(5, 30)`, `new(-9, -30)`).
     ///
-    /// Throws `root.errors.InvalidArgument` if the signs differ or the
-    /// result exceeds ±24 hours.
+    /// # Throws
+    ///
+    /// - `baml.errors.InvalidArgument` if the signs differ or the result exceeds ±24 hours.
     function new(hours: int, minutes: int) -> TimeZoneOffset throws root.errors.InvalidArgument {
         if ((hours > 0 && minutes < 0) || (hours < 0 && minutes > 0)) {
             throw root.errors.InvalidArgument { message: "TimeZoneOffset.new: hours and minutes must carry the same sign" };
@@ -51,34 +52,58 @@ class TimeZoneOffset {
     /// to its concrete offset at the absolute time `at` (DST-aware).
     ///
     /// Resolution uses the host's timezone database.
+    ///
+    /// # Throws
+    ///
+    /// - `baml.time.UnknownTimezoneError` if the timezone is invalid.
+    ///
+    /// # Panics
+    ///
+    /// - `baml.panics.HostUnavailable` if timezone data is unavailable.
     function from_timezone(
         timezone: string,
         at: Instant,
-    ) -> TimeZoneOffset throws UnknownTimezoneError | root.errors.Io {
+    ) -> TimeZoneOffset throws UnknownTimezoneError {
         match (_tz_offset_at(timezone, at._nanoseconds)) {
             null => throw UnknownTimezoneError { timezone: timezone },
             // `?? 0` is unreachable: the null arm above already matched.
             let offset => TimeZoneOffset { _nanoseconds: offset ?? 0 },
         }
     }
+
     /// Returns the local timezone offset right now.
     /// Note that even in the same location, this may vary over time based on
     /// daylight savings.
+    ///
+    /// # Throws
+    ///
+    /// - `baml.time.UnknownTimezoneError` if the system timezone is invalid.
+    /// - `baml.errors.Io` if the system timezone could not be determined.
+    ///
+    /// # Panics
+    ///
+    /// - `baml.panics.HostUnavailable` if the current time could not be determined.
     function local() -> TimeZoneOffset throws UnknownTimezoneError | root.errors.Io {
         TimeZoneOffset.from_timezone(system_timezone(), Instant.now())
     }
+
     /// Creates a `TimeZoneOffset` from a `Duration`.
     ///
-    /// Throws `root.errors.InvalidArgument` if the duration exceeds ±24 hours.
+    /// # Throws
+    ///
+    /// - `baml.errors.InvalidArgument` if the duration exceeds ±24 hours.
     //baml:mut_vm
     function from_duration(
         duration: Duration,
     ) -> TimeZoneOffset throws root.errors.InvalidArgument {
         $rust_function
     }
+
+    /// Converts the offset to a `Duration`.
     function to_duration(self) -> Duration throws never {
         Duration { _nanoseconds: 0n + self._nanoseconds }
     }
+
     /// The hour component of the offset. Rounded toward zero.
     function hours(self) -> int throws never {
         self._nanoseconds / 3600000000000
@@ -93,19 +118,27 @@ class TimeZoneOffset {
 /// `"America/Los_Angeles"`. Mirrors `Temporal.Now.timeZoneId()`.
 ///
 /// An IO function so hosts can swap the system-state source out.
-/// Throws if the host cannot determine its timezone.
+///
+/// # Throws
+///
+/// - `baml.errors.Io` if the host cannot determine its timezone.
 function system_timezone() -> string throws root.errors.Io {
     $rust_io_function
 }
 
-/// Internal: resolves an IANA identifier to its offset (in nanoseconds) at
+/// (internal) Resolves an IANA identifier to its offset (in nanoseconds) at
 /// the absolute time `at_ns` (nanoseconds since the Unix epoch), using the
 /// host's timezone database. Returns `null` if the identifier is unknown.
-function _tz_offset_at(timezone: string, at_ns: bigint) -> int? throws root.errors.Io {
+///
+/// # Panics
+///
+/// - `baml.panics.HostUnavailable` if timezone data is unavailable.
+//baml:fallible
+function _tz_offset_at(timezone: string, at_ns: bigint) -> int? throws never {
     $rust_io_function
 }
 
-/// Internal: locates the civil ("wall-clock") reading `civil_ns` (nanoseconds
+/// (internal) Locates the civil ("wall-clock") reading `civil_ns` (nanoseconds
 /// since 1970-01-01T00:00:00, interpreted as if UTC) in the IANA timezone
 /// `timezone`, resolving DST gaps/overlaps per `disambiguation` (which must
 /// be `"compatible"`, `"earlier"`, or `"later"` — `"reject"` is implemented

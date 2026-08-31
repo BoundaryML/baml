@@ -105,7 +105,7 @@ class ReadPipeLines {
     }
 }
 
-/// Drop one trailing carriage return so CRLF input produces clean lines.
+/// (internal) Drop one trailing carriage return so CRLF input produces clean lines.
 function _strip_carriage_return(line: uint8array) -> uint8array throws never {
     match (line.at(line.length() - 1)) {
         13 => line.slice(0, line.length() - 1),
@@ -225,7 +225,7 @@ function collect_garbage() -> null throws never {
     $rust_io_function
 }
 
-/// Panics with `message`, throwing a `baml.panics.UserPanic`. Never returns.
+/// Panics with `message`, raising a `baml.panics.UserPanic`. Never returns.
 //baml:fallible
 function panic(message: string) -> never throws never {
     $rust_function

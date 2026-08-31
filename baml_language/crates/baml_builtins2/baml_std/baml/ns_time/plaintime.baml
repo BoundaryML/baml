@@ -1,4 +1,5 @@
 /// A civil wall-clock time without a date or timezone: `07:32:00.5`.
+/// Has a range of 24 hours.
 ///
 /// Equivalent to `Temporal.PlainTime` (TC39).
 class PlainTime {
@@ -8,8 +9,9 @@ class PlainTime {
     /// Creates a `PlainTime` from clock components. Defaulted components
     /// are passed by name: `PlainTime.from_components(7, minute = 32)`.
     ///
-    /// Throws `root.errors.InvalidArgument` if a component is out of range
-    /// (e.g. hour 24, minute 60).
+    /// # Throws
+    /// - `baml.errors.InvalidArgument` if a component is out of range
+    ///   (e.g. hour 24, minute 60).
     function from_components(
         hour: int,
         minute: int = 0,
@@ -20,7 +22,7 @@ class PlainTime {
     ) -> PlainTime throws root.errors.InvalidArgument {
         PlainTime._from_components(hour, minute, second, millisecond, microsecond, nanosecond)
     }
-    /// Internal: all-required native behind `from_components`. Native
+    /// (internal): all-required native behind `from_components`. Native
     /// functions have no BAML prologue, so defaulted parameters cannot live
     /// on the native itself (an omitted argument would reach the native
     /// unfilled).
@@ -36,23 +38,36 @@ class PlainTime {
         $rust_function
     }
     /// Parses an ISO 8601 time-of-day: `07:32:00`, `07:32:00.5`.
+    ///
+    /// # Throws
+    /// - `baml.errors.ParseError` if the string is not a valid ISO 8601 time-of-day.
     //baml:mut_vm
     function parse(s: string) -> PlainTime throws root.errors.ParseError {
         $rust_function
     }
-    /// Serializes to an ISO 8601 time-of-day: `07:32:00`. Sub-second
-    /// precision is supported; trailing subsecond zeros are truncated.
+
     implements baml.ToString {
+        /// Serializes to an ISO 8601 time-of-day: `07:32:00`. Sub-second
+        /// precision is supported; trailing subsecond zeros are truncated.
         function to_string(self) -> string throws never {
             self._to_string_impl()
         }
     }
 
+    /// (internal) TODO: just do the impl
     function _to_string_impl(self) -> string throws never {
         $rust_function
     }
 
     /// Combines with a date into a `PlainDateTime`.
+    ///
+    /// # Examples
+    /// ```baml
+    /// let time = baml.time.PlainTime.parse("12:34:56");
+    /// let date = baml.time.PlainDate.parse("2025-01-01");
+    /// let datetime = time.to_plain_datetime(date);
+    /// assert.equal(datetime, baml.time.PlainDateTime.parse("2025-01-01T12:34:56"));
+    /// ```
     function to_plain_datetime(self, date: PlainDate) -> PlainDateTime throws never {
         date.to_plain_datetime(time = self)
     }
@@ -101,10 +116,16 @@ class PlainTime {
     }
 }
 
-/// Adding a `Duration` wraps around midnight: a `PlainTime` has no date to
-/// carry into, so `23:00 + 2h` is `01:00`, not a next-day value.
 implement root.ops.Add<Duration> for PlainTime {
     type Output = PlainTime
+    /// Adds a `Duration` to this `PlainTime`, wrapping around midnight.
+    ///
+    /// # Examples
+    /// ```baml
+    /// let time = baml.time.PlainTime.parse("23:00");
+    /// let duration = baml.time.Duration.from_hours(2);
+    /// assert.equal(time + duration, baml.time.PlainTime.parse("01:00"));
+    /// ```
     function add(self, other: Duration) -> PlainTime {
         PlainTime {
             _nanoseconds: _wrap_into_day(self._nanoseconds + other._nanoseconds),
@@ -112,9 +133,16 @@ implement root.ops.Add<Duration> for PlainTime {
     }
 }
 
-/// Wraps like [`Add`]: `01:00 - 2h` is `23:00`.
 implement root.ops.Subtract<Duration> for PlainTime {
     type Output = PlainTime
+    /// Subtracts a `Duration` from this `PlainTime`, wrapping around midnight.
+    ///
+    /// # Examples
+    /// ```baml
+    /// let time = baml.time.PlainTime.parse("01:00");
+    /// let duration = baml.time.Duration.from_hours(2);
+    /// assert.equal(time - duration, baml.time.PlainTime.parse("23:00"));
+    /// ```
     function sub(self, other: Duration) -> PlainTime {
         PlainTime {
             _nanoseconds: _wrap_into_day(self._nanoseconds - other._nanoseconds),
@@ -122,10 +150,16 @@ implement root.ops.Subtract<Duration> for PlainTime {
     }
 }
 
-/// The signed gap between two wall-clock times, which does *not* wrap: the
-/// result is negative when `other` is later in the day than `self`.
 implement root.ops.Subtract<PlainTime> for PlainTime {
     type Output = Duration
+    /// Subtracts one `PlainTime` from another, returning the signed gap between them.
+    ///
+    /// # Examples
+    /// ```baml
+    /// let time1 = baml.time.PlainTime.parse("01:00");
+    /// let time2 = baml.time.PlainTime.parse("02:00");
+    /// assert.equal(time2 - time1, baml.time.Duration.from_hours(1));
+    /// ```
     function sub(self, other: PlainTime) -> Duration {
         Duration {
             _nanoseconds: 0n + (self._nanoseconds - other._nanoseconds),
@@ -133,7 +167,7 @@ implement root.ops.Subtract<PlainTime> for PlainTime {
     }
 }
 
-/// Internal: reduce `total_ns` to nanoseconds-since-midnight in `[0, 24h)`.
+/// (internal) Internal: reduce `total_ns` to nanoseconds-since-midnight in `[0, 24h)`.
 ///
 /// Written `((n % day) + day) % day` rather than `n % day` because `%` keeps
 /// the sign of the left operand, so a negative `total_ns` would otherwise stay

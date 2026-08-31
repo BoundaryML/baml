@@ -136,7 +136,7 @@ class AllFailed<E> {
     errors: E[],
 }
 
-/// BEP-034 internal primitive: suspend until the FIRST of `futures` settles —
+/// (internal) BEP-034 internal primitive: suspend until the FIRST of `futures` settles —
 /// whether it succeeds, fails, or is cancelled — and return its index in input
 /// order. Compiles to a dedicated `AwaitAny` suspend point (it is `await` over
 /// many futures), and is the building block for `race` and `any`. The inputs

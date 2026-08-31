@@ -283,7 +283,7 @@ class Int {
         r
     }
 
-    /// Internal: maps one full-range draw onto `[lower, upper)`, returning
+    /// (internal) Internal: maps one full-range draw onto `[lower, upper)`, returning
     /// `upper` when the draw must be rejected.
     function _random_in_range(draw: int, lower: int, upper: int) -> int throws never {
         $rust_function

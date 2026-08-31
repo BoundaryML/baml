@@ -2,7 +2,7 @@
 // output-format text, and tool schema lowering.
 // Mirrors _planv2/pages/02_guides/03_clients/03_writing_a_client.md.
 
-/// Collapse a client's `root.Credential?` option to the value to put on the
+/// Collapse a client's `ai.Credential?` option to the value to put on the
 /// wire, reading the environment at REQUEST time (never at construction).
 ///
 ///   * a literal string resolves to itself, unless it is blank — a

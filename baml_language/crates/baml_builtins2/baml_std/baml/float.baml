@@ -422,7 +422,7 @@ class Float {
         float._unit_from_draw(rng.random_int())
     }
 
-    /// Internal: maps 53 bits of an `int` draw onto `[0.0, 1.0)`.
+    /// (internal) Internal: maps 53 bits of an `int` draw onto `[0.0, 1.0)`.
     function _unit_from_draw(draw: int) -> float throws never {
         $rust_function
     }
@@ -458,7 +458,7 @@ class Float {
 
 // ─── Internal (private) native helpers ────────────────────────────────────────
 
-/// Truncates `value` toward zero and returns the integer part, **saturating**
+/// (internal) Truncates `value` toward zero and returns the integer part, **saturating**
 /// to the `int` range and mapping NaN to `0` — it never throws.
 ///
 /// Private helper (leading `_`; formerly the public `baml.math.trunc`) backing

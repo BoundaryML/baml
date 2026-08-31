@@ -41,7 +41,7 @@ class PromptMessage {
     /// readable `content` projection so media survives prompt rendering.
     parts: PromptPart[],
     /// Per-message provider directives, carried verbatim from the
-    /// `root.Role.metadata` of the `${role(...)}` marker that opened
+    /// `ai.Role.metadata` of the `${role(...)}` marker that opened
     /// this message — Anthropic `cache_control`, for example. Empty when the
     /// message carried none.
     metadata: map<string, baml.json.json>,

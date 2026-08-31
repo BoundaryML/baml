@@ -8,11 +8,13 @@ class Instant {
     /// Note that this uses wall-clock time and is not guaranteed to be monotonic
     /// (e.g. [NTP](https://en.wikipedia.org/wiki/Network_Time_Protocol) adjustments may cause time to jump backwards).
     ///
-    /// ## Panics
-    /// If the system clock is not available, this function will panic.
+    /// # Panics
+    ///
+    /// - `baml.panics.HostUnavailable` if the system clock is not available.
     function now() -> Instant throws never {
         $rust_io_function
     }
+
     /// Creates a new `Duration` representing the time elapsed since `self`.
     /// If `time` is in the future, the duration will be negative.
     ///
@@ -22,10 +24,12 @@ class Instant {
     /// due to measurement overhead, it is not recommended to use this
     /// for high-precision measurements.
     ///
-    /// ## Panics
-    /// If the system clock is not available, this function will panic.
+    /// # Panics
     ///
-    /// ## Examples
+    /// - `baml.panics.HostUnavailable` if the system clock is not available.
+    ///
+    /// # Examples
+    ///
     /// ```baml
     /// let start = Instant.now();
     /// let response = baml.http.fetch("https://example.com");
@@ -45,9 +49,12 @@ class Instant {
     /// Every accepted format carries a UTC offset, which is applied to produce
     /// the absolute instant.
     ///
-    /// Throws `root.errors.ParseError` if `s` matches none of the formats above.
+    /// # Throws
+    ///
+    /// - `baml.errors.ParseError` if `s` matches none of the formats above.
     ///
     /// ## Examples
+    ///
     /// ```baml
     /// let t = baml.time.Instant.parse("2026-05-27T12:00:00Z");
     /// ```
@@ -63,10 +70,11 @@ class Instant {
         ///
         /// Sub-second precision is supported, but trailing subsecond zeros may be truncated.
         ///
-        /// ## Panics
+        /// # Panics
         /// - If the year would be more than 4 digits (outside the RFC 3339 range).
         ///
-        /// ## Examples
+        /// # Examples
+        ///
         /// ```baml
         /// let t = baml.time.Instant.epoch();
         /// assert.equal(t.to_string(), "1970-01-01T00:00:00Z")
@@ -80,7 +88,7 @@ class Instant {
         }
     }
 
-    /// Internal RFC 3339 formatter. Throws `InvalidArgument` when the year is
+    /// (internal) RFC 3339 formatter. Throws `InvalidArgument` when the year is
     /// outside the 4-digit RFC 3339 range; `baml.ToString.to_string` turns that
     /// into a panic, while `to_json` surfaces it as a `JsonSerializationError`.
     function _to_string_impl(self) -> string throws root.errors.InvalidArgument {
@@ -179,6 +187,7 @@ class Instant {
 
 implement root.ops.Add<Duration> for Instant {
     type Output = Instant
+    /// Adds a `Duration` to this `Instant`, returning a new `Instant`.
     function add(self, other: Duration) -> Instant {
         Instant {
             _nanoseconds: self._nanoseconds + other._nanoseconds
@@ -188,6 +197,7 @@ implement root.ops.Add<Duration> for Instant {
 
 implement root.ops.Subtract<Duration> for Instant {
     type Output = Instant
+    /// Subtracts a `Duration` from this `Instant`, returning a new `Instant`.
     function sub(self, other: Duration) -> Instant {
         Instant {
             _nanoseconds: self._nanoseconds - other._nanoseconds
@@ -197,6 +207,7 @@ implement root.ops.Subtract<Duration> for Instant {
 
 implement root.ops.Subtract<Instant> for Instant {
     type Output = Duration
+    /// Subtracts an `Instant` from this `Instant`, returning a `Duration`.
     function sub(self, other: Instant) -> Duration {
         Duration {
             _nanoseconds: self._nanoseconds - other._nanoseconds

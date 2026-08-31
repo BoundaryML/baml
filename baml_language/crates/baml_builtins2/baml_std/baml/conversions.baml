@@ -39,7 +39,7 @@ implement root.ToString for reflect.Type {
   }
 }
 
-/// Internal: default structural rendering used by `string.from` for values
+/// (internal) Internal: default structural rendering used by `string.from` for values
 /// whose runtime type does not implement `baml.ToString`. Primitives render
 /// naturally (`5`, `true`, `null`); containers and class instances render
 /// structurally (`[1, 2]`, `Point { x: 1, y: 2 }`). A nested value whose runtime
@@ -51,7 +51,7 @@ function _to_string_default<T>(value: T) -> string throws never {
     $rust_function
 }
 
-/// Internal: BEP-042 `cleanup` run-once guard. Compiled into the prologue of a
+/// (internal) Internal: BEP-042 `cleanup` run-once guard. Compiled into the prologue of a
 /// user class's magic `cleanup(self) -> void` method as
 /// `if (baml._cleanup_begin(self)) { <body> }`. Atomically test-and-sets the
 /// receiver instance's per-instance "cleaned" latch and returns `true` iff this
@@ -98,7 +98,7 @@ interface ToJson {
   }
 }
 
-/// Internal: default structural json rendering used by `baml.json.from` for
+/// (internal) Internal: default structural json rendering used by `baml.json.from` for
 /// values whose runtime type does not implement `baml.ToJson`. Primitives render
 /// naturally; containers and class instances render structurally (`[1, 2]`,
 /// `{"field": value}`), enums as their variant name, media as the tagged form. A
@@ -111,7 +111,7 @@ function _to_json_default<T>(value: T) -> baml.json.json throws baml.json.JsonSe
     $rust_function
 }
 
-/// Internal: dispatch `to_json` on `value`'s *runtime* class, honoring a
+/// (internal) Internal: dispatch `to_json` on `value`'s *runtime* class, honoring a
 /// user-defined override. `baml.json.from` routes through this rather than a
 /// static `match (value) { baml.ToJson => value.to_json() }`, for the same reason
 /// `string.from` uses [`_to_string_shim`]: static interface dispatch from this
@@ -159,7 +159,7 @@ interface FromJson {
   function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError
 }
 
-/// Internal: dispatch `from_json` on the target type `T`, honoring a
+/// (internal) Internal: dispatch `from_json` on the target type `T`, honoring a
 /// user-defined override. `baml.json.to` routes through this rather than a
 /// static `match` for the same package-boundary reason `baml.json.from` uses
 /// [`_to_json_shim`]: static interface dispatch from this (stdlib) package can

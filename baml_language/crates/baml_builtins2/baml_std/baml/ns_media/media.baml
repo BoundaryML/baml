@@ -1,4 +1,6 @@
-/// A PDF document value. Construct with `Pdf.from_url`, `Pdf.from_file`, or `Pdf.from_base64`.
+/// A PDF document value.
+///
+/// May be backed by a URL, local file path, or base64-encoded content.
 class Pdf {
     _data: $rust_type,
 
@@ -42,7 +44,9 @@ class Pdf {
     }
 }
 
-/// An audio clip value. Construct with `Audio.from_url`, `Audio.from_file`, or `Audio.from_base64`.
+/// An audio clip value.
+///
+/// May be backed by a URL, local file path, or base64-encoded content.
 class Audio {
     _data: $rust_type,
 
@@ -86,7 +90,9 @@ class Audio {
     }
 }
 
-/// A video clip value. Construct with `Video.from_url`, `Video.from_file`, or `Video.from_base64`.
+/// A video clip value.
+///
+/// May be backed by a URL, local file path, or base64-encoded content.
 class Video {
     _data: $rust_type,
 
@@ -130,7 +136,9 @@ class Video {
     }
 }
 
-/// An image value. Construct with `Image.from_url`, `Image.from_file`, or `Image.from_base64`.
+/// An image value.
+///
+/// May be backed by a URL, local file path, or base64-encoded content.
 class Image {
     _data: $rust_type,
 

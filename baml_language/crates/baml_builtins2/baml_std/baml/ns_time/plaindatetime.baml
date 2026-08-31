@@ -14,7 +14,7 @@ class PlainDateTime {
     /// `day` are 1-based. Defaulted clock components are passed by name:
     /// `PlainDateTime.from_components(1979, 5, 27, hour = 7)`.
     ///
-    /// Throws `root.errors.InvalidArgument` if a component is out of range
+    /// Throws `baml.errors.InvalidArgument` if a component is out of range
     /// (e.g. month 13, Feb 30) or the year is outside ±9999.
     function from_components(
         year: int,
@@ -39,7 +39,7 @@ class PlainDateTime {
             nanosecond,
         )
     }
-    /// Internal: all-required native behind `from_components` (native
+    /// (internal) Internal: all-required native behind `from_components` (native
     /// functions have no BAML prologue to fill defaulted parameters).
     //baml:mut_vm
     function _from_components(
@@ -63,11 +63,14 @@ class PlainDateTime {
     function parse(s: string) -> PlainDateTime throws root.errors.ParseError {
         $rust_function
     }
+
     /// Serializes to ISO 8601 with no offset suffix: `1979-05-27T07:32:00`.
     /// Sub-second precision is supported; trailing subsecond zeros are
     /// truncated.
     ///
-    /// Panics if the year is outside ±9999.
+    /// # Panics
+    ///
+    /// - `baml.panics.UserPanic` if the year is outside ±9999.
     implements baml.ToString {
         function to_string(self) -> string throws never {
             self._to_string_impl() catch (_) {
@@ -78,7 +81,7 @@ class PlainDateTime {
         }
     }
 
-    /// Internal ISO 8601 formatter. Throws `InvalidArgument` when the year is
+    /// (internal) ISO 8601 formatter. Throws `InvalidArgument` when the year is
     /// outside ±9999; `baml.ToString.to_string` turns that into a panic, while
     /// `to_json` surfaces it as a `JsonSerializationError`.
     function _to_string_impl(self) -> string throws root.errors.InvalidArgument {
@@ -231,6 +234,8 @@ class PlainDateTime {
 
 implement root.ops.Add<Duration> for PlainDateTime {
     type Output = PlainDateTime
+    /// Adds a `Duration` to this `PlainDateTime`, returning a new `PlainDateTime`
+    /// with the adjusted epoch time.
     function add(self, other: Duration) -> PlainDateTime {
         PlainDateTime {
             _nanoseconds: self._nanoseconds + other._nanoseconds
@@ -240,6 +245,8 @@ implement root.ops.Add<Duration> for PlainDateTime {
 
 implement root.ops.Subtract<Duration> for PlainDateTime {
     type Output = PlainDateTime
+    /// Subtracts a `Duration` from this `PlainDateTime`, returning a new `PlainDateTime`
+    /// with the adjusted epoch time.
     function sub(self, other: Duration) -> PlainDateTime {
         PlainDateTime {
             _nanoseconds: self._nanoseconds - other._nanoseconds
@@ -249,6 +256,8 @@ implement root.ops.Subtract<Duration> for PlainDateTime {
 
 implement root.ops.Subtract<PlainDateTime> for PlainDateTime {
     type Output = Duration
+    /// Subtracts a `PlainDateTime` from this `PlainDateTime`, returning a `Duration`
+    /// representing the time difference between the two.
     function sub(self, other: PlainDateTime) -> Duration {
         Duration {
             _nanoseconds: self._nanoseconds - other._nanoseconds

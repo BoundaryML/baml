@@ -7895,33 +7895,6 @@ fn baml.media.Image.from_file = builtin(vm)
 
 fn baml.media.Image.from_base64 = builtin(vm)
 
-fn baml.net._timeout_nanos(timeout: null | baml.time.Duration) -> bigint {
-    // Locals:
-    let _0: bigint // _0 // return
-    let _1: null | baml.time.Duration // timeout // param
-    let _2: bool
-    let _3: baml.time.Duration // t
-
-    bb0: {
-        _2 = copy _1 == const null;
-        branch copy _2 -> [bb2, bb1];
-    }
-
-    bb1: {
-        _3 = copy _1;
-        _0 = call const fn baml.time.Duration.to_nanoseconds(copy _3) -> [bb3];
-    }
-
-    bb2: {
-        _0 = const 0n;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn baml.net.TcpStream.connect(addr: string, timeout: null | baml.time.Duration) -> baml.net.TcpStream {
     // Locals:
     let _0: baml.net.TcpStream // _0 // return
@@ -7929,6 +7902,10 @@ fn baml.net.TcpStream.connect(addr: string, timeout: null | baml.time.Duration) 
     let _2: null | baml.time.Duration // timeout // param
     let _3: bool
     let _4: bigint
+    let _5: bigint
+    let _6: bigint | null
+    let _7: bool
+    let _8: bool
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -7941,14 +7918,36 @@ fn baml.net.TcpStream.connect(addr: string, timeout: null | baml.time.Duration) 
     }
 
     bb2: {
-        _4 = call const fn baml.net._timeout_nanos(copy _2) -> [bb3];
+        _7 = copy _2 == const null;
+        branch copy _7 -> [bb4, bb3];
     }
 
     bb3: {
-        _0 = sys_op const fn baml.net.TcpStream._connect(copy _1, copy _4) -> bb4;
+        _6 = call const fn baml.time.Duration.to_nanoseconds(copy _2) -> [bb5];
     }
 
     bb4: {
+        _6 = const null;
+        goto -> bb5;
+    }
+
+    bb5: {
+        _5 = copy _6;
+        _8 = copy _5 == const null;
+        branch copy _8 -> [bb6, bb7];
+    }
+
+    bb6: {
+        _5 = const 0n;
+        goto -> bb7;
+    }
+
+    bb7: {
+        _4 = copy _5;
+        _0 = sys_op const fn baml.net.TcpStream._connect(copy _1, copy _4) -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -7993,6 +7992,10 @@ fn baml.net.UdpSocket.send_to(self: baml.net.UdpSocket, data: uint8array, addr: 
     let _4: null | baml.time.Duration // timeout // param
     let _5: bool
     let _6: bigint
+    let _7: bigint
+    let _8: bigint | null
+    let _9: bool
+    let _10: bool
 
     bb0: {
         _5 = copy _4 == const <omitted>;
@@ -8005,14 +8008,36 @@ fn baml.net.UdpSocket.send_to(self: baml.net.UdpSocket, data: uint8array, addr: 
     }
 
     bb2: {
-        _6 = call const fn baml.net._timeout_nanos(copy _4) -> [bb3];
+        _9 = copy _4 == const null;
+        branch copy _9 -> [bb4, bb3];
     }
 
     bb3: {
-        _0 = sys_op const fn baml.net.UdpSocket._send_to(copy _1, copy _2, copy _3, copy _6) -> bb4;
+        _8 = call const fn baml.time.Duration.to_nanoseconds(copy _4) -> [bb5];
     }
 
     bb4: {
+        _8 = const null;
+        goto -> bb5;
+    }
+
+    bb5: {
+        _7 = copy _8;
+        _10 = copy _7 == const null;
+        branch copy _10 -> [bb6, bb7];
+    }
+
+    bb6: {
+        _7 = const 0n;
+        goto -> bb7;
+    }
+
+    bb7: {
+        _6 = copy _7;
+        _0 = sys_op const fn baml.net.UdpSocket._send_to(copy _1, copy _2, copy _3, copy _6) -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -8026,6 +8051,10 @@ fn baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket, timeout: null | baml.t
     let _2: null | baml.time.Duration // timeout // param
     let _3: bool
     let _4: bigint
+    let _5: bigint
+    let _6: bigint | null
+    let _7: bool
+    let _8: bool
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -8038,14 +8067,36 @@ fn baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket, timeout: null | baml.t
     }
 
     bb2: {
-        _4 = call const fn baml.net._timeout_nanos(copy _2) -> [bb3];
+        _7 = copy _2 == const null;
+        branch copy _7 -> [bb4, bb3];
     }
 
     bb3: {
-        _0 = sys_op const fn baml.net.UdpSocket._recv_from(copy _1, copy _4) -> bb4;
+        _6 = call const fn baml.time.Duration.to_nanoseconds(copy _2) -> [bb5];
     }
 
     bb4: {
+        _6 = const null;
+        goto -> bb5;
+    }
+
+    bb5: {
+        _5 = copy _6;
+        _8 = copy _5 == const null;
+        branch copy _8 -> [bb6, bb7];
+    }
+
+    bb6: {
+        _5 = const 0n;
+        goto -> bb7;
+    }
+
+    bb7: {
+        _4 = copy _5;
+        _0 = sys_op const fn baml.net.UdpSocket._recv_from(copy _1, copy _4) -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -10338,12 +10389,13 @@ fn baml.time.PlainDate.baml.ToString.to_string(self: baml.time.PlainDate) -> str
 
 fn baml.time.PlainDate._to_string_impl = builtin(vm)
 
-fn baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: null | baml.time.PlainTime) -> baml.time.PlainDateTime {
+fn baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime) -> baml.time.PlainDateTime {
     // Locals:
     let _0: baml.time.PlainDateTime // _0 // return
     let _1: baml.time.PlainDate // self // param
-    let _2: null | baml.time.PlainTime // time // param
+    let _2: baml.time.PlainTime // time // param
     let _3: bool
+    let _4: int
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -10351,12 +10403,13 @@ fn baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: null |
     }
 
     bb1: {
-        _2 = const null;
+        _2 = baml.time.PlainTime { const 0_i64 };
         goto -> bb2;
     }
 
     bb2: {
-        _0 = call const fn baml.time.PlainDate._to_plain_datetime(copy _1, copy _2) -> [bb3];
+        _4 = copy _2.0;
+        _0 = call const fn baml.time.PlainDate._to_plain_datetime(copy _1, copy _4) -> [bb3];
     }
 
     bb3: {
@@ -11823,45 +11876,31 @@ fn baml.time.ZonedDateTime.baml.ToString.to_string(self: baml.time.ZonedDateTime
     let _0: string // _0 // return
     let _1: baml.time.ZonedDateTime // self // param
     let _2: unknown // _
+    let _3: bigint
+    let _4: int
+    let _5: baml.time.TimeZoneOffset
+    let _6: string | null
 
     bb0: {
-        _0 = call const fn baml.time.ZonedDateTime._to_string_impl(copy _1) -> [bb3, unwind: bb1];
+        _3 = copy _1.0;
+        _5 = call const fn baml.time.ZonedDateTime.timezone_offset(copy _1) -> [bb1, unwind: bb2];
     }
 
     bb1: {
-        throw_if_panic copy _2 -> bb2;
+        _4 = copy _5.0;
+        _6 = copy _1.2;
+        _0 = call const fn baml.time._format_zoned(copy _3, copy _4, copy _6) -> [bb4, unwind: bb2];
     }
 
     bb2: {
-        _0 = call const fn baml.sys.panic(const "ZonedDateTime.to_string: value cannot be formatted (year out of range, unknown timezone, or IO error)") -> [bb3];
+        throw_if_panic copy _2 -> bb3;
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn baml.time.ZonedDateTime._to_string_impl(self: baml.time.ZonedDateTime) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: baml.time.ZonedDateTime // self // param
-    let _2: bigint
-    let _3: int
-    let _4: baml.time.TimeZoneOffset
-    let _5: string | null
-
-    bb0: {
-        _2 = copy _1.0;
-        _4 = call const fn baml.time.ZonedDateTime.timezone_offset(copy _1) -> [bb1];
+        _0 = call const fn baml.sys.panic(const "ZonedDateTime.to_string: value cannot be formatted (year out of range, unknown timezone, or IO error)") -> [bb4];
     }
 
-    bb1: {
-        _3 = copy _4.0;
-        _5 = copy _1.2;
-        _0 = call const fn baml.time._format_zoned(copy _2, copy _3, copy _5) -> [bb2];
-    }
-
-    bb2: {
+    bb4: {
         return;
     }
 }
@@ -12342,44 +12381,45 @@ fn baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTime) ->
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: baml.time.ZonedDateTime // self // param
     let _2: unknown // _
-    let _3: bool
-    let _4: bool
-    let _5: bool
-    let _6: string
-    let _7: string // message
-    let _8: baml.json.JsonSerializationError
+    let _3: bigint
+    let _4: int
+    let _5: baml.time.TimeZoneOffset
+    let _6: string | null
+    let _7: bool
+    let _8: bool
     let _9: string
-    let _10: string
-    let _11: string // timezone
-    let _12: baml.json.JsonSerializationError
+    let _10: string // message
+    let _11: baml.json.JsonSerializationError
+    let _12: string
     let _13: string
-    let _14: string
-    let _15: string
-    let _16: string // message
-    let _17: baml.json.JsonSerializationError
-    let _18: string
+    let _14: string // timezone
+    let _15: baml.json.JsonSerializationError
+    let _16: string
+    let _17: string
 
     bb0: {
-        _0 = call const fn baml.time.ZonedDateTime._to_string_impl(copy _1) -> [bb1, unwind: bb2];
+        _3 = copy _1.0;
+        _5 = call const fn baml.time.ZonedDateTime.timezone_offset(copy _1) -> [bb1, unwind: bb3];
     }
 
     bb1: {
-        return;
+        _4 = copy _5.0;
+        _6 = copy _1.2;
+        _0 = call const fn baml.time._format_zoned(copy _3, copy _4, copy _6) -> [bb2, unwind: bb3];
     }
 
     bb2: {
-        _3 = is_type(copy _2, baml.errors.InvalidArgument);
-        branch copy _3 -> [bb8, bb3];
+        return;
     }
 
     bb3: {
-        _4 = is_type(copy _2, baml.time.UnknownTimezoneError);
-        branch copy _4 -> [bb7, bb4];
+        _7 = is_type(copy _2, baml.errors.InvalidArgument);
+        branch copy _7 -> [bb7, bb4];
     }
 
     bb4: {
-        _5 = is_type(copy _2, baml.errors.Io);
-        branch copy _5 -> [bb6, bb5];
+        _8 = is_type(copy _2, baml.time.UnknownTimezoneError);
+        branch copy _8 -> [bb6, bb5];
     }
 
     bb5: {
@@ -12387,28 +12427,20 @@ fn baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTime) ->
     }
 
     bb6: {
-        _15 = copy _2.0;
-        _16 = copy _15;
-        _18 = copy _16;
-        _17 = baml.json.JsonSerializationError { copy _18, const "", const null };
-        throw copy _17;
+        _13 = copy _2.0;
+        _14 = copy _13;
+        _17 = copy _14;
+        _16 = const "unknown timezone: " + copy _17;
+        _15 = baml.json.JsonSerializationError { copy _16, const "", const null };
+        throw copy _15;
     }
 
     bb7: {
-        _10 = copy _2.0;
-        _11 = copy _10;
-        _14 = copy _11;
-        _13 = const "unknown timezone: " + copy _14;
-        _12 = baml.json.JsonSerializationError { copy _13, const "", const null };
-        throw copy _12;
-    }
-
-    bb8: {
-        _6 = copy _2.0;
-        _7 = copy _6;
-        _9 = copy _7;
-        _8 = baml.json.JsonSerializationError { copy _9, const "", const null };
-        throw copy _8;
+        _9 = copy _2.0;
+        _10 = copy _9;
+        _12 = copy _10;
+        _11 = baml.json.JsonSerializationError { copy _12, const "", const null };
+        throw copy _11;
     }
 }
 

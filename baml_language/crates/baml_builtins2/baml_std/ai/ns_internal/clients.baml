@@ -2,7 +2,7 @@
 // `"provider/model"` shorthand map. Nothing here is part of the public ai
 // surface.
 
-/// The `"provider/model"` prefixes `ai.clients.resolve` understands, for error
+/// (internal) The `"provider/model"` prefixes `ai.clients.resolve` understands, for error
 /// messages.
 function _shorthand_prefixes() -> string {
     [

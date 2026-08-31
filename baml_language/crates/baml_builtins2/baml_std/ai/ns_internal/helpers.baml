@@ -45,7 +45,7 @@ class SpecCtx {
 }
 
 /// Assemble a structural `ai.Prompt` from a tagged template's flattened
-/// `parts` and `values`. `root.Role` values start new messages; media
+/// `parts` and `values`. `ai.Role` values start new messages; media
 /// remains structural until a provider lowers the prompt.
 //baml:mut_vm
 //baml:may_yield

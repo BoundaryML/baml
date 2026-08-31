@@ -122,7 +122,7 @@ class SseStream {
     }
 }
 
-/// Converts an optional timeout into the nanosecond count carried across the
+/// (internal) Converts an optional timeout into the nanosecond count carried across the
 /// sys-op boundary. `null` (no deadline) becomes `0n`, which the native layer
 /// treats as unbounded. Modeled on Rust's `Option<Duration>`.
 function _timeout_nanos(timeout: root.time.Duration?) -> bigint throws never {
@@ -136,7 +136,7 @@ function _timeout_nanos(timeout: root.time.Duration?) -> bigint throws never {
 ///
 /// `timeout` is the total deadline for the request (connection + response
 /// headers + body). `null` (the default) imposes no deadline. On expiry this
-/// throws `root.errors.Timeout`.
+/// throws `baml.errors.Timeout`.
 function fetch(
     url: string,
     timeout: root.time.Duration? = null,

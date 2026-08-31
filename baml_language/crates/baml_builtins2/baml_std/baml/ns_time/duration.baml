@@ -2,6 +2,7 @@
 ///
 /// May be negative: while `Instant` represents absolute points in time, a `Duration` represents the difference between two `Instant`s.
 class Duration {
+    /// (internal)
     _nanoseconds: bigint,
 
     /// Creates a new `Duration` representing the positive magnitude of `self`.
@@ -102,6 +103,7 @@ class Duration {
 
 implement root.ops.Add<Duration> for Duration {
     type Output = Duration
+    /// Adds two `Duration`s, returning a new `Duration`.
     function add(self, other: Duration) -> Duration throws never {
         Duration {
             _nanoseconds: self._nanoseconds + other._nanoseconds,
@@ -111,6 +113,7 @@ implement root.ops.Add<Duration> for Duration {
 
 implement root.ops.Subtract<Duration> for Duration {
     type Output = Duration
+    /// Subtracts a `Duration` from this `Duration`, returning a new `Duration`.
     function sub(self, other: Duration) -> Duration throws never {
         Duration {
             _nanoseconds: self._nanoseconds - other._nanoseconds,
@@ -120,6 +123,7 @@ implement root.ops.Subtract<Duration> for Duration {
 
 implement root.ops.Multiply<int> for Duration {
     type Output = Duration
+    /// Multiplies this `Duration` by an `int`, returning a new `Duration`.
     function mul(self, other: int) -> Duration throws never {
         Duration {
             _nanoseconds: self._nanoseconds * other,
@@ -129,6 +133,7 @@ implement root.ops.Multiply<int> for Duration {
 
 implement root.ops.Multiply<bigint> for Duration {
     type Output = Duration
+    /// Multiplies this `Duration` by a `bigint`, returning a new `Duration`.
     function mul(self, other: bigint) -> Duration throws never {
         Duration {
             _nanoseconds: self._nanoseconds * other,
@@ -138,6 +143,7 @@ implement root.ops.Multiply<bigint> for Duration {
 
 implement root.ops.Divide<int> for Duration {
     type Output = Duration
+    /// Divides this `Duration` by an `int`, returning a new `Duration`.
     function div(self, other: int) -> Duration throws never {
         Duration {
             _nanoseconds: self._nanoseconds / other,
@@ -147,6 +153,7 @@ implement root.ops.Divide<int> for Duration {
 
 implement root.ops.Divide<bigint> for Duration {
     type Output = Duration
+    /// Divides this `Duration` by a `bigint`, returning a new `Duration`.
     function div(self, other: bigint) -> Duration throws never {
         Duration {
             _nanoseconds: self._nanoseconds / other,
@@ -156,6 +163,7 @@ implement root.ops.Divide<bigint> for Duration {
 
 implement root.ops.Remainder<Duration> for Duration {
     type Output = Duration
+    /// Returns the remainder of this `Duration` divided by another `Duration`.
     function rem(self, other: Duration) -> Duration throws never {
         Duration {
             _nanoseconds: self._nanoseconds % other._nanoseconds,
@@ -165,6 +173,7 @@ implement root.ops.Remainder<Duration> for Duration {
 
 implement root.ops.Negate for Duration {
     type Output = Duration
+    /// Negates this `Duration`, returning a new `Duration`.
     function neg(self) -> Duration throws never {
         Duration {
             _nanoseconds: -self._nanoseconds

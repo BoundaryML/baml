@@ -619,7 +619,7 @@ function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
     blocks
 }
 
-/// The per-message metadata key that requests a Bedrock prompt-caching
+/// (internal) The per-message metadata key that requests a Bedrock prompt-caching
 /// checkpoint after the message's content.
 ///
 /// The engine emits `{"cachePoint":{"type":"default"}}` whenever a message
@@ -734,7 +734,7 @@ function _assistant_content(content: ai.content.Block[]) -> ContentBlock[] {
     out
 }
 
-/// `ToolResultBlock.status` "is only supported by Amazon Nova and Anthropic
+/// (internal) `ToolResultBlock.status` "is only supported by Amazon Nova and Anthropic
 /// Claude 3 and 4 models" (API_runtime_ToolResultBlock). Sending it to any
 /// other family ships a member that model does not accept, so it is gated on a
 /// substring of the model id — which covers a bare id
@@ -1235,7 +1235,7 @@ class ConverseResponse {
     additionalModelResponseFields: baml.json.json?,
 }
 
-/// True for the two `stopReason` values that say the turn's own content is
+/// (internal) True for the two `stopReason` values that say the turn's own content is
 /// unusable: `malformed_model_output` (the model emitted something the service
 /// could not assemble into a message) and `malformed_tool_use` (it emitted a
 /// tool call the service could not assemble into a `toolUse` block).

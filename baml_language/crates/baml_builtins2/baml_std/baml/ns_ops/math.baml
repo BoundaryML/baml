@@ -1,25 +1,25 @@
-// Native math operators (`+ - * / %` and unary `-`) for primitive values,
-// declared as `baml.ops.{Add,Subtract,Multiply,Divide,Remainder,Negate}` and
-// implemented in `crates/bex_vm/src/package_baml/ops_math.rs`.
-//
-// Like the comparison ops in `comparison.baml`, the compiler special-cases these
-// for statically-typed operands (emitting `AddInt` / `AddFloat` / … bytecode);
-// the implementations here back the same operations when reached through a
-// generic bound (`T extends Add<...>`) and define the canonical semantics the
-// bytecode matches.
-//
-// Behaviour the `throws never` signatures do not capture — panics are orthogonal
-// to the `throws` contract (see `bigint.baml`), so these stay `throws never`.
-// Every case matches the opcodes exactly (B-266: checked, not wrapping):
-//   - `int` arithmetic raises catchable `baml.panics.IntegerOverflow` on a
-//     result outside the i63 range (incl. `int.min_value() / -1` and
-//     `-int.min_value()`), like the `AddInt` / `SubInt` / `MulInt` bytecode.
-//   - integer (`int` / `bigint`) `/` and `%` by zero raise
-//     `baml.panics.DivisionByZero` (`//baml:fallible`).
-//   - a `bigint` result beyond the workspace size cap raises
-//     `baml.panics.AllocFailure`.
-//   - `float` `+ - * %` follow IEEE-754 (`%` by zero yields `NaN`); `/` by zero
-//     raises `baml.panics.DivisionByZero`, like the `DivFloat` bytecode.
+//! Native math operators (`+ - * / %` and unary `-`) for primitive values,
+//! declared as `baml.ops.{Add,Subtract,Multiply,Divide,Remainder,Negate}` and
+//! implemented in `crates/bex_vm/src/package_baml/ops_math.rs`.
+//!
+//! Like the comparison ops in `comparison.baml`, the compiler special-cases these
+//! for statically-typed operands (emitting `AddInt` / `AddFloat` / … bytecode);
+//! the implementations here back the same operations when reached through a
+//! generic bound (`T extends Add<...>`) and define the canonical semantics the
+//! bytecode matches.
+//!
+//! Behaviour the `throws never` signatures do not capture — panics are orthogonal
+//! to the `throws` contract (see `bigint.baml`), so these stay `throws never`.
+//! Every case matches the opcodes exactly (B-266: checked, not wrapping):
+//!   - `int` arithmetic raises catchable `baml.panics.IntegerOverflow` on a
+//!     result outside the i63 range (incl. `int.min_value() / -1` and
+//!     `-int.min_value()`), like the `AddInt` / `SubInt` / `MulInt` bytecode.
+//!   - integer (`int` / `bigint`) `/` and `%` by zero raise
+//!     `baml.panics.DivisionByZero` (`//baml:fallible`).
+//!   - a `bigint` result beyond the workspace size cap raises
+//!     `baml.panics.AllocFailure`.
+//!   - `float` `+ - * %` follow IEEE-754 (`%` by zero yields `NaN`); `/` by zero
+//!     raises `baml.panics.DivisionByZero`, like the `DivFloat` bytecode.
 
 /// `self + rhs`
 interface Add<Rhs extends root.Concrete> requires root.Concrete {

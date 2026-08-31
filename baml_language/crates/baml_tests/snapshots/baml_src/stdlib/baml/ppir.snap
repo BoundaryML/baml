@@ -1506,9 +1506,6 @@ class baml.net.UdpSocket$stream {
 function baml.net._connect(addr: string, timeout_nanos: bigint) -> baml.net.TcpStream  [builtin]
 function baml.net._recv_from(self: ?, timeout_nanos: bigint) -> baml.net.Datagram  [builtin]
 function baml.net._send_to(self: ?, data: uint8array, addr: string, timeout_nanos: bigint) -> int  [builtin]
-function baml.net._timeout_nanos(timeout: root.time.Duration?) -> bigint  [expr] {
-  {  } match (timeout) { null => 0n, t: root.time.Duration => t.to_nanoseconds() }
-}
 function baml.net.accept(self: ?) -> baml.net.TcpStream  [builtin]
 function baml.net.bind(addr: string) -> baml.net.TcpListener  [builtin]
 function baml.net.bind(addr: string) -> baml.net.UdpSocket  [builtin]
@@ -1516,17 +1513,17 @@ function baml.net.close(self: ?) -> null  [builtin]
 function baml.net.close(self: ?) -> null  [builtin]
 function baml.net.close(self: ?) -> null  [builtin]
 function baml.net.connect(addr: string, timeout: root.time.Duration? = null) -> baml.net.TcpStream  [expr] {
-  {  } TcpStream._connect(addr, _timeout_nanos(timeout))
+  {  } TcpStream._connect(addr, timeout?.to_nanoseconds() NullCoalesce 0n)
 }
 function baml.net.flush(self: ?) -> void  [expr] {
   {  }
 }
 function baml.net.read(self: ?, limit: int) -> uint8array?  [builtin]
 function baml.net.recv_from(self: ?, timeout: root.time.Duration? = null) -> baml.net.Datagram  [expr] {
-  {  } self._recv_from(_timeout_nanos(timeout))
+  {  } self._recv_from(timeout?.to_nanoseconds() NullCoalesce 0n)
 }
 function baml.net.send_to(self: ?, data: uint8array, addr: string, timeout: root.time.Duration? = null) -> int  [expr] {
-  {  } self._send_to(data, addr, _timeout_nanos(timeout))
+  {  } self._send_to(data, addr, timeout?.to_nanoseconds() NullCoalesce 0n)
 }
 function baml.net.write_some(self: ?, data: uint8array) -> int  [builtin]
 
@@ -2135,7 +2132,7 @@ class baml.time.PlainDate {
 class baml.time.PlainDate$stream {
   _days: int | null
 }
-function baml.time._to_plain_datetime(self: ?, time: PlainTime?) -> PlainDateTime  [builtin]
+function baml.time._to_plain_datetime(self: ?, time: int) -> PlainDateTime  [builtin]
 function baml.time._to_string_impl(self: ?) -> string  [builtin]
 function baml.time.day(self: ?) -> int  [builtin]
 function baml.time.from_components(year: int, month: int, day: int) -> baml.time.PlainDate  [builtin]
@@ -2147,8 +2144,8 @@ function baml.time.parse(s: string) -> baml.time.PlainDate  [builtin]
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
   {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } } }
 }
-function baml.time.to_plain_datetime(self: ?, time: PlainTime? = null) -> PlainDateTime  [expr] {
-  {  } self._to_plain_datetime(time)
+function baml.time.to_plain_datetime(self: ?, time: PlainTime = ...) -> PlainDateTime  [expr] {
+  {  } self._to_plain_datetime(time._nanoseconds)
 }
 function baml.time.to_string(self: ?) -> string  [expr] {
   {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => {  } root.sys.panic("PlainDate.to_stri..." Add message) }
@@ -2314,9 +2311,6 @@ class baml.time.ZonedDateTime$stream {
   _iana: string | null
 }
 function baml.time._format_zoned(epoch_ns: bigint, offset_ns: int, iana: string?) -> string  [builtin]
-function baml.time._to_string_impl(self: ?) -> string  [expr] {
-  {  } _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana)
-}
 function baml.time.add(self: ?, other: Duration) -> baml.time.ZonedDateTime  [expr] {
   {  } baml.time.ZonedDateTime { _nanoseconds: self._nanoseconds Add other._nanoseconds, _offset_ns: self._offset_ns, _iana: self._iana }
 }
@@ -2376,13 +2370,13 @@ function baml.time.to_instant(self: ?) -> Instant  [expr] {
   {  } Instant { _nanoseconds: self._nanoseconds }
 }
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } }, UnknownTimezoneError { timezone: timezone } => { throw baml.json.JsonSerializationError { message: "unknown timezone: " Add timezone, path: "" } }, root.errors.Io { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } } }
+  {  } _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.JsonSerializationError { message: message, path: "" } }, UnknownTimezoneError { timezone: timezone } => { throw baml.json.JsonSerializationError { message: "unknown timezone: " Add timezone, path: "" } } }
 }
 function baml.time.to_plain(self: ?) -> PlainDateTime  [expr] {
   {  } PlainDateTime { _nanoseconds: self._nanoseconds Add self.timezone_offset()._nanoseconds }
 }
 function baml.time.to_string(self: ?) -> string  [expr] {
-  {  } self._to_string_impl() catch (_) { _ => {  } root.sys.panic("ZonedDateTime.to_...") }
+  {  } _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) catch (_) { _ => {  } root.sys.panic("ZonedDateTime.to_...") }
 }
 function baml.time.with_timezone(self: ?, timezone: TimeZoneOffset | string) -> baml.time.ZonedDateTime  [expr] {
   {  } ZonedDateTime.from_instant(self.to_instant(), timezone)

@@ -354,7 +354,7 @@ class Session {
     }
 }
 
-/// Structural error rendering for `Session.eval` that keeps `reflect` a root
+/// (internal) Structural error rendering for `Session.eval` that keeps `reflect` a root
 /// package. This is the dependency-free counterpart of `string.from`: its VM
 /// implementation shares the same renderer without importing `baml`.
 //baml:mut_vm

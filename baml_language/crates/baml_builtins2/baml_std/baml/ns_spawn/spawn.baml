@@ -83,10 +83,21 @@ class TaskGroup {
     }
 }
 
-/// A cooperative, one-shot cancellation handle backed by a runtime
+/// A one-shot cancellation handle backed by a runtime
 /// cancellation token. Passing one via `options(cancel = ...)` links it into a
-/// spawned task's effective token: once fired, the task's next `await` throws
+/// spawned task's effective token: once fired, the task's next `await` panics with
 /// `baml.panics.Cancelled`. Once cancelled, a token stays cancelled forever.
+///
+/// # Examples
+///
+/// ```baml
+/// let token = baml.spawn.CancelToken.new()
+/// spawn with baml.spawn.options(cancel = token) {
+///     baml.sys.sleep(baml.time.Duration.from_seconds(5)); // cancellation triggers here inside `sleep`
+///     baml.io.println("sleep finished");
+/// }
+/// token.cancel();
+/// ```
 class CancelToken {
     _handle: $rust_type,
 

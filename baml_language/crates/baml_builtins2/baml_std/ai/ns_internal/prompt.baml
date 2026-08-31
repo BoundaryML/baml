@@ -36,7 +36,7 @@ function render_output_format(return_type: reflect.Type) -> string throws never 
 }
 
 /// Local spelling of the public handle, so the builtin-IO extractor keeps
-/// resolving the return type to `root.OutputFormat`'s generated struct.
+/// resolving the return type to `ai.OutputFormat`'s generated struct.
 type OutputFormat = root.OutputFormat;
 
 /// Build the output-format handle used by render contexts.

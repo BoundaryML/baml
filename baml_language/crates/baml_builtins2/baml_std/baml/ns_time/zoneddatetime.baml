@@ -21,16 +21,36 @@ class ZonedDateTime {
     /// Creates a new `ZonedDateTime` with the current time in the system
     /// timezone (an IANA identifier, e.g. `"America/Los_Angeles"`).
     /// Mirrors `Temporal.Now.zonedDateTimeISO()`.
+    ///
+    /// # Throws
+    ///
+    /// - `baml.errors.Io` if the system timezone could not be determined.
+    ///
+    /// # Panics
+    ///
+    /// - `HostUnavailable` if the current time cannot be determined (e.g. the
+    ///   system clock is not available).
     function now() -> ZonedDateTime throws root.errors.Io {
         ZonedDateTime.from_instant(Instant.now(), system_timezone())
     }
     /// Creates a new `ZonedDateTime` with the current time in the given
     /// timezone.
+    ///
+    /// # Panics
+    ///
+    /// - `HostUnavailable` if the current time cannot be determined (e.g. the
+    ///   system clock is not available).
     function now_in(timezone: TimeZoneOffset | string) -> ZonedDateTime throws never {
         ZonedDateTime.from_instant(Instant.now(), timezone)
     }
 
     /// Pairs an absolute time with a timezone.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// ZonedDateTime.from_instant(Instant.now(), "America/Los_Angeles")
+    /// ```
     function from_instant(
         instant: Instant,
         timezone: TimeZoneOffset | string,
@@ -102,16 +122,19 @@ class ZonedDateTime {
     function parse(s: string) -> ZonedDateTime throws root.errors.ParseError {
         $rust_function
     }
-    /// Serializes the way Temporal does: RFC 9557 with the bracketed
-    /// annotation when the timezone is an IANA identifier
-    /// (`2026-03-18T13:04:27-07:00[America/Los_Angeles]`); plain RFC 3339
-    /// when it is a fixed offset (with `Z` for the zero offset).
-    ///
-    /// Panics if the value cannot be formatted (year out of range, unknown
-    /// timezone, or an IO error resolving the IANA zone).
+
     implements baml.ToString {
+        /// Serializes the way Temporal does: RFC 9557 with the bracketed
+        /// annotation when the timezone is an IANA identifier
+        /// (`2026-03-18T13:04:27-07:00[America/Los_Angeles]`); plain RFC 3339
+        /// when it is a fixed offset (with `Z` for the zero offset).
+        ///
+        /// # Panics
+        ///
+        /// - `baml.panics.UserPanic` if the value cannot be formatted (year out of range, unknown
+        ///   timezone, or an IO error resolving the IANA zone).
         function to_string(self) -> string throws never {
-            self._to_string_impl() catch (_) {
+            _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) catch (_) {
                 _ => {
                     root.sys.panic(
                         "ZonedDateTime.to_string: value cannot be formatted (year out of range, unknown timezone, or IO error)",
@@ -119,15 +142,6 @@ class ZonedDateTime {
                 }
             }
         }
-    }
-
-    /// Internal RFC 9557 / RFC 3339 formatter. Throws when the value cannot be
-    /// formatted; `baml.ToString.to_string` turns that into a panic, while
-    /// `to_json` surfaces it as a `JsonSerializationError`.
-    function _to_string_impl(
-        self,
-    ) -> string throws root.errors.InvalidArgument | UnknownTimezoneError | root.errors.Io {
-        _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana)
     }
 
     /// If `self` is before `other` (absolute-time comparison), returns
@@ -153,6 +167,7 @@ class ZonedDateTime {
     function with_timezone(self, timezone: TimeZoneOffset | string) -> ZonedDateTime throws never {
         ZonedDateTime.from_instant(self.to_instant(), timezone)
     }
+
     /// The timezone: a `TimeZoneOffset` if fixed, or the IANA identifier.
     function timezone(self) -> TimeZoneOffset | string throws never {
         match (self._iana) {
@@ -161,11 +176,20 @@ class ZonedDateTime {
             let iana => iana ?? "",
         }
     }
+
     /// The resolved `TimeZoneOffset` for this `ZonedDateTime`. If the
     /// timezone is an IANA identifier, it is resolved to a concrete offset
     /// based on the absolute time (DST-aware), using the host's timezone
     /// database.
-    function timezone_offset(self) -> TimeZoneOffset throws UnknownTimezoneError | root.errors.Io {
+    ///
+    /// # Throws
+    ///
+    /// - `baml.time.UnknownTimezoneError` if the timezone is an unknown IANA identifier.
+    ///
+    /// # Panics
+    ///
+    /// - `baml.panics.HostUnavailable` if timezone data is unavailable.
+    function timezone_offset(self) -> TimeZoneOffset throws UnknownTimezoneError {
         match (self._iana) {
             null => TimeZoneOffset { _nanoseconds: self._offset_ns ?? 0 },
             // The `?? ""` / `?? 0` fallbacks are unreachable: the null arms
@@ -178,51 +202,51 @@ class ZonedDateTime {
     }
 
     /// Drops the timezone, keeping the wall-clock reading.
-    function to_plain(self) -> PlainDateTime throws UnknownTimezoneError | root.errors.Io {
+    function to_plain(self) -> PlainDateTime throws UnknownTimezoneError {
         PlainDateTime { _nanoseconds: self._nanoseconds + self.timezone_offset()._nanoseconds }
     }
 
     /// The calendar year, resolved through the timezone.
     function year(
         self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError | root.errors.Io {
+    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().year()
     }
     /// The calendar month, in `[1, 12]`, resolved through the timezone.
     function month(
         self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError | root.errors.Io {
+    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().month()
     }
     /// The day of the month, in `[1, 31]`, resolved through the timezone.
     function day(
         self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError | root.errors.Io {
+    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().day()
     }
     /// The hour of the day, in `[0, 23]`, resolved through the timezone.
     function hour(
         self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError | root.errors.Io {
+    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().hour()
     }
     /// The minute of the hour, in `[0, 59]`, resolved through the timezone.
     function minute(
         self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError | root.errors.Io {
+    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().minute()
     }
     /// The second of the minute, in `[0, 59]`, resolved through the timezone.
     function second(
         self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError | root.errors.Io {
+    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().second()
     }
     /// The millisecond of the second, in `[0, 999]`, resolved through the
     /// timezone.
     function millisecond(
         self,
-    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError | root.errors.Io {
+    ) -> int throws root.errors.InvalidArgument | UnknownTimezoneError {
         self.to_plain().millisecond()
     }
 
@@ -244,22 +268,19 @@ class ZonedDateTime {
     }
     implements baml.ToJson {
         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-            self._to_string_impl() catch (_) {
+            _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) catch (_) {
                 root.errors.InvalidArgument { message } => {
                     throw baml.json.JsonSerializationError { message: message, path: "" }
                 },
                 UnknownTimezoneError { timezone } => {
                     throw baml.json.JsonSerializationError { message: "unknown timezone: " + timezone, path: "" }
                 },
-                root.errors.Io { message } => {
-                    throw baml.json.JsonSerializationError { message: message, path: "" }
-                },
             }
         }
     }
 }
 
-/// Internal: formats an absolute time as RFC 3339 at the given offset,
+/// (internal) Internal: formats an absolute time as RFC 3339 at the given offset,
 /// appending an RFC 9557 `[iana]` annotation when `iana` is non-null.
 function _format_zoned(
     epoch_ns: bigint,
@@ -271,6 +292,8 @@ function _format_zoned(
 
 implement root.ops.Add<Duration> for ZonedDateTime {
     type Output = ZonedDateTime
+    /// Adds a `Duration` to this `ZonedDateTime`, returning a new `ZonedDateTime`
+    /// with the same timezone but the adjusted epoch time.
     function add(self, other: Duration) -> ZonedDateTime {
         ZonedDateTime {
             _nanoseconds: self._nanoseconds + other._nanoseconds,
@@ -282,6 +305,8 @@ implement root.ops.Add<Duration> for ZonedDateTime {
 
 implement root.ops.Subtract<Duration> for ZonedDateTime {
     type Output = ZonedDateTime
+    /// Subtracts a `Duration` from this `ZonedDateTime`, returning a new `ZonedDateTime`
+    /// with the same timezone but the adjusted epoch time.
     function sub(self, other: Duration) -> ZonedDateTime {
         ZonedDateTime {
             _nanoseconds: self._nanoseconds - other._nanoseconds,
@@ -293,6 +318,8 @@ implement root.ops.Subtract<Duration> for ZonedDateTime {
 
 implement root.ops.Subtract<ZonedDateTime> for ZonedDateTime {
     type Output = Duration
+    /// Subtracts a `ZonedDateTime` from this `ZonedDateTime`, returning a `Duration`
+    /// representing the time difference between the two.
     function sub(self, other: ZonedDateTime) -> Duration {
         Duration {
             _nanoseconds: self._nanoseconds - other._nanoseconds,

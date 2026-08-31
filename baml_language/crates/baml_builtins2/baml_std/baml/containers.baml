@@ -7,21 +7,20 @@ class Array<T> {
     /// `while`/`push` loop. (Remember a 1-indexed structure needs `length + 1`
     /// slots.)
     ///
-    /// # Parameters
-    /// - `length`: the number of elements to create. A negative or zero `length`
-    ///   produces an empty array.
-    /// - `value`: the value stored in every slot.
-    ///
-    /// # Warning
-    /// `Array.filled` reuses the exact same `value` for every slot. For reference
-    /// types (arrays, maps, class instances), every slot aliases the same object.
-    /// Mutating one slot mutates all slots.
+    /// Note that `Array.filled` reuses the exact same `value` for every slot.
+    /// For reference types (arrays, maps, class instances), every slot aliases
+    /// the same object: mutating one slot mutates all slots.
     ///
     /// To get independent per-slot values, use `Array.generate`, which calls a
     /// factory once per index:
     /// ```
     /// Array.generate(3, (i: int) -> int[] { [] })   // three independent []s
     /// ```
+    ///
+    /// # Parameters
+    /// - `length`: the number of elements to create. A negative or zero `length`
+    ///   produces an empty array.
+    /// - `value`: the value stored in every slot.
     ///
     /// # Returns
     /// A fresh `T[]` of length `max(length, 0)` with every element equal to
@@ -769,7 +768,7 @@ implements FloatStats for float[] {
     /// Returns the arithmetic mean (average) of `self`.
     ///
     /// Computed as `self.sum() / self.length()`. Throws
-    /// `root.errors.InvalidArgument` when `self` is empty, because the mean of
+    /// `baml.errors.InvalidArgument` when `self` is empty, because the mean of
     /// no elements is undefined.
     ///
     /// # Examples
@@ -791,7 +790,7 @@ implements FloatStats for float[] {
     /// matching `float[].sort()`) before the middle is taken, so the caller's
     /// array is left untouched. With an odd element count the single middle
     /// element is returned; with an even count the arithmetic mean of the two
-    /// middle elements is returned. Throws `root.errors.InvalidArgument` when
+    /// middle elements is returned. Throws `baml.errors.InvalidArgument` when
     /// `self` is empty.
     ///
     /// # Examples
@@ -825,7 +824,7 @@ function _sum_float(values: float[]) -> float throws never {
     $rust_function
 }
 
-/// (internal) Native backing for `float[].median()`. Throws `root.errors.InvalidArgument`
+/// (internal) Native backing for `float[].median()`. Throws `baml.errors.InvalidArgument`
 /// when `values` is empty.
 //baml:vm
 function _median_float(values: float[]) -> float throws root.errors.InvalidArgument {

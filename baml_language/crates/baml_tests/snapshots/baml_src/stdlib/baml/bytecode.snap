@@ -5438,8 +5438,28 @@ function baml.net.TcpStream.connect(addr: string, timeout: baml.time.Duration | 
 
   L0:
     load_var timeout
-    call baml.net._timeout_nanos
-    store_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var timeout
+    call baml.time.Duration.to_nanoseconds
+    jump L3
+
+  L2:
+    load_const null
+
+  L3:
+    store_var_load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const 0n
+    store_var _5
+
+  L4:
     load_var2 1 3
     sys_op baml.net.TcpStream._connect
     return
@@ -5478,8 +5498,28 @@ function baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket, timeout: baml.ti
 
   L0:
     load_var timeout
-    call baml.net._timeout_nanos
-    store_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var timeout
+    call baml.time.Duration.to_nanoseconds
+    jump L3
+
+  L2:
+    load_const null
+
+  L3:
+    store_var_load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const 0n
+    store_var _5
+
+  L4:
     load_var2 1 3
     sys_op baml.net.UdpSocket._recv_from
     return
@@ -5495,30 +5535,31 @@ function baml.net.UdpSocket.send_to(self: baml.net.UdpSocket, data: uint8array, 
 
   L0:
     load_var timeout
-    call baml.net._timeout_nanos
-    store_var _6
-    load_var2 1 2
-    load_var2 3 5
-    sys_op baml.net.UdpSocket._send_to
-    return
-}
-
-function baml.net._timeout_nanos(timeout: baml.time.Duration | null) -> bigint {
-    load_var timeout
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var timeout
-    call baml.time.Duration.to_nanoseconds
+    pop_jump_if_false L1
     jump L2
 
   L1:
-    load_const 0n
+    load_var timeout
+    call baml.time.Duration.to_nanoseconds
+    jump L3
 
   L2:
+    load_const null
+
+  L3:
+    store_var_load_var _7
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const 0n
+    store_var _7
+
+  L4:
+    load_var2 1 2
+    load_var2 3 5
+    sys_op baml.net.UdpSocket._send_to
     return
 }
 
@@ -6890,7 +6931,7 @@ function baml.time.Instant.to_timestamp_seconds(self: baml.time.Instant) -> bigi
     return
 }
 
-function baml.time.PlainDate._to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime | null) -> baml.time.PlainDateTime {
+function baml.time.PlainDate._to_plain_datetime(self: baml.time.PlainDate, time: int) -> baml.time.PlainDateTime {
 }
 
 function baml.time.PlainDate._to_string_impl(self: baml.time.PlainDate) -> string {
@@ -6993,16 +7034,18 @@ function baml.time.PlainDate.month(self: baml.time.PlainDate) -> int {
 function baml.time.PlainDate.parse(s: string) -> baml.time.PlainDate {
 }
 
-function baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime | null) -> baml.time.PlainDateTime {
+function baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime) -> baml.time.PlainDateTime {
     load_var time
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_const null
+    load_const 0
+    init_instance baml.time.PlainTime ._nanoseconds
     store_var time
 
   L0:
     load_var2 1 2
+    load_field ._nanoseconds
     call baml.time.PlainDate._to_plain_datetime
     return
 }
@@ -7730,21 +7773,6 @@ function baml.time.TimeZoneOffset.utc() -> baml.time.TimeZoneOffset {
     return
 }
 
-function baml.time.ZonedDateTime._to_string_impl(self: baml.time.ZonedDateTime) -> string {
-    load_var self
-    load_field ._nanoseconds
-    store_var _2
-    load_var self
-    call baml.time.ZonedDateTime.timezone_offset
-    store_var _4
-    load_var2 2 3
-    load_field ._nanoseconds
-    load_var self
-    load_field ._iana
-    call baml.time._format_zoned
-    return
-}
-
 function baml.time.ZonedDateTime.baml.FromJson.from_json(j: baml.json.json) -> baml.time.ZonedDateTime {
     load_var j
     is_type string
@@ -7783,28 +7811,41 @@ function baml.time.ZonedDateTime.baml.FromJson.from_json(j: baml.json.json) -> b
 
 function baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTime) -> baml.json.json {
     load_var self
-    call baml.time.ZonedDateTime._to_string_impl
-    jump L6
+    load_field ._nanoseconds
+    store_var _3
+    load_var self
+    call baml.time.ZonedDateTime.timezone_offset
+    store_var _5
+    load_var2 3 4
+    load_field ._nanoseconds
+    load_var self
+    load_field ._iana
+    call baml.time._format_zoned
+    jump L4
     load_var _
     is_type baml.errors.InvalidArgument
     pop_jump_if_false L0
-    jump L5
+    jump L3
 
   L0:
     load_var _
     is_type baml.time.UnknownTimezoneError
     pop_jump_if_false L1
-    jump L4
+    jump L2
 
   L1:
     load_var _
-    is_type baml.errors.Io
-    pop_jump_if_false L2
-    jump L3
+    rethrow
 
   L2:
+    load_const "unknown timezone: "
     load_var _
-    rethrow
+    load_field .0
+    bin_op +
+    load_const ""
+    load_const null
+    init_instance baml.json.JsonSerializationError .message, .path, .reason
+    throw
 
   L3:
     load_var _
@@ -7815,30 +7856,21 @@ function baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTi
     throw
 
   L4:
-    load_const "unknown timezone: "
-    load_var _
-    load_field .0
-    bin_op +
-    load_const ""
-    load_const null
-    init_instance baml.json.JsonSerializationError .message, .path, .reason
-    throw
-
-  L5:
-    load_var _
-    load_field .0
-    load_const ""
-    load_const null
-    init_instance baml.json.JsonSerializationError .message, .path, .reason
-    throw
-
-  L6:
     return
 }
 
 function baml.time.ZonedDateTime.baml.ToString.to_string(self: baml.time.ZonedDateTime) -> string {
     load_var self
-    call baml.time.ZonedDateTime._to_string_impl
+    load_field ._nanoseconds
+    store_var _3
+    load_var self
+    call baml.time.ZonedDateTime.timezone_offset
+    store_var _5
+    load_var2 3 4
+    load_field ._nanoseconds
+    load_var self
+    load_field ._iana
+    call baml.time._format_zoned
     jump L0
     load_var _
     throw_if_panic

@@ -1,28 +1,28 @@
-// Native bitwise operators (`& | ^ << >>`) for the integer primitives,
-// declared as `baml.ops.{BitAnd,BitOr,BitXor,ShiftLeft,ShiftRight}` and
-// implemented in `crates/bex_vm/src/package_baml/ops_bitwise.rs`.
-//
-// Like the math ops in `math.baml`, the compiler special-cases these for
-// statically-typed operands (emitting the `BitAnd` / `Shl` / ... `BinOp`
-// bytecode); the implementations here back the same operations when reached
-// through a generic bound (`T extends BitAnd<...>`) and define the canonical
-// semantics the bytecode matches (B-1075).
-//
-// Result-type rule (mirrors the bytecode's operand widening): `int` with `int`
-// stays `int`; any `int`/`bigint` mix widens to `bigint` - including a shift of
-// an `int` by a `bigint` count, where the VALUE widens before shifting.
-//
-// Panics are orthogonal to the `throws` contract (see `math.baml`), so every
-// signature stays `throws never`; the fallible cases match the opcodes exactly:
-//   - `int << int` raises catchable `baml.panics.IntegerOverflow` on a result
-//     outside the i63 range, and `baml.panics.NegativeBitShift` on a negative
-//     count (like the validated `Shl` opcode).
-//   - `int >> int` raises `baml.panics.NegativeBitShift` on a negative count; a
-//     count past every bit saturates to the sign (arithmetic shift).
-//   - `bigint` shifts raise `baml.panics.NegativeBitShift` on a negative count;
-//     `<<` raises `baml.panics.AllocFailure` when the result would exceed the
-//     workspace bigint cap; `>>` past every bit saturates to `0n`/`-1n`.
-//   - `& | ^` never panic (results never grow past their operands).
+//! Native bitwise operators (`& | ^ << >>`) for the integer primitives,
+//! declared as `baml.ops.{BitAnd,BitOr,BitXor,ShiftLeft,ShiftRight}` and
+//! implemented in `crates/bex_vm/src/package_baml/ops_bitwise.rs`.
+//!
+//! Like the math ops in `math.baml`, the compiler special-cases these for
+//! statically-typed operands (emitting the `BitAnd` / `Shl` / ... `BinOp`
+//! bytecode); the implementations here back the same operations when reached
+//! through a generic bound (`T extends BitAnd<...>`) and define the canonical
+//! semantics the bytecode matches (B-1075).
+//!
+//! Result-type rule (mirrors the bytecode's operand widening): `int` with `int`
+//! stays `int`; any `int`/`bigint` mix widens to `bigint` - including a shift of
+//! an `int` by a `bigint` count, where the VALUE widens before shifting.
+//!
+//! Panics are orthogonal to the `throws` contract (see `math.baml`), so every
+//! signature stays `throws never`; the fallible cases match the opcodes exactly:
+//!   - `int << int` raises catchable `baml.panics.IntegerOverflow` on a result
+//!     outside the i63 range, and `baml.panics.NegativeBitShift` on a negative
+//!     count (like the validated `Shl` opcode).
+//!   - `int >> int` raises `baml.panics.NegativeBitShift` on a negative count; a
+//!     count past every bit saturates to the sign (arithmetic shift).
+//!   - `bigint` shifts raise `baml.panics.NegativeBitShift` on a negative count;
+//!     `<<` raises `baml.panics.AllocFailure` when the result would exceed the
+//!     workspace bigint cap; `>>` past every bit saturates to `0n`/`-1n`.
+//!   - `& | ^` never panic (results never grow past their operands).
 
 /// `self & rhs`
 interface BitAnd<Rhs extends root.Concrete> requires root.Concrete {

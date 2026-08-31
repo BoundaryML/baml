@@ -4,8 +4,6 @@
 /// (`0xFFn`), octal (`0o755n`), or binary (`0b1010n`), with `_` digit
 /// separators allowed (`1_000_000n`).
 ///
-/// # Bitwise on negatives
-///
 /// `&`, `|`, `^` use two's-complement semantics — bigints are treated as if
 /// they had an infinite sign-extended bit string. So `(-1n) & 1n == 1n`,
 /// `(-1n) | 0n == -1n`, `(-1n) ^ 0n == -1n`. This matches JavaScript `BigInt`
@@ -233,12 +231,12 @@ class Bigint {
         r
     }
 
-    /// Internal: number of bytes needed for one draw over `[lower, upper)`.
+    /// (internal) Internal: number of bytes needed for one draw over `[lower, upper)`.
     function _random_byte_count(lower: bigint, upper: bigint) -> int throws never {
         $rust_function
     }
 
-    /// Internal: maps one draw onto `[lower, upper)`, returning `upper` when the
+    /// (internal) Internal: maps one draw onto `[lower, upper)`, returning `upper` when the
     /// draw must be rejected.
     function _random_in_range(
         draw: uint8array,

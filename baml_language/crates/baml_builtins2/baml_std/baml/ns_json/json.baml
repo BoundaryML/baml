@@ -316,7 +316,7 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// everything else here moves a *value* between BAML and `json`, while this
 /// describes the *shape* a value of `t` would take.
 ///
-/// Throws `root.errors.Unsupported` for constructs without a JSON Schema form.
+/// Throws `baml.errors.Unsupported` for constructs without a JSON Schema form.
 function schema(t: reflect.Type) -> json throws root.errors.Unsupported {
     $rust_io_function
 }

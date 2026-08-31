@@ -10,8 +10,10 @@ class PlainDate {
     /// Creates a `PlainDate` from calendar components. `month` and `day`
     /// are 1-based.
     ///
-    /// Throws `root.errors.InvalidArgument` if a component is out of range
-    /// (e.g. month 13, Feb 30) or the year is outside ±9999.
+    /// # Throws
+    ///
+    /// - `baml.errors.InvalidArgument` if a component is out of range
+    ///   (e.g. month 13, Feb 30) or the year is outside ±9999.
     //baml:mut_vm
     function from_components(
         year: int,
@@ -27,7 +29,9 @@ class PlainDate {
     }
     /// Serializes to an ISO 8601 calendar date: `1979-05-27`.
     ///
-    /// Panics if the year is outside the 4-digit ISO 8601 range.
+    /// # Panics
+    ///
+    /// - `baml.panics.UserPanic` if the year is outside the 4-digit ISO 8601 range.
     implements baml.ToString {
         function to_string(self) -> string throws never {
             self._to_string_impl() catch (_) {
@@ -38,7 +42,7 @@ class PlainDate {
         }
     }
 
-    /// Internal ISO 8601 formatter. Throws `InvalidArgument` when the year is
+    /// (internal) ISO 8601 formatter. Throws `InvalidArgument` when the year is
     /// out of range; `baml.ToString.to_string` turns that into a panic, while
     /// `to_json` surfaces it as a `JsonSerializationError`.
     function _to_string_impl(self) -> string throws root.errors.InvalidArgument {
@@ -48,25 +52,28 @@ class PlainDate {
     /// Combines with a time-of-day into a `PlainDateTime`. Defaults to
     /// midnight when `time` is omitted (pass by name to override:
     /// `d.to_plain_datetime(time = t)`).
-    function to_plain_datetime(self, time: PlainTime? = null) -> PlainDateTime throws never {
-        self._to_plain_datetime(time)
+    function to_plain_datetime(self, time: PlainTime = PlainTime { _nanoseconds: 0 }) -> PlainDateTime throws never {
+        self._to_plain_datetime(time._nanoseconds)
     }
-    /// Internal: all-required native behind `to_plain_datetime` (native
+    /// (internal) all-required native behind `to_plain_datetime` (native
     /// functions have no BAML prologue to fill defaulted parameters).
     //baml:mut_vm
-    function _to_plain_datetime(self, time: PlainTime?) -> PlainDateTime throws never {
+    function _to_plain_datetime(self, time: int) -> PlainDateTime throws never {
         $rust_function
     }
 
     /// The calendar year.
+    /// TODO: this should not throw
     function year(self) -> int throws root.errors.InvalidArgument {
         $rust_function
     }
     /// The calendar month, in `[1, 12]`.
+    /// TODO: this should not throw
     function month(self) -> int throws root.errors.InvalidArgument {
         $rust_function
     }
     /// The day of the month, in `[1, 31]`.
+    /// TODO: this should not throw
     function day(self) -> int throws root.errors.InvalidArgument {
         $rust_function
     }

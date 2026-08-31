@@ -18,7 +18,7 @@
 // ---------------------------------------------------------------------------
 // Local rejections.
 
-/// Every LOCAL, pre-send rejection in the Anthropic client throws ONE error
+/// (internal) Every LOCAL, pre-send rejection in the Anthropic client throws ONE error
 /// identity: `ai.errors.InvalidRequest` with a null status code — the class
 /// the Responses, Google, Images and Bedrock clients already use.
 ///

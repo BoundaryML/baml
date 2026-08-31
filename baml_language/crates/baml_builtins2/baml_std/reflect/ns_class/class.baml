@@ -38,7 +38,7 @@ function new(
     _new(name, fields, implementations)
 }
 
-/// Internal native backing `new`; all arguments have been materialized.
+/// (internal) Internal native backing `new`; all arguments have been materialized.
 //baml:mut_vm
 function _new(
     name: string,
@@ -94,7 +94,7 @@ class Builder {
         self._build(implementations)
     }
 
-    /// Internal native backing `build`; all arguments have been materialized.
+    /// (internal) Internal native backing `build`; all arguments have been materialized.
     //baml:mut_vm
     function _build(
         self,
