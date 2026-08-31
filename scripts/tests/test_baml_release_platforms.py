@@ -63,11 +63,7 @@ class WrapperReleasePlatformTests(unittest.TestCase):
             "aarch64-unknown-linux-gnu",
             "x86_64-unknown-linux-gnu",
         ):
-            self.assertEqual(targets[triple].glibc_max, "2.18")
             self.assertEqual(targets[triple].runner, "ubuntu-latest")
-        for target in targets.values():
-            if target.libc != "gnu":
-                self.assertIsNone(target.glibc_max)
 
     def test_expected_assets_include_both_linux_libcs_and_windows_variants(
         self,
@@ -145,24 +141,6 @@ class WrapperReleasePlatformTests(unittest.TestCase):
                 "wrapper runner .* does not match macos",
                 lambda contract: contract["targets"][0]["artifacts"]["wrapper"].update(
                     runner="windows-latest"
-                ),
-            ),
-            (
-                "wrapper.glibc_max must be a non-empty string",
-                lambda contract: contract["targets"][2]["artifacts"]["wrapper"].pop(
-                    "glibc_max"
-                ),
-            ),
-            (
-                "wrapper.glibc_max must be a dotted numeric version",
-                lambda contract: contract["targets"][2]["artifacts"]["wrapper"].update(
-                    glibc_max="new"
-                ),
-            ),
-            (
-                "wrapper.glibc_max is only valid for GNU targets",
-                lambda contract: contract["targets"][3]["artifacts"]["wrapper"].update(
-                    glibc_max="2.18"
                 ),
             ),
         )

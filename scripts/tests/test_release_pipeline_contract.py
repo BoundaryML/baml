@@ -1104,7 +1104,8 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("Verify Linux wrapper ABI and installer selection", wrapper)
         self.assertIn("readelf --wide --dynamic", wrapper)
         self.assertIn("GLIBC_[0-9]+", wrapper)
-        self.assertIn('matrix.glibc_max', wrapper)
+        self.assertIn('GLIBC_MAX: "2.18"', wrapper)
+        self.assertNotIn("matrix.glibc_max", wrapper)
         self.assertIn("--network none", wrapper)
         self.assertIn("sh /repo/scripts/install.sh --wrapper-only", wrapper)
         self.assertIn(

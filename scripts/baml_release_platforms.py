@@ -36,7 +36,6 @@ class WrapperTarget:
     archive_suffix: str
     runner: str
     variants: tuple[str, ...]
-    glibc_max: str | None
 
     @property
     def executable_suffix(self) -> str:
@@ -63,7 +62,6 @@ class WrapperTarget:
             "archive_suffix": self.archive_suffix,
             "executable_suffix": self.executable_suffix,
             "no_self_update": self.supports("no-self-update"),
-            "glibc_max": self.glibc_max,
         }
 
 
@@ -137,15 +135,6 @@ def load_wrapper_targets(
         if "self-update" not in variants:
             fail(f"{triple}: wrapper variants must include 'self-update'")
 
-        glibc_max = wrapper.get("glibc_max")
-        if libc == "gnu":
-            glibc_max = require_string(glibc_max, f"{triple}: wrapper.glibc_max")
-            glibc_parts = glibc_max.split(".")
-            if len(glibc_parts) < 2 or not all(part.isdigit() for part in glibc_parts):
-                fail(f"{triple}: wrapper.glibc_max must be a dotted numeric version")
-        elif glibc_max is not None:
-            fail(f"{triple}: wrapper.glibc_max is only valid for GNU targets")
-
         targets.append(
             WrapperTarget(
                 triple=triple,
@@ -155,7 +144,6 @@ def load_wrapper_targets(
                 archive_suffix=archive_suffix,
                 runner=runner,
                 variants=variants,
-                glibc_max=glibc_max,
             )
         )
 

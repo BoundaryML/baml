@@ -98,7 +98,7 @@ jobs:
       - name: Verify Linux wrapper ABI and installer selection
         if: ${{ matrix.libc == 'gnu' || matrix.libc == 'musl' }}
         env:
-          GLIBC_MAX: ${{ matrix.glibc_max }}
+          GLIBC_MAX: "2.18"
           LIBC: ${{ matrix.libc }}
           TARGET: ${{ matrix.target }}
         run: |
