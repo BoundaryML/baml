@@ -102,21 +102,48 @@ test "a lambda receives context from the function arm of a union" {
             "case.baml": `
                 class Box { text string }
 
-                function bare(f: (Box) -> string throws never) -> int throws never { 0 }
-                function unioned(f: string | ((Box) -> string throws never)) -> int throws never { 0 }
+                type BoxCallback = (Box) -> string throws never
+
+                function bare(f: BoxCallback) -> int throws never { 0 }
+                function union_before(f: string | BoxCallback) -> int throws never { 0 }
+                function union_after(f: BoxCallback | string) -> int throws never { 0 }
+                function union_many(f: int | BoxCallback | bool | string) -> int throws never { 0 }
 
                 function demo() -> int[] throws never {
                     [
                         bare((z) -> { z.text }),
                         bare((z) -> { z.text.to_upper_case() }),
-                        unioned((z) -> { z.text }),
-                        unioned((z) -> { z.text.to_upper_case() }),
+                        union_before((z) -> { z.text }),
+                        union_before((z) -> { z.text.to_upper_case() }),
+                        union_after((z) -> { z.text }),
+                        union_many((z) -> { z.text.to_upper_case() }),
                     ]
                 }
             `,
         },
     );
     assert.equal(package.diagnostics().length(), 0)
+}
+
+test "a lambda does not guess between multiple function arms" {
+    root.compiler.AssertRejected(
+        {
+            "case.baml": `
+                class Box { text string }
+                type BoxCallback = (Box) -> string throws never
+                type IntCallback = (int) -> string throws never
+
+                function unioned(f: BoxCallback | IntCallback) -> int throws never { 0 }
+                function demo() -> int throws never {
+                    unioned((value) -> { "ok" })
+                }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0002",
+            message: "cannot infer type of lambda parameter `value` — add a type annotation or provide context",
+        },
+    )
 }
 
 // Both function arms are plausible, so a union does not provide one concrete
