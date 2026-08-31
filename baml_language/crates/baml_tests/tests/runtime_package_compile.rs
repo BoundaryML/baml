@@ -30,7 +30,7 @@ class ExtractedRecord {
   let pkg = reflect.Package.compile({ "schema.baml": source })
   let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
   let document_text = `{"account":"AC-1","amount":42}`
-  let record = Extract$parse<unreflect(record_t.as_type())>(document_text)
+  let record = Extract@parse<unreflect(record_t.as_type())>(document_text)
   json.to_string(record)
 }
 
@@ -39,7 +39,7 @@ function rendered_schema() -> string {
     "schema.baml": "class ExtractedRecord { account string amount int }"
   })
   let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
-  Extract$render_prompt<unreflect(record_t.as_type())>("sample document").text()
+  Extract@render_prompt<unreflect(record_t.as_type())>("sample document").text()
 }
 
 function declaration_identity_properties() -> bool {
@@ -246,7 +246,7 @@ function Extract<T>(document: string) -> T {
   prompt: "Extract document"
 }`
   })
-  let extracted = pkg.get_function<(string) -> ai.Prompt>("root.Extract$render_prompt") catch (e) {
+  let extracted = pkg.get_function<(string) -> ai.Prompt>("root.Extract@render_prompt") catch (e) {
     reflect.errors.CompilationError => {
       return e.diagnostics[0].code
     },
@@ -270,7 +270,7 @@ function Extract<T>(document: string) -> T {
   prompt: "Extract document"
 }`
   })
-  pkg.functions().get("root.Extract$render_prompt") != null
+  pkg.functions().get("root.Extract@render_prompt") != null
 }
 
 function alias_order_and_reserved_names() -> bool {

@@ -388,7 +388,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null
 
     bb5: {
         _10 = load_type(#0);
-        _9 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _10>(copy _1) -> [bb6];
+        _9 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec<copy _10>(copy _1) -> [bb6];
     }
 
     bb6: {
@@ -406,7 +406,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: string, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify@build_request(input: string, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // input // param
@@ -428,7 +428,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: string
 
     bb2: {
         _5 = load_type(#0);
-        _4 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _5>(copy _1) -> [bb3];
+        _4 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec<copy _5>(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -441,7 +441,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: string
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify$parse(json: string) -> T {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify@parse(json: string) -> T {
     // Locals:
     let _0: T // _0 // return
     let _1: string // json // param
@@ -457,7 +457,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$parse(json: string) -> T {
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: string) -> ai.Prompt {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify@render_prompt(input: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // input // param
@@ -467,7 +467,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: string
 
     bb0: {
         _3 = load_type(#0);
-        _2 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _3>(copy _1) -> [bb1];
+        _2 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec<copy _3>(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -480,7 +480,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: string
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<T> {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec(input: string) -> ai.FunctionSpec<T> {
     // Locals:
     let _0: ai.FunctionSpec<T> // _0 // return
     let _1: string // input // param [captured]
@@ -512,7 +512,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec(input: string) -> ai.F
 }
 
 // lambda[0]
-fn .<lambda(RuntimeClassify$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(RuntimeClassify@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -625,7 +625,7 @@ fn .<lambda(RuntimeClassify$spec, 0)>( __spec_output_format: ai.OutputFormat) ->
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<null | T, T> {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify@stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<null | T, T> {
     // Locals:
     let _0: ai.stream.Stream<null | T, T> // _0 // return
     let _1: string // input // param
@@ -660,7 +660,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, clien
 
     bb4: {
         _7 = load_type(#0);
-        _6 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _7>(copy _1) -> [bb5];
+        _6 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec<copy _7>(copy _1) -> [bb5];
     }
 
     bb5: {
@@ -700,7 +700,7 @@ fn user.fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> st
 
     bb2: {
         _6 = copy _1;
-        _5 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$render_prompt<copy _6>(const "sample"; runtime_type_check) -> [bb3];
+        _5 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@render_prompt<copy _6>(const "sample"; runtime_type_check) -> [bb3];
     }
 
     bb3: {
@@ -709,7 +709,7 @@ fn user.fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> st
 
     bb4: {
         _8 = copy _1;
-        _7 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$parse<copy _8>(const "\"k7\""; runtime_type_check) -> [bb5];
+        _7 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@parse<copy _8>(const "\"k7\""; runtime_type_check) -> [bb5];
     }
 
     bb5: {

@@ -295,7 +295,7 @@ fn find_enclosing_function(
 
     let func_scope_range = index.scopes[func_scope_id.index() as usize].range;
 
-    // A declarative LLM function and its `$stream`/`$parse_stream` companions
+    // A declarative LLM function and its `@stream`/`@parse` companions
     // share one declaration span, hence one scope range — so multiple
     // functions match here. Prefer the user-authored one (origin order).
     let func_loc = baml_compiler2_ppir::item_data::file_functions(db, source_file)

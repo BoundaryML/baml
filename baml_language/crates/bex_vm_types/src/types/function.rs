@@ -364,19 +364,19 @@ pub struct Closure {
 /// runtime `Self` at bind time). The receiver is inserted as `self` at call time
 /// by `CallIndirect`.
 ///
-/// Like every callable value, a bound method is fully realized: its complete
-/// type environment is curried in at creation via [`Self::type_args`], so the
-/// `CallIndirect` that invokes it carries no type arguments of its own.
+/// The type environment resolved when the method is bound is curried in via
+/// [`Self::type_args`], so `CallIndirect` carries no separate type arguments.
+/// See the field documentation for the ordinary-bound-method limitation around
+/// a later explicit generic application.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
     /// The receiver value (inserted as `self` at call time).
     pub receiver: Value,
-    /// The callee frame's **complete** curried type arguments, in the callee
+    /// The callee frame's canonical curried type arguments, in the callee
     /// frame's De Bruijn order — materialized at bind time and installed as
-    /// `frame.type_args` when the value is invoked by `CallIndirect`, so
-    /// `LoadType(TypeArgRef(N))` / `IsType` inside the body resolve correctly.
+    /// `frame.type_args` when the value is invoked by `CallIndirect`.
     ///
     /// `MakeBoundMethod` curries `[class generics (→ Self), method fn generics]`
     /// — the exact vector a direct `receiver.method<…>(…)` call would seed.

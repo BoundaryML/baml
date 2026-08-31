@@ -418,7 +418,7 @@ function streaming_composite_clients.CompositeStreamSpec(client: ai.Client | nul
     load_var on_event
     call ai.Agent.new
     store_var _6
-    call user.streaming_composite_clients.CompositeStreamSpec$spec
+    call user.streaming_composite_clients.CompositeStreamSpec@spec
     store_var _8
     load_type string
     load_var2 4 5
@@ -431,7 +431,7 @@ function streaming_composite_clients.CompositeStreamSpec(client: ai.Client | nul
     return
 }
 
-function streaming_composite_clients.CompositeStreamSpec$build_request(client: ai.Client | null) -> baml.http.Request {
+function streaming_composite_clients.CompositeStreamSpec@build_request(client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -440,7 +440,7 @@ function streaming_composite_clients.CompositeStreamSpec$build_request(client: a
     store_var client
 
   L0:
-    call user.streaming_composite_clients.CompositeStreamSpec$spec
+    call user.streaming_composite_clients.CompositeStreamSpec@spec
     store_var _3
     load_type string
     load_var2 2 1
@@ -448,15 +448,15 @@ function streaming_composite_clients.CompositeStreamSpec$build_request(client: a
     return
 }
 
-function streaming_composite_clients.CompositeStreamSpec$parse(json: string) -> string {
+function streaming_composite_clients.CompositeStreamSpec@parse(json: string) -> string {
     load_type string
     load_var json
     call baml.sap.parse
     return
 }
 
-function streaming_composite_clients.CompositeStreamSpec$render_prompt() -> ai.Prompt {
-    call user.streaming_composite_clients.CompositeStreamSpec$spec
+function streaming_composite_clients.CompositeStreamSpec@render_prompt() -> ai.Prompt {
+    call user.streaming_composite_clients.CompositeStreamSpec@spec
     store_var _1
     load_type string
     load_var _1
@@ -464,7 +464,7 @@ function streaming_composite_clients.CompositeStreamSpec$render_prompt() -> ai.P
     return
 }
 
-function streaming_composite_clients.CompositeStreamSpec$spec() -> ai.FunctionSpec<string> {
+function streaming_composite_clients.CompositeStreamSpec@spec() -> ai.FunctionSpec<string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -492,14 +492,14 @@ function streaming_composite_clients.CompositeStreamSpec$spec() -> ai.FunctionSp
     load_type string
     load_type unknown
     alloc_map 0
-    make_closure .<lambda(CompositeStreamSpec$spec, 0)>, 0
+    make_closure .<lambda(CompositeStreamSpec@spec, 0)>, 0
     load_var2 1 2
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function streaming_composite_clients.CompositeStreamSpec$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function streaming_composite_clients.CompositeStreamSpec@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -516,7 +516,7 @@ function streaming_composite_clients.CompositeStreamSpec$stream(client: ai.strea
     store_var on_event
 
   L1:
-    call user.streaming_composite_clients.CompositeStreamSpec$spec
+    call user.streaming_composite_clients.CompositeStreamSpec@spec
     store_var _5
     load_type string | null
     load_type string
@@ -527,7 +527,7 @@ function streaming_composite_clients.CompositeStreamSpec$stream(client: ai.strea
 }
 
 function streaming_composite_clients.composite_input() -> ai.ModelTurnInput {
-    call user.streaming_composite_clients.CompositeStreamSpec$spec
+    call user.streaming_composite_clients.CompositeStreamSpec@spec
     store_var spec
     load_var spec
     load_field .prompt_template

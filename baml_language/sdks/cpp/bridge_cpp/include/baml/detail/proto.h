@@ -15,6 +15,7 @@
 #include "baml_bridge/cffi/v1/baml_outbound.pb.h"
 
 namespace baml {
+
 namespace detail {
 
 namespace pb = ::baml_bridge::cffi::v1;

@@ -723,6 +723,19 @@ fn runtime_ty_is_int_only(ty: &RuntimeTy) -> bool {
     }
 }
 
+/// Whether every value admitted by `ty` has an enum discriminant belonging to
+/// `enum_name`. Nullable and mixed-enum scrutinees must use the comparison
+/// chain so non-matching values can reach a wildcard arm.
+fn runtime_ty_is_enum_only(ty: &RuntimeTy, enum_name: &TypeName) -> bool {
+    match ty {
+        RuntimeTy::Enum(name, _) | RuntimeTy::EnumVariant(name, _, _) => name == enum_name,
+        RuntimeTy::Union(members, _) => members
+            .iter()
+            .all(|member| runtime_ty_is_enum_only(member, enum_name)),
+        _ => false,
+    }
+}
+
 /// Convert a TIR pattern type into a complete [`TyTemplate`], failing closed
 /// when a type variable has no runtime frame slot.
 fn tir2_to_pattern_template(
@@ -1859,7 +1872,7 @@ struct LoweringContext<'db> {
     file: baml_base::SourceFile,
     func_loc: Option<FunctionLoc<'db>>,
     source_param_scope: Option<FileScopeId>,
-    /// Raw function name from the item tree (e.g. `"Foo$render_prompt"`).
+    /// Raw function name from the item tree (e.g. `"Foo@render_prompt"`).
     /// Used to disambiguate companion scopes that share the same span.
     scope_func_name: Option<Name>,
 
@@ -4677,7 +4690,7 @@ impl<'db> LoweringContext<'db> {
             let index = file_semantic_index(self.db, self.file);
             // Two functions can carry a lambda at the *same* source span — an
             // LLM function and its synthesized companions all share the parent's
-            // ranges (e.g. the `$spec` companion's prompt closure vs the
+            // ranges (e.g. the `@spec` companion's prompt closure vs the
             // parent's prompt-tag closure). A bare range match would pick
             // whichever lambda scope appears first in the file, binding this
             // lambda to the *other* function's captures. Disambiguate by
@@ -13608,6 +13621,14 @@ impl<'db> LoweringContext<'db> {
 
         // Need at least one int arm to justify a switch.
         if int_arms.is_empty() {
+            return false;
+        }
+
+        // Reading a discriminant is only valid when every possible scrutinee
+        // value belongs to this enum. Fall back for optionals and mixed unions.
+        if let Some(SwitchKind::EnumDiscriminant(enum_name)) = &switch_kind
+            && !runtime_ty_is_enum_only(&self.builder.local_ty(scrutinee), enum_name)
+        {
             return false;
         }
 

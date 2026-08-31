@@ -42,7 +42,7 @@ fn user.fixtures.o1_allowed_roles.AskO1(question: string, client: null | ai.Clie
     }
 
     bb5: {
-        _9 = call const fn user.fixtures.o1_allowed_roles.AskO1$spec(copy _1) -> [bb6];
+        _9 = call const fn user.fixtures.o1_allowed_roles.AskO1@spec(copy _1) -> [bb6];
     }
 
     bb6: {
@@ -60,7 +60,7 @@ fn user.fixtures.o1_allowed_roles.AskO1(question: string, client: null | ai.Clie
     }
 }
 
-fn user.fixtures.o1_allowed_roles.AskO1$build_request(question: string, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.o1_allowed_roles.AskO1@build_request(question: string, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // question // param
@@ -80,7 +80,7 @@ fn user.fixtures.o1_allowed_roles.AskO1$build_request(question: string, client: 
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.o1_allowed_roles.AskO1$spec(copy _1) -> [bb3];
+        _4 = call const fn user.fixtures.o1_allowed_roles.AskO1@spec(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -93,7 +93,7 @@ fn user.fixtures.o1_allowed_roles.AskO1$build_request(question: string, client: 
     }
 }
 
-fn user.fixtures.o1_allowed_roles.AskO1$parse(json: string) -> string {
+fn user.fixtures.o1_allowed_roles.AskO1@parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
@@ -109,7 +109,7 @@ fn user.fixtures.o1_allowed_roles.AskO1$parse(json: string) -> string {
     }
 }
 
-fn user.fixtures.o1_allowed_roles.AskO1$render_prompt(question: string) -> ai.Prompt {
+fn user.fixtures.o1_allowed_roles.AskO1@render_prompt(question: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // question // param
@@ -117,7 +117,7 @@ fn user.fixtures.o1_allowed_roles.AskO1$render_prompt(question: string) -> ai.Pr
     let _3: reflect.Type
 
     bb0: {
-        _2 = call const fn user.fixtures.o1_allowed_roles.AskO1$spec(copy _1) -> [bb1];
+        _2 = call const fn user.fixtures.o1_allowed_roles.AskO1@spec(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -130,7 +130,7 @@ fn user.fixtures.o1_allowed_roles.AskO1$render_prompt(question: string) -> ai.Pr
     }
 }
 
-fn user.fixtures.o1_allowed_roles.AskO1$spec(question: string) -> ai.FunctionSpec<string> {
+fn user.fixtures.o1_allowed_roles.AskO1@spec(question: string) -> ai.FunctionSpec<string> {
     // Locals:
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // question // param [captured]
@@ -162,7 +162,7 @@ fn user.fixtures.o1_allowed_roles.AskO1$spec(question: string) -> ai.FunctionSpe
 }
 
 // lambda[0]
-fn .<lambda(AskO1$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(AskO1@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -243,7 +243,7 @@ fn .<lambda(AskO1$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt
     }
 }
 
-fn user.fixtures.o1_allowed_roles.AskO1$stream(question: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.o1_allowed_roles.AskO1@stream(question: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: string // question // param
@@ -276,7 +276,7 @@ fn user.fixtures.o1_allowed_roles.AskO1$stream(question: string, client: null | 
     }
 
     bb4: {
-        _6 = call const fn user.fixtures.o1_allowed_roles.AskO1$spec(copy _1) -> [bb5];
+        _6 = call const fn user.fixtures.o1_allowed_roles.AskO1@spec(copy _1) -> [bb5];
     }
 
     bb5: {
@@ -330,7 +330,7 @@ fn user.fixtures.o1_allowed_roles.AskGpt4o(question: string, client: null | ai.C
     }
 
     bb5: {
-        _9 = call const fn user.fixtures.o1_allowed_roles.AskGpt4o$spec(copy _1) -> [bb6];
+        _9 = call const fn user.fixtures.o1_allowed_roles.AskGpt4o@spec(copy _1) -> [bb6];
     }
 
     bb6: {
@@ -348,7 +348,7 @@ fn user.fixtures.o1_allowed_roles.AskGpt4o(question: string, client: null | ai.C
     }
 }
 
-fn user.fixtures.o1_allowed_roles.AskGpt4o$build_request(question: string, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.o1_allowed_roles.AskGpt4o@build_request(question: string, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // question // param
@@ -368,7 +368,7 @@ fn user.fixtures.o1_allowed_roles.AskGpt4o$build_request(question: string, clien
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.o1_allowed_roles.AskGpt4o$spec(copy _1) -> [bb3];
+        _4 = call const fn user.fixtures.o1_allowed_roles.AskGpt4o@spec(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -381,7 +381,7 @@ fn user.fixtures.o1_allowed_roles.AskGpt4o$build_request(question: string, clien
     }
 }
 
-fn user.fixtures.o1_allowed_roles.AskGpt4o$parse(json: string) -> string {
+fn user.fixtures.o1_allowed_roles.AskGpt4o@parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
@@ -397,7 +397,7 @@ fn user.fixtures.o1_allowed_roles.AskGpt4o$parse(json: string) -> string {
     }
 }
 
-fn user.fixtures.o1_allowed_roles.AskGpt4o$render_prompt(question: string) -> ai.Prompt {
+fn user.fixtures.o1_allowed_roles.AskGpt4o@render_prompt(question: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // question // param
@@ -405,7 +405,7 @@ fn user.fixtures.o1_allowed_roles.AskGpt4o$render_prompt(question: string) -> ai
     let _3: reflect.Type
 
     bb0: {
-        _2 = call const fn user.fixtures.o1_allowed_roles.AskGpt4o$spec(copy _1) -> [bb1];
+        _2 = call const fn user.fixtures.o1_allowed_roles.AskGpt4o@spec(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -418,7 +418,7 @@ fn user.fixtures.o1_allowed_roles.AskGpt4o$render_prompt(question: string) -> ai
     }
 }
 
-fn user.fixtures.o1_allowed_roles.AskGpt4o$spec(question: string) -> ai.FunctionSpec<string> {
+fn user.fixtures.o1_allowed_roles.AskGpt4o@spec(question: string) -> ai.FunctionSpec<string> {
     // Locals:
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // question // param [captured]
@@ -450,7 +450,7 @@ fn user.fixtures.o1_allowed_roles.AskGpt4o$spec(question: string) -> ai.Function
 }
 
 // lambda[0]
-fn .<lambda(AskGpt4o$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(AskGpt4o@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -531,7 +531,7 @@ fn .<lambda(AskGpt4o$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Pro
     }
 }
 
-fn user.fixtures.o1_allowed_roles.AskGpt4o$stream(question: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.o1_allowed_roles.AskGpt4o@stream(question: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: string // question // param
@@ -564,7 +564,7 @@ fn user.fixtures.o1_allowed_roles.AskGpt4o$stream(question: string, client: null
     }
 
     bb4: {
-        _6 = call const fn user.fixtures.o1_allowed_roles.AskGpt4o$spec(copy _1) -> [bb5];
+        _6 = call const fn user.fixtures.o1_allowed_roles.AskGpt4o@spec(copy _1) -> [bb5];
     }
 
     bb5: {

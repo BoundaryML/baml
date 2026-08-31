@@ -666,7 +666,7 @@ fn a_result_that_is_the_parameter_stays_legal() {
         }}
 
         function main(t: reflect.Type, document: string) -> unknown {{
-            Extract$parse<unreflect(t)>(document)
+            Extract@parse<unreflect(t)>(document)
         }}
         "##
     ));
@@ -686,7 +686,7 @@ fn a_result_that_never_mentions_the_parameter_stays_legal() {
         }}
 
         function main(t: reflect.Type, document: string) -> string {{
-            Extract$render_prompt<unreflect(t)>(document).text()
+            Extract@render_prompt<unreflect(t)>(document).text()
         }}
         "##
     ));
@@ -917,12 +917,11 @@ function main(t: reflect.Type, flag: bool) -> unknown {
     );
 }
 
-/// A streaming call publishes `T` as a stream of partials, so the result rule
-/// already refuses it — on top of the older guard that says a streaming call
-/// carries no runtime type arguments at all. Both refusals are the same
-/// answer; the shape is pinned so it cannot quietly become neither.
+/// A streaming call publishes `T` as a stream of partials, so an inline runtime
+/// type cannot outlive its lexical binding. The ordinary escape diagnostic is
+/// sufficient; streaming itself supports named runtime types.
 #[test]
-fn a_streaming_call_with_an_inline_runtime_type_is_refused_twice() {
+fn a_streaming_call_with_an_inline_runtime_type_is_refused() {
     assert_error_codes(
         &format!(
             r##"
@@ -934,11 +933,11 @@ fn a_streaming_call_with_an_inline_runtime_type_is_refused_twice() {
         }}
 
         function main(t: reflect.Type, document: string) -> unknown {{
-            Extract$stream<unreflect(t)>(document)
+            Extract@stream<unreflect(t)>(document)
         }}
         "##
         ),
-        &["E0010", "E0168"],
+        &["E0168"],
     );
 }
 

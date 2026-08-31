@@ -8,6 +8,7 @@ use baml_tests::{
     stdlib_prefix::{check_user_files, setup_test_db},
 };
 use bex_engine::BexExternalValue;
+use bex_external_types::{BexExternalAdt, TaggedHeapHandleKind};
 
 fn compile_errors(source: &str) -> Vec<(String, String)> {
     check_user_files(&setup_test_db(source))
@@ -108,8 +109,8 @@ async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {
                     description: "symptoms",
                 },
             ])
-            let prompt = ExtractNote$render_prompt<unreflect(note_t.as_type())>("sample").text()
-            let note = ExtractNote$parse<unreflect(note_t.as_type())>(
+            let prompt = ExtractNote@render_prompt<unreflect(note_t.as_type())>("sample").text()
+            let note = ExtractNote@parse<unreflect(note_t.as_type())>(
                 `{"height_cm": 183, "chief_complaint": "cough", "bullets": ["dry", "night"]}`,
             )
             let height = reflect.class.get_field<int>(note, "height_cm")
@@ -181,8 +182,8 @@ async fn scenario_3_tool_union_dispatches_by_runtime_class() {
                 "args": search_args_t.as_type(),
             })
             let action_t = reflect.union.new([read_t.as_type(), search_t.as_type()])
-            let prompt = PickAction$render_prompt<unreflect(action_t.as_type())>("read the file").text()
-            let action = PickAction$parse<unreflect(action_t.as_type())>(
+            let prompt = PickAction@render_prompt<unreflect(action_t.as_type())>("read the file").text()
+            let action = PickAction@parse<unreflect(action_t.as_type())>(
                 `{"tool": "filesystem/read_file", "args": {"file_path": "/tmp/a.txt"}}`,
             )
 
@@ -355,13 +356,13 @@ async fn constructed_type_to_baml_compiles_to_equivalent_new_identity() {
                 "tags": ["urgent", "review"],
                 "scores": {"priority": 7, "followup": null}
             }`
-            let original_value = RoundTrip$parse<unreflect(original.as_type())>(document)
-            let compiled_value = RoundTrip$parse<unreflect(compiled.as_type())>(document)
+            let original_value = RoundTrip@parse<unreflect(original.as_type())>(document)
+            let compiled_value = RoundTrip@parse<unreflect(compiled.as_type())>(document)
 
             return original.as_type() != compiled.as_type()
                 && source == compiled.as_type().to_baml()
-                && RoundTrip$render_prompt<unreflect(original.as_type())>().text()
-                    == RoundTrip$render_prompt<unreflect(compiled.as_type())>().text()
+                && RoundTrip@render_prompt<unreflect(original.as_type())>().text()
+                    == RoundTrip@render_prompt<unreflect(compiled.as_type())>().text()
                 && baml.json.to_string(original_value) == baml.json.to_string(compiled_value)
                 && reflect.Type.of_value(original_value) == original.as_type()
                 && reflect.Type.of_value(compiled_value) == compiled.as_type()
@@ -457,9 +458,9 @@ async fn same_fields_in_different_orders_render_independently() {
                 "second": reflect.Type.of<string>(),
                 "first": reflect.Type.of<int>(),
             })
-            return Render$render_prompt<unreflect(left.as_type())>().text()
+            return Render@render_prompt<unreflect(left.as_type())>().text()
                 + "\n<RIGHT>\n"
-                + Render$render_prompt<unreflect(right.as_type())>().text()
+                + Render@render_prompt<unreflect(right.as_type())>().text()
                 + "\n<UNEQUAL>" + (left != right).to_string()
         }
         "##
@@ -505,7 +506,7 @@ async fn get_field_missing_and_wrong_type_throw_compilation_diagnostics() {
 
         function main() -> string {
             let t = reflect.class.new("OneField", { "count": reflect.Type.of<int>() })
-            let value = Extract$parse<unreflect(t.as_type())>(`{"count": 4}`)
+            let value = Extract@parse<unreflect(t.as_type())>(`{"count": 4}`)
             let missing = reflect.class.get_field<int>(value, "absent") catch (e) {
                 reflect.errors.CompilationError => {
                     e.diagnostics[0].code + ":" + e.diagnostics[0].message
@@ -573,7 +574,7 @@ async fn an_anonymous_class_instance_crosses_as_an_opaque_handle() {
             let widget_t = reflect.class.new("Widget", {
                 "name": reflect.Type.of<string>(),
             })
-            Extract$parse<unreflect(widget_t.as_type())>(`{"name":"anonymous"}`)
+            Extract@parse<unreflect(widget_t.as_type())>(`{"name":"anonymous"}`)
         }
         "##
     );
@@ -582,10 +583,13 @@ async fn an_anonymous_class_instance_crosses_as_an_opaque_handle() {
         .result
         .expect("a runtime class instance should reach the host")
     {
-        BexExternalValue::Handle(_) => {}
+        BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+            kind: TaggedHeapHandleKind::RuntimeValue,
+            ..
+        }) => {}
         other => panic!(
-            "an anonymous class instance must not cross structurally under a \
-             name that resolves to the compiled `Widget`: {other:?}"
+            "an anonymous class instance must cross as a tagged RuntimeValue, \
+             not structurally under the compiled `Widget`: {other:?}"
         ),
     }
 }
@@ -622,7 +626,7 @@ async fn a_runtime_compiled_class_instance_crosses_as_an_opaque_handle() {
                 "schema.baml": "class ExtractedRecord { account string }"
             })
             let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
-            Extract$parse<unreflect(record_t.as_type())>(`{"account":"AC-1"}`)
+            Extract@parse<unreflect(record_t.as_type())>(`{"account":"AC-1"}`)
         }
         "##
     );
@@ -631,10 +635,13 @@ async fn a_runtime_compiled_class_instance_crosses_as_an_opaque_handle() {
         .result
         .expect("a runtime-compiled class instance should reach the host")
     {
-        BexExternalValue::Handle(_) => {}
+        BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+            kind: TaggedHeapHandleKind::RuntimeValue,
+            ..
+        }) => {}
         other => panic!(
-            "a runtime-compiled class instance must not cross structurally under a \
-             name that resolves to the static `ExtractedRecord`: {other:?}"
+            "a runtime-compiled class instance must cross as a tagged RuntimeValue, \
+             not structurally under the static `ExtractedRecord`: {other:?}"
         ),
     }
 }

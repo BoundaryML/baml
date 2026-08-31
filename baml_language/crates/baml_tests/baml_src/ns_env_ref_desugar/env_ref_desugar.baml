@@ -91,10 +91,10 @@ function EnvRefDesugarFn() -> string {
     prompt: `hi`
 }
 
-// The client expression is resolved when the FUNCTION is called (at `$spec`
+// The client expression is resolved when the FUNCTION is called (at `@spec`
 // construction), not at `$init` — reading it back exercises that path.
 function EnvRefDesugarFnClientId() -> string {
-    EnvRefDesugarFn$spec().default_client.id()
+    EnvRefDesugarFn@spec().default_client.id()
 }
 
 // ─── dynamic client selection ────────────────────────────────────────────────
@@ -111,7 +111,7 @@ function EnvRefDynClientFn() -> string {
 }
 
 function EnvRefDynClientId() -> string {
-    EnvRefDynClientFn$spec().default_client.id()
+    EnvRefDynClientFn@spec().default_client.id()
 }
 
 // ─── evaluation timing: call time, not `$init` ───────────────────────────────
@@ -127,14 +127,14 @@ function EnvRefBadClientFn() -> string {
     prompt: `hi`
 }
 
-// THE TIMING PROOF. The client expression lives in the synthesized `<Fn>$spec`
+// THE TIMING PROOF. The client expression lives in the synthesized `<Fn>@spec`
 // companion body, so it runs when the function is CALLED, not during `$init`.
 // If it ran at `$init`, the throw above would abort this namespace's
 // initialization and take every other test in this file down with it. Instead
-// nothing happens until `$spec()` is invoked here.
+// nothing happens until `@spec()` is invoked here.
 function EnvRefBadClientThrowsAtCallTime() -> string {
     {
-        EnvRefBadClientFn$spec();
+        EnvRefBadClientFn@spec();
         "resolved-unexpectedly"
     } catch (e) {
         ai.errors.InvalidRequest => "threw-at-call-time"

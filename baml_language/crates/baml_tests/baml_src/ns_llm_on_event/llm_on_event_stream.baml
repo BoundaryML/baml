@@ -56,7 +56,7 @@ test "stream drained via next delivers settle events exactly once" {
     let cb = (e: ai.events.Event) -> void {
         probe.labels.push(label_of(e));
     };
-    let s = Greet$stream("world", client = make_script(), on_event = cb);
+    let s = Greet@stream("world", client = make_script(), on_event = cb);
     while (true) {
         match (s.next()) {
             let d: ai.stream.Done => {
@@ -84,7 +84,7 @@ test "stream drained via final recovers streamed usage" {
             },
         };
     };
-    let s = Greet$stream("world", client = make_script(), on_event = cb);
+    let s = Greet@stream("world", client = make_script(), on_event = cb);
     let f = s.final();
     assert.equal(f.message, "hi");
     assert.equal(probe.labels, ["RunStarted", "AssistantMessage", "Usage:7/11"])
@@ -94,7 +94,7 @@ test "throwing listener does not alter the stream result" {
     let cb = (e: ai.events.Event) -> void {
         throw baml.errors.InvalidArgument { message: "listener boom" }
     };
-    let s = Greet$stream("world", client = make_script(), on_event = cb);
+    let s = Greet@stream("world", client = make_script(), on_event = cb);
     let f = s.final();
     assert.equal(f.message, "hi")
 }

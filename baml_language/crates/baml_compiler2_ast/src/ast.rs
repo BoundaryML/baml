@@ -1807,7 +1807,7 @@ pub struct LlmPromptSpans {
 pub struct LlmBodyDef {
     pub client: Option<Name>,
     /// Pre-lowered companion bodies keyed by target name. The single-path
-    /// world stashes exactly one: `"spec"` — the `<Fn>$spec` body, built in
+    /// world stashes exactly one: `"spec"` — the `<Fn>@spec` body, built in
     /// `lower_cst` while the CST backtick is still in hand (the AST must stay
     /// CST-free for Salsa: a rowan node is `!Send`), and read back by
     /// `companions::llm_spec`. Absent when the prompt or client is unusable
