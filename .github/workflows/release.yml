@@ -139,6 +139,7 @@ jobs:
       - build-cli
       - build-vscode-reusable
       - build-jetbrains-release
+      - integ-tests
     steps:
       - run: echo "::do-nothing::" >/dev/null
 
