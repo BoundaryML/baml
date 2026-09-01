@@ -323,9 +323,13 @@ impl BamlWasmRuntime {
     /// Recovery is the host's: the state is half-applied by construction, so
     /// this runtime cannot be trusted again and the page must be reloaded.
     fn is_unavailable(&self) -> bool {
-        // A successful test borrow is released immediately; only a leaked
-        // guard from a panicked call can keep this `Err`.
+        // A successful test borrow is released immediately, and it also
+        // proves any earlier conflict was transient - a nested call that has
+        // since returned, not a guard leaked by a panic. Re-arm the one-shot
+        // so a later genuine failure is still reported rather than swallowed
+        // by that earlier transient.
         if self.state.try_borrow_mut().is_ok() {
+            self.unavailable_reported.set(false);
             return false;
         }
         if !self.unavailable_reported.replace(true) {
