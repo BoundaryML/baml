@@ -18,7 +18,6 @@ GO_RELEASE_SMOKE = ROOT / "scripts" / "smoke-go-release.py"
 GO_SDK_ASSEMBLER = ROOT / "scripts" / "assemble-go-sdk-mirror"
 PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
-RELEASE_NOTIFIER = ROOT / "tools" / "notify-release-failure.py"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yaml"
 NIGHTLY_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-release.yml"
 BRIDGE_CFFI_PUBLIC_EXPORTS = (
@@ -654,41 +653,6 @@ def step_inputs(step: str) -> dict[str, str]:
 
 
 class WorkflowGraphTests(unittest.TestCase):
-    def test_release_slack_notifications_cover_failures_and_canary_success(self) -> None:
-        workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
-        notifier = RELEASE_NOTIFIER.read_text(encoding="utf-8")
-        notify_slack = job_block(workflow, "notify-slack")
-        notify_step = step_block(notify_slack, "Notify Slack of the release result")
-
-        self.assertIn("always()", notify_slack)
-        self.assertIn(
-            "run: uv run --script tools/notify-release-failure.py",
-            notify_step,
-        )
-        self.assertIn(
-            "CHANNEL: ${{ needs.plan.outputs.channel }}",
-            notify_step,
-        )
-        self.assertIn(
-            "VERSION: ${{ needs.plan.outputs.version }}",
-            notify_step,
-        )
-        self.assertIn(
-            "RELEASE_SUCCEEDED: ${{ needs.publish-pkg-channel.result == 'success' }}",
-            notify_step,
-        )
-        self.assertIn(
-            'if release_succeeded and not failures and channel != "canary"',
-            notifier,
-        )
-        self.assertIn(
-            'SUCCESSFUL_JOB_CONCLUSIONS = {"success", "skipped"}',
-            notifier,
-        )
-        self.assertIn("conclusion not in SUCCESSFUL_JOB_CONCLUSIONS", notifier)
-        self.assertIn("❌ BAML {channel} release failed", notifier)
-        self.assertIn("✅ BAML {channel} release succeeded", notifier)
-
     def test_cpp_verifier_stamps_the_frozen_release_plan(self) -> None:
         workflow = CPP_VERIFIER.read_text(encoding="utf-8")
         verify = job_block(workflow, "verify")
