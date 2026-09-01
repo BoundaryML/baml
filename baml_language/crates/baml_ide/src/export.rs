@@ -285,9 +285,8 @@ impl SymbolId {
     /// (or its contributing impl block) rather than the namespace.
     fn of_definition(db: &Db, def: Definition<'_>) -> Option<Self> {
         if let Definition::Function(func) = def {
-            // An impl-contributed method is addressed through its block, even
-            // when the block is written in the class body and the method is
-            // therefore also a class method: `Duration` implementing both
+            // An impl-contributed method is addressed through its block
+            // (wherever the block is written): `Duration` implementing both
             // `Multiply<int>` and `Multiply<bigint>` contributes two methods
             // named `mul`, and `M:baml.time.Duration.mul` cannot name both.
             if let Some(imp) = contributing_impl(db, func) {
@@ -316,7 +315,8 @@ impl SymbolId {
                         &function_name(db, func),
                     ));
                 }
-                Some(item_data::MethodOwner::FreeImpl(_)) | None => {}
+                // Impl-owned methods took the `contributing_impl` road above.
+                Some(item_data::MethodOwner::Impl(_)) | None => {}
             }
         }
 
@@ -328,7 +328,6 @@ impl SymbolId {
             Definition::Function(_)
             | Definition::TemplateString(_)
             | Definition::Client(_)
-            | Definition::Test(_)
             | Definition::RetryPolicy(_)
             | Definition::Let(_) => IdKind::Value,
         };
@@ -386,20 +385,13 @@ impl SymbolId {
     }
 }
 
-/// The impl block that contributes `function`, if any: the block itself for
-/// free-impl methods, or the class's (in-body/merged) block that lists it.
+/// The impl block that contributes `function`, if any. Impl-block methods
+/// are Impl-owned (in-body and free alike), so the compiler's owner record
+/// answers directly — a class-owned method is never an impl member.
 fn contributing_impl<'db>(db: &'db Db, function: FunctionLoc<'db>) -> Option<ImplLoc<'db>> {
     match item_data::method_owner(db, function)? {
-        item_data::MethodOwner::FreeImpl(imp) => Some(imp),
-        item_data::MethodOwner::Class(class) => item_data::class_impls(db, class)
-            .iter()
-            .copied()
-            .find(|&imp| {
-                item_data::impl_block_data(db, imp)
-                    .methods
-                    .contains(&function)
-            }),
-        item_data::MethodOwner::Interface(_) => None,
+        item_data::MethodOwner::Impl(imp) => Some(imp),
+        item_data::MethodOwner::Class(_) | item_data::MethodOwner::Interface(_) => None,
     }
 }
 
@@ -588,7 +580,7 @@ pub struct ImplExport {
     pub generics: Vec<GenericExport>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub assoc_bindings: Vec<AssocBindingExport>,
-    /// Overrides plus inherited defaults, sorted by name.
+    /// Provided methods plus adopted defaults, sorted by name.
     pub methods: Vec<FunctionExport>,
     pub source: SourceExport,
 }
@@ -613,7 +605,6 @@ pub enum ExportItemKind {
     Function,
     TemplateString,
     Client,
-    Test,
     RetryPolicy,
     Global,
 }
@@ -627,7 +618,6 @@ fn item_kind(def: Definition<'_>) -> ExportItemKind {
         Definition::Function(_) => ExportItemKind::Function,
         Definition::TemplateString(_) => ExportItemKind::TemplateString,
         Definition::Client(_) => ExportItemKind::Client,
-        Definition::Test(_) => ExportItemKind::Test,
         Definition::RetryPolicy(_) => ExportItemKind::RetryPolicy,
         Definition::Let(_) => ExportItemKind::Global,
     }
@@ -758,7 +748,6 @@ fn definition_name(db: &Db, def: Definition<'_>) -> Name {
         Definition::Function(loc) => item_data::function_data(db, loc).name.clone(),
         Definition::TemplateString(loc) => item_data::template_string_data(db, loc).name.clone(),
         Definition::Client(loc) => item_data::client_data(db, loc).name.clone(),
-        Definition::Test(loc) => item_data::test_data(db, loc).name.clone(),
         Definition::RetryPolicy(loc) => item_data::retry_policy_data(db, loc).name.clone(),
         Definition::Let(loc) => item_data::let_data(db, loc).name.clone(),
     }
@@ -773,7 +762,6 @@ fn definition_file(db: &Db, def: Definition<'_>) -> SourceFile {
         Definition::Function(loc) => loc.file(db),
         Definition::TemplateString(loc) => loc.file(db),
         Definition::Client(loc) => loc.file(db),
-        Definition::Test(loc) => loc.file(db),
         Definition::RetryPolicy(loc) => loc.file(db),
         Definition::Let(loc) => loc.file(db),
     }
@@ -788,7 +776,6 @@ fn definition_span(db: &Db, def: Definition<'_>) -> TextRange {
         Definition::Function(loc) => item_data::function_source_map(db, loc).span,
         Definition::TemplateString(loc) => item_data::template_string_source_map(db, loc).span,
         Definition::Client(loc) => item_data::client_source_map(db, loc).span,
-        Definition::Test(loc) => item_data::test_source_map(db, loc).span,
         Definition::RetryPolicy(loc) => item_data::retry_policy_source_map(db, loc).span,
         Definition::Let(loc) => item_data::let_source_map(db, loc).span,
     }
@@ -806,7 +793,6 @@ fn definition_docstring<'db>(db: &'db Db, def: Definition<'db>) -> Option<&'db s
         Definition::Function(loc) => item_data::function_data(db, loc).docstring.as_deref(),
         Definition::TemplateString(_)
         | Definition::Client(_)
-        | Definition::Test(_)
         | Definition::RetryPolicy(_)
         | Definition::Let(_) => None,
     }
@@ -1003,7 +989,7 @@ fn source_export(db: &Db, file: SourceFile, span: TextRange) -> SourceExport {
 /// when it is listed under one.
 ///
 /// An impl entry is addressed under its block rather than by the declaring
-/// symbol's id: an inherited default is re-listed by every implementor, and
+/// symbol's id: an adopted default is re-listed by every implementor, and
 /// a method declared in a free impl has no symbol id at all. The declaring
 /// id is kept in `declared_by`, which is what a consumer dedupes on when it
 /// wants to treat one declaration as one thing.
@@ -1033,7 +1019,7 @@ fn function_export(
                 })
                 .unwrap_or_default();
             // `declared_by` is only worth stating when it differs — an
-            // inherited default lives on the interface, while a method the
+            // adopted default lives on the interface, while a method the
             // block writes itself is already named by `id`.
             let declared_by = declared.filter(|declared| declared != &qualified);
             (qualified, declared_by)
@@ -1324,7 +1310,6 @@ fn export_item<'db>(
         },
         Definition::TemplateString(_)
         | Definition::Client(_)
-        | Definition::Test(_)
         | Definition::RetryPolicy(_)
         | Definition::Let(_) => ItemDetail::Plain {},
     };
@@ -1379,7 +1364,7 @@ mod tests {
     /// Consumers key on ids — a report diffs on them, a cache blesses on
     /// them — so a collision is not a cosmetic flaw but a wrong answer about
     /// a different symbol. The pressure is entirely on impl blocks: an
-    /// inherited default is re-listed by every implementor, which is why an
+    /// adopted default is re-listed by every implementor, which is why an
     /// impl entry is addressed through its block and keeps the declaration
     /// in `declared_by`.
     ///

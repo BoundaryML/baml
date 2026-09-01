@@ -32,6 +32,9 @@ use baml_codegen_types::Name;
 /// `vendor/<pkg>/` (mirroring the Python generator's routing rules).
 pub(crate) fn source_ns(symbol: &Name) -> Vec<Box<str>> {
     let mut out: Vec<Box<str>> = Vec::new();
+    if symbol.is_stream() {
+        out.push(Box::from("stream_types"));
+    }
     match symbol.package().as_str() {
         "user" => {}
         "baml" => out.push(Box::from("baml")),

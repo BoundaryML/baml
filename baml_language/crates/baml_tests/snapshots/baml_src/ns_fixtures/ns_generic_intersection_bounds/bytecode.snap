@@ -1,30 +1,30 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.generic_intersection_bounds.Both.Sized.size(self: fixtures.generic_intersection_bounds.Both) -> int {
-    load_const 7
-    return
-}
-
-function fixtures.generic_intersection_bounds.Both.Tagged.tag(self: fixtures.generic_intersection_bounds.Both) -> string {
-    load_var self
-    load_field .name
-    return
-}
-
-function fixtures.generic_intersection_bounds.Printable$for$T.display(self: #0) -> string {
+function fixtures.generic_intersection_bounds.<(#0 as user.fixtures.generic_intersection_bounds.Printable)>.display(self: #0) -> string {
     load_type #0
     load_var self
     call user.fixtures.generic_intersection_bounds.describe
     return
 }
 
-function fixtures.generic_intersection_bounds.Registered.Registry<Both>.put(self: fixtures.generic_intersection_bounds.Registered, item: fixtures.generic_intersection_bounds.Both) -> void {
+function fixtures.generic_intersection_bounds.<(user.fixtures.generic_intersection_bounds.Both as user.fixtures.generic_intersection_bounds.Sized)>.size(self: fixtures.generic_intersection_bounds.Both) -> int {
+    load_const 7
+    return
+}
+
+function fixtures.generic_intersection_bounds.<(user.fixtures.generic_intersection_bounds.Both as user.fixtures.generic_intersection_bounds.Tagged)>.tag(self: fixtures.generic_intersection_bounds.Both) -> string {
+    load_var self
+    load_field .name
+    return
+}
+
+function fixtures.generic_intersection_bounds.<(user.fixtures.generic_intersection_bounds.Registered as user.fixtures.generic_intersection_bounds.Registry<user.fixtures.generic_intersection_bounds.Both>)>.put(self: fixtures.generic_intersection_bounds.Registered, item: fixtures.generic_intersection_bounds.Both) -> void {
     load_const null
     return
 }
 
-function fixtures.generic_intersection_bounds.Registered.Registry<Both>.summarize(self: fixtures.generic_intersection_bounds.Registered, other: #0) -> string {
+function fixtures.generic_intersection_bounds.<(user.fixtures.generic_intersection_bounds.Registered as user.fixtures.generic_intersection_bounds.Registry<user.fixtures.generic_intersection_bounds.Both>)>.summarize(self: fixtures.generic_intersection_bounds.Registered, other: #0) -> string {
     load_type #0
     load_var other
     call user.fixtures.generic_intersection_bounds.describe

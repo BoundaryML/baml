@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 === MIR2 (package reflect) ===
-fn reflect.array.Type.reflect.TypeView.as_type = builtin(vm)
+fn reflect.array.<(reflect.array.Type as reflect.TypeView)>.as_type = builtin(vm)
 
 fn reflect.array.Type.element_type = builtin(vm)
 
@@ -154,7 +154,7 @@ fn reflect.class.PendingType.meta = builtin(vm)
 
 fn reflect.class.get_field = builtin(vm)
 
-fn reflect.class.Type.reflect.TypeView.as_type = builtin(vm)
+fn reflect.class.<(reflect.class.Type as reflect.TypeView)>.as_type = builtin(vm)
 
 fn reflect.class.Type.fields = builtin(vm)
 
@@ -166,19 +166,19 @@ fn reflect.enum.new = builtin(vm)
 
 fn reflect.enum.get_value = builtin(vm)
 
-fn reflect.enum.Type.reflect.TypeView.as_type = builtin(vm)
+fn reflect.enum.<(reflect.enum.Type as reflect.TypeView)>.as_type = builtin(vm)
 
 fn reflect.enum.Type.values = builtin(vm)
 
 fn reflect.enum.Type.meta = builtin(vm)
 
-fn reflect.function.Type.reflect.TypeView.as_type = builtin(vm)
+fn reflect.function.<(reflect.function.Type as reflect.TypeView)>.as_type = builtin(vm)
 
 fn reflect.function.Type.params = builtin(vm)
 
 fn reflect.function.Type.return_type = builtin(vm)
 
-fn reflect.interface.Type.reflect.TypeView.as_type = builtin(vm)
+fn reflect.interface.<(reflect.interface.Type as reflect.TypeView)>.as_type = builtin(vm)
 
 fn reflect.interface.Type.implemented_by = builtin(vm)
 
@@ -188,21 +188,21 @@ fn reflect.interface.implementation = builtin(vm)
 
 fn reflect.literal.new = builtin(vm)
 
-fn reflect.literal.Type.reflect.TypeView.as_type = builtin(vm)
+fn reflect.literal.<(reflect.literal.Type as reflect.TypeView)>.as_type = builtin(vm)
 
 fn reflect.map.new = builtin(vm)
 
-fn reflect.map.Type.reflect.TypeView.as_type = builtin(vm)
+fn reflect.map.<(reflect.map.Type as reflect.TypeView)>.as_type = builtin(vm)
 
 fn reflect.map.Type.key_type = builtin(vm)
 
 fn reflect.map.Type.value_type = builtin(vm)
 
-fn reflect.primitive.Type.reflect.TypeView.as_type = builtin(vm)
+fn reflect.primitive.<(reflect.primitive.Type as reflect.TypeView)>.as_type = builtin(vm)
 
 fn reflect.union.new = builtin(vm)
 
-fn reflect.union.Type.reflect.TypeView.as_type = builtin(vm)
+fn reflect.union.<(reflect.union.Type as reflect.TypeView)>.as_type = builtin(vm)
 
 fn reflect.union.Type.member_types = builtin(vm)
 
@@ -521,7 +521,7 @@ fn reflect.AnyClass.name(self: reflect.AnyClass) -> string {
     }
 
     bb1: {
-        _0 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _2) -> [bb2];
+        _0 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _2) -> [bb2];
     }
 
     bb2: {

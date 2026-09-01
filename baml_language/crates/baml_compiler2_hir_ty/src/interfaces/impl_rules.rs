@@ -450,7 +450,7 @@ pub fn impl_data<'db>(
             .iter()
             .map(|loc| &function_data(db, *loc).name)
             .collect();
-        // E0113: a required method with no override and no inherited default.
+        // E0113: a required method the impl neither provides nor the interface defaults.
         for required in &iface_data.required_methods {
             let provided = override_names.iter().any(|n| **n == required.name)
                 || default_names.iter().any(|n| **n == required.name);
@@ -740,52 +740,6 @@ pub fn impl_data_source_map<'db>(
         interface_field_link_spans,
         class_field_link_spans,
         associated_binding_spans,
-    }
-}
-
-/// Collect every `Ty::TypeVar` name in `ty` (at any depth) into `out` — used to
-/// decide which impl generic params the for-type / interface args determine (E0135).
-fn collect_type_var_names(ty: &Ty, out: &mut Vec<ParamTy>) {
-    match ty {
-        Ty::TypeVar(name, _) => out.push(name.clone()),
-        Ty::List(inner, _) => {
-            collect_type_var_names(inner, out);
-        }
-        Ty::Map { key, value, .. } => {
-            collect_type_var_names(key, out);
-            collect_type_var_names(value, out);
-        }
-        Ty::Future(value, error, _) => {
-            collect_type_var_names(value, out);
-            collect_type_var_names(error, out);
-        }
-        Ty::Union(tys, _) | Ty::Class(_, tys, _) => {
-            for t in tys {
-                collect_type_var_names(t, out);
-            }
-        }
-        Ty::Interface(_, args, bindings, _) => {
-            for t in args {
-                collect_type_var_names(t, out);
-            }
-            for (_, t) in bindings {
-                collect_type_var_names(t, out);
-            }
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            for p in params {
-                collect_type_var_names(&p.ty, out);
-            }
-            collect_type_var_names(ret, out);
-            collect_type_var_names(throws, out);
-        }
-        Ty::AssociatedTypeProjection { base, .. } => collect_type_var_names(base, out),
-        _ => {}
     }
 }
 
@@ -1206,19 +1160,17 @@ pub fn validate_impl_signatures<'db>(
                 ImplDiagnosticLocation::ForTarget,
             ));
         }
-        // E0135: every declared generic param must be determined by the for-type
-        // or interface args.
-        let mut determined = Vec::new();
-        collect_type_var_names(&data.for_ty_pattern, &mut determined);
-        for arg in &data.interface_args {
-            collect_type_var_names(arg, &mut determined);
-        }
-        for (name, _) in &data.generic_params {
-            if !determined.contains(name) {
+        // E0135: every declared generic param must be determined by the
+        // for-type or interface args. The list comes from the header's ONE
+        // validity decision (`impl_facts`), which also POISONS the impl —
+        // an undetermined param means the impl resolves nowhere, so the
+        // diagnostic and the unresolvability can never drift.
+        if let crate::impls::ImplHeaderResolution::Poisoned { unconstrained } =
+            crate::impls::impl_facts(db, impl_loc)
+        {
+            for name in unconstrained {
                 diags.push((
-                    TirTypeError::UnconstrainedImplTypeParam {
-                        name: name.name().clone(),
-                    },
+                    TirTypeError::UnconstrainedImplTypeParam { name: name.clone() },
                     ImplDiagnosticLocation::Bound,
                 ));
             }
@@ -2074,71 +2026,7 @@ pub fn first_failing_impl_bound<'db>(
     None
 }
 
-/// An interface method resolved on a [`ResolvedImpl`].
-pub struct ResolvedMethod<'db> {
-    /// The function providing the implementation: the impl block's own override,
-    /// or the interface's default method.
-    pub method: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    /// `true` when `method` is the interface's default body.
-    pub from_interface_default: bool,
-    /// Type arguments for the callee's generic frame, in frame order.
-    pub frame_type_args: Vec<Ty>,
-}
-
 impl<'db> ResolvedImpl<'db> {
-    /// Resolve `method` to its backing function and frame on this impl.
-    /// `method` MUST be declared on the resolved interface itself (interfaces
-    /// are bounds, not inheritance — the caller resolves the declaring
-    /// interface first).
-    pub fn get_method(
-        &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
-        method: &Name,
-    ) -> Option<ResolvedMethod<'db>> {
-        use baml_compiler2_ppir::item_data::{function_data, interface_data};
-
-        let data = impl_data(db, self.impl_loc).as_ref().ok()?;
-
-        // The impl's own override, framed by the impl's generic params bound to
-        // the realized type arguments.
-        for &func_loc in &data.methods {
-            if function_data(db, func_loc).name == *method {
-                let frame_type_args = data
-                    .generic_params
-                    .iter()
-                    .map(|(name, _)| {
-                        self.bindings.get(name).cloned().unwrap_or(Ty::Unknown {
-                            attr: TyAttr::default(),
-                        })
-                    })
-                    .collect();
-                return Some(ResolvedMethod {
-                    method: func_loc,
-                    from_interface_default: false,
-                    frame_type_args,
-                });
-            }
-        }
-
-        // The interface's default — framed by the realized interface input args.
-        let iface_data = interface_data(db, data.interface);
-        for &fn_loc in &iface_data.default_methods {
-            if function_data(db, fn_loc).name == *method {
-                let frame_type_args = data
-                    .interface_args
-                    .iter()
-                    .map(|arg| substitute_ty(arg, &self.bindings))
-                    .collect();
-                return Some(ResolvedMethod {
-                    method: fn_loc,
-                    from_interface_default: true,
-                    frame_type_args,
-                });
-            }
-        }
-        None
-    }
-
     /// The interface this impl provides at its resolved instantiation:
     /// the declared interface with the impl's bindings substituted in.
     pub fn implemented_interface(

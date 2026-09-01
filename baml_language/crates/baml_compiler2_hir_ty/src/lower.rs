@@ -775,7 +775,10 @@ impl<'db> LowerCtx<'db> {
         // Lexical generic names (including a body-local overlay appended to
         // the frame) shadow nominal type definitions. A multi-segment path
         // rooted in such a name is an associated projection, never a package
-        // or namespace path with the same spelling.
+        // or namespace path with the same spelling. Associated types are NOT
+        // in the frame and have no bare spelling: a reference must be written
+        // `Self.X` (the projection road below), so a bare associated-type
+        // name falls through to ordinary resolution and diagnoses unresolved.
         let generic_head = self
             .generic_params
             .iter()
@@ -1171,7 +1174,6 @@ impl<'db> LowerCtx<'db> {
             Definition::Function(_)
             | Definition::TemplateString(_)
             | Definition::Client(_)
-            | Definition::Test(_)
             | Definition::RetryPolicy(_)
             | Definition::Let(_) => LoweringTy::error(),
         }
@@ -1195,7 +1197,23 @@ impl<'db> LowerCtx<'db> {
             } => {
                 self.record_arity(short, args.len(), generic_params.len());
                 enforce_arity(&mut args, generic_params.len());
-                LoweringTy::Class(qtn, args.into_boxed_slice(), attr())
+                // Through `class_lowering_ty`, exactly like the source-backed
+                // lane: the builtin bridgings (B-1080 carriers,
+                // `baml.future.Future`) are a property of the SPELLING, so a
+                // mounted `baml` must lower it identically to a source-visible
+                // one.
+                let ty = class_lowering_ty(qtn, args);
+                // The `baml.Map<K, V>` spelling bridges to the structural
+                // map, so it gets the same key validation as the
+                // `map<k, v>` syntax.
+                if let LoweringTy::Map { key, value, attr } = ty {
+                    return LoweringTy::Map {
+                        key: Box::new(self.checked_map_key(*key)),
+                        value,
+                        attr,
+                    };
+                }
+                ty
             }
             ExportedType::Enum { qtn, .. } => {
                 self.record_arity(short, args.len(), 0);
@@ -1564,9 +1582,9 @@ fn enforce_arity(args: &mut Vec<LoweringTy>, expected: usize) {
 // -- Generic frames -----------------------------------------------------------
 
 /// The flattened generic frame for a function: owner generics first (class
-/// generics; interfaces prepend `Self` and append associated-type names,
-/// mirroring TIR's layout), then the function's own generics, then its
-/// synthetic effect params. Indices are absolute frame positions.
+/// generics; interfaces prepend `Self` — associated types are not frame
+/// slots), then the function's own generics, then its synthetic effect
+/// params. Indices are absolute frame positions.
 pub fn function_generic_frame<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
@@ -1578,26 +1596,21 @@ pub fn function_generic_frame<'db>(
             extend_frame(&mut frame, data.generic_params.iter().map(|g| &g.name));
         }
         Some(MethodOwner::Interface(interface_loc)) => {
+            // Associated types are NOT frame slots: an associated type is
+            // uniquely determined by the `(Self, interface, name)` triple and
+            // has no bare spelling — a reference is written `Self.X`, lowers
+            // as a projection over the `Self` slot, and reduces through the
+            // resolver at use, instead of riding as copyable — and driftable —
+            // frame state.
             let data = baml_compiler2_ppir::item_data::interface_data(db, interface_loc);
             extend_frame(&mut frame, &[Name::new("Self")]);
             extend_frame(&mut frame, data.generic_params.iter().map(|g| &g.name));
-            let associated: Vec<Name> = data
-                .associated_types
-                .iter()
-                .map(|assoc| assoc.name.clone())
-                .collect();
-            extend_frame(&mut frame, &associated);
         }
-        // Free impls (`implements<T extends I> J for T[]`): the impl's own
-        // generics are the owner prefix, mirroring the class arm.
-        Some(MethodOwner::FreeImpl(impl_loc)) => {
-            let data = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
-            if let baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } =
-                &data.subject
-            {
-                let names: Vec<Name> = generics.iter().map(|param| param.name.clone()).collect();
-                extend_frame(&mut frame, &names);
-            }
+        // Impl blocks (in-class and free alike): the block's root frame is
+        // the owner prefix — the class's generics for an in-class block, the
+        // block's own declared generics for a free one (`impl_frame`).
+        Some(MethodOwner::Impl(impl_loc)) => {
+            frame = impl_frame(db, impl_loc);
         }
         None => {}
     }
@@ -1623,6 +1636,20 @@ enum BuiltinStructural {
     Future,
     List,
     Map,
+    /// A dedicated-variant scalar carrier (`class baml.Int` and friends),
+    /// which denotes its structural primitive rather than a nominal class.
+    Scalar(BuiltinScalar),
+}
+
+#[derive(Clone, Copy)]
+enum BuiltinScalar {
+    Int,
+    Bigint,
+    Float,
+    Bool,
+    String,
+    Uint8Array,
+    Null,
 }
 
 fn builtin_structural(qtn: &TypeName, arity: usize) -> Option<BuiltinStructural> {
@@ -1642,6 +1669,30 @@ fn builtin_structural(qtn: &TypeName, arity: usize) -> Option<BuiltinStructural>
         }
         if qtn.name().as_str() == "Map" && arity == 2 {
             return Some(BuiltinStructural::Map);
+        }
+        // The dedicated-variant scalar builtins bridge the same way: a value
+        // of `class baml.Int` IS an `int` at runtime (S11's receiver-class
+        // correspondence, applied in reverse), so the class spelling —
+        // `class_self_ty` inside the class's own methods and implements
+        // blocks included — denotes the structural type. Without this, an
+        // in-class impl's for-target would be a nominal type no runtime value
+        // ever inhabits. The carrier family is total: `class baml.Null`
+        // exists (empty — a doc anchor), and leaving it unbridged would let
+        // `baml.Null` denote a nominal class no value inhabits.
+        if arity == 0 {
+            let scalar = match qtn.name().as_str() {
+                "Int" => Some(BuiltinScalar::Int),
+                "Bigint" => Some(BuiltinScalar::Bigint),
+                "Float" => Some(BuiltinScalar::Float),
+                "Bool" => Some(BuiltinScalar::Bool),
+                "String" => Some(BuiltinScalar::String),
+                "Uint8Array" => Some(BuiltinScalar::Uint8Array),
+                "Null" => Some(BuiltinScalar::Null),
+                _ => None,
+            };
+            if let Some(scalar) = scalar {
+                return Some(BuiltinStructural::Scalar(scalar));
+            }
         }
     }
     None
@@ -1672,6 +1723,15 @@ pub fn class_lowering_ty(qtn: TypeName, mut args: Vec<LoweringTy>) -> LoweringTy
                 attr: attr(),
             }
         }
+        Some(BuiltinStructural::Scalar(scalar)) => match scalar {
+            BuiltinScalar::Int => LoweringTy::Int { attr: attr() },
+            BuiltinScalar::Bigint => LoweringTy::Bigint { attr: attr() },
+            BuiltinScalar::Float => LoweringTy::Float { attr: attr() },
+            BuiltinScalar::Bool => LoweringTy::Bool { attr: attr() },
+            BuiltinScalar::String => LoweringTy::String { attr: attr() },
+            BuiltinScalar::Uint8Array => LoweringTy::Uint8Array { attr: attr() },
+            BuiltinScalar::Null => LoweringTy::Null { attr: attr() },
+        },
         None => LoweringTy::Class(qtn, args.into(), attr()),
     }
 }
@@ -1700,6 +1760,15 @@ pub fn class_ty(qtn: TypeName, mut args: Vec<Ty>) -> Ty {
                 attr: attr(),
             })
         }
+        Some(BuiltinStructural::Scalar(scalar)) => Ty::intern(match scalar {
+            BuiltinScalar::Int => InferTy::Int { attr: attr() },
+            BuiltinScalar::Bigint => InferTy::Bigint { attr: attr() },
+            BuiltinScalar::Float => InferTy::Float { attr: attr() },
+            BuiltinScalar::Bool => InferTy::Bool { attr: attr() },
+            BuiltinScalar::String => InferTy::String { attr: attr() },
+            BuiltinScalar::Uint8Array => InferTy::Uint8Array { attr: attr() },
+            BuiltinScalar::Null => InferTy::Null { attr: attr() },
+        }),
         None => Ty::intern(InferTy::Class(qtn, args.into(), attr())),
     }
 }
@@ -1745,10 +1814,17 @@ pub fn interface_generic_frame_params(names: &[Name]) -> Vec<ParamTy> {
     frame
 }
 
-/// The full interface frame: `[Self, params.., assoc..]` - the positional
-/// discipline every interface-scoped type (member signatures, fields,
-/// associated-type bounds and defaults) lowers in, instantiated by
+/// The full interface frame: `[Self, params..]` - the positional discipline
+/// every interface-scoped type (member signatures, fields, associated-type
+/// bounds and defaults) lowers in, instantiated by
 /// `interface_instantiation`'s vector of the same shape.
+///
+/// Associated types are NOT frame slots: each is uniquely determined by the
+/// `(Self, interface, name)` triple and has no bare spelling. A reference is
+/// written `Self.X`, lowers as a projection over the `Self` slot, and
+/// reduces at use - a pinned reference substitutes its pin, a concrete
+/// `Self` reduces through its impl, and a symbolic `Self` stays a rigid
+/// projection.
 pub fn interface_frame<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     interface: InterfaceLoc<'db>,
@@ -1756,12 +1832,11 @@ pub fn interface_frame<'db>(
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
     let mut names = vec![Name::new("Self")];
     names.extend(data.generic_params.iter().map(|g| g.name.clone()));
-    names.extend(data.associated_types.iter().map(|assoc| assoc.name.clone()));
     interface_generic_frame_params(&names)
 }
 
-/// The interface's OWN declared params - `interface_frame`'s middle
-/// section, without `Self` and the associated slots.
+/// The interface's OWN declared params - `interface_frame`'s tail, without
+/// the `Self` slot (associated types are not slots).
 pub fn interface_declared_params<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     interface: InterfaceLoc<'db>,
@@ -1793,6 +1868,30 @@ pub fn impl_frame<'db>(
             );
             frame
         }
+    }
+}
+
+/// The type an impl block is FOR — what `Self` denotes inside it: the
+/// enclosing class's self type for an in-body block, the lowered for-target
+/// for a free one. Together with [`impl_frame`] and [`impl_generic_bounds`]
+/// this is the UNIFORM impl surface: the in-body-vs-free distinction is
+/// HIR's business, and downstream consumers (emit's rule baking, MIR's
+/// display names) see only the type.
+pub fn impl_self_ty<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    block: baml_compiler2_hir::loc::ImplLoc<'db>,
+) -> baml_type::Ty {
+    let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
+    match &data.subject {
+        baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
+            class_self_ty(db, *class)
+        }
+        baml_compiler2_ppir::item_data::ImplSubjectData::Free { for_target, .. } => reject_holes(
+            &lower_ctx_for_file(db, block.file(db))
+                .with_frame(impl_frame(db, block))
+                .with_bounds(impl_generic_bounds(db, block))
+                .lower_type_ref(&data.type_refs, *for_target),
+        ),
     }
 }
 
@@ -2036,62 +2135,60 @@ pub fn function_generic_bounds<'db>(
     let mut frame_iter = frame.iter();
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => {
+            // The class's declared bounds, keyed by the same frame-prefix
+            // identities this function's frame starts with.
             let class_data = baml_compiler2_ppir::item_data::class_data(db, class);
-            for declared in &class_data.generic_params {
-                let Some(param) = frame_iter.next() else {
-                    break;
-                };
-                let refs: Vec<_> = declared
-                    .bounds
-                    .iter()
-                    .filter_map(|&type_ref| {
-                        as_ref(&ctx.lower_type_ref_at(
-                            &class_data.type_refs,
-                            type_ref,
-                            TypePosition::ConstraintHead,
-                        ))
-                    })
-                    .collect();
-                if !refs.is_empty() {
-                    out.insert(param.clone(), refs);
-                }
+            out.extend(class_generic_bounds(db, class));
+            for _ in 0..class_data.generic_params.len() {
+                frame_iter.next();
             }
         }
         Some(MethodOwner::Interface(interface)) => {
             let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
-            // The shared interface param env (`Self` bound, param bounds,
-            // associated-slot bounds), keyed by the same frame-prefix
-            // identities this function's frame starts with.
+            // The shared interface param env (`Self` bound, param bounds),
+            // keyed by the same frame-prefix identities this function's
+            // frame starts with: `[Self, params..]` — associated types are
+            // not frame slots.
             out.extend(interface_scope_bounds(db, interface));
-            for _ in 0..(1 + data.generic_params.len() + data.associated_types.len()) {
+            for _ in 0..=data.generic_params.len() {
                 frame_iter.next();
             }
         }
-        Some(MethodOwner::FreeImpl(impl_loc)) => {
-            // The impl's declared bounds (`implements<T extends I> ...`),
-            // conjunctive per param, keyed by the frame-prefix identities
-            // this function's frame starts with.
+        Some(MethodOwner::Impl(impl_loc)) => {
+            // The owner prefix's declared bounds, conjunctive per param,
+            // keyed by the frame-prefix identities this function's frame
+            // starts with: the block's own generics for a free impl
+            // (`implements<T extends I> ...`), the enclosing CLASS's
+            // generics for an in-class block (`impl_frame` is the class
+            // frame there, so the identities coincide).
             let impl_data = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
-            if let baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } =
-                &impl_data.subject
-            {
-                for param_data in generics {
-                    let Some(param) = frame_iter.next() else {
-                        break;
-                    };
-                    let bounds: Vec<_> = param_data
-                        .bounds
-                        .iter()
-                        .filter_map(|&type_ref| {
-                            as_ref(&ctx.lower_type_ref_at(
-                                &impl_data.type_refs,
-                                type_ref,
-                                TypePosition::ConstraintHead,
-                            ))
-                        })
-                        .collect();
-                    if !bounds.is_empty() {
-                        out.insert(param.clone(), bounds);
+            match &impl_data.subject {
+                baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
+                    let class_data = baml_compiler2_ppir::item_data::class_data(db, *class);
+                    out.extend(class_generic_bounds(db, *class));
+                    for _ in 0..class_data.generic_params.len() {
+                        frame_iter.next();
+                    }
+                }
+                baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } => {
+                    for param_data in generics {
+                        let Some(param) = frame_iter.next() else {
+                            break;
+                        };
+                        let bounds: Vec<_> = param_data
+                            .bounds
+                            .iter()
+                            .filter_map(|&type_ref| {
+                                as_ref(&ctx.lower_type_ref_at(
+                                    &impl_data.type_refs,
+                                    type_ref,
+                                    TypePosition::ConstraintHead,
+                                ))
+                            })
+                            .collect();
+                        if !bounds.is_empty() {
+                            out.insert(param.clone(), bounds);
+                        }
                     }
                 }
             }
@@ -2123,10 +2220,12 @@ pub fn function_generic_bounds<'db>(
 
 /// The interface scope's param env, keyed by `interface_frame`
 /// identities: `Self` (slot 0) bounded by the interface itself at its own
-/// params, each generic param's declared bound, and each associated
-/// slot's declared bound (I5 consumes those for projections). The single
-/// env every interface-scoped lowering shares - member signatures via
-/// `function_generic_bounds`, required-method and field lowering, and
+/// params, plus each generic param's declared bound. Associated types are
+/// not slots and contribute no env entries — a `Self.Member` projection
+/// reduces through the resolver, and the member's declared `extends` bound
+/// is consulted there (`assoc_bound_roots` / `realized_assoc_bound`). The
+/// single env every interface-scoped lowering shares - member signatures
+/// via `function_generic_bounds`, required-method and field lowering, and
 /// associated-type bounds/defaults - so `Self.Member` projections resolve
 /// their qualifying interface identically everywhere.
 pub fn interface_scope_bounds<'db>(
@@ -2149,28 +2248,15 @@ pub fn interface_scope_bounds<'db>(
             .take(data.generic_params.len())
             .map(|param| baml_type::Ty::TypeVar(param.clone(), TyAttr::default()))
             .collect();
-        // Each associated slot pins to the frame's OWN var, so inside the
-        // interface `Self.Member` reduces to that slot (TIR's layout: the
-        // member is a frame position, bound per-receiver at impl
-        // selection - a default method's projection stays symbolic, never
-        // the declared default).
-        let pins: Box<[(Name, baml_type::Ty)]> = frame
-            .iter()
-            .skip(1 + data.generic_params.len())
-            .zip(&data.associated_types)
-            .map(|(param, assoc)| {
-                (
-                    assoc.name.clone(),
-                    baml_type::Ty::TypeVar(param.clone(), TyAttr::default()),
-                )
-            })
-            .collect();
+        // `Self`'s self-bound carries no pins: a `Self.Member` projection
+        // stays symbolic inside the interface and reduces through the
+        // resolver at use.
         out.insert(
             self_param.clone(),
             vec![baml_type::Interface::new(
                 interface_qualified_name(db, interface),
                 args.into_boxed_slice(),
-                pins,
+                Box::new([]),
             )],
         );
     }
@@ -2191,18 +2277,6 @@ pub fn interface_scope_bounds<'db>(
             .collect();
         if !refs.is_empty() {
             out.insert(param.clone(), refs);
-        }
-    }
-    for assoc in &data.associated_types {
-        let param = frame_iter.next();
-        if let (Some(param), Some(type_ref)) = (param, assoc.bound)
-            && let Some(bound) = as_ref(&ctx.lower_type_ref_at(
-                &data.type_refs,
-                type_ref,
-                TypePosition::ConstraintHead,
-            ))
-        {
-            out.insert(param.clone(), vec![bound]);
         }
     }
     out
@@ -2266,24 +2340,10 @@ fn function_signature_cycle_initial<'db>(
 pub fn owner_self_ty<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
-    frame: &[baml_type::ParamTy],
 ) -> Option<baml_type::Ty> {
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => Some(class_self_ty(db, class)),
-        Some(MethodOwner::FreeImpl(impl_loc)) => {
-            let data = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
-            match &data.subject {
-                baml_compiler2_ppir::item_data::ImplSubjectData::Free { for_target, .. } => {
-                    let ctx = lower_ctx_for_file(db, impl_loc.file(db)).with_frame(frame.to_vec());
-                    Some(reject_holes(
-                        &ctx.lower_type_ref(&data.type_refs, *for_target),
-                    ))
-                }
-                baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
-                    Some(class_self_ty(db, *class))
-                }
-            }
-        }
+        Some(MethodOwner::Impl(impl_loc)) => Some(impl_self_ty(db, impl_loc)),
         _ => None,
     }
 }
@@ -2385,9 +2445,9 @@ fn extend_lowering_diagnostics(
 }
 
 /// Whether a declared throws clause is an open contract: it names `unknown`
-/// directly, through a union member, or through a type alias. An open
-/// contract deliberately admits any thrown value, so throws-coverage
-/// analysis (E0097 extraneous-declaration warnings) does not apply to it.
+/// directly, through a union member, or through a type alias. Open contracts
+/// still participate in coverage: an escaping `unknown` must justify the open
+/// bound, while uncovered concrete members remain ordinary E0097 warnings.
 pub(crate) fn is_open_throws_contract(db: &dyn baml_compiler2_ppir::Db, ty: &Ty) -> bool {
     fn visit(
         facts: &crate::facts::Facts<'_>,
@@ -2417,16 +2477,16 @@ pub fn signature_lowering_diagnostics<'db>(
 ) -> Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> {
     use crate::diagnostics::TirTypeError;
     // Required interface methods are signature-only items checked by the
-    // interface-scope driver with `Self` and the associated slots in
-    // scope; this pass would misreport their `Self.*` references (the
-    // same exclusion the pre-S17 signature pass carried).
+    // interface-scope driver with `Self` in scope; this pass would
+    // misreport their `Self.*` references (the same exclusion the
+    // pre-S17 signature pass carried).
     if baml_compiler2_ppir::item_data::is_required_interface_method(db, function) {
         return Vec::new();
     }
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
     let bounds = function_generic_bounds(db, function);
-    let concrete_self = owner_self_ty(db, function, &frame);
+    let concrete_self = owner_self_ty(db, function);
     let impl_target = owner_impl_target(db, function, &frame);
     let ctx = lower_ctx_for_file(db, function.file(db))
         .with_frame(frame)
@@ -2587,11 +2647,18 @@ pub fn class_lowering_diagnostics<'db>(
 ) -> Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> {
     use crate::diagnostics::TirTypeError;
     let data = baml_compiler2_ppir::item_data::class_data(db, class);
+    let source_map = baml_compiler2_ppir::item_data::class_source_map(db, class);
+    // PPIR synthesizes `$stream` companions with an empty declaration span.
+    // Their field types originate in the source class, whose lowering walk
+    // already owns any diagnostics; reporting the clone produces a duplicate
+    // at the synthetic 0..0 range.
+    if source_map.span.is_empty() {
+        return Vec::new();
+    }
     let frame = class_generic_frame(db, class);
     let ctx = lower_ctx_for_file(db, class.file(db))
         .with_frame(frame)
         .with_bounds(class_generic_bounds(db, class));
-    let source_map = baml_compiler2_ppir::item_data::class_source_map(db, class);
     let mut out = Vec::new();
     // Field annotations: every written field type re-lowers with the sink
     // (unresolved names, wrong arg counts - the pre-S17 structural walk)
@@ -2899,7 +2966,7 @@ pub fn function_signature<'db>(
     // receiver (elaboration leaves its slot `Missing`) takes it
     // directly. Interface owners provide none - their `Self` is the
     // frame's universal slot 0, resolved as a param.
-    let concrete_self = owner_self_ty(db, function, &frame);
+    let concrete_self = owner_self_ty(db, function);
     let impl_target = owner_impl_target(db, function, &frame);
     let ctx = lower_ctx_for_file(db, function.file(db))
         .with_frame(frame.clone())

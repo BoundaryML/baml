@@ -26,6 +26,7 @@ the CI step times).
 import hashlib
 import json
 import os
+import shutil
 import sys
 
 # Everything the C# projects compile lives under these trees: the bridge
@@ -44,6 +45,19 @@ EXCLUDED_DIR_NAMES = {"bin", "obj", ".baml"}
 MANIFEST = os.path.expanduser("~/.baml-csharp-ci/manifest.json")
 # 2000-01-01 UTC: comfortably older than any output restored from the cache.
 BACKDATED_MTIME = 946_684_800
+
+
+def remove_build_outputs():
+    removed = 0
+    for root in ROOTS[:2]:
+        for dirpath, dirnames, _ in os.walk(root, topdown=True):
+            for name in list(dirnames):
+                if name not in {"bin", "obj"}:
+                    continue
+                shutil.rmtree(os.path.join(dirpath, name))
+                dirnames.remove(name)
+                removed += 1
+    print(f"removed {removed} cached bin/obj directories after input changes")
 
 
 def tracked_files():
@@ -91,6 +105,14 @@ def restore():
             # that referenced it rebuilds via its own fresh inputs.
             missing.append(path)
     new = [p for p in tracked_files() if p not in manifest]
+    if changed or missing or new:
+        # A cached obj/ tree can contain generated protobuf sources whose own
+        # timestamp is newer than a freshly checked-out changed .proto. MSBuild
+        # may then accept the stale generated source even though this script
+        # correctly left the changed input fresh. Invalidate the build outputs
+        # as a unit whenever any tracked input changed; the content cache still
+        # provides the fast path when every input is identical.
+        remove_build_outputs()
     print(f"backdated {backdated}/{len(manifest)} unchanged files")
     for label, paths in (("changed", changed), ("missing", missing), ("new", new)):
         if not paths:

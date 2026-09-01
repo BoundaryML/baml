@@ -124,14 +124,51 @@ pub(crate) fn interface_self_param(
         .expect("interface frame starts with Self")
 }
 
-/// Resolve a name against the FULL interface frame (declared params and
-/// associated slots), innermost-last-wins.
-fn resolve_frame_param(frame: &[ParamTy], name: &Name) -> Option<ParamTy> {
-    frame
-        .iter()
-        .rev()
-        .find(|param| param.name() == name)
-        .cloned()
+/// Collapse `Self.X` projections through the pins resolved so far — the
+/// projection-only counterpart of the old associated frame-slot
+/// substitution (associated types are not frame slots; a sibling reference
+/// in a binding value or realized default is a projection over `Self`).
+/// Only projections whose base IS this interface's `Self` — the symbolic
+/// param or the realized receiver — collapse; foreign bases keep theirs.
+/// The qualifier must match at its GENERICS too, not just its name: `Self`
+/// may implement the same interface at several instantiations, and a
+/// written `(Self as I<float>).X` inside an `I<int>` realization names the
+/// OTHER instantiation's member — its pin belongs to the resolver, never to
+/// this realization's pin list. (A projection's spelled qualifier always
+/// carries its instantiation — `projection_interface_for` reads it off the
+/// bound or the existential — and every caller collapses a type already
+/// substituted at the realization's args, so equality is exact here.)
+pub(crate) fn collapse_self_assoc_projections(
+    ty: &Ty,
+    self_tys: &[&Ty],
+    iface: Option<&QualifiedTypeName>,
+    iface_args: &[Ty],
+    pins: &[(Name, Ty)],
+) -> Ty {
+    let Some(iface) = iface else {
+        return ty.clone();
+    };
+    if pins.is_empty() {
+        return ty.clone();
+    }
+    baml_type::unify::rewrite_ty(ty, &mut |node| {
+        if let Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } = node
+            && &interface.name == iface
+            && interface.generics.len() == iface_args.len()
+            && interface.generics.iter().eq(iface_args)
+            && self_tys.iter().any(|s| *s == base.as_ref())
+            && let Some((_, pin)) = pins.iter().find(|(name, _)| name == member)
+        {
+            Some(pin.clone())
+        } else {
+            None
+        }
+    })
 }
 
 /// One binding per param mapping it to itself as a rigid var — the identity
@@ -375,7 +412,8 @@ fn lower_interface_associated_bindings<'db>(
     let mut value_bindings: TypeBindings = identity_bindings(generic_params);
     value_bindings.insert(self_param.clone(), self_ty.clone());
     let mut resolved_pins: Vec<(Name, Ty)> = Vec::new();
-    let mut default_bindings = baml_type::unify::bind_type_vars(&iface_params, interface_args);
+    let default_bindings = baml_type::unify::bind_type_vars(&iface_params, interface_args);
+    let self_var = Ty::TypeVar(self_param.clone(), TyAttr::default());
 
     iface
         .associated_types
@@ -427,10 +465,16 @@ fn lower_interface_associated_bindings<'db>(
                 );
                 baml_type::unify::substitute_ty(&realized, &default_bindings)
             };
+            // A sibling reference (`type Items = Self.Item[]`) is a projection
+            // over `Self`; the earlier witness is its value.
+            let ty = collapse_self_assoc_projections(
+                &ty,
+                &[&self_var, self_ty],
+                iface_qtn.as_ref(),
+                interface_args,
+                &resolved_pins,
+            );
             resolved_pins.push((assoc.name.clone(), ty.clone()));
-            let assoc_param = resolve_frame_param(&frame, &assoc.name)
-                .expect("associated type parameter is in its interface frame");
-            default_bindings.insert(assoc_param, ty.clone());
             Some((assoc.name.clone(), ty))
         })
         .collect()
@@ -454,12 +498,12 @@ pub(crate) fn complete_interface_associated_bindings_from_tys<'db>(
         .cloned()
         .expect("interface frame starts with Self");
     let iface_params = crate::lower::interface_declared_params(db, iface_loc);
-    let mut bindings = baml_type::unify::bind_type_vars(&iface_params, interface_args);
-    for (name, ty) in associated_bindings {
-        let param = resolve_frame_param(&frame, name)
-            .expect("associated type parameter is in its interface frame");
-        bindings.insert(param, ty.clone());
-    }
+    let iface_qtn = interface_loc_qtn(db, iface_loc);
+    let bindings = baml_type::unify::bind_type_vars(&iface_params, interface_args);
+    let self_var = Ty::TypeVar(self_param.clone(), TyAttr::default());
+    // The members resolved so far, in declaration order — a later member's
+    // `Self.X` projection collapses through them.
+    let mut resolved_pins: Vec<(Name, Ty)> = Vec::new();
 
     iface
         .associated_types
@@ -470,9 +514,14 @@ pub(crate) fn complete_interface_associated_bindings_from_tys<'db>(
                 .find(|(name, _)| name == &assoc.name)
             {
                 let ty = baml_type::unify::substitute_ty(ty, &bindings);
-                let assoc_param = resolve_frame_param(&frame, &assoc.name)
-                    .expect("associated type parameter is in its interface frame");
-                bindings.insert(assoc_param, ty.clone());
+                let ty = collapse_self_assoc_projections(
+                    &ty,
+                    &[&self_var],
+                    iface_qtn.as_ref(),
+                    interface_args,
+                    &resolved_pins,
+                );
+                resolved_pins.push((assoc.name.clone(), ty.clone()));
                 return Some((assoc.name.clone(), ty));
             }
             if !fill_defaults {
@@ -484,20 +533,10 @@ pub(crate) fn complete_interface_associated_bindings_from_tys<'db>(
             // default is lowered once (symbolic `Self`) by the shared query.
             let (default, _diags) =
                 interface_associated_type_default(db, iface_loc, assoc.name.clone())?;
-            let self_pins: Vec<(Name, Ty)> = iface
-                .associated_types
-                .iter()
-                .filter_map(|assoc| {
-                    let param = resolve_frame_param(&frame, &assoc.name)?;
-                    bindings
-                        .get(&param)
-                        .map(|ty| (assoc.name.clone(), ty.clone()))
-                })
-                .collect();
             let self_ty = Ty::Interface(
-                interface_loc_qtn(db, iface_loc)?,
+                iface_qtn.clone()?,
                 interface_args.into(),
-                self_pins.into(),
+                resolved_pins.clone().into(),
                 TyAttr::default(),
             );
             let realized = realize_associated_default(
@@ -508,9 +547,14 @@ pub(crate) fn complete_interface_associated_bindings_from_tys<'db>(
                 &self_ty,
             );
             let ty = baml_type::unify::substitute_ty(&realized, &bindings);
-            let assoc_param = resolve_frame_param(&frame, &assoc.name)
-                .expect("associated type parameter is in its interface frame");
-            bindings.insert(assoc_param, ty.clone());
+            let ty = collapse_self_assoc_projections(
+                &ty,
+                &[&self_var, &self_ty],
+                iface_qtn.as_ref(),
+                interface_args,
+                &resolved_pins,
+            );
+            resolved_pins.push((assoc.name.clone(), ty.clone()));
             Some((assoc.name.clone(), ty))
         })
         .collect()
@@ -850,6 +894,11 @@ fn lower_interface_type_associated_bindings(
     // The interface's declared parameter bounds, so a `T.member` projection in a
     // binding value or default resolves `T`'s declaring interface.
     let iface_bounds = interface_declared_param_bounds(ctx.db, ctx.iface_loc);
+    let iface_qtn = interface_loc_qtn(ctx.db, ctx.iface_loc);
+    let self_var = Ty::TypeVar(self_param.clone(), TyAttr::default());
+    // The members resolved so far, in declaration order — a later member's
+    // `Self.X` projection collapses through them.
+    let mut resolved_pins: Vec<(Name, Ty)> = Vec::new();
 
     ctx.iface
         .associated_types
@@ -901,29 +950,23 @@ fn lower_interface_type_associated_bindings(
                         &bindings,
                     )
                 };
-                let assoc_param = resolve_frame_param(&frame, &assoc.name)
-                    .expect("associated type parameter is in its interface frame");
-                bindings.insert(assoc_param, ty.clone());
+                let ty = collapse_self_assoc_projections(
+                    &ty,
+                    &[&self_var],
+                    iface_qtn.as_ref(),
+                    ctx.interface_args,
+                    &resolved_pins,
+                );
+                resolved_pins.push((assoc.name.clone(), ty.clone()));
                 return Some((assoc.name.clone(), ty));
             }
             // Fill the omitted default eagerly at this interface realized on the receiver.
             let (default, _diags) =
                 interface_associated_type_default(ctx.db, ctx.iface_loc, assoc.name.clone())?;
-            let self_pins: Vec<(Name, Ty)> = ctx
-                .iface
-                .associated_types
-                .iter()
-                .filter_map(|assoc| {
-                    let param = resolve_frame_param(&frame, &assoc.name)?;
-                    bindings
-                        .get(&param)
-                        .map(|ty| (assoc.name.clone(), ty.clone()))
-                })
-                .collect();
             let self_ty = Ty::Interface(
-                interface_loc_qtn(ctx.db, ctx.iface_loc)?,
+                iface_qtn.clone()?,
                 ctx.interface_args.into(),
-                self_pins.into(),
+                resolved_pins.clone().into(),
                 TyAttr::default(),
             );
             let realized = realize_associated_default(
@@ -934,9 +977,14 @@ fn lower_interface_type_associated_bindings(
                 &self_ty,
             );
             let ty = baml_type::unify::substitute_ty(&realized, &bindings);
-            let assoc_param = resolve_frame_param(&frame, &assoc.name)
-                .expect("associated type parameter is in its interface frame");
-            bindings.insert(assoc_param, ty.clone());
+            let ty = collapse_self_assoc_projections(
+                &ty,
+                &[&self_var, &self_ty],
+                iface_qtn.as_ref(),
+                ctx.interface_args,
+                &resolved_pins,
+            );
+            resolved_pins.push((assoc.name.clone(), ty.clone()));
             Some((assoc.name.clone(), ty))
         })
         .collect()
@@ -1392,14 +1440,11 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
         let mut child_ancestors = ancestors.clone();
         child_ancestors.insert(loc);
 
-        let frame = crate::lower::interface_frame(db, loc);
+        // Only the declared params bind: associated types are projection-only
+        // (`Self.X`), resolved through `self_bound`'s pins below, and a bare
+        // assoc name in a parent argument is ban-illegal.
         let iface_params = crate::lower::interface_declared_params(db, loc);
-        let mut bindings = baml_type::unify::bind_type_vars(&iface_params, &args);
-        for (name, ty) in &associated_bindings {
-            let param = resolve_frame_param(&frame, name)
-                .expect("associated type parameter is in its interface frame");
-            bindings.insert(param, ty.clone());
-        }
+        let bindings = baml_type::unify::bind_type_vars(&iface_params, &args);
 
         // This interface as a constraint (its associated types pinned to the realized
         // bindings) — so a required interface's `Item = Self.Item` resolves `Self.Item` here.

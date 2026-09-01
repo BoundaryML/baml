@@ -62,7 +62,7 @@ function generic_match_subtype.$init_test_ns_generic_match_subtype_generic_match
     return
 }
 
-function generic_match_subtype.Sq.Shape.area(self: generic_match_subtype.Sq) -> int {
+function generic_match_subtype.<(user.generic_match_subtype.Sq as user.generic_match_subtype.Shape)>.area(self: generic_match_subtype.Sq) -> int {
     load_var self
     load_field .s
     load_var self

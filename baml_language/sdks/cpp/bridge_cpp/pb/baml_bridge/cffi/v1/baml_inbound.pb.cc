@@ -420,6 +420,58 @@ void InboundValue::clear_ty_def_value() {
     clear_has_value();
   }
 }
+void InboundValue::set_allocated_media_value(::baml_bridge::cffi::v1::BamlValueMedia* PROTOBUF_NULLABLE media_value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_value();
+  if (media_value) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::MessageLite*>(media_value)->GetArena();
+    if (message_arena != submessage_arena) {
+      media_value = ::google::protobuf::internal::GetOwnedMessage(message_arena, media_value, submessage_arena);
+    }
+    set_has_media_value();
+    _impl_.value_.media_value_ = media_value;
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.InboundValue.media_value)
+}
+void InboundValue::clear_media_value() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value_case() == kMediaValue) {
+    if (GetArena() == nullptr) {
+      delete _impl_.value_.media_value_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      if (_impl_.value_.media_value_ != nullptr) {
+        _impl_.value_.media_value_->Clear();
+      }
+    }
+    clear_has_value();
+  }
+}
+void InboundValue::set_allocated_prompt_ast_value(::baml_bridge::cffi::v1::BamlValuePromptAst* PROTOBUF_NULLABLE prompt_ast_value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_value();
+  if (prompt_ast_value) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::MessageLite*>(prompt_ast_value)->GetArena();
+    if (message_arena != submessage_arena) {
+      prompt_ast_value = ::google::protobuf::internal::GetOwnedMessage(message_arena, prompt_ast_value, submessage_arena);
+    }
+    set_has_prompt_ast_value();
+    _impl_.value_.prompt_ast_value_ = prompt_ast_value;
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.InboundValue.prompt_ast_value)
+}
+void InboundValue::clear_prompt_ast_value() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value_case() == kPromptAstValue) {
+    if (GetArena() == nullptr) {
+      delete _impl_.value_.prompt_ast_value_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      if (_impl_.value_.prompt_ast_value_ != nullptr) {
+        _impl_.value_.prompt_ast_value_->Clear();
+      }
+    }
+    clear_has_value();
+  }
+}
 InboundValue::InboundValue(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::MessageLite(arena, InboundValue_class_data_.base()) {
@@ -496,6 +548,12 @@ InboundValue::InboundValue(
         break;
       case kTyDefValue:
         _impl_.value_.ty_def_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.ty_def_value_);
+        break;
+      case kMediaValue:
+        _impl_.value_.media_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.media_value_);
+        break;
+      case kPromptAstValue:
+        _impl_.value_.prompt_ast_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.prompt_ast_value_);
         break;
   }
 
@@ -625,6 +683,26 @@ void InboundValue::clear_value() {
       }
       break;
     }
+    case kMediaValue: {
+      if (GetArena() == nullptr) {
+        delete _impl_.value_.media_value_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        if (_impl_.value_.media_value_ != nullptr) {
+          _impl_.value_.media_value_->Clear();
+        }
+      }
+      break;
+    }
+    case kPromptAstValue: {
+      if (GetArena() == nullptr) {
+        delete _impl_.value_.prompt_ast_value_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        if (_impl_.value_.prompt_ast_value_ != nullptr) {
+          _impl_.value_.prompt_ast_value_->Clear();
+        }
+      }
+      break;
+    }
     case VALUE_NOT_SET: {
       break;
     }
@@ -673,17 +751,17 @@ InboundValue::GetClassData() const {
   return InboundValue_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 14, 8, 73, 2>
+const ::_pbi::TcParseTable<0, 16, 10, 81, 2>
 InboundValue::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(InboundValue, _impl_._has_bits_),
     0, // no _extensions_
-    14, 0,  // max_field_number, fast_idx_mask
+    16, 0,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294950912,  // skipmap
+    4294901760,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    14,  // num_field_entries
-    8,  // num_aux_entries
+    16,  // num_field_entries
+    10,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     InboundValue_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -740,6 +818,12 @@ InboundValue::_table_ = {
     // .baml_bridge.cffi.v1.BamlTyDef ty_def_value = 14;
     {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.ty_def_value_), _Internal::kOneofCaseOffset + 0, 7,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.BamlValueMedia media_value = 15;
+    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.media_value_), _Internal::kOneofCaseOffset + 0, 8,
+    (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.BamlValuePromptAst prompt_ast_value = 16;
+    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.prompt_ast_value_), _Internal::kOneofCaseOffset + 0, 9,
+    (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
@@ -750,9 +834,11 @@ InboundValue::_table_ = {
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlHandle>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyDef>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlValueMedia>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlValuePromptAst>()},
   }},
   {{
-    "\40\0\14\0\0\0\0\0\0\0\0\0\14\0\0\0"
+    "\40\0\14\0\0\0\0\0\0\0\0\0\14\0\0\0\0\0\0\0\0\0\0\0"
     "baml_bridge.cffi.v1.InboundValue"
     "string_value"
     "bigint_value"
@@ -878,6 +964,18 @@ PROTOBUF_NOINLINE void InboundValue::Clear() {
           stream);
       break;
     }
+    case kMediaValue: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          15, *this_._impl_.value_.media_value_, this_._impl_.value_.media_value_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kPromptAstValue: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          16, *this_._impl_.value_.prompt_ast_value_, this_._impl_.value_.prompt_ast_value_->GetCachedSize(), target,
+          stream);
+      break;
+    }
     default:
       break;
   }
@@ -987,6 +1085,18 @@ PROTOBUF_NOINLINE void InboundValue::Clear() {
     case kTyDefValue: {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.value_.ty_def_value_);
+      break;
+    }
+    // .baml_bridge.cffi.v1.BamlValueMedia media_value = 15;
+    case kMediaValue: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.value_.media_value_);
+      break;
+    }
+    // .baml_bridge.cffi.v1.BamlValuePromptAst prompt_ast_value = 16;
+    case kPromptAstValue: {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.value_.prompt_ast_value_);
       break;
     }
     case VALUE_NOT_SET: {
@@ -1116,6 +1226,22 @@ void InboundValue::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::go
           _this->_impl_.value_.ty_def_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.ty_def_value_);
         } else {
           _this->_impl_.value_.ty_def_value_->CheckTypeAndMergeFrom(*from._impl_.value_.ty_def_value_);
+        }
+        break;
+      }
+      case kMediaValue: {
+        if (oneof_needs_init) {
+          _this->_impl_.value_.media_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.media_value_);
+        } else {
+          _this->_impl_.value_.media_value_->CheckTypeAndMergeFrom(*from._impl_.value_.media_value_);
+        }
+        break;
+      }
+      case kPromptAstValue: {
+        if (oneof_needs_init) {
+          _this->_impl_.value_.prompt_ast_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.prompt_ast_value_);
+        } else {
+          _this->_impl_.value_.prompt_ast_value_->CheckTypeAndMergeFrom(*from._impl_.value_.prompt_ast_value_);
         }
         break;
       }

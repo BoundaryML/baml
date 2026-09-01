@@ -1282,7 +1282,7 @@ impl<'a> Parser<'a> {
 
     /// [`at_top_level_keyword`] minus tokens that are valid in statement position:
     /// - `client` can start `client.method(...)` (parameter named `client`)
-    /// - `test` with a string literal is an expression-body test (valid in blocks)
+    /// - `test` starts an expression-body test (valid in blocks)
     /// - `testset` with a string literal is a testset declaration (valid in blocks)
     fn at_top_level_keyword_except_client(&self) -> bool {
         if !self.at_top_level_keyword() {
@@ -1292,9 +1292,7 @@ impl<'a> Parser<'a> {
             return false;
         }
         // Expression-body test/testset are valid inside block expressions
-        if (self.at(TokenKind::Test) && self.looks_like_test_expr_body())
-            || self.at(TokenKind::TestSet)
-        {
+        if self.at(TokenKind::Test) || self.at(TokenKind::TestSet) {
             return false;
         }
         true
@@ -1558,6 +1556,47 @@ impl<'a> Parser<'a> {
         if self.at(TokenKind::Word) {
             self.bump(); // type name
         }
+        self.skip_balanced_braces();
+        self.finish_node();
+        true
+    }
+
+    /// Recover from a legacy `test Name { ... }` declaration. Tests now use
+    /// expression bodies and quoted names. Emits E0098 and consumes the whole
+    /// declaration inside an ERROR node so invalid config contents do not
+    /// produce cascading diagnostics.
+    fn try_recover_removed_legacy_test(&mut self) -> bool {
+        let starts_legacy_config = self.peek(3).is_some_and(|token| {
+            token.kind == TokenKind::Word
+                && match token.text.as_str() {
+                    "functions" => self.peek(4).is_some_and(|next| {
+                        matches!(next.kind, TokenKind::LBracket | TokenKind::Colon)
+                    }),
+                    "args" | "type_builder" => self.peek(4).is_some_and(|next| {
+                        matches!(next.kind, TokenKind::LBrace | TokenKind::Colon)
+                    }),
+                    _ => false,
+                }
+        });
+        if !self.at(TokenKind::Test)
+            || self.peek(1).map(|token| token.kind) != Some(TokenKind::Word)
+            || self.peek(2).map(|token| token.kind) != Some(TokenKind::LBrace)
+            || !starts_legacy_config
+        {
+            return false;
+        }
+
+        let start_span = self.current().map(|token| token.span).unwrap_or_default();
+        let name_span = self.peek(1).map(|token| token.span).unwrap_or(start_span);
+        self.events.push(Event::RemovedFeature {
+            message: "Legacy test declarations were removed. Use an expression-body test with a quoted name, for example: `test \"Name\" { assert.equal(Foo(...), expected) }`."
+                .to_string(),
+            span: Self::span_from_to(start_span, name_span),
+        });
+
+        self.start_node(SyntaxKind::ERROR);
+        self.bump();
+        self.bump();
         self.skip_balanced_braces();
         self.finish_node();
         true
@@ -4577,7 +4616,7 @@ impl<'a> Parser<'a> {
             self.parse_throw_stmt();
         } else if self.at(TokenKind::Defer) {
             self.parse_defer_stmt();
-        } else if self.at(TokenKind::Test) && self.looks_like_test_expr_body() {
+        } else if self.at(TokenKind::Test) {
             if self.testset_body_depth > 0 {
                 self.parse_test_expr();
             } else {
@@ -6238,15 +6277,18 @@ impl<'a> Parser<'a> {
                 }
             } else if op == TokenKind::At
                 && !self.has_newline_ahead()
-                && self
-                    .peek(1)
-                    .is_some_and(|t| t.kind == TokenKind::Word && t.text == "spec")
+                && self.peek(1).is_some_and(|t| {
+                    t.kind == TokenKind::Word
+                        && matches!(
+                            t.text.as_str(),
+                            "spec" | "stream" | "render_prompt" | "build_request" | "parse"
+                        )
+                })
             {
-                // Postfix `@spec` on an LLM function reference: `MyFunc@spec(...)`.
-                // Wraps the base expression in a SPEC_EXPR; AST lowering renames
-                // the path's last segment to the `<name>$spec` companion. The
-                // no-newline guard mirrors the tagged-template rule so an
-                // attribute at the start of the next line is never absorbed.
+                // Postfix companion reference, such as `MyFunc@spec(...)` or
+                // `MyFunc@parse(...)`. AST lowering turns it into the ordinary
+                // internal callable FQN. The no-newline guard mirrors the tagged
+                // template rule so a next-line attribute is never absorbed.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::SPEC_EXPR);
                 self.bump(); // @
@@ -8067,89 +8109,6 @@ impl<'a> Parser<'a> {
 
     // ============ Test Parsing ============
 
-    /// Parse a test declaration
-    pub(crate) fn parse_test(&mut self) {
-        self.with_node(SyntaxKind::TEST_DEF, |p| {
-            // 'test' keyword
-            p.expect(TokenKind::Test);
-
-            // Test name
-            let test_name = if p.at(TokenKind::Word) {
-                let name = p.current().map(|t| t.text.clone());
-                p.bump();
-                name
-            } else {
-                p.error_unexpected_token("test name".to_string());
-                None
-            };
-
-            // Check for unnecessary parentheses and emit helpful hint
-            if p.at(TokenKind::LParen) {
-                let name = test_name.as_deref().unwrap_or("Name");
-                let start_span = p.current().map(|t| t.span).unwrap();
-                p.bump(); // consume (
-                let end_span = if p.at(TokenKind::RParen) {
-                    let span = p.current().map(|t| t.span).unwrap();
-                    p.bump(); // consume )
-                    span
-                } else {
-                    start_span
-                };
-                let span = baml_base::Span::new(
-                    start_span.file_id,
-                    TextRange::new(start_span.range.start(), end_span.range.end()),
-                );
-                p.error(
-                    format!("remove parentheses from test name: `test {name}`"),
-                    span,
-                );
-            }
-
-            // Config block
-            if p.at(TokenKind::LBrace) {
-                p.parse_config_block();
-            } else {
-                p.error_unexpected_token("test body".to_string());
-            }
-        });
-    }
-
-    /// Check if the current test looks like an expression-body test (new-style).
-    ///
-    /// Old-style: `test Name { functions [...] ... }` — config block
-    /// New-style: `test <expr> [with <expr>] { ... }` — expression body
-    ///
-    /// We detect the old style and default to new style otherwise, so that
-    /// any expression (string concat, function calls, etc.) works as a test name.
-    fn looks_like_test_expr_body(&self) -> bool {
-        let Some(next) = self.peek(1) else {
-            return true;
-        };
-        // Old-style is only: `test Name { functions ...}` or `test Name { type_builder ...}`
-        // (`type_builder` is legacy BEP-066 syntax; routing it to config-block
-        // parsing surfaces the targeted E0098 removed-feature error there.)
-        // There is no old-style form with parens — `test Name(...)` was never valid old-style
-        // syntax (the old parser just emits a "remove parentheses" error).
-        if next.kind == TokenKind::Word {
-            if let Some(after_word) = self.peek(2) {
-                if after_word.kind == TokenKind::LBrace {
-                    // Peek inside the brace: `test Name { functions` or
-                    // `test Name { type_builder`. The latter is legacy
-                    // BEP-066 syntax that must reach config-block recovery so
-                    // it produces the targeted removed-feature diagnostic.
-                    if let Some(inside) = self.peek(3) {
-                        if inside.kind == TokenKind::Word
-                            && (inside.text == "functions" || inside.text == "type_builder")
-                        {
-                            return false; // old-style config block
-                        }
-                    }
-                }
-            }
-        }
-        true
-    }
-
     /// Parse an expression-body test: `test <name_expr> [with expr] { body }`
     ///
     /// The name is any expression that type-checks as a string, e.g.:
@@ -8417,10 +8376,8 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
         } else if parser.at(TokenKind::Generator) {
             parser.parse_generator();
         } else if parser.at(TokenKind::Test) {
-            if parser.looks_like_test_expr_body() {
+            if !parser.try_recover_removed_legacy_test() {
                 parser.parse_test_expr();
-            } else {
-                parser.parse_test();
             }
         } else if parser.at(TokenKind::TestSet) {
             parser.parse_testset();
@@ -8558,6 +8515,31 @@ mod tests {
         ] {
             assert_removed_feature_recovery(source, expected_message);
         }
+    }
+
+    #[test]
+    fn removed_legacy_tests_recover_without_cascading() {
+        for source in [
+            "test OldStyle {\n  functions [Foo]\n  args { value 1 }\n}\nfunction After() -> int { 1 }\n",
+            "test ArgsFirst {\n  args { value 1 }\n  functions [Foo]\n}\nfunction After() -> int { 1 }\n",
+            "test BuilderFirst {\n  type_builder { class Foo { value int } }\n  functions [Foo]\n}\nfunction After() -> int { 1 }\n",
+        ] {
+            assert_removed_feature_recovery(source, "Legacy test declarations were removed");
+        }
+    }
+
+    #[test]
+    fn expression_body_tests_can_use_identifier_names() {
+        let source = r#"
+testset "dynamic" {
+  let name = "case"
+  test name { assert.is_true(true) }
+  test name { args() }
+  test name { functions() }
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
     }
 
     /// A run of hashes at EOF (an incomplete raw string like `##`) must
@@ -9457,11 +9439,6 @@ client<llm> TestClient {
   }
 }
 
-test Legacy {
-  //# test config
-  functions []
-}
-
 function llm_body() -> string {
   client: TestClient
   //# llm fields
@@ -9478,7 +9455,7 @@ function executable() -> int {
 
         assert_eq!(
             errors.len(),
-            8,
+            7,
             "every non-expression header should produce one diagnostic: {errors:#?}"
         );
         assert!(errors.iter().all(|error| {
@@ -9504,7 +9481,7 @@ function executable() -> int {
                     )
                 })
                 .count(),
-            8,
+            7,
             "non-expression headers should be ordinary line-comment trivia"
         );
     }

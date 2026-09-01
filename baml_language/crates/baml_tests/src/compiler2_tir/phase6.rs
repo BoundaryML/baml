@@ -1252,7 +1252,7 @@ function f(file: baml.fs.File) -> null {
     );
     let ty = expr_type_in_function(&db, file, "f", "read");
     assert!(
-        ty.starts_with("(n: int) -> string throws "),
+        ty.starts_with("(limit: int) -> uint8array | null throws "),
         "expected builtin member value to preserve declared throws, got `{ty}`"
     );
     assert!(

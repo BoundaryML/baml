@@ -221,7 +221,7 @@ fn user.fixtures.reflect_shadowing.package_still_reachable() -> string {
 
     bb1: {
         _4 = copy _2.3;
-        _0 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _4) -> [bb2];
+        _0 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _4) -> [bb2];
     }
 
     bb2: {

@@ -32,7 +32,7 @@ use std::{
     path::PathBuf,
 };
 
-use baml_base::qualified_name::{AI_STREAM_DONE, AI_STREAM_STREAM};
+use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_DONE, AI_STREAM_STREAM};
 use baml_codegen_types::{Function, Symbol, SymbolPool, Ty};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 
@@ -68,6 +68,8 @@ const RUNTIME_OWNED_FQNS: &[&str] = &[
     "baml.media.Audio",
     "baml.media.Video",
     "baml.media.Pdf",
+    "ai.Prompt",
+    AI_FUNCTION_SPEC,
     AI_STREAM_STREAM,
     // The stream-done sentinel is runtime-owned: its body ships in
     // `baml-bridge` as `baml_sdk.ai.stream.Done` and
@@ -1268,6 +1270,54 @@ mod tests {
     }
 
     #[test]
+    fn stream_options_include_client_and_preserve_event_callback_types() {
+        use baml_codegen_types::{
+            CallableParam, CodegenFunctionParamMode, FunctionArgumentDefault,
+        };
+
+        let mut pool = SymbolPool::new();
+        let event = name("vendor", &["ai", "events"], "Event");
+        pool.insert(event.clone(), class_sym(&event, &[], 0));
+        let callback = Ty::Function {
+            params: Box::new([CallableParam {
+                name: None,
+                ty: t_class(event),
+                mode: CodegenFunctionParamMode::Required,
+            }]),
+            ret: Box::new(Ty::Void { attr: a() }),
+            throws: Box::new(Ty::Never { attr: a() }),
+            attr: a(),
+        };
+        pool.insert(
+            name("user", &[], "probe@stream"),
+            Symbol::Function(Function {
+                name: BaseName::new("probe@stream"),
+                generic_params: Vec::new(),
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    injected: true,
+                    name: BaseName::new("on_event"),
+                    docstring: None,
+                    ty: t_opt(callback),
+                    default: Some(FunctionArgumentDefault::Null),
+                }],
+                return_type: t_int(),
+                throws: None,
+                watchers: Vec::new(),
+                origin: origin(1),
+            }),
+        );
+
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("Fns.java")];
+        assert!(file.contains("public probe_stream$Opts client(java.lang.Object v) {"));
+        assert!(file.contains("this.$values.put(\"client\", v);"));
+        assert!(
+            file.contains("this.$values.put(\"on_event\", new baml_bridge.BamlTypedCallable(v")
+        );
+    }
+
+    #[test]
     fn optional_args_instance_method_puts_configurator_last() {
         use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault};
         let mut pool = SymbolPool::new();
@@ -1616,12 +1666,18 @@ mod tests {
         pool.insert(stream.clone(), class_sym(&stream, &[], 1));
         let done = name("ai", &["stream"], "Done");
         pool.insert(done.clone(), class_sym(&done, &[], 2));
+        let prompt = name("ai", &[], "Prompt");
+        pool.insert(prompt.clone(), class_sym(&prompt, &[], 3));
+        let spec = name("ai", &[], "FunctionSpec");
+        pool.insert(spec.clone(), class_sym(&spec, &[], 4));
         let resp = name("baml", &["http"], "Response");
-        pool.insert(resp.clone(), class_sym(&resp, &[], 3));
+        pool.insert(resp.clone(), class_sym(&resp, &[], 5));
         let out = emit_sdk(&pool);
         assert!(!out.contains_key(&PathBuf::from("baml/media/Image.java")));
         assert!(!out.contains_key(&PathBuf::from("vendor/ai/stream/Stream.java")));
         assert!(!out.contains_key(&PathBuf::from("vendor/ai/stream/Done.java")));
+        assert!(!out.contains_key(&PathBuf::from("vendor/ai/Prompt.java")));
+        assert!(!out.contains_key(&PathBuf::from("vendor/ai/FunctionSpec.java")));
         assert!(out.contains_key(&PathBuf::from("baml/http/Response.java")));
     }
 

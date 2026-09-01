@@ -14,10 +14,10 @@ expression: outcome.dump
 494..495 '2': 2
 520..521 's': string
 534..540 'tagged': throws never
-563..704 '{\n   ...  0\n}': 0
-569..579 'let render': (ai.Context) -> ai.Prompt throws never
-582..588 'prompt': (body: (role: (string) -> ai.Role throws never, ctx: ai.Context) -> baml.TaggedString throws never) -> ((ai.Context) -> ai.Prompt throws never) throws never
-582..641 'prompt...)}Hi!`': (ai.Context) -> ai.Prompt throws never
+563..726 '{\n   ...  0\n}': 0
+569..579 'let render': (ai.Context) -> ai.Prompt throws ai.errors.PromptRenderError
+582..588 'prompt': (body: (role: (string) -> ai.Role throws never, ctx: ai.Context) -> baml.TaggedString throws never) -> ((ai.Context) -> ai.Prompt throws ai.errors.PromptRenderError) throws never
+582..641 'prompt...)}Hi!`': (ai.Context) -> ai.Prompt throws ai.errors.PromptRenderError
 590..606 '{role(...tem")}': ai.Role
 591..595 'role': (string) -> ai.Role throws never
 591..605 'role("system")': ai.Role
@@ -26,4 +26,4 @@ expression: outcome.dump
 624..628 'role': (string) -> ai.Role throws never
 624..636 'role("user")': ai.Role
 629..635 '"user"': "user"
-701..702 '0': 0
+723..724 '0': 0

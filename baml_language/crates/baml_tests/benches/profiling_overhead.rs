@@ -12,7 +12,7 @@
 //!
 use std::{path::Path, sync::Arc, time::Duration};
 
-use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
+use baml_compiler2_emit::generate_project_bytecode;
 use baml_db::ProjectDatabase;
 use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, FunctionCallContextBuilder, logger::TraceLogger};
@@ -54,13 +54,7 @@ fn compile_source(
     let mut db = ProjectDatabase::new();
     db.workspace(Path::new("."));
     db.file("bench.baml", source);
-    let bytecode = generate_project_bytecode(
-        &db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-    )
-    .expect("benchmark compilation failed");
+    let bytecode = generate_project_bytecode(&db).expect("benchmark compilation failed");
     let store = tempfile::Builder::new()
         .prefix("baml-profiling-overhead-bench-")
         .tempdir()
@@ -226,11 +220,11 @@ fn logging_only_one_record(bencher: Bencher) {
 }
 
 const ONE_WAIT_PER_CALL_SOURCE: &str = r#"
-    function waited() -> int throws unknown {
+    function waited() -> int {
         baml.sys.sleep(baml.time.Duration.from_nanoseconds(0n));
         1
     }
-    function main() -> int throws unknown {
+    function main() -> int {
         let sum = 0;
         for (let i = 0; i < 100; i += 1) { sum += waited(); };
         sum
@@ -238,7 +232,7 @@ const ONE_WAIT_PER_CALL_SOURCE: &str = r#"
 "#;
 
 const MANY_WAITS_PER_CALL_SOURCE: &str = r#"
-    function waited() -> int throws unknown {
+    function waited() -> int {
         baml.sys.sleep(baml.time.Duration.from_nanoseconds(0n));
         baml.sys.sleep(baml.time.Duration.from_nanoseconds(0n));
         baml.sys.sleep(baml.time.Duration.from_nanoseconds(0n));
@@ -251,7 +245,7 @@ const MANY_WAITS_PER_CALL_SOURCE: &str = r#"
         baml.sys.sleep(baml.time.Duration.from_nanoseconds(0n));
         10
     }
-    function main() -> int throws unknown {
+    function main() -> int {
         let sum = 0;
         for (let i = 0; i < 10; i += 1) { sum += waited(); };
         sum

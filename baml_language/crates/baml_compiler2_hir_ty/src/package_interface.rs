@@ -439,7 +439,7 @@ fn external_target<'db>(
             interface: crate::lower::interface_qualified_name(db, interface),
             method: name,
         },
-        Some(MethodOwner::FreeImpl(_)) => crate::lower::owner_impl_target(db, function, frame)
+        Some(MethodOwner::Impl(_)) => crate::lower::owner_impl_target(db, function, frame)
             .map(|target| ExternalCallTarget::Interface {
                 interface: target.name,
                 method: name.clone(),
@@ -1037,7 +1037,7 @@ fn exported_impls<'db>(
 
     let mut rows = Vec::new();
     for &block in crate::impls::package_impl_locs(db, pkg_id) {
-        let Some(facts) = crate::impls::impl_facts(db, block) else {
+        let Some(facts) = crate::impls::impl_facts(db, block).resolved() else {
             continue;
         };
         let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
@@ -1556,7 +1556,6 @@ fn def_to_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, def: Definition<'db>) ->
         Definition::Function(_)
         | Definition::TemplateString(_)
         | Definition::Client(_)
-        | Definition::Test(_)
         | Definition::RetryPolicy(_)
         | Definition::Let(_) => return None,
     };
@@ -1590,7 +1589,6 @@ fn def_to_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, def: Definition<'db>) ->
         Definition::Function(_)
         | Definition::TemplateString(_)
         | Definition::Client(_)
-        | Definition::Test(_)
         | Definition::RetryPolicy(_)
         | Definition::Let(_) => None,
     }

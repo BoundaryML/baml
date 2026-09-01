@@ -41,9 +41,10 @@ use std::{
 use baml_db::{
     ProjectDatabase, SourceFile,
     baml_compiler2_emit::{
-        CompileOptions, LoweringError, OptLevel, decompose_units, generate_project_bytecode,
-        generate_project_bytecode_with_reuse_artifacts, generate_project_bytecode_with_stdlib,
-        generate_stdlib_program, reuse_throws_mismatches,
+        LoweringError, OptLevel, generate_project_bytecode,
+        generate_project_bytecode_with_reuse_artifacts,
+        generate_project_bytecode_with_stdlib_artifacts, generate_stdlib_program,
+        reuse_throws_mismatches,
     },
     baml_compiler2_hir, baml_compiler2_ppir,
 };
@@ -114,14 +115,11 @@ pub(crate) struct CacheContext {
     /// list), derived from `key` — a warm `--list` serves it and skips engine
     /// boot + in-VM discovery entirely.
     test_discovery_key: CacheKey,
-    /// Whether test cases are emitted — needed to decompose a full compile back
-    /// into independently persisted units.
-    emit_test_cases: bool,
 }
 
 impl CacheContext {
     /// `None` when caching is disabled via `BAML_NO_BYTECODE_CACHE=1`.
-    pub(crate) fn open(resolved: &ResolvedProject, emit_test_cases: bool) -> Option<Self> {
+    pub(crate) fn open(resolved: &ResolvedProject) -> Option<Self> {
         if env_flag("BAML_NO_BYTECODE_CACHE") {
             return None;
         }
@@ -145,7 +143,6 @@ impl CacheContext {
         let key = compute_key(&KeyInputs {
             compiler_fingerprint: fingerprint,
             opt_level: CLI_OPT_LEVEL as u8,
-            emit_test_cases,
             manifest: resolved.manifest.as_deref(),
             files: &files,
         });
@@ -159,12 +156,10 @@ impl CacheContext {
             manifest_key: manifest_key(
                 &fingerprint,
                 CLI_OPT_LEVEL as u8,
-                emit_test_cases,
                 &resolved.root,
                 resolved.manifest.as_deref(),
             ),
             test_discovery_key: test_discovery_key(key.as_bytes()),
-            emit_test_cases,
         })
     }
 
@@ -411,20 +406,6 @@ impl CacheContext {
     }
 }
 
-/// One legacy (`function + test` block) test as it appears in `baml test --list`
-/// output — the render inputs, decoupled from the Rust-side `LegacyTest` so the
-/// cache payload does not depend on `test_command.rs`'s private type.
-#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
-pub(crate) struct CachedLegacyTest {
-    pub(crate) function_name: String,
-    pub(crate) test_name: String,
-    /// Public root-qualified test id. Adding this field intentionally makes
-    /// older discovery blobs fail Borsh decoding and fall back to discovery.
-    pub(crate) canonical_id: String,
-    /// Project-root-relative display path (the `--list` `(path)` suffix).
-    pub(crate) file_path: String,
-}
-
 /// The cached `baml test --list` **discovery output**: everything a `--list`
 /// invocation renders, in the exact order it renders it, *unfiltered* so any
 /// `-i`/`-x` selection is served from one entry (the filter is re-applied live
@@ -442,8 +423,6 @@ pub(crate) struct CachedLegacyTest {
 /// discovery that completed without error.
 #[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub(crate) struct TestDiscovery {
-    /// Legacy function-attached tests, unfiltered, in discovery order.
-    pub(crate) legacy: Vec<CachedLegacyTest>,
     /// Fully-expanded testset leaf names (canonical `root...::...` ids), unfiltered, in
     /// `collect_leaf_names` order.
     pub(crate) testset_leaf_names: Vec<String>,
@@ -509,15 +488,6 @@ impl CacheContext {
         cached: &TestDiscovery,
         honest: &TestDiscovery,
     ) -> anyhow::Result<()> {
-        if cached.legacy != honest.legacy {
-            anyhow::bail!(
-                "BAML_CACHE_VERIFY: cached `test --list` legacy-test discovery differs from a \
-                 fresh discovery ({} vs {} tests). Test discovery is nondeterministic or reads \
-                 uncached state — please report this.",
-                cached.legacy.len(),
-                honest.legacy.len(),
-            );
-        }
         if cached.testset_leaf_names != honest.testset_leaf_names {
             anyhow::bail!(
                 "BAML_CACHE_VERIFY: cached `test --list` testset discovery differs from a fresh \
@@ -565,16 +535,27 @@ fn extract_stdlib_interface(db: &ProjectDatabase) -> std::collections::BTreeMap<
 /// it fresh; a failed write just means rebuilding it next run.
 pub(crate) fn compile_program(
     db: &ProjectDatabase,
-    options: &CompileOptions,
     cache: Option<&CacheContext>,
     plan: Option<&ReusePlan>,
 ) -> Result<Program, LoweringError> {
-    compile_program_artifacts(db, options, cache, plan).map(|artifacts| artifacts.program)
+    compile_program_artifacts(db, cache, plan).map(|artifacts| artifacts.program)
 }
 
 pub(crate) struct CompiledArtifacts {
     pub(crate) program: Program,
-    pub(crate) units: Option<Vec<CompilationUnit>>,
+    pub(crate) units: CompiledUnits,
+}
+
+/// How a compile's symbolic units came to be — the store path persists fresh
+/// units for every file but may keep a reuse plan's unit-key POINTERS for
+/// clean files when the units were carried through a successful reuse.
+pub(crate) enum CompiledUnits {
+    /// Cache-less compile: units were never assembled (nothing stores them).
+    None,
+    /// Fresh full/splice compile: freshly decomposed alongside the program.
+    Fresh(Vec<CompilationUnit>),
+    /// Successful reuse compile: clean units carried from the plan.
+    Reused(Vec<CompilationUnit>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -585,14 +566,13 @@ pub(crate) struct CacheStoreStats {
 
 pub(crate) fn compile_program_artifacts(
     db: &ProjectDatabase,
-    options: &CompileOptions,
     cache: Option<&CacheContext>,
     plan: Option<&ReusePlan>,
 ) -> Result<CompiledArtifacts, LoweringError> {
     let Some(ctx) = cache else {
-        return generate_project_bytecode(db, options).map(|program| CompiledArtifacts {
+        return generate_project_bytecode(db).map(|program| CompiledArtifacts {
             program,
-            units: None,
+            units: CompiledUnits::None,
         });
     };
     let base = match ctx.cache.load_shared(&ctx.stdlib_key) {
@@ -606,7 +586,6 @@ pub(crate) fn compile_program_artifacts(
     if let Some(plan) = plan {
         match generate_project_bytecode_with_reuse_artifacts(
             db,
-            options,
             CLI_OPT_LEVEL,
             &base,
             &plan.prev_units,
@@ -615,7 +594,7 @@ pub(crate) fn compile_program_artifacts(
             Ok((program, units)) => {
                 return Ok(CompiledArtifacts {
                     program,
-                    units: Some(units),
+                    units: CompiledUnits::Reused(units),
                 });
             }
             // A real compile error must surface — it is not a reuse problem.
@@ -628,12 +607,12 @@ pub(crate) fn compile_program_artifacts(
             }
         }
     }
-    generate_project_bytecode_with_stdlib(db, options, CLI_OPT_LEVEL, &base).map(|program| {
-        CompiledArtifacts {
+    generate_project_bytecode_with_stdlib_artifacts(db, CLI_OPT_LEVEL, &base).map(
+        |(program, units)| CompiledArtifacts {
             program,
-            units: None,
-        }
-    })
+            units: CompiledUnits::Fresh(units),
+        },
+    )
 }
 
 /// The per-file reuse decision for one compile: which files' compiled
@@ -1032,7 +1011,7 @@ fn file_has_impl_construct(db: &ProjectDatabase, file: SourceFile) -> bool {
 /// A file whose bytecode bakes a type's *layout* through a non-`Object`
 /// operand (field offsets, enum discriminants, virtual-dispatch slots) also
 /// gets the `LAYOUT_SENTINEL` — see `bakes_type_layout`. The bytecode set is
-/// unioned with `syntactic_type_names` in `store_with_manifest`, so both
+/// unioned with `syntactic_type_names` in `store_artifacts_with_manifest`, so both
 /// desugared-reference coverage and source-level type dependencies are kept.
 fn referenced_names_by_file(program: &Program) -> HashMap<String, Vec<String>> {
     let mut slot_names: HashMap<usize, &str> = HashMap::new();
@@ -1622,40 +1601,16 @@ impl CacheContext {
     /// checked (dirty or degraded), by rel_path. Per file the manifest takes its
     /// fresh blob if present, else the plan's carried clean blob, else an empty
     /// blob — so a re-checked file always overwrites a stale/poison carry.
-    pub(crate) fn store_with_manifest(
-        &self,
-        db: &ProjectDatabase,
-        program: &Program,
-        fresh_by_file: &std::collections::BTreeMap<String, Vec<u8>>,
-        plan: Option<&ReusePlan>,
-    ) -> std::io::Result<CacheStoreStats> {
-        self.store_artifacts_with_manifest(db, program, None, fresh_by_file, plan)
-    }
-
     pub(crate) fn store_artifacts_with_manifest(
         &self,
         db: &ProjectDatabase,
         program: &Program,
-        units: Option<&[CompilationUnit]>,
+        units: &[CompilationUnit],
+        reused_units: bool,
         fresh_by_file: &std::collections::BTreeMap<String, Vec<u8>>,
         plan: Option<&ReusePlan>,
     ) -> std::io::Result<CacheStoreStats> {
         self.store(program)?;
-
-        let reused_units = units.is_some();
-        let owned_units;
-        let units = match units {
-            Some(units) => units,
-            None => {
-                let options = CompileOptions {
-                    emit_test_cases: self.emit_test_cases,
-                };
-                owned_units = decompose_units(db, &options, program).map_err(|error| {
-                    std::io::Error::other(format!("unit decomposition failed: {error}"))
-                })?;
-                &owned_units
-            }
-        };
 
         let mut units_by_source = HashMap::with_capacity(units.len());
         for unit in units {
@@ -1819,10 +1774,27 @@ impl CacheContext {
         self.verify_diagnostics(db)?;
         self.verify_stdlib_diagnostics(db)?;
         self.verify_callable_throws_fragments(db)?;
+        let (units, reused_units) = match &compiled.units {
+            CompiledUnits::Fresh(units) => (units.as_slice(), false),
+            CompiledUnits::Reused(units) => (units.as_slice(), true),
+            CompiledUnits::None => {
+                // Every cached compile assembles units alongside the program;
+                // reaching a cache store without them is a programmer error.
+                // The compile itself succeeded, so release builds degrade to
+                // an uncached run — the file's convention for store failures
+                // — but LOUDLY on the debug channel, never silently.
+                debug_assert!(false, "cached compile stored without assembled units");
+                cache_debug(format_args!(
+                    "cache store skipped: compile produced no assembled units"
+                ));
+                return Ok(());
+            }
+        };
         if let Err(e) = self.store_artifacts_with_manifest(
             db,
             &compiled.program,
-            compiled.units.as_deref(),
+            units,
+            reused_units,
             fresh,
             plan,
         ) {
@@ -1956,7 +1928,7 @@ impl CacheContext {
             std::collections::BTreeMap::new()
         };
         // Ensure every re-checked user file has an entry (empty if it produced
-        // no diagnostics) so `store_with_manifest` overwrites a stale/poison
+        // no diagnostics) so `store_artifacts_with_manifest` overwrites a stale/poison
         // carry for a degraded-but-now-clean file rather than re-carrying it.
         if persist_fresh {
             for (sf, rel) in user_files_with_rel_paths(db) {
@@ -2455,7 +2427,7 @@ mod tests {
 
     use super::*;
     use crate::cache_test_support::{
-        cache_disabled, compile_and_store_v1, dirty_basenames, opts, resolved, unique_root,
+        cache_disabled, compile_and_store_v1, dirty_basenames, resolved, unique_root,
     };
 
     /// A unique on-disk root for a `bytecode_cache` disk-round-trip test.
@@ -2519,7 +2491,7 @@ mod tests {
 
         let r2 = resolved(&root, edited);
         let db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
         let plan = ctx2.plan_reuse(&db2).expect("reuse plan available");
 
         let dirty = dirty_basenames(&plan.dirty_files, &db2);
@@ -2556,7 +2528,7 @@ mod tests {
         // v2 served path: plan reuse, seed exactly as the CLI does, relink.
         let r2 = resolved(&root, edited);
         let mut db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
         let pending_plan = ctx2.plan_reuse(&db2);
         let seeded = pending_plan
             .as_ref()
@@ -2565,13 +2537,12 @@ mod tests {
             .map(|path| basename(path))
             .collect();
         let plan = prepare_reuse_plan(&mut db2, pending_plan).expect("reuse plan available");
-        let relinked =
-            compile_program(&db2, &opts(), Some(&ctx2), Some(&plan)).expect("relink compile");
+        let relinked = compile_program(&db2, Some(&ctx2), Some(&plan)).expect("relink compile");
 
         // v2 honest path: an independent fresh database, no reuse plan — the
         // stdlib-spliced full compile the relink must reproduce byte-for-byte.
         let db_full = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let full = compile_program(&db_full, &opts(), Some(&ctx2), None).expect("full compile");
+        let full = compile_program(&db_full, Some(&ctx2), None).expect("full compile");
         let byte_identical = borsh::to_vec(&relinked).expect("ser relink")
             == borsh::to_vec(&full).expect("ser full");
 
@@ -2601,7 +2572,7 @@ mod tests {
 
         let r2 = resolved(&root, edited);
         let mut db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
         let pending_plan = ctx2.plan_reuse(&db2);
         let seeded = pending_plan
             .as_ref()
@@ -2620,9 +2591,8 @@ mod tests {
         let honest = baml_db::collect_compiler2_diagnostics(&db_honest);
         let diags_match = diagnostic_sets_equal(&served, &honest);
 
-        let relinked =
-            compile_program(&db2, &opts(), Some(&ctx2), Some(&plan)).expect("relink compile");
-        let full = compile_program(&db_honest, &opts(), Some(&ctx2), None).expect("full compile");
+        let relinked = compile_program(&db2, Some(&ctx2), Some(&plan)).expect("relink compile");
+        let full = compile_program(&db_honest, Some(&ctx2), None).expect("full compile");
         let byte_identical = borsh::to_vec(&relinked).expect("ser relink")
             == borsh::to_vec(&full).expect("ser full");
 
@@ -3260,7 +3230,7 @@ mod tests {
         // boundary is dirty (skipped), the truly-clean files are unchanged.
         let r2 = resolved(&root, &edited);
         let db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
         ctx2.check_cached_diagnostics_against_fresh(&db2).expect(
             "the diagnostics oracle must not bail on a content-unchanged file that \
              the cascade dirtied (it is re-checked, never served stale)",
@@ -3355,7 +3325,7 @@ mod tests {
         // A faithful fragment cache passes the oracle (all files content-clean).
         let r = resolved(&root, &files);
         let db2 = crate::project_load::build_db_from_sources(&r, |_| {});
-        let ctx2 = CacheContext::open(&r, false).expect("cache reopens");
+        let ctx2 = CacheContext::open(&r).expect("cache reopens");
         ctx2.check_callable_throws_fragments_against_honest(&db2)
             .expect("faithful fragments pass the oracle");
 
@@ -3467,7 +3437,7 @@ mod tests {
 
         let r2 = resolved(&root, &edited);
         let mut db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
         let mut plan = ctx2.plan_reuse(&db2).expect("partial reuse available");
         assert!(plan.clean_files.contains("a.baml"));
         let stable_unit = plan
@@ -3544,8 +3514,12 @@ mod tests {
              function diff(p: Point) -> int {\n  p.x - p.y\n}\n",
         )]);
         let base = generate_stdlib_program(&db, CLI_OPT_LEVEL).expect("stdlib compiles");
-        let program = generate_project_bytecode_with_stdlib(&db, &opts(), CLI_OPT_LEVEL, &base)
-            .expect("project compiles");
+        let program = baml_db::baml_compiler2_emit::generate_project_bytecode_with_stdlib(
+            &db,
+            CLI_OPT_LEVEL,
+            &base,
+        )
+        .expect("project compiles");
         let refs = referenced_names_by_file(&program);
         let a = refs.get("a.baml").expect("a.baml has referenced names");
         assert!(
@@ -3604,7 +3578,7 @@ mod tests {
 
         let r = resolved(&root, &edited);
         let mut db2 = crate::project_load::build_db_from_sources(&r, |_| {});
-        let ctx2 = CacheContext::open(&r, false).expect("cache reopens");
+        let ctx2 = CacheContext::open(&r).expect("cache reopens");
         let pending = ctx2.plan_reuse(&db2).expect("partial reuse survives");
         let dirty = dirty_basenames(&pending.dirty_files, &db2);
         assert_eq!(
@@ -3616,13 +3590,13 @@ mod tests {
         let plan = prepare_reuse_plan(&mut db2, Some(pending)).expect("reuse plan");
         let _ = baml_db::baml_compiler2_emit::take_lowered_files();
         let relinked =
-            compile_program(&db2, &opts(), Some(&ctx2), Some(&plan)).expect("incremental compile");
+            compile_program(&db2, Some(&ctx2), Some(&plan)).expect("incremental compile");
         let mut lowered = baml_db::baml_compiler2_emit::take_lowered_files();
         lowered.sort();
         assert_eq!(lowered, vec!["b.baml".to_string(), "c.baml".to_string()]);
 
         let honest_db = crate::project_load::build_db_from_sources(&r, |_| {});
-        let full = compile_program(&honest_db, &opts(), Some(&ctx2), None).expect("full compile");
+        let full = compile_program(&honest_db, Some(&ctx2), None).expect("full compile");
         assert_eq!(
             borsh::to_vec(&relinked).expect("serialize relink"),
             borsh::to_vec(&full).expect("serialize full")
@@ -3649,33 +3623,42 @@ mod tests {
 
         let r1 = resolved(&root, &initial);
         let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
-        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-        let program1 = compile_program(&db1, &opts(), Some(&ctx1), None).expect("compile");
+        let ctx1 = CacheContext::open(&r1).expect("cache opens");
+        let compiled1 = compile_program_artifacts(&db1, Some(&ctx1), None).expect("compile");
+        let program1 = &compiled1.program;
+        let (CompiledUnits::Fresh(units1) | CompiledUnits::Reused(units1)) = &compiled1.units
+        else {
+            panic!("cached compile assembles units")
+        };
         let fresh1 = ctx1
             .collect_diagnostics_incremental(&db1, None)
             .fresh_by_file;
         let cold_stats = ctx1
-            .store_with_manifest(&db1, &program1, &fresh1, None)
+            .store_artifacts_with_manifest(&db1, program1, units1, false, &fresh1, None)
             .expect("cold store");
         assert_eq!(cold_stats.unit_entries_written, 3);
         assert_eq!(cold_stats.manifest_entries_written, 1);
 
         let r2 = resolved(&root, &edited);
         let mut db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
         let pending = ctx2.plan_reuse(&db2);
         let plan = prepare_reuse_plan(&mut db2, pending).expect("reuse plan");
         assert_eq!(plan.dirty_files.len(), 1);
         let fresh2 = ctx2
             .collect_diagnostics_incremental(&db2, Some(&plan))
             .fresh_by_file;
-        let compiled =
-            compile_program_artifacts(&db2, &opts(), Some(&ctx2), Some(&plan)).expect("compile");
+        let compiled = compile_program_artifacts(&db2, Some(&ctx2), Some(&plan)).expect("compile");
+        let (CompiledUnits::Fresh(units2) | CompiledUnits::Reused(units2)) = &compiled.units else {
+            panic!("cached compile assembles units")
+        };
+        let reused2 = matches!(compiled.units, CompiledUnits::Reused(_));
         let stats = ctx2
             .store_artifacts_with_manifest(
                 &db2,
                 &compiled.program,
-                compiled.units.as_deref(),
+                units2,
+                reused2,
                 &fresh2,
                 Some(&plan),
             )
@@ -3780,20 +3763,6 @@ mod tests {
 
     fn sample_discovery() -> TestDiscovery {
         TestDiscovery {
-            legacy: vec![
-                CachedLegacyTest {
-                    function_name: "Greet".to_string(),
-                    test_name: "hello".to_string(),
-                    canonical_id: "root.Greet::hello".to_string(),
-                    file_path: "greet.baml".to_string(),
-                },
-                CachedLegacyTest {
-                    function_name: "Greet".to_string(),
-                    test_name: "world".to_string(),
-                    canonical_id: "root.Greet::world".to_string(),
-                    file_path: "greet.baml".to_string(),
-                },
-            ],
             testset_leaf_names: vec![
                 "root::suite::one".to_string(),
                 "root::suite::two".to_string(),
@@ -3812,7 +3781,7 @@ mod tests {
         let root = bc_root();
         let _ = std::fs::remove_dir_all(&root);
         let r = resolved(&root, &[("a.baml", "function f() -> int {\n  1\n}\n")]);
-        let ctx = CacheContext::open(&r, true).expect("cache opens");
+        let ctx = CacheContext::open(&r).expect("cache opens");
 
         assert!(
             ctx.load_test_discovery().is_none(),
@@ -3841,7 +3810,7 @@ mod tests {
         let root = bc_root();
         let _ = std::fs::remove_dir_all(&root);
         let r = resolved(&root, &[("a.baml", "function f() -> int {\n  1\n}\n")]);
-        let ctx = CacheContext::open(&r, true).expect("cache opens");
+        let ctx = CacheContext::open(&r).expect("cache opens");
 
         ctx.cache
             .store_raw(&ctx.test_discovery_key, b"not-a-valid-borsh-TestDiscovery")
@@ -3860,20 +3829,6 @@ mod tests {
         assert!(
             CacheContext::compare_test_discovery(&disco, &disco).is_ok(),
             "a faithful cached discovery must pass the verify core"
-        );
-    }
-
-    #[test]
-    fn compare_test_discovery_bails_on_legacy_mismatch() {
-        // A drifted legacy list is a hard error (the `gocacheverify` signal).
-        let cached = sample_discovery();
-        let mut honest = sample_discovery();
-        honest.legacy.pop();
-        let err = CacheContext::compare_test_discovery(&cached, &honest)
-            .expect_err("a legacy-list mismatch must bail");
-        assert!(
-            err.to_string().contains("legacy-test discovery differs"),
-            "the bail message must name the legacy divergence: {err}"
         );
     }
 
@@ -3958,7 +3913,7 @@ mod tests {
 
         let r = resolved(&root, files);
         let db2 = crate::project_load::build_db_from_sources(&r, |_| {});
-        let ctx2 = CacheContext::open(&r, false).expect("cache reopens");
+        let ctx2 = CacheContext::open(&r).expect("cache reopens");
         let plan = ctx2.plan_reuse(&db2).expect("all-clean reuse plan");
         // The oracle DB must be fresh and un-seeded (no `prepare_reuse_plan`),
         // else the honest re-derivation would return the served seed verbatim.
@@ -4094,7 +4049,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         let r = resolved(&root, &[("a.baml", "function f() -> int {\n  1\n}\n")]);
         let db = crate::project_load::build_db_from_sources(&r, |_| {});
-        let ctx = CacheContext::open(&r, false).expect("cache opens");
+        let ctx = CacheContext::open(&r).expect("cache opens");
 
         let honest = baml_db::collect_compiler2_diagnostics(&db);
 

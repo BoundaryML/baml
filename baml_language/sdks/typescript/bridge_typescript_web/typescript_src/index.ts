@@ -6,6 +6,8 @@ installHostCallableDispatchFactory(makeHostCallableDispatch);
 
 export { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, Collector, FunctionLog, HostSpanManager, Timing, Usage, _seedFunctionRefHandle, _seedGenericMediaHandle, flushEvents, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, newFunctionCall } from "./native.js";
 export { BamlStream } from "./shared/stream.js";
+export { BamlFunctionSpec } from "./shared/function_spec.js";
+export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from "./shared/function_spec.js";
 export { BamlTypeMap, getTypeMap, setTypeMap } from "./shared/typemap.js";
 export { defineFunction, defineInstanceFunction, UNSET } from "./shared/define_function.js";
 export type { GenericParams } from "./shared/define_function.js";
@@ -13,7 +15,8 @@ export { Never, lowerTypeToWireTy } from "./shared/wire_ty.js";
 export { BamlType, reflectType } from "./shared/wire_ty.js";
 export type { BamlClassCtor, BamlInterfaceToken, BamlPrimitiveToken, BamlTypeMetadata, BamlTypeToken } from "./shared/wire_ty.js";
 export { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, wrapNativeError } from "./shared/errors.js";
-export { decodeCallResult, encodeCallArgs } from "./shared/proto.js";
+export { BamlPrompt, decodeCallResult, encodeCallArgs } from "./shared/proto.js";
+export type { BamlPromptCallOptions, BamlPromptMessage } from "./shared/proto.js";
 
 export function initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string): void {
   BamlRuntime.initializeRuntimeFromBytecode(bytecode, embeddedBamlToml);

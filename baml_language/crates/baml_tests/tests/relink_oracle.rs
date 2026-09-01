@@ -15,7 +15,7 @@ mod common;
 use std::collections::HashSet;
 
 use baml_compiler2_emit::{
-    CompileOptions, OptLevel, emit_units, generate_project_bytecode_with_reuse_units,
+    OptLevel, emit_units, generate_project_bytecode_with_reuse_units,
     generate_project_bytecode_with_stdlib, generate_stdlib_program, take_lowered_files,
 };
 use baml_db::ProjectDatabase;
@@ -25,29 +25,16 @@ use common::{A_BAML, B_BAML, C_BAML, assert_programs_byte_identical, build_db};
 const ROOT: &str = "/relink-oracle";
 
 fn compile_full(files: &[(&str, &str)], base: &Program) -> Program {
-    generate_project_bytecode_with_stdlib(
-        &build_db(ROOT, files),
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-        OptLevel::Two,
-        base,
-    )
-    .expect("full compile failed")
+    generate_project_bytecode_with_stdlib(&build_db(ROOT, files), OptLevel::Two, base)
+        .expect("full compile failed")
 }
 
 /// The previous compile's symbolic image: the units the reuse path draws clean
 /// files from (in the CLI this is what `plan_reuse` loads from the cache; here
 /// it is produced in-process by `emit_units` over the previous sources).
 fn prev_units(files: &[(&str, &str)]) -> Vec<CompilationUnit> {
-    emit_units(
-        &build_db(ROOT, files),
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-        OptLevel::Two,
-    )
-    .expect("emit_units for previous compile failed")
+    emit_units(&build_db(ROOT, files), OptLevel::Two)
+        .expect("emit_units for previous compile failed")
 }
 
 fn relink(
@@ -91,17 +78,8 @@ fn relink_with_db(
     clean: &[&str],
 ) -> Program {
     let clean_files: HashSet<String> = clean.iter().map(ToString::to_string).collect();
-    generate_project_bytecode_with_reuse_units(
-        &db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-        OptLevel::Two,
-        base,
-        prev_units,
-        &clean_files,
-    )
-    .expect("relink failed")
+    generate_project_bytecode_with_reuse_units(&db, OptLevel::Two, base, prev_units, &clean_files)
+        .expect("relink failed")
 }
 
 fn assert_relink_matches(
@@ -332,9 +310,6 @@ fn assert_incremental_matches(
     let _ = take_lowered_files();
     let reused = generate_project_bytecode_with_reuse_units(
         &db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
         OptLevel::Two,
         base,
         prev_units,
@@ -488,6 +463,54 @@ fn incremental_dirty_generic_value_shadows_clean() {
         &prev,
         &["gen_a_base.baml", "gen_b_use.baml"],
         &["gen_c_use.baml"],
+    );
+}
+
+/// A CLEAN file declaring an interface WITH a default method body. The fresh
+/// (dirty-only) emit still pools every interface object (Pass 3b has no
+/// skip-clean gate), but the default body's placement is `ReusedClean` — a
+/// past-the-pool placeholder. The default backfill must not write that
+/// placeholder into the pooled interface's `default` operand: decompose's
+/// operand walk indexes `obj_owner[target]` and would panic out of bounds.
+/// The clean unit already carries the real operand, so dropping the backfill
+/// stays byte-identical.
+#[test]
+fn incremental_clean_interface_with_default_body() {
+    const IFACE: &str = r#"interface Greeter {
+  function greet(self) -> string throws never {
+    "hello"
+  }
+}
+
+class Plain {
+  implements Greeter {}
+}
+
+function greet_plain(p: Plain) -> string {
+  p.greet()
+}
+"#;
+    const DIRTY: &str = r#"function dirty_fn() -> int {
+  1
+}
+"#;
+    let files = [("i_iface.baml", IFACE), ("i_dirty.baml", DIRTY)];
+    let base = generate_stdlib_program(&build_db(ROOT, &files), OptLevel::Two).expect("stdlib");
+    let prev = prev_units(&files);
+
+    let dirty_edit = DIRTY.replace("  1\n}", "  2\n}");
+    assert_ne!(dirty_edit, DIRTY, "edit must apply");
+    let edited = [
+        ("i_iface.baml", IFACE),
+        ("i_dirty.baml", dirty_edit.as_str()),
+    ];
+    assert_incremental_matches(
+        "clean interface with default body",
+        &edited,
+        &base,
+        &prev,
+        &["i_iface.baml"],
+        &["i_dirty.baml"],
     );
 }
 

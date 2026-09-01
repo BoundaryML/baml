@@ -27,7 +27,7 @@ use crate::{
     item_tree::{ImplBlock, ImplSubject, InterfaceFieldLink},
     loc::{
         ClassLoc, ClientLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
-        TemplateStringLoc, TestLoc, TypeAliasLoc,
+        TemplateStringLoc, TypeAliasLoc,
     },
     scope::{FileScopeId, ItemScopeOwner, Scope, ScopeId, ScopeKind},
     semantic_index::{
@@ -1394,7 +1394,6 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Item::Enum(e) => self.lower_enum(e),
             ast::Item::TypeAlias(ta) => self.lower_type_alias(ta),
             ast::Item::Client(c) => self.lower_client(c),
-            ast::Item::Test(t) => self.lower_test(t),
             ast::Item::TemplateString(ts) => self.lower_template_string(ts),
             ast::Item::RetryPolicy(rp) => self.lower_retry_policy(rp),
             ast::Item::Let(l) => self.lower_let(l),
@@ -1520,13 +1519,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_diagnostics(seen);
 
         // Walk class methods — inside class scope, so methods won't be
-        // contributed as top-level symbols. We collapse class-level methods
-        // and all `implements I { ... }` method overrides into a single id
-        // list so downstream code (which queries `Class::methods`) sees them
-        // uniformly. Disambiguation of which interface a method satisfies
-        // happens in TIR via `class.implements`.
+        // contributed as top-level symbols. `Class::methods` carries ONLY the
+        // class-level methods: an in-body `implements I { … }` method belongs
+        // to its impl block (the compiler sees no distinction between the
+        // in-class and out-of-body spellings beyond syntax), so those ids
+        // live on the `ImplBlock` and resolve through the impl tier.
         self.class_depth += 1;
-        let mut method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
+        let method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
         for impl_block in &c.implements {
             let mut block_method_ids = Vec::new();
             for m in &impl_block.methods {
@@ -1557,14 +1556,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                     .map(InterfaceFieldLink::from_ast)
                     .collect(),
                 associated_type_bindings: impl_block.associated_type_bindings.clone(),
-                methods: block_method_ids.clone(),
+                methods: block_method_ids,
                 span: impl_block.span,
                 // In-body `implements` blocks don't carry a docstring today —
                 // the AST `ImplementsBlock` has no field for one.
                 docstring: None,
             };
             self.item_tree.alloc_impl(&iface_head, &c.name, block);
-            method_ids.extend(block_method_ids);
         }
         self.class_depth -= 1;
 
@@ -1774,23 +1772,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.push_scope(ScopeKind::Item, Some(c.name.clone()), c.span);
         let scope = self.current_scope_id();
         self.record_scope_owner(scope, ItemScopeOwner::Client(local_id));
-        self.pop_scope();
-    }
-
-    fn lower_test(&mut self, t: &ast::TestDef) {
-        let local_id = self.item_tree.alloc_test(t);
-        let loc = TestLoc::new(self.db, self.file, local_id);
-        self.value_contributions.push((
-            t.name.clone(),
-            Contribution {
-                name_span: t.name_span,
-                definition: Definition::Test(loc),
-            },
-        ));
-
-        self.push_scope(ScopeKind::Item, Some(t.name.clone()), t.span);
-        let scope = self.current_scope_id();
-        self.record_scope_owner(scope, ItemScopeOwner::Test(local_id));
         self.pop_scope();
     }
 

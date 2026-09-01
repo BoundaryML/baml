@@ -16,11 +16,6 @@ function Summarize(input: Input) -> string {
   "#
 }
 
-test BasicTest {
-  functions [Summarize]
-  args {
-    input {
-      text "Hello world"
-    }
-  }
+test "BasicTest" {
+  Summarize(Input { text: "Hello world" })
 }

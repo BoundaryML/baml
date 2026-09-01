@@ -15,14 +15,14 @@ use rustc_hash::FxHashMap;
 use crate::{
     ids::{
         ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker,
-        ItemKind, LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker,
-        TypeAliasMarker, hash_impl_key, hash_name,
+        ItemKind, LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TypeAliasMarker,
+        hash_impl_key, hash_name,
     },
     item_tree::{
         Attribute, Class, ClassField, Client, DefaultExprRef, Enum, EnumVariant, Function,
         FunctionParam, ImplBlock, ImplSubject, ImplementsBlock, Interface, InterfaceFieldLink,
         ItemSpans, ItemTree, ItemTreeSourceMap, Let, MethodOwner, RetryPolicy, TemplateString,
-        Test, TypeAlias,
+        TypeAlias,
     },
 };
 
@@ -195,15 +195,16 @@ impl ItemTreeBuilder {
         match &block.subject {
             ImplSubject::InClass { class, .. } => {
                 self.tree.class_to_impls.entry(*class).or_default().push(id);
-                // No owner recording: in-body impl methods are flattened into
-                // `Class::methods`, so `set_class_methods` owns them.
             }
             ImplSubject::Free { .. } => {
                 self.tree.free_impls.push(id);
-                for method in &block.methods {
-                    self.record_method_owner(*method, MethodOwner::FreeImpl(id));
-                }
             }
+        }
+        // A method belongs to its impl block regardless of where the block
+        // is written — the in-class spelling is pure syntax (TYPE_SYSTEM.md:
+        // "the implementation should use a unified path for both forms").
+        for method in &block.methods {
+            self.record_method_owner(*method, MethodOwner::Impl(id));
         }
         self.tree.impls.insert(id, block);
         id
@@ -380,26 +381,6 @@ impl ItemTreeBuilder {
                 sub_client_names,
                 retry_policy_name,
                 round_robin_start: None,
-            },
-        );
-        id
-    }
-
-    pub fn alloc_test(&mut self, t: &ast::TestDef) -> LocalItemId<TestMarker> {
-        let id = self.alloc_id(ItemKind::Test, &t.name);
-        self.source_map.test_spans.insert(
-            id,
-            ItemSpans {
-                span: t.span,
-                name_span: t.name_span,
-            },
-        );
-        self.tree.tests.insert(
-            id,
-            Test {
-                name: t.name.clone(),
-                function_refs: t.function_refs.clone(),
-                args: t.args.clone(),
             },
         );
         id

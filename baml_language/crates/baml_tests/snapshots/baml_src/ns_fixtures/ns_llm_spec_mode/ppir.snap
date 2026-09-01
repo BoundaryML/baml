@@ -9,55 +9,55 @@ class user.fixtures.llm_spec_mode.Answer$stream {
   text: string | null
 }
 function user.fixtures.llm_spec_mode.NamedTools(q: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> user.fixtures.llm_spec_mode.Answer  [llm] {
-  ai.Agent.new(client = client, on_event = on_event).run(NamedTools$spec(q)).value
+  ai.Agent.new(client = client, on_event = on_event).run(NamedTools@spec(q)).value
 }
-function user.fixtures.llm_spec_mode.NamedTools$build_request(q: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
-  NamedTools$spec(q).build_request(override_client = client)
+function user.fixtures.llm_spec_mode.NamedTools@build_request(q: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  NamedTools@spec(q).build_request(client = client)
 }
-function user.fixtures.llm_spec_mode.NamedTools$parse(json: string) -> user.fixtures.llm_spec_mode.Answer  [expr] {
+function user.fixtures.llm_spec_mode.NamedTools@parse(json: string) -> user.fixtures.llm_spec_mode.Answer  [expr] {
   baml.sap.parse(json)
 }
-function user.fixtures.llm_spec_mode.NamedTools$render_prompt(q: string) -> ai.Prompt  [expr] {
-  NamedTools$spec(q).prompt()
+function user.fixtures.llm_spec_mode.NamedTools@render_prompt(q: string) -> ai.Prompt  [expr] {
+  NamedTools@spec(q).prompt()
 }
-function user.fixtures.llm_spec_mode.NamedTools$spec(q: string) -> ai.FunctionSpec<user.fixtures.llm_spec_mode.Answer>  [expr] {
-  ai.FunctionSpec { spec_name: "NamedTools", args: map { "q": q }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } q);  __tt_cur =  __tt_cur Add "\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format());  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new(more_tools()), default_client: anthropic.AnthropicClient.new(model = "claude-haiku-4-5") }
+function user.fixtures.llm_spec_mode.NamedTools@spec(q: string) -> ai.FunctionSpec<user.fixtures.llm_spec_mode.Answer>  [expr] {
+  ai.FunctionSpec { spec_name: "NamedTools", args: map { "q": q }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } q);  __tt_cur =  __tt_cur Add "\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format());  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new(more_tools()), default_client: anthropic.AnthropicClient.new(model = "claude-haiku-4-5") }
 }
 function user.fixtures.llm_spec_mode.PlainChat(q: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
-  ai.Agent.new(client = client, on_event = on_event).run(PlainChat$spec(q)).value
+  ai.Agent.new(client = client, on_event = on_event).run(PlainChat@spec(q)).value
 }
-function user.fixtures.llm_spec_mode.PlainChat$build_request(q: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
-  PlainChat$spec(q).build_request(override_client = client)
+function user.fixtures.llm_spec_mode.PlainChat@build_request(q: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  PlainChat@spec(q).build_request(client = client)
 }
-function user.fixtures.llm_spec_mode.PlainChat$parse(json: string) -> string  [expr] {
+function user.fixtures.llm_spec_mode.PlainChat@parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
-function user.fixtures.llm_spec_mode.PlainChat$render_prompt(q: string) -> ai.Prompt  [expr] {
-  PlainChat$spec(q).prompt()
+function user.fixtures.llm_spec_mode.PlainChat@render_prompt(q: string) -> ai.Prompt  [expr] {
+  PlainChat@spec(q).prompt()
 }
-function user.fixtures.llm_spec_mode.PlainChat$spec(q: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "PlainChat", args: map { "q": q }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Be terse.\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } q);  __tt_cur =  __tt_cur Add "\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format());  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ResponsesClient.new(model = "gpt-4o-mini") }
+function user.fixtures.llm_spec_mode.PlainChat@spec(q: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "PlainChat", args: map { "q": q }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Be terse.\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } q);  __tt_cur =  __tt_cur Add "\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format());  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ResponsesClient.new(model = "gpt-4o-mini") }
 }
-function user.fixtures.llm_spec_mode.PlainChat$stream(q: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(PlainChat$spec(q), client = client, on_event = on_event)
+function user.fixtures.llm_spec_mode.PlainChat@stream(q: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(PlainChat@spec(q), client = client, on_event = on_event)
 }
 function user.fixtures.llm_spec_mode.SpecAgent(q: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> user.fixtures.llm_spec_mode.Answer  [llm] {
-  ai.Agent.new(client = client, on_event = on_event).run(SpecAgent$spec(q)).value
+  ai.Agent.new(client = client, on_event = on_event).run(SpecAgent@spec(q)).value
 }
-function user.fixtures.llm_spec_mode.SpecAgent$build_request(q: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
-  SpecAgent$spec(q).build_request(override_client = client)
+function user.fixtures.llm_spec_mode.SpecAgent@build_request(q: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  SpecAgent@spec(q).build_request(client = client)
 }
-function user.fixtures.llm_spec_mode.SpecAgent$parse(json: string) -> user.fixtures.llm_spec_mode.Answer  [expr] {
+function user.fixtures.llm_spec_mode.SpecAgent@parse(json: string) -> user.fixtures.llm_spec_mode.Answer  [expr] {
   baml.sap.parse(json)
 }
-function user.fixtures.llm_spec_mode.SpecAgent$render_prompt(q: string) -> ai.Prompt  [expr] {
-  SpecAgent$spec(q).prompt()
+function user.fixtures.llm_spec_mode.SpecAgent@render_prompt(q: string) -> ai.Prompt  [expr] {
+  SpecAgent@spec(q).prompt()
 }
-function user.fixtures.llm_spec_mode.SpecAgent$spec(q: string) -> ai.FunctionSpec<user.fixtures.llm_spec_mode.Answer>  [expr] {
-  ai.FunctionSpec { spec_name: "SpecAgent", args: map { "q": q }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } q);  __tt_cur =  __tt_cur Add "\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format());  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([ai.tools.tool(double_it)]), default_client: openai.ResponsesClient.new(model = "gpt-4o-mini") }
+function user.fixtures.llm_spec_mode.SpecAgent@spec(q: string) -> ai.FunctionSpec<user.fixtures.llm_spec_mode.Answer>  [expr] {
+  ai.FunctionSpec { spec_name: "SpecAgent", args: map { "q": q }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } q);  __tt_cur =  __tt_cur Add "\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format());  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([ai.tools.tool(double_it)]), default_client: openai.ResponsesClient.new(model = "gpt-4o-mini") }
 }
 function user.fixtures.llm_spec_mode.build_spec(q: string) -> ai.FunctionSpec<user.fixtures.llm_spec_mode.Answer>  [expr] {
-  {  } SpecAgent$spec(q = q)
+  {  } SpecAgent@spec(q = q)
 }
 function user.fixtures.llm_spec_mode.double_it(n: int) -> int  [expr] {
   {  } n Mul 2
@@ -67,6 +67,6 @@ function user.fixtures.llm_spec_mode.more_tools() -> ai.tools.Tool[]  [expr] {
 }
 
 --- captures ---
-lambda ( __spec_output_format) in PlainChat$spec: captures [q]
-lambda ( __spec_output_format) in SpecAgent$spec: captures [q]
-lambda ( __spec_output_format) in NamedTools$spec: captures [q]
+lambda ( __spec_output_format) in PlainChat@spec: captures [q]
+lambda ( __spec_output_format) in SpecAgent@spec: captures [q]
+lambda ( __spec_output_format) in NamedTools@spec: captures [q]

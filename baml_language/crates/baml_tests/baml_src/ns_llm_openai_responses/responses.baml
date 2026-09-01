@@ -367,7 +367,7 @@ test "oai_system_image_input" {
     let got = oai_system_image_input();
     assert.contains(
         got,
-        `{"role":"system","content":[{"type":"input_text","text":"\\nLook: "},{"type":"input_image","image_url":"data:image/png;base64,aW1n","detail":"auto"}]}`,
+        `{"role":"system","content":[{"type":"input_text","text":"Look:"},{"type":"input_image","image_url":"data:image/png;base64,aW1n","detail":"auto"}]}`,
     )
 }
 

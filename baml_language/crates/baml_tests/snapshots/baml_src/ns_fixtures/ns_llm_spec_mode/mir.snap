@@ -76,12 +76,12 @@ fn user.fixtures.llm_spec_mode.PlainChat(q: string, client: null | ai.Client, on
     }
 
     bb5: {
-        _9 = call const fn user.fixtures.llm_spec_mode.PlainChat$spec(copy _1) -> [bb6];
+        _9 = call const fn user.fixtures.llm_spec_mode.PlainChat@spec(copy _1) -> [bb6];
     }
 
     bb6: {
         _10 = load_type(string);
-        _6 = call const fn ai.Agent.run<copy _10>(copy _7, copy _9) -> [bb7];
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _10>(copy _7, copy _9) -> [bb7];
     }
 
     bb7: {
@@ -94,7 +94,7 @@ fn user.fixtures.llm_spec_mode.PlainChat(q: string, client: null | ai.Client, on
     }
 }
 
-fn user.fixtures.llm_spec_mode.PlainChat$build_request(q: string, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.llm_spec_mode.PlainChat@build_request(q: string, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // q // param
@@ -114,7 +114,7 @@ fn user.fixtures.llm_spec_mode.PlainChat$build_request(q: string, client: null |
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.llm_spec_mode.PlainChat$spec(copy _1) -> [bb3];
+        _4 = call const fn user.fixtures.llm_spec_mode.PlainChat@spec(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -127,7 +127,7 @@ fn user.fixtures.llm_spec_mode.PlainChat$build_request(q: string, client: null |
     }
 }
 
-fn user.fixtures.llm_spec_mode.PlainChat$parse(json: string) -> string {
+fn user.fixtures.llm_spec_mode.PlainChat@parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
@@ -143,7 +143,7 @@ fn user.fixtures.llm_spec_mode.PlainChat$parse(json: string) -> string {
     }
 }
 
-fn user.fixtures.llm_spec_mode.PlainChat$render_prompt(q: string) -> ai.Prompt {
+fn user.fixtures.llm_spec_mode.PlainChat@render_prompt(q: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // q // param
@@ -151,7 +151,7 @@ fn user.fixtures.llm_spec_mode.PlainChat$render_prompt(q: string) -> ai.Prompt {
     let _3: reflect.Type
 
     bb0: {
-        _2 = call const fn user.fixtures.llm_spec_mode.PlainChat$spec(copy _1) -> [bb1];
+        _2 = call const fn user.fixtures.llm_spec_mode.PlainChat@spec(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -164,12 +164,12 @@ fn user.fixtures.llm_spec_mode.PlainChat$render_prompt(q: string) -> ai.Prompt {
     }
 }
 
-fn user.fixtures.llm_spec_mode.PlainChat$spec(q: string) -> ai.FunctionSpec<string> {
+fn user.fixtures.llm_spec_mode.PlainChat@spec(q: string) -> ai.FunctionSpec<string> {
     // Locals:
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // q // param [captured]
     let _2: map<string, unknown>
-    let _3: (ai.OutputFormat) -> ai.Prompt throws never
+    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
     let _6: openai.ResponsesClient
@@ -196,107 +196,120 @@ fn user.fixtures.llm_spec_mode.PlainChat$spec(q: string) -> ai.FunctionSpec<stri
 }
 
 // lambda[0]
-fn .<lambda(PlainChat$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(PlainChat@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
-    let _2: ai.internal.SpecCtx // ctx
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: string
-    let _8: int
-    let _9: string[]
-    let _10: string
-    let _11: reflect.Type
-    let _12: int
-    let _13: unknown[]
-    let _14: string
-    let _15: reflect.Type
-    let _16: int
-    let _17: string[]
-    let _18: "\n"
-    let _19: reflect.Type
-    let _20: int
-    let _21: unknown[]
-    let _22: string
-    let _23: reflect.Type
-    let _24: int
-    let _25: string[]
-    let _26: ""
-    let _27: reflect.Type
-    let _28: string[]
-    let _29: unknown[]
-    let _30: string[]
-    let _31: baml.TaggedString
-    let _32: unknown[]
-    let _33: baml.TaggedString
+    let _2: unknown //  __prompt_render_err
+    let _3: ai.internal.SpecCtx // ctx
+    let _4: baml.TaggedString //  __spec_tagged_prompt
+    let _5: string[] //  __tt_parts
+    let _6: unknown[] //  __tt_values
+    let _7: string //  __tt_cur
+    let _8: string
+    let _9: int
+    let _10: string[]
+    let _11: string
+    let _12: reflect.Type
+    let _13: int
+    let _14: unknown[]
+    let _15: string
+    let _16: reflect.Type
+    let _17: int
+    let _18: string[]
+    let _19: "\n"
+    let _20: reflect.Type
+    let _21: int
+    let _22: unknown[]
+    let _23: string
+    let _24: reflect.Type
+    let _25: int
+    let _26: string[]
+    let _27: ""
+    let _28: reflect.Type
+    let _29: string[]
+    let _30: unknown[]
+    let _31: string[]
+    let _32: baml.TaggedString
+    let _33: unknown[]
+    let _34: baml.TaggedString
+    let _35: ai.errors.PromptRenderError
+    let _36: never
 
     bb0: {
-        _2 = ai.internal.SpecCtx { copy _1 };
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _7 = copy _6;
-        _6 = copy _7 + const "Be terse.\n";
-        _9 = copy _4;
-        _10 = copy _6;
-        _11 = load_type(string);
-        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1];
+        _3 = ai.internal.SpecCtx { copy _1 };
+        _5 = []: string[];
+        _6 = []: unknown[];
+        _7 = const "";
+        _8 = copy _7;
+        _7 = copy _8 + const "Be terse.\n";
+        _10 = copy _5;
+        _11 = copy _7;
+        _12 = load_type(string);
+        _9 = call const fn baml.Array.push<copy _12>(copy _10, copy _11) -> [bb1, unwind: bb8];
     }
 
     bb1: {
-        _6 = const "";
-        _13 = copy _5;
-        _14 = copy capture[0];
-        _15 = load_type(unknown);
-        _12 = call const fn baml.Array.push<copy _15>(copy _13, copy _14) -> [bb2];
+        _7 = const "";
+        _14 = copy _6;
+        _15 = copy capture[0];
+        _16 = load_type(unknown);
+        _13 = call const fn baml.Array.push<copy _16>(copy _14, copy _15) -> [bb2, unwind: bb8];
     }
 
     bb2: {
-        _6 = const "\n";
-        _17 = copy _4;
-        _18 = copy _6;
-        _19 = load_type(string);
-        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3];
+        _7 = const "\n";
+        _18 = copy _5;
+        _19 = copy _7;
+        _20 = load_type(string);
+        _17 = call const fn baml.Array.push<copy _20>(copy _18, copy _19) -> [bb3, unwind: bb8];
     }
 
     bb3: {
-        _6 = const "";
-        _21 = copy _5;
-        _22 = call const fn ai.internal.SpecCtx.output_format(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb4];
+        _7 = const "";
+        _22 = copy _6;
+        _23 = call const fn ai.internal.SpecCtx.output_format(copy _3, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb4, unwind: bb8];
     }
 
     bb4: {
-        _23 = load_type(unknown);
-        _20 = call const fn baml.Array.push<copy _23>(copy _21, copy _22) -> [bb5];
+        _24 = load_type(unknown);
+        _21 = call const fn baml.Array.push<copy _24>(copy _22, copy _23) -> [bb5, unwind: bb8];
     }
 
     bb5: {
-        _25 = copy _4;
-        _26 = copy _6;
-        _27 = load_type(string);
-        _24 = call const fn baml.Array.push<copy _27>(copy _25, copy _26) -> [bb6];
+        _26 = copy _5;
+        _27 = copy _7;
+        _28 = load_type(string);
+        _25 = call const fn baml.Array.push<copy _28>(copy _26, copy _27) -> [bb6, unwind: bb8];
     }
 
     bb6: {
-        _28 = copy _4;
         _29 = copy _5;
-        _3 = baml.TaggedString { copy _28, copy _29 };
-        _31 = copy _3;
-        _30 = copy _31.0;
-        _33 = copy _3;
-        _32 = copy _33.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _30, copy _32) -> [bb7];
+        _30 = copy _6;
+        _4 = baml.TaggedString { copy _29, copy _30 };
+        _32 = copy _4;
+        _31 = copy _32.0;
+        _34 = copy _4;
+        _33 = copy _34.1;
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _31, copy _33) -> [bb7, unwind: bb8];
     }
 
     bb7: {
         return;
     }
+
+    bb8: {
+        throw_if_panic copy _2 -> bb9;
+    }
+
+    bb9: {
+        _36 = copy _2;
+        _35 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _36 };
+        throw copy _35;
+    }
 }
 
-fn user.fixtures.llm_spec_mode.PlainChat$stream(q: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.llm_spec_mode.PlainChat@stream(q: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: string // q // param
@@ -329,7 +342,7 @@ fn user.fixtures.llm_spec_mode.PlainChat$stream(q: string, client: null | ai.str
     }
 
     bb4: {
-        _6 = call const fn user.fixtures.llm_spec_mode.PlainChat$spec(copy _1) -> [bb5];
+        _6 = call const fn user.fixtures.llm_spec_mode.PlainChat@spec(copy _1) -> [bb5];
     }
 
     bb5: {
@@ -383,12 +396,12 @@ fn user.fixtures.llm_spec_mode.SpecAgent(q: string, client: null | ai.Client, on
     }
 
     bb5: {
-        _9 = call const fn user.fixtures.llm_spec_mode.SpecAgent$spec(copy _1) -> [bb6];
+        _9 = call const fn user.fixtures.llm_spec_mode.SpecAgent@spec(copy _1) -> [bb6];
     }
 
     bb6: {
         _10 = load_type(fixtures.llm_spec_mode.Answer);
-        _6 = call const fn ai.Agent.run<copy _10>(copy _7, copy _9) -> [bb7];
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _10>(copy _7, copy _9) -> [bb7];
     }
 
     bb7: {
@@ -401,7 +414,7 @@ fn user.fixtures.llm_spec_mode.SpecAgent(q: string, client: null | ai.Client, on
     }
 }
 
-fn user.fixtures.llm_spec_mode.SpecAgent$build_request(q: string, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.llm_spec_mode.SpecAgent@build_request(q: string, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // q // param
@@ -421,7 +434,7 @@ fn user.fixtures.llm_spec_mode.SpecAgent$build_request(q: string, client: null |
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.llm_spec_mode.SpecAgent$spec(copy _1) -> [bb3];
+        _4 = call const fn user.fixtures.llm_spec_mode.SpecAgent@spec(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -434,7 +447,7 @@ fn user.fixtures.llm_spec_mode.SpecAgent$build_request(q: string, client: null |
     }
 }
 
-fn user.fixtures.llm_spec_mode.SpecAgent$parse(json: string) -> fixtures.llm_spec_mode.Answer {
+fn user.fixtures.llm_spec_mode.SpecAgent@parse(json: string) -> fixtures.llm_spec_mode.Answer {
     // Locals:
     let _0: fixtures.llm_spec_mode.Answer // _0 // return
     let _1: string // json // param
@@ -450,7 +463,7 @@ fn user.fixtures.llm_spec_mode.SpecAgent$parse(json: string) -> fixtures.llm_spe
     }
 }
 
-fn user.fixtures.llm_spec_mode.SpecAgent$render_prompt(q: string) -> ai.Prompt {
+fn user.fixtures.llm_spec_mode.SpecAgent@render_prompt(q: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // q // param
@@ -458,7 +471,7 @@ fn user.fixtures.llm_spec_mode.SpecAgent$render_prompt(q: string) -> ai.Prompt {
     let _3: reflect.Type
 
     bb0: {
-        _2 = call const fn user.fixtures.llm_spec_mode.SpecAgent$spec(copy _1) -> [bb1];
+        _2 = call const fn user.fixtures.llm_spec_mode.SpecAgent@spec(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -471,12 +484,12 @@ fn user.fixtures.llm_spec_mode.SpecAgent$render_prompt(q: string) -> ai.Prompt {
     }
 }
 
-fn user.fixtures.llm_spec_mode.SpecAgent$spec(q: string) -> ai.FunctionSpec<fixtures.llm_spec_mode.Answer> {
+fn user.fixtures.llm_spec_mode.SpecAgent@spec(q: string) -> ai.FunctionSpec<fixtures.llm_spec_mode.Answer> {
     // Locals:
     let _0: ai.FunctionSpec<fixtures.llm_spec_mode.Answer> // _0 // return
     let _1: string // q // param [captured]
     let _2: map<string, unknown>
-    let _3: (ai.OutputFormat) -> ai.Prompt throws never
+    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
     let _6: ai.tools.Tool
@@ -508,100 +521,113 @@ fn user.fixtures.llm_spec_mode.SpecAgent$spec(q: string) -> ai.FunctionSpec<fixt
 }
 
 // lambda[0]
-fn .<lambda(SpecAgent$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(SpecAgent@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
-    let _2: ai.internal.SpecCtx // ctx
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: int
-    let _8: string[]
-    let _9: string
-    let _10: reflect.Type
-    let _11: int
-    let _12: unknown[]
-    let _13: string
-    let _14: reflect.Type
-    let _15: int
-    let _16: string[]
-    let _17: "\n"
-    let _18: reflect.Type
-    let _19: int
-    let _20: unknown[]
-    let _21: string
-    let _22: reflect.Type
-    let _23: int
-    let _24: string[]
-    let _25: ""
-    let _26: reflect.Type
-    let _27: string[]
-    let _28: unknown[]
-    let _29: string[]
-    let _30: baml.TaggedString
-    let _31: unknown[]
-    let _32: baml.TaggedString
+    let _2: unknown //  __prompt_render_err
+    let _3: ai.internal.SpecCtx // ctx
+    let _4: baml.TaggedString //  __spec_tagged_prompt
+    let _5: string[] //  __tt_parts
+    let _6: unknown[] //  __tt_values
+    let _7: string //  __tt_cur
+    let _8: int
+    let _9: string[]
+    let _10: string
+    let _11: reflect.Type
+    let _12: int
+    let _13: unknown[]
+    let _14: string
+    let _15: reflect.Type
+    let _16: int
+    let _17: string[]
+    let _18: "\n"
+    let _19: reflect.Type
+    let _20: int
+    let _21: unknown[]
+    let _22: string
+    let _23: reflect.Type
+    let _24: int
+    let _25: string[]
+    let _26: ""
+    let _27: reflect.Type
+    let _28: string[]
+    let _29: unknown[]
+    let _30: string[]
+    let _31: baml.TaggedString
+    let _32: unknown[]
+    let _33: baml.TaggedString
+    let _34: ai.errors.PromptRenderError
+    let _35: never
 
     bb0: {
-        _2 = ai.internal.SpecCtx { copy _1 };
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _8 = copy _4;
-        _9 = copy _6;
-        _10 = load_type(string);
-        _7 = call const fn baml.Array.push<copy _10>(copy _8, copy _9) -> [bb1];
+        _3 = ai.internal.SpecCtx { copy _1 };
+        _5 = []: string[];
+        _6 = []: unknown[];
+        _7 = const "";
+        _9 = copy _5;
+        _10 = copy _7;
+        _11 = load_type(string);
+        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1, unwind: bb8];
     }
 
     bb1: {
-        _6 = const "";
-        _12 = copy _5;
-        _13 = copy capture[0];
-        _14 = load_type(unknown);
-        _11 = call const fn baml.Array.push<copy _14>(copy _12, copy _13) -> [bb2];
+        _7 = const "";
+        _13 = copy _6;
+        _14 = copy capture[0];
+        _15 = load_type(unknown);
+        _12 = call const fn baml.Array.push<copy _15>(copy _13, copy _14) -> [bb2, unwind: bb8];
     }
 
     bb2: {
-        _6 = const "\n";
-        _16 = copy _4;
-        _17 = copy _6;
-        _18 = load_type(string);
-        _15 = call const fn baml.Array.push<copy _18>(copy _16, copy _17) -> [bb3];
+        _7 = const "\n";
+        _17 = copy _5;
+        _18 = copy _7;
+        _19 = load_type(string);
+        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3, unwind: bb8];
     }
 
     bb3: {
-        _6 = const "";
-        _20 = copy _5;
-        _21 = call const fn ai.internal.SpecCtx.output_format(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb4];
+        _7 = const "";
+        _21 = copy _6;
+        _22 = call const fn ai.internal.SpecCtx.output_format(copy _3, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb4, unwind: bb8];
     }
 
     bb4: {
-        _22 = load_type(unknown);
-        _19 = call const fn baml.Array.push<copy _22>(copy _20, copy _21) -> [bb5];
+        _23 = load_type(unknown);
+        _20 = call const fn baml.Array.push<copy _23>(copy _21, copy _22) -> [bb5, unwind: bb8];
     }
 
     bb5: {
-        _24 = copy _4;
-        _25 = copy _6;
-        _26 = load_type(string);
-        _23 = call const fn baml.Array.push<copy _26>(copy _24, copy _25) -> [bb6];
+        _25 = copy _5;
+        _26 = copy _7;
+        _27 = load_type(string);
+        _24 = call const fn baml.Array.push<copy _27>(copy _25, copy _26) -> [bb6, unwind: bb8];
     }
 
     bb6: {
-        _27 = copy _4;
         _28 = copy _5;
-        _3 = baml.TaggedString { copy _27, copy _28 };
-        _30 = copy _3;
-        _29 = copy _30.0;
-        _32 = copy _3;
-        _31 = copy _32.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _29, copy _31) -> [bb7];
+        _29 = copy _6;
+        _4 = baml.TaggedString { copy _28, copy _29 };
+        _31 = copy _4;
+        _30 = copy _31.0;
+        _33 = copy _4;
+        _32 = copy _33.1;
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _30, copy _32) -> [bb7, unwind: bb8];
     }
 
     bb7: {
         return;
+    }
+
+    bb8: {
+        throw_if_panic copy _2 -> bb9;
+    }
+
+    bb9: {
+        _35 = copy _2;
+        _34 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _35 };
+        throw copy _34;
     }
 }
 
@@ -645,12 +671,12 @@ fn user.fixtures.llm_spec_mode.NamedTools(q: string, client: null | ai.Client, o
     }
 
     bb5: {
-        _9 = call const fn user.fixtures.llm_spec_mode.NamedTools$spec(copy _1) -> [bb6];
+        _9 = call const fn user.fixtures.llm_spec_mode.NamedTools@spec(copy _1) -> [bb6];
     }
 
     bb6: {
         _10 = load_type(fixtures.llm_spec_mode.Answer);
-        _6 = call const fn ai.Agent.run<copy _10>(copy _7, copy _9) -> [bb7];
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _10>(copy _7, copy _9) -> [bb7];
     }
 
     bb7: {
@@ -663,7 +689,7 @@ fn user.fixtures.llm_spec_mode.NamedTools(q: string, client: null | ai.Client, o
     }
 }
 
-fn user.fixtures.llm_spec_mode.NamedTools$build_request(q: string, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.llm_spec_mode.NamedTools@build_request(q: string, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // q // param
@@ -683,7 +709,7 @@ fn user.fixtures.llm_spec_mode.NamedTools$build_request(q: string, client: null 
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.llm_spec_mode.NamedTools$spec(copy _1) -> [bb3];
+        _4 = call const fn user.fixtures.llm_spec_mode.NamedTools@spec(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -696,7 +722,7 @@ fn user.fixtures.llm_spec_mode.NamedTools$build_request(q: string, client: null 
     }
 }
 
-fn user.fixtures.llm_spec_mode.NamedTools$parse(json: string) -> fixtures.llm_spec_mode.Answer {
+fn user.fixtures.llm_spec_mode.NamedTools@parse(json: string) -> fixtures.llm_spec_mode.Answer {
     // Locals:
     let _0: fixtures.llm_spec_mode.Answer // _0 // return
     let _1: string // json // param
@@ -712,7 +738,7 @@ fn user.fixtures.llm_spec_mode.NamedTools$parse(json: string) -> fixtures.llm_sp
     }
 }
 
-fn user.fixtures.llm_spec_mode.NamedTools$render_prompt(q: string) -> ai.Prompt {
+fn user.fixtures.llm_spec_mode.NamedTools@render_prompt(q: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // q // param
@@ -720,7 +746,7 @@ fn user.fixtures.llm_spec_mode.NamedTools$render_prompt(q: string) -> ai.Prompt 
     let _3: reflect.Type
 
     bb0: {
-        _2 = call const fn user.fixtures.llm_spec_mode.NamedTools$spec(copy _1) -> [bb1];
+        _2 = call const fn user.fixtures.llm_spec_mode.NamedTools@spec(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -733,12 +759,12 @@ fn user.fixtures.llm_spec_mode.NamedTools$render_prompt(q: string) -> ai.Prompt 
     }
 }
 
-fn user.fixtures.llm_spec_mode.NamedTools$spec(q: string) -> ai.FunctionSpec<fixtures.llm_spec_mode.Answer> {
+fn user.fixtures.llm_spec_mode.NamedTools@spec(q: string) -> ai.FunctionSpec<fixtures.llm_spec_mode.Answer> {
     // Locals:
     let _0: ai.FunctionSpec<fixtures.llm_spec_mode.Answer> // _0 // return
     let _1: string // q // param [captured]
     let _2: map<string, unknown>
-    let _3: (ai.OutputFormat) -> ai.Prompt throws never
+    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
     let _6: anthropic.AnthropicClient
@@ -768,100 +794,113 @@ fn user.fixtures.llm_spec_mode.NamedTools$spec(q: string) -> ai.FunctionSpec<fix
 }
 
 // lambda[0]
-fn .<lambda(NamedTools$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(NamedTools@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
-    let _2: ai.internal.SpecCtx // ctx
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: int
-    let _8: string[]
-    let _9: string
-    let _10: reflect.Type
-    let _11: int
-    let _12: unknown[]
-    let _13: string
-    let _14: reflect.Type
-    let _15: int
-    let _16: string[]
-    let _17: "\n"
-    let _18: reflect.Type
-    let _19: int
-    let _20: unknown[]
-    let _21: string
-    let _22: reflect.Type
-    let _23: int
-    let _24: string[]
-    let _25: ""
-    let _26: reflect.Type
-    let _27: string[]
-    let _28: unknown[]
-    let _29: string[]
-    let _30: baml.TaggedString
-    let _31: unknown[]
-    let _32: baml.TaggedString
+    let _2: unknown //  __prompt_render_err
+    let _3: ai.internal.SpecCtx // ctx
+    let _4: baml.TaggedString //  __spec_tagged_prompt
+    let _5: string[] //  __tt_parts
+    let _6: unknown[] //  __tt_values
+    let _7: string //  __tt_cur
+    let _8: int
+    let _9: string[]
+    let _10: string
+    let _11: reflect.Type
+    let _12: int
+    let _13: unknown[]
+    let _14: string
+    let _15: reflect.Type
+    let _16: int
+    let _17: string[]
+    let _18: "\n"
+    let _19: reflect.Type
+    let _20: int
+    let _21: unknown[]
+    let _22: string
+    let _23: reflect.Type
+    let _24: int
+    let _25: string[]
+    let _26: ""
+    let _27: reflect.Type
+    let _28: string[]
+    let _29: unknown[]
+    let _30: string[]
+    let _31: baml.TaggedString
+    let _32: unknown[]
+    let _33: baml.TaggedString
+    let _34: ai.errors.PromptRenderError
+    let _35: never
 
     bb0: {
-        _2 = ai.internal.SpecCtx { copy _1 };
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _8 = copy _4;
-        _9 = copy _6;
-        _10 = load_type(string);
-        _7 = call const fn baml.Array.push<copy _10>(copy _8, copy _9) -> [bb1];
+        _3 = ai.internal.SpecCtx { copy _1 };
+        _5 = []: string[];
+        _6 = []: unknown[];
+        _7 = const "";
+        _9 = copy _5;
+        _10 = copy _7;
+        _11 = load_type(string);
+        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1, unwind: bb8];
     }
 
     bb1: {
-        _6 = const "";
-        _12 = copy _5;
-        _13 = copy capture[0];
-        _14 = load_type(unknown);
-        _11 = call const fn baml.Array.push<copy _14>(copy _12, copy _13) -> [bb2];
+        _7 = const "";
+        _13 = copy _6;
+        _14 = copy capture[0];
+        _15 = load_type(unknown);
+        _12 = call const fn baml.Array.push<copy _15>(copy _13, copy _14) -> [bb2, unwind: bb8];
     }
 
     bb2: {
-        _6 = const "\n";
-        _16 = copy _4;
-        _17 = copy _6;
-        _18 = load_type(string);
-        _15 = call const fn baml.Array.push<copy _18>(copy _16, copy _17) -> [bb3];
+        _7 = const "\n";
+        _17 = copy _5;
+        _18 = copy _7;
+        _19 = load_type(string);
+        _16 = call const fn baml.Array.push<copy _19>(copy _17, copy _18) -> [bb3, unwind: bb8];
     }
 
     bb3: {
-        _6 = const "";
-        _20 = copy _5;
-        _21 = call const fn ai.internal.SpecCtx.output_format(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb4];
+        _7 = const "";
+        _21 = copy _6;
+        _22 = call const fn ai.internal.SpecCtx.output_format(copy _3, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb4, unwind: bb8];
     }
 
     bb4: {
-        _22 = load_type(unknown);
-        _19 = call const fn baml.Array.push<copy _22>(copy _20, copy _21) -> [bb5];
+        _23 = load_type(unknown);
+        _20 = call const fn baml.Array.push<copy _23>(copy _21, copy _22) -> [bb5, unwind: bb8];
     }
 
     bb5: {
-        _24 = copy _4;
-        _25 = copy _6;
-        _26 = load_type(string);
-        _23 = call const fn baml.Array.push<copy _26>(copy _24, copy _25) -> [bb6];
+        _25 = copy _5;
+        _26 = copy _7;
+        _27 = load_type(string);
+        _24 = call const fn baml.Array.push<copy _27>(copy _25, copy _26) -> [bb6, unwind: bb8];
     }
 
     bb6: {
-        _27 = copy _4;
         _28 = copy _5;
-        _3 = baml.TaggedString { copy _27, copy _28 };
-        _30 = copy _3;
-        _29 = copy _30.0;
-        _32 = copy _3;
-        _31 = copy _32.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _29, copy _31) -> [bb7];
+        _29 = copy _6;
+        _4 = baml.TaggedString { copy _28, copy _29 };
+        _31 = copy _4;
+        _30 = copy _31.0;
+        _33 = copy _4;
+        _32 = copy _33.1;
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _30, copy _32) -> [bb7, unwind: bb8];
     }
 
     bb7: {
         return;
+    }
+
+    bb8: {
+        throw_if_panic copy _2 -> bb9;
+    }
+
+    bb9: {
+        _35 = copy _2;
+        _34 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _35 };
+        throw copy _34;
     }
 }
 
@@ -871,7 +910,7 @@ fn user.fixtures.llm_spec_mode.build_spec(q: string) -> ai.FunctionSpec<fixtures
     let _1: string // q // param
 
     bb0: {
-        _0 = call const fn user.fixtures.llm_spec_mode.SpecAgent$spec(copy _1) -> [bb1];
+        _0 = call const fn user.fixtures.llm_spec_mode.SpecAgent@spec(copy _1) -> [bb1];
     }
 
     bb1: {

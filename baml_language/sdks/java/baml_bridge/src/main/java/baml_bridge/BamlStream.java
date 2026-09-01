@@ -83,7 +83,7 @@ public final class BamlStream<TPartial, TFinal> {
     /**
      * The next partial value, or an {@link baml_sdk.ai.stream.Done}
      * value once the stream is exhausted. The result is decoded wire-driven (null
-     * descriptor): a partial is a registered {@code $stream} companion (or a bare
+     * descriptor): a partial is a registered PPIR {@code $stream} model (or a bare
      * primitive), and {@code Done} is a registered runtime class.
      */
     @SuppressWarnings("unchecked")

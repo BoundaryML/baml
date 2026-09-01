@@ -168,7 +168,7 @@ fn backtick_llm_function_compiles_to_agent_loop() {
     // Single-path world: a backtick prompt in an LLM function desugars to the
     // ai Agent loop — the direct-call body runs
     // `ai.Agent<Out>.new(client = client).run(Greet@spec(...))` and the
-    // `Greet$spec` companion builds the bound `ai.FunctionSpec`. The `${name}`
+    // `Greet@spec` companion builds the bound `ai.FunctionSpec`. The `${name}`
     // interp captures the function param inside the spec's prompt closure.
     let mut db = make_db();
     let file = db.file(
@@ -188,7 +188,7 @@ function Greet(name: string) -> string {
         "backtick LLM function should compile clean, got:\n{tir}"
     );
     assert!(
-        tir.contains("Greet$spec") && tir.contains("FunctionSpec"),
+        tir.contains("Greet@spec") && tir.contains("FunctionSpec"),
         "the spec companion should build an ai.FunctionSpec, got:\n{tir}"
     );
 }
@@ -207,7 +207,7 @@ function Greet(name: string, suffix: string = "!") -> string {
 }
 
 function main() -> string {
-  Greet$render_prompt("Ada").text()
+  Greet@render_prompt("Ada").text()
 }
 "#,
     );
@@ -218,14 +218,14 @@ function main() -> string {
         "defaulted LLM companions should compile without diagnostics:\n{tir}"
     );
     assert!(
-        tir.contains("Greet$render_prompt(name: string, suffix: string = \"!\")")
-            && tir.contains("Greet$build_request(name: string, suffix: string = \"!\", client:")
+        tir.contains("Greet@render_prompt(name: string, suffix: string = \"!\")")
+            && tir.contains("Greet@build_request(name: string, suffix: string = \"!\", client:")
             && tir.contains("suffix = suffix"),
         "render-prompt/build-request companions must preserve the defaulted argument as named:\n{tir}"
     );
     assert!(
         tir.contains(
-            "ai.Agent.new(client = client, on_event = on_event).run(Greet$spec(name, suffix = suffix)).value"
+            "ai.Agent.new(client = client, on_event = on_event).run(Greet@spec(name, suffix = suffix)).value"
         ),
         "the direct-call companion must name the defaulted spec argument and thread on_event:\n{tir}"
     );
@@ -239,7 +239,7 @@ function main() -> string {
     let window = &stream_call[..stream_call.len().min(200)];
     assert!(
         window
-            .contains("(Greet$spec(name, suffix = suffix), client = client, on_event = on_event)"),
+            .contains("(Greet@spec(name, suffix = suffix), client = client, on_event = on_event)"),
         "the stream companion must pass spec, client, and on_event to from_spec:\n{tir}"
     );
 }
@@ -893,7 +893,7 @@ function f() -> string {
 fn llm_client_override_argument_is_callable_on_function() {
     // The compiler injects a `client: ai.Client? = null` override parameter on
     // every LLM function; a call site can pass any ai.Client value for it.
-    // The generated `$build_request` companion shares the client override with
+    // The generated `@build_request` companion shares the client override with
     // the parent LLM function.
     let mut db = make_db();
     let file = db.file(

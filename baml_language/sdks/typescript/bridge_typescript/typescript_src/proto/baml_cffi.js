@@ -61,6 +61,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @property {string|null} [bigintValue] InboundValue bigintValue
                  * @property {baml_bridge.cffi.v1.IBamlTy|null} [tyValue] InboundValue tyValue
                  * @property {baml_bridge.cffi.v1.IBamlTyDef|null} [tyDefValue] InboundValue tyDefValue
+                 * @property {baml_bridge.cffi.v1.IBamlValueMedia|null} [mediaValue] InboundValue mediaValue
+                 * @property {baml_bridge.cffi.v1.IBamlValuePromptAst|null} [promptAstValue] InboundValue promptAstValue
                  */
 
                 /**
@@ -190,17 +192,33 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  */
                 InboundValue.prototype.tyDefValue = null;
 
+                /**
+                 * InboundValue mediaValue.
+                 * @member {baml_bridge.cffi.v1.IBamlValueMedia|null|undefined} mediaValue
+                 * @memberof baml_bridge.cffi.v1.InboundValue
+                 * @instance
+                 */
+                InboundValue.prototype.mediaValue = null;
+
+                /**
+                 * InboundValue promptAstValue.
+                 * @member {baml_bridge.cffi.v1.IBamlValuePromptAst|null|undefined} promptAstValue
+                 * @memberof baml_bridge.cffi.v1.InboundValue
+                 * @instance
+                 */
+                InboundValue.prototype.promptAstValue = null;
+
                 // OneOf field names bound to virtual getters and setters
                 let $oneOfFields;
 
                 /**
                  * InboundValue value.
-                 * @member {"stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue"|"tyDefValue"|undefined} value
+                 * @member {"stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue"|"tyDefValue"|"mediaValue"|"promptAstValue"|undefined} value
                  * @memberof baml_bridge.cffi.v1.InboundValue
                  * @instance
                  */
                 Object.defineProperty(InboundValue.prototype, "value", {
-                    get: $util.oneOfGetter($oneOfFields = ["stringValue", "intValue", "floatValue", "boolValue", "listValue", "mapValue", "classValue", "enumValue", "handle", "uint8arrayValue", "bigintValue", "tyValue", "tyDefValue"]),
+                    get: $util.oneOfGetter($oneOfFields = ["stringValue", "intValue", "floatValue", "boolValue", "listValue", "mapValue", "classValue", "enumValue", "handle", "uint8arrayValue", "bigintValue", "tyValue", "tyDefValue", "mediaValue", "promptAstValue"]),
                     set: $util.oneOfSetter($oneOfFields)
                 });
 
@@ -260,6 +278,10 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         $root.baml_bridge.cffi.v1.BamlTy.encode(message.tyValue, writer.uint32(/* id 13, wireType 2 =*/106).fork(), q + 1).ldelim();
                     if (message.tyDefValue != null && Object.hasOwnProperty.call(message, "tyDefValue"))
                         $root.baml_bridge.cffi.v1.BamlTyDef.encode(message.tyDefValue, writer.uint32(/* id 14, wireType 2 =*/114).fork(), q + 1).ldelim();
+                    if (message.mediaValue != null && Object.hasOwnProperty.call(message, "mediaValue"))
+                        $root.baml_bridge.cffi.v1.BamlValueMedia.encode(message.mediaValue, writer.uint32(/* id 15, wireType 2 =*/122).fork(), q + 1).ldelim();
+                    if (message.promptAstValue != null && Object.hasOwnProperty.call(message, "promptAstValue"))
+                        $root.baml_bridge.cffi.v1.BamlValuePromptAst.encode(message.promptAstValue, writer.uint32(/* id 16, wireType 2 =*/130).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -354,6 +376,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             }
                         case 14: {
                                 message.tyDefValue = $root.baml_bridge.cffi.v1.BamlTyDef.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 15: {
+                                message.mediaValue = $root.baml_bridge.cffi.v1.BamlValueMedia.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 16: {
+                                message.promptAstValue = $root.baml_bridge.cffi.v1.BamlValuePromptAst.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
@@ -511,6 +541,26 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 return "tyDefValue." + error;
                         }
                     }
+                    if (message.mediaValue != null && message.hasOwnProperty("mediaValue")) {
+                        if (properties.value === 1)
+                            return "value: multiple values";
+                        properties.value = 1;
+                        {
+                            let error = $root.baml_bridge.cffi.v1.BamlValueMedia.verify(message.mediaValue, long + 1);
+                            if (error)
+                                return "mediaValue." + error;
+                        }
+                    }
+                    if (message.promptAstValue != null && message.hasOwnProperty("promptAstValue")) {
+                        if (properties.value === 1)
+                            return "value: multiple values";
+                        properties.value = 1;
+                        {
+                            let error = $root.baml_bridge.cffi.v1.BamlValuePromptAst.verify(message.promptAstValue, long + 1);
+                            if (error)
+                                return "promptAstValue." + error;
+                        }
+                    }
                     return null;
                 };
 
@@ -593,6 +643,16 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         if (!$util.isObject(object.tyDefValue))
                             throw TypeError(".baml_bridge.cffi.v1.InboundValue.tyDefValue: object expected");
                         message.tyDefValue = $root.baml_bridge.cffi.v1.BamlTyDef.fromObject(object.tyDefValue, long + 1);
+                    }
+                    if (object.mediaValue != null) {
+                        if (!$util.isObject(object.mediaValue))
+                            throw TypeError(".baml_bridge.cffi.v1.InboundValue.mediaValue: object expected");
+                        message.mediaValue = $root.baml_bridge.cffi.v1.BamlValueMedia.fromObject(object.mediaValue, long + 1);
+                    }
+                    if (object.promptAstValue != null) {
+                        if (!$util.isObject(object.promptAstValue))
+                            throw TypeError(".baml_bridge.cffi.v1.InboundValue.promptAstValue: object expected");
+                        message.promptAstValue = $root.baml_bridge.cffi.v1.BamlValuePromptAst.fromObject(object.promptAstValue, long + 1);
                     }
                     return message;
                 };
@@ -687,6 +747,16 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         object.tyDefValue = $root.baml_bridge.cffi.v1.BamlTyDef.toObject(message.tyDefValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "tyDefValue";
+                    }
+                    if (message.mediaValue != null && message.hasOwnProperty("mediaValue")) {
+                        object.mediaValue = $root.baml_bridge.cffi.v1.BamlValueMedia.toObject(message.mediaValue, options, q + 1);
+                        if (options.oneofs)
+                            object.value = "mediaValue";
+                    }
+                    if (message.promptAstValue != null && message.hasOwnProperty("promptAstValue")) {
+                        object.promptAstValue = $root.baml_bridge.cffi.v1.BamlValuePromptAst.toObject(message.promptAstValue, options, q + 1);
+                        if (options.oneofs)
+                            object.value = "promptAstValue";
                     }
                     return object;
                 };
@@ -3058,6 +3128,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
              * @property {number} ADT_TAGGED_HEAP_HANDLE=14 ADT_TAGGED_HEAP_HANDLE value
              * @property {number} HOST_VALUE_CALLABLE=15 HOST_VALUE_CALLABLE value
              * @property {number} HOST_VALUE_OPAQUE=16 HOST_VALUE_OPAQUE value
+             * @property {number} ADT_FUNCTION_SPEC=17 ADT_FUNCTION_SPEC value
+             * @property {number} ADT_RUNTIME_VALUE=18 ADT_RUNTIME_VALUE value
              */
             v1.BamlHandleType = (function() {
                 const valuesById = {}, values = Object.create(valuesById);
@@ -3076,6 +3148,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 values[valuesById[14] = "ADT_TAGGED_HEAP_HANDLE"] = 14;
                 values[valuesById[15] = "HOST_VALUE_CALLABLE"] = 15;
                 values[valuesById[16] = "HOST_VALUE_OPAQUE"] = 16;
+                values[valuesById[17] = "ADT_FUNCTION_SPEC"] = 17;
+                values[valuesById[18] = "ADT_RUNTIME_VALUE"] = 18;
                 return values;
             })();
 
@@ -3261,6 +3335,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         case 14:
                         case 15:
                         case 16:
+                        case 17:
+                        case 18:
                             break;
                         }
                     return null;
@@ -3359,6 +3435,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case "HOST_VALUE_OPAQUE":
                     case 16:
                         message.handleType = 16;
+                        break;
+                    case "ADT_FUNCTION_SPEC":
+                    case 17:
+                        message.handleType = 17;
+                        break;
+                    case "ADT_RUNTIME_VALUE":
+                    case 18:
+                        message.handleType = 18;
                         break;
                     }
                     return message;
@@ -15334,6 +15418,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         case 14:
                         case 15:
                         case 16:
+                        case 17:
+                        case 18:
                             break;
                         }
                     if (message.ty != null && message.hasOwnProperty("ty")) {
@@ -15437,6 +15523,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case "HOST_VALUE_OPAQUE":
                     case 16:
                         message.handleType = 16;
+                        break;
+                    case "ADT_FUNCTION_SPEC":
+                    case 17:
+                        message.handleType = 17;
+                        break;
+                    case "ADT_RUNTIME_VALUE":
+                    case 18:
+                        message.handleType = 18;
                         break;
                     }
                     if (object.ty != null) {

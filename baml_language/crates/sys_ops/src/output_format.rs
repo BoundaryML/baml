@@ -91,6 +91,11 @@ pub struct Class {
 #[derive(Clone, Debug)]
 pub struct OutputFormatContent {
     pub enums: IndexMap<String, Enum>,
+    /// Hoist-render ordering: enum names in LAST-REFERENCE order (a
+    /// re-reference during the schema walk moves the name to the end).
+    /// Kept separate from `enums` so the map itself stays in DECLARATION
+    /// order for collision validation and stable error reporting.
+    pub enum_reference_order: Vec<String>,
     pub classes: IndexMap<String, Class>,
     pub target: ::sys_types::SapTy,
     pub recursive_classes: indexmap::IndexSet<String>,
@@ -104,6 +109,7 @@ impl OutputFormatContent {
     pub fn new(target: ::sys_types::SapTy) -> Self {
         Self {
             enums: IndexMap::new(),
+            enum_reference_order: Vec::new(),
             classes: IndexMap::new(),
             target,
             recursive_classes: indexmap::IndexSet::new(),
@@ -115,6 +121,9 @@ impl OutputFormatContent {
     /// Add an enum definition.
     #[must_use]
     pub fn with_enum(mut self, enm: Enum) -> Self {
+        if !self.enums.contains_key(&enm.name) {
+            self.enum_reference_order.push(enm.name.clone());
+        }
         self.enums.insert(enm.name.clone(), enm);
         self
     }
@@ -344,10 +353,15 @@ impl OutputFormatContent {
 
     /// Compute which enums should be hoisted (rendered as top-level definitions).
     fn compute_hoisted_enums(&self, options: &RenderOptions) -> indexmap::IndexSet<String> {
+        // Reverse of the walk's last-reference order (legacy renderer parity).
         let mut hoisted = indexmap::IndexSet::new();
         let has_docs =
             |docs: &Option<String>| docs.as_deref().is_some_and(|docs| !docs.trim().is_empty());
-        for (name, enm) in &self.enums {
+        // Reverse of the walk's last-reference order (legacy renderer parity).
+        for name in self.enum_reference_order.iter().rev() {
+            let Some(enm) = self.enums.get(name) else {
+                continue;
+            };
             if enm.values.len() > Self::INLINE_RENDER_ENUM_MAX_VALUES
                 || has_docs(&enm.description)
                 || has_docs(&enm.docstring)
@@ -419,10 +433,14 @@ impl OutputFormatContent {
             }
             definitions_by_rendered_name.insert(rendered_name, definition_key.clone());
         }
-        for definition_key in hoisted_enums {
-            let Some(enm) = self.find_enum(definition_key) else {
+        // Validate in DECLARATION order, not hoist-render order: hoisted
+        // enums render in reverse last-reference order (legacy parity), but
+        // collision reporting must stay stable and name the declaration-order
+        // first/second pair.
+        for (definition_key, enm) in &self.enums {
+            if !hoisted_enums.contains(definition_key) {
                 continue;
-            };
+            }
             let rendered_name = rendered_name(&enm.name, enm.alias.as_ref()).to_string();
             if let Some(first) = definitions_by_rendered_name.get(&rendered_name) {
                 return Err(RenderError::RenderedEnumNameCollision {
@@ -486,9 +504,24 @@ impl OutputFormatContent {
                     .filter(|v| !matches!(v, SapTy::Null { .. }))
                     .collect();
                 // `T?` (single non-null member + null) follows the inner type's
-                // prefix; a true multi-member union gets the union prefix.
+                // prefix — except that a nullable PRIMITIVE, unlike a bare
+                // primitive (which renders no schema at all), does render a
+                // schema (`int or null`) and therefore takes the generic
+                // schema prefix (legacy renderer parity). The bare-primitive
+                // "Answer as an int" prefix would duplicate the type wording
+                // in front of the rendered schema.
                 if non_null.len() == 1 && non_null.len() < variants.len() {
-                    Self::auto_prefix(non_null[0], type_word, hoisted)
+                    match non_null[0] {
+                        SapTy::String { .. }
+                        | SapTy::Int { .. }
+                        | SapTy::Bigint { .. }
+                        | SapTy::Float { .. }
+                        | SapTy::Bool { .. } => {
+                            Some(format!("Answer in JSON using this {type_word}:\n"))
+                        }
+                        inner => Self::auto_prefix(inner, type_word, hoisted)
+                            .or_else(|| Some(format!("Answer in JSON using this {type_word}:\n"))),
+                    }
                 } else if non_null.len() > 1 {
                     Some(format!("Answer in JSON using any of these {type_word}s:\n"))
                 } else {
@@ -563,9 +596,11 @@ impl OutputFormatContent {
                         | SapTy::Bool { .. }
                         | SapTy::Null { .. } => false,
                         SapTy::Enum(tn, _) => {
-                            // Inline enums render short; hoisted ones are just a name
-                            !hoisted_enums.contains(tn.display_name().as_str())
-                                && inner_str.len() > 15
+                            // Hoisted enums render as a bracketed block (legacy
+                            // parity: `[\n  Name\n]`); inline enums go
+                            // multiline only when long.
+                            hoisted_enums.contains(tn.display_name().as_str())
+                                || inner_str.len() > 15
                         }
                         SapTy::Union(items, _) => items.iter().all(|t| {
                             !matches!(
@@ -605,8 +640,14 @@ impl OutputFormatContent {
             }
 
             SapTy::Union(variants, _) => {
-                let rendered: Vec<String> = variants
+                // Null arms render last (`X or null`), matching the legacy
+                // renderer regardless of the union's internal arm order.
+                let (null_variants, value_variants): (Vec<&SapTy>, Vec<&SapTy>) = variants
                     .iter()
+                    .partition(|v| matches!(v, SapTy::Null { .. }));
+                let rendered: Vec<String> = value_variants
+                    .into_iter()
+                    .chain(null_variants)
                     .filter_map(|v| {
                         self.render_type_hoisted(v, options, hoisted_classes, hoisted_enums)
                             .ok()
@@ -735,13 +776,23 @@ impl OutputFormatContent {
                 .flatten()
                 .map(|docs| docs.trim())
                 .filter(|docs| !docs.is_empty())
-                .map(|docs| docs.lines().map(str::trim).collect::<Vec<_>>().join(" "))
                 .collect::<Vec<_>>()
                 .join(" ");
             let line = if docs.is_empty() {
                 format!("{prefix}{value_name}")
             } else {
-                format!("{prefix}{value_name}: {docs}")
+                // Continuation lines align under the value text (legacy
+                // renderer behavior; keeps multi-line descriptions visually
+                // attached to their value). The indent is the configured
+                // prefix's width — two spaces for the default "- " (legacy
+                // parity bytes unchanged), zero when the prefix is Never.
+                // Docstrings join the description (upstream behavior) but
+                // interior newlines are preserved.
+                let indent = " ".repeat(prefix.chars().count());
+                format!(
+                    "{prefix}{value_name}: {}",
+                    docs.replace('\r', "").replace('\n', &format!("\n{indent}"))
+                )
             };
             result.push('\n');
             result.push_str(&line);
@@ -813,8 +864,14 @@ impl OutputFormatContent {
                 output.push('\n');
             }
         }
-        output.push_str(&fields_str.join("\n"));
-        output.push_str("\n}");
+        if fields_str.is_empty() {
+            // An empty (fully dynamic, not yet extended) class renders as
+            // "{\n}" rather than leaving a blank line between the braces.
+            output.push('}');
+        } else {
+            output.push_str(&fields_str.join("\n"));
+            output.push_str("\n}");
+        }
 
         Ok(output)
     }
@@ -1247,6 +1304,14 @@ fn walk_ty(
         SapTy::Enum(type_name, _) => {
             let key = OutputVisitKey::Enum(type_name.clone());
             if !visited.insert(key) {
+                // Legacy renderer parity: a re-reference moves the enum to the
+                // end of the collection order; hoisted definitions are then
+                // emitted in REVERSE of that (last-referenced first).
+                let display = type_name.display_name().to_string();
+                if content.enums.contains_key(&display) {
+                    content.enum_reference_order.retain(|n| n != &display);
+                    content.enum_reference_order.push(display);
+                }
                 return Ok(());
             }
             if let Some(enum_def) = find_enum_definition(ctx, type_name) {
@@ -1263,6 +1328,9 @@ fn walk_ty(
                     })
                     .collect();
 
+                if !content.enums.contains_key(&output_name) {
+                    content.enum_reference_order.push(output_name.clone());
+                }
                 content.enums.insert(
                     output_name.clone(),
                     self::Enum {
@@ -1756,7 +1824,12 @@ mod tests {
             attr: TyAttr::default(),
         }));
         let rendered = content.render(&RenderOptions::default()).unwrap();
-        assert_eq!(rendered, Some("string or null".to_string()));
+        // A nullable primitive renders a schema, so it takes the generic
+        // schema prefix (legacy renderer parity) — unlike a bare primitive.
+        assert_eq!(
+            rendered,
+            Some("Answer in JSON using this schema:\nstring or null".to_string())
+        );
     }
 
     #[test]
@@ -1770,7 +1843,10 @@ mod tests {
                 ..RenderOptions::default()
             })
             .unwrap();
-        assert_eq!(rendered, Some("string or omit".to_string()));
+        assert_eq!(
+            rendered,
+            Some("Answer in JSON using this schema:\nstring or omit".to_string())
+        );
     }
 
     #[test]
@@ -2009,7 +2085,12 @@ mod tests {
     }
 
     #[test]
-    fn enum_value_docs_stay_on_one_line() {
+    fn enum_value_docs_preserve_lines_with_prefix_indent() {
+        // Interior newlines are PRESERVED and continuation lines indent by
+        // the prefix width (legacy renderer parity — multi-line enum-value
+        // descriptions render aligned beneath the value text, not collapsed
+        // onto one line). Description and docstring join with a space, and
+        // CRLF normalizes to LF.
         let mut enm = mk_enum("Color", vec!["Red"]);
         enm.values[0].description = Some(" first line\n second line ".to_string());
         enm.values[0].docstring = Some("third line\r\nfourth line".to_string());
@@ -2020,7 +2101,7 @@ mod tests {
             .unwrap()
             .expect("an enum renders");
         assert!(
-            rendered.contains("- Red: first line second line third line fourth line"),
+            rendered.contains("- Red: first line\n   second line third line\n  fourth line"),
             "{rendered}"
         );
     }
@@ -2261,6 +2342,115 @@ mod tests {
                 })
                 .collect(),
         }
+    }
+
+    #[test]
+    fn re_referenced_enum_keeps_declaration_order_collision_reporting() {
+        // `Choice` is declared first but re-referenced LAST in the walk
+        // (Union[Choice, Choice_2, Choice]); the re-reference moves it to
+        // the end of the hoist-render order. Collision validation must
+        // still report declaration order: first == Choice.
+        let first = dynamic_key("Choice");
+        let second = dynamic_key("Choice_2");
+        let target = RuntimeTy::Union(
+            Box::new([
+                RuntimeTy::Enum(first.clone(), TyAttr::default()),
+                RuntimeTy::Enum(second.clone(), TyAttr::default()),
+                RuntimeTy::Enum(first.clone(), TyAttr::default()),
+            ]),
+            TyAttr::default(),
+        );
+        let definition = |name: &str| sys_types::EnumDefinition {
+            name: name.to_string(),
+            docstring: None,
+            description: None,
+            alias: Some("SharedChoice".to_string()),
+            variants: vec![sys_types::EnumVariantDefinition {
+                name: "Value".to_string(),
+                docstring: None,
+                description: None,
+                alias: None,
+            }],
+        };
+        let mut enums = indexmap::IndexMap::new();
+        enums.insert(first, definition("Choice"));
+        enums.insert(second, definition("Choice_2"));
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.enum_definitions = Arc::new(enums);
+
+        let content = build_output_format_content(&target, &ctx);
+        let error = content
+            .render(&RenderOptions {
+                always_hoist_enums: RenderSetting::Always(true),
+                ..RenderOptions::default()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedEnumNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
+        ));
+    }
+
+    #[test]
+    fn nullable_primitive_targets_take_the_generic_schema_prefix() {
+        let ty_bigint = || RuntimeTy::Bigint {
+            attr: TyAttr::default(),
+        };
+        for (ty, rendered) in [
+            (ty_int(), "int"),
+            (ty_bigint(), "bigint"),
+            (ty_float(), "float"),
+            (ty_bool(), "bool"),
+            (ty_string(), "string"),
+        ] {
+            let content =
+                build_output_format_content(&ty_optional(ty), &sys_types::SysOpContext::empty());
+            let output = content
+                .render(&RenderOptions::default())
+                .unwrap()
+                .unwrap_or_default();
+            assert_eq!(
+                output,
+                format!("Answer in JSON using this schema:\n{rendered} or null"),
+            );
+        }
+    }
+
+    #[test]
+    fn enum_value_continuation_indent_follows_the_prefix() {
+        let content = || {
+            let mut enm = mk_enum("Choice", vec!["Red"]);
+            enm.values[0].description = Some("first line\nsecond line".to_string());
+            OutputFormatContent::new(ty_enum("Choice")).with_enum(enm)
+        };
+        // default "- " prefix: two-space continuation (legacy parity)
+        let out = content()
+            .render(&RenderOptions::default())
+            .unwrap()
+            .unwrap_or_default();
+        assert!(out.contains("- Red: first line\n  second line"), "{out}");
+        // wider custom prefix: continuation matches its width
+        let out = content()
+            .render(&RenderOptions {
+                enum_value_prefix: RenderSetting::Always("-- ".to_string()),
+                ..RenderOptions::default()
+            })
+            .unwrap()
+            .unwrap_or_default();
+        assert!(out.contains("-- Red: first line\n   second line"), "{out}");
+        // Never: no prefix, no continuation indent
+        let out = content()
+            .render(&RenderOptions {
+                enum_value_prefix: RenderSetting::Never,
+                ..RenderOptions::default()
+            })
+            .unwrap()
+            .unwrap_or_default();
+        assert!(out.contains("Red: first line\nsecond line"), "{out}");
     }
 
     fn mk_recursive(names: &[&str]) -> indexmap::IndexSet<String> {

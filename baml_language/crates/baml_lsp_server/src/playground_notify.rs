@@ -82,14 +82,6 @@ pub struct LlmCapabilities {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TestInfo {
-    pub name: String,
-    pub function_name: String,
-    pub args_json: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ProjectDiagnostic {
     pub severity: &'static str,
     pub message: String,
@@ -104,8 +96,6 @@ pub struct ProjectUpdate {
     /// Generation of the installed engine that backs this project update.
     pub generation: u64,
     pub functions: Vec<FunctionInfo>,
-    /// Statically declared legacy test cases that can seed function previews.
-    pub tests: Vec<TestInfo>,
     /// Shared type table for `FunctionInfo.params` refs: every named type
     /// referenced from any function's schema, defined exactly once and keyed
     /// by canonical dotted FQN. `None` (omitted on the wire) means the binary
@@ -181,7 +171,6 @@ pub fn build_project_update(
     diagnostics: Vec<ProjectDiagnostic>,
 ) -> ProjectUpdate {
     let listing = baml_ide::list_functions_with_metadata(db);
-    let tests_listing = baml_ide::list_tests_with_metadata(db);
 
     let functions = listing
         .functions
@@ -213,20 +202,10 @@ pub fn build_project_update(
         })
         .collect();
 
-    let tests = tests_listing
-        .into_iter()
-        .map(|test| TestInfo {
-            name: test.name,
-            function_name: test.function_name,
-            args_json: test.args_json,
-        })
-        .collect();
-
     ProjectUpdate {
         is_bex_current,
         generation,
         functions,
-        tests,
         types: Some(listing.types),
         diagnostics,
     }

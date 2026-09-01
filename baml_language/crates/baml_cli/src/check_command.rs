@@ -124,9 +124,6 @@ impl CheckArgs {
             if should_seed {
                 match crate::bytecode_cache::compile_program_artifacts(
                     db,
-                    &baml_db::baml_compiler2_emit::CompileOptions {
-                        emit_test_cases: false,
-                    },
                     cache.as_ref(),
                     reuse_plan.as_ref(),
                 ) {

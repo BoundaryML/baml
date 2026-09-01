@@ -28,7 +28,7 @@ function HostExtract<T>(input: string) -> T {
 
 // Pure, offline entry point used by the Python host-boundary tests.
 function HostParse<T>(raw: string) -> T {
-  HostExtract$parse<T>(raw)
+  HostExtract@spec<T>("").parse(raw)
 }
 
 function HostTypeEqual<A, B>() -> bool {

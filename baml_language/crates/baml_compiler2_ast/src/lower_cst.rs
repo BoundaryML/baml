@@ -19,7 +19,7 @@ use crate::{
         FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, ImplementsBlockDef,
         ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Item, LambdaDef, LambdaKind,
         LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, TemplateStringDef,
-        TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
+        TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -114,8 +114,8 @@ fn lower_file_with_path_and_test_owner_impl(
     for child in root.children() {
         match child.kind() {
             baml_compiler_syntax::SyntaxKind::FUNCTION_DEF => {
-                if let Some(func) = lower_function(&child, &mut diags, &mut env_var_refs) {
-                    let companions = expand_companions(&func);
+                if let Some(func) = lower_function(&child, &mut diags, &mut env_var_refs, None) {
+                    let companions = expand_companions(&func, None, &[]);
                     items.push(Item::Function(func));
                     items.extend(companions.into_iter().map(Item::Function));
                 }
@@ -170,11 +170,6 @@ fn lower_file_with_path_and_test_owner_impl(
                     provider,
                     span: child.span_range(),
                 });
-            }
-            baml_compiler_syntax::SyntaxKind::TEST_DEF => {
-                if let Some(t) = lower_test(&child, &mut diags) {
-                    items.push(Item::Test(t));
-                }
             }
             baml_compiler_syntax::SyntaxKind::TEST_EXPR_DEF => {
                 if let Some(reg) = lower_test_expr(&child) {
@@ -320,10 +315,17 @@ fn check_missing_type(
 
 // ── Per-item lowering ───────────────────────────────────────────
 
+#[derive(Clone, Copy)]
+struct ClassMethodContext<'a> {
+    name: &'a Name,
+    generic_params: &'a [crate::ast::GenericParam],
+}
+
 fn lower_function(
     node: &SyntaxNode,
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<crate::EnvVarRef>,
+    class_method: Option<ClassMethodContext<'_>>,
 ) -> Option<FunctionDef> {
     let func = ast::FunctionDef::cast(node.clone())?;
     let Some(name_token) = func.name() else {
@@ -445,7 +447,7 @@ fn lower_function(
             .collect();
         let param_names: Vec<Name> = user_params.iter().map(|p| p.name.clone()).collect();
 
-        // Build and stash the `$spec` companion body while the CST prompt
+        // Build and stash the `@spec` companion body while the CST prompt
         // literal is in hand (read back by `companions::llm_spec`). Skipped
         // when the prompt or client is unusable — the migration diagnostics
         // above are the authoritative errors then.
@@ -471,7 +473,7 @@ fn lower_function(
         // Every LLM function runs the ai Agent loop; `client: ai.Client? =
         // null` is the compiler-injected per-call override. When the spec
         // could not be synthesized (migration diagnostics fired), the body is
-        // omitted so the missing `<Fn>$spec` reference never cascades.
+        // omitted so the missing `<Fn>@spec` reference never cascades.
         append_spec_client_param(&mut params, &mut defaults, llm_body_def.span);
         append_spec_on_event_param(&mut params, &mut defaults, llm_body_def.span);
         let body = if llm_body_def
@@ -479,6 +481,15 @@ fn lower_function(
             .iter()
             .any(|(t, _)| t == "spec")
         {
+            let owner_generic_param_names = class_method
+                .map(|owner| {
+                    owner
+                        .generic_params
+                        .iter()
+                        .map(|param| param.name.clone())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
             let (expr_body, source_map) = lower_expr_body::synthesize_spec_agent_run_body(
                 name.as_str(),
                 &user_params,
@@ -486,6 +497,8 @@ fn lower_function(
                     .iter()
                     .map(|param| param.name.clone())
                     .collect::<Vec<_>>(),
+                class_method.map(|owner| owner.name),
+                &owner_generic_param_names,
                 llm_body_def.span,
             );
             Some(FunctionBodyDef::Expr(expr_body, source_map))
@@ -1044,6 +1057,7 @@ fn lower_class(
 
     let generic_params = extract_generic_params_with_bounds(node, diags);
     let class_name = name_token.text().to_string();
+    let class_name_ident = Name::new(name_token.text());
 
     let fields = class
         .fields()
@@ -1125,9 +1139,24 @@ fn lower_class(
 
     let methods = class
         .methods()
-        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
+        .filter_map(|f| {
+            lower_function(
+                f.syntax(),
+                diags,
+                env_var_refs,
+                Some(ClassMethodContext {
+                    name: &class_name_ident,
+                    generic_params: &generic_params,
+                }),
+            )
+        })
         .flat_map(|func| {
-            let companions = expand_companions(&func);
+            let owner_generic_param_names = generic_params
+                .iter()
+                .map(|param| param.name.clone())
+                .collect::<Vec<_>>();
+            let companions =
+                expand_companions(&func, Some(&class_name_ident), &owner_generic_param_names);
             std::iter::once(func).chain(companions)
         })
         .collect();
@@ -1138,7 +1167,7 @@ fn lower_class(
         .collect();
 
     let mut class_def = crate::ast::ClassDef {
-        name: Name::new(name_token.text()),
+        name: class_name_ident,
         generic_params,
         fields,
         methods,
@@ -1369,7 +1398,7 @@ fn lower_interface(
 
     let default_methods = iface
         .default_methods()
-        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
+        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs, None))
         .collect();
 
     Some(InterfaceDef {
@@ -1578,7 +1607,7 @@ fn lower_implements_block(
 
     let methods = block
         .methods()
-        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
+        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs, None))
         .collect();
 
     Some(ImplementsBlockDef {
@@ -1659,7 +1688,7 @@ fn lower_implements_for(
 
     let methods = imp
         .methods()
-        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs))
+        .filter_map(|f| lower_function(f.syntax(), diags, env_var_refs, None))
         .collect();
 
     Some(ImplementsForDef {
@@ -1735,147 +1764,6 @@ fn lower_type_alias(
         name_span: name_token.text_range(),
         docstring: crate::docstring::extract_docstring(node),
     })
-}
-
-fn lower_test(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<TestDef> {
-    let test = ast::TestDef::cast(node.clone())?;
-    let Some(name_token) = test.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "test",
-            span: node.span_range(),
-        });
-        return None;
-    };
-
-    let test_name = name_token.text().to_string();
-    let config_block = test.config_block();
-    if let Some(block) = &config_block {
-        for item in block.items() {
-            if item.key().is_none() {
-                diags.push(LoweringDiagnostic::MissingConfigKey {
-                    block_kind: "test",
-                    block_name: test_name.clone(),
-                    span: item.syntax().span_range(),
-                });
-            }
-        }
-    }
-    let function_refs = test
-        .function_reference_names()
-        .into_iter()
-        .map(Name::new)
-        .collect();
-    let args = config_block
-        .as_ref()
-        .and_then(|block| block.items().find(|item| item.matches_key("args")))
-        .and_then(|item| item.nested_block())
-        .map(|block| lower_test_arg_map(&block))
-        .unwrap_or_default();
-
-    Some(TestDef {
-        name: Name::new(&test_name),
-        function_refs,
-        args,
-        span: node.span_range(),
-        name_span: name_token.text_range(),
-    })
-}
-
-fn lower_test_arg_map(block: &ast::ConfigBlock) -> Vec<(Name, TestArgValue)> {
-    block
-        .items()
-        .filter_map(|item| {
-            let key = item.key()?;
-            Some((Name::new(key.text()), lower_test_arg_item(&item)))
-        })
-        .collect()
-}
-
-fn lower_test_arg_map_as_value(block: &ast::ConfigBlock) -> TestArgValue {
-    TestArgValue::Map(
-        lower_test_arg_map(block)
-            .into_iter()
-            .map(|(key, value)| (key.to_string(), value))
-            .collect(),
-    )
-}
-
-fn lower_test_arg_item(item: &ast::ConfigItem) -> TestArgValue {
-    if let Some(block) = item.nested_block() {
-        return lower_test_arg_map_as_value(&block);
-    }
-
-    item.config_value_node()
-        .map(|value| lower_test_arg_config_value(&value))
-        .unwrap_or(TestArgValue::Null)
-}
-
-fn lower_test_arg_config_value(value: &SyntaxNode) -> TestArgValue {
-    if value
-        .descendants()
-        .any(|node| node.kind() == SyntaxKind::RAW_STRING_LITERAL)
-    {
-        return TestArgValue::Null;
-    }
-
-    if let Some(array) = value
-        .children()
-        .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
-    {
-        return TestArgValue::Array(
-            array
-                .children()
-                .filter_map(|element| match element.kind() {
-                    SyntaxKind::CONFIG_VALUE => Some(lower_test_arg_config_value(&element)),
-                    SyntaxKind::CONFIG_BLOCK => ast::ConfigBlock::cast(element)
-                        .map(|block| lower_test_arg_map_as_value(&block)),
-                    _ => None,
-                })
-                .collect(),
-        );
-    }
-
-    let raw = value.text().to_string();
-    if let Some(string) = crate::parse_string_attr_value(raw.trim()) {
-        return TestArgValue::String(string);
-    }
-
-    let text = ast::ConfigValue::cast(value.clone())
-        .and_then(|config_value| config_value.scalar_text())
-        .unwrap_or_default();
-
-    match text.as_str() {
-        "null" => return TestArgValue::Null,
-        "true" => return TestArgValue::Bool(true),
-        "false" => return TestArgValue::Bool(false),
-        _ => {}
-    }
-
-    // Duck-typed scalar: number-shaped text becomes a number, everything
-    // else stays a string, so no diagnostics here. `num_lit` handles base
-    // prefixes and underscores; a leading `-` is handled by hand since the
-    // helper only accepts unsigned magnitudes.
-    let (negated, magnitude) = match text.strip_prefix('-') {
-        Some(rest) => (true, rest),
-        None => (false, text.as_str()),
-    };
-    if let Ok(value) = baml_base::num_lit::parse_int_literal(magnitude) {
-        return TestArgValue::Int(if negated { -value } else { value });
-    }
-    if let Ok(value) = text.parse::<f64>() {
-        return TestArgValue::float(value);
-    }
-    // Underscored floats (`1_000.5`) fail the plain parse; retry with
-    // separators stripped, but only for digit-led text so words containing
-    // underscores (`in_f`) can't be misread as `inf`.
-    if magnitude.starts_with(|c: char| c.is_ascii_digit())
-        && text.contains('_')
-        && let Ok(value) = baml_base::num_lit::normalize_float_literal(&text).parse::<f64>()
-    {
-        return TestArgValue::float(value);
-    }
-
-    TestArgValue::String(text)
 }
 
 /// Extract the name expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.

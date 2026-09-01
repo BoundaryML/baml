@@ -3,26 +3,26 @@ source: crates/baml_tests/src/corpus.rs
 ---
 === PPIR ===
 function user.fixtures.backtick_decl_slots.Greet(name: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
-  ai.Agent.new(client = client, on_event = on_event).run(Greet$spec(name)).value
+  ai.Agent.new(client = client, on_event = on_event).run(Greet@spec(name)).value
 }
-function user.fixtures.backtick_decl_slots.Greet$build_request(name: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
-  Greet$spec(name).build_request(override_client = client)
+function user.fixtures.backtick_decl_slots.Greet@build_request(name: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  Greet@spec(name).build_request(client = client)
 }
-function user.fixtures.backtick_decl_slots.Greet$parse(json: string) -> string  [expr] {
+function user.fixtures.backtick_decl_slots.Greet@parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
-function user.fixtures.backtick_decl_slots.Greet$render_prompt(name: string) -> ai.Prompt  [expr] {
-  Greet$spec(name).prompt()
+function user.fixtures.backtick_decl_slots.Greet@render_prompt(name: string) -> ai.Prompt  [expr] {
+  Greet@spec(name).prompt()
 }
-function user.fixtures.backtick_decl_slots.Greet$spec(name: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "Greet", args: map { "name": name }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Say hello to ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } name);  __tt_cur =  __tt_cur Add ".";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Fast) }
+function user.fixtures.backtick_decl_slots.Greet@spec(name: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "Greet", args: map { "name": name }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Say hello to ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } name);  __tt_cur =  __tt_cur Add ".";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) catch_all ( __prompt_render_err) { _ => throw ai.errors.PromptRenderError { message: "prompt template r...", cause:  __prompt_render_err } } }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Fast) }
 }
-function user.fixtures.backtick_decl_slots.Greet$stream(name: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(Greet$spec(name), client = client, on_event = on_event)
+function user.fixtures.backtick_decl_slots.Greet@stream(name: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(Greet@spec(name), client = client, on_event = on_event)
 }
 function user.fixtures.backtick_decl_slots.Header(title: string) -> string  [expr] {
   {  } `...`
 }
 
 --- captures ---
-lambda ( __spec_output_format) in Greet$spec: captures [name]
+lambda ( __spec_output_format) in Greet@spec: captures [name]

@@ -193,12 +193,10 @@ pub fn external_to_outbound(
         BexExternalValue::Handle(_)
         | BexExternalValue::FunctionRef { .. }
         | BexExternalValue::Adt(_) => {
-            // For `TaggedHeapHandle` the underlying type rides on the wire as a
-            // full `BamlTy` so the host can pick a typed wrapper (from the class
-            // FQN) and the wire form stays faithful (an interface keeps its
-            // bindings). Other ADTs are discriminated purely by `handle_type`
-            // and leave `ty` unset. Read `ty` directly off the variant — no heap
-            // permit needed (plan 23a §"Outbound encode").
+            // A tagged capability's trusted `handle_type` selects the host
+            // wrapper. Its `ty` rides along only for annotations and
+            // diagnostics; live declaration identity and generic substitution
+            // come from the rooted heap object when it re-enters the engine.
             let ty = match value {
                 BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { ty, .. }) => {
                     Some(crate::ty_encode::runtime_ty_to_proto_ty(ty))
@@ -858,6 +856,43 @@ mod tests {
         assert!(matches!(
             encoded.value,
             Some(BamlValueVariant::MediaValue(_))
+        ));
+    }
+
+    #[test]
+    fn portable_boundary_never_boxes_media_or_prompt_as_handles() {
+        let media = Arc::new(MediaValue::new(
+            bex_project::MediaKind::Image,
+            MediaContent::Base64 {
+                base64_data: "aW1hZ2U=".to_string(),
+            },
+            Some("image/png".to_string()),
+        ));
+        let prompt = Arc::new(PromptAst::Message {
+            role: "user".to_string(),
+            content: Arc::new(PromptAstSimple::Media(media.clone())),
+            metadata: serde_json::Value::Null,
+        });
+        let options = CffiHandleTableOptions::for_wire();
+
+        let encoded_media = external_to_outbound(
+            &BexExternalValue::Adt(BexExternalAdt::Media(media)),
+            &options,
+        )
+        .unwrap();
+        let encoded_prompt = external_to_outbound(
+            &BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt)),
+            &options,
+        )
+        .unwrap();
+
+        assert!(matches!(
+            encoded_media.value,
+            Some(BamlValueVariant::MediaValue(_))
+        ));
+        assert!(matches!(
+            encoded_prompt.value,
+            Some(BamlValueVariant::PromptAstValue(_))
         ));
     }
 }

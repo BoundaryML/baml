@@ -26,7 +26,7 @@ testset "test" {
         testset sentiments {
             let req = baml.http.fetch("http://localhost:8000/" + sentiments);
             let data = req.text();
-            let tests = GenerateTests$parse(data);
+            let tests = GenerateTests@parse(data);
             for (let ex in tests) {
                 test ex {
                     let result = ClassifySentiment("hi");

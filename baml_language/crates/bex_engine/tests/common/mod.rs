@@ -174,7 +174,7 @@ pub(crate) fn prompt_ast_to_string(value: &BexExternalValue) -> String {
 /// `return_type` is the function's return type (e.g. "Tree", "`RecAliasOne`", "int").
 ///
 /// Returns the full rendered prompt string (input arg + output format), as
-/// produced by the compiler-generated `<Fn>$render_prompt` companion.
+/// produced by `Fn@spec(...).prompt()`.
 pub(crate) async fn render_output_format(baml_types: &str, return_type: &str) -> String {
     let source = format!(
         r##"
@@ -189,7 +189,7 @@ function TestFunc(input: string) -> {return_type} {{
 }}
 
 function get_prompt() -> string {{
-    TestFunc$render_prompt("test").text()
+    TestFunc@spec("test").prompt().text()
 }}
 "##
     );

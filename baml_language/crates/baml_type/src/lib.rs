@@ -155,6 +155,52 @@ fn dedup_and_collapse(types: Vec<Ty>, attr: TyAttr) -> Ty {
     }
 }
 
+/// Does `pred` hold for `ty` or any type nested inside it?
+pub fn contains_ty_where(ty: &Ty, pred: &dyn Fn(&Ty) -> bool) -> bool {
+    if pred(ty) {
+        return true;
+    }
+
+    match ty {
+        Ty::AssociatedTypeProjection {
+            base, interface, ..
+        } => contains_ty_where(base, pred) || interface.tys().any(|t| contains_ty_where(t, pred)),
+        Ty::List(inner, _) => contains_ty_where(inner, pred),
+        Ty::Map {
+            key: k, value: v, ..
+        } => contains_ty_where(k, pred) || contains_ty_where(v, pred),
+        Ty::Union(tys, _) => tys.iter().any(|t| contains_ty_where(t, pred)),
+        Ty::Future(value, error, _) => {
+            contains_ty_where(value, pred) || contains_ty_where(error, pred)
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params
+                .iter()
+                .any(|param| contains_ty_where(&param.ty, pred))
+                || contains_ty_where(ret, pred)
+                || contains_ty_where(throws, pred)
+        }
+        Ty::Class(_, type_args, _) => type_args.iter().any(|t| contains_ty_where(t, pred)),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args.iter().any(|t| contains_ty_where(t, pred))
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| contains_ty_where(ty, pred))
+        }
+        _ => false,
+    }
+}
+
+/// Does `ty` carry `Ty::Error` or `Ty::Unknown` anywhere in its structure?
+pub fn contains_error_recovery(ty: &Ty) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::Error { .. } | Ty::Unknown { .. }))
+}
+
 impl Ty {
     /// The bottom type with default attributes.
     pub fn never() -> Self {

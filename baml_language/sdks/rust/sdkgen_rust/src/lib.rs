@@ -846,6 +846,33 @@ mod tests {
     }
 
     #[test]
+    fn stream_with_options_counts_options_for_the_clippy_lint() {
+        let n = name("user", &[], "wide_function@stream");
+        let mut function = nullary_string_fn(&n);
+        function.arguments = (0..7)
+            .map(|index| baml_codegen_types::FunctionArgument {
+                injected: false,
+                name: baml_base::Name::new(format!("arg_{index}")),
+                docstring: None,
+                ty: Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                default: None,
+            })
+            .collect();
+        let pool = SymbolPool::from([(n, Symbol::Function(function))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        assert_eq!(
+            lib.matches("#[allow(clippy::too_many_arguments)]").count(),
+            4,
+            "the sync/async stream bindings and their options variants need the allowance:\n{lib}"
+        );
+    }
+
+    #[test]
     fn functions_with_arguments_carry_the_by_value_note() {
         let with_args = name("user", &[], "takes_one");
         let mut function = nullary_string_fn(&with_args);

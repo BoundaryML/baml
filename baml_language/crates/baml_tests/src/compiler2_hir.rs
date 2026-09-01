@@ -591,8 +591,8 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Five conflicts: greet, greet$spec, greet$render_prompt,
-        // greet$build_request, and greet$parse. Each LLM function expands to
+        // Five conflicts: greet, greet@spec, greet@render_prompt,
+        // greet@build_request, and greet@parse. Each LLM function expands to
         // AST-level companions, all duplicated across 3 files.
         assert_eq!(ns.conflicts().len(), 5);
         for conflict in ns.conflicts() {
@@ -702,25 +702,6 @@ mod tests {
 
         let package = PackageId::new(&db, Name::new("user"));
         assert!(package_items(&db, package).conflicts().is_empty());
-    }
-
-    #[test]
-    fn same_named_tests_keep_function_scoped_identity() {
-        let mut db = make_db();
-        let _file_a = db.file(
-            "a.baml",
-            "function First() -> int { 1 }\ntest Shared { functions [First] }
-",
-        );
-        let _file_b = db.file(
-            "b.baml",
-            "function Second() -> int { 2 }\ntest Shared { functions [Second] }
-",
-        );
-
-        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
-        assert!(ns.conflicts().is_empty());
     }
 
     /// No conflict when names are unique across files.
@@ -2175,11 +2156,6 @@ function MyTemplate(x: string) -> string { `${x}` }
 client MyClient = openai.ResponsesClient.new(model = "gpt-4o-mini");
 
 function target() -> int { 1 }
-
-test my_test {
-  functions [target]
-  args {}
-}
 "##;
         let file = db.file("spans.baml", src);
         let text = |range: text_size::TextRange| {
@@ -2249,14 +2225,6 @@ test my_test {
             text(item_data::let_source_map(&db, find_let("MyClient")).name_span),
             "MyClient"
         );
-
-        let test_loc = *item_data::file_tests(&db, file)
-            .iter()
-            .find(|&&t| item_data::test_data(&db, t).name.as_str() == "my_test")
-            .unwrap();
-        let test_spans = item_data::test_source_map(&db, test_loc);
-        assert_eq!(text(test_spans.name_span), "my_test");
-        assert!(text(test_spans.span).starts_with("test my_test"));
 
         // The `implements … for …` block merges onto same-file `MyClass`, so it
         // is an in-class impl — its docstring is intentionally absent today.

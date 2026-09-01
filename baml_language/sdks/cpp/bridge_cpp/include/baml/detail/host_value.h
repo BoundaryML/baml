@@ -267,6 +267,12 @@ inline void transcode_outbound_to_inbound(pb::InboundValue& out,
       handle->set_handle_type(v.handle_value().handle_type());
       return;
     }
+    case pb::BamlOutboundValue::kMediaValue:
+      out.mutable_media_value()->CopyFrom(v.media_value());
+      return;
+    case pb::BamlOutboundValue::kPromptAstValue:
+      out.mutable_prompt_ast_value()->CopyFrom(v.prompt_ast_value());
+      return;
     case pb::BamlOutboundValue::kUint8ArrayValue:
       out.set_uint8array_value(v.uint8array_value());
       return;

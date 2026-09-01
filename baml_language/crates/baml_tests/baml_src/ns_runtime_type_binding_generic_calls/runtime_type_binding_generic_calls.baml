@@ -29,16 +29,9 @@ test "non-closure generic list ops over a runtime-bound element type" {
     assert.equal(items.slice(0, 0).length(), 0)
 }
 
-// The shape that ICEd, guarded at COMPILE time only — the crash was in MIR
-// lowering, which every corpus file goes through, and this function is
-// deliberately never called.
-//
-// It is not executed because the runtime gate still rejects it: the unsolved
-// slot MIR seeds is `baml.Array.filter`'s own `E`, an effect parameter whose
-// language default is `never` rather than the top type MIR widens to.
-// `default_unsolved_effects_to_never` only recognizes synthetic
-// `__effect_param_N` params, so a user-written `filter<E>(…) throws E` is
-// missed. Promote this to a `test` once that is fixed.
+// The shape that ICEd. Inferring the stored lambda parameter also lets the
+// callback's `never` effect reach `Array.filter`'s `E` slot, so this now runs
+// through the runtime gate instead of only compiling.
 function ClosureOverRuntimeBoundElement() -> int {
     let item_t = reflect.class
         .new("BoundPredicate", { "value": reflect.Type.of<string>() })
@@ -52,6 +45,10 @@ function ClosureOverRuntimeBoundElement() -> int {
             true
         })
         .length()
+}
+
+test "closure generic list ops over a runtime-bound element type" {
+    assert.equal(ClosureOverRuntimeBoundElement(), 0)
 }
 
 // The user-generic-class receiver path. `Holder<Bound>` puts a runtime-bound

@@ -445,6 +445,17 @@ def _seed_generic_media_handle() -> tuple[builtins.int, builtins.int]:
     Test-only: seed an `Adt(Media(generic))` entry through the shared CFFI API.
     """
 
+def _release_wire_handle(key: builtins.int) -> None:
+    r"""
+    Release a handle cloned for wire ownership when encoding aborts before the
+    engine can consume it.
+    """
+
+def _live_handle_count() -> builtins.int:
+    r"""
+    Test-only: return the number of live ordinary HANDLE_TABLE keys.
+    """
+
 def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
 
 def flush_events() -> None:

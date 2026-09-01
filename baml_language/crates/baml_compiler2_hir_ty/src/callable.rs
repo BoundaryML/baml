@@ -178,8 +178,8 @@ pub struct FunctionSignatureTy {
     /// contract is then [`callable_throws`]' inferred one).
     pub declared_throws: Option<baml_type::Ty>,
     /// The function's OWN generic parameters: its frame minus the enclosing
-    /// type's prefix (class frame, interface frame incl. `Self` and the
-    /// associated slots, or free-impl frame).
+    /// type's prefix (class frame, `[Self, iface params..]` for an
+    /// interface, or the impl block's frame).
     pub generic_params: Vec<baml_type::ParamTy>,
     /// `Some` for builtin-bodied functions.
     pub builtin_kind: Option<baml_compiler2_ast::BuiltinKind>,
@@ -216,7 +216,7 @@ fn enclosing_param_count<'db>(
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => crate::lower::class_generic_frame(db, class).len(),
         Some(MethodOwner::Interface(iface)) => crate::lower::interface_frame(db, iface).len(),
-        Some(MethodOwner::FreeImpl(imp)) => crate::lower::impl_frame(db, imp).len(),
+        Some(MethodOwner::Impl(imp)) => crate::lower::impl_frame(db, imp).len(),
         None => 0,
     }
 }

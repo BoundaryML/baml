@@ -6,7 +6,10 @@
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
-use tokio::{io::AsyncWriteExt, net::TcpListener};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+};
 
 /// Replace the dynamic address in bytecode with a stable placeholder.
 fn stabilize_bytecode(bytecode: &str, addr: &str) -> String {
@@ -26,21 +29,25 @@ async fn net_connect_and_read() {
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> uint8array {{
+            function main() -> uint8array? {{
                 let sock = baml.net.TcpStream.connect("{addr}");
-                sock.read()
+                sock.read(1024)
             }}
         "#
     ));
     server.await.unwrap();
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
-    function main() -> uint8array {
+    function main() -> uint8array | null {
         load_const "{ADDR}"
         load_const <omitted>
         call baml.net.TcpStream.connect
-        load_const <omitted>
-        call baml.net.TcpStream.read
+        load_const 1024
+        load_type baml.io.Read
+        load_const "read"
+        virtual_call nargs=2 ntypeargs=0
+        store_var _0
+        load_var _0
         return
     }
     "#);
@@ -54,26 +61,57 @@ async fn net_connect_and_read() {
 async fn net_connect_failure() {
     let output = baml_test!(
         r#"
-            function main() -> uint8array {
+            function main() -> uint8array? {
                 let sock = baml.net.TcpStream.connect("127.0.0.1:1");
-                sock.read()
+                sock.read(1024)
             }
         "#
     );
 
     insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> uint8array {
+    function main() -> uint8array | null {
         load_const "127.0.0.1:1"
         load_const <omitted>
         call baml.net.TcpStream.connect
-        load_const <omitted>
-        call baml.net.TcpStream.read
+        load_const 1024
+        load_type baml.io.Read
+        load_const "read"
+        virtual_call nargs=2 ntypeargs=0
+        store_var _0
+        load_var _0
         return
     }
     "#);
     // Error message contains OS error code which differs across platforms
     // (111 on Linux, 61 on macOS).
     assert!(output.result.is_err());
+}
+
+#[tokio::test]
+async fn net_write_accepts_text_and_writes_every_byte() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut data = Vec::new();
+        socket.read_to_end(&mut data).await.unwrap();
+        data
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> int {{
+                let sock = baml.net.TcpStream.connect("{addr}");
+                let written = sock.write("hello");
+                sock.close();
+                written
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(5)));
+    assert_eq!(server.await.unwrap(), b"hello");
 }
 
 #[tokio::test]
@@ -91,10 +129,10 @@ async fn net_multiple_reads() {
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> uint8array {{
+            function main() -> uint8array? {{
                 let sock = baml.net.TcpStream.connect("{addr}");
-                let first = sock.read();
-                let second = sock.read();
+                let first = sock.read(1024);
+                let second = sock.read(1024);
                 first
             }}
         "#
@@ -102,18 +140,22 @@ async fn net_multiple_reads() {
     server.await.unwrap();
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
-    function main() -> uint8array {
+    function main() -> uint8array | null {
         load_const "{ADDR}"
         load_const <omitted>
         call baml.net.TcpStream.connect
         store_var sock
         load_var sock
-        load_const <omitted>
-        call baml.net.TcpStream.read
+        load_const 1024
+        load_type baml.io.Read
+        load_const "read"
+        virtual_call nargs=2 ntypeargs=0
         store_var first
         load_var sock
-        load_const <omitted>
-        call baml.net.TcpStream.read
+        load_const 1024
+        load_type baml.io.Read
+        load_const "read"
+        virtual_call nargs=2 ntypeargs=0
         store_var second
         load_var first
         return
@@ -125,48 +167,78 @@ async fn net_multiple_reads() {
     );
 }
 
-// Kept in Rust (not the baml_src corpus): the silent peer must be a
-// controlled Rust listener that accepts and holds the connection open. A
-// corpus version using `baml.http.Server.bind` as the silent peer is flaky —
-// the BAML listener object can be GC-collected between `connect` and the
-// throwing `read`, resetting the connection into an `Io` error instead of the
-// expected `Timeout`, intermittently under load.
 #[tokio::test]
-async fn net_read_timeout_fires() {
-    // The server accepts the connection but never writes, so a bare read() would
-    // block forever. A short read timeout must surface as baml.errors.Timeout.
+async fn net_read_is_cancellable() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap().to_string();
 
     let server = tokio::spawn(async move {
         let _conn = listener.accept().await.unwrap();
-        // Hold the connection open (silent) past the client's deadline.
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     });
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> uint8array {{
+            function main() -> string {{
                 let sock = baml.net.TcpStream.connect("{addr}");
-                sock.read(timeout = baml.time.Duration.from_milliseconds(50n))
+                let tok = baml.spawn.CancelToken.new();
+                let read = spawn with baml.spawn.options(cancel = tok) {{
+                    sock.read(1024)
+                }};
+                let deadline = spawn {{
+                    baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+                    tok.cancel()
+                }};
+                let outcome = (await read) catch (e) {{
+                    baml.panics.Cancelled => "cancelled"
+                }};
+                match (outcome) {{
+                    let reason: string => reason,
+                    null => "eof",
+                    let chunk: uint8array => "read",
+                }}
             }}
         "#
     ));
     server.await.unwrap();
 
-    let err = output
-        .result
-        .expect_err("read with a 50ms timeout against a silent peer should time out")
-        .to_string();
-    assert!(
-        err.contains("baml.errors.Timeout"),
-        "expected a baml.errors.Timeout throw, got: {err}"
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("cancelled".into()))
     );
 }
 
 #[tokio::test]
-async fn net_read_succeeds_within_timeout() {
-    // A generous read timeout must not interfere with a prompt response.
+async fn net_close_cancels_pending_read() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+
+    let server = tokio::spawn(async move {
+        let _conn = listener.accept().await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                let sock = baml.net.TcpStream.connect("{addr}");
+                let read = spawn {{ sock.read(1024) }};
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(25n));
+                sock.close();
+                (await read) catch (e) {{
+                    baml.errors.Io => {{ return "closed"; }}
+                }};
+                "completed"
+            }}
+        "#
+    ));
+    server.await.unwrap();
+
+    assert_eq!(output.result, Ok(BexExternalValue::String("closed".into())));
+}
+
+#[tokio::test]
+async fn net_read_completes_before_cancellation() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap().to_string();
 
@@ -178,9 +250,19 @@ async fn net_read_succeeds_within_timeout() {
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> uint8array {{
+            function main() -> uint8array? {{
                 let sock = baml.net.TcpStream.connect("{addr}");
-                sock.read(timeout = baml.time.Duration.from_seconds(5n))
+                let tok = baml.spawn.CancelToken.new();
+                let read = spawn with baml.spawn.options(cancel = tok) {{
+                    sock.read(1024)
+                }};
+                let deadline = spawn {{
+                    baml.sys.sleep(baml.time.Duration.from_seconds(5n));
+                    tok.cancel()
+                }};
+                let chunk = await read;
+                deadline.cancel();
+                chunk
             }}
         "#
     ));
@@ -207,12 +289,12 @@ async fn net_connect_timeout_param_accepted() {
 
     let output = baml_test!(&format!(
         r#"
-            function main() -> uint8array {{
+            function main() -> uint8array? {{
                 let sock = baml.net.TcpStream.connect(
                     "{addr}",
                     timeout = baml.time.Duration.from_seconds(5n),
                 );
-                sock.read()
+                sock.read(1024)
             }}
         "#
     ));

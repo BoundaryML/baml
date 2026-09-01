@@ -1,0 +1,76 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function test_block_locals.$init_test_ns_test_block_locals_test_block_locals(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.test_block_locals"
+    load_const "test_block_local_instance_method_call"
+    make_closure .<lambda($init_test_ns_test_block_locals_test_block_locals, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.test_block_locals"
+    load_const "test_block_local_instance_field_read"
+    make_closure .<lambda($init_test_ns_test_block_locals_test_block_locals, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.test_block_locals"
+    load_const "test_block_local_adopted_default"
+    make_closure .<lambda($init_test_ns_test_block_locals_test_block_locals, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.test_block_locals"
+    load_const "test_block_local_interface_typed_value"
+    make_closure .<lambda($init_test_ns_test_block_locals_test_block_locals, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.test_block_locals"
+    load_const "test_block_local_bound_method"
+    make_closure .<lambda($init_test_ns_test_block_locals_test_block_locals, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.test_block_locals"
+    load_const "test_block_local_union_typed"
+    make_closure .<lambda($init_test_ns_test_block_locals_test_block_locals, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.test_block_locals"
+    load_const "test_block_local_mutation"
+    make_closure .<lambda($init_test_ns_test_block_locals_test_block_locals, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.test_block_locals"
+    load_const "test_block_local_interpolation"
+    make_closure .<lambda($init_test_ns_test_block_locals_test_block_locals, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function test_block_locals.<(user.test_block_locals.TblLoud as user.test_block_locals.TblSpeaker)>.speak(self: test_block_locals.TblLoud) -> string {
+    load_const "loud "
+    load_var self
+    load_field .tag
+    bin_op +
+    return
+}
+
+function test_block_locals.TblSpeaker.speak(self: test_block_locals.TblSpeaker) -> string {
+    load_const "default"
+    return
+}

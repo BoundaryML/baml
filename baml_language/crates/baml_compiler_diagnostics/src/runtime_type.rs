@@ -382,9 +382,9 @@ mod tests {
                 "generic function `root.Extract` cannot be extracted through reflection: its signature still mentions its own type parameters",
             ),
             (
-                unspecialized_reflected_generic_call("GenericList$render_prompt"),
+                unspecialized_reflected_generic_call("GenericList@render_prompt"),
                 "E0165",
-                "generic function `GenericList$render_prompt` cannot be invoked through reflection: its body needs type arguments",
+                "generic function `GenericList@render_prompt` cannot be invoked through reflection: its body needs type arguments",
             ),
             (
                 computed_generic_argument_requires_unreflect("runtime_t"),

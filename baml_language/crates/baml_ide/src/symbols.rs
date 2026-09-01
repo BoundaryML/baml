@@ -3,14 +3,9 @@
 //! This module provides APIs for listing symbols (functions, classes, enums, etc.)
 //! in a BAML project.
 
-use baml_compiler2_hir::{
-    contributions::{Definition, DefinitionKind},
-    package::package_items,
-};
+use baml_compiler2_hir::{contributions::Definition, package::package_items};
 use baml_compiler2_hir_ty::package_interface::package_interface;
-use baml_compiler2_ppir::item_data::{
-    function_data, function_llm_meta, function_source_map, test_data,
-};
+use baml_compiler2_ppir::item_data::{function_data, function_llm_meta, function_source_map};
 use baml_db::{Name, ProjectDatabase};
 
 use crate::{
@@ -21,9 +16,7 @@ use crate::{
 /// Whether an enumeration of the language surface should skip this
 /// definition as synthesized.
 ///
-/// Two reasons, one rule. A `$`-companion (`Extract$parse`, `Agent$stream`)
-/// has no spelling in source — `$` cannot appear in a written name — so no
-/// position can name one. And companions and auto-derives carry the
+/// Companions and auto-derives carry the
 /// docstring of the declaration they shadow, so listing them makes every
 /// original into several near-duplicate rows. Search and completion both
 /// enumerate what a reader can write, so both ask here.
@@ -134,18 +127,6 @@ impl From<baml_compiler2_ast::ast::FunctionOrigin> for FunctionOrigin {
     }
 }
 
-/// Extended test metadata for the playground.
-#[derive(Debug, Clone)]
-pub struct TestSymbol {
-    pub name: String,
-    /// One function targeted by this test. Tests that target multiple
-    /// functions produce one symbol per function so preview selection is
-    /// unambiguous.
-    pub function_name: String,
-    /// Test args serialized as a JSON string.
-    pub args_json: String,
-}
-
 /// List user-facing functions with metadata for the playground, along with
 /// the shared type table their param schemas reference.
 ///
@@ -167,8 +148,8 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
                     .and_then(|meta| meta.client_name.as_ref())
                     .map(std::string::ToString::to_string);
 
-                // Sub-functions have names with '$' (e.g. MyFunc$render_prompt)
-                let is_sub_function = name.as_str().contains('$');
+                // Callable companions have names with `@` (e.g. `MyFunc@render_prompt`).
+                let is_sub_function = name.as_str().contains('@');
 
                 let function = function_data(db, *func_loc);
                 let origin: FunctionOrigin = function.metadata.origin.into();
@@ -326,72 +307,6 @@ pub(crate) fn playground_function_name(namespace_path: &[Name], name: &Name) -> 
     parts.join(".")
 }
 
-/// List tests with full metadata for the playground.
-// BUG: duplicated with different semantics in
-// `baml_cli::test_command::discover_legacy_tests` — see the note there.
-pub fn list_tests_with_metadata(db: &ProjectDatabase) -> Vec<TestSymbol> {
-    let pkg_id = baml_compiler2_hir::package::sole_workspace_package(db);
-    let pkg = package_items(db, pkg_id);
-    let mut result = Vec::new();
-    for (namespace_path, ns_items) in &pkg.namespaces {
-        for (name, defn) in &ns_items.values {
-            if let Definition::Test(test_loc) = defn {
-                let test = test_data(db, *test_loc);
-
-                let args_json = serialize_test_args(&test.args);
-                result.extend(test.function_refs.iter().map(|function_name| {
-                    let function_name = ns_items
-                        .values
-                        .get(function_name)
-                        .filter(|definition| definition.kind() == DefinitionKind::Function)
-                        .map(|_| playground_function_name(namespace_path, function_name))
-                        .unwrap_or_else(|| function_name.to_string());
-                    TestSymbol {
-                        name: name.to_string(),
-                        function_name,
-                        args_json: args_json.clone(),
-                    }
-                }));
-            }
-        }
-    }
-    result.sort_by(|a, b| {
-        a.name
-            .cmp(&b.name)
-            .then_with(|| a.function_name.cmp(&b.function_name))
-    });
-    result
-}
-
-fn serialize_test_args(args: &[(Name, baml_compiler2_hir::item_tree::TestArgValue)]) -> String {
-    let object = args
-        .iter()
-        .map(|(name, value)| (name.to_string(), test_arg_to_json(value)))
-        .collect();
-    serde_json::to_string(&serde_json::Value::Object(object)).unwrap_or_else(|_| "{}".to_string())
-}
-
-fn test_arg_to_json(value: &baml_compiler2_hir::item_tree::TestArgValue) -> serde_json::Value {
-    use baml_compiler2_hir::item_tree::TestArgValue;
-
-    match value {
-        TestArgValue::Null => serde_json::Value::Null,
-        TestArgValue::Int(value) => serde_json::Value::from(*value),
-        TestArgValue::FloatBits(bits) => serde_json::Value::from(f64::from_bits(*bits)),
-        TestArgValue::Bool(value) => serde_json::Value::from(*value),
-        TestArgValue::String(value) => serde_json::Value::from(value.clone()),
-        TestArgValue::Array(items) => {
-            serde_json::Value::Array(items.iter().map(test_arg_to_json).collect())
-        }
-        TestArgValue::Map(entries) => serde_json::Value::Object(
-            entries
-                .iter()
-                .map(|(key, value)| (key.clone(), test_arg_to_json(value)))
-                .collect(),
-        ),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -464,134 +379,5 @@ mod tests {
                 column: 10,
             }
         );
-    }
-
-    #[test]
-    fn playground_test_metadata_preserves_typed_nested_args() {
-        let mut db = make_db();
-        db.file(
-            std::path::Path::new("/tmp/main.baml"),
-            r##"
-function preview(
-  text: string,
-  raw_text: string,
-  count: int,
-  ratio: float,
-  enabled: bool,
-  missing: string?,
-  tags: unknown[],
-  payload: map<string, unknown>,
-) -> string {
-  text
-}
-
-test PreviewCase {
-  functions [preview]
-  args {
-    text "hello world\nnext"
-    raw_text "raw value with spaces"
-    count -2
-    ratio 1.5
-    enabled true
-    missing null
-    tags ["a", 3, false]
-    payload {
-      nested "value"
-    }
-  }
-}
-"##,
-        );
-
-        let tests = list_tests_with_metadata(&db);
-        assert_eq!(tests.len(), 1);
-        assert_eq!(tests[0].name, "PreviewCase");
-        assert_eq!(tests[0].function_name, "preview");
-        assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&tests[0].args_json).unwrap(),
-            serde_json::json!({
-                "text": "hello world\nnext",
-                "raw_text": "raw value with spaces",
-                "count": -2,
-                "ratio": 1.5,
-                "enabled": true,
-                "missing": null,
-                "tags": ["a", 3, false],
-                "payload": { "nested": "value" },
-            }),
-        );
-    }
-
-    #[test]
-    fn playground_test_metadata_expands_multi_function_tests() {
-        let mut db = make_db();
-        db.file(
-            std::path::Path::new("/tmp/main.baml"),
-            r#"
-function alpha(value: string) -> string { value }
-function beta(value: string) -> string { value }
-
-test SharedCase {
-  functions [alpha, beta]
-  args { value "same" }
-}
-"#,
-        );
-
-        let tests = list_tests_with_metadata(&db);
-        assert_eq!(
-            tests
-                .iter()
-                .map(|test| (test.name.as_str(), test.function_name.as_str()))
-                .collect::<Vec<_>>(),
-            vec![("SharedCase", "alpha"), ("SharedCase", "beta")],
-        );
-        assert!(
-            tests
-                .iter()
-                .all(|test| test.args_json == r#"{"value":"same"}"#)
-        );
-    }
-
-    #[test]
-    fn playground_test_metadata_qualifies_local_namespace_function() {
-        let mut db = make_db();
-        db.file(
-            std::path::Path::new("/tmp/ns_demo/main.baml"),
-            r#"
-function preview(value: string) -> string { value }
-
-test PreviewCase {
-  functions [preview]
-  args { value "namespaced" }
-}
-"#,
-        );
-
-        let tests = list_tests_with_metadata(&db);
-        assert_eq!(tests.len(), 1);
-        assert_eq!(tests[0].function_name, "demo.preview");
-    }
-
-    #[test]
-    fn playground_test_metadata_preserves_cross_namespace_function_reference() {
-        let mut db = make_db();
-        db.file(
-            std::path::Path::new("/tmp/ns_demo/preview.baml"),
-            "function preview(value: string) -> string { value }",
-        );
-        db.file(
-            std::path::Path::new("/tmp/main.baml"),
-            r#"
-test PreviewCase {
-  functions [demo.preview]
-  args { value "namespaced" }
-}
-"#,
-        );
-
-        let tests = list_tests_with_metadata(&db);
-        assert_eq!(tests.len(), 1);
-        assert_eq!(tests[0].function_name, "demo.preview");
     }
 }

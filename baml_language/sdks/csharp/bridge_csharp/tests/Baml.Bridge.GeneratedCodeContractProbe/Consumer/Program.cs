@@ -418,9 +418,7 @@ internal sealed record GeneratedArtifacts(
     BamlGeneratedFunction<BamlGeneratedRequest> BuildRequest,
     BamlGeneratedArgument<BamlGeneratedRequest, Person> BuildRequestArgument,
     BamlGeneratedGenericFunction GenericDefault,
-    BamlGeneratedResultTypeParameter GenericResult,
-    BamlGeneratedStreamFunction<string, Person> StreamPerson,
-    BamlGeneratedStreamArgument<string, Person, Person> StreamPersonArgument);
+    BamlGeneratedResultTypeParameter GenericResult);
 
 internal static class GeneratedRegistration
 {
@@ -568,19 +566,6 @@ internal static class GeneratedRegistration
                 "TResult",
                 out BamlGeneratedResultTypeParameter genericResult);
 
-        BamlGeneratedStreamFunction<string, Person> streamPerson =
-            builder.DeclareStreamFunction(
-                "probe.stream_person",
-                "stream",
-                stringType,
-                personType);
-        BamlGeneratedStreamArgument<string, Person, Person>
-            streamPersonArgument =
-                builder.DeclareStreamArgument(
-                    streamPerson,
-                    "person",
-                    personType);
-
         return new GeneratedArtifacts(
             builder.Build(),
             stringType,
@@ -598,9 +583,7 @@ internal static class GeneratedRegistration
             buildRequest,
             buildRequestArgument,
             genericDefault,
-            genericResult,
-            streamPerson,
-            streamPersonArgument);
+            genericResult);
     }
 }
 
@@ -692,17 +675,6 @@ internal sealed class GeneratedClient(
         return program.Call(function, builder.Build());
     }
 
-    internal BamlGeneratedStream<string, Person> StreamPerson(
-        Person person)
-    {
-        BamlGeneratedStreamArgumentsBuilder<string, Person> builder =
-            generated.Registry.CreateArgumentsBuilder(
-                generated.StreamPerson);
-        builder.Set(generated.StreamPersonArgument, person);
-        return program.Stream(
-            generated.StreamPerson,
-            builder.Build());
-    }
 }
 
 internal static class ContractChecks
@@ -847,11 +819,6 @@ internal static class ContractChecks
             () => firstRegistry.CreateArgumentsBuilder(
                 default(BamlGeneratedFunction<string>)),
             "A default function token was accepted.");
-        Expect<InvalidOperationException>(
-            () => generated.Registry.CreateArgumentsBuilder(
-                default(BamlGeneratedStreamFunction<string, Person>)),
-            "A default stream function token was accepted.");
-
         BamlGeneratedArgumentsBuilder<string> frozenArguments =
             firstRegistry.CreateArgumentsBuilder(firstFunction);
         Expect<InvalidOperationException>(
@@ -1112,18 +1079,6 @@ internal static class Program
                 "The result-only generic binding failed.");
         }
 
-        BamlGeneratedStream<string, Person> stream =
-            client.StreamPerson(original);
-        Person final = await stream.GetFinalAsync();
-        if (!stream.Partials.SequenceEqual(
-                ["A", "Ad", "Ada"],
-                StringComparer.Ordinal)
-            || final.DisplayName != "Ada")
-        {
-            throw new InvalidOperationException(
-                "The typed stream partial/final tokens failed.");
-        }
-
         ContractChecks.CarrierRoundTrip(generated, original);
         ContractChecks.NegativeTokenChecks(generated);
         ContractChecks.VersionChecks(generated);
@@ -1155,7 +1110,7 @@ internal static class Program
         Console.WriteLine(
             "cross_assembly_generated_codec=full_v1_representative_ok");
         Console.WriteLine(
-            "cross_assembly_generated_dispatch=sync_async_generic_optional_self_request_stream_ok");
+            "cross_assembly_generated_dispatch=sync_async_generic_optional_self_request_ok");
         Console.WriteLine(
             "generated_token_negatives=cross_builder_duplicate_default_frozen_contradictory_ok");
         Console.WriteLine(

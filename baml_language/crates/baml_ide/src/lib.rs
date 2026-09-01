@@ -77,8 +77,8 @@ pub use symbol_pool::build_symbol_pool;
 // the unqualified name belongs to `describe::SymbolKind`, the payload-carrying
 // kind of a symbol description.
 pub use symbols::{
-    FunctionListing, FunctionOrigin, FunctionSourcePosition, FunctionSymbol, Symbol, TestSymbol,
-    list_functions_with_metadata, list_tests_with_metadata,
+    FunctionListing, FunctionOrigin, FunctionSourcePosition, FunctionSymbol, Symbol,
+    list_functions_with_metadata,
 };
 // Editor primitive: cursor-position token lookup. First-class API — callers
 // (e.g. the playground cursor context) must not depend on feature modules'

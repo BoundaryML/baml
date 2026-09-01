@@ -90,7 +90,23 @@ use sha2::{Digest, Sha256};
 /// sentinel (29). The slots are tombstoned rather than reused, so a 9 image
 /// carrying one in a persisted throw fact would now fail to decode instead of
 /// silently landing on whatever occupies the slot later.
-pub const FORMAT_VERSION: u32 = 10;
+///
+/// Version 11: the interface-dispatch rework, described as one net change
+/// against the format canary shipped (a bump only matters against that;
+/// intermediate shapes that never left the branch are not versions).
+/// Interface bodies became anonymous-but-slotted: `Function` gained
+/// `is_interface_body` + `native_key` (wire fields), and `function_indices` /
+/// `function_global_indices` stopped carrying impl-block methods and
+/// interface default bodies. Impl-rule method tables became PROVIDED-ONLY
+/// (an adopted interface default resolves at dispatch through the
+/// interface's `default_fn`, never through a baked row), rule fragments
+/// moved onto their declaring unit, and `ProgramMethodImplFrag` carries the
+/// body's code-bucket offset in that unit rather than a name. A body has no
+/// name-keyed coordinates on the PROGRAM wire — its spelling survives only
+/// as the `CompilationUnit`'s link-internal export/import key; compile
+/// boundaries read coordinates from the declaration-keyed placement
+/// registry, with a Pass-1 slot replay only at the stdlib-splice boundary.
+pub const FORMAT_VERSION: u32 = 11;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -125,8 +141,6 @@ pub struct KeyInputs<'a> {
     pub compiler_fingerprint: [u8; 32],
     /// `OptLevel` as a stable discriminant.
     pub opt_level: u8,
-    /// `CompileOptions::emit_test_cases`.
-    pub emit_test_cases: bool,
     /// `baml.toml` content, if the project has one.
     pub manifest: Option<&'a str>,
     /// `(project-root-relative path, content)` for every source file,
@@ -179,7 +193,7 @@ pub fn compute_key(inputs: &KeyInputs<'_>) -> CacheKey {
     h.update(MAGIC);
     h.update(FORMAT_VERSION.to_le_bytes());
     h.update(inputs.compiler_fingerprint);
-    h.update([inputs.opt_level, u8::from(inputs.emit_test_cases)]);
+    h.update([inputs.opt_level]);
     hash_opt_str(&mut h, inputs.manifest);
     h.update((inputs.files.len() as u64).to_le_bytes());
     // Sort defensively rather than trusting the documented precondition: an
@@ -277,20 +291,19 @@ pub struct ManifestFile {
 
 /// Fixed per-project key for the [`ProjectManifest`].
 ///
-/// Keyed by compiler fingerprint + opt + options + the project root path:
+/// Keyed by compiler fingerprint + opt level + the project root path:
 /// a different compiler build gets a fresh manifest (its previous Program
 /// would not be relink-compatible), and two checkouts of the same project
 /// don't fight over one entry.
 pub fn manifest_key(
     compiler_fingerprint: &[u8; 32],
     opt_level: u8,
-    emit_test_cases: bool,
     project_root: &Path,
     project_manifest_toml: Option<&str>,
 ) -> CacheKey {
     let mut h = keyed_hasher(b"project-manifest");
     h.update(compiler_fingerprint);
-    h.update([opt_level, u8::from(emit_test_cases)]);
+    h.update([opt_level]);
     update_framed(&mut h, project_root.as_os_str().as_encoded_bytes());
     // baml.toml is a compile input of the program key, so it must gate the
     // manifest too: a config-only change must not let plan_reuse splice
@@ -799,7 +812,6 @@ mod tests {
         KeyInputs {
             compiler_fingerprint: [7u8; 32],
             opt_level: 2,
-            emit_test_cases: false,
             manifest: None,
             files,
         }
@@ -819,10 +831,6 @@ mod tests {
         let mut inputs = dummy_inputs(&files);
         inputs.opt_level = 0;
         assert_ne!(base, compute_key(&inputs), "opt level");
-
-        let mut inputs = dummy_inputs(&files);
-        inputs.emit_test_cases = true;
-        assert_ne!(base, compute_key(&inputs), "emit_test_cases");
 
         let mut inputs = dummy_inputs(&files);
         inputs.manifest = Some("[package]\nname = \"x\"");
@@ -949,7 +957,7 @@ mod tests {
 
         let dir = tempfile::tempdir().expect("tempdir");
         let cache = BytecodeCache::open(dir.path().to_path_buf());
-        let key = manifest_key(&[7u8; 32], 2, false, Path::new("/project"), None);
+        let key = manifest_key(&[7u8; 32], 2, Path::new("/project"), None);
         let payload = borsh::to_vec(&LegacyManifest {
             program_key: [8u8; 32],
             files: vec![LegacyManifestFile {
@@ -1366,7 +1374,6 @@ mod remote_tests {
         let key = compute_key(&KeyInputs {
             compiler_fingerprint: [9u8; 32],
             opt_level: 2,
-            emit_test_cases: false,
             manifest: None,
             files: &files,
         });
@@ -1412,7 +1419,6 @@ mod remote_tests {
         let key2 = compute_key(&KeyInputs {
             compiler_fingerprint: [10u8; 32],
             opt_level: 2,
-            emit_test_cases: false,
             manifest: None,
             files: &files,
         });

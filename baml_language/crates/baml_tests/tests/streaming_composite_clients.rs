@@ -76,7 +76,7 @@ async fn retry_reopens_after_pre_delta_disconnect() {
         }}
 
         function main() -> string {{
-            Echo$stream().final()
+            Echo@stream().final()
         }}
         "#,
         leaf = response_client("Leaf", "retry-leaf", &server.uri()),
@@ -134,7 +134,7 @@ async fn retry_does_not_reopen_after_visible_prefix() {
             );
             let stream = retried.invoke_stream(input());
             let first = match (stream.next()) {{
-                let text: string => text,
+                let batch: string[] => batch.join(""),
                 let done: ai.stream.Done => "done",
             }};
             let second = stream.next() catch (e) {{
@@ -200,7 +200,7 @@ async fn fallback_advances_only_after_pre_delta_disconnect() {
         }}
 
         function main() -> string {{
-            Echo$stream().final()
+            Echo@stream().final()
         }}
         "#,
         first_client = response_client("First", "first", &first.uri()),
@@ -266,7 +266,7 @@ async fn round_robin_selects_once_and_rotates_between_streams() {
         }}
 
         function main() -> string {{
-            [Echo$stream().final(), Echo$stream().final(), Echo$stream().final()].join(",")
+            [Echo@stream().final(), Echo@stream().final(), Echo@stream().final()].join(",")
         }}
         "#,
         first_client = response_client("First", "first", &first.uri()),

@@ -62,6 +62,21 @@ enum Subsystem {
     Runtime,
     StdLibrary,
     Tooling,
+    /// None of the above fits (or the defect spans several); routed to the
+    /// default shepherds.
+    Unknown,
+}
+
+/// How much work an issue is, as gauged from the ticket alone.
+enum Difficulty {
+    /// One obvious change: a typo, a message, a config default.
+    Trivial,
+    /// Localized fix in one place with a clear cause; under a day.
+    Easy,
+    /// A few days inside one subsystem; the cause is known or nearly so.
+    Medium,
+    /// Design or cross-subsystem work, or the root cause is still unknown.
+    Hard,
 }
 
 // Status is a tagged union so each state carries exactly the payload the
@@ -115,4 +130,6 @@ class Issue {
     comments: Comment[],
     /// Document outlining the fix; humans comment on it via `comments`.
     resolution_plan: string?,
+    /// Null until gauged (gauge_issue).
+    difficulty: Difficulty?,
 }

@@ -12,7 +12,7 @@ use baml_base::Name;
 use baml_compiler_diagnostics::{DiagnosticId, Severity};
 use baml_compiler_lexer::{TokenKind, lex_lossless};
 use baml_compiler_syntax::{BlockElement, BlockExpr, SyntaxKind, SyntaxNode};
-use baml_compiler2_emit::{CompileOptions, emit_units_with_stdlib};
+use baml_compiler2_emit::emit_units_with_stdlib;
 use baml_compiler2_hir::{
     body::{BodyOwnerId, LetBody, let_body},
     contributions::Definition,
@@ -280,10 +280,12 @@ fn enrich_runtime_mount(
                 (target_namespace, method.clone())
             }
         };
-        // Compiler-generated init/test helpers are not part of the mounted
-        // callable ABI. They can carry internal-only signature forms that are
-        // intentionally not source-spellable, and no consumer can name them.
-        if name.as_str().starts_with('$') {
+        // Compiler-generated init/test helpers and callable companions are not
+        // authored declarations. The mounted interface already exports their
+        // exact callable identities; emitting either spelling as a source stub
+        // is invalid (`$init`) or would redeclare the authored function
+        // (`Extract@spec` is postfix syntax, not a declaration identifier).
+        if name.as_str().starts_with('$') || name.as_str().contains('@') {
             return;
         }
         let generic_params = function
@@ -2097,12 +2099,8 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                         span: None,
                     }]
                 })?;
-        let options = CompileOptions {
-            emit_test_cases: crate::precompiled_stdlib_config::EMIT_TEST_CASES,
-        };
         let emitted = emit_units_with_stdlib(
             &db,
-            &options,
             crate::precompiled_stdlib_config::OPT_LEVEL,
             &stdlib.program,
         )

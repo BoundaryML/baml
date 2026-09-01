@@ -40,7 +40,7 @@ pub use type_alias::*;
 pub use type_value::*;
 pub use value::*;
 
-use crate::{RuntimeTy, heap_ptr::HeapPtr, indexable::ObjectPool};
+use crate::{heap_ptr::HeapPtr, indexable::ObjectPool};
 
 // ============================================================================
 // Type Tags for Jump Table Dispatch
@@ -77,10 +77,25 @@ pub struct Program {
     pub globals: Vec<ConstValue>,
 
     /// Maps function names to their object indices.
+    ///
+    /// Interface-machinery bodies — impl-block methods (in-class or free) and
+    /// interface default-method bodies — are excluded: such a body is pooled
+    /// and
+    /// slotted like any function but is not a table-addressable item (each
+    /// body's [`Function::is_interface_body`](crate::Function::is_interface_body)
+    /// marks it). Where a compile boundary needs a body's coordinates, it
+    /// reads them structurally: the declaration-keyed placement registry
+    /// (unit decomposition — same process, same emit), the Pass-1 slot
+    /// replay over the artifact's globals (the stdlib splice, the one
+    /// genuine cross-process boundary), or the impl-rule tables / the
+    /// interface's `default` operand (rule baking, dispatch).
     pub function_indices: HashMap<String, usize>,
 
     /// Maps function names to their global indices.
     /// Used for dynamic function lookup at runtime.
+    ///
+    /// Interface-machinery bodies are excluded (see
+    /// [`Self::function_indices`]).
     pub function_global_indices: HashMap<String, usize>,
 
     /// Maps let-binding fully-qualified names to their global slot indices.
@@ -91,9 +106,6 @@ pub struct Program {
     /// Client build metadata for constructing full client trees at runtime.
     /// Keyed by client name.
     pub client_metadata: HashMap<String, ClientBuildMeta>,
-
-    /// Compiled test cases.
-    pub test_cases: Vec<TestCase>,
 
     /// Ordered list of `$init` function names to run at load time.
     /// E.g., `["baml.$init", "$init"]` — builtins before user package.
@@ -398,51 +410,6 @@ include!(concat!(env!("OUT_DIR"), "/errors_generated.rs"));
 // Panic class / instance enums — generated from `panics.baml` class definitions.
 // PanicClass (tag enum), PanicInstance (with Value fields), associated methods.
 include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));
-
-// ============================================================================
-// Test Cases
-// ============================================================================
-
-/// A constant value for test arguments.
-///
-/// Self-contained type with no dependency on HIR or external types.
-/// Converted from HIR's `TestArgValue` during emission, and converted
-/// to `BexExternalValue` in the engine for function calls.
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
-pub enum TestArgValue {
-    Null,
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    String(String),
-    Array {
-        element_type: RuntimeTy,
-        items: Vec<TestArgValue>,
-    },
-    Map {
-        key_type: RuntimeTy,
-        value_type: RuntimeTy,
-        entries: IndexMap<String, TestArgValue>,
-    },
-}
-
-/// A compiled test case, ready for execution.
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
-pub struct TestCase {
-    /// Test name (e.g., "`TestAddOne`").
-    pub name: String,
-    /// Function names this test targets.
-    pub function_names: Vec<String>,
-    /// Test arguments, keyed by parameter name.
-    pub args: IndexMap<String, TestArgValue>,
-    /// Project-root-relative path of the file that *defines* this test block.
-    ///
-    /// Recorded so `baml test --list` reports the test-defining file
-    /// identically whether the program was freshly compiled or served from the
-    /// bytecode cache. Empty only for programs compiled before this field
-    /// existed.
-    pub source_file: String,
-}
 
 /// Media value.
 ///

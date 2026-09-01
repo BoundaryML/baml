@@ -142,7 +142,6 @@ ast_node!(RequiresClause, REQUIRES_CLAUSE);
 ast_node!(MethodSig, METHOD_SIG);
 ast_node!(AssociatedTypeDecl, ASSOCIATED_TYPE_DECL);
 ast_node!(ClientDef, CLIENT_DEF);
-ast_node!(TestDef, TEST_DEF);
 ast_node!(RetryPolicyDef, RETRY_POLICY_DEF);
 ast_node!(TemplateStringDef, TEMPLATE_STRING_DEF);
 ast_node!(TypeAliasDef, TYPE_ALIAS_DEF);
@@ -1080,8 +1079,7 @@ impl ToolsField {
 }
 
 impl SpecExpr {
-    /// The base expression the postfix `@spec` was applied to (a `PATH_EXPR`
-    /// naming an LLM function).
+    /// The base expression a companion postfix was applied to.
     pub fn base(&self) -> Option<SyntaxNode> {
         self.syntax.children().next()
     }
@@ -2424,59 +2422,6 @@ impl ConfigValue {
     }
 }
 
-impl TestDef {
-    fn function_config_item(&self) -> Option<ConfigItem> {
-        self.syntax
-            .descendants()
-            .filter_map(ConfigItem::cast)
-            .find(|item| item.matches_key("functions") || item.matches_key("function"))
-    }
-
-    /// Get the test name.
-    pub fn name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
-            })
-            .nth(0) // Get the first WORD (test keyword is KW_TEST, not WORD)
-    }
-
-    /// Get complete function references from the legacy `function(s)` config.
-    ///
-    /// Preserves qualified references such as `workflows.Classify` as one value.
-    pub fn function_reference_names(&self) -> Vec<String> {
-        let Some(value) = self
-            .function_config_item()
-            .and_then(|item| item.config_value_node())
-        else {
-            return Vec::new();
-        };
-
-        let Some(text) = ConfigValue::cast(value).and_then(|value| value.scalar_text()) else {
-            return Vec::new();
-        };
-        let contents = text
-            .strip_prefix('[')
-            .and_then(|value| value.strip_suffix(']'))
-            .unwrap_or(&text);
-
-        contents
-            .split(',')
-            .map(str::trim)
-            .map(|name| name.trim_matches('"'))
-            .filter(|name| !name.is_empty())
-            .map(str::to_owned)
-            .collect()
-    }
-
-    /// Get the config block.
-    pub fn config_block(&self) -> Option<ConfigBlock> {
-        self.syntax.children().find_map(ConfigBlock::cast)
-    }
-}
-
 impl TypeAliasDef {
     /// Get the type alias name — the first direct WORD child (the `type`
     /// keyword is a `KW_TYPE` token, so no skipping is needed).
@@ -2718,7 +2663,6 @@ pub enum Item {
     Interface(InterfaceDef),
     ImplementsFor(ImplementsFor),
     Client(ClientDef),
-    Test(TestDef),
     RetryPolicy(RetryPolicyDef),
     TemplateString(TemplateStringDef),
     TypeAlias(TypeAliasDef),
@@ -2736,7 +2680,6 @@ impl AstNode for Item {
                 | SyntaxKind::INTERFACE_DEF
                 | SyntaxKind::IMPLEMENTS_FOR
                 | SyntaxKind::CLIENT_DEF
-                | SyntaxKind::TEST_DEF
                 | SyntaxKind::RETRY_POLICY_DEF
                 | SyntaxKind::TEMPLATE_STRING_DEF
                 | SyntaxKind::TYPE_ALIAS_DEF
@@ -2751,7 +2694,6 @@ impl AstNode for Item {
             SyntaxKind::INTERFACE_DEF => Some(Item::Interface(InterfaceDef { syntax })),
             SyntaxKind::IMPLEMENTS_FOR => Some(Item::ImplementsFor(ImplementsFor { syntax })),
             SyntaxKind::CLIENT_DEF => Some(Item::Client(ClientDef { syntax })),
-            SyntaxKind::TEST_DEF => Some(Item::Test(TestDef { syntax })),
             SyntaxKind::RETRY_POLICY_DEF => Some(Item::RetryPolicy(RetryPolicyDef { syntax })),
             SyntaxKind::TEMPLATE_STRING_DEF => {
                 Some(Item::TemplateString(TemplateStringDef { syntax }))
@@ -2769,7 +2711,6 @@ impl AstNode for Item {
             Item::Interface(it) => it.syntax(),
             Item::ImplementsFor(it) => it.syntax(),
             Item::Client(it) => it.syntax(),
-            Item::Test(it) => it.syntax(),
             Item::RetryPolicy(it) => it.syntax(),
             Item::TemplateString(it) => it.syntax(),
             Item::TypeAlias(it) => it.syntax(),

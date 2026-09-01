@@ -1,0 +1,202 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function io.$init_test_ns_io_io(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.io"
+    load_const "read bytes consumes chunks through eof"
+    make_closure .<lambda($init_test_ns_io_io, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.io"
+    load_const "read text decodes strict utf8"
+    make_closure .<lambda($init_test_ns_io_io, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.io"
+    load_const "read text rejects invalid utf8"
+    make_closure .<lambda($init_test_ns_io_io, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.io"
+    load_const "write retries partial writes"
+    make_closure .<lambda($init_test_ns_io_io, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.io"
+    load_const "write rejects zero progress"
+    make_closure .<lambda($init_test_ns_io_io, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.io"
+    load_const "write rejects oversized progress"
+    make_closure .<lambda($init_test_ns_io_io, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.io"
+    load_const "uint8array index_of finds bytes"
+    make_closure .<lambda($init_test_ns_io_io, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function io.<(user.io.ChunkReader as baml.io.Read)>.read(self: io.ChunkReader, limit: int) -> uint8array | null {
+    load_var self
+    load_field .cursor
+    store_var _4
+    load_var self
+    load_field .data
+    container_len
+    store_var _5
+    load_var2 3 4
+    cmp_int_op >=
+    pop_jump_if_false L0
+    jump L7
+
+  L0:
+    load_var2 2 1
+    load_field .chunk_size
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var self
+    load_field .chunk_size
+    store_var count
+    jump L3
+
+  L2:
+    load_var limit
+    store_var count
+
+  L3:
+    load_var self
+    load_field .cursor
+    load_var count
+    add_int
+    store_var _12
+    load_var self
+    load_field .data
+    container_len
+    store_var _15
+    load_var2 7 8
+    cmp_int_op <
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var self
+    load_field .data
+    container_len
+    store_var end
+    jump L6
+
+  L5:
+    load_var self
+    load_field .cursor
+    load_var count
+    add_int
+    store_var end
+
+  L6:
+    load_var self
+    load_field .data
+    load_var self
+    load_field .cursor
+    load_var end
+    call baml.Uint8Array.slice
+    load_var2 1 6
+    store_field .cursor
+    jump L8
+
+  L7:
+    load_const null
+
+  L8:
+    return
+}
+
+function io.<(user.io.ChunkWriter as baml.io.Write)>.flush(self: io.ChunkWriter) -> void {
+    load_const null
+    return
+}
+
+function io.<(user.io.ChunkWriter as baml.io.Write)>.write_some(self: io.ChunkWriter, data: uint8array) -> int {
+    load_var data
+    container_len
+    store_var _5
+    load_var2 4 1
+    load_field .chunk_size
+    cmp_int_op <
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    load_field .chunk_size
+    store_var count
+    jump L2
+
+  L1:
+    load_var data
+    container_len
+    store_var count
+
+  L2:
+    load_var self
+    load_field .data
+    store_var _7
+    load_var data
+    load_const 0
+    load_var count
+    call baml.Uint8Array.slice
+    store_var _8
+    load_var2 5 6
+    call baml.Uint8Array.concat
+    store_var _10
+    load_var2 1 7
+    store_field .data
+    load_var count
+    return
+}
+
+function io.<(user.io.OversizedWriter as baml.io.Write)>.flush(self: io.OversizedWriter) -> void {
+    load_const null
+    return
+}
+
+function io.<(user.io.OversizedWriter as baml.io.Write)>.write_some(self: io.OversizedWriter, data: uint8array) -> int {
+    load_var data
+    container_len
+    store_var _3
+    load_var _3
+    load_const 1
+    add_int
+    return
+}
+
+function io.<(user.io.ZeroWriter as baml.io.Write)>.flush(self: io.ZeroWriter) -> void {
+    load_const null
+    return
+}
+
+function io.<(user.io.ZeroWriter as baml.io.Write)>.write_some(self: io.ZeroWriter, data: uint8array) -> int {
+    load_const 0
+    return
+}

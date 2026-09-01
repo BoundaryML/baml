@@ -163,7 +163,7 @@ function main() -> string {
 async fn e5_structured_diagnostics_have_null_spans() {
     let output = baml_test!(
         r#"
-function main() -> string throws unknown {
+function main() -> string {
   let zero_result = reflect.union.new([]) catch (e) {
     reflect.errors.CompilationError { diagnostics } => {
       diagnostics[0].code + ":" + (diagnostics[0].span == null).to_string()
