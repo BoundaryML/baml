@@ -1149,11 +1149,16 @@ fn impl_sort_key(db: &dyn baml_compiler2_ppir::Db, loc: ImplLoc<'_>) -> (String,
 
 /// True iff two impls of the SAME interface conflict. Distinct interfaces
 /// never conflict; a duplicate in-body block is a degenerate overlap
-/// (rustc's conflicting-implementations error for exact duplicates). An
-/// impl whose alias-expanded for-target is not a valid implementor (the
-/// E0138 concreteness gate's subjects) contributes no overlap - it
-/// carries its own rejection, and stacking a spurious overlap on top
-/// would double-report.
+/// (rustc's conflicting-implementations error for exact duplicates).
+///
+/// There is deliberately NO concreteness gate here: an impl whose
+/// for-target is not an implementor never produces
+/// [`ImplFacts`](crate::impls::ImplFacts) at all
+/// ([`ImplHeaderResolution::NotImplementor`](crate::impls::ImplHeaderResolution)),
+/// so it cannot reach this function. Re-deriving that judgment locally is
+/// what opened the E0132 hole: this gate judged the RAW head while E0138
+/// judged the normalized one, so a `true | false` subject was invalid here
+/// and valid there, and the pair escaped both.
 pub fn impls_conflict(
     db: &dyn baml_compiler2_ppir::Db,
     a: &ImplFacts<'_>,
@@ -1161,11 +1166,6 @@ pub fn impls_conflict(
     aliases: &FxHashMap<TypeName, Ty>,
 ) -> Overlap {
     if a.interface.name != b.interface.name {
-        return Overlap::No;
-    }
-    if !expand_alias_head(&a.for_ty_pattern.to_plain(), aliases).is_valid_impl_subject()
-        || !expand_alias_head(&b.for_ty_pattern.to_plain(), aliases).is_valid_impl_subject()
-    {
         return Overlap::No;
     }
     impls_overlap(db, a, b, aliases)

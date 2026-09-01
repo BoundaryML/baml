@@ -61,6 +61,34 @@ pub fn try_interned_ty(ty: &baml_type::Ty) -> Option<Ty> {
     (!ty.as_lowering_ty().contains_error()).then(|| Ty::from_plain(ty))
 }
 
+/// Whether a lowered for-target is a valid implementor — the E0138 rule, and
+/// THE one place it is decided.
+///
+/// Alias heads expand (an alias is a spelling device, so `type B = Box` names
+/// the same implementor `Box` does), but nothing else does. That gap is the
+/// whole point: NORMALIZING would additionally collapse unions, making
+/// `true | false` the valid subject `bool` here while the raw head stayed a
+/// union elsewhere — the two gates would then disagree about the same block,
+/// which is exactly how a local `implement I for true | false` and a
+/// dependency's `implement I for bool` escaped coherence entirely.
+///
+/// Expansion reads alias definitions only, so this cannot re-enter the impl
+/// resolver that asks for it.
+fn subject_head_is_implementor(db: &dyn baml_compiler2_ppir::Db, ty: &baml_type::Ty) -> bool {
+    let mut head = ty.clone();
+    // Bounded: a cyclic alias is rejected at its declaration (E0068).
+    for _ in 0..64 {
+        let baml_type::Ty::TypeAlias(name, _) = &head else {
+            break;
+        };
+        match crate::facts::uncached_alias_def(db, name) {
+            Some(expanded) => head = expanded,
+            None => break,
+        }
+    }
+    head.is_valid_impl_subject()
+}
+
 /// One impl's resolution-relevant facts, normalized to the free shape.
 ///
 /// Declaration-side data in the CLOSED interned vocabulary
@@ -131,14 +159,52 @@ pub enum ImplHeaderResolution<'db> {
     Poisoned {
         unconstrained: Vec<Name>,
     },
+    /// The header resolves, but its written for-target is not an implementor
+    /// (E0138): a union — `T?` included — a literal, a function type, or a
+    /// path naming an alias or an interface. Decided SYNTACTICALLY at
+    /// lowering ([`crate::lower::LowerCtx::written_subject_is_implementor`]),
+    /// so no fact context is consulted and this query cannot re-enter the
+    /// resolver.
+    ///
+    /// The facts are deliberately NOT constructed, for the same reason
+    /// [`Self::Poisoned`] withholds them: a subject no value inhabits must be
+    /// invisible to every consumer. That is what keeps coherence honest — it
+    /// sees no impl here at all, rather than re-deriving concreteness on a
+    /// different spelling and disagreeing with E0138 (the two gates
+    /// disagreeing is exactly how a mounted `implement I for bool` and a
+    /// local `implement I for true | false` both escaped E0132).
+    NotImplementor {
+        /// The written subject, as lowered — the diagnostic's payload.
+        target: baml_type::Ty,
+        /// The header's facts, with `for_ty_pattern` REPLACED by the Error
+        /// sentinel. Kept so the IDE can still describe the block (its
+        /// interface, methods, bindings); withheld from selection through
+        /// [`Self::resolved`], which is what keeps an uninhabitable subject
+        /// out of dispatch and coherence.
+        facts: ImplFacts<'db>,
+    },
     Resolved(ImplFacts<'db>),
 }
 
 impl<'db> ImplHeaderResolution<'db> {
-    /// The facts, when the header resolved cleanly.
+    /// The facts, when the header resolved cleanly — the SELECTION surface.
+    /// A header that carries its own rejection answers `None`, so no
+    /// resolver, dispatch path, or coherence check can see it.
     pub fn resolved(&self) -> Option<&ImplFacts<'db>> {
         match self {
             Self::Resolved(facts) => Some(facts),
+            Self::Unresolved | Self::Poisoned { .. } | Self::NotImplementor { .. } => None,
+        }
+    }
+
+    /// The facts for DESCRIBING the block (IDE hover, `describe`, export
+    /// listings), which want a rejected impl's shape even though nothing may
+    /// select it. A rejected subject reads as the Error sentinel, so a
+    /// consumer that does inspect the type sees a diagnosed value rather
+    /// than a subject no value inhabits.
+    pub fn for_display(&self) -> Option<&ImplFacts<'db>> {
+        match self {
+            Self::Resolved(facts) | Self::NotImplementor { facts, .. } => Some(facts),
             Self::Unresolved | Self::Poisoned { .. } => None,
         }
     }
@@ -157,6 +223,9 @@ pub fn impl_facts<'db>(
     let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
     let file = block.file(db);
 
+    // Set when the written for-target is not an implementor (E0138); the
+    // header still lowers, so the facts stay available to the IDE.
+    let mut not_implementor: Option<baml_type::Ty> = None;
     // The generic frame and for-target, normalized to the free shape.
     let (params, param_bounds, for_ty_pattern): (Vec<ParamTy>, Vec<Vec<baml_type::Interface>>, _) =
         match &data.subject {
@@ -220,10 +289,27 @@ pub fn impl_facts<'db>(
                             .collect()
                     })
                     .collect();
-                let for_ty = ClosedTy::from_plain(&crate::lower::reject_holes(
-                    &ctx.lower_type_ref(&data.type_refs, *for_target),
-                ));
-                (frame, bounds, for_ty)
+                let for_ty_plain =
+                    crate::lower::reject_holes(&ctx.lower_type_ref(&data.type_refs, *for_target));
+                // E0138, decided on the LOWERED form — never the normalized
+                // one. Lowering is exactly the right amount of resolution:
+                // it expands aliases and applies the builtin bridges (so
+                // `Future<T>` and `E.A` are seen for what they denote), while
+                // leaving unions uncollapsed (so `true | false` stays a union
+                // rather than becoming the valid subject `bool`). It is the
+                // collapse that made this gate and coherence disagree.
+                //
+                // The subject is REPLACED by the Error sentinel rather than
+                // withheld: the rest of the header still lowers, so the IDE
+                // keeps a fact set to describe, while every selection path
+                // sees a diagnosed sentinel instead of a subject no value
+                // inhabits.
+                if !subject_head_is_implementor(db, &for_ty_plain) {
+                    not_implementor = Some(for_ty_plain);
+                    (frame, bounds, ClosedTy::from_plain(&baml_type::Ty::error()))
+                } else {
+                    (frame, bounds, ClosedTy::from_plain(&for_ty_plain))
+                }
             }
         };
 
@@ -252,17 +338,24 @@ pub fn impl_facts<'db>(
     // match can ever bind: the header is POISONED (see
     // [`ImplHeaderResolution::Poisoned`]) and the impl resolves nowhere.
     // E0135 renders this very list (`validate_impl_signatures`).
-    let unconstrained: Vec<Name> = params
-        .iter()
-        .filter(|param| {
-            !crate::infer::ty_mentions_param(&for_ty_pattern, param)
-                && !interface
-                    .generics
-                    .iter()
-                    .any(|arg| crate::infer::ty_mentions_param(arg, param))
-        })
-        .map(|param| param.name().clone())
-        .collect();
+    let unconstrained: Vec<Name> = if not_implementor.is_some() {
+        // The subject is the Error sentinel now, so it mentions no param —
+        // reporting every param as unconstrained would be an artifact of
+        // this fill, not of the source.
+        Vec::new()
+    } else {
+        params
+            .iter()
+            .filter(|param| {
+                !crate::infer::ty_mentions_param(&for_ty_pattern, param)
+                    && !interface
+                        .generics
+                        .iter()
+                        .any(|arg| crate::infer::ty_mentions_param(arg, param))
+            })
+            .map(|param| param.name().clone())
+            .collect()
+    };
     if !unconstrained.is_empty() {
         return ImplHeaderResolution::Poisoned { unconstrained };
     }
@@ -281,7 +374,7 @@ pub fn impl_facts<'db>(
         })
         .collect();
 
-    ImplHeaderResolution::Resolved(ImplFacts {
+    let facts = ImplFacts {
         interface,
         for_ty_pattern,
         generic_params: params
@@ -295,7 +388,11 @@ pub fn impl_facts<'db>(
             .collect(),
         associated_types,
         methods: data.methods.clone(),
-    })
+    };
+    match not_implementor {
+        Some(target) => ImplHeaderResolution::NotImplementor { target, facts },
+        None => ImplHeaderResolution::Resolved(facts),
+    }
 }
 
 /// An interface-existential lowering read back as a target reference.

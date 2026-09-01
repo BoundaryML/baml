@@ -1061,6 +1061,15 @@ pub fn validate_impl_signatures<'db>(
                 ImplDiagnosticLocation::ForTarget,
             )];
         }
+        // BUG: `ImplData::interface` is a SOURCE `InterfaceLoc`, so an impl of
+        // a MOUNTED interface always lands here and every header diagnostic
+        // below is skipped — E0138, E0135, the orphan rule and signature
+        // conformance alike. `implement dep.I for true | false` is therefore
+        // accepted in silence, while the identical block against a local
+        // interface reports E0138. Not a soundness hole today (the header's
+        // own validity decision still withholds the facts from selection, so
+        // nothing dispatches to it) but a real diagnostic gap; it needs the
+        // mounted-interface impl validation slice.
         Err(ImplDataError::InterfaceUnresolved { .. } | ImplDataError::Malformed) => return diags,
     };
     let Some(iface_qtn) = interface_loc_qtn(db, data.interface) else {
@@ -1151,11 +1160,17 @@ pub fn validate_impl_signatures<'db>(
 
     // ── Impl-header gates (out-of-body only). ──
     if matches!(data.origin, InterfaceImplOrigin::OutOfBody) {
-        // E0138: the for-target must be a single concrete impl subject (alias-expanded).
-        if !baml_type::normalize::normalize(&data.for_ty_pattern, &ctx).is_valid_impl_subject() {
+        // E0138: the for-target must be a single concrete impl subject. The
+        // verdict comes from the header's ONE validity decision
+        // (`impl_facts`), which also withholds the facts — so an impl this
+        // diagnostic rejects is invisible to every consumer, and coherence
+        // cannot re-derive concreteness on a different spelling and disagree.
+        if let crate::impls::ImplHeaderResolution::NotImplementor { target, .. } =
+            crate::impls::impl_facts(db, impl_loc)
+        {
             diags.push((
                 TirTypeError::ImplTargetNotConcrete {
-                    target: data.for_ty_pattern.clone(),
+                    target: target.clone(),
                 },
                 ImplDiagnosticLocation::ForTarget,
             ));
