@@ -42,6 +42,7 @@ jobs:
     with:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
+      targets: '["x86_64-unknown-linux-gnu","x86_64-unknown-linux-musl","aarch64-unknown-linux-gnu","aarch64-unknown-linux-musl"]'
 
   docker:
     name: Docker (${{ matrix.distro }}, ${{ matrix.arch }})

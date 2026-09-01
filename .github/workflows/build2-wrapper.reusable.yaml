@@ -11,6 +11,11 @@ on:
         description: "Wrapper version used in archive names"
         type: string
         required: true
+      targets:
+        description: "JSON array of release targets to build; an empty array builds every target"
+        type: string
+        required: false
+        default: "[]"
 
 permissions:
   contents: read
@@ -39,9 +44,15 @@ jobs:
           persist-credentials: false
       - name: Generate wrapper matrix from the platform contract
         id: gen
+        env:
+          TARGETS: ${{ inputs.targets }}
         run: |
           set -euo pipefail
           include="$(scripts/baml-release-platforms wrapper-matrix)"
+          if [[ "$TARGETS" != "[]" ]]; then
+            include="$(jq -c --argjson targets "$TARGETS" 'map(select(.target as $target | $targets | index($target)))' <<<"$include")"
+          fi
+          [[ "$(jq length <<<"$include")" -gt 0 ]]
           echo "include=$include" >> "$GITHUB_OUTPUT"
           jq . <<<"$include"
 
