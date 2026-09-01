@@ -38,6 +38,11 @@ in the set. Each release JSON contains all toolchain-discovered packages—not a
 docs-maintained list—and generated symbols use fully qualified names such as
 `baml.http.Request`.
 
+The build eagerly renders authored pages, the default-version aliases, and each
+version landing page. Versioned symbol and command pages remain normal public
+routes, but render on their first request instead of multiplying release build
+work by the number of retained toolchains.
+
 To exercise the complete producer/consumer path locally:
 
 ```sh

@@ -2,6 +2,7 @@ import { getMDXComponents } from '@/components/mdx';
 import { VersionSwitcher } from '@/components/version-switcher';
 import docsVersions from '@/generated/docs-versions.json';
 import { source } from '@/lib/source';
+import { createDocsPrerenderPredicate } from '@/lib/static-generation.mjs';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import {
@@ -21,6 +22,10 @@ const versionedRoots = [
   ['baml', 'language', 'reference'],
   ['cli', 'commands'],
 ] as const;
+
+const shouldPreRenderDocsSlug = createDocsPrerenderPredicate(
+  versionCatalog.versions.map(({ version }) => version),
+);
 
 function versionSwitcher(slug: string[]) {
   const root = versionedRoots.find((candidate) => candidate.every((segment, index) => slug[index] === segment));
@@ -71,8 +76,10 @@ export default async function Page(props: PageProps<'/[...slug]'>) {
 }
 
 export function generateStaticParams() {
-  return source.generateParams();
+  return source.generateParams().filter(({ slug }) => shouldPreRenderDocsSlug(slug));
 }
+
+export const dynamicParams = true;
 
 export async function generateMetadata(
   props: PageProps<'/[...slug]'>,
