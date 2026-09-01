@@ -622,6 +622,30 @@ function $init_test(registry: unknown) -> null {
     load_var ?1
     call ?
     pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
     load_const ?
     return
 }

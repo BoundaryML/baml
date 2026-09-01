@@ -106,6 +106,41 @@ enum InboundDeclarationKind {
     Enum,
 }
 
+/// The host proxy kind for a live stdlib capability.
+///
+/// A declaration's display name is never an identity: in particular,
+/// `user.ai.FunctionSpec` displays as `ai.FunctionSpec`, and a runtime package
+/// may compile that same local spelling again under a fresh head. Trust only
+/// the exact stdlib declaration spelling together with the content-addressed
+/// tag emitted for that spelling. Runtime-created heads are rejected by the
+/// tag check before their name is inspected.
+fn trusted_stdlib_capability_kind(
+    class: &bex_vm_types::Class,
+) -> Option<bex_external_types::TaggedHeapHandleKind> {
+    if class.type_tag.is_dynamic() {
+        return None;
+    }
+
+    let name = class.name.declared()?;
+    let (qualified_name, kind) = match (
+        name.package().as_str(),
+        name.namespace().as_slice(),
+        name.name().as_str(),
+    ) {
+        ("ai", [], "FunctionSpec") => (
+            baml_type::qualified_name::AI_FUNCTION_SPEC,
+            bex_external_types::TaggedHeapHandleKind::FunctionSpec,
+        ),
+        ("ai", [namespace], "Stream") if namespace.as_str() == "stream" => (
+            baml_type::qualified_name::AI_STREAM_STREAM,
+            bex_external_types::TaggedHeapHandleKind::Stream,
+        ),
+        _ => return None,
+    };
+
+    (class.type_tag == baml_type::typetag::TypeTag::of_head(qualified_name)).then_some(kind)
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct InboundRuntimeOverlay<'a> {
     dynamic_classes: &'a indexmap::IndexMap<String, bex_external_types::Handle>,
@@ -520,9 +555,16 @@ impl BexEngine {
     ) -> Result<BexExternalValue, EngineError> {
         let selected_interface =
             find_implemented_interface_union_member(value, declared_type, vm, permit)?;
-        // If declared type is a union, find which member matches the actual value
+        // Select union arms while the value is still a live VM value. Some
+        // values intentionally become opaque tagged handles at the host
+        // boundary; re-selecting from that host carrier would discard the
+        // heap-owned nominal identity that made the arm unambiguous.
+        let selected_runtime = selected_interface.or_else(|| match declared_type {
+            RuntimeTy::Union(members, _) => find_matching_union_member(value, members),
+            _ => None,
+        });
         let effective_type =
-            selected_interface.unwrap_or_else(|| resolve_effective_type(value, declared_type));
+            selected_runtime.unwrap_or_else(|| resolve_effective_type(value, declared_type));
 
         let external = match value.kind() {
             ValueKind::OmittedArg => {
@@ -538,12 +580,8 @@ impl BexEngine {
             }
         };
 
-        if let Some(selected) = selected_interface {
-            return Ok(wrap_selected_union_member(
-                external,
-                declared_type,
-                selected,
-            ));
+        if let Some(selected) = selected_runtime {
+            return wrap_selected_union_member(external, declared_type, selected);
         }
         // Wrap in Union if declared type is a union
         maybe_wrap_union(external, declared_type)
@@ -653,22 +691,45 @@ impl BexEngine {
                     panic!("Instance.class should point to a Class object")
                 };
 
-                // Lift the canonical AI stream to an opaque ADT handle. Its
-                // BAML-owned state stays on the heap
-                // behind the GC-rooted handle so the BAML interpreter can
-                // walk them when running `Stream.next` / `Stream.final`
-                // bodies on subsequent calls.  See plan 21b §"Phase 1a".
-                //
-                // `ty` is computed from the class FQN + `class_type_args`
-                // once at lift time and carried inline on the variant so
-                // the wire encoder doesn't need a heap permit. See plan
-                // 23a §"Engine-side ripple effects".
-                if class.name.display_name().as_str() == baml_type::qualified_name::AI_STREAM_STREAM
-                {
+                // Only a *statically compiled* declaration is addressable by
+                // a host: codegen emitted a host type for its FQN, so the
+                // structural form is well-typed on arrival. Every runtime
+                // declaration crosses as an opaque handle instead (BEP-066:
+                // dynamic types never leave the heap). The line is the tag,
+                // not the name: a runtime-compiled package member is
+                // `Declared` and may collide with a static or stdlib name, but
+                // its freshly minted dynamic tag cannot impersonate either.
+                if class.type_tag.is_dynamic() {
+                    let ty = RuntimeTy::Class(
+                        class
+                            .name
+                            .declared()
+                            .cloned()
+                            .unwrap_or_else(|| overlay_type_name(&class.name)),
+                        instance
+                            .class_type_args
+                            .iter()
+                            .map(|arg| overlay_wire_ty(&bex_vm_types::RuntimeTy::from(arg)))
+                            .collect::<Result<Vec<_>, _>>()?,
+                        baml_type::TyAttr::default(),
+                    );
+                    return Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                        kind: bex_external_types::TaggedHeapHandleKind::RuntimeValue,
+                        ty,
+                        heap_handle: self.heap.create_handle(ptr),
+                    }));
+                }
+
+                // Live stdlib capabilities stay on the heap. The trusted kind
+                // selects the host proxy; the wire `ty` is annotation-only.
+                // Method generic substitution must recover the instance's
+                // TypeHead/class_type_args after resolving this handle.
+                let capability_kind = trusted_stdlib_capability_kind(class);
+                if let Some(kind) = capability_kind {
                     let handle = self.heap.create_handle(ptr);
                     let ty = RuntimeTy::Class(
                         class.name.declared().cloned().unwrap_or_else(|| {
-                            unreachable!("ai.stream.Stream is a compiled declaration")
+                            unreachable!("stdlib capability is a compiled declaration")
                         }),
                         instance
                             .class_type_args
@@ -678,29 +739,10 @@ impl BexEngine {
                         baml_type::TyAttr::default(),
                     );
                     return Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                        kind,
                         ty,
                         heap_handle: handle,
                     }));
-                }
-
-                // Only a *statically compiled* declaration is addressable by
-                // a host: codegen emitted a host type for its FQN, so the
-                // structural form is well-typed on arrival. Every other
-                // declaration crosses as an opaque handle instead (BEP-066:
-                // dynamic types never leave the heap).
-                //
-                // The line is the *tag*, not the name. A runtime-compiled
-                // package member is `Declared` and carries a real qualified
-                // name — but no codegen entry exists for it, and that name can
-                // collide with a statically compiled one, so an echoed value
-                // would rebind to the static declaration and violate its
-                // contract. An anonymous typebuilder declaration fails the
-                // same way through its bare item name. Both are reminted from
-                // the counter range, so one integer compare separates them
-                // from the content-addressed static heads — without reading
-                // the heap, and without depending on a pointer staying valid.
-                if class.type_tag.is_dynamic() {
-                    return Ok(BexExternalValue::Handle(self.heap.create_handle(ptr)));
                 }
 
                 debug_assert_eq!(
@@ -741,10 +783,18 @@ impl BexEngine {
 
                 let mut fields = fields?;
 
-                // Media wrapper instances flatten to the canonical
-                // `Adt(Media(_))` on the wire: the host bridges construct and
-                // decode media through the ADT (media_roundtrip.rs pins this),
-                // while the VM-internal form is the stdlib wrapper class.
+                // Rust-backed value wrappers flatten to their canonical ADTs
+                // on the wire. Hosts reconstruct fresh wrapper objects from
+                // these portable payloads; neither media nor a rendered prompt
+                // is a live engine capability.
+                if class.name.to_string() == "ai.Prompt" {
+                    if let Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(arc))) =
+                        fields.shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
+                    {
+                        return Ok(BexExternalValue::Adt(BexExternalAdt::PromptAst(arc)));
+                    }
+                }
+
                 if matches!(
                     class.name.to_string().as_str(),
                     "baml.media.Image" | "baml.media.Audio" | "baml.media.Video" | "baml.media.Pdf"
@@ -777,7 +827,18 @@ impl BexEngine {
                 // enum has a codegen entry, and any other spelling can collide
                 // with one that does.
                 if enm.type_tag.is_dynamic() {
-                    return Ok(BexExternalValue::Handle(self.heap.create_handle(ptr)));
+                    let ty = RuntimeTy::Enum(
+                        enm.name
+                            .declared()
+                            .cloned()
+                            .unwrap_or_else(|| overlay_type_name(&enm.name)),
+                        baml_type::TyAttr::default(),
+                    );
+                    return Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                        kind: bex_external_types::TaggedHeapHandleKind::RuntimeValue,
+                        ty,
+                        heap_handle: self.heap.create_handle(ptr),
+                    }));
                 }
                 let variant_name = enm
                     .variants
@@ -805,6 +866,7 @@ impl BexEngine {
             | Object::GenericFunction(_) => {
                 let handle = self.heap.create_handle(ptr);
                 Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                    kind: bex_external_types::TaggedHeapHandleKind::Callable,
                     ty: effective_type.clone(),
                     heap_handle: handle,
                 }))
@@ -967,10 +1029,10 @@ impl BexEngine {
             BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)) => {
                 SynthTy::Known(RuntimeTy::Type { attr: attr() })
             }
-            // A typed heap handle already carries its concrete `RuntimeTy`.
-            BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { ty, .. }) => {
-                SynthTy::Known(ty.clone())
-            }
+            // A tagged handle's wire type is annotation-only. Call paths that
+            // hold a heap permit resolve the rooted object and supply its live
+            // TypeHead; inference without that proof must treat it as opaque.
+            BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { .. }) => SynthTy::HostOnly,
             // Media is a concrete leaf BAML type (`image`/`audio`/...): its kind
             // is readable from the value, so `identity<T>(img)` binds T to the
             // real media type rather than the host-only `rust_type` catch-all.
@@ -1672,10 +1734,28 @@ impl BexEngine {
                     }
                 }
             }
-            BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
-                return Err(EngineError::CannotConvert {
-                    type_name: "ai.Prompt".to_string(),
-                });
+            BexExternalValue::Adt(BexExternalAdt::PromptAst(arc)) => {
+                if matches!(expected_ty, Some(RuntimeTy::RustType { .. })) {
+                    Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
+                } else {
+                    let mut fields = indexmap::IndexMap::new();
+                    fields.insert(
+                        bex_external_types::MEDIA_WRAPPER_DATA_FIELD.to_string(),
+                        BexExternalValue::Adt(BexExternalAdt::PromptAst(arc)),
+                    );
+                    return self.convert_external_to_vm_value_with_ty_and_runtime(
+                        holder,
+                        BexExternalValue::Instance {
+                            class_name: "ai.Prompt".to_string(),
+                            type_args: vec![],
+                            fields,
+                        },
+                        None,
+                        dynamic_classes,
+                        dynamic_enums,
+                        runtime_named_objects,
+                    );
+                }
             }
             BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
                 // A bare rust_data is only correct when the destination slot
@@ -1725,10 +1805,17 @@ impl BexEngine {
                     );
                 }
             }
-            BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { heap_handle, .. }) => {
-                Value::object(self.resolve_handle(holder.proof(), &heap_handle).expect(
-                    "TaggedHeapHandle should be valid - object was returned to external code",
-                ))
+            BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                kind, heap_handle, ..
+            }) => {
+                let ptr = self
+                    .resolve_handle(holder.proof(), &heap_handle)
+                    .ok_or_else(|| EngineError::TypeMismatch {
+                        message: format!(
+                            "{kind:?} handle is stale or belongs to a different BAML runtime"
+                        ),
+                    })?;
+                Value::object(ptr)
             }
             BexExternalValue::FunctionRef { global_index } => {
                 // `convert_external_to_vm_value` runs while `holder`'s
@@ -2133,24 +2220,27 @@ fn wrap_selected_union_member(
     value: BexExternalValue,
     declared_type: &RuntimeTy,
     selected: &RuntimeTy,
-) -> BexExternalValue {
+) -> Result<BexExternalValue, EngineError> {
     let RuntimeTy::Union(members, _) = declared_type else {
-        return value;
+        return Ok(value);
     };
     if members.iter().any(RuntimeTy::is_null) {
         if matches!(value, BexExternalValue::Null) {
-            return value;
+            return Ok(value);
         }
         let non_null: Vec<&RuntimeTy> = members.iter().filter(|member| !member.is_null()).collect();
-        if non_null.len() <= 1 {
-            return value;
+        if let [non_null] = non_null.as_slice() {
+            // Optionality itself is untagged, but its sole non-null member may
+            // still be a real (possibly nested/aliased) union. Preserve that
+            // member's selected-arm envelope just like `maybe_wrap_union`.
+            return maybe_wrap_union(value, non_null);
         }
     }
 
-    BexExternalValue::Union {
+    Ok(BexExternalValue::Union {
         value: Box::new(value),
         metadata: UnionMetadata::new(declared_type.clone(), selected.clone()),
-    }
+    })
 }
 
 /// Recover `TypeVar(name) -> concrete` bindings by walking a declared type and
@@ -2201,6 +2291,60 @@ pub(crate) fn collect_type_var_bindings<N: Clone>(
         (RuntimeTy::Future(dv, de, _), RuntimeTy::Future(cv, ce, _)) => {
             collect_type_var_bindings(dv, cv, out);
             collect_type_var_bindings(de, ce, out);
+        }
+        _ => {}
+    }
+}
+
+/// Recover type-variable bindings from a live VM type. The declared signature
+/// uses wire-name heads, while the concrete side retains identity-carrying
+/// `TypeHead`s from the rooted heap object. Keeping the concrete side prevents
+/// descriptive handle metadata from becoming authority for generic receivers.
+pub(crate) fn collect_live_type_var_bindings<DeclaredHead: Clone, ConcreteHead: Clone>(
+    declared: &baml_type::RuntimeTy<DeclaredHead>,
+    concrete: &baml_type::RuntimeTy<ConcreteHead>,
+    out: &mut indexmap::IndexMap<String, baml_type::RuntimeTy<ConcreteHead>>,
+) {
+    use baml_type::RuntimeTy;
+    match (declared, concrete) {
+        (RuntimeTy::TypeVar(name, _), _) => {
+            out.entry(name.to_string())
+                .or_insert_with(|| concrete.clone());
+        }
+        (RuntimeTy::Class(_, declared_args, _), RuntimeTy::Class(_, concrete_args, _)) => {
+            for (declared, concrete) in declared_args.iter().zip(concrete_args) {
+                collect_live_type_var_bindings(declared, concrete, out);
+            }
+        }
+        (RuntimeTy::List(declared, _), RuntimeTy::List(concrete, _)) => {
+            collect_live_type_var_bindings(declared, concrete, out);
+        }
+        (
+            RuntimeTy::Map {
+                key: declared_key,
+                value: declared_value,
+                ..
+            },
+            RuntimeTy::Map {
+                key: concrete_key,
+                value: concrete_value,
+                ..
+            },
+        ) => {
+            collect_live_type_var_bindings(declared_key, concrete_key, out);
+            collect_live_type_var_bindings(declared_value, concrete_value, out);
+        }
+        (RuntimeTy::Union(declared, _), RuntimeTy::Union(concrete, _)) => {
+            for (declared, concrete) in declared.iter().zip(concrete) {
+                collect_live_type_var_bindings(declared, concrete, out);
+            }
+        }
+        (
+            RuntimeTy::Future(declared_value, declared_error, _),
+            RuntimeTy::Future(concrete_value, concrete_error, _),
+        ) => {
+            collect_live_type_var_bindings(declared_value, concrete_value, out);
+            collect_live_type_var_bindings(declared_error, concrete_error, out);
         }
         _ => {}
     }
@@ -2310,17 +2454,6 @@ pub(crate) fn first_unbound_type_var(ty: &RuntimeTy) -> Option<String> {
 /// position). Thin wrapper over [`first_unbound_type_var`].
 pub(crate) fn contains_type_var(ty: &RuntimeTy) -> bool {
     first_unbound_type_var(ty).is_some()
-}
-
-/// The concrete `RuntimeTy` carried by a typed heap-handle argument (e.g. a
-/// `Stream` receiver passed as `self`), if any. The handle's `ty` is canonically
-/// `Class { name, args }` with the instance's bound type args — the concrete
-/// side that [`collect_type_var_bindings`] zips against the declared `self` type.
-pub(crate) fn tagged_handle_runtime_ty(value: &BexExternalValue) -> Option<&RuntimeTy> {
-    match value {
-        BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { ty, .. }) => Some(ty),
-        _ => None,
-    }
 }
 
 // ===========================================================================
@@ -3170,6 +3303,13 @@ fn value_matches_type_with_definitions(
             (class_name.is_empty() || type_name_matches_external_name(class_name, tn))
                 && (type_args.is_empty() || class_type_args_compatible(type_args, expected_args))
         }
+        // Media wrapper instances flatten to their canonical portable ADT at
+        // the host boundary. That owned value still inhabits the corresponding
+        // stdlib wrapper arm (for example `ai.PromptPart`'s
+        // `baml.media.Image` member) even though it no longer has class shape.
+        (BexExternalValue::Adt(BexExternalAdt::Media(media)), wrapper @ RuntimeTy::Class(..)) => {
+            stdlib_media_wrapper_kind(wrapper).is_some_and(|kind| kind == media.kind)
+        }
         (BexExternalValue::Variant { enum_name, .. }, RuntimeTy::Enum(tn, _)) => {
             type_name_matches_external_name(enum_name, tn)
         }
@@ -3788,7 +3928,7 @@ fn find_implemented_interface_union_member<'a>(
 
 /// Find the union member that matches the runtime value's type.
 fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&RuntimeTy> {
-    match value.kind() {
+    let direct = match value.kind() {
         ValueKind::OmittedArg => None,
         ValueKind::Null => members.iter().find(|m| matches!(m, RuntimeTy::Null { .. })),
         ValueKind::Int(value) => members
@@ -3848,7 +3988,9 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                         // class_type_args exactly.
                         members.iter().find(|m| {
                             matches!(m, RuntimeTy::Class(tn, expected_args, _)
-                                if class.name.declared() == Some(tn)
+                                if (class.name.declared() == Some(tn)
+                                    || (class.type_tag.is_dynamic()
+                                        && class.name.overlay_name() == *tn))
                                 && (expected_args.is_empty()
                                     || (expected_args.len() == inst.class_type_args.len()
                                         && expected_args
@@ -3942,7 +4084,13 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 Object::Sentinel(_) => None,
             }
         }
-    }
+    };
+    direct.or_else(|| {
+        members.iter().find(|member| {
+            matches!(member, RuntimeTy::Union(nested, _)
+                if find_matching_union_member(value, nested).is_some())
+        })
+    })
 }
 
 /// Convert a VM value to a `BexExternalValue` for sys op arguments.
@@ -4864,7 +5012,10 @@ mod union_container_selection_tests {
     };
     use bex_external_types::{HostValueArc, HostValueKind};
     use bex_heap::{BexHeap, Tlab};
-    use bex_vm_types::{EnumVariant, Object, Value, types::Enum};
+    use bex_vm_types::{
+        DeclarationName, EnumVariant, Object, Value,
+        types::{Class, Enum},
+    };
 
     use super::*;
 
@@ -5189,6 +5340,67 @@ mod union_container_selection_tests {
         assert_eq!(
             find_matching_union_member(sad_value, &members),
             Some(&broad)
+        );
+    }
+
+    #[test]
+    fn vm_dynamic_class_selects_nested_partial_union_while_done_stays_direct() {
+        fn alloc_class(
+            tlab: &mut Tlab,
+            name: DeclarationName,
+            type_tag: baml_type::typetag::TypeTag,
+        ) -> bex_vm_types::HeapPtr {
+            tlab.alloc(Object::Class(Box::new(Class {
+                name,
+                fields: Vec::new(),
+                description: None,
+                alias: None,
+                docstring: None,
+                other: indexmap::IndexMap::new(),
+                type_tag,
+                ty_attr: TyAttr::default(),
+                has_cleanup: false,
+                generic_param_count: 0,
+                owner: bex_vm_types::HeapPtr::null(),
+            })))
+        }
+
+        let mut tlab = Tlab::new(BexHeap::new(Vec::new()));
+        let dynamic_name = Name::new("Hs7Collision");
+        let dynamic_class = alloc_class(
+            &mut tlab,
+            DeclarationName::Anonymous(dynamic_name.clone()),
+            baml_type::typetag::TypeTag::fresh_dynamic(),
+        );
+        let dynamic_value = Value::object(tlab.alloc_instance(dynamic_class, Vec::new()));
+
+        let done_name = TypeName::from_dotted_path("ai.stream.Done");
+        let done_class = alloc_class(
+            &mut tlab,
+            DeclarationName::Declared(done_name.clone()),
+            baml_type::typetag::TypeTag::of_head(&done_name.render_dotted(false)),
+        );
+        let done_value = Value::object(tlab.alloc_instance(done_class, Vec::new()));
+
+        let partial_arm = RuntimeTy::Union(
+            vec![
+                RuntimeTy::Class(TypeName::local(dynamic_name), Vec::new(), TyAttr::default()),
+                RuntimeTy::Null {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        let done_arm = RuntimeTy::Class(done_name, Vec::new(), TyAttr::default());
+        let members = [partial_arm.clone(), done_arm.clone()];
+
+        assert_eq!(
+            find_matching_union_member(dynamic_value, &members),
+            Some(&partial_arm),
+        );
+        assert_eq!(
+            find_matching_union_member(done_value, &members),
+            Some(&done_arm),
         );
     }
 
@@ -5677,6 +5889,51 @@ mod union_container_selection_tests {
             &media_ty(MediaKind::Image),
             &media_ty(MediaKind::Generic)
         ));
+    }
+
+    #[test]
+    fn portable_media_selects_the_nested_prompt_part_wrapper_union() {
+        let media_part = RuntimeTy::union([
+            media_wrapper_ty(MediaKind::Image),
+            media_wrapper_ty(MediaKind::Audio),
+            media_wrapper_ty(MediaKind::Video),
+            media_wrapper_ty(MediaKind::Pdf),
+        ]);
+        let prompt_part = RuntimeTy::union([RuntimeTy::string(), media_part.clone()]);
+
+        let wrapped = maybe_wrap_union(media_value(MediaKind::Image), &prompt_part).unwrap();
+        let BexExternalValue::Union { value, metadata } = wrapped else {
+            panic!("expected prompt-part union metadata")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &media_part
+        ));
+        assert!(matches!(
+            *value,
+            BexExternalValue::Adt(BexExternalAdt::Media(ref media))
+                if media.kind == MediaKind::Image
+        ));
+    }
+
+    #[test]
+    fn selected_nested_union_inside_optional_retains_inner_envelope() {
+        let inner = RuntimeTy::union([
+            RuntimeTy::int(),
+            RuntimeTy::string(),
+            RuntimeTy::float(),
+            RuntimeTy::bool(),
+        ]);
+        let optional = RuntimeTy::Union(vec![inner.clone(), RuntimeTy::null()], TyAttr::default());
+
+        let wrapped =
+            wrap_selected_union_member(BexExternalValue::String("alias".into()), &optional, &inner)
+                .unwrap();
+        let BexExternalValue::Union { metadata, .. } = wrapped else {
+            panic!("expected the inner union envelope")
+        };
+        assert!(runtime_ty_structurally_equal(&metadata.union_type, &inner));
+        assert_eq!(metadata.selected_option, RuntimeTy::string());
     }
 
     #[test]

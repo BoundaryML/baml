@@ -13,19 +13,26 @@ import asyncio
 import copy
 import typing
 
+import pytest
+
 import baml_bridge
 import baml_bridge.baml_py
 import baml_bridge.proto
-import pytest
 
-from baml_bridge import BamlPyHandle, BamlStream
+from baml_bridge import BamlFunctionSpec, BamlPyHandle, BamlRuntimeValue, BamlStream
 from baml_bridge.baml_py import (
+    _live_handle_count,
+    _release_wire_handle,
     _seed_function_ref_handle,
     _seed_generic_media_handle,
 )
+from baml_bridge.cffi.v1 import (
+    baml_handle_pb2,
+    baml_inbound_pb2,
+    baml_outbound_pb2,
+)
 from baml_bridge.proto import _decode_handle
 from baml_bridge.typemap import BamlTypeMap
-from baml_bridge.cffi.v1 import baml_handle_pb2, baml_outbound_pb2
 
 
 def _make_handle(key: int, handle_type: int) -> "baml_handle_pb2.BamlHandle":
@@ -64,30 +71,119 @@ def test_decoded_pyhandle_releases_on_drop():
         copy.copy(stale._handle)
 
 
-def test_tagged_handle_passes_class_fqn_to_wrapper():
-    class TaggedWrapper:
-        @classmethod
-        def _from_pyhandle(cls, pyhandle, class_fqn):
-            return pyhandle, class_fqn
+def test_encode_failure_releases_every_cloned_capability_handle():
+    """A later nested encode error explicitly releases every HANDLE_TABLE
+    clone while leaving each original Python-owned capability live."""
+    handles = []
+    capabilities = []
+    wrappers = (
+        lambda handle: handle,
+        BamlFunctionSpec._from_pyhandle,
+        BamlStream._from_pyhandle,
+        BamlRuntimeValue._from_pyhandle,
+    )
+    for index, wrap in enumerate(wrappers):
+        key, handle_type = _seed_function_ref_handle(index)
+        handle = BamlPyHandle(key, handle_type)
+        handles.append(handle)
+        capabilities.append(wrap(handle))
 
+    before = _live_handle_count()
+    with pytest.raises(TypeError, match="Cannot encode argument 'values'"):
+        baml_bridge.proto.encode_call_args(
+            {"values": [*capabilities, object()]},
+            call_id=1,
+        )
+
+    assert _live_handle_count() == before
+    for handle in handles:
+        clone_key, _ = handle._clone_key_for_wire()
+        _release_wire_handle(clone_key)
+
+
+def test_successful_encode_retains_clone_until_wire_owner_consumes_it():
+    key, handle_type = _seed_function_ref_handle(17)
+    original = BamlPyHandle(key, handle_type)
+    spec = BamlFunctionSpec._from_pyhandle(original)
+    before = _live_handle_count()
+
+    encoded = baml_bridge.proto.encode_call_args({"spec": spec}, call_id=2)
+    args = baml_inbound_pb2.CallFunctionArgs.FromString(encoded)
+    wire_key = args.kwargs[0].value.handle.key
+
+    assert wire_key != key
+    assert _live_handle_count() == before + 1
+    _release_wire_handle(wire_key)
+    assert _live_handle_count() == before
+
+
+def test_stream_handle_kind_ignores_misleading_type_metadata():
     key, _ = _seed_function_ref_handle(9)
     handle = baml_outbound_pb2.BamlOutboundHandle()
     handle.key = key
     handle.handle_type = baml_handle_pb2.ADT_TAGGED_HEAP_HANDLE
     handle.ty.class_ty.name = "test.stream.Custom"
-    tm = BamlTypeMap()
-    tm._class_cache["test.stream.Custom"] = TaggedWrapper
+    assert isinstance(_decode_handle(handle, BamlTypeMap()), BamlStream)
 
-    pyhandle, class_fqn = _decode_handle(handle, tm)
-    assert isinstance(pyhandle, BamlPyHandle)
-    assert class_fqn == "test.stream.Custom"
+
+@pytest.mark.parametrize(
+    ("handle_type", "expected_type"),
+    [
+        (baml_handle_pb2.ADT_FUNCTION_SPEC, BamlFunctionSpec),
+        (baml_handle_pb2.ADT_RUNTIME_VALUE, BamlRuntimeValue),
+    ],
+)
+def test_live_handle_kinds_select_trusted_wrappers(handle_type, expected_type):
+    key, _ = _seed_function_ref_handle(10)
+    handle = baml_outbound_pb2.BamlOutboundHandle(
+        key=key,
+        handle_type=handle_type,
+    )
+    handle.ty.class_ty.name = "user.CollidingCompiledName"
+    assert isinstance(_decode_handle(handle, BamlTypeMap()), expected_type)
 
 
 @pytest.mark.asyncio
-async def test_stream_derives_method_fqns_from_tagged_class(monkeypatch):
-    stream = BamlStream._from_pyhandle(
-        typing.cast(BamlPyHandle, object()), "test.stream.Custom"
-    )
+async def test_function_spec_uses_canonical_method_fqns_and_wire_argument_names(
+    monkeypatch,
+):
+    spec = BamlFunctionSpec._from_pyhandle(typing.cast(BamlPyHandle, object()))
+    sync_calls = []
+    async_calls = []
+
+    def capture_sync(_self, fqn, kwargs=None):
+        sync_calls.append((fqn, kwargs))
+        return fqn
+
+    async def capture_async(_self, fqn, kwargs=None):
+        async_calls.append((fqn, kwargs))
+        return fqn
+
+    monkeypatch.setattr(BamlFunctionSpec, "_call_sync", capture_sync)
+    monkeypatch.setattr(BamlFunctionSpec, "_call_async", capture_async)
+
+    assert spec.output_type() == "ai.FunctionSpec.output_type"
+    assert spec.client_id() == "ai.FunctionSpec.client_id"
+    assert spec.parse("{}") == "ai.FunctionSpec.parse"
+    assert await spec.output_type_async() == "ai.FunctionSpec.output_type"
+    assert await spec.client_id_async() == "ai.FunctionSpec.client_id"
+    assert await spec.parse_async("[]") == "ai.FunctionSpec.parse"
+
+    assert sync_calls == [
+        ("ai.FunctionSpec.output_type", None),
+        ("ai.FunctionSpec.client_id", None),
+        ("ai.FunctionSpec.parse", {"json": "{}"}),
+    ]
+    assert async_calls == [
+        ("ai.FunctionSpec.output_type", None),
+        ("ai.FunctionSpec.client_id", None),
+        ("ai.FunctionSpec.parse", {"json": "[]"}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_stream_uses_canonical_method_fqns(monkeypatch):
+    stream = BamlStream._from_pyhandle(typing.cast(BamlPyHandle, object()))
     monkeypatch.setattr(BamlStream, "_call_sync", lambda _self, fqn: fqn)
 
     async def capture_async(_self, fqn):
@@ -95,10 +191,10 @@ async def test_stream_derives_method_fqns_from_tagged_class(monkeypatch):
 
     monkeypatch.setattr(BamlStream, "_call_async", capture_async)
 
-    assert stream.next() == "test.stream.Custom.next"
-    assert stream.final() == "test.stream.Custom.final"
-    assert await stream.next_async() == "test.stream.Custom.next"
-    assert await stream.final_async() == "test.stream.Custom.final"
+    assert stream.next() == "ai.stream.Stream.next"
+    assert stream.final() == "ai.stream.Stream.final"
+    assert await stream.next_async() == "ai.stream.Stream.next"
+    assert await stream.final_async() == "ai.stream.Stream.final"
 
 
 @pytest.mark.asyncio
@@ -125,10 +221,7 @@ async def test_stream_async_forwards_python_task_cancellation(monkeypatch):
         return b"encoded"
 
     monkeypatch.setattr(baml_bridge.proto, "encode_call_args", encode_call_args)
-    stream = BamlStream._from_pyhandle(
-        typing.cast(BamlPyHandle, object()),
-        "test.stream.Custom",
-    )
+    stream = BamlStream._from_pyhandle(typing.cast(BamlPyHandle, object()))
 
     task = asyncio.create_task(stream.next_async())
     await asyncio.wait_for(entered.wait(), timeout=1.0)
@@ -164,10 +257,7 @@ async def test_stream_async_preserves_cancellation_when_native_cancel_fails(
         "encode_call_args",
         lambda _args, _call_id, **_kwargs: b"encoded",
     )
-    stream = BamlStream._from_pyhandle(
-        typing.cast(BamlPyHandle, object()),
-        "test.stream.Custom",
-    )
+    stream = BamlStream._from_pyhandle(typing.cast(BamlPyHandle, object()))
 
     task = asyncio.create_task(stream.next_async())
     await asyncio.wait_for(entered.wait(), timeout=1.0)
@@ -178,3 +268,37 @@ async def test_stream_async_preserves_cancellation_when_native_cancel_fails(
 
     assert task.cancelled()
     assert call_ids == [23]
+
+
+@pytest.mark.asyncio
+async def test_live_capability_methods_use_async_cancellation_decoder(monkeypatch):
+    class CompletedRuntime:
+        async def call_function(self, _args, _ctx, _collectors):
+            return b"cancelled-result"
+
+    decoded: list[bytes] = []
+
+    def decode_async(result: bytes):
+        decoded.append(result)
+        raise asyncio.CancelledError("engine cancellation")
+
+    monkeypatch.setattr(baml_bridge, "get_runtime", lambda: CompletedRuntime())
+    monkeypatch.setattr(baml_bridge, "_decode_call_result_async", decode_async)
+    monkeypatch.setattr(baml_bridge.baml_py, "new_function_call", lambda: 29)
+    monkeypatch.setattr(
+        baml_bridge.proto,
+        "encode_call_args",
+        lambda _args, _call_id, **_kwargs: b"encoded",
+    )
+
+    handle = typing.cast(BamlPyHandle, object())
+    calls = [
+        BamlFunctionSpec._from_pyhandle(handle).name_async,
+        BamlStream._from_pyhandle(handle).next_async,
+        BamlRuntimeValue._from_pyhandle(handle).to_data_async,
+    ]
+    for call in calls:
+        with pytest.raises(asyncio.CancelledError, match="engine cancellation"):
+            await call()
+
+    assert decoded == [b"cancelled-result"] * 3

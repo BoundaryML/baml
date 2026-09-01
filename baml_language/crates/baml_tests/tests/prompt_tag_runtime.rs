@@ -20,13 +20,8 @@ fn test_result(output: TestOutput) -> BexExternalValue {
 
 fn prompt_ast(output: TestOutput) -> Arc<PromptAst> {
     match test_result(output) {
-        BexExternalValue::Instance {
-            class_name, fields, ..
-        } if class_name == "ai.Prompt" => match fields.get("_data") {
-            Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
-            other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
-        },
-        other => panic!("expected a ai.Prompt instance, got {other:?}"),
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => ast,
+        other => panic!("expected a portable PromptAst ADT, got {other:?}"),
     }
 }
 
@@ -78,7 +73,7 @@ function StructuredGreeting(name: string) -> string {
 }
 
 function main() -> ai.Prompt {
-  StructuredGreeting$render_prompt("Ada")
+  StructuredGreeting@render_prompt("Ada")
 }
 "#
     );
@@ -102,7 +97,7 @@ function InspectPhoto(photo: image) -> string {
 }
 
 function main() -> ai.Prompt {
-  InspectPhoto$render_prompt(image.from_url("https://example.com/photo.png", "image/png"))
+  InspectPhoto@render_prompt(image.from_url("https://example.com/photo.png", "image/png"))
 }
 "#
     );

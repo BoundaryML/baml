@@ -3,7 +3,7 @@
 // PlainChat has NO tools field: an instructions-only backtick prompt with the
 // `${ctx.output_format()}` hole.
 //
-// SpecAgent has a tools field: it gets the SpecAgent$spec companion, its
+// SpecAgent has a tools field: it gets the SpecAgent@spec companion, its
 // direct call runs the ai Agent loop, and `tools` accepts both a literal
 // list of function references and a named ai.Tool[] expression.
 

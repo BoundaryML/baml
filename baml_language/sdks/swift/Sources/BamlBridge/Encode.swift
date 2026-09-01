@@ -51,6 +51,12 @@ public struct BamlTypeDescriptor: @unchecked Sendable, Equatable {
     public static var null: BamlTypeDescriptor { primitive(.bamlTyPrimitiveNull) }
     public static var bytes: BamlTypeDescriptor { primitive(.bamlTyPrimitiveBytes) }
 
+    public static var prompt: BamlTypeDescriptor {
+        var ty = BamlBridge_Cffi_V1_BamlTy()
+        ty.promptAst = BamlBridge_Cffi_V1_BamlTyPromptAst()
+        return BamlTypeDescriptor(ty)
+    }
+
     public static func list(_ item: BamlTypeDescriptor) -> BamlTypeDescriptor {
         var list = BamlBridge_Cffi_V1_BamlTyList()
         list.item = item.raw
@@ -276,6 +282,16 @@ extension BamlInboundValue {
         typeArguments: [BamlTypeDescriptor?] = [],
         _ fields: [(String, (any BamlEncodable)?)]
     ) -> BamlInboundValue {
+        // Generated media classes contain only `_data: BamlHandle?`. The
+        // handle encoder lowers that field to the canonical media payload;
+        // flatten the wrapper too so media never crosses as class+handle
+        // identity.
+        if fields.count == 1, fields[0].0 == "_data", let data = fields[0].1 {
+            let encoded = data._bamlEncode()
+            if case .mediaValue? = encoded.raw.value {
+                return encoded
+            }
+        }
         var cls = BamlBridge_Cffi_V1_InboundClassValue()
         cls.fields = fields.map { name, value in
             var entry = BamlBridge_Cffi_V1_InboundMapEntry()

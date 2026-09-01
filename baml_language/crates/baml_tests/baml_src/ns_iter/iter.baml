@@ -582,7 +582,7 @@ test "iter_array_iter" {
 // The motivating case: `Repeat.new(v)` defaults to `count = -1` and repeats
 // forever. Before `take` existed there was no way to make it finite, so
 // `collect()` on it could never terminate.
-function iter_take_bounds_infinite_repeat() -> int[] throws unknown {
+function iter_take_bounds_infinite_repeat() -> int[] {
   baml.iter.Repeat.new(0).take(5).collect()
 }
 
@@ -590,7 +590,7 @@ test "iter_take_bounds_infinite_repeat" {
   assert.equal(iter_take_bounds_infinite_repeat(), [0, 0, 0, 0, 0])
 }
 
-function iter_take_stops_early() -> int[] throws unknown {
+function iter_take_stops_early() -> int[] {
   baml.iter.Range.new(0, 10).take(3).collect()
 }
 
@@ -598,7 +598,7 @@ test "iter_take_stops_early" {
   assert.equal(iter_take_stops_early(), [0, 1, 2])
 }
 
-function iter_take_more_than_available() -> int[] throws unknown {
+function iter_take_more_than_available() -> int[] {
   baml.iter.ArrayIterator.new([1, 2]).take(5).collect()
 }
 
@@ -606,7 +606,7 @@ test "iter_take_more_than_available" {
   assert.equal(iter_take_more_than_available(), [1, 2])
 }
 
-function iter_take_zero() -> int[] throws unknown {
+function iter_take_zero() -> int[] {
   baml.iter.Range.new(0, 10).take(0).collect()
 }
 
@@ -614,7 +614,7 @@ test "iter_take_zero" {
   assert.equal(iter_take_zero(), [])
 }
 
-function iter_skip() -> int[] throws unknown {
+function iter_skip() -> int[] {
   baml.iter.Range.new(0, 5).skip(2).collect()
 }
 
@@ -622,7 +622,7 @@ test "iter_skip" {
   assert.equal(iter_skip(), [2, 3, 4])
 }
 
-function iter_skip_past_end() -> int[] throws unknown {
+function iter_skip_past_end() -> int[] {
   baml.iter.ArrayIterator.new([1, 2]).skip(5).collect()
 }
 
@@ -630,7 +630,7 @@ test "iter_skip_past_end" {
   assert.equal(iter_skip_past_end(), [])
 }
 
-function iter_skip_zero() -> int[] throws unknown {
+function iter_skip_zero() -> int[] {
   baml.iter.Range.new(0, 3).skip(0).collect()
 }
 
@@ -638,7 +638,7 @@ test "iter_skip_zero" {
   assert.equal(iter_skip_zero(), [0, 1, 2])
 }
 
-function iter_skip_then_take() -> int[] throws unknown {
+function iter_skip_then_take() -> int[] {
   baml.iter.Range.new(0, 100).skip(3).take(4).collect()
 }
 
@@ -646,7 +646,7 @@ test "iter_skip_then_take" {
   assert.equal(iter_skip_then_take(), [3, 4, 5, 6])
 }
 
-function iter_take_while() -> int[] throws unknown {
+function iter_take_while() -> int[] {
   baml.iter.ArrayIterator.new([1, 2, 3, 4, 1]).take_while((x: int) -> bool { x < 3 }).collect()
 }
 
@@ -655,7 +655,7 @@ test "iter_take_while" {
 }
 
 // `take_while` stops at the first false; it does not filter later elements.
-function iter_take_while_stops_not_filters() -> int[] throws unknown {
+function iter_take_while_stops_not_filters() -> int[] {
   baml.iter.ArrayIterator.new([2, 4, 5, 6, 8]).take_while((x: int) -> bool { x % 2 == 0 }).collect()
 }
 
@@ -663,7 +663,7 @@ test "iter_take_while_stops_not_filters" {
   assert.equal(iter_take_while_stops_not_filters(), [2, 4])
 }
 
-function iter_take_while_none_match() -> int[] throws unknown {
+function iter_take_while_none_match() -> int[] {
   baml.iter.ArrayIterator.new([5, 6]).take_while((x: int) -> bool { x < 0 }).collect()
 }
 
@@ -671,7 +671,7 @@ test "iter_take_while_none_match" {
   assert.equal(iter_take_while_none_match(), [])
 }
 
-function iter_take_while_bounds_infinite() -> int[] throws unknown {
+function iter_take_while_bounds_infinite() -> int[] {
   baml.iter.Range.new(0, 1000000).take_while((x: int) -> bool { x < 4 }).collect()
 }
 
@@ -679,7 +679,7 @@ test "iter_take_while_bounds_infinite" {
   assert.equal(iter_take_while_bounds_infinite(), [0, 1, 2, 3])
 }
 
-function iter_skip_while() -> int[] throws unknown {
+function iter_skip_while() -> int[] {
   baml.iter.ArrayIterator.new([1, 2, 3, 1, 2]).skip_while((x: int) -> bool { x < 3 }).collect()
 }
 
@@ -687,7 +687,7 @@ test "iter_skip_while" {
   assert.equal(iter_skip_while(), [3, 1, 2])
 }
 
-function iter_skip_while_all_match() -> int[] throws unknown {
+function iter_skip_while_all_match() -> int[] {
   baml.iter.ArrayIterator.new([1, 2]).skip_while((x: int) -> bool { x < 10 }).collect()
 }
 
@@ -695,7 +695,7 @@ test "iter_skip_while_all_match" {
   assert.equal(iter_skip_while_all_match(), [])
 }
 
-function iter_skip_while_none_match() -> int[] throws unknown {
+function iter_skip_while_none_match() -> int[] {
   baml.iter.ArrayIterator.new([5, 1, 2]).skip_while((x: int) -> bool { x < 0 }).collect()
 }
 
@@ -789,7 +789,7 @@ class ResumableIterator {
 
 // take(3) over a source that throws after the first item. Retrying must still
 // deliver three items — the failed pull must not have spent a slot.
-function iter_take_quota_survives_source_error() -> int[] throws unknown {
+function iter_take_quota_survives_source_error() -> int[] {
   let t = FlakyIterator.new([1, 2, 3, 4, 5], 1).take(3);
   let out: int[] = [];
   match (t.next()) {
@@ -817,7 +817,7 @@ test "iter_take_quota_survives_source_error" {
 
 // skip(3) over a source that throws during the skipping phase. The failed pull
 // must not count as a skipped element.
-function iter_skip_quota_survives_source_error() -> int[] throws unknown {
+function iter_skip_quota_survives_source_error() -> int[] {
   let s = FlakyIterator.new([1, 2, 3, 4, 5], 1).skip(3);
   let out: int[] = [];
   {
@@ -841,7 +841,7 @@ test "iter_skip_quota_survives_source_error" {
 
 // Once the source reports Done, take() must stay Done rather than pulling
 // again. -1 marks a Done result.
-function iter_take_stays_done_after_source_done() -> int[] throws unknown {
+function iter_take_stays_done_after_source_done() -> int[] {
   let t = ResumableIterator.new([1, 2, 3, 4, 5], 1).take(3);
   let out: int[] = [];
   for (let i in baml.iter.Range.new(0, 3)) {
@@ -858,7 +858,7 @@ test "iter_take_stays_done_after_source_done" {
 }
 
 // skip() must not re-enter its skipping phase after the source reported Done.
-function iter_skip_does_not_respend_quota_after_done() -> int[] throws unknown {
+function iter_skip_does_not_respend_quota_after_done() -> int[] {
   let s = ResumableIterator.new([1, 2, 3, 4, 5], 1).skip(3);
   let out: int[] = [];
   for (let i in baml.iter.Range.new(0, 2)) {

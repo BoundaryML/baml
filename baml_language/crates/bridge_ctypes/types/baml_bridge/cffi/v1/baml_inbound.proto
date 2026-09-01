@@ -8,6 +8,7 @@ package baml_bridge.cffi.v1;
 // this inbound file.
 import "baml_bridge/cffi/v1/baml_handle.proto";
 import "baml_bridge/cffi/v1/baml_type.proto";
+import "baml_bridge/cffi/v1/baml_outbound.proto";
 
 option go_package = "./cffi";
 // C++ generates against the lite runtime (no descriptors/reflection);
@@ -45,6 +46,11 @@ message InboundValue {
     // must retain runtime-created class/enum schemas; tag 13 remains for
     // rollout compatibility with structural/static type senders.
     BamlTyDef ty_def_value = 14;
+    // Rust-backed values cross as portable data, never as capability handles.
+    // These message shapes are shared with the outbound side so host-created
+    // and engine-created values have one canonical representation.
+    BamlValueMedia media_value = 15;
+    BamlValuePromptAst prompt_ast_value = 16;
   }
   // Absent oneof = null value.
 }

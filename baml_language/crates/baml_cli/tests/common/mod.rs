@@ -40,6 +40,17 @@
 
 use std::{path::PathBuf, process::Command, sync::OnceLock};
 
+const SKILL_TEMPLATE: &str = include_str!("../../../../../skills/baml-core/SKILL.md");
+const TOOLCHAIN_VERSION_PLACEHOLDER: &str = "{{BAML_TOOLCHAIN_VERSION}}";
+
+pub fn installed_skill_content() -> String {
+    SKILL_TEMPLATE.replacen(
+        TOOLCHAIN_VERSION_PLACEHOLDER,
+        baml_version::CANONICAL_VERSION,
+        1,
+    )
+}
+
 /// Memoized host discovery for this test process. Nextest's filtered setup
 /// script prebuilds the host once for the whole run; plain `cargo test` falls
 /// back to one build shared by every case in its single process.

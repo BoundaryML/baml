@@ -397,7 +397,7 @@ impl GenerateArgs {
                 reporter.status(
                     "Generated",
                     format!(
-                        "{} ({count} file(s) → {})",
+                        "{} ({count} file(s), 0 identifier renames → {})",
                         generator.name,
                         output_dir.display()
                     ),
@@ -409,15 +409,18 @@ impl GenerateArgs {
             // Unified to bytes at the write boundary: python/TS emit text
             // only; the rust generator also ships the embedded bytecode as
             // a binary file.
+            let mut identifier_renames = Vec::new();
             let generated: Vec<(PathBuf, Vec<u8>)> = match generator.output_type {
                 OutputType::PythonPydantic | OutputType::PythonPydanticV1 => {
-                    sdkgen_python_pydantic2::to_source_code_with_bytecode_and_metadata_and_source_files(
+                    let generated = sdkgen_python_pydantic2::generate_with_bytecode_and_metadata_and_source_files(
                         &pool,
                         &baml_bytecode,
                         &embedded_baml_toml,
                         &user_baml_files,
                         generator.naming_convention,
-                    )
+                    );
+                    identifier_renames = generated.renames;
+                    generated.files
                     .into_iter()
                     .map(|(path, content)| (path, content.into_bytes()))
                     .collect()
@@ -537,6 +540,18 @@ impl GenerateArgs {
                 )
             })?;
             let count = report.written_files.len();
+            for rename in &identifier_renames {
+                crate::reporter::print_verbose(format_args!(
+                    "Renamed {} `{}`: `{}` → `{}` ({})",
+                    rename.kind, rename.fqn, rename.original, rename.generated, rename.reason,
+                ));
+            }
+            let rename_count = identifier_renames.len();
+            let rename_label = if rename_count == 1 {
+                "identifier rename"
+            } else {
+                "identifier renames"
+            };
 
             // Persistent status line in the scrollback — one per
             // generator block. Matches cargo's `   Compiling foo
@@ -545,7 +560,7 @@ impl GenerateArgs {
             reporter.status(
                 "Generated",
                 format!(
-                    "{} ({count} file(s) → {})",
+                    "{} ({count} file(s), {rename_count} {rename_label} → {})",
                     generator.name,
                     output_dir.display()
                 ),

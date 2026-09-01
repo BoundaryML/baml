@@ -1021,7 +1021,7 @@ fn ai.clients.Retry._attempt(self: ai.clients.Retry, input: ai.ModelTurnInput, r
     }
 }
 
-fn ai.clients.Retry.root.Client.id(self: ai.clients.Retry) -> string {
+fn ai.clients.<(ai.clients.Retry as ai.Client)>.id(self: ai.clients.Retry) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: ai.clients.Retry // self // param
@@ -1037,7 +1037,7 @@ fn ai.clients.Retry.root.Client.id(self: ai.clients.Retry) -> string {
     }
 }
 
-fn ai.clients.Retry.root.Client.render(self: ai.clients.Retry, input: ai.ModelTurnInput) -> baml.http.Request {
+fn ai.clients.<(ai.clients.Retry as ai.Client)>.render(self: ai.clients.Retry, input: ai.ModelTurnInput) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: ai.clients.Retry // self // param
@@ -1070,7 +1070,7 @@ fn ai.clients.Retry.root.Client.render(self: ai.clients.Retry, input: ai.ModelTu
     }
 }
 
-fn ai.clients.Retry.root.Client.invoke(self: ai.clients.Retry, input: ai.ModelTurnInput) -> ai.ModelTurn {
+fn ai.clients.<(ai.clients.Retry as ai.Client)>.invoke(self: ai.clients.Retry, input: ai.ModelTurnInput) -> ai.ModelTurn {
     // Locals:
     let _0: ai.ModelTurn // _0 // return
     let _1: ai.clients.Retry // self // param
@@ -1141,7 +1141,7 @@ fn ai.clients.Retry.root.Client.invoke(self: ai.clients.Retry, input: ai.ModelTu
     }
 }
 
-fn ai.clients.Retry.root.stream.StreamingClient.invoke_stream(self: ai.clients.Retry, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+fn ai.clients.<(ai.clients.Retry as ai.stream.StreamingClient)>.invoke_stream(self: ai.clients.Retry, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     // Locals:
     let _0: ai.stream.TurnStream // _0 // return
     let _1: ai.clients.Retry // self // param [captured]
@@ -1385,7 +1385,7 @@ fn ai.clients.RoundRobin.new(members: ai.Client[]) -> ai.clients.RoundRobin {
     }
 }
 
-fn ai.clients.RoundRobin.root.Client.id(self: ai.clients.RoundRobin) -> string {
+fn ai.clients.<(ai.clients.RoundRobin as ai.Client)>.id(self: ai.clients.RoundRobin) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: ai.clients.RoundRobin // self // param
@@ -1421,7 +1421,7 @@ fn ai.clients.RoundRobin.root.Client.id(self: ai.clients.RoundRobin) -> string {
     }
 }
 
-fn ai.clients.RoundRobin.root.Client.render(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> baml.http.Request {
+fn ai.clients.<(ai.clients.RoundRobin as ai.Client)>.render(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: ai.clients.RoundRobin // self // param
@@ -1475,7 +1475,7 @@ fn ai.clients.RoundRobin.root.Client.render(self: ai.clients.RoundRobin, input: 
     }
 }
 
-fn ai.clients.RoundRobin.root.Client.invoke(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> ai.ModelTurn {
+fn ai.clients.<(ai.clients.RoundRobin as ai.Client)>.invoke(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> ai.ModelTurn {
     // Locals:
     let _0: ai.ModelTurn // _0 // return
     let _1: ai.clients.RoundRobin // self // param
@@ -1566,7 +1566,7 @@ fn ai.clients.RoundRobin.root.Client.invoke(self: ai.clients.RoundRobin, input: 
     }
 }
 
-fn ai.clients.RoundRobin.root.stream.StreamingClient.invoke_stream(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+fn ai.clients.<(ai.clients.RoundRobin as ai.stream.StreamingClient)>.invoke_stream(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     // Locals:
     let _0: ai.stream.TurnStream // _0 // return
     let _1: ai.clients.RoundRobin // self // param
@@ -1790,7 +1790,7 @@ fn ai.clients.Fallback._try(self: ai.clients.Fallback, input: ai.ModelTurnInput,
     }
 }
 
-fn ai.clients.Fallback.root.Client.id(self: ai.clients.Fallback) -> string {
+fn ai.clients.<(ai.clients.Fallback as ai.Client)>.id(self: ai.clients.Fallback) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: ai.clients.Fallback // self // param
@@ -1826,7 +1826,7 @@ fn ai.clients.Fallback.root.Client.id(self: ai.clients.Fallback) -> string {
     }
 }
 
-fn ai.clients.Fallback.root.Client.render(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> baml.http.Request {
+fn ai.clients.<(ai.clients.Fallback as ai.Client)>.render(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: ai.clients.Fallback // self // param
@@ -1880,7 +1880,7 @@ fn ai.clients.Fallback.root.Client.render(self: ai.clients.Fallback, input: ai.M
     }
 }
 
-fn ai.clients.Fallback.root.Client.invoke(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> ai.ModelTurn {
+fn ai.clients.<(ai.clients.Fallback as ai.Client)>.invoke(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> ai.ModelTurn {
     // Locals:
     let _0: ai.ModelTurn // _0 // return
     let _1: ai.clients.Fallback // self // param
@@ -1949,7 +1949,7 @@ fn ai.clients.Fallback.root.Client.invoke(self: ai.clients.Fallback, input: ai.M
     }
 }
 
-fn ai.clients.Fallback.root.stream.StreamingClient.invoke_stream(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+fn ai.clients.<(ai.clients.Fallback as ai.stream.StreamingClient)>.invoke_stream(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     // Locals:
     let _0: ai.stream.TurnStream // _0 // return
     let _1: ai.clients.Fallback // self // param [captured]
@@ -3064,7 +3064,7 @@ fn ai.errors.normalize_invoke(error: baml.errors.AccessError | baml.errors.Inval
     }
 }
 
-fn ai.errors.RateLimited.Failure.retry_safety(self: ai.errors.RateLimited) -> ai.errors.RetrySafety {
+fn ai.errors.<(ai.errors.RateLimited as ai.errors.Failure)>.retry_safety(self: ai.errors.RateLimited) -> ai.errors.RetrySafety {
     // Locals:
     let _0: ai.errors.RetrySafety // _0 // return
     let _1: ai.errors.RateLimited // self // param
@@ -3079,7 +3079,7 @@ fn ai.errors.RateLimited.Failure.retry_safety(self: ai.errors.RateLimited) -> ai
     }
 }
 
-fn ai.errors.NetworkFailure.Failure.retry_safety(self: ai.errors.NetworkFailure) -> ai.errors.RetrySafety {
+fn ai.errors.<(ai.errors.NetworkFailure as ai.errors.Failure)>.retry_safety(self: ai.errors.NetworkFailure) -> ai.errors.RetrySafety {
     // Locals:
     let _0: ai.errors.RetrySafety // _0 // return
     let _1: ai.errors.NetworkFailure // self // param
@@ -3094,7 +3094,7 @@ fn ai.errors.NetworkFailure.Failure.retry_safety(self: ai.errors.NetworkFailure)
     }
 }
 
-fn ai.errors.InvalidRequest.Failure.retry_safety(self: ai.errors.InvalidRequest) -> ai.errors.RetrySafety {
+fn ai.errors.<(ai.errors.InvalidRequest as ai.errors.Failure)>.retry_safety(self: ai.errors.InvalidRequest) -> ai.errors.RetrySafety {
     // Locals:
     let _0: ai.errors.RetrySafety // _0 // return
     let _1: ai.errors.InvalidRequest // self // param
@@ -3109,7 +3109,7 @@ fn ai.errors.InvalidRequest.Failure.retry_safety(self: ai.errors.InvalidRequest)
     }
 }
 
-fn ai.errors.PromptRenderError.Failure.retry_safety(self: ai.errors.PromptRenderError) -> ai.errors.RetrySafety {
+fn ai.errors.<(ai.errors.PromptRenderError as ai.errors.Failure)>.retry_safety(self: ai.errors.PromptRenderError) -> ai.errors.RetrySafety {
     // Locals:
     let _0: ai.errors.RetrySafety // _0 // return
     let _1: ai.errors.PromptRenderError // self // param
@@ -3124,7 +3124,7 @@ fn ai.errors.PromptRenderError.Failure.retry_safety(self: ai.errors.PromptRender
     }
 }
 
-fn ai.errors.PreviewUnsupported.Failure.retry_safety(self: ai.errors.PreviewUnsupported) -> ai.errors.RetrySafety {
+fn ai.errors.<(ai.errors.PreviewUnsupported as ai.errors.Failure)>.retry_safety(self: ai.errors.PreviewUnsupported) -> ai.errors.RetrySafety {
     // Locals:
     let _0: ai.errors.RetrySafety // _0 // return
     let _1: ai.errors.PreviewUnsupported // self // param
@@ -3139,7 +3139,7 @@ fn ai.errors.PreviewUnsupported.Failure.retry_safety(self: ai.errors.PreviewUnsu
     }
 }
 
-fn ai.errors.Refused.Failure.retry_safety(self: ai.errors.Refused) -> ai.errors.RetrySafety {
+fn ai.errors.<(ai.errors.Refused as ai.errors.Failure)>.retry_safety(self: ai.errors.Refused) -> ai.errors.RetrySafety {
     // Locals:
     let _0: ai.errors.RetrySafety // _0 // return
     let _1: ai.errors.Refused // self // param
@@ -3154,7 +3154,7 @@ fn ai.errors.Refused.Failure.retry_safety(self: ai.errors.Refused) -> ai.errors.
     }
 }
 
-fn ai.errors.ParseFailed.Failure.retry_safety(self: ai.errors.ParseFailed) -> ai.errors.RetrySafety {
+fn ai.errors.<(ai.errors.ParseFailed as ai.errors.Failure)>.retry_safety(self: ai.errors.ParseFailed) -> ai.errors.RetrySafety {
     // Locals:
     let _0: ai.errors.RetrySafety // _0 // return
     let _1: ai.errors.ParseFailed // self // param
@@ -3169,7 +3169,7 @@ fn ai.errors.ParseFailed.Failure.retry_safety(self: ai.errors.ParseFailed) -> ai
     }
 }
 
-fn ai.errors.FinishReasonError.Failure.retry_safety(self: ai.errors.FinishReasonError) -> ai.errors.RetrySafety {
+fn ai.errors.<(ai.errors.FinishReasonError as ai.errors.Failure)>.retry_safety(self: ai.errors.FinishReasonError) -> ai.errors.RetrySafety {
     // Locals:
     let _0: ai.errors.RetrySafety // _0 // return
     let _1: ai.errors.FinishReasonError // self // param
@@ -3184,7 +3184,7 @@ fn ai.errors.FinishReasonError.Failure.retry_safety(self: ai.errors.FinishReason
     }
 }
 
-fn ai.errors.StepBudgetExceeded.Failure.retry_safety(self: ai.errors.StepBudgetExceeded) -> ai.errors.RetrySafety {
+fn ai.errors.<(ai.errors.StepBudgetExceeded as ai.errors.Failure)>.retry_safety(self: ai.errors.StepBudgetExceeded) -> ai.errors.RetrySafety {
     // Locals:
     let _0: ai.errors.RetrySafety // _0 // return
     let _1: ai.errors.StepBudgetExceeded // self // param
@@ -3199,7 +3199,7 @@ fn ai.errors.StepBudgetExceeded.Failure.retry_safety(self: ai.errors.StepBudgetE
     }
 }
 
-fn ai.errors.ToolFailedError.Failure.retry_safety(self: ai.errors.ToolFailedError) -> ai.errors.RetrySafety {
+fn ai.errors.<(ai.errors.ToolFailedError as ai.errors.Failure)>.retry_safety(self: ai.errors.ToolFailedError) -> ai.errors.RetrySafety {
     // Locals:
     let _0: ai.errors.RetrySafety // _0 // return
     let _1: ai.errors.ToolFailedError // self // param
@@ -3214,7 +3214,7 @@ fn ai.errors.ToolFailedError.Failure.retry_safety(self: ai.errors.ToolFailedErro
     }
 }
 
-fn ai.errors.StreamingUnsupported.Failure.retry_safety(self: ai.errors.StreamingUnsupported) -> ai.errors.RetrySafety {
+fn ai.errors.<(ai.errors.StreamingUnsupported as ai.errors.Failure)>.retry_safety(self: ai.errors.StreamingUnsupported) -> ai.errors.RetrySafety {
     // Locals:
     let _0: ai.errors.RetrySafety // _0 // return
     let _1: ai.errors.StreamingUnsupported // self // param
@@ -4729,7 +4729,7 @@ fn ai.internal._media_mixed_parts(turn: ai.ModelTurn) -> baml.json.json[] {
     let _10: ai.content.Text // t
     let _11: bool
     let _12: string
-    let _13: (baml.String) -> string throws never
+    let _13: (string) -> string throws never
     let _14: int
     let _15: string
     let _16: reflect.Type
@@ -4956,7 +4956,7 @@ fn ai.internal._media_reject_mixed(turn: ai.ModelTurn, kind: string, provider: s
     let _17: ai.content.Text // t
     let _18: bool
     let _19: string
-    let _20: (baml.String) -> string throws never
+    let _20: (string) -> string throws never
     let _21: int
     let _22: bool
     let _23: int
@@ -6086,7 +6086,7 @@ fn ai.internal.validate_output_type(return_type: reflect.Type) -> void {
     }
 
     bb9: {
-        _11 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _1) -> [bb10];
+        _11 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _1) -> [bb10];
     }
 
     bb10: {
@@ -6517,7 +6517,7 @@ fn ai.internal._wire_blocks(content: (ai.content.Media | ai.content.Reasoning | 
     let _10: ai.content.Text // text
     let _11: bool
     let _12: string
-    let _13: (baml.String) -> string throws never
+    let _13: (string) -> string throws never
     let _14: int
     let _15: ai.content.Text
     let _16: reflect.Type
@@ -7155,7 +7155,7 @@ fn .<lambda(McpConnection._request, 0)>() -> never {
 
     bb9: {
         _3 = copy capture[0].2;
-        _1 = call const fn baml.sys.ReadPipeLines.root.iter.Iterator.next(copy _3) -> [bb15, unwind: bb10];
+        _1 = call const fn baml.sys.<(baml.sys.ReadPipeLines as baml.iter.Iterator)>.next(copy _3) -> [bb15, unwind: bb10];
     }
 
     bb10: {
@@ -7930,7 +7930,7 @@ fn ai.stream.TurnStream._check_terminal(self: ai.stream.TurnStream) -> void {
     let _13: string
     let _14: string
     let _15: int
-    let _16: (baml.String) -> int throws never
+    let _16: (string) -> int throws never
     let _17: reflect.Type
     let _18: string | null
 
@@ -11977,7 +11977,7 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
     bb24: {
         _82 = const "Expected zero or one " + copy _83;
         _81 = copy _82 + const " output for ";
-        _87 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _4) -> [bb25];
+        _87 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _4) -> [bb25];
     }
 
     bb25: {
@@ -12087,7 +12087,7 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
     }
 
     bb44: {
-        _42 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _4) -> [bb45];
+        _42 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _4) -> [bb45];
     }
 
     bb45: {
@@ -12179,7 +12179,7 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
     bb61: {
         _110 = const "the " + copy _111;
         _109 = copy _110 + const " output did not fit ";
-        _115 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _4) -> [bb62];
+        _115 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _4) -> [bb62];
     }
 
     bb62: {
@@ -12770,7 +12770,7 @@ fn ai.Agent._emit_from(self: ai.Agent, j: ai.Journal, seen: int) -> int {
     }
 }
 
-fn ai.Agent.Runner.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.RunResult<Out> {
+fn ai.<(ai.Agent as ai.Runner)>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.RunResult<Out> {
     // Locals:
     let _0: ai.RunResult<Out> // _0 // return
     let _1: ai.Agent // self // param [captured]
@@ -13331,7 +13331,7 @@ fn ai.Prompt.text = builtin(vm)
 
 fn ai.Prompt.messages = builtin(vm)
 
-fn ai.Prompt.baml.ToString.to_string(self: ai.Prompt) -> string {
+fn ai.<(ai.Prompt as baml.ToString)>.to_string(self: ai.Prompt) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: ai.Prompt // self // param
@@ -13401,11 +13401,81 @@ fn .<lambda(prompt, 0)>(ctx: ai.Context) -> ai.Prompt {
     }
 }
 
-fn ai.FunctionSpec.build_request(self: ai.FunctionSpec, override_client: null | ai.Client) -> baml.http.Request {
+fn ai.FunctionSpec.call(self: ai.FunctionSpec, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> Out {
+    // Locals:
+    let _0: Out // _0 // return
+    let _1: ai.FunctionSpec // self // param
+    let _2: null | ai.Client // client // param
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.RunResult<Out>
+    let _7: ai.Agent
+    let _8: reflect.Type
+    let _9: reflect.Type
+
+    bb0: {
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _8 = load_type(unknown);
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3) -> [bb5];
+    }
+
+    bb5: {
+        _9 = load_type(#0);
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _9>(copy _7, copy _1) -> [bb6];
+    }
+
+    bb6: {
+        _0 = copy _6.0;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn ai.FunctionSpec.parse(self: ai.FunctionSpec, json: string) -> Out {
+    // Locals:
+    let _0: Out // _0 // return
+    let _1: ai.FunctionSpec // self // param
+    let _2: string // json // param
+    let _3: reflect.Type
+
+    bb0: {
+        _3 = load_type(#0);
+        _0 = call const fn baml.sap.parse<copy _3>(copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn ai.FunctionSpec.build_request(self: ai.FunctionSpec, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: ai.FunctionSpec // self // param
-    let _2: null | ai.Client // override_client // param
+    let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.Client // selected
     let _5: ai.Client
@@ -13561,6 +13631,22 @@ fn ai.FunctionSpec.tools(self: ai.FunctionSpec) -> ai.tools.Toolbox {
     bb0: {
         _0 = copy _1.3;
         goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn ai.FunctionSpec.client_id(self: ai.FunctionSpec) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: ai.FunctionSpec // self // param
+    let _2: ai.Client
+
+    bb0: {
+        _2 = copy _1.4;
+        _0 = virtual_call id as ai.Client(copy _2) -> [bb1];
     }
 
     bb1: {

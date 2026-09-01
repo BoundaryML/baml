@@ -31,9 +31,10 @@
 //     get_final()/get_final_async() (get_final escapes Python's `final`, a Java
 //     reserved word — OWNER decision 2026-07-18).
 //   * `await x_async()` ports to `x_async().join()` per the conventions doc.
-//   * `$stream` companions keep the BAML name verbatim ($ is legal in Java):
-//     the streaming factory is `stream_e2e_extract$stream(...)` (not Python's
-//     `_stream`), and a class partial is the in-package companion
+//   * Streaming factories are flat host projections of the authored function:
+//     `stream_e2e_extract_stream(...)` dispatches the Stream operation against
+//     the authored FQN. A class partial remains the
+//     in-package PPIR partial model
 //     `baml_sdk.lorem.StreamingDoc$stream` (not Python's `stream_types.lorem.*`
 //     legacy layout) — the same retarget TestStreams got (GAP B, 2026-07-17).
 //   * `hasattr(v, "title")` ports to a reflective accessor-presence check
@@ -51,6 +52,7 @@ import baml_sdk.lorem.Fns;
 import baml_sdk.lorem.StreamE2ECollectResult;
 import baml_sdk.lorem.StreamingDoc;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -81,8 +83,11 @@ class TestStreamingE2e {
     void test_streaming_e2e_stream() throws Exception {
         // Sync `next()` yields a stream of partials and drains to `Done`.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_string")) {
+            AtomicInteger events = new AtomicInteger();
             BamlStream<String, String> stream =
-                    Fns.stream_e2e_extract$stream("ignored-by-replay-server");
+                    Fns.stream_e2e_extract_stream(
+                            "ignored-by-replay-server",
+                            opts -> opts.on_event(event -> events.incrementAndGet()));
             int results = 0;
             while (true) {
                 Object v = stream.next();
@@ -94,6 +99,7 @@ class TestStreamingE2e {
                 assertTrue(results < 10_000, "stream.next() failed to terminate");
             }
             assertTrue(results >= 10, "expected stream.next() to yield at least 10 partials");
+            assertTrue(events.get() > 0, "flat stream on_event callback was not invoked");
             assertInstanceOf(String.class, stream.get_final());
         }
     }
@@ -103,7 +109,7 @@ class TestStreamingE2e {
         // Async sibling over the CompletableFuture path: next_async() / get_final_async().
         try (ReplayHarness h = ReplayHarness.start("replay_extract_string")) {
             BamlStream<String, String> stream =
-                    Fns.stream_e2e_extract$stream_async("ignored-by-replay-server").join();
+                    Fns.stream_e2e_extract_stream_async("ignored-by-replay-server").join();
             int results = 0;
             while (true) {
                 Object v = stream.next_async().join();
@@ -146,7 +152,7 @@ class TestStreamingE2e {
         // Sync `next()` yields >= 10 doc partials; `get_final()` is a typed `StreamingDoc`.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_doc")) {
             BamlStream<baml_sdk.lorem.StreamingDoc$stream, StreamingDoc> stream =
-                    Fns.stream_e2e_extract_doc$stream("ignored-by-replay-server");
+                    Fns.stream_e2e_extract_doc_stream("ignored-by-replay-server");
             int results = 0;
             while (true) {
                 Object v = stream.next();
@@ -169,7 +175,7 @@ class TestStreamingE2e {
         // Async sibling over the CompletableFuture path for a class `T`.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_doc")) {
             BamlStream<baml_sdk.lorem.StreamingDoc$stream, StreamingDoc> stream =
-                    Fns.stream_e2e_extract_doc$stream_async("ignored-by-replay-server").join();
+                    Fns.stream_e2e_extract_doc_stream_async("ignored-by-replay-server").join();
             int results = 0;
             while (true) {
                 Object v = stream.next_async().join();

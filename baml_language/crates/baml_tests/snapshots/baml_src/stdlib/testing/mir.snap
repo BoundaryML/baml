@@ -49,7 +49,7 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     let _23: bool
     let _24: string
     let _25: string
-    let _26: (baml.String, string) -> bool throws never
+    let _26: (string, string) -> bool throws never
     let _27: string
     let _28: string // final_name
     let _29: bool
@@ -211,7 +211,7 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     let _23: bool
     let _24: string
     let _25: string
-    let _26: (baml.String, string) -> bool throws never
+    let _26: (string, string) -> bool throws never
     let _27: string
     let _28: string // final_name
     let _29: bool

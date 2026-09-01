@@ -104,7 +104,7 @@ function to_json_interface.$init_test_ns_to_json_interface_to_json_interface(reg
     return
 }
 
-function to_json_interface.Inner.baml.ToJson.to_json(self: to_json_interface.Inner) -> baml.json.json {
+function to_json_interface.<(user.to_json_interface.Inner as baml.ToJson)>.to_json(self: to_json_interface.Inner) -> baml.json.json {
     load_type int
     load_var self
     load_field .v
@@ -116,7 +116,7 @@ function to_json_interface.Inner.baml.ToJson.to_json(self: to_json_interface.Inn
     return
 }
 
-function to_json_interface.Point.baml.ToJson.to_json(self: to_json_interface.Point) -> baml.json.json {
+function to_json_interface.<(user.to_json_interface.Point as baml.ToJson)>.to_json(self: to_json_interface.Point) -> baml.json.json {
     load_type int
     load_var self
     load_field .x
@@ -137,7 +137,7 @@ function to_json_interface.Point.baml.ToJson.to_json(self: to_json_interface.Poi
     return
 }
 
-function to_json_interface.Tag.baml.ToJson.to_json(self: to_json_interface.Tag) -> baml.json.json {
+function to_json_interface.<(user.to_json_interface.Tag as baml.ToJson)>.to_json(self: to_json_interface.Tag) -> baml.json.json {
     load_type string
     load_var self
     load_field .name

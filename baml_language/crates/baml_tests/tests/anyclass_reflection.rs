@@ -130,7 +130,7 @@ async fn runtime_minted_class_narrows_and_exercises_the_complete_surface() {
                 "fourth": optional_string,
                 "fifth": optional_string,
             })
-            let opaque = Extract$parse<unreflect(runtime_t.as_type())>(
+            let opaque = Extract@parse<unreflect(runtime_t.as_type())>(
                 `{"first":"one","second":"two","third":null,"fourth":"four","fifth":"five"}`,
             )
             let record: reflect.AnyClass = opaque else {
@@ -181,7 +181,7 @@ async fn membership_is_class_only_and_kind_views_are_ordinary_classes() {
             class_value.type() == reflect.Type.of_value(value)
         }
 
-        function main() -> bool throws unknown {
+        function main() -> bool {
             let numbers = { "one": 1 }
             let class_kind = reflect.Type.of<Point>().as_class() ?? throw "class kind"
             let enum_kind = reflect.Type.of<Color>().as_enum() ?? throw "enum kind"
@@ -227,7 +227,7 @@ async fn reflected_membership_and_static_field_handles_agree_with_narrowing() {
             @@alias("point")
         }
 
-        function main() -> bool throws unknown {
+        function main() -> bool {
             let any_class_t = reflect.Type.of<reflect.AnyClass>()
             let any_class_view = any_class_t.as_interface() ?? throw "AnyClass interface"
             let point = Point { x: 7 }
@@ -298,7 +298,7 @@ async fn concrete_members_keep_precedence_until_explicitly_narrowed() {
             }
         }
 
-        function main() -> bool throws unknown {
+        function main() -> bool {
             let fields = ExistingFields {
                 name: "field-name",
                 type: 7,

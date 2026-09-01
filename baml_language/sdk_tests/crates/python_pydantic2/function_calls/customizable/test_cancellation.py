@@ -10,20 +10,20 @@ import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
 from baml_bridge import BamlCallContext
-from baml_sdk.baml import BamlPanic
+from baml_bridge import BamlCancelledError
 from baml_sdk.baml.panics import Cancelled
 from baml_sdk import throws_test
 
 _MAX_CANCELLATION_SECONDS = 0.5
 
 
-def _assert_cancelled_panic(exc: BamlPanic) -> None:
+def _assert_cancelled_panic(exc: BamlCancelledError) -> None:
     assert isinstance(exc.value, Cancelled)
 
 
 def _assert_cancelled_reason(exc: asyncio.CancelledError) -> None:
     reason = getattr(exc, "reason", None)
-    assert type(reason).__name__ == "BamlCancelledError"
+    assert isinstance(reason, BamlCancelledError)
     assert isinstance(reason.value, Cancelled)
 
 
@@ -54,7 +54,7 @@ def test_cancellation_sync_cancel_via_call_context():
 
     timer.start()
     try:
-        with pytest.raises(BamlPanic) as exc_info:
+        with pytest.raises(BamlCancelledError) as exc_info:
             throws_test.SleepMs(2000, _ctx=ctx)
     finally:
         timer.cancel()
@@ -95,7 +95,9 @@ async def test_cancellation_async_cancel_via_task_cancel():
     _assert_fast_cancellation(start)
 
 
-@pytest.mark.skipif(sys.version_info < (3, 11), reason="asyncio.TaskGroup requires Python 3.11+")
+@pytest.mark.skipif(
+    sys.version_info < (3, 11), reason="asyncio.TaskGroup requires Python 3.11+"
+)
 async def test_cancellation_async_cancel_via_task_group_sibling():
     start = time.monotonic()
 

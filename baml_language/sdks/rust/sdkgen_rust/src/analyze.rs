@@ -73,7 +73,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         match symbol {
             Symbol::Class(class) => classes.push((name, class)),
             Symbol::Enum(_) => {
-                if name.name().as_str().contains('$') {
+                if name.name().as_str().contains('$') && !name.is_stream() {
                     warnings.push(SkipWarning {
                         fqn: name.to_string(),
                         reason: "companion types ($stream, …) are not emitted yet".to_string(),
@@ -98,7 +98,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         // `$`-suffixed companion types ($stream partials, …) are not
         // representable as Rust identifiers and are not emitted yet —
         // same filter the function emitter applies.
-        if name.name().as_str().contains('$') {
+        if name.name().as_str().contains('$') && !name.is_stream() {
             warnings.push(SkipWarning {
                 fqn: name.to_string(),
                 reason: "companion types ($stream, …) are not emitted yet".to_string(),
@@ -159,7 +159,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     // types; only recursive aliases (unrepresentable as a plain Rust
     // `type`) and structurally unsupported right-hand sides skip.
     for (name, alias) in &aliases {
-        if name.name().as_str().contains('$') {
+        if name.name().as_str().contains('$') && !name.is_stream() {
             warnings.push(SkipWarning {
                 fqn: name.to_string(),
                 reason: "companion types ($stream, …) are not emitted yet".to_string(),
@@ -253,7 +253,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             type_names_by_leaf
                 .entry(leaf)
                 .or_default()
-                .insert(name.name().as_str().to_string());
+                .insert(name.bare_name().to_string());
         }
     }
 
@@ -544,7 +544,7 @@ fn compute_renames(
             types_in
                 .entry(path.clone())
                 .or_default()
-                .insert(name.name().as_str().to_string());
+                .insert(name.bare_name().to_string());
         }
     }
 

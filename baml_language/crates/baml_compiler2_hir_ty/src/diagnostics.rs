@@ -398,6 +398,9 @@ pub enum TirTypeError {
     },
     /// Declared throws contains extra types that never escape.
     ExtraneousThrowsDeclaration { extra_types: Vec<String> },
+    /// An `unknown`-containing throws contract without an escaping value typed
+    /// `unknown`.
+    ImpreciseUnknownThrows { inferred_types: Vec<String> },
     /// A type parameter could not be inferred at a call site.
     CannotInferTypeParameter { name: Name },
     /// A method's generic type parameter shadows a type-level parameter (generic
@@ -446,7 +449,17 @@ pub enum TirTypeError {
     /// (`let f = identity` where `identity<T>`). A generic function is a type
     /// constructor — it must be specialized (`identity<int>`) or have its type
     /// arguments inferable from context before it becomes a usable value.
-    GenericFunctionValueNotSpecialized { name: Name },
+    GenericFunctionValueNotSpecialized {
+        name: Name,
+        reference: String,
+        had_expected_type: bool,
+        generic_params: Vec<Name>,
+        binding_name: Option<Name>,
+        function_shape: Option<String>,
+        annotation_example: Option<String>,
+        specialization_example: Option<String>,
+        specialization_syntax_available: bool,
+    },
     /// A lambda parameter has no type annotation and no expected type context
     /// to infer the type from.
     CannotInferLambdaParamType { param_name: Name },
@@ -909,6 +922,84 @@ pub enum TirTypeError {
         /// the initializer calls the sysop directly.
         via: Option<Name>,
     },
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_generic_function_value_diagnostic(
+    f: &mut fmt::Formatter<'_>,
+    name: &Name,
+    reference: &str,
+    had_expected_type: bool,
+    generic_params: &[Name],
+    binding_name: Option<&Name>,
+    function_shape: Option<&str>,
+    annotation_example: Option<&str>,
+    specialization_example: Option<&str>,
+    specialization_syntax_available: bool,
+) -> fmt::Result {
+    if had_expected_type {
+        write!(
+            f,
+            "cannot determine every type argument for generic function `{name}` from the expected function type. "
+        )?;
+    } else if let Some(binding) = binding_name {
+        write!(
+            f,
+            "generic function `{name}` needs concrete type arguments before it can be stored in `{binding}`. "
+        )?;
+    } else {
+        write!(
+            f,
+            "generic function `{name}` needs concrete type arguments before it can be used as a value. "
+        )?;
+    }
+
+    let param_names = generic_params
+        .iter()
+        .map(Name::as_str)
+        .collect::<Vec<_>>()
+        .join(", ");
+    if let Some(example_args) = specialization_example {
+        write!(
+            f,
+            "Specialize it explicitly, for example `{reference}<{example_args}>`. "
+        )?;
+    } else if !specialization_syntax_available {
+        write!(
+            f,
+            "This reference form cannot take type arguments as a stored value; choose concrete types for {param_names} with a function type annotation instead. "
+        )?;
+    } else {
+        write!(
+            f,
+            "Specialize it explicitly by choosing concrete types for {param_names}; each type must satisfy its declared bounds. "
+        )?;
+    }
+
+    match (binding_name, annotation_example, function_shape) {
+        (Some(binding), Some(example), _) => write!(
+            f,
+            "Or write the concrete function type after the binding name: `let {binding}: {example} = {reference}`. "
+        )?,
+        (Some(binding), None, Some(shape)) => write!(
+            f,
+            "Or write the concrete function type after the binding name, using `{shape}` as the shape and replacing {param_names} with the types you want: `let {binding}: ... = {reference}`. "
+        )?,
+        (None, Some(example), _) => write!(
+            f,
+            "Bind it first with a concrete function type: `let function_value: {example} = {reference}`. "
+        )?,
+        (_, _, Some(shape)) => write!(
+            f,
+            "A concrete annotation can use `{shape}` as its shape; replace {param_names} with the types you want. "
+        )?,
+        _ => {}
+    }
+
+    write!(
+        f,
+        "Calling `{reference}(...)` directly works only when that call's arguments or expected result determine every type argument"
+    )
 }
 
 impl fmt::Display for TirTypeError {
@@ -1437,6 +1528,20 @@ impl fmt::Display for TirTypeError {
                     extra_types.join(", ")
                 )
             }
+            TirTypeError::ImpreciseUnknownThrows { inferred_types } => {
+                if inferred_types.is_empty() {
+                    write!(
+                        f,
+                        "`throws unknown` is unnecessary: BAML infers thrown types automatically, and this function does not throw. Remove the declaration; write an explicit `throws` type only to bound what may escape"
+                    )
+                } else {
+                    let inferred = inferred_types.join(" | ");
+                    write!(
+                        f,
+                        "`throws unknown` is imprecise: this function only throws `{inferred}`. BAML infers thrown types automatically, so remove the declaration; write `throws {inferred}` only to explicitly bound what may escape"
+                    )
+                }
+            }
             TirTypeError::CannotInferTypeParameter { name } => {
                 write!(f, "cannot infer type parameter `{name}`")
             }
@@ -1478,13 +1583,50 @@ impl fmt::Display for TirTypeError {
                     "{kind} `{type_name}` is not generic and cannot take type arguments"
                 )
             }
-            TirTypeError::GenericFunctionValueNotSpecialized { name } => {
-                write!(
-                    f,
-                    "generic function `{name}` must be specialized before it is used \
-                    as a value (e.g. `{name}<int>`)"
-                )
-            }
+            TirTypeError::GenericFunctionValueNotSpecialized {
+                name,
+                reference,
+                had_expected_type: true,
+                generic_params,
+                binding_name,
+                function_shape,
+                annotation_example,
+                specialization_example,
+                specialization_syntax_available,
+            } => write_generic_function_value_diagnostic(
+                f,
+                name,
+                reference,
+                true,
+                generic_params,
+                binding_name.as_ref(),
+                function_shape.as_deref(),
+                annotation_example.as_deref(),
+                specialization_example.as_deref(),
+                *specialization_syntax_available,
+            ),
+            TirTypeError::GenericFunctionValueNotSpecialized {
+                name,
+                reference,
+                had_expected_type: false,
+                generic_params,
+                binding_name,
+                function_shape,
+                annotation_example,
+                specialization_example,
+                specialization_syntax_available,
+            } => write_generic_function_value_diagnostic(
+                f,
+                name,
+                reference,
+                false,
+                generic_params,
+                binding_name.as_ref(),
+                function_shape.as_deref(),
+                annotation_example.as_deref(),
+                specialization_example.as_deref(),
+                *specialization_syntax_available,
+            ),
             TirTypeError::TypeParamShadowed {
                 param_name,
                 type_name,

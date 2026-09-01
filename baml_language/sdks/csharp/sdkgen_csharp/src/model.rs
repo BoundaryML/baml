@@ -8,12 +8,8 @@ use baml_codegen_types::{Class, Name, Symbol, SymbolPool};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum CallableVariant {
     Execute,
-    RenderPrompt,
-    BuildRequest,
-    BuildRequestStream,
+    Spec,
     Stream,
-    Parse,
-    ParseStream,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -206,13 +202,9 @@ fn identity(name: &BaseName, receiver: Option<CallableReceiver>) -> CallableIden
 }
 
 fn callable_parts(name: &BaseName) -> (BaseName, CallableVariant) {
-    const SUFFIXES: [(&str, CallableVariant); 6] = [
-        ("$build_request_stream", CallableVariant::BuildRequestStream),
-        ("$render_prompt", CallableVariant::RenderPrompt),
-        ("$build_request", CallableVariant::BuildRequest),
-        ("$parse_stream", CallableVariant::ParseStream),
-        ("$stream", CallableVariant::Stream),
-        ("$parse", CallableVariant::Parse),
+    const SUFFIXES: [(&str, CallableVariant); 2] = [
+        ("@stream", CallableVariant::Stream),
+        ("@spec", CallableVariant::Spec),
     ];
     for (suffix, variant) in SUFFIXES {
         if let Some(family) = name.as_str().strip_suffix(suffix) {
@@ -269,11 +261,12 @@ mod tests {
     #[test]
     fn companion_suffixes_are_interpreted_inside_the_csharp_generator() {
         assert_eq!(
-            callable_parts(&BaseName::new("Extract$build_request_stream")),
-            (
-                BaseName::new("Extract"),
-                CallableVariant::BuildRequestStream
-            )
+            callable_parts(&BaseName::new("Extract@spec")),
+            (BaseName::new("Extract"), CallableVariant::Spec)
+        );
+        assert_eq!(
+            callable_parts(&BaseName::new("Extract@stream")),
+            (BaseName::new("Extract"), CallableVariant::Stream)
         );
         assert_eq!(
             callable_parts(&BaseName::new("Extract")),
@@ -283,43 +276,37 @@ mod tests {
 
     #[test]
     fn static_execute_reclassifies_instance_only_companions_as_static() {
-        let class = reclassify_companion_methods(&class(
-            &["Extract"],
-            &["Extract$render_prompt", "Extract$parse"],
-        ));
+        let class =
+            reclassify_companion_methods(&class(&["Extract"], &["Extract@spec", "Extract@stream"]));
 
         assert_eq!(
             method_names(&class.static_methods),
-            ["Extract", "Extract$render_prompt", "Extract$parse"]
+            ["Extract", "Extract@spec", "Extract@stream"]
         );
         assert!(class.instance_methods.is_empty());
     }
 
     #[test]
     fn instance_execute_reclassifies_static_only_companions_as_instance() {
-        let class = reclassify_companion_methods(&class(
-            &["Extract$build_request", "Extract$stream"],
-            &["Extract"],
-        ));
+        let class =
+            reclassify_companion_methods(&class(&["Extract@spec", "Extract@stream"], &["Extract"]));
 
         assert!(class.static_methods.is_empty());
         assert_eq!(
             method_names(&class.instance_methods),
-            ["Extract$build_request", "Extract$stream", "Extract"]
+            ["Extract@spec", "Extract@stream", "Extract"]
         );
     }
 
     #[test]
     fn orphan_companions_preserve_their_original_method_kind() {
-        let class = reclassify_companion_methods(&class(
-            &["StaticOnly$parse"],
-            &["InstanceOnly$render_prompt"],
-        ));
+        let class =
+            reclassify_companion_methods(&class(&["StaticOnly@spec"], &["InstanceOnly@stream"]));
 
-        assert_eq!(method_names(&class.static_methods), ["StaticOnly$parse"]);
+        assert_eq!(method_names(&class.static_methods), ["StaticOnly@spec"]);
         assert_eq!(
             method_names(&class.instance_methods),
-            ["InstanceOnly$render_prompt"]
+            ["InstanceOnly@stream"]
         );
     }
 

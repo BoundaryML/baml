@@ -1,6 +1,7 @@
 // The `Self` frame slot: interface-owned default-method bodies carry the
 // receiver's concrete type at frame slot 0 (layout
-// `[Self ++ interface generics ++ associated types ++ fn generics]`), so
+// `[Self ++ interface generics ++ fn generics]` — associated types are not
+// frame slots; they reduce as `Self.X` projections), so
 // body-position `Self` — `is` tests, match arms, `reflect.Type.of<Self>()` —
 // resolves to the *implementor* type at runtime through every seeding path:
 // the impl rule's realized frame (virtual/existential dispatch and plain

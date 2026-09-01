@@ -26,6 +26,8 @@ public enum BamlValueKind : int
     Union = 11,
     Media = 12,
     Handle = 13,
+    Prompt = 14,
+    Type = 15,
 }
 
 public enum BamlTypeDescriptorKind : int
@@ -45,6 +47,8 @@ public enum BamlTypeDescriptorKind : int
     Union = 12,
     Media = 13,
     Handle = 14,
+    Prompt = 15,
+    Type = 16,
 }
 
 /// <summary>
@@ -67,11 +71,15 @@ public sealed class BamlValue : IEquatable<BamlValue>
 
     private readonly BamlGeneratedValue value;
     private readonly BamlTypeDescriptor type;
+    private readonly BamlGeneratedRegistry? promptRegistry;
 
-    internal BamlValue(BamlGeneratedValue value)
+    internal BamlValue(
+        BamlGeneratedValue value,
+        BamlGeneratedRegistry? promptRegistry = null)
     {
         ArgumentNullException.ThrowIfNull(value);
         this.value = value;
+        this.promptRegistry = promptRegistry;
         type = BamlTypeDescriptor.FromGenerated(value);
     }
 
@@ -273,6 +281,19 @@ public sealed class BamlValue : IEquatable<BamlValue>
         {
             return new BamlValue(BamlGeneratedValue.CreateHandle((BamlHandle)(object)value));
         }
+        if (declaredType == typeof(BamlPrompt))
+        {
+            var prompt = (BamlPrompt)(object)value;
+            return new BamlValue(
+                BamlGeneratedValue.CreatePromptAst(
+                    prompt.WireCopy()),
+                prompt.Registry);
+        }
+        if (declaredType == typeof(BamlType))
+        {
+            return new BamlValue(
+                BamlGeneratedValue.CreateType((BamlType)(object)value));
+        }
         if (BamlDynamicCodecRegistry.TryEncode(value, out BamlValue? encoded))
         {
             return encoded!;
@@ -315,6 +336,18 @@ public sealed class BamlValue : IEquatable<BamlValue>
         if (Kind == BamlValueKind.Handle && typeof(T) == typeof(BamlHandle))
         {
             result = (T)(object)value.ReadHandle();
+            return true;
+        }
+        if (Kind == BamlValueKind.Type && typeof(T) == typeof(BamlType))
+        {
+            result = (T)(object)value.ReadType();
+            return true;
+        }
+        if (Kind == BamlValueKind.Prompt
+            && typeof(T) == typeof(BamlPrompt)
+            && promptRegistry is not null)
+        {
+            result = (T)(object)new BamlPrompt(value.ReadPromptAst(), promptRegistry);
             return true;
         }
         if (BamlDynamicCodecRegistry.TryDecode(this, out result))
@@ -414,7 +447,9 @@ public sealed class BamlValue : IEquatable<BamlValue>
         {
             fields = new ReadOnlyCollection<KeyValuePair<string, BamlValue>>(
                 value.ReadClassFields()
-                    .Select(pair => new KeyValuePair<string, BamlValue>(pair.Key, new BamlValue(pair.Value)))
+                    .Select(pair => new KeyValuePair<string, BamlValue>(
+                        pair.Key,
+                        new BamlValue(pair.Value, promptRegistry)))
                     .ToArray());
             return true;
         }
@@ -440,7 +475,7 @@ public sealed class BamlValue : IEquatable<BamlValue>
         {
             payload = payload.WithOccurrenceType(selectedType);
         }
-        BamlValue selected = new(payload);
+        BamlValue selected = new(payload, promptRegistry);
         int[] matchingCases = value.UnionSelectedTypeMetadata is { Length: > 0 }
             ? Type.Arguments
                 .Select((argument, index) => (argument, index))
@@ -467,7 +502,9 @@ public sealed class BamlValue : IEquatable<BamlValue>
             && UnionOptionMetadata(value.UnionSelfTypeMetadata, matchingCases[0])
                 is { } inferredSelectedType)
         {
-            selected = new BamlValue(payload.WithOccurrenceType(inferredSelectedType));
+            selected = new BamlValue(
+                payload.WithOccurrenceType(inferredSelectedType),
+                promptRegistry);
         }
 
         selectedValue = selected;
@@ -587,6 +624,8 @@ public sealed class BamlValue : IEquatable<BamlValue>
         PrimitiveCarrierKind.Class => BamlValueKind.Class,
         PrimitiveCarrierKind.Union => BamlValueKind.Union,
         PrimitiveCarrierKind.Media => BamlValueKind.Media,
+        PrimitiveCarrierKind.Prompt => BamlValueKind.Prompt,
+        PrimitiveCarrierKind.Type => BamlValueKind.Type,
         PrimitiveCarrierKind.Handle => BamlValueKind.Handle,
         _ => throw new BamlProtocolException(
             "The managed bridge encountered an unsupported BAML value kind.",
@@ -630,6 +669,8 @@ public sealed class BamlValue : IEquatable<BamlValue>
                     right.ReadUnionOptionName())
                 && ValueEquals(left.ReadUnionPayload(), right.ReadUnionPayload()),
             PrimitiveCarrierKind.Media => left.ReadMedia().Equals(right.ReadMedia()),
+            PrimitiveCarrierKind.Prompt => left.ReadPromptAst().Equals(right.ReadPromptAst()),
+            PrimitiveCarrierKind.Type => left.ReadType().Equals(right.ReadType()),
             PrimitiveCarrierKind.Handle => ReferenceEquals(left.ReadHandle(), right.ReadHandle()),
             _ => false,
         };
@@ -729,6 +770,12 @@ public sealed class BamlValue : IEquatable<BamlValue>
             case PrimitiveCarrierKind.Media:
                 hash.Add(value.ReadMedia());
                 break;
+            case PrimitiveCarrierKind.Prompt:
+                hash.Add(value.ReadPromptAst());
+                break;
+            case PrimitiveCarrierKind.Type:
+                hash.Add(value.ReadType());
+                break;
             case PrimitiveCarrierKind.Handle:
                 hash.Add(value.ReadHandle(), ReferenceEqualityComparer.Instance);
                 break;
@@ -736,19 +783,23 @@ public sealed class BamlValue : IEquatable<BamlValue>
     }
 
     internal IReadOnlyList<BamlValue> ReadListValues() =>
-        value.ReadList().Select(item => new BamlValue(item)).ToArray();
+        value.ReadList().Select(item => new BamlValue(item, promptRegistry)).ToArray();
 
     internal IReadOnlyList<KeyValuePair<string, BamlValue>> ReadMapValues() =>
         value.ReadMapEntries()
-            .Select(pair => new KeyValuePair<string, BamlValue>(pair.Key, new BamlValue(pair.Value)))
+            .Select(pair => new KeyValuePair<string, BamlValue>(
+                pair.Key,
+                new BamlValue(pair.Value, promptRegistry)))
             .ToArray();
 
     internal IReadOnlyList<KeyValuePair<string, BamlValue>> ReadClassValues() =>
         value.ReadClassFields()
-            .Select(pair => new KeyValuePair<string, BamlValue>(pair.Key, new BamlValue(pair.Value)))
+            .Select(pair => new KeyValuePair<string, BamlValue>(
+                pair.Key,
+                new BamlValue(pair.Value, promptRegistry)))
             .ToArray();
 
-    internal BamlValue ReadUnionValue() => new(value.ReadUnionPayload());
+    internal BamlValue ReadUnionValue() => new(value.ReadUnionPayload(), promptRegistry);
 
     private static TItem[] SnapshotBounded<TItem>(
         IEnumerable<TItem> values,
@@ -783,6 +834,8 @@ public sealed class BamlValue : IEquatable<BamlValue>
             || canonicalType == typeof(BamlAudio)
             || canonicalType == typeof(BamlVideo)
             || canonicalType == typeof(BamlPdf)
+            || canonicalType == typeof(BamlPrompt)
+            || canonicalType == typeof(BamlType)
             || canonicalType == typeof(BamlHandle);
     }
 
@@ -905,6 +958,8 @@ public sealed class BamlTypeDescriptor : IEquatable<BamlTypeDescriptor>
                 value.ReadEnumIdentity()),
             PrimitiveCarrierKind.Union => FromMetadata(value.UnionSelfTypeMetadata),
             PrimitiveCarrierKind.Media => Leaf(BamlTypeDescriptorKind.Media),
+            PrimitiveCarrierKind.Prompt => Leaf(BamlTypeDescriptorKind.Prompt),
+            PrimitiveCarrierKind.Type => Leaf(BamlTypeDescriptorKind.Type),
             PrimitiveCarrierKind.Handle => value.ReadHandle().Type,
             _ => throw new BamlProtocolException(
                 "The managed bridge encountered an unsupported BAML value type.",
@@ -989,6 +1044,8 @@ public sealed class BamlTypeDescriptor : IEquatable<BamlTypeDescriptor>
                 type.EnumVariant.Name,
                 literal: type.EnumVariant.Variant),
             BamlTy.TyOneofCase.Resource => Leaf(BamlTypeDescriptorKind.Handle),
+            BamlTy.TyOneofCase.PromptAst => Leaf(BamlTypeDescriptorKind.Prompt),
+            BamlTy.TyOneofCase.MetaType => Leaf(BamlTypeDescriptorKind.Type),
             _ => throw UnsupportedType(type),
         };
     }

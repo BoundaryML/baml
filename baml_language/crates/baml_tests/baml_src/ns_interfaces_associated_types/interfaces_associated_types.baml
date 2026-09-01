@@ -834,3 +834,75 @@ function srab_main() -> string {
 test "self_referential_associated_bound_compiles_and_runs" {
     assert.equal(srab_main(), "leaf")
 }
+
+// ── Own-generic bounds keyed past associated types ───────────────────────────
+// An interface method's frame is [Self, iface params..] — associated types
+// are NOT slots — so a bound on an own generic declared AFTER an associated
+// type must key to that own generic. Regression: a shifted bounds cursor
+// keyed `X`'s bound onto `Y` (dropping the tail), so the default body lost
+// the bound its own signature declared and `a.tag_of()` failed to resolve.
+
+interface OgbTagged {
+    function tag_of(self) -> string throws never
+}
+
+interface OgbTallier {
+    type Marker
+    function tally<X extends OgbTagged, Y>(self, a: X, extra: Y) -> string throws never {
+        return a.tag_of()
+    }
+}
+
+class OgbCard {
+    implements OgbTagged {
+        function tag_of(self) -> string throws never { return "card" }
+    }
+}
+
+class OgbSums {
+    implements OgbTallier {
+        type Marker = int;
+    }
+}
+
+function ogb_main(s: OgbSums, c: OgbCard) -> string {
+    return s.tally(c, 1)
+}
+
+test "own_generic_bound_after_associated_type_reaches_default_body" {
+    assert.equal(ogb_main(OgbSums {}, OgbCard {}), "card")
+}
+
+// ── Foreign-instantiation projections keep their own realization ─────────────
+// A class may implement one interface at several instantiations. Inside one
+// realization's implements block, a written `(FipBoth as I<other>).X` names
+// the OTHER instantiation's member and must resolve to THAT realization's
+// pin — the projection's base is the block's own receiver, so only the
+// qualifier's generics tell the two realizations apart. (Today the ground
+// projection reduces eagerly at lowering; the sibling-pin collapse also
+// compares the qualifier's generics, so the pin holds even for a lane that
+// defers the reduction.)
+
+interface FipConv<T> {
+    type Wide
+    type Out
+}
+
+class FipBoth {
+    implements FipConv<int> {
+        type Wide = string;
+        type Out = string;
+    }
+    implements FipConv<float> {
+        type Wide = bool;
+        type Out = (FipBoth as FipConv<int>).Wide;
+    }
+}
+
+function fip_probe(x: (FipBoth as FipConv<float>).Out) -> string throws never {
+    return x
+}
+
+test "foreign_instantiation_projection_keeps_its_own_realization" {
+    assert.equal(fip_probe("ok"), "ok")
+}

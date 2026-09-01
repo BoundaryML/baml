@@ -95,11 +95,10 @@ function prompt(
     render
 }
 
-// One unit of model work, bound and unrun. Immutable; getters only.
-// `MyFunc@spec(args)` desugars to a constructor like this: the compiler
-// synthesizes a `MyFunc$spec` companion for every spec-mode LLM function
-// (backtick prompt, "provider/model" client string, and a `tools` field —
-// `tools []` opts a tool-less function in).
+// One unit of model work, bound and unrun. `MyFunc@spec(args)` calls the
+// compiler-generated private ordinary `MyFunc@spec` companion. Streaming calls
+// the separate private ordinary `MyFunc@stream` companion, whose return type
+// carries the existing `Out$stream` schema. Neither companion is public.
 class FunctionSpec<Out> {
     spec_name: string,
     args: map<string, unknown>,
@@ -107,10 +106,26 @@ class FunctionSpec<Out> {
     toolbox: root.tools.Toolbox,
     default_client: Client,
 
+    // Execute this bound spec through the default Agent. Null uses the bound
+    // client and an optional event callback observes the same journal events
+    // as a direct LLM-function call.
+    function call(
+        self,
+        client: Client? = null,
+        on_event: ((root.events.Event) -> void)? = null,
+    ) -> Out {
+        Agent.new(client = client, on_event = on_event).run(self).value
+    }
+
+    // Parse an existing model reply using this spec's realized output type.
+    function parse(self, json: string) -> Out {
+        baml.sap.parse<Out>(json)
+    }
+
     // Build the provider HTTP request shape for this spec without invoking the model.
     // A supplied client overrides the spec's default; null uses the default.
-    function build_request(self, override_client: Client? = null) -> baml.http.Request {
-        let selected = override_client ?? self.default_client;
+    function build_request(self, client: Client? = null) -> baml.http.Request {
+        let selected = client ?? self.default_client;
         selected
             .render(
                 ModelTurnInput {
@@ -142,6 +157,10 @@ class FunctionSpec<Out> {
 
     function tools(self) -> root.tools.Toolbox {
         self.toolbox
+    }
+
+    function client_id(self) -> string {
+        self.default_client.id()
     }
 
     // NOTE: `client` is a keyword, so the default client is read as the

@@ -32,18 +32,16 @@ use baml_type::{RuntimeTy, TyTemplate};
 use crate::{
     BasicBlock, BlockId, CatchRegion, Constant, ItemRef, Local, LocalDecl, MirFunction,
     MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, Terminator,
-    VizNode,
 };
 
 /// Builder for constructing MIR functions.
-pub(crate) struct MirBuilder {
+pub(crate) struct MirBuilder<'db> {
     name: Name,
     arity: usize,
-    blocks: Vec<BasicBlock>,
+    blocks: Vec<BasicBlock<'db>>,
     locals: Vec<LocalDecl>,
     current_block: Option<BlockId>,
     span: Option<Span>,
-    viz_nodes: Vec<VizNode>,
     /// Current source span for tagging statements/terminators.
     pub(crate) current_source_span: Option<Span>,
     /// Catch regions recorded during lowering for exception table construction.
@@ -52,7 +50,7 @@ pub(crate) struct MirBuilder {
 
 // Some builder utilities are not yet used but will be needed as MIR 2 matures.
 #[allow(dead_code)]
-impl MirBuilder {
+impl<'db> MirBuilder<'db> {
     /// Create a new MIR builder for a function.
     pub(crate) fn new(name: Name, arity: usize) -> Self {
         Self {
@@ -62,7 +60,6 @@ impl MirBuilder {
             locals: Vec::new(),
             current_block: None,
             span: None,
-            viz_nodes: Vec::new(),
             current_source_span: None,
             catch_regions: Vec::new(),
         }
@@ -167,12 +164,12 @@ impl MirBuilder {
     }
 
     /// Get a reference to a block.
-    pub(crate) fn get_block(&self, id: BlockId) -> &BasicBlock {
+    pub(crate) fn get_block(&self, id: BlockId) -> &BasicBlock<'db> {
         &self.blocks[id.0]
     }
 
     /// Get a mutable reference to a block.
-    pub(crate) fn get_block_mut(&mut self, id: BlockId) -> &mut BasicBlock {
+    pub(crate) fn get_block_mut(&mut self, id: BlockId) -> &mut BasicBlock<'db> {
         &mut self.blocks[id.0]
     }
 
@@ -180,13 +177,13 @@ impl MirBuilder {
     // Statement Emission
     // ========================================================================
 
-    fn current_block_mut(&mut self) -> &mut BasicBlock {
+    fn current_block_mut(&mut self) -> &mut BasicBlock<'db> {
         let id = self.current_block.expect("no current block set");
         &mut self.blocks[id.0]
     }
 
     /// Push a statement to the current block.
-    pub(crate) fn push_statement(&mut self, kind: StatementKind, span: Option<Span>) {
+    pub(crate) fn push_statement(&mut self, kind: StatementKind<'db>, span: Option<Span>) {
         let span = span.or(self.current_source_span);
         let block = self.current_block_mut();
         assert!(
@@ -197,12 +194,12 @@ impl MirBuilder {
     }
 
     /// Emit an assignment: `dest = value`
-    pub(crate) fn assign(&mut self, destination: Place, value: Rvalue) {
+    pub(crate) fn assign(&mut self, destination: Place, value: Rvalue<'db>) {
         self.push_statement(StatementKind::Assign { destination, value }, None);
     }
 
     /// Emit an assignment with span.
-    pub(crate) fn assign_with_span(&mut self, destination: Place, value: Rvalue, span: Span) {
+    pub(crate) fn assign_with_span(&mut self, destination: Place, value: Rvalue<'db>, span: Span) {
         self.push_statement(StatementKind::Assign { destination, value }, Some(span));
     }
 
@@ -210,10 +207,10 @@ impl MirBuilder {
     pub(crate) fn virtual_field_store(
         &mut self,
         iface: baml_type::TyTemplateInterface,
-        receiver: Operand,
+        receiver: Operand<'db>,
         field_index: u32,
         field: baml_base::Name,
-        value: Operand,
+        value: Operand<'db>,
     ) {
         self.push_statement(
             StatementKind::VirtualFieldStore {
@@ -253,7 +250,7 @@ impl MirBuilder {
     // Terminator Emission
     // ========================================================================
 
-    fn set_terminator(&mut self, terminator: Terminator) {
+    fn set_terminator(&mut self, terminator: Terminator<'db>) {
         let terminator_span = self.current_source_span;
         let block = self.current_block_mut();
         assert!(block.terminator.is_none(), "block already has a terminator");
@@ -267,7 +264,12 @@ impl MirBuilder {
     }
 
     /// Emit a conditional branch.
-    pub(crate) fn branch(&mut self, condition: Operand, then_block: BlockId, else_block: BlockId) {
+    pub(crate) fn branch(
+        &mut self,
+        condition: Operand<'db>,
+        then_block: BlockId,
+        else_block: BlockId,
+    ) {
         self.set_terminator(Terminator::Branch {
             condition,
             then_block,
@@ -277,7 +279,7 @@ impl MirBuilder {
 
     pub(crate) fn narrow_bind(
         &mut self,
-        source: Operand,
+        source: Operand<'db>,
         ty_template: TyTemplate,
         destination: Local,
         then_block: BlockId,
@@ -295,7 +297,7 @@ impl MirBuilder {
     /// Emit a short-circuit `&&` / `||` terminator.
     pub(crate) fn short_circuit(
         &mut self,
-        operand: Operand,
+        operand: Operand<'db>,
         is_and: bool,
         destination: Place,
         eval_rhs: BlockId,
@@ -316,7 +318,7 @@ impl MirBuilder {
     /// allowing the last arm's comparison to be skipped during codegen.
     pub(crate) fn switch(
         &mut self,
-        discriminant: Operand,
+        discriminant: Operand<'db>,
         arms: Vec<(i64, BlockId)>,
         otherwise: BlockId,
         exhaustive: bool,
@@ -339,8 +341,8 @@ impl MirBuilder {
     /// Emit a function call.
     pub(crate) fn call(
         &mut self,
-        callee: Operand,
-        args: Vec<Operand>,
+        callee: Operand<'db>,
+        args: Vec<Operand<'db>>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -354,8 +356,8 @@ impl MirBuilder {
     /// produced by `Rvalue::LoadType`.  Regular value args follow after them.
     pub(crate) fn call_with_type_args(
         &mut self,
-        callee: Operand,
-        args: Vec<Operand>,
+        callee: Operand<'db>,
+        args: Vec<Operand<'db>>,
         ntypeargs: usize,
         destination: Place,
         target: BlockId,
@@ -376,10 +378,10 @@ impl MirBuilder {
     #[expect(clippy::too_many_arguments)]
     pub(crate) fn call_with_type_args_and_runtime_id(
         &mut self,
-        callee: Operand,
-        args: Vec<Operand>,
+        callee: Operand<'db>,
+        args: Vec<Operand<'db>>,
         ntypeargs: usize,
-        runtime_id: Option<Operand>,
+        runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -401,11 +403,11 @@ impl MirBuilder {
     #[expect(clippy::too_many_arguments)]
     pub(crate) fn call_with_runtime_type_check(
         &mut self,
-        callee: Operand,
-        args: Vec<Operand>,
+        callee: Operand<'db>,
+        args: Vec<Operand<'db>>,
         ntypeargs: usize,
         runtime_type_check: bool,
-        runtime_id: Option<Operand>,
+        runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -435,7 +437,7 @@ impl MirBuilder {
         &mut self,
         iface: baml_type::TyTemplateInterface,
         method: String,
-        args: Vec<Operand>,
+        args: Vec<Operand<'db>>,
         ntypeargs: usize,
         destination: Place,
         target: BlockId,
@@ -460,9 +462,9 @@ impl MirBuilder {
         &mut self,
         iface: baml_type::TyTemplateInterface,
         method: String,
-        args: Vec<Operand>,
+        args: Vec<Operand<'db>>,
         ntypeargs: usize,
-        runtime_id: Option<Operand>,
+        runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -487,10 +489,10 @@ impl MirBuilder {
         &mut self,
         iface: baml_type::TyTemplateInterface,
         method: String,
-        args: Vec<Operand>,
+        args: Vec<Operand<'db>>,
         ntypeargs: usize,
         runtime_type_check: bool,
-        runtime_id: Option<Operand>,
+        runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -522,18 +524,18 @@ impl MirBuilder {
     }
 
     /// Emit a throw terminator (unwind with error value).
-    pub(crate) fn throw(&mut self, value: Operand) {
+    pub(crate) fn throw(&mut self, value: Operand<'db>) {
         self.set_terminator(Terminator::Throw { value });
     }
 
     /// Emit a rethrow terminator for a caught error value.
-    pub(crate) fn rethrow(&mut self, value: Operand) {
+    pub(crate) fn rethrow(&mut self, value: Operand<'db>) {
         self.set_terminator(Terminator::Rethrow { value });
     }
 
     /// Emit a throw-if-panic terminator: if the value is a panic instance,
     /// throw it; otherwise continue to `otherwise`.
-    pub(crate) fn throw_if_panic(&mut self, value: Operand, otherwise: BlockId) {
+    pub(crate) fn throw_if_panic(&mut self, value: Operand<'db>, otherwise: BlockId) {
         self.set_terminator(Terminator::ThrowIfPanic { value, otherwise });
     }
 
@@ -542,8 +544,8 @@ impl MirBuilder {
     /// return value is bound directly into `destination`.
     pub(crate) fn sys_op(
         &mut self,
-        callee: Operand,
-        args: Vec<Operand>,
+        callee: Operand<'db>,
+        args: Vec<Operand<'db>>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -554,9 +556,9 @@ impl MirBuilder {
     /// BEP-034 phase D′ sys-op call with an optional hidden runtime-id operand.
     pub(crate) fn sys_op_with_runtime_id(
         &mut self,
-        callee: Operand,
-        args: Vec<Operand>,
-        runtime_id: Option<Operand>,
+        callee: Operand<'db>,
+        args: Vec<Operand<'db>>,
+        runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -603,7 +605,7 @@ impl MirBuilder {
     /// the `futures` array settles and bind its `int` index into `destination`.
     pub(crate) fn await_any(
         &mut self,
-        futures: Operand,
+        futures: Operand<'db>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -625,9 +627,9 @@ impl MirBuilder {
     /// handle into `future`.
     pub(crate) fn spawn(
         &mut self,
-        closure: Operand,
-        name: Operand,
-        config: Option<Box<Operand>>,
+        closure: Operand<'db>,
+        name: Operand<'db>,
+        config: Option<Box<Operand<'db>>>,
         future_ty: Box<crate::ir::SpawnFutureTy>,
         future: Place,
         resume: BlockId,
@@ -651,7 +653,7 @@ impl MirBuilder {
     // ========================================================================
 
     /// Assign a constant to a place.
-    pub(crate) fn assign_const(&mut self, dest: Place, constant: Constant) {
+    pub(crate) fn assign_const(&mut self, dest: Place, constant: Constant<'db>) {
         self.assign(dest, Rvalue::Use(Operand::Constant(constant)));
     }
 
@@ -687,7 +689,7 @@ impl MirBuilder {
     ///
     /// The `item_ref` field is set to a placeholder — `lower_function` overwrites
     /// it with the real fully-qualified reference after calling `build()`.
-    pub(crate) fn build(self) -> MirFunction {
+    pub(crate) fn build(self) -> MirFunction<'db> {
         assert!(!self.blocks.is_empty(), "function has no blocks");
 
         for (i, block) in self.blocks.iter().enumerate() {
@@ -707,7 +709,6 @@ impl MirBuilder {
                 entry: BlockId(0),
                 locals: self.locals,
                 catch_regions: self.catch_regions.clone(),
-                viz_nodes: self.viz_nodes,
             }),
             lambdas: vec![],
             signature: None,
@@ -718,7 +719,7 @@ impl MirBuilder {
     ///
     /// Used when building a let-binding initializer — the caller holds the
     /// `arity` and `item_ref` context externally.
-    pub(crate) fn build_body(self) -> MirFunctionBody {
+    pub(crate) fn build_body(self) -> MirFunctionBody<'db> {
         assert!(!self.blocks.is_empty(), "let body has no blocks");
         for (i, block) in self.blocks.iter().enumerate() {
             assert!(block.terminator.is_some(), "block bb{i} is not terminated");
@@ -728,7 +729,6 @@ impl MirBuilder {
             entry: BlockId(0),
             locals: self.locals,
             catch_regions: self.catch_regions,
-            viz_nodes: self.viz_nodes,
         }
     }
 
@@ -736,7 +736,7 @@ impl MirBuilder {
     ///
     /// The `item_ref` field is set to a placeholder — `lower_function` overwrites
     /// it with the real fully-qualified reference after calling `build_unchecked()`.
-    pub(crate) fn build_unchecked(self) -> MirFunction {
+    pub(crate) fn build_unchecked(self) -> MirFunction<'db> {
         MirFunction {
             arity: self.arity,
             span: self.span,
@@ -750,21 +750,9 @@ impl MirBuilder {
                 entry: BlockId(0),
                 locals: self.locals,
                 catch_regions: self.catch_regions.clone(),
-                viz_nodes: self.viz_nodes,
             }),
             lambdas: vec![],
             signature: None,
         }
-    }
-
-    // ========================================================================
-    // Visualization Helpers
-    // ========================================================================
-
-    /// Add a visualization node and return its index.
-    pub(crate) fn add_viz_node(&mut self, node: VizNode) -> usize {
-        let idx = self.viz_nodes.len();
-        self.viz_nodes.push(node);
-        idx
     }
 }

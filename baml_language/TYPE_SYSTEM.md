@@ -32,6 +32,10 @@ Every run-time value is of exactly one concrete type. They are the types that de
 
 As of writing, no concrete types have subtyping relationships with each other. This is because doing so would require a physical conversion-- they cannot be statically cast as their memory layouts differ. So where we could statically upcast an `int` to `baml.ops.Equals` (which accepts any implementing concrete type), we cannot statically convert an `int` to a `float`. Additionally, since the concrete types represent different things, static conversion would generally not be well-defined (e.g. `int`/`float` conversion will always be lossy and/or fallible in either direction). For this reason, it's best to require explicit conversions. To avoid this being too inconvenient, we define operators like `int + float` that do the conversions while still clearly being a computation point.
 
+The stdlib declares _companion carrier classes_ for the builtins: `baml.Int`, `baml.Bigint`, `baml.Float`, `baml.Bool`, `baml.String`, `baml.Null`, `baml.Uint8Array`, `baml.Array<T>`, and `baml.Map<K, V>`. A carrier is a stand-in for declaring inherent members on a builtin type (morally `implement int { ... }`, which the syntax does not support yet) and **effectively does not exist as a type**: every occurrence of the spelling denotes the builtin type itself — `baml.Int` _is_ `int`, `baml.Array<T>` _is_ `T[]` — in every position, including `Self` inside the carrier's own methods and `implements` blocks and an impl's `for` target. No value ever inhabits a nominal carrier class.
+
+Two companions are the opposite case — the class name IS the builtin type's canonical spelling: `reflect.Type` (the metatype) and `baml.future.Future<V, E>`. Each denotes its dedicated type kind; the class declaration exists to carry members and documentation. Their long-term shape is undecided (perhaps a magic-builtin-backed alias with an inherent `implement` block), but the invariant holds either way: the spelling denotes the builtin kind, and the declaration only attaches members.
+
 ### Abstract Types
 
 Abstract types can generally be viewed as set unions of different groups of concrete (and literal) types:
@@ -466,6 +470,10 @@ function add_makes_int<O, T extends baml.ops.Add<O, Output=int>>(
 	lhs + rhs
 }
 ```
+
+### Members of union-typed receivers
+
+The member surface of a union-typed receiver is exactly the interface methods of the interfaces that _every_ member implements (at one shared instantiation), and nothing else. Inherent methods never participate: two classes each declaring their own `execute` give `A | B` no callable `execute`, even with identical signatures — only a shared interface that declares the member does. A call through the union then dispatches open-world on that shared interface, resolving against the runtime member's own implementation. This is effectively a call via upcasting to the shared interface-existential (thus requiring common associated-type pins) but provides a narrower callsite receiver type.
 
 ### Interface Implementations
 

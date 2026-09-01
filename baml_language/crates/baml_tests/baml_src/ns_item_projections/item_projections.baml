@@ -430,7 +430,10 @@ test "selfless_member_through_the_type_carries_the_whole_frame" {
     assert.equal((Plate<int> as Embosser).fresh(9).label(), "plate 9")
     let make = (Plate<int> as Embosser).fresh
     assert.equal(make(4).label(), "plate 4")
-    // Own generics through a value reference, solved by the later call.
-    let stamp = (Plate<int> as Embosser).emboss
+    // A stored generic method value must realize its own generic parameter at
+    // the binding; unlike a direct call, a later call cannot specialize it.
+    // Qualified interface projections cannot carry standalone `<...>`, so the
+    // concrete function annotation is the available spelling here.
+    let stamp: (int) -> string throws never = (Plate<int> as Embosser).emboss
     assert.equal(stamp(7), "emboss int")
 }

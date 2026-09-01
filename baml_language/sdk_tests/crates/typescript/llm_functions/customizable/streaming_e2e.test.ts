@@ -6,8 +6,8 @@
 // StreamAccumulator → SAP → Stream.next()/final() path is exercised with **no
 // `OPENAI_API_KEY`**.
 //
-//   stream_e2e_extract(text)     -> string        ($stream: Stream<string | null, string>)
-//   stream_e2e_extract_doc(text) -> StreamingDoc   ($stream: Stream<StreamingDoc$stream | null, StreamingDoc>)
+//   stream_e2e_extract$stream(text)     -> Stream<string | null, string>
+//   stream_e2e_extract_doc$stream(text) -> Stream<StreamingDoc$stream | null, StreamingDoc>
 //
 // The recordings stream many SSE chunks, so each `next()` yields >= 10 partials
 // before `Done` (asserted below); finals are checked for type, not

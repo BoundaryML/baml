@@ -3,6 +3,7 @@ from typing import assert_type
 from baml_sdk.ai.stream import Done
 from baml_sdk.lorem import (
     StreamingDoc,
+    StreamingExtract_spec_async,
     StreamingExtract_stream,
     StreamingExtract_stream_async,
     stream_e2e_extract_stream,
@@ -33,6 +34,13 @@ async def check_async_accessors() -> None:
     async_stream = await StreamingExtract_stream_async("extract")
     assert_type(await async_stream.next_async(), PartialStreamingDoc | None | Done)
     assert_type(await async_stream.final_async(), StreamingDoc)
+    async for partial in async_stream:
+        assert_type(partial, PartialStreamingDoc)
+
+    spec = await StreamingExtract_spec_async("extract")
+    assert_type(
+        await spec.parse_async('{"title":"x","body":"y","word_count":1}'), StreamingDoc
+    )
 
 
 text_stream = stream_e2e_extract_stream("summarize")

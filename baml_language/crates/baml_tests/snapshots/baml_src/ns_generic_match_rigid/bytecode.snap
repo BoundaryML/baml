@@ -181,6 +181,11 @@ function generic_match_rigid.$init_test_ns_generic_match_rigid_generic_match_rig
     return
 }
 
+function generic_match_rigid.<(user.generic_match_rigid.RigidTagged as user.generic_match_rigid.RigidMarked)>.tag(self: generic_match_rigid.RigidTagged) -> string {
+    load_const "tagged"
+    return
+}
+
 function generic_match_rigid.RigidBox.is_own(self: generic_match_rigid.RigidBox<#0>, other: generic_match_rigid.RigidBox<int> | int) -> bool {
     load_var other
     is_type generic_match_rigid.RigidBox<...>
@@ -214,11 +219,6 @@ function generic_match_rigid.RigidBox.match_own(self: generic_match_rigid.RigidB
     load_const "box"
 
   L2:
-    return
-}
-
-function generic_match_rigid.RigidTagged.RigidMarked.tag(self: generic_match_rigid.RigidTagged) -> string {
-    load_const "tagged"
     return
 }
 

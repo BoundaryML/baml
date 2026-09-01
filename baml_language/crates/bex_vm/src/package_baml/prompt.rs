@@ -255,8 +255,10 @@ impl PromptAssembly {
         let Some(&next_ptr) = self.pending.get(self.results.len()) else {
             return self.finish(vm);
         };
-        let Some(callee) = make_to_string_callee(vm, Value::object(next_ptr)) else {
-            return self.finish(vm);
+        let callee = match make_to_string_callee(vm, Value::object(next_ptr)) {
+            Err(e) => return NativeCallResult::Error(e.into()),
+            Ok(Some(callee)) => callee,
+            Ok(None) => return self.finish(vm),
         };
         NativeCallResult::YieldToCall {
             callee,
@@ -379,8 +381,10 @@ impl BamlNamespaceInternal for PackageAiImpl {
     fn assemble_prompt(vm: &mut BexVm, parts: &[Value], values: &[Value]) -> NativeCallResult {
         let mut pending = Vec::new();
         for value in values.iter().copied() {
-            if prompt_role(vm, value).is_none() {
-                collect_to_string_overrides(vm, value, &mut pending);
+            if prompt_role(vm, value).is_none()
+                && let Err(e) = collect_to_string_overrides(vm, value, &mut pending)
+            {
+                return NativeCallResult::Error(e.into());
             }
         }
 

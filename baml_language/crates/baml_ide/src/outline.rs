@@ -30,9 +30,9 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, EnumLoc},
 };
 use baml_compiler2_ppir::item_data::{
-    class_data, class_source_map, client_source_map, enum_data, enum_source_map, function_data,
-    function_source_map, interface_source_map, let_data, let_source_map, retry_policy_source_map,
-    template_string_source_map, type_alias_source_map,
+    class_data, class_impls, class_source_map, client_source_map, enum_data, enum_source_map,
+    function_data, function_source_map, impl_block_data, interface_source_map, let_data,
+    let_source_map, retry_policy_source_map, template_string_source_map, type_alias_source_map,
 };
 use text_size::TextRange;
 
@@ -203,10 +203,15 @@ fn class_children<'db>(
         })
         .collect();
 
-    // Methods — resolve each `FunctionLoc` via the firewall. `ClassData`
-    // methods always live in the class's own file, so their spans are valid
-    // ranges within this outline's document.
-    for &method_loc in &class.methods {
+    // Methods — inherent plus the class's `implements` blocks' (impl-block
+    // methods are Impl-owned, never in `class.methods`); resolve each
+    // `FunctionLoc` via the firewall. Both tiers live in the class's own
+    // file (`class_impls` is same-file), so their spans are valid ranges
+    // within this outline's document.
+    let impl_methods = class_impls(db, class_loc)
+        .iter()
+        .flat_map(|&impl_loc| impl_block_data(db, impl_loc).methods.iter().copied());
+    for method_loc in class.methods.iter().copied().chain(impl_methods) {
         let method = function_data(db, method_loc);
         if method.metadata.is_language_internal {
             continue;

@@ -315,12 +315,12 @@ async fn json_serializes_unknown_call_any_results_by_runtime_value() {
             image.from_url("https://example.com/a.png", "image/png")
         }
 
-        function serialize_unknown(f: reflect.AnyFunction) -> string throws unknown {
+        function serialize_unknown(f: reflect.AnyFunction) -> string {
             let value: unknown = reflect.call_any(f, {})
             baml.json.to_string(value) + "|" + baml.json.stringify(baml.json.to_json(value))
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             serialize_unknown(make_record)
                 + "\n" + serialize_unknown(make_wrapped_list)
                 + "\n" + serialize_unknown(make_state)
@@ -356,11 +356,11 @@ async fn json_serializes_unknown_call_any_results_by_runtime_value() {
 async fn json_rejects_unknown_uint8array_call_any_results() {
     let output = baml_test!(
         r#"
-        function make_bytes() -> uint8array throws unknown {
+        function make_bytes() -> uint8array {
             baml.Uint8Array.from_hex("00ff")
         }
 
-        function to_string_error(value: unknown) -> string throws unknown {
+        function to_string_error(value: unknown) -> string {
             {
                 let _ = baml.json.to_string(value)
                 "unexpected success"
@@ -369,7 +369,7 @@ async fn json_rejects_unknown_uint8array_call_any_results() {
             }
         }
 
-        function to_json_error(value: unknown) -> string throws unknown {
+        function to_json_error(value: unknown) -> string {
             {
                 let _ = baml.json.to_json(value)
                 "unexpected success"
@@ -378,7 +378,7 @@ async fn json_rejects_unknown_uint8array_call_any_results() {
             }
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let f: reflect.AnyFunction = make_bytes
             let value: unknown = reflect.call_any(f, {})
             to_string_error(value) + "|" + to_json_error(value)
@@ -814,34 +814,6 @@ async fn instantiated_generic_function_reflects_precisely_and_dispatches() {
 }
 
 #[tokio::test]
-async fn call_any_reports_unspecialized_generic_function() {
-    let output = baml_test!(
-        r#"
-        function ident<T>(x: T) -> T throws never {
-            return x
-        }
-
-        function main() -> string throws unknown {
-            let f: reflect.AnyFunction = ident
-            let _ = reflect.call_any(f, { "x": 42 }) catch (e) {
-                reflect.errors.CompilationError => {
-                    return e.diagnostics[0].code + "|" + e.diagnostics[0].message
-                },
-                _ => throw e,
-            }
-            return "generic call unexpectedly succeeded"
-        }
-        "#
-    );
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String(
-            "E0165|generic function `ident` cannot be extracted through reflection: its signature still mentions its own type parameters".into()
-        ))
-    );
-}
-
-#[tokio::test]
 async fn pinned_call_any_declares_unspecialized_generic_compilation_error() {
     let output = baml_test!(
         r#"
@@ -866,33 +838,6 @@ async fn pinned_call_any_declares_unspecialized_generic_compilation_error() {
         Ok(BexExternalValue::String(
             "E0165|generic function `ident` cannot be extracted through reflection: its signature still mentions its own type parameters".into()
         ))
-    );
-}
-
-/// An *uninstantiated* generic reference — no turbofish and nothing to infer
-/// from — is a compile error: a callable value must carry a realized frame, so
-/// there is no such thing as a half-generic one to reflect on. Ignored until
-/// that diagnostic exists; today the reference is accepted and only fails later,
-/// at `reflect.signature`, with a misleading "expects a function value".
-#[ignore = "pending the uninstantiated-generic-reference diagnostic"]
-#[tokio::test]
-async fn uninstantiated_generic_function_reference_is_a_compile_error() {
-    let output = baml_test!(
-        r#"
-        function ident<T>(x: T) -> T throws never {
-            return x
-        }
-
-        function main() -> string throws never {
-            let f: reflect.AnyFunction = ident
-            return "unreachable"
-        }
-        "#
-    );
-    assert!(
-        output.result.is_err(),
-        "expected a compile error naming the uninferable type parameter, got {:?}",
-        output.result
     );
 }
 
@@ -964,8 +909,8 @@ async fn runtime_enum_renders_and_alias_round_trips_through_sap() {
                 reflect.enum.value("RED", alias = "k7", description = "warm"),
                 reflect.enum.value("BLUE", description = "cool"),
             ])
-            let prompt = Classify$render_prompt<unreflect(t)>("sample").text()
-            let parsed = Classify$parse<unreflect(t)>(`"k7"`)
+            let prompt = Classify@render_prompt<unreflect(t)>("sample").text()
+            let parsed = Classify@parse<unreflect(t)>(`"k7"`)
             return prompt + "\n<PARSED>" + reflect.enum.get_value(parsed)
         }
         "##
@@ -1019,7 +964,7 @@ function main() -> string {
         "speaker": reflect.Type.of<string>(),
         "words": reflect.Type.of<string[]>(),
     })
-    Extract$render_prompt<Wrapper<unreflect(runtime_class.as_type())>>("sample").text()
+    Extract@render_prompt<Wrapper<unreflect(runtime_class.as_type())>>("sample").text()
 }
 "##
     );
@@ -1056,8 +1001,8 @@ async fn runtime_enum_identity_and_metadata_are_preserved() {
             // rather than the enum-kind view's zero-argument metadata reader.
             let left: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"]).as_type()
             let right: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"]).as_type()
-            let left_prompt = Classify$render_prompt<unreflect(left)>("sample").text()
-            let right_prompt = Classify$render_prompt<unreflect(right)>("sample").text()
+            let left_prompt = Classify@render_prompt<unreflect(left)>("sample").text()
+            let right_prompt = Classify@render_prompt<unreflect(right)>("sample").text()
             let tagged = left.meta(
                 alias = "category_code",
                 description = "A generated category",
@@ -1135,7 +1080,7 @@ async fn empty_runtime_enum_fails_at_the_render_boundary() {
             let t = reflect.enum.new("Category", []) catch (e) {
                 _ => return "constructor threw"
             }
-            let rendered = Classify$render_prompt<unreflect(t)>("sample") catch (e) {
+            let rendered = Classify@render_prompt<unreflect(t)>("sample") catch (e) {
                 reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                 _ => "wrong render error",
             }
@@ -1161,7 +1106,7 @@ async fn empty_runtime_enum_fails_at_the_render_boundary() {
 }
 
 #[test]
-fn runtime_type_arguments_are_rejected_on_streaming_companions() {
+fn runtime_type_arguments_on_streaming_companions_obey_escape_rules() {
     let db = setup_test_db(
         r##"
         client TestClient = openai.ResponsesClient.new(
@@ -1176,7 +1121,7 @@ fn runtime_type_arguments_are_rejected_on_streaming_companions() {
 
         function main() -> null {
             let t = reflect.enum.new("Category", ["RED"])
-            Classify$stream<unreflect(t)>("sample")
+            Classify@stream<unreflect(t)>("sample")
             return null
         }
         "##,
@@ -1185,14 +1130,13 @@ fn runtime_type_arguments_are_rejected_on_streaming_companions() {
     assert!(
         diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.message.contains(
-                "runtime type arguments are not supported on streaming call `Classify$stream`"
-            )),
-        "missing streaming firewall diagnostic: {diagnostics:#?}"
+            .flat_map(|diagnostic| &diagnostic.related_info)
+            .any(|related| related.message.contains("Classify@stream<Out>(\"sample\")")),
+        "missing runtime-type escape diagnostic with an @stream repair: {diagnostics:#?}"
     );
 }
 
-/// B-1582 item 3: a generic LLM function's `$render_prompt` companion has a
+/// B-1582 item 3: a generic LLM function's `@render_prompt` companion has a
 /// signature free of `T` (it takes the parent's value arguments and returns an
 /// `ai.Prompt`), so it reconstructs and `Package.get_function` used to hand it
 /// out. Its *body* still materializes `T` for the output-format schema, and
@@ -1223,7 +1167,7 @@ async fn get_function_refuses_an_unspecialized_generic_through_any_function() {
         function main() -> string throws never {
             let package = reflect.Package.current()
             let callable: AnyCallable = package.get_function<AnyCallable>(
-                "GenericList$render_prompt",
+                "GenericList@render_prompt",
             ) catch (e) {
                 reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
@@ -1244,7 +1188,7 @@ async fn get_function_refuses_an_unspecialized_generic_through_any_function() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "E0165|generic function `GenericList$render_prompt` cannot be invoked through \
+            "E0165|generic function `GenericList@render_prompt` cannot be invoked through \
              reflection: its body needs type arguments"
                 .into()
         ))
@@ -1273,9 +1217,9 @@ async fn call_any_still_invokes_a_non_generic_companion() {
             `
         }
 
-        function main() -> bool throws unknown {
+        function main() -> bool {
             let package = reflect.Package.current()
-            let callable = package.get_function<AnyCallable>("Plain$render_prompt")
+            let callable = package.get_function<AnyCallable>("Plain@render_prompt")
                 ?? throw "expected the companion"
             let rendered = reflect.call_any<unknown, unknown>(callable, { "topic": "hello" })
             rendered is ai.Prompt
@@ -1313,7 +1257,7 @@ async fn get_function_refuses_an_unspecialized_generic_companion() {
         function main() -> string throws never {
             let package = reflect.Package.current()
             let callable: PromptFn = package.get_function<PromptFn>(
-                "GenericList$render_prompt",
+                "GenericList@render_prompt",
             ) catch (e) {
                 reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
@@ -1334,7 +1278,7 @@ async fn get_function_refuses_an_unspecialized_generic_companion() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "E0165|generic function `GenericList$render_prompt` cannot be invoked through \
+            "E0165|generic function `GenericList@render_prompt` cannot be invoked through \
              reflection: its body needs type arguments"
                 .into()
         ))
@@ -1364,9 +1308,9 @@ async fn get_function_still_extracts_a_non_generic_companion() {
             `
         }
 
-        function main() -> bool throws unknown {
+        function main() -> bool {
             let package = reflect.Package.current()
-            let callable = package.get_function<PromptFn>("Plain$render_prompt")
+            let callable = package.get_function<PromptFn>("Plain@render_prompt")
                 ?? throw "expected the companion"
             let rendered = callable("hello")
             rendered.text().length() > 0
