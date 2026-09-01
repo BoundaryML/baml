@@ -56,18 +56,10 @@ impl ProcessEuid {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct EngineId(pub u64);
 
-/// Identity of a compiled program. Currently random per engine construction
-/// — good enough for event-file-local joins, NOT a durable content identity
-/// (identical programs in two engines get different ids).
+/// Content identity of a compiled program. The engine derives this from the
+/// source-content hash when available, or from deterministic compiled content.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ProgramId(pub [u8; 16]);
-
-impl ProgramId {
-    #[must_use]
-    pub fn new_random() -> Self {
-        Self(*uuid::Uuid::new_v4().as_bytes())
-    }
-}
 
 /// Identity of the source snapshot a program was compiled from. Modeled for
 /// the metadata join path but not yet populated by the runtime — consumers

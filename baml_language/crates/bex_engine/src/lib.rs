@@ -1021,7 +1021,6 @@ pub fn cancelled_unhandled_throw() -> EngineError {
 ///         └── Tlab ─── exclusive allocation region from shared heap
 /// ```
 pub struct BexEngine {
-    process_euid: ProcessEuid,
     engine_id: EngineId,
     program_metadata: ProgramMetadata,
     /// Function identity by heap address: maps each compile-time
@@ -1893,14 +1892,21 @@ impl BexEngine {
 
         // Conservative content identity (streams spec §2.3): byte-identical
         // builds share a program_id (so ContextKeys aggregate across
-        // executions of one build); a host that provides no hash falls back
-        // to random, which over-splits — the safe direction.
+        // executions of one build). Stored bytecode does not retain the
+        // source hash, so use its deterministic compiled representation as a
+        // ProgramId without claiming that it identifies a source snapshot.
         let (program_id, source_snapshot_id) = match program.source_content_hash {
             Some(hash) => (
                 ProgramId(hash[..16].try_into().expect("fixed-width slice")),
                 Some(bex_events::ids::SourceSnapshotId(hash)),
             ),
-            None => (ProgramId::new_random(), None),
+            None => {
+                let hash = bex_vm_types::identity::compiled_program_content_hash(program);
+                (
+                    ProgramId(hash[..16].try_into().expect("fixed-width slice")),
+                    None,
+                )
+            }
         };
         ProgramMetadata {
             program_id,
@@ -2017,7 +2023,6 @@ impl BexEngine {
         profiler_session: Arc<ProfilerSession>,
     ) -> Result<Self, EngineError> {
         let argv: Arc<[String]> = Arc::from(argv);
-        let process_euid = ProcessEuid::current();
         let engine_id = Self::next_engine_id();
         let program_metadata = Self::build_program_metadata(&bytecode_program);
 
@@ -2333,7 +2338,6 @@ impl BexEngine {
         );
 
         Ok(Self {
-            process_euid,
             engine_id,
             program_metadata,
             next_thread_id: AtomicU64::new(1),
@@ -2420,7 +2424,11 @@ impl BexEngine {
 
     #[must_use]
     pub fn process_euid(&self) -> ProcessEuid {
-        self.process_euid
+        // Do not mint the process identity while constructing an engine. Web
+        // hosts such as workerd forbid cryptographic randomness during module
+        // evaluation, while the first execution runs inside a request context
+        // where the UUID-backed process identity can be initialized safely.
+        ProcessEuid::current()
     }
 
     #[must_use]
@@ -3978,7 +3986,7 @@ impl BexEngine {
         // Identity seed for the `$id` surface (baml.id.*): unconditional —
         // `$id` works with profiling off, and the ids it exposes are the
         // VM-minted ids the event stream records.
-        vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
+        vm.bex_ref_seed = Some((self.process_euid(), self.engine_id));
         // No ring snapshot and no StartThread here: the permit acquisition
         // below awaits (the snapshot would go stale across an OS-thread
         // migration), and early-error returns between here and the run loop
@@ -4071,7 +4079,7 @@ impl BexEngine {
             type_args.insert(name, realized);
         }
         let root_thread_ref = ThreadRef {
-            process_euid: self.process_euid,
+            process_euid: self.process_euid(),
             engine_id: self.engine_id,
             thread_id: BexThreadId(thread.vm.prof_thread_id),
         };
@@ -4123,7 +4131,7 @@ impl BexEngine {
             .vm
             .install_boundary_id_for_current_call(boundary.boundary_id);
         let entry_call_ref = CallRef {
-            process_euid: self.process_euid,
+            process_euid: self.process_euid(),
             engine_id: self.engine_id,
             thread_id: BexThreadId(thread.vm.prof_thread_id),
             call_id: BexCallId(thread.vm.current_call_id()),
@@ -5235,7 +5243,7 @@ impl BexEngine {
         if let Some(capture) = capture {
             for event in events {
                 let call_ref = CallRef {
-                    process_euid: self.process_euid,
+                    process_euid: self.process_euid(),
                     engine_id: self.engine_id,
                     thread_id: BexThreadId(event.thread_id),
                     call_id: BexCallId(event.call_id),
@@ -5304,7 +5312,7 @@ impl BexEngine {
             return;
         };
         let call = bex_events::run::TraceCallKey {
-            process_euid: self.process_euid,
+            process_euid: self.process_euid(),
             engine_id: self.engine_id,
             thread_id: BexThreadId(thread.vm.prof_thread_id),
             call_id: BexCallId(thread.vm.current_call_id()),
@@ -5779,7 +5787,7 @@ impl BexEngine {
         if child_vm.root_profiler.is_active() {
             child_vm.prof_enable_await_accumulator();
         }
-        child_vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
+        child_vm.bex_ref_seed = Some((self.process_euid(), self.engine_id));
         child_vm.set_call_input_capture_hook(
             call_capture
                 .as_ref()

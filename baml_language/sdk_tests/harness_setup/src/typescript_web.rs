@@ -25,6 +25,8 @@ const TSCONFIG_WEB_JSON: &str = include_str!("templates/tsconfig_web.json");
 const TSCONFIG_WORKERS_JSON: &str = include_str!("templates/tsconfig_workers.json");
 const VITEST_WEB_CONFIG: &str = include_str!("templates/vitest_web.config.ts");
 const VITEST_WORKERS_CONFIG: &str = include_str!("templates/vitest_workers.config.ts");
+const VITEST_INTEGRATION_CONFIG: &str = include_str!("templates/vitest_integration.config.ts");
+const WORKER_STARTUP_TEST: &str = include_str!("templates/worker_startup.test.ts");
 const SETUP_ENV_VAR: &str = "SDK_TEST_TYPESCRIPT_WEB_SETUP";
 
 pub fn run_all_from_typescript_sources(relative_sources: &str) {
@@ -118,6 +120,11 @@ fn codegen_fixture(
             VITEST_WORKERS_CONFIG.to_string(),
         ),
         (
+            "vitest.integration.config.ts",
+            VITEST_INTEGRATION_CONFIG.to_string(),
+        ),
+        ("worker_startup.test.ts", WORKER_STARTUP_TEST.to_string()),
+        (
             "wrangler.jsonc",
             r#"{
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -131,7 +138,9 @@ fn codegen_fixture(
         ),
         (
             "worker.js",
-            r#"export default {
+            r#"import "./workers/baml_sdk/index.js";
+
+export default {
   fetch() {
     return new Response("sdk-test-typescript-workers");
   },
@@ -212,6 +221,7 @@ mod {name} {{
     #[test]
     fn vitest_workers() {
         cmd("pnpm exec vitest run --config vitest.workers.config.ts");
+        cmd("pnpm exec vitest run --config vitest.integration.config.ts");
     }
 "#,
             );
