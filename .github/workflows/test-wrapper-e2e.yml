@@ -1,0 +1,80 @@
+name: Test - Wrapper installer E2E
+
+on:
+  push:
+    branches:
+      - sxlijin/issue-4624-wrapper-e2e
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: wrapper-installer-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan wrapper build
+    runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.plan.outputs.source_sha }}
+      wrapper_version: ${{ steps.plan.outputs.wrapper_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read source identity
+        id: plan
+        run: |
+          set -euo pipefail
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "wrapper_version=$(scripts/baml-wrapper-version show)" >> "$GITHUB_OUTPUT"
+
+  build-wrapper:
+    name: Build local wrappers
+    needs: plan
+    uses: ./.github/workflows/build2-wrapper.reusable.yaml
+    with:
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+      wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
+
+  docker:
+    name: Docker (${{ matrix.distro }}, ${{ matrix.arch }})
+    needs: [plan, build-wrapper]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: debian
+            arch: x86_64
+            target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - distro: alpine
+            arch: x86_64
+            target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+          - distro: debian
+            arch: aarch64
+            target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+          - distro: alpine
+            arch: aarch64
+            target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: wrapper-${{ matrix.target }}
+          path: artifacts/wrapper-${{ matrix.target }}
+      - name: Exercise install.sh, wrapper, and released CLI
+        run: scripts/test-wrapper-e2e --artifacts artifacts --case "${{ matrix.distro }}-${{ matrix.arch }}" --channel canary

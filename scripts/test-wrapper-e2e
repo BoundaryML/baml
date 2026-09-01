@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SUPPORT="$ROOT/scripts/wrapper-e2e"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/test-wrapper-e2e (--artifacts DIR | --run-id ID) [options]
+
+Run the checked-out install.sh against wrapper artifacts produced by the
+Test - Wrapper installer E2E GitHub workflow. The installed wrapper then
+downloads the selected released toolchain and executes baml init + baml check.
+
+Artifact options:
+  --artifacts DIR       Directory containing downloaded wrapper-* artifacts
+  --run-id ID           Download wrapper artifacts from this GitHub Actions run
+  --repo OWNER/REPO     Repository used with --run-id (default: BoundaryML/baml)
+
+Test options:
+  --case CASE           all, debian-x86_64, alpine-x86_64,
+                        debian-aarch64, or alpine-aarch64 (default: all)
+  --channel CHANNEL     canary or nightly (default: canary)
+
+Examples:
+  scripts/test-wrapper-e2e --run-id 123456789
+  scripts/test-wrapper-e2e --artifacts /tmp/wrappers --case alpine-aarch64
+EOF
+}
+
+fail() {
+  echo "error: $*" >&2
+  exit 1
+}
+
+artifacts=""
+run_id=""
+repo="BoundaryML/baml"
+selected_case="all"
+channel="canary"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --artifacts) artifacts="${2:?missing directory after --artifacts}"; shift 2 ;;
+    --run-id) run_id="${2:?missing ID after --run-id}"; shift 2 ;;
+    --repo) repo="${2:?missing repository after --repo}"; shift 2 ;;
+    --case) selected_case="${2:?missing case after --case}"; shift 2 ;;
+    --channel) channel="${2:?missing channel after --channel}"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) fail "unknown argument $1" ;;
+  esac
+done
+
+if [[ -n "$artifacts" && -n "$run_id" ]]; then
+  fail "use exactly one of --artifacts or --run-id"
+fi
+if [[ -z "$artifacts" && -z "$run_id" ]]; then
+  fail "use exactly one of --artifacts or --run-id"
+fi
+case "$channel" in
+  canary|nightly) ;;
+  *) fail "channel must be canary or nightly" ;;
+esac
+case "$selected_case" in
+  all|debian-x86_64|alpine-x86_64|debian-aarch64|alpine-aarch64) ;;
+  *) fail "unknown case $selected_case" ;;
+esac
+
+tmp_dirs=()
+
+cleanup() {
+  local status=$?
+  local dir
+  for dir in "${tmp_dirs[@]-}"; do
+    if [[ -n "$dir" ]]; then
+      rm -rf "$dir"
+    fi
+  done
+  exit "$status"
+}
+trap cleanup EXIT INT TERM
+
+if [[ -n "$run_id" ]]; then
+  command -v gh >/dev/null 2>&1 || fail "gh is required with --run-id"
+  artifacts="$(mktemp -d "${TMPDIR:-/tmp}/baml-wrapper-artifacts.XXXXXX")"
+  tmp_dirs+=("$artifacts")
+  gh run download "$run_id" --repo "$repo" --pattern 'wrapper-*-unknown-linux-*' --dir "$artifacts"
+fi
+[[ -d "$artifacts" ]] || fail "artifact directory does not exist: $artifacts"
+
+case_values() {
+  case "$1" in
+    debian-x86_64) printf '%s\n' debian x86_64 x86_64-unknown-linux-gnu debian:bookworm-slim amd64 ;;
+    alpine-x86_64) printf '%s\n' alpine x86_64 x86_64-unknown-linux-musl alpine:3.22 amd64 ;;
+    debian-aarch64) printf '%s\n' debian aarch64 aarch64-unknown-linux-gnu debian:bookworm-slim arm64 ;;
+    alpine-aarch64) printf '%s\n' alpine aarch64 aarch64-unknown-linux-musl alpine:3.22 arm64 ;;
+    *) fail "unknown case $1" ;;
+  esac
+}
+
+find_wrapper() {
+  local target="$1"
+  local matches=()
+  local match
+  while IFS= read -r match; do
+    matches+=("$match")
+  done < <(find "$artifacts" -type f -name "baml-wrapper-*-$target.tar.gz" ! -name 'baml-wrapper-no-self-update-*' | sort)
+  if [[ ${#matches[@]} -ne 1 ]]; then
+    printf 'error: expected exactly one self-update wrapper for %s under %s; found %s\n' "$target" "$artifacts" "${#matches[@]}" >&2
+    printf '  %s\n' "${matches[@]}" >&2
+    return 1
+  fi
+  printf '%s\n' "${matches[0]}"
+}
+
+wrapper_version() {
+  local archive="$1"
+  local target="$2"
+  local name="${archive##*/}"
+  name="${name#baml-wrapper-}"
+  printf '%s\n' "${name%-$target.tar.gz}"
+}
+
+cases=(debian-x86_64 alpine-x86_64 debian-aarch64 alpine-aarch64)
+if [[ "$selected_case" != all ]]; then
+  cases=("$selected_case")
+fi
+
+run_docker_case() {
+  local test_case="$1"
+  local values=()
+  while IFS= read -r value; do values+=("$value"); done < <(case_values "$test_case")
+  local distro="${values[0]}" arch="${values[1]}" target="${values[2]}" image="${values[3]}" docker_arch="${values[4]}"
+  local archive version
+  archive="$(find_wrapper "$target")"
+  version="$(wrapper_version "$archive" "$target")"
+  local stage
+  stage="$(mktemp -d "$ROOT/.wrapper-e2e-docker.XXXXXX")"
+  tmp_dirs+=("$stage")
+  cp "$ROOT/scripts/install.sh" "$stage/install.sh"
+  cp "$SUPPORT/run-inside.sh" "$stage/run-inside.sh"
+  cp "$archive" "$stage/wrapper.tar.gz"
+  echo "==> Docker: $distro $arch ($target, wrapper $version)"
+  docker run --rm --pull always --platform "linux/$docker_arch" \
+    --mount "type=bind,src=$stage/install.sh,dst=/e2e/install.sh,readonly" \
+    --mount "type=bind,src=$stage/run-inside.sh,dst=/e2e/run-inside.sh,readonly" \
+    --mount "type=bind,src=$stage/wrapper.tar.gz,dst=/e2e/wrapper.tar.gz,readonly" \
+    --env "E2E_CHANNEL=$channel" \
+    --env "E2E_DISTRO=$distro" \
+    --env "E2E_TARGET=$target" \
+    --env "E2E_WRAPPER_VERSION=$version" \
+    --entrypoint /bin/sh \
+    "$image" /e2e/run-inside.sh
+}
+
+command -v docker >/dev/null 2>&1 || fail "docker is required"
+for test_case in "${cases[@]}"; do run_docker_case "$test_case"; done
