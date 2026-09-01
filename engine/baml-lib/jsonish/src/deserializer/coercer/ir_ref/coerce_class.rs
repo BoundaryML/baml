@@ -87,11 +87,8 @@ impl TypeCoercer for Class {
                 if matches!(val, Triple::Present(_)) {
                     continue;
                 }
-                if let Some(cast_value) = field_type.try_cast(ctx, field_type, Some(v)) {
-                    *val = Triple::Present(Box::new(cast_value));
-                } else {
-                    return None;
-                }
+                let cast_value = field_type.try_cast(ctx, field_type, Some(v))?;
+                *val = Triple::Present(Box::new(cast_value));
             } else {
                 // In try_cast mode, reject objects with extra keys for stricter matching
                 return None;
@@ -292,22 +289,21 @@ impl TypeCoercer for Class {
                     completed_cls.push(Ok(option1));
                 }
             }
-            Some(x) => {
+            Some(x) if self.fields.len() == 1 => {
                 // If the class has a single field, then we can try to coerce it directly
-                if self.fields.len() == 1 {
-                    let field = &self.fields[0];
-                    let scope = ctx.enter_scope(&format!("<implied:{}>", field.0.real_name()));
-                    let parsed = match field.1.coerce(&scope, &field.1, Some(x)) {
-                        Ok(mut v) => {
-                            v.add_flag(Flag::ImpliedKey(field.0.real_name().into()));
-                            flags.add_flag(Flag::InferedObject(x.clone()));
-                            Ok(v)
-                        }
-                        Err(e) => Err(e),
-                    };
-                    update_map(&mut required_values, &mut optional_values, field, parsed);
-                }
+                let field = &self.fields[0];
+                let scope = ctx.enter_scope(&format!("<implied:{}>", field.0.real_name()));
+                let parsed = match field.1.coerce(&scope, &field.1, Some(x)) {
+                    Ok(mut v) => {
+                        v.add_flag(Flag::ImpliedKey(field.0.real_name().into()));
+                        flags.add_flag(Flag::InferedObject(x.clone()));
+                        Ok(v)
+                    }
+                    Err(e) => Err(e),
+                };
+                update_map(&mut required_values, &mut optional_values, field, parsed);
             }
+            Some(_) => {}
         }
 
         // Check what we have / what we need

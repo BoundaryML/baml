@@ -375,7 +375,7 @@ impl UnresolvedRolesSelection {
 
         match (&allowed, &remap) {
             (Some(allowed), Some(remap)) => {
-                for (k, _) in remap.iter() {
+                for k in remap.keys() {
                     if !allowed.contains(k) {
                         return Err(anyhow::anyhow!(
                             "remap_role must be in allowed_roles: {}. Not found in {:?}",
@@ -390,7 +390,7 @@ impl UnresolvedRolesSelection {
                     .iter()
                     .map(|s| s.to_string())
                     .collect::<Vec<_>>();
-                for (k, _) in remap.iter() {
+                for k in remap.keys() {
                     if !allowed.contains(k) {
                         return Err(anyhow::anyhow!(
                             "remap_role must be in allowed_roles: {}. Not found in {:?}",

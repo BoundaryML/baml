@@ -1402,7 +1402,7 @@ impl BamlRuntime {
         }
 
         log::trace!("Calling function: {function_name}");
-        log::debug!("collectors: {:#?}", &collectors);
+        log::debug!("collectors: {:#?}", collectors);
 
         let call = self
             .tracer_wrapper
@@ -1742,7 +1742,7 @@ impl BamlRuntime {
             let processed_content = if let Some(spans) = test_spans_by_file.get(path) {
                 // Sort spans by start position in reverse order so we can remove from end to start
                 let mut sorted_spans = spans.clone();
-                sorted_spans.sort_by(|a, b| b.start.cmp(&a.start));
+                sorted_spans.sort_by_key(|a| std::cmp::Reverse(a.start));
 
                 // Remove each test block from the content
                 let mut new_content = content.clone();
