@@ -1,21 +1,18 @@
 name: BAML Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Build and verify without creating tags or publishing"
-        type: boolean
-        required: false
-        default: false
+  push:
+    tags:
+      - "*.*.*-engine"
 
 concurrency:
   # No suffix specified - in reusable workflows we need a statically-defined suffix
   # to prevent workflow_call workflows from triggering a concurrency deadlock
-  group: ${{ github.workflow }}-${{ inputs.dry_run && format('dry-run-{0}', github.sha) || 'release' }}
+  group: ${{ github.workflow }}-release
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
   id-token: write
 
@@ -36,15 +33,9 @@ jobs:
       - name: Set Version Info
         id: set-version
         env:
-          DRY_RUN: ${{ inputs.dry_run }}
           REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-
-          if [[ "$REF" != "refs/heads/canary" ]]; then
-            echo "Engine releases must be dispatched from the canary branch, not $REF" >&2
-            exit 1
-          fi
 
           VERSION="$(awk '/^current_version =/ { print $3; exit }' tools/versions/engine.cfg)"
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -52,22 +43,66 @@ jobs:
             exit 1
           fi
 
-          IS_RELEASE="true"
-          if [[ "$DRY_RUN" == "true" ]]; then
-            IS_RELEASE="false"
+          EXPECTED_REF="refs/tags/$VERSION-engine"
+          if [[ "$REF" != "$EXPECTED_REF" ]]; then
+            echo "Engine release tag $REF does not match tools/versions/engine.cfg; expected $EXPECTED_REF" >&2
+            exit 1
           fi
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "is_release=$IS_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "is_release=true" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION"
-          echo "Production release: $IS_RELEASE"
+          echo "Trigger tag: $REF"
+          echo "Production release: true"
           {
             echo "### Engine release plan"
             echo
             echo "- Version: \`$VERSION\`"
+            echo "- Trigger tag: \`$REF\`"
             echo "- Commit: \`$GITHUB_SHA\`"
-            echo "- Production release: \`$IS_RELEASE\`"
+            echo "- Production release: \`true\`"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify source is the current green canary commit
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sourceSha = context.sha;
+            const canary = await github.rest.git.getRef({
+              owner,
+              repo,
+              ref: "heads/canary",
+            });
+            const canarySha = canary.data.object.sha;
+            if (sourceSha !== canarySha) {
+              throw new Error(`Trigger tag commit ${sourceSha} is not current canary ${canarySha}`);
+            }
+
+            const runs = await github.paginate(
+              github.rest.actions.listWorkflowRunsForRepo,
+              {
+                owner,
+                repo,
+                head_sha: sourceSha,
+                status: "success",
+                per_page: 100,
+              },
+              (response) => response.data.workflow_runs,
+            );
+            const sourceCi = runs.find((run) => {
+              if (run.name !== "BAML Runtime" || run.path !== ".github/workflows/primary.yml") {
+                return false;
+              }
+              if (run.event === "push" && run.head_branch === "canary") {
+                return true;
+              }
+              return run.event === "merge_group" && run.head_branch.startsWith("gh-readonly-queue/canary/");
+            });
+            if (sourceCi === undefined) {
+              throw new Error(`Current canary ${sourceSha} has no successful BAML Runtime push or merge-queue run`);
+            }
+
+            core.info(`Verified current canary ${sourceSha} with successful CI run ${sourceCi.html_url}`);
       - name: Verify source versions
         env:
           VERSION: ${{ steps.set-version.outputs.version }}
