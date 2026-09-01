@@ -176,7 +176,7 @@ jobs:
         if: matrix._.use_cross
         uses: ./.github/actions/setup-mise
         with:
-          install_args: cargo:cross
+          install_args: "sccache cargo:cross"
 
       - name: Select cross (Linux targets)
         if: matrix._.use_cross

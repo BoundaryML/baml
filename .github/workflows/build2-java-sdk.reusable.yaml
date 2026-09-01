@@ -158,7 +158,7 @@ jobs:
         if: ${{ matrix._.libc == 'musl' }}
         uses: ./.github/actions/setup-mise
         with:
-          install_args: cargo:cross
+          install_args: "sccache cargo:cross"
 
       - name: Select cross (musl targets)
         if: ${{ matrix._.libc == 'musl' }}

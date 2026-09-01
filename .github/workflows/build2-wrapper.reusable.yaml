@@ -78,7 +78,7 @@ jobs:
         if: ${{ matrix.libc == 'gnu' }}
         uses: ./.github/actions/setup-mise
         with:
-          install_args: cargo:cross
+          install_args: "sccache cargo:cross"
       - name: Configure cross for GNU wrapper
         if: ${{ matrix.libc == 'gnu' }}
         env:
