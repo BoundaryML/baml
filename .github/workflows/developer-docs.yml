@@ -59,14 +59,25 @@ jobs:
         with:
           node-action-version: "v6"
 
+      - name: Install wasm-pack
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "github:rustwasm/wasm-pack"
+
+      - name: Set up Rust WASM target
+        run: rustup target add wasm32-unknown-unknown
+
       - name: Build the repository CLI
         run: cargo build --locked -p baml_cli --bin baml-cli
         working-directory: baml_language
 
-      - name: Produce versioned docs metadata from the source-built CLI
+      - name: Produce exact docs metadata and browser runtime
         run: |
+          set -euo pipefail
           version="$($BAML_BIN --version | awk '{print $2}')"
           metadata="$RUNNER_TEMP/baml-docs-metadata-$version.json"
+          runtime_build="$RUNNER_TEMP/baml-docs-runtime-build"
+          runtime_root="$RUNNER_TEMP/baml-docs-runtime-$version"
           released_at="$(git show -s --format=%cI "$GITHUB_SHA")"
           pnpm --filter @baml/developer-docs produce:docs-metadata -- \
             --version "$version" \
@@ -74,9 +85,22 @@ jobs:
             --source-revision "$GITHUB_SHA" \
             --released-at "$released_at" \
             --output "$metadata"
+          CARGO_PROFILE_RELEASE_OPT_LEVEL=z wasm-pack build \
+            baml_language/crates/bridge_wasm \
+            --target web \
+            --release \
+            --out-dir "$runtime_build" \
+            --out-name bridge_wasm
+          pnpm --filter @baml/developer-docs produce:runner-artifact -- \
+            --input "$runtime_build" \
+            --version "$version" \
+            --source-revision "$GITHUB_SHA" \
+            --output "$runtime_root"
           {
             echo "BAML_DOCS_VERSION=$version"
             echo "BAML_DOCS_METADATA_FILE=$metadata"
+            echo "BAML_DOCS_RUNTIME_FILE=$runtime_root/runtime.json"
+            echo "BAML_DOCS_RUNTIME_ROOT=$runtime_root"
           } >> "$GITHUB_ENV"
 
       - name: Resolve curated published docs versions
@@ -104,6 +128,7 @@ jobs:
           path: |
             ${{ env.BAML_DOCS_METADATA_FILE }}
             ${{ env.BAML_DOCS_VERSIONS_INDEX_FILE }}
+            ${{ env.BAML_DOCS_RUNTIME_ROOT }}
           if-no-files-found: error
           retention-days: 7
 
@@ -116,7 +141,7 @@ jobs:
       - name: Verify approved book imports
         run: pnpm --filter @baml/developer-docs check:book
 
-      - name: Verify checked-in browser runtime
+      - name: Verify materialized browser runtime
         run: pnpm --filter @baml/developer-docs check:runner-artifact
 
       - name: Verify runnable examples against native and WASM runtimes
@@ -192,11 +217,16 @@ jobs:
           fi
           version="$(jq -r '.version' "$metadata")"
           versions_index="$(find "$RUNNER_TEMP/developer-docs-metadata" -type f -name 'baml-docs-versions.json' -print -quit)"
+          runtime_manifest="$(find "$RUNNER_TEMP/developer-docs-metadata" -type f -name 'runtime.json' -print -quit)"
+          if [[ -z "$runtime_manifest" ]]; then
+            echo "::error::The verified docs runtime artifact is empty."
+            exit 1
+          fi
           if [[ -n "$versions_index" ]]; then
             export BAML_DOCS_VERSIONS_INDEX_FILE="$versions_index"
           fi
           pnpm exec vercel pull --yes --environment=preview --token "$VERCEL_TOKEN"
-          BAML_DOCS_METADATA_FILE="$metadata" BAML_DOCS_VERSION="$version" \
+          BAML_DOCS_METADATA_FILE="$metadata" BAML_DOCS_RUNTIME_FILE="$runtime_manifest" BAML_DOCS_VERSION="$version" \
             pnpm exec vercel build --target=preview --token "$VERCEL_TOKEN"
           preview_url="$(pnpm exec vercel deploy --prebuilt --target=preview --token "$VERCEL_TOKEN")"
           echo "### Developer docs preview" >> "$GITHUB_STEP_SUMMARY"

@@ -1,7 +1,6 @@
 # BAML/WASM runner spike
 
-Status: browser component, source-pinned preview artifact, and versioned release
-producer are implemented.
+Status: browser component and versioned release producer/consumer are implemented.
 
 ## Decision
 
@@ -84,23 +83,20 @@ copied into every consumer.
 
 ## Implemented vertical slice
 
-The portal ships one content-addressed runtime artifact and a worker bundle. The
+The portal materializes the selected version's content-addressed runtime artifact
+and ships it with a worker bundle. The
 `BamlRunner` MDX component warms a project near the viewport, keeps the runtime
 off the main thread, reports download/initialization/project/run timings, and
 restarts the worker after a crash or outer timeout. Project sessions are keyed
 by a SHA-256 digest of their complete file set.
 
-CI verifies the artifact manifest and generated worker bundle, then executes
+CI produces and verifies the artifact manifest and generated worker bundle, then executes
 every registered runnable example with both the source-built native CLI and the
 exact checked-in WASM artifact. The outputs must agree.
 
 ## Remaining implementation work
 
-1. Make the TypeScript-only docs build materialize the indexed release runtime
-   and remove the transitional checked-in browser snapshot. Release CI now
-   publishes `v<version>/runtime.json` plus content-addressed JS/WASM and verifies
-   it against the exact native CLI before promoting the version index.
-2. Extract the docs-owned RunStore client, VFS, and result decoder into a small
+1. Extract the docs-owned RunStore client, VFS, and result decoder into a small
    published browser-runtime package shared with the book.
-3. Run browser benchmarks in the preview environment and replace the
+2. Run browser benchmarks in the preview environment and replace the
    provisional budgets with observed p50/p95 targets.

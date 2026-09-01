@@ -56,14 +56,16 @@ test('generated CLI reference includes nested public commands', async () => {
   ]);
 });
 
-test('runnable examples ship a worker and a content-addressed runtime', async () => {
-  const manifest = JSON.parse(
-    await readFile(path.join(packageRoot, 'public', 'baml-runtime', 'manifest.json'), 'utf8'),
-  );
-  assert.match(manifest.wasm, /^\/baml-runtime\/artifacts\/[0-9a-f]+\/bridge_wasm_bg\.wasm$/);
+test('runnable examples ship the stable worker entrypoint but no derived runtime', async () => {
   await Promise.all([
     access(path.join(packageRoot, 'content', 'examples', 'runnable-baml.mdx')),
     access(path.join(packageRoot, 'public', 'baml-runtime', 'runner-worker.mjs')),
-    access(path.join(packageRoot, 'public', manifest.wasm.slice(1))),
   ]);
+  const trackedRuntime = await import('node:child_process').then(({ execFileSync }) =>
+    execFileSync('git', ['ls-files', '--', 'docs/public/baml-runtime/manifest.json', 'docs/public/baml-runtime/artifacts'], {
+      cwd: path.resolve(packageRoot, '..'),
+      encoding: 'utf8',
+    }).trim(),
+  );
+  assert.equal(trackedRuntime, '');
 });

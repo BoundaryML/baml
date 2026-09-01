@@ -15,6 +15,8 @@ const generatedPaths = [
   'docs/generated/docs-versions.json',
   'docs/generated/metadata',
   'docs/content/baml/book/meta.json',
+  'docs/public/baml-runtime/artifacts',
+  'docs/public/baml-runtime/manifest.json',
 ];
 
 const trackedGenerated = run('git', ['ls-files', '--', ...generatedPaths], { cwd: repositoryRoot });
@@ -29,5 +31,5 @@ if (tracked.length > 0) {
   if (remaining > 0) console.error(`- …and ${remaining} more`);
   process.exitCode = 1;
 } else {
-  console.log('Generated language, CLI, and book content is not tracked by git.');
+  console.log('Generated language, CLI, book, and browser runtime content is not tracked by git.');
 }

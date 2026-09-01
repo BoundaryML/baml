@@ -16,9 +16,11 @@ import {
 } from './docs-metadata-source.mjs';
 import { writeGeneratedTree } from './generated-content.mjs';
 import { buildVersionedReferences, versionDirectory } from './versioned-reference.mjs';
+import { clearMaterializedRuntime, materializeRuntime, readRuntimeSource } from './runtime-consumer.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const generatedRoot = path.join(packageRoot, 'generated');
+const runtimePublicRoot = path.join(packageRoot, 'public', 'baml-runtime');
 
 class HttpStatusError extends Error {
   constructor(url, status, statusText) {
@@ -130,7 +132,7 @@ async function loadSelection(selection, manifestBaseUrl, environment) {
     if (metadata.payloadSha256 !== selection.payloadSha256) {
       throw new Error(`Docs versions index checksum for BAML ${selection.value} does not match its immutable artifact`);
     }
-    return { metadata, url };
+    return { metadata, url, runtimeSource: selection.runtimeSource };
   }
 
   const manifestUrl = channelManifestUrl(manifestBaseUrl, selection.value);
@@ -201,6 +203,11 @@ for (const selection of requested) {
         channel: entry.channel,
         path: entry.artifacts.stdlib.path,
         payloadSha256: entry.artifacts.stdlib.payloadSha256,
+        runtimeSource: entry.artifacts.runtime ? {
+          type: 'url',
+          value: `${manifestBaseUrl}/docs/${entry.artifacts.runtime.path}`,
+          payloadSha256: entry.artifacts.runtime.payloadSha256,
+        } : undefined,
         explicit: selection.explicit,
       })));
   } catch (error) {
@@ -210,6 +217,7 @@ for (const selection of requested) {
       explicitSelection: selection.explicit,
     });
     if (!fallback) throw error;
+    await clearMaterializedRuntime(runtimePublicRoot);
     await mkdir(generatedRoot, { recursive: true });
     await writeUnavailableReferences({
       channel: environment.BAML_DOCS_CHANNEL ?? 'canary',
@@ -238,6 +246,7 @@ for (const selection of requested) {
     const url = selection.type === 'indexed'
       ? `${manifestBaseUrl}/docs/${selection.path}`
       : version ? versionMetadataUrl(manifestBaseUrl, version) : channelManifestUrl(manifestBaseUrl, channel);
+    await clearMaterializedRuntime(runtimePublicRoot);
     await mkdir(generatedRoot, { recursive: true });
     await writeUnavailableReferences({ channel, url, version });
     process.exit(0);
@@ -258,6 +267,55 @@ const defaultVersion = environment.BAML_DOCS_DEFAULT_VERSION
   ?? indexedDefaultVersion
   ?? metadataEntries[0]?.version;
 if (!defaultVersion) throw new Error('No BAML docs metadata versions were loaded');
+
+const runtimeByVersion = new Map();
+async function registerRuntime(source) {
+  if (!source) return;
+  const runtime = await readRuntimeSource(source);
+  const metadata = byVersion.get(runtime.manifest.version);
+  if (!metadata) throw new Error(`Runtime ${runtime.manifest.version} has no selected docs metadata`);
+  validateRuntimeManifestProvenance(runtime.manifest, metadata);
+  const previous = runtimeByVersion.get(runtime.manifest.version);
+  if (previous && previous.manifest.payloadSha256 !== runtime.manifest.payloadSha256) {
+    throw new Error(`BAML ${runtime.manifest.version} was selected with conflicting runtime payloads`);
+  }
+  runtimeByVersion.set(runtime.manifest.version, runtime);
+}
+
+function validateRuntimeManifestProvenance(manifest, metadata) {
+  if (manifest.version !== metadata.version) throw new Error('Runtime version does not match docs metadata');
+  if (manifest.sourceRevision !== metadata.sourceRevision) {
+    throw new Error(`Runtime source revision ${manifest.sourceRevision} does not match docs metadata ${metadata.sourceRevision}`);
+  }
+}
+
+for (const entry of loaded) {
+  if (entry.metadata.version === defaultVersion) await registerRuntime(entry.runtimeSource);
+}
+for (const file of [
+  ...(environment.BAML_DOCS_RUNTIME_FILE ? [environment.BAML_DOCS_RUNTIME_FILE] : []),
+  ...list(environment.BAML_DOCS_RUNTIME_FILES),
+]) await registerRuntime({ type: 'file', value: file });
+for (const url of [
+  ...(environment.BAML_DOCS_RUNTIME_URL ? [environment.BAML_DOCS_RUNTIME_URL] : []),
+  ...list(environment.BAML_DOCS_RUNTIME_URLS),
+]) await registerRuntime({ type: 'url', value: url });
+
+const selectedRuntime = runtimeByVersion.get(defaultVersion);
+if (selectedRuntime) {
+  await materializeRuntime({ loaded: selectedRuntime, publicRoot: runtimePublicRoot });
+} else {
+  await clearMaterializedRuntime(runtimePublicRoot);
+  const unavailableAllowed = previewFallbackAllowed({
+    args: process.argv.slice(2),
+    environment,
+    explicitSelection: requested.some((selection) => selection.explicit),
+  });
+  if (!unavailableAllowed) {
+    throw new Error(`No browser runtime was selected for the default BAML docs version ${defaultVersion}`);
+  }
+  console.warn(`Rendered docs without a runnable browser artifact for BAML ${defaultVersion}.`);
+}
 
 for (const metadata of metadataEntries) await cacheMetadata(metadata);
 const generated = buildVersionedReferences(metadataEntries, defaultVersion);

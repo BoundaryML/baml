@@ -8,6 +8,7 @@ import {
   validateRuntimeManifest,
   verifyRuntimeFiles,
 } from '../scripts/runtime-artifact.mjs';
+import { materializeRuntime, readRuntimeSource } from '../scripts/runtime-consumer.mjs';
 
 async function fixture(version = '1.2.3') {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'baml-runtime-artifact-'));
@@ -68,4 +69,44 @@ test('rejects provenance mismatches and tampered release files', async () => {
   const unsafe = structuredClone(manifest);
   unsafe.module.path = '../bridge_wasm.js';
   assert.throws(() => validateRuntimeManifest(unsafe), /safe content-addressed path/);
+});
+
+test('materializes the selected immutable release as the same-origin worker runtime', async () => {
+  const { inputRoot, outputRoot } = await fixture();
+  const publicRoot = path.join(path.dirname(outputRoot), 'public-runtime');
+  const release = await packageRuntimeArtifact({
+    inputRoot,
+    outputRoot,
+    sourceRevision: 'a'.repeat(40),
+    toolchain: 'baml-cli 1.2.3',
+    version: '1.2.3',
+  });
+  const loaded = await readRuntimeSource({ type: 'file', value: path.join(outputRoot, 'runtime.json') }, {
+    version: '1.2.3',
+    sourceRevision: 'a'.repeat(40),
+  });
+  const serving = await materializeRuntime({ loaded, publicRoot });
+  assert.equal(serving.runtimeVersion, release.version);
+  assert.equal(serving.sourceCommit, release.sourceRevision);
+  assert.match(serving.wasm, /^\/baml-runtime\/artifacts\/[0-9a-f]{16}\/bridge_wasm_bg\.wasm$/);
+  assert.equal(
+    (await readFile(path.join(publicRoot, serving.wasm.replace('/baml-runtime/', '')))).length,
+    release.wasm.rawBytes,
+  );
+
+  const mismatched = structuredClone(release);
+  mismatched.sourceRevision = 'b'.repeat(40);
+  assert.throws(
+    () => validateRuntimeManifest(mismatched, { version: '1.2.3', sourceRevision: 'a'.repeat(40) }),
+    /does not match docs metadata/,
+  );
+});
+
+test('pull request previews pass the exact source-built runtime into the TypeScript-only deploy', async () => {
+  const workflow = await readFile(path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../.github/workflows/developer-docs.yml'), 'utf8');
+  assert.match(workflow, /wasm-pack build[\s\S]*baml_language\/crates\/bridge_wasm/);
+  assert.match(workflow, /produce:runner-artifact/);
+  assert.match(workflow, /BAML_DOCS_RUNTIME_FILE=\$runtime_root\/runtime\.json/);
+  assert.match(workflow, /\$\{\{ env\.BAML_DOCS_RUNTIME_ROOT \}\}/);
+  assert.match(workflow, /BAML_DOCS_RUNTIME_FILE="\$runtime_manifest"[\s\S]*vercel build/);
 });

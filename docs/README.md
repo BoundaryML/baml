@@ -38,6 +38,13 @@ in the set. Each release JSON contains all toolchain-discovered packages—not a
 docs-maintained list—and generated symbols use fully qualified names such as
 `baml.http.Request`.
 
+The selected default toolchain must also provide its browser runtime. Curated
+index builds resolve it automatically. Explicit builds use
+`BAML_DOCS_RUNTIME_FILE` or `BAML_DOCS_RUNTIME_URL`; plural forms accept a
+comma-separated runtime set when needed. The consumer validates the runtime's
+payload hash, version, source revision, JS/WASM hashes, and delivery budget,
+then materializes only the selected default into `public/baml-runtime`.
+
 The same release freezes the matching browser runtime at
 `/manifest/v1/docs/v<version>/runtime.json`, with its JavaScript and WASM files
 under content-addressed paths beside that manifest. The version index binds both
@@ -46,7 +53,7 @@ registered example through the exact native CLI and exact packaged WASM before
 advertising either artifact.
 
 Pull-request verification and its exact-metadata Vercel preview pass the
-source-built JSON together with a captured copy of the curated version index.
+source-built JSON and WASM together with a captured copy of the curated version index.
 The source-built toolchain becomes the default while the other immutable
 published toolchains remain available in the selector. Set
 `BAML_DOCS_VERSIONS_INDEX_FILE` to reproduce that overlay locally.
@@ -113,22 +120,34 @@ hashes and that no unmanaged chapter slipped around the approval manifest. Set
 
 ## Runnable examples
 
-Runnable examples execute in one isolated Web Worker per page. The worker and
-source-pinned WASM runtime are checked in, so Vercel previews never compile Rust
-as part of a docs build.
+Runnable examples execute in one isolated Web Worker per page. The worker is
+checked in; the source-pinned WASM is a generated deployment input and is never
+checked in. Release and pull-request CI compile it once, while Vercel only
+validates and copies the frozen artifact with TypeScript-only build tooling.
 
-To rebuild the runtime after a language release or compatible canary update:
+To produce a local runtime after building `bridge_wasm` with `wasm-pack`:
 
 ```sh
-cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
-BAML_BIN="$PWD/baml_language/target/debug/baml-cli" pnpm --filter @baml/developer-docs runner:artifact
-pnpm --filter @baml/developer-docs runner:bundle
-BAML_BIN="$PWD/baml_language/target/debug/baml-cli" pnpm --filter @baml/developer-docs verify:runner
+version="$($PWD/baml_language/target/debug/baml-cli --version | awk '{print $2}')"
+revision="$(git rev-parse HEAD)"
+wasm-pack build baml_language/crates/bridge_wasm --target web --release \
+  --out-dir /tmp/baml-docs-runtime-build --out-name bridge_wasm
+BAML_BIN="$PWD/baml_language/target/debug/baml-cli" \
+  pnpm --filter @baml/developer-docs produce:runner-artifact -- \
+    --input /tmp/baml-docs-runtime-build \
+    --version "$version" \
+    --source-revision "$revision" \
+    --output /tmp/baml-docs-runtime
+BAML_DOCS_RUNTIME_FILE=/tmp/baml-docs-runtime/runtime.json \
+  pnpm --filter @baml/developer-docs generate:derived
+BAML_BIN="$PWD/baml_language/target/debug/baml-cli" \
+  pnpm --filter @baml/developer-docs verify:runner
 ```
 
-The manifest pins the source commit, runtime identity, hashes, and compressed
-sizes. CI also executes every registered example with the native CLI and the
-exact browser artifact, requiring identical formatted output.
+The release manifest pins the source commit, runtime identity, hashes, and
+compressed sizes. The same-origin serving manifest and content-addressed files
+are derived from it during the docs build. CI executes every registered example
+with the native CLI and exact browser artifact, requiring identical output.
 
 ## Deployment
 
