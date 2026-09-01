@@ -1,6 +1,8 @@
 import type { MDXComponents } from "mdx/types"
 import defaultMdxComponents from "fumadocs-ui/mdx"
 
+import { BamlExample } from "@/components/baml-example"
+import { Quiz } from "@/components/quiz"
 import { cn } from "@/lib/utils"
 
 function getText(node: React.ReactNode): string {
@@ -36,6 +38,8 @@ function heading(Tag: "h2" | "h3" | "h4") {
 
 export const mdxComponents: MDXComponents = {
   ...defaultMdxComponents,
+  BamlExample,
+  Quiz,
   h2: heading("h2"),
   h3: heading("h3"),
   h4: heading("h4"),

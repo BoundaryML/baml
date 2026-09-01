@@ -3,4 +3,21 @@ title: The BAML Book
 description: A deliberate path from your first BAML program to production use.
 ---
 
-The first chapters will arrive with compiler-verified, runnable examples. This publication will grow incrementally without depending on the former `baml-book` application.
+The book teaches BAML as a language: start with a small typed function, run it, then grow the same ideas into model-backed programs.
+
+## A function is just a function
+
+BAML functions have named, typed parameters and a typed return value. This first example is deliberately local, so you can edit and run it without configuring a model provider.
+
+<BamlExample id="book/first-function" />
+
+Try changing the greeting or the `name` argument. The same fixture supplies the listing, the editable source, compiler diagnostics, and the browser run—there is no second copy of the example hiding behind the page.
+
+## Check your understanding
+
+<Quiz
+  question="What does BAML verify before this function runs?"
+  options={["Only the function name", "The parameter and return types", "A model provider API key"]}
+  answer="The parameter and return types"
+  explanation="The compiler checks the function signature and body. This local function does not need a model provider."
+/>

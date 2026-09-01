@@ -1,0 +1,11 @@
+{
+  "id": "book/first-function",
+  "title": "Your first BAML function",
+  "listing": 1,
+  "caption": "A typed function that runs locally in the browser—no model key required.",
+  "file": "baml_src/main.baml",
+  "anchor": "welcome",
+  "mode": "run",
+  "functionName": "Welcome",
+  "args": { "name": "Ada" }
+}

@@ -1,0 +1,73 @@
+name: Developer Docs
+
+on:
+  pull_request:
+    paths:
+      - "typescript/apps/developer-docs/**"
+      - "typescript2/pkg-grammar/**"
+      - "baml_language/**"
+      - "pnpm-lock.yaml"
+      - ".github/actions/setup-node/**"
+      - ".github/actions/setup-rust/**"
+      - ".github/workflows/developer-docs.yml"
+  push:
+    branches: [main, canary]
+    paths:
+      - "typescript/apps/developer-docs/**"
+      - "typescript2/pkg-grammar/**"
+      - "baml_language/**"
+      - "pnpm-lock.yaml"
+      - ".github/actions/setup-node/**"
+      - ".github/actions/setup-rust/**"
+      - ".github/workflows/developer-docs.yml"
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  application:
+    name: Application
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: "20"
+
+      - name: Test
+        run: pnpm --filter @baml/developer-docs test
+
+      - name: Typecheck
+        run: pnpm --filter @baml/developer-docs typecheck
+
+      - name: Build
+        run: pnpm --filter @baml/developer-docs build
+
+  fixtures:
+    name: Native fixtures
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Validate examples
+        run: node typescript/apps/developer-docs/scripts/validate-examples.mjs
