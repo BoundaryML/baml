@@ -37,7 +37,7 @@ pub fn init() -> Result<(), JsValue> {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(js_name = configureWorkerdUuidSeed)]
 pub fn configure_workerd_uuid_seed(seed: u64) -> Result<(), JsValue> {
-    bex_prof_store::ids::configure_workerd_uuid_seed(seed).map_err(JsValue::from_str)
+    bex_project::configure_workerd_uuid_seed(seed).map_err(JsValue::from_str)
 }
 
 #[cfg(target_arch = "wasm32")]

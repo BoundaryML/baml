@@ -20,10 +20,9 @@
 //! base64, payload length, and version, and never panics on malformed
 //! input. The typed decoders reject each other's prefixes.
 
-use std::{fmt, sync::OnceLock};
-
 #[cfg(target_arch = "wasm32")]
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::{fmt, sync::OnceLock};
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 
