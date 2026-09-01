@@ -1,0 +1,16 @@
+---
+title: Runnable BAML
+description: Execute a BAML program locally in your browser with the version-pinned WebAssembly runtime.
+---
+
+import { helloWorld } from '../../lib/baml-runner/examples.mjs';
+
+This is the smallest complete BAML program. Select **Run BAML** to compile and execute it without leaving this page.
+
+<BamlRunner
+  files={helloWorld.files}
+  functionName={helloWorld.functionName}
+  expected={helloWorld.expected}
+/>
+
+The page does not load WebAssembly during server rendering. When this example approaches the viewport, an isolated worker prepares a content-addressed project session. The same checked-in runtime is exercised against the native CLI in CI.

@@ -1,6 +1,6 @@
 # BAML/WASM runner spike
 
-Status: architecture proven; browser component and release artifact are not yet shipped.
+Status: browser component and a source-pinned preview artifact are implemented.
 
 ## Decision
 
@@ -69,11 +69,22 @@ copied into every consumer.
 - Fail CI when the runtime manifest, compiler, grammar, or runnable listings
   describe incompatible versions.
 
+## Implemented vertical slice
+
+The portal ships one content-addressed runtime artifact and a worker bundle. The
+`BamlRunner` MDX component warms a project near the viewport, keeps the runtime
+off the main thread, reports download/initialization/project/run timings, and
+restarts the worker after a crash or outer timeout. Project sessions are keyed
+by a SHA-256 digest of their complete file set.
+
+CI verifies the artifact manifest and generated worker bundle, then executes
+every registered runnable example with both the source-built native CLI and the
+exact checked-in WASM artifact. The outputs must agree.
+
 ## Remaining implementation work
 
 1. Publish the runtime artifact for every stable/canary language release.
-2. Extract the current RunStore client, VFS, and result decoder into a small
-   browser-runtime package with no playground UI dependency.
-3. Add the worker and `BamlRunner` MDX component to this portal.
-4. Run browser benchmarks in the preview environment and replace the
+2. Extract the docs-owned RunStore client, VFS, and result decoder into a small
+   published browser-runtime package shared with the book.
+3. Run browser benchmarks in the preview environment and replace the
    provisional budgets with observed p50/p95 targets.

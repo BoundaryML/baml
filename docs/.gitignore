@@ -12,5 +12,9 @@
 # local deployment state
 /.vercel
 
+# Source-pinned browser runtime consumed by preview deployments
+!/public/baml-runtime/artifacts/
+!/public/baml-runtime/artifacts/**
+
 # environment files
 .env*.local

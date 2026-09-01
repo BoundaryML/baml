@@ -46,3 +46,15 @@ test('generated CLI reference includes nested public commands', async () => {
     access(path.join(packageRoot, 'generated', 'cli', 'manifest.json')),
   ]);
 });
+
+test('runnable examples ship a worker and a content-addressed runtime', async () => {
+  const manifest = JSON.parse(
+    await readFile(path.join(packageRoot, 'public', 'baml-runtime', 'manifest.json'), 'utf8'),
+  );
+  assert.match(manifest.wasm, /^\/baml-runtime\/artifacts\/[0-9a-f]+\/bridge_wasm_bg\.wasm$/);
+  await Promise.all([
+    access(path.join(packageRoot, 'content', 'examples', 'runnable-baml.mdx')),
+    access(path.join(packageRoot, 'public', 'baml-runtime', 'runner-worker.mjs')),
+    access(path.join(packageRoot, 'public', manifest.wasm.slice(1))),
+  ]);
+});

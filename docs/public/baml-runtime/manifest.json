@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "runtimeVersion": "0.18.0",
+  "runtimeCommit": "ac5b845",
+  "runtimeBuildTimeUnix": "1788224998",
+  "sourceCommit": "ac5b845f556875c72ed0e43f2d356b91f037baa1",
+  "toolchain": "baml-cli 0.18.0",
+  "sha256": "140b32f982debe204125b685ad26b92c24d41dff7b3cf3e08e2db2f5f20d5111",
+  "moduleSha256": "4185a3686689788ab6930e167515f2b38b4b10006bd9528ccc6c2a3daea4b3a7",
+  "rawBytes": 17856276,
+  "gzipBytes": 4606951,
+  "brotliBytes": 2954759,
+  "module": "/baml-runtime/artifacts/140b32f982debe20/bridge_wasm.js",
+  "wasm": "/baml-runtime/artifacts/140b32f982debe20/bridge_wasm_bg.wasm"
+}

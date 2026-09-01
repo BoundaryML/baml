@@ -2,17 +2,22 @@
   "name": "@baml/developer-docs",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "next build",
     "check:cli-reference": "node scripts/generate-cli-reference.mjs --check",
     "check:reference": "node scripts/generate-baml-reference.mjs --check",
+    "check:runner-artifact": "node scripts/check-runner-artifact.mjs && node scripts/build-runner-bundle.mjs --check",
     "dev": "next dev",
     "generate:cli-reference": "node scripts/generate-cli-reference.mjs",
     "generate:reference": "node scripts/generate-baml-reference.mjs",
+    "runner:artifact": "node scripts/build-runner-artifact.mjs",
+    "runner:bundle": "node scripts/build-runner-bundle.mjs",
     "runner:measure": "node scripts/measure-wasm.mjs",
     "start": "next start",
     "test": "node --test tests/*.test.mjs",
     "typecheck": "fumadocs-mdx && next typegen && tsc --noEmit",
+    "verify:runner": "node scripts/verify-runnable-examples.mjs",
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
@@ -30,6 +35,7 @@
     "@types/node": "^24.0.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "esbuild": "0.25.2",
     "postcss": "^8.5.14",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.8.3"

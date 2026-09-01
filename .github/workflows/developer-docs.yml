@@ -75,6 +75,12 @@ jobs:
       - name: Verify generated CLI reference
         run: pnpm --filter @baml/developer-docs check:cli-reference
 
+      - name: Verify checked-in browser runtime
+        run: pnpm --filter @baml/developer-docs check:runner-artifact
+
+      - name: Verify runnable examples against native and WASM runtimes
+        run: pnpm --filter @baml/developer-docs verify:runner
+
       - name: Run docs tests
         run: pnpm --filter @baml/developer-docs test
 

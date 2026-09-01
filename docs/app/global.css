@@ -10,3 +10,114 @@ html > body[data-scroll-locked] {
   margin-right: 0 !important;
   --removed-body-scroll-bar-size: 0px !important;
 }
+
+.baml-runner {
+  margin-block: 1.5rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--color-fd-border) 88%, transparent);
+  border-radius: 0.8rem;
+  background: var(--color-fd-card);
+}
+
+.baml-runner-source {
+  margin: 0;
+  overflow-x: auto;
+  border: 0;
+  border-radius: 0;
+  padding: 1.1rem 1.25rem;
+  background: color-mix(in oklab, var(--color-fd-secondary) 55%, transparent);
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+
+.baml-runner-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  border-top: 1px solid var(--color-fd-border);
+  padding: 0.75rem 0.9rem;
+}
+
+.baml-runner-toolbar button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 0.5rem;
+  background: var(--color-fd-primary);
+  color: var(--color-fd-primary-foreground);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.baml-runner-toolbar button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.baml-runner-toolbar svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.baml-runner-toolbar span,
+.baml-runner-result span {
+  color: var(--color-fd-muted-foreground);
+  font-size: 0.78rem;
+}
+
+.baml-runner-result {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--color-fd-border);
+  padding: 0.85rem 1rem;
+}
+
+.baml-runner-result code {
+  color: var(--color-fd-foreground);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.baml-runner-result--error span {
+  color: var(--color-red-500);
+}
+
+.baml-runner-timings {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--color-fd-border);
+  margin: 0;
+}
+
+.baml-runner-timings div {
+  padding: 0.65rem 1rem;
+}
+
+.baml-runner-timings dt {
+  color: var(--color-fd-muted-foreground);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.baml-runner-timings dd {
+  margin: 0.12rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .baml-runner-toolbar,
+  .baml-runner-result {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .baml-runner-timings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
