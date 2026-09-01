@@ -23,7 +23,7 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build:wasm": "wasm-pack build . --target web --dev --out-dir dist/wasm --out-name bridge_web_core && wasm-pack build . --target bundler --dev --out-dir dist/workerd-wasm --out-name bridge_web_core && node scripts/sync-wasm-declarations.mjs && node scripts/prepare-wasm-package.mjs",
+    "build:wasm": "node scripts/build-wasm-debug.mjs && node scripts/sync-wasm-declarations.mjs && node scripts/prepare-wasm-package.mjs",
     "build:wasm:release": "node scripts/build-wasm-release.mjs && node scripts/sync-wasm-declarations.mjs && node scripts/prepare-wasm-package.mjs",
     "check:wasm-declarations": "node scripts/sync-wasm-declarations.mjs --check",
     "build:ts": "node scripts/sync-node-runtime.mjs && tsc -p tsconfig.json && node scripts/prepare-workerd-package.mjs",

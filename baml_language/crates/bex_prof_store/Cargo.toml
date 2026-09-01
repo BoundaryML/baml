@@ -34,7 +34,7 @@ uuid = { workspace = true }
 fs2 = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-uuid = { workspace = true, features = [ "js" ] }
+uuid = { workspace = true, features = [ "rng-getrandom" ] }
 web-time = { workspace = true }
 
 [dev-dependencies]

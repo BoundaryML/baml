@@ -18,6 +18,8 @@ pub mod media;
 pub mod runtime;
 #[cfg(target_arch = "wasm32")]
 mod version;
+#[cfg(all(target_arch = "wasm32", getrandom_backend = "custom"))]
+mod workerd_random;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(start)]
@@ -30,14 +32,6 @@ pub fn init() -> Result<(), JsValue> {
     })
     .map(|_| ())
     .map_err(|error| JsValue::from_str(&error))
-}
-
-/// Configure the workerd-only non-cryptographic `UUIDv4` source before a
-/// generated SDK stages bytecode at module scope.
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(js_name = configureWorkerdUuidSeed)]
-pub fn configure_workerd_uuid_seed(seed: u64) -> Result<(), JsValue> {
-    bex_project::configure_workerd_uuid_seed(seed).map_err(JsValue::from_str)
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -8,12 +8,12 @@ for (const [target, outDir] of [["web", "dist/wasm"], ["bundler", "dist/workerd-
   const result = spawnSync(
     "wasm-pack",
     [
-      "build", ".", "--target", target, "--release", "--out-dir", outDir, "--out-name", "bridge_web_core",
+      "build", ".", "--target", target, "--dev", "--out-dir", outDir, "--out-name", "bridge_web_core",
       ...(target === "bundler" ? ["--no-default-features"] : []),
     ],
     {
       stdio: "inherit",
-      env: { ...process.env, CARGO_PROFILE_RELEASE_OPT_LEVEL: "z", RUSTFLAGS: rustflags },
+      env: { ...process.env, RUSTFLAGS: rustflags },
       shell: process.platform === "win32",
     },
   );

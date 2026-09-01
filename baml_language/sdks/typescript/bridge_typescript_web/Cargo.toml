@@ -19,6 +19,13 @@ serde-wasm-bindgen = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom_04 = { workspace = true }
+
+[features]
+default = [ "browser-random" ]
+browser-random = [ "getrandom_04/wasm_js" ]
+
 [package.metadata.wasm-pack.profile.dev]
 wasm-opt = false
 

@@ -91,8 +91,6 @@ use ::bex_heap::{HeapPermit as _, Tlab};
 use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
-#[cfg(target_arch = "wasm32")]
-pub use bex_events::ids::configure_workerd_uuid_seed;
 use bex_events::prof::backend::{ExecutionEndStatus, ProfilerSession, RootProfiler};
 #[cfg(not(target_arch = "wasm32"))]
 use bex_events::prof::backend::{ExecutionHandle, RootAdmission, ValueLossReason, ValueRole};
