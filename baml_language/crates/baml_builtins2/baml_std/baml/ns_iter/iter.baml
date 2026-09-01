@@ -270,6 +270,11 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
   }
 }
 
+/// Flattens an iterator of iterables into an iterator over their elements.
+///
+/// Each element of `src` is iterated to exhaustion before the next one is
+/// pulled. Lazy like every adapter here: nothing is advanced until `next`
+/// is called on the result.
 function flatten<R, E, E3, I extends Iterable<Item = R, Error = E3>>(
     src: Iterator<Item = I, Error = E>,
 ) -> Iterator<Item = R, Error = E | E3> throws never {
@@ -281,6 +286,7 @@ class ArrayIterator<T> {
     arr: T[],
     idx: int,
 
+    /// Creates an iterator positioned at the start of `arr`.
     function new(arr: T[]) -> ArrayIterator<T> throws never {
         ArrayIterator<T> { arr: arr, idx: 0 }
     }
@@ -316,11 +322,17 @@ class ArrayIterator<T> {
     }
 }
 
+/// An iterator over the integers from `min` up to but excluding `max`.
 class Range {
     i: int,
     max: int,
     step: int,
 
+    /// Creates a range that starts at `min` and adds `step` after each item,
+    /// stopping at the first value that reaches `max`.
+    ///
+    /// A non-positive `step` never reaches `max`, so the range is infinite;
+    /// pair it with `take` if that is what you want.
     function new(min: int, max: int, step: int = 1) -> Range throws never {
         Range { i: min, max: max, step: step }
     }
@@ -387,6 +399,7 @@ class Repeat<T> {
     }
 }
 
+/// The iterator `baml.iter.Iterator.map` returns.
 class Map<T, R, E, E2> {
     source: Iterator<Item = T, Error = E>,
     func: (T) -> R throws E2,
@@ -413,6 +426,7 @@ class Map<T, R, E, E2> {
     }
 }
 
+/// The iterator `baml.iter.Iterator.filter` returns.
 class Filter<T, E, E2> {
     source: Iterator<Item = T, Error = E>,
     predicate: (T) -> bool throws E2,
@@ -448,6 +462,7 @@ class Filter<T, E, E2> {
     }
 }
 
+/// The iterator `baml.iter.Iterator.filter_map` returns.
 class FilterMap<T, R, E, E2> {
     source: Iterator<Item = T, Error = E>,
     func: (T) -> R? throws E2,
@@ -486,6 +501,7 @@ class FilterMap<T, R, E, E2> {
     }
 }
 
+/// The iterator `baml.iter.Iterator.flat_map` returns.
 class FlatMap<T, R, E, E2, E3> {
     source: Iterator<Item = T, Error = E>,
     func: (T) -> Iterable<Item = R, Error = E3> throws E2,
@@ -535,6 +551,7 @@ class FlatMap<T, R, E, E2, E3> {
     }
 }
 
+/// The iterator `baml.iter.flatten` returns.
 class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
     source: Iterator<Item = I, Error = E>,
     inner: Iterator<Item = R, Error = E3> | Done,
@@ -583,11 +600,17 @@ class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
     }
 }
 
+/// The iterator `baml.iter.Iterator.peekable` returns.
 class Peekable<T, E> {
     source: Iterator<Item = T, Error = E>,
     buffer: T | Done,
     has_buffer: bool,
 
+    /// Returns the next item without consuming it, or `baml.iter.Done` at the
+    /// end of the source.
+    ///
+    /// The item is buffered, so the following `next` returns the same one and
+    /// repeated `peek` calls do not advance the source.
     function peek(self) -> T | Done throws E {
         if (self.has_buffer) {
             return self.buffer;
@@ -623,6 +646,7 @@ class Peekable<T, E> {
     }
 }
 
+/// The iterator `baml.iter.Iterator.step_by` returns.
 class StepBy<T, E> {
     source: Iterator<Item = T, Error = E>,
     n: int,
@@ -659,6 +683,7 @@ class StepBy<T, E> {
     }
 }
 
+/// The iterator `baml.iter.Iterator.chain` returns.
 class Chain<T, E, E2> {
     first: Iterator<Item = T, Error = E>,
     other: Iterator<Item = T, Error = E2>,
@@ -693,6 +718,7 @@ class Chain<T, E, E2> {
     }
 }
 
+/// The iterator `baml.iter.Iterator.take` returns.
 class Take<T, E> {
     source: Iterator<Item = T, Error = E>,
     remaining: int,
@@ -732,6 +758,7 @@ class Take<T, E> {
     }
 }
 
+/// The iterator `baml.iter.Iterator.skip` returns.
 class Skip<T, E> {
     source: Iterator<Item = T, Error = E>,
     remaining: int,
@@ -770,6 +797,7 @@ class Skip<T, E> {
     }
 }
 
+/// The iterator `baml.iter.Iterator.take_while` returns.
 class TakeWhile<T, E, E2> {
     source: Iterator<Item = T, Error = E>,
     predicate: (T) -> bool throws E2,
@@ -808,6 +836,7 @@ class TakeWhile<T, E, E2> {
     }
 }
 
+/// The iterator `baml.iter.Iterator.skip_while` returns.
 class SkipWhile<T, E, E2> {
     source: Iterator<Item = T, Error = E>,
     predicate: (T) -> bool throws E2,

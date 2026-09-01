@@ -48,38 +48,56 @@ class Type {
         $rust_function
     }
 
+    /// The class view of this type, or `null` when it does not describe
+    /// a class.
     //baml:mut_vm
     function as_class(self) -> reflect.class.Type? throws never {
         $rust_function
     }
+    /// The enum view of this type, or `null` when it does not describe
+    /// an enum.
     //baml:mut_vm
     function as_enum(self) -> reflect.enum.Type? throws never {
         $rust_function
     }
+    /// The union view of this type, or `null` when it does not describe
+    /// a union.
     //baml:mut_vm
     function as_union(self) -> reflect.union.Type? throws never {
         $rust_function
     }
+    /// The literal view of this type, or `null` when it does not describe
+    /// a literal.
     //baml:mut_vm
     function as_literal(self) -> reflect.literal.Type? throws never {
         $rust_function
     }
+    /// The array view of this type, or `null` when it does not describe
+    /// an array.
     //baml:mut_vm
     function as_array(self) -> reflect.array.Type? throws never {
         $rust_function
     }
+    /// The map view of this type, or `null` when it does not describe
+    /// a map.
     //baml:mut_vm
     function as_map(self) -> reflect.map.Type? throws never {
         $rust_function
     }
+    /// The interface view of this type, or `null` when it does not describe
+    /// an interface.
     //baml:mut_vm
     function as_interface(self) -> reflect.interface.Type? throws never {
         $rust_function
     }
+    /// The primitive view of this type, or `null` when it does not describe
+    /// a primitive.
     //baml:mut_vm
     function as_primitive(self) -> reflect.primitive.Type? throws never {
         $rust_function
     }
+    /// The function view of this type, or `null` when it does not describe
+    /// a function.
     //baml:mut_vm
     function as_function(self) -> reflect.function.Type? throws never {
         $rust_function

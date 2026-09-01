@@ -358,19 +358,24 @@ function testset_children_selected(
 ) -> TestSetChild[] {
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
-        if (root._name_selected(t.name, names)) {
+        if (names.includes(t.name)) {
             children.push(root.test_child(t.name, t.body, t.runner))
         } else {
             null
         }
     }
     for (let ts in registry.collector.testsets) {
+        let prefix = `${ts.name}::`;
         // Select testsets by descendant match only. `names` holds leaf paths, and a
         // testset contributes only "name::..." descendants — never a bare "name" — so
         // an exact ts.name match can happen only when a same-named top-level `test`
         // was selected (tests and testsets dedupe in separate collections, so the
         // names can collide). Honoring that would wrongly run the whole testset.
-        if (root._has_selected_descendant(ts.name, names)) {
+        if (
+            names.some((n) -> {
+                n.starts_with(prefix)
+            })
+        ) {
             children.push(root.testset_child_selected(registry, ts, names, pool))
         } else {
             null
@@ -430,29 +435,6 @@ function testset_child_selected(
             }
         },
     }
-}
-
-function _name_selected(name: string, names: string[]) -> bool {
-    for (let selected in names) {
-        if (selected == name) {
-            return true;
-        } else {
-            null
-        }
-    }
-    false
-}
-
-function _has_selected_descendant(prefix: string, names: string[]) -> bool {
-    let descendant_prefix = prefix + "::";
-    for (let selected in names) {
-        if (selected.starts_with(descendant_prefix)) {
-            return true;
-        } else {
-            null
-        }
-    }
-    false
 }
 
 function aggregate_reports(named_results: NamedChildReport[]) -> TestSetReport {

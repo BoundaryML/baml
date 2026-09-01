@@ -26,31 +26,43 @@
 
 /// `self & rhs`
 interface BitAnd<Rhs extends root.Concrete> requires root.Concrete {
+    /// The type `self & rhs` produces: `int` when both operands are `int`, otherwise `bigint`.
     type Output extends root.Concrete;
+    /// The `&` operator.
     function bit_and(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self | rhs`
 interface BitOr<Rhs extends root.Concrete> requires root.Concrete {
+    /// The type `self | rhs` produces: `int` when both operands are `int`, otherwise `bigint`.
     type Output extends root.Concrete;
+    /// The `|` operator.
     function bit_or(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self ^ rhs`
 interface BitXor<Rhs extends root.Concrete> requires root.Concrete {
+    /// The type `self ^ rhs` produces: `int` when both operands are `int`, otherwise `bigint`.
     type Output extends root.Concrete;
+    /// The `^` operator.
     function bit_xor(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self << rhs`
 interface ShiftLeft<Rhs extends root.Concrete> requires root.Concrete {
+    /// The type `self << rhs` produces: `int` when both operands are `int`, otherwise `bigint`.
+    /// A `bigint` count widens the shifted value before shifting.
     type Output extends root.Concrete;
+    /// The `<<` operator.
     function shl(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self >> rhs`
 interface ShiftRight<Rhs extends root.Concrete> requires root.Concrete {
+    /// The type `self >> rhs` produces: `int` when both operands are `int`, otherwise `bigint`.
+    /// A `bigint` count widens the shifted value before shifting.
     type Output extends root.Concrete;
+    /// The `>>` operator.
     function shr(self, rhs: Rhs) -> Self.Output throws never
 }
 

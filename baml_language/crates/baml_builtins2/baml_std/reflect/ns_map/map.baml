@@ -1,3 +1,4 @@
+/// Constructs the map type `map<key, value>`.
 //baml:mut_vm
 function new(key: reflect.Type, value: reflect.Type) -> Type throws never {
     $rust_function
@@ -17,11 +18,13 @@ class Type {
             $rust_function
         }
     }
+    /// The type of the map's keys.
     //baml:mut_vm
     //baml:fallible
     function key_type(self) -> reflect.Type throws never {
         $rust_function
     }
+    /// The type of the map's values.
     //baml:mut_vm
     //baml:fallible
     function value_type(self) -> reflect.Type throws never {

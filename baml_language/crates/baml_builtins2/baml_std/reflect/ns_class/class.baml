@@ -1,3 +1,9 @@
+/// One field of a class: its name, its declared type, and its schema
+/// metadata.
+///
+/// A descriptor from `reflect.AnyClass.list_fields` or `get_field` is bound
+/// to the instance it came from, so `value` can read it; one from
+/// `Type.fields()` describes the type only and is ownerless.
 class Field {
     name: string,
     type: reflect.Type?,
@@ -7,6 +13,7 @@ class Field {
     /// intentionally ownerless.
     _owner: unknown?,
 
+    /// This field's schema metadata. Same value as the `meta` field.
     function metadata(self) -> reflect.Meta throws never {
         self.meta
     }
@@ -169,11 +176,14 @@ class Type {
             $rust_function
         }
     }
+    /// The class's fields, in declaration order. Ownerless: these describe
+    /// the type, so `Field.value` on them returns `null`.
     //baml:mut_vm
     //baml:fallible
     function fields(self) -> Field[] throws never {
         $rust_function
     }
+    /// The class declaration's own schema metadata.
     //baml:mut_vm
     //baml:fallible
     function meta(self) -> reflect.Meta throws never {

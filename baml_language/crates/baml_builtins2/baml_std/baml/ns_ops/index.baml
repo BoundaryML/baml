@@ -17,7 +17,14 @@
 
 /// `self[idx]`
 interface Index<Idx> requires root.Concrete {
+    /// The type `self[idx]` produces.
     type Output;
+    /// The `[]` operator.
+    ///
+    /// # Panics
+    ///
+    /// - `baml.panics.IndexOutOfBounds` for a list or `uint8array` index
+    ///   outside the container.
     function index(self, idx: Idx) -> Self.Output throws never
 }
 

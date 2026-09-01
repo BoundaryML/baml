@@ -14,6 +14,10 @@ class Type {
     }
     //baml:vm
     //baml:fallible
+    /// Whether `other` nominally implements this interface.
+    ///
+    /// The mirror of `reflect.Type.implements`, asked from the interface's
+    /// side. `false` when `other` is not a class.
     function implemented_by(self, other: reflect.Type) -> bool throws never {
         $rust_function
     }
@@ -21,9 +25,20 @@ class Type {
 
 /// An immutable structural-conformance witness.  Values are created only by
 /// `implementation<I>()`; each `field` call returns a new witness.
+/// A structural witness that a runtime-built class implements an interface.
+///
+/// Start one with `reflect.interface.implementation<I>()` and link each
+/// interface field to the class field satisfying it with `field`.
 class Implementation {
     _handle: $rust_type,
 
+    /// Links `interface_field` to the class field that satisfies it,
+    /// defaulting to the field of the same name.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.CompilationError` if the interface declares no such
+    ///   field, or the link is not well typed.
     //baml:mut_vm
     function field(
         self,

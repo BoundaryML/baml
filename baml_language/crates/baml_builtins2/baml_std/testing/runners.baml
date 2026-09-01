@@ -1,3 +1,4 @@
+/// Creates a test runner that requires at least `n` passes out of `m` runs to pass.
 function Quorum(n: int, m: int) -> TestRunner {
     if (n <= 0) {
         baml.sys.panic("testing.Quorum requires n > 0")
@@ -32,6 +33,8 @@ function Quorum(n: int, m: int) -> TestRunner {
     };
 }
 
+/// Creates a test runner that retries a test up to `max_attempts` times.
+/// Tests fail if there are no passes after `max_attempts` attempts.
 function Retry(max_attempts: int) -> TestRunner {
     if (max_attempts <= 0) {
         baml.sys.panic("testing.Retry requires max_attempts > 0")
@@ -66,6 +69,7 @@ function Retry(max_attempts: int) -> TestRunner {
     };
 }
 
+/// Creates a test runner that requires a pass rate above `threshold` to pass.
 function PassRate(threshold: float) -> TestSetRunner {
     if (threshold < 0.0 || threshold > 1.0) {
         baml.sys.panic("testing.PassRate requires 0.0 <= threshold <= 1.0")
@@ -79,7 +83,7 @@ function PassRate(threshold: float) -> TestSetRunner {
         let report = root.run_children_parallel(children, root.test_pool(0));
         let outcome: Outcome = if (report.total == 0) {
             "pass"
-        } else if (root._int_to_float(report.passed) / root._int_to_float(report.total) >= threshold) {
+        } else if ((report.passed + 0.0) / (report.total + 0.0) >= threshold) {
             "pass"
         } else {
             "fail"
@@ -98,17 +102,18 @@ function PassRate(threshold: float) -> TestSetRunner {
 
 function Sequential() -> TestSetRunner {
     return (children) -> TestSetReport {
-        root.run_children_sequential(children, false)
+        root._run_children_sequential(children, false)
     };
 }
 
 function FailFast() -> TestSetRunner {
     return (children) -> TestSetReport {
-        root.run_children_sequential(children, true)
+        root._run_children_sequential(children, true)
     };
 }
 
-function run_children_sequential(children: TestSetChild[], fail_fast: bool) -> TestSetReport {
+/// (internal)
+function _run_children_sequential(children: TestSetChild[], fail_fast: bool) -> TestSetReport {
     let named_results: NamedChildReport[] = [];
     for (let child in children) {
         let report = child.run();
@@ -124,10 +129,4 @@ function run_children_sequential(children: TestSetChild[], fail_fast: bool) -> T
         }
     }
     root.aggregate_reports(named_results)
-}
-
-function _int_to_float(value: int) -> float {
-    float.parse(string.from(value)) catch_all (e) {
-        _ => baml.sys.panic("failed to convert int to float")
-    }
 }

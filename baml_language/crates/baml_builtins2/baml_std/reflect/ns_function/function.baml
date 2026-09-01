@@ -1,3 +1,5 @@
+/// One parameter of a function type: its name where the signature gives
+/// one, its declared type, and whether it may be omitted.
 class Parameter {
     name: string?,
     type: reflect.Type,
@@ -21,11 +23,13 @@ class Type {
     }
     //baml:mut_vm
     //baml:fallible
+    /// The function's parameters, in declaration order.
     function params(self) -> Parameter[] throws never {
         $rust_function
     }
     //baml:mut_vm
     //baml:fallible
+    /// The function's return type.
     function return_type(self) -> reflect.Type throws never {
         $rust_function
     }

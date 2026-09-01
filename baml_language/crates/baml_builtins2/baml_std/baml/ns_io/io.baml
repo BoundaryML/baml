@@ -8,6 +8,7 @@
 /// value.
 ///
 /// # Throws
+///
 /// - `Io` if the prompt cannot be written or stdin cannot be read.
 function input(prompt: string?) -> string throws root.errors.Io {
     $rust_io_function
@@ -16,30 +17,36 @@ function input(prompt: string?) -> string throws root.errors.Io {
 /// Write `s` to stdout with no trailing newline. Flushes immediately so the
 /// bytes are visible before the next sysop or await suspends the thread.
 ///
-/// Panics with `baml.panics.HostUnavailable` if stdout cannot be written —
-/// the same choice Rust makes for `println!`. Use `baml.io.input` as the model
-/// for an I/O operation you are expected to handle.
+/// # Panics
+///
+/// - `baml.panics.HostUnavailable` if stdout cannot be written
 function print(s: string) -> null throws never {
     $rust_io_function
 }
 
 /// Write `s` to stdout followed by a newline.
 ///
-/// Panics with `baml.panics.HostUnavailable` if stdout cannot be written.
+/// # Panics
+///
+/// - `baml.panics.HostUnavailable` if stdout cannot be written
 function println(s: string) -> null throws never {
     $rust_io_function
 }
 
 /// Like `print` but writes to stderr.
 ///
-/// Panics with `baml.panics.HostUnavailable` if stderr cannot be written.
+/// # Panics
+///
+/// - `baml.panics.HostUnavailable` if stderr cannot be written
 function eprint(s: string) -> null throws never {
     $rust_io_function
 }
 
 /// Like `println` but writes to stderr.
 ///
-/// Panics with `baml.panics.HostUnavailable` if stderr cannot be written.
+/// # Panics
+///
+/// - `baml.panics.HostUnavailable` if stderr cannot be written
 function eprintln(s: string) -> null throws never {
     $rust_io_function
 }

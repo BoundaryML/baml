@@ -68,6 +68,9 @@ class ResponsesClient {
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
 
+    /// Creates a client. Construction reads no environment variable, so
+    /// declaring one is always safe; credentials and endpoints resolve when a
+    /// request is built.
     function new(
         model: string = "gpt-4o-mini",
         api_key: ai.Credential? = null,

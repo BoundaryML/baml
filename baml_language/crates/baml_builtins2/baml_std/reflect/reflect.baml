@@ -46,6 +46,7 @@ class Diagnostic {
 
 /// Common identity-preserving surface shared by every reflection kind view.
 interface TypeView {
+  /// The `type` value this view wraps, restoring the unnarrowed type.
   function as_type(self) -> reflect.Type throws never
 }
 
@@ -68,7 +69,9 @@ type TypeKind = reflect.class.Type
 /// the held function through `reflect.call_any`; read its signature with
 /// `reflect.signature`.
 interface AnyFunction {
+  /// The held function's return type. `unknown` accepts any return.
   type Returns = unknown
+  /// The held function's error type. `unknown` accepts any throws clause.
   type Throws = unknown
 }
 
@@ -111,6 +114,8 @@ interface AnyClass {
     null
   }
 
+  /// Whether this value's runtime class declares a field called `name`.
+  /// `false` when the runtime type is not a class.
   function has_field(self, name: string) -> bool throws never {
     let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
       return false
@@ -140,14 +145,18 @@ interface AnyClass {
     fields
   }
 
+  /// The rendered name of this value's concrete runtime type.
   function name(self) -> string throws never {
     reflect.Type.of_value(self).to_string()
   }
 
+  /// This value's concrete runtime type.
   function type(self) -> reflect.Type throws never {
     reflect.Type.of_value(self)
   }
 
+  /// The class declaration's schema metadata, or empty metadata when the
+  /// runtime type is not a class.
   function attributes(self) -> reflect.Meta throws never {
     let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
       return reflect.Meta {
@@ -210,6 +219,20 @@ class Package {
         $compiler_intrinsic
     }
 
+    /// Compiles `files` into an isolated package, resolving its dependencies
+    /// against `packages`.
+    ///
+    /// # Parameters
+    ///
+    /// - `files`: source text keyed by path, as the package's `baml_src`.
+    /// - `packages`: packages the source may depend on, keyed by the alias it
+    ///   imports them under.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.CompilationError` if the source does not compile.
+    /// - anything the package's top-level initialization throws, which is why
+    ///   the clause is `unknown`.
     function compile(
         files: map<string, string>,
         packages: map<string, Package> = {},
@@ -234,16 +257,20 @@ class Package {
         $rust_function
     }
 
+    /// The exported class called `name`, or `null` if the package exports none.
     //baml:mut_vm
     function get_class(self, name: string) -> reflect.class.Type? throws never {
         $rust_function
     }
 
+    /// The exported enum called `name`, or `null` if the package exports none.
     //baml:mut_vm
     function get_enum(self, name: string) -> reflect.enum.Type? throws never {
         $rust_function
     }
 
+    /// The exported interface called `name`, or `null` if the package exports
+    /// none.
     //baml:mut_vm
     function get_interface(self, name: string) -> reflect.interface.Type? throws never {
         $rust_function
@@ -267,16 +294,19 @@ class Package {
         $rust_function
     }
 
+    /// Exported class types, keyed by package-local name.
     //baml:mut_vm
     function classes(self) -> map<string, reflect.class.Type> throws never {
         $rust_function
     }
 
+    /// Exported enum types, keyed by package-local name.
     //baml:mut_vm
     function enums(self) -> map<string, reflect.enum.Type> throws never {
         $rust_function
     }
 
+    /// Exported interface types, keyed by package-local name.
     //baml:mut_vm
     function interfaces(self) -> map<string, reflect.interface.Type> throws never {
         $rust_function
@@ -295,6 +325,7 @@ class Package {
         $rust_function
     }
 
+    /// Diagnostics produced while compiling this package.
     //baml:mut_vm
     function diagnostics(self) -> Diagnostic[] throws never {
         $rust_function
@@ -307,6 +338,11 @@ class Package {
 class Session {
     _inner: unknown,
 
+    /// Opens a session whose dependency aliases are fixed to `packages`.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.CompilationError` if the dependencies do not resolve.
     function new(
         packages: map<string, Package> = {},
     ) -> Session throws reflect.errors.CompilationError {
@@ -320,6 +356,18 @@ class Session {
         $rust_function
     }
 
+    /// Compiles and runs `source` against this session, returning its value
+    /// as `T`.
+    ///
+    /// Each call checks in a fresh compiler context; statements that succeed
+    /// are committed to the session's persistent image and are visible to
+    /// later calls. A call that throws commits nothing.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.CompilationError` if `source` does not compile.
+    /// - `reflect.errors.EvaluationError` if it compiles but throws when run.
+    /// - `reflect.errors.SessionBusy` if the session is already evaluating.
     function eval<T>(
         self,
         source: string,
@@ -348,6 +396,7 @@ class Session {
         $rust_function
     }
 
+    /// Diagnostics from this session's most recent `eval`.
     //baml:mut_vm
     function diagnostics(self) -> Diagnostic[] throws never {
         $rust_function

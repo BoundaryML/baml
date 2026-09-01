@@ -18,6 +18,8 @@ class SafetySetting {
     category: string,
     threshold: string,
 
+    /// Creates a safety setting pairing a harm `category` with a blocking
+    /// `threshold`. Both strings go on the wire verbatim.
     function new(category: string, threshold: string) -> SafetySetting {
         SafetySetting { category: category, threshold: threshold }
     }
@@ -71,6 +73,9 @@ class GeminiClient {
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
 
+    /// Creates a client. Construction reads no environment variable, so
+    /// declaring one is always safe; credentials and endpoints resolve when a
+    /// request is built.
     function new(
         model: string = "gemini-2.5-flash",
         api_key: ai.Credential? = null,

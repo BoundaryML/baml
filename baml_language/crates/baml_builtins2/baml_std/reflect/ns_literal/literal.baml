@@ -1,3 +1,4 @@
+/// Constructs the literal type matching exactly `value`.
 //baml:mut_vm
 function new(value: string | int | bool) -> Type throws never {
     $rust_function

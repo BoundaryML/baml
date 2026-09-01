@@ -12,6 +12,7 @@ class Type {
             $rust_function
         }
     }
+    /// The type of the array's elements.
     //baml:mut_vm
     //baml:fallible
     function element_type(self) -> reflect.Type throws never {

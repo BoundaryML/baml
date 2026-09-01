@@ -14,11 +14,13 @@ class ThinkingConfig {
     type: string,
     budget_tokens: int?,
 
+    /// Turns extended thinking on, with `budget_tokens` reserved for it.
     function enabled(budget_tokens: int) -> ThinkingConfig {
         let budget = budget_tokens;
         ThinkingConfig { type: "enabled", budget_tokens: budget }
     }
 
+    /// Turns extended thinking off.
     function disabled() -> ThinkingConfig {
         let kind = "disabled";
         ThinkingConfig { type: kind, budget_tokens: null }
@@ -63,6 +65,11 @@ class ToolChoice {
     }
 }
 
+/// One model turn against Anthropic's Messages API
+/// (`POST https://api.anthropic.com/v1/messages`).
+///
+/// Construction reads no environment variable, so declaring a client is
+/// always safe; the credential resolves when a request is built.
 class Client {
     model: string,
     // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request

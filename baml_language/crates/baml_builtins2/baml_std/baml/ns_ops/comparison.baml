@@ -1,18 +1,37 @@
+/// Equality for a type that defines it.
+///
+/// Implementing `Equals` is what lets a type satisfy a `T extends Equals` bound
+/// and be compared through dynamic dispatch. It is narrower than the `==`
+/// operator: `equals_equals` below compares any pair of compatible types and
+/// routes here only when the operand's runtime type implements this interface.
 interface Equals {
+    /// Whether `self` and `other` are equal.
     function eq(self, other: Self) -> bool throws never
+    /// Whether `self` and `other` differ. Defaults to `!self.eq(other)`.
     function neq(self, other: Self) -> bool throws never {
         !self.eq(other)
     }
 }
 
+/// Ordering for a type that also defines equality.
+///
+/// Only `lt` has no default: `le`, `gt`, and `ge` derive from it and `eq`, so
+/// an implementation that overrides them is responsible for keeping all four
+/// consistent with one another.
 interface Compare requires Equals {
+    /// Whether `self` orders before `other`.
     function lt(self, other: Self) -> bool throws never
+    /// Whether `self` orders before `other` or equals it. Defaults to
+    /// `self.lt(other) || self.eq(other)`.
     function le(self, other: Self) -> bool throws never {
         self.lt(other) || self.eq(other)
     }
+    /// Whether `self` orders after `other`. Defaults to `!self.le(other)`.
     function gt(self, other: Self) -> bool throws never {
         !self.le(other)
     }
+    /// Whether `self` orders after `other` or equals it. Defaults to
+    /// `!self.lt(other)`.
     function ge(self, other: Self) -> bool throws never {
         !self.lt(other)
     }

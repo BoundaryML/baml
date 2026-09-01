@@ -41,6 +41,9 @@ class ChatClient {
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
 
+    /// Creates a client. Construction reads no environment variable, so
+    /// declaring one is always safe; credentials and endpoints resolve when a
+    /// request is built.
     function new(
         model: string = "gpt-4o-mini",
         api_key: ai.Credential? = null,
@@ -93,6 +96,8 @@ class ChatClient {
     /// The provider record: everything the shared core needs to know about this
     /// endpoint. Only `stream_options` distinguishes first-party OpenAI from a
     /// bare compatible server.
+    /// The provider record: everything the shared chat core needs to know
+    /// about this endpoint.
     function compat(self) -> root.internal.ChatCompat {
         root.internal.ChatCompat.new(
             provider = "openai-chat",
@@ -103,6 +108,12 @@ class ChatClient {
         )
     }
 
+    /// The per-request parameters handed to the shared chat core.
+    ///
+    /// # Parameters
+    ///
+    /// - `preview`: omit the credential, for rendering a request without
+    ///   sending it.
     function params(self, preview: bool = false) -> root.internal.ChatParams {
         root.internal.ChatParams.new(
             model = self.model,

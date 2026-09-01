@@ -1,18 +1,17 @@
-// openai.OllamaClient — a local Ollama server through its OpenAI-compatible
-// chat-completions endpoint.
-//
-// The whole client is four deviations from `openai.GenericClient`:
-//   * the base URL defaults to `http://localhost:11434/v1`. The `/v1` is
-//     load-bearing — Ollama serves the OpenAI-compatible API only under that
-//     prefix, and sys_llm's `:11434` default 404s on every call (PLAN §5).
-//   * no credential is required (and none is sent unless one is configured).
-//   * the `system` role is allowed, like every other client here: Ollama passes
-//     it straight through to the model's template.
-//   * image URLs are fetched and inlined as base64. Ollama's OpenAI-compat
-//     docs are explicit — "Base64 encoded image ✓ / Image URL ✗" — so an
-//     `Image.from_url` prompt would otherwise reach a server that cannot read
-//     it (`inline_image_urls`).
-
+/// A local Ollama server through its OpenAI-compatible
+/// chat-completions endpoint.
+///
+/// The whole client is four deviations from `openai.GenericClient`:
+///   * the base URL defaults to `http://localhost:11434/v1`. The `/v1` is
+///     load-bearing — Ollama serves the OpenAI-compatible API only under that
+///     prefix, and a bare `:11434` default 404s on every call.
+///   * no credential is required (and none is sent unless one is configured).
+///   * the `system` role is allowed, like every other client here: Ollama passes
+///     it straight through to the model's template.
+///   * image URLs are fetched and inlined as base64. Ollama's OpenAI-compat
+///     docs are explicit — "Base64 encoded image ✓ / Image URL ✗" — so an
+///     `Image.from_url` prompt would otherwise reach a server that cannot read
+///     it (`inline_image_urls`).
 class OllamaClient {
     model: string,
     base_url: ai.Credential?,
@@ -32,6 +31,9 @@ class OllamaClient {
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
 
+    /// Creates a client. Construction reads no environment variable, so
+    /// declaring one is always safe; credentials and endpoints resolve when a
+    /// request is built.
     function new(
         model: string,
         base_url: ai.Credential? = null,
@@ -62,14 +64,20 @@ class OllamaClient {
         }
     }
 
+    /// The request-time credential, if one is configured. Ollama requires
+    /// none, so `null` is the ordinary case and no auth header is sent.
     function resolved_api_key(self) -> string? {
         ai.wire.resolve_credential(self.api_key, null)
     }
 
+    /// The request-time base URL, or `http://localhost:11434/v1`. The `/v1`
+    /// is load-bearing: Ollama serves the OpenAI-compatible API only there.
     function resolved_base_url(self) -> string {
         ai.wire.resolve_credential(self.base_url, null) ?? "http://localhost:11434/v1"
     }
 
+    /// The provider record: everything the shared chat core needs to know
+    /// about this endpoint.
     function compat(self) -> root.internal.ChatCompat {
         root.internal.ChatCompat.new(
             provider = "ollama",
@@ -79,6 +87,12 @@ class OllamaClient {
         )
     }
 
+    /// The per-request parameters handed to the shared chat core.
+    ///
+    /// # Parameters
+    ///
+    /// - `preview`: omit the credential, for rendering a request without
+    ///   sending it.
     function params(self, preview: bool = false) -> root.internal.ChatParams {
         root.internal.ChatParams.new(
             model = self.model,

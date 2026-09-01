@@ -1,3 +1,8 @@
+/// Constructs the canonical union of `types`.
+///
+/// # Throws
+///
+/// - `reflect.errors.CompilationError` if the members cannot form a union.
 //baml:mut_vm
 function new(types: reflect.Type[]) -> Type throws reflect.errors.CompilationError {
     $rust_function
@@ -17,6 +22,7 @@ class Type {
             $rust_function
         }
     }
+    /// The union's members, in canonical order.
     //baml:mut_vm
     //baml:fallible
     function member_types(self) -> reflect.Type[] throws never {

@@ -1,3 +1,4 @@
+/// One variant of an enum: its name and its schema metadata.
 class Value {
     name: string,
     meta: reflect.Meta,
@@ -53,11 +54,13 @@ class Type {
     }
     //baml:mut_vm
     //baml:fallible
+    /// The enum's variants, in declaration order.
     function values(self) -> Value[] throws never {
         $rust_function
     }
     //baml:mut_vm
     //baml:fallible
+    /// The enum declaration's own schema metadata.
     function meta(self) -> reflect.Meta throws never {
         $rust_function
     }

@@ -1,16 +1,15 @@
-// openai.GenericClient — any OpenAI-compatible chat-completions endpoint:
-// vLLM, LM Studio, TGI, llama.cpp, Together, Fireworks, a corporate gateway.
-//
-// Two things separate it from `openai.ChatClient`:
-//   * `base_url` is REQUIRED. An unset base URL is a configuration error, not a
-//     silent fallback to api.openai.com — sending a private prompt to OpenAI
-//     because a variable was unset is the worse failure (PLAN §5).
-//   * all-text messages are sent as `content: "…"` rather than
-//     `content: [{"type":"text",…}]`. Many compatible servers reject the array
-//     form outright; media-bearing messages still use parts.
-// It also sends no `stream_options` (undocumented outside first-party OpenAI)
-// and requires no credential — a local server usually has none.
-
+/// Any OpenAI-compatible chat-completions endpoint:
+/// vLLM, LM Studio, TGI, llama.cpp, Together, Fireworks, a corporate gateway.
+///
+/// Two things separate it from `openai.ChatClient`:
+///   * `base_url` is REQUIRED. An unset base URL is a configuration error, not a
+///     silent fallback to api.openai.com — sending a private prompt to OpenAI
+///     because a variable was unset is the worse failure.
+///   * all-text messages are sent as `content: "…"` rather than
+///     `content: [{"type":"text",…}]`. Many compatible servers reject the array
+///     form outright; media-bearing messages still use parts.
+/// It also sends no `stream_options` (undocumented outside first-party OpenAI)
+/// and requires no credential — a local server usually has none.
 class GenericClient {
     model: string,
     // Required: the endpoint's base, up to and including any version prefix,
@@ -38,6 +37,9 @@ class GenericClient {
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
 
+    /// Creates a client. Construction reads no environment variable, so
+    /// declaring one is always safe; credentials and endpoints resolve when a
+    /// request is built.
     function new(
         model: string,
         base_url: ai.Credential? = null,
@@ -96,6 +98,8 @@ class GenericClient {
         )
     }
 
+    /// The provider record: everything the shared chat core needs to know
+    /// about this endpoint.
     function compat(self) -> root.internal.ChatCompat {
         root.internal.ChatCompat.new(
             provider = "openai-generic",
@@ -104,6 +108,12 @@ class GenericClient {
         )
     }
 
+    /// The per-request parameters handed to the shared chat core.
+    ///
+    /// # Parameters
+    ///
+    /// - `preview`: omit the credential, for rendering a request without
+    ///   sending it.
     function params(self, preview: bool = false) -> root.internal.ChatParams {
         root.internal.ChatParams.new(
             model = self.model,
