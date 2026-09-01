@@ -1,6 +1,6 @@
 name: BAML Language Release
 
-run-name: "${{ inputs.dry_run && 'Dry run' || 'Publish' }} · ${{ inputs.channel }} · ${{ inputs.version || 'auto-version' }}"
+run-name: "${{ inputs.channel }} release${{ inputs.dry_run && ' (dry run)' || '' }}: ${{ inputs.version || 'auto-version' }}"
 
 # Channel-aware replacement for the legacy BAML language release workflow.
 # Release workflows run packaging smoke tests only; the full suite runs in CI.
