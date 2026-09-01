@@ -2060,12 +2060,54 @@ jobs:
       - name: Promote mutable channel manifest
         env:
           CHANNEL: ${{ needs.plan.outputs.channel }}
+          VERSION: ${{ needs.plan.outputs.version }}
         run: |
           set -euo pipefail
           aws s3 cp "manifests/$CHANNEL.json" \
             "s3://$PKG_BUCKET/manifest/v1/$CHANNEL.json" \
             --content-type application/json \
             --cache-control "public, max-age=60, must-revalidate"
+
+          current_index="$(mktemp)"
+          next_index="$(mktemp)"
+          if ! aws s3 cp \
+            "s3://$PKG_BUCKET/manifest/v1/docs/versions.json" \
+            "$current_index" >/dev/null 2>&1; then
+            printf '%s\n' '{"schema":1,"defaultVersion":null,"aliases":{},"versions":[]}' > "$current_index"
+          fi
+          jq \
+            --arg channel "$CHANNEL" \
+            --arg version "$VERSION" \
+            --slurpfile release "manifests/docs/v$VERSION/stdlib.json" '
+              .schema = 1
+              | .aliases = ((.aliases // {}) + {($channel): $version})
+              | .defaultVersion = if $channel == "nightly" then (.defaultVersion // $version) else $version end
+              | .versions = ([{
+                  version: $version,
+                  channel: $channel,
+                  releasedAt: $release[0].releasedAt,
+                  sourceRevision: $release[0].sourceRevision,
+                  artifacts: {
+                    stdlib: {
+                      path: ("v" + $version + "/stdlib.json"),
+                      payloadSha256: $release[0].payloadSha256
+                    }
+                  }
+                }] + [(.versions // [])[] | select(.version != $version)])
+              | (.aliases | [.[]]) as $alias_versions
+              | .versions = (
+                  (.versions | sort_by(.releasedAt) | reverse) as $ordered
+                  | ($ordered[0:5] + [$ordered[] | select(.version as $candidate | $alias_versions | index($candidate))])
+                  | unique_by(.version)
+                  | sort_by(.releasedAt)
+                  | reverse
+                )
+            ' "$current_index" > "$next_index"
+          aws s3 cp "$next_index" \
+            "s3://$PKG_BUCKET/manifest/v1/docs/versions.json" \
+            --content-type application/json \
+            --cache-control "public, max-age=60, must-revalidate"
+          rm -f "$current_index" "$next_index"
       - name: Rebuild developer docs from the promoted release
         env:
           DEPLOY_HOOK: ${{ secrets.DEVELOPER_DOCS_VERCEL_DEPLOY_HOOK }}

@@ -9,12 +9,15 @@ import {
 } from '../scripts/docs-metadata.mjs';
 import {
   channelManifestUrl,
+  docsVersionsIndexUrl,
   previewFallbackAllowed,
   unavailableReferencePage,
   validateChannelManifest,
+  validateDocsVersionsIndex,
   versionMetadataUrl,
 } from '../scripts/docs-metadata-source.mjs';
 import { buildBamlReferenceFiles } from '../scripts/generate-baml-reference.mjs';
+import { buildVersionedReferences, versionDirectory } from '../scripts/versioned-reference.mjs';
 
 function metadata() {
   const emptySignature = () => ({
@@ -192,11 +195,69 @@ test('renders every package with fully qualified symbol UI', () => {
   );
 });
 
+test('renders multiple immutable toolchains alongside a default-version alias', () => {
+  const current = metadata();
+  const previous = metadata();
+  previous.version = '1.2.2';
+  previous.channel = 'stable';
+  previous.sourceRevision = 'b'.repeat(40);
+  previous.releasedAt = '2026-08-01T00:00:00.000Z';
+  previous.toolchain = 'baml-cli 1.2.2';
+  previous.payloadSha256 = sha256Json(docsMetadataChecksumPayload(previous));
+
+  const rendered = buildVersionedReferences([previous, current], current.version);
+  assert.equal(versionDirectory(current.version), `v${current.version}`);
+  assert.equal(rendered.catalog.defaultVersion, current.version);
+  assert.deepEqual(rendered.catalog.versions.map((entry) => entry.version), [current.version, previous.version]);
+  assert.equal(
+    rendered.bamlContent.get('baml/classes/http/Request.md'),
+    rendered.bamlContent.get(`v${current.version}/baml/classes/http/Request.md`),
+  );
+  assert.match(rendered.bamlContent.get(`v${previous.version}/index.md`), /BAML 1\.2\.2/);
+  assert.match(rendered.cliContent.get(`v${previous.version}/check.md`), /BAML version: `1\.2\.2`/);
+  assert.ok(rendered.bamlData.has(`versions/v${previous.version}/manifest.json`));
+  assert.ok(rendered.cliData.has(`versions/v${current.version}/manifest.json`));
+});
+
 test('resolves a mutable channel only to its exact immutable metadata URL', () => {
   const base = 'https://pkg.boundaryml.com/manifest/v1/';
   const version = validateChannelManifest({ schema: 1, channel: 'canary', version: '1.2.3' }, 'canary');
   assert.equal(channelManifestUrl(base, 'canary'), `${base}canary.json`);
   assert.equal(versionMetadataUrl(base, version), `${base}docs/v1.2.3/stdlib.json`);
+});
+
+test('validates the curated multi-version discovery index', () => {
+  const indexEntry = (version, channel, source = 'a') => ({
+    version,
+    channel,
+    releasedAt: '2026-08-31T00:00:00.000Z',
+    sourceRevision: source.repeat(40),
+    artifacts: { stdlib: { path: `v${version}/stdlib.json`, payloadSha256: source.repeat(64) } },
+  });
+  const index = {
+    schema: 1,
+    defaultVersion: '1.2.3',
+    aliases: { canary: '1.2.3', stable: '1.2.2' },
+    versions: [
+      indexEntry('1.2.3', 'canary'),
+      indexEntry('1.2.2', 'stable', 'b'),
+    ],
+  };
+  assert.equal(validateDocsVersionsIndex(index), index);
+  assert.equal(docsVersionsIndexUrl('https://pkg.boundaryml.com/manifest/v1/'), 'https://pkg.boundaryml.com/manifest/v1/docs/versions.json');
+
+  const duplicate = structuredClone(index);
+  duplicate.versions[1].version = '1.2.3';
+  duplicate.versions[1].artifacts.stdlib.path = 'v1.2.3/stdlib.json';
+  assert.throws(() => validateDocsVersionsIndex(duplicate), /duplicate version 1\.2\.3/);
+
+  const unsafe = structuredClone(index);
+  unsafe.versions[0].artifacts.stdlib.path = '../stdlib.json';
+  assert.throws(() => validateDocsVersionsIndex(unsafe), /invalid stdlib artifact path/);
+
+  const unknownAlias = structuredClone(index);
+  unknownAlias.aliases.nightly = '1.2.1';
+  assert.throws(() => validateDocsVersionsIndex(unknownAlias), /points to unknown version 1\.2\.1/);
 });
 
 test('unavailable references are allowed only for implicit previews or explicit local development', () => {

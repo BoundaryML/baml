@@ -12,6 +12,8 @@
 /generated/cli/
 /generated/book/
 /generated/docs-metadata.json
+/generated/docs-versions.json
+/generated/metadata/
 
 # build and typecheck output
 /.next

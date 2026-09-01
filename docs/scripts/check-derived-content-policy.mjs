@@ -12,6 +12,8 @@ const generatedPaths = [
   'docs/generated/baml',
   'docs/generated/cli',
   'docs/generated/book',
+  'docs/generated/docs-versions.json',
+  'docs/generated/metadata',
   'docs/content/baml/book/meta.json',
 ];
 

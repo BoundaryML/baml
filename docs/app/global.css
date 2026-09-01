@@ -374,6 +374,27 @@ body {
   padding-bottom: 4rem !important;
 }
 
+.shadcn-version-switcher {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.shadcn-version-switcher select {
+  height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.8);
+  padding-inline: 0.625rem 1.75rem;
+  color: var(--foreground);
+  background: var(--background);
+  font: inherit;
+}
+
 .shadcn-docs-page h1 {
   font-size: 1.875rem;
   font-weight: 600;

@@ -7,16 +7,18 @@ import { readDocsMetadata, validateDocsMetadata } from './docs-metadata.mjs';
 import {
   DEFAULT_MANIFEST_BASE_URL,
   channelManifestUrl,
+  docsVersionsIndexUrl,
   previewFallbackAllowed,
   unavailableReferencePage,
   validateChannelManifest,
+  validateDocsVersionsIndex,
   versionMetadataUrl,
 } from './docs-metadata-source.mjs';
-import { run, writeGeneratedTree } from './generated-content.mjs';
+import { writeGeneratedTree } from './generated-content.mjs';
+import { buildVersionedReferences, versionDirectory } from './versioned-reference.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const repositoryRoot = path.resolve(packageRoot, '..');
-const metadataCache = path.join(packageRoot, 'generated', 'docs-metadata.json');
+const generatedRoot = path.join(packageRoot, 'generated');
 
 class HttpStatusError extends Error {
   constructor(url, status, statusText) {
@@ -45,10 +47,93 @@ function metadataUnavailable(error) {
   return error instanceof HttpStatusError || error?.name === 'TypeError' || error?.name === 'TimeoutError';
 }
 
+function list(value) {
+  return (value ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
+}
+
+function selections(environment) {
+  const selected = [];
+  const singleFile = environment.BAML_DOCS_METADATA_FILE;
+  const singleUrl = environment.BAML_DOCS_METADATA_URL;
+  const singleVersion = environment.BAML_DOCS_VERSION;
+  const files = [...(singleFile ? [singleFile] : []), ...list(environment.BAML_DOCS_METADATA_FILES)];
+  const urls = [...(singleUrl ? [singleUrl] : []), ...list(environment.BAML_DOCS_METADATA_URLS)];
+  const versions = list(environment.BAML_DOCS_VERSIONS);
+  const channels = list(environment.BAML_DOCS_CHANNELS);
+
+  if (files.length > 0) {
+    files.forEach((file, index) => selected.push({
+      type: 'file',
+      value: file,
+      expectedVersion: files.length === 1 && index === 0 ? singleVersion : undefined,
+      explicit: true,
+    }));
+  } else if (urls.length > 0) {
+    urls.forEach((url, index) => selected.push({
+      type: 'url',
+      value: url,
+      expectedVersion: urls.length === 1 && index === 0 ? singleVersion : undefined,
+      explicit: true,
+    }));
+  }
+
+  const requestedVersions = versions.length > 0
+    ? versions
+    : files.length === 0 && urls.length === 0 && singleVersion ? [singleVersion] : [];
+  requestedVersions.forEach((version) => selected.push({ type: 'version', value: version, explicit: true }));
+  channels.forEach((channel) => selected.push({ type: 'channel', value: channel, explicit: true }));
+
+  if (selected.length === 0) {
+    selected.push({ type: 'index', value: docsVersionsIndexUrl(environment.BAML_DOCS_MANIFEST_BASE_URL ?? DEFAULT_MANIFEST_BASE_URL), explicit: false });
+  }
+  return selected;
+}
+
 async function cacheMetadata(metadata) {
-  await mkdir(path.dirname(metadataCache), { recursive: true });
-  await writeFile(metadataCache, `${JSON.stringify(metadata, null, 2)}\n`);
-  return metadataCache;
+  const file = path.join(generatedRoot, 'metadata', versionDirectory(metadata.version), 'stdlib.json');
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, `${JSON.stringify(metadata, null, 2)}\n`);
+}
+
+async function loadSelection(selection, manifestBaseUrl, environment) {
+  if (selection.type === 'file') {
+    const metadata = await readDocsMetadata(
+      path.resolve(selection.value),
+      selection.expectedVersion,
+      environment.BAML_DOCS_CHANNEL,
+    );
+    return { metadata, url: path.resolve(selection.value) };
+  }
+
+  if (selection.type === 'url') {
+    const metadata = validateDocsMetadata(
+      await fetchJson(selection.value),
+      selection.expectedVersion,
+      environment.BAML_DOCS_CHANNEL,
+    );
+    return { metadata, url: selection.value };
+  }
+
+  if (selection.type === 'version') {
+    const url = versionMetadataUrl(manifestBaseUrl, selection.value);
+    const metadata = validateDocsMetadata(await fetchJson(url), selection.value);
+    return { metadata, url };
+  }
+
+  if (selection.type === 'indexed') {
+    const url = `${manifestBaseUrl}/docs/${selection.path}`;
+    const metadata = validateDocsMetadata(await fetchJson(url), selection.value, selection.channel);
+    if (metadata.payloadSha256 !== selection.payloadSha256) {
+      throw new Error(`Docs versions index checksum for BAML ${selection.value} does not match its immutable artifact`);
+    }
+    return { metadata, url };
+  }
+
+  const manifestUrl = channelManifestUrl(manifestBaseUrl, selection.value);
+  const version = validateChannelManifest(await fetchJson(manifestUrl), selection.value);
+  const url = versionMetadataUrl(manifestBaseUrl, version);
+  const metadata = validateDocsMetadata(await fetchJson(url), version, selection.value);
+  return { metadata, url };
 }
 
 async function writeUnavailableReferences({ channel, url, version }) {
@@ -74,70 +159,94 @@ async function writeUnavailableReferences({ channel, url, version }) {
         ['meta.json', `${JSON.stringify({ title: 'Commands', pages: ['index'] }, null, 2)}\n`],
       ]),
     ),
-    writeGeneratedTree(
-      path.join(packageRoot, 'generated', 'baml'),
-      new Map([['manifest.json', `${JSON.stringify(provenance, null, 2)}\n`]]),
-    ),
-    writeGeneratedTree(
-      path.join(packageRoot, 'generated', 'cli'),
-      new Map([['manifest.json', `${JSON.stringify(provenance, null, 2)}\n`]]),
-    ),
+    writeGeneratedTree(path.join(generatedRoot, 'baml'), new Map([['manifest.json', `${JSON.stringify(provenance, null, 2)}\n`]])),
+    writeGeneratedTree(path.join(generatedRoot, 'cli'), new Map([['manifest.json', `${JSON.stringify(provenance, null, 2)}\n`]])),
+    writeFile(path.join(generatedRoot, 'docs-versions.json'), `${JSON.stringify({ schemaVersion: 1, defaultVersion: null, versions: [] }, null, 2)}\n`),
   ]);
   console.warn(`Rendered preview placeholders because ${url} could not be loaded.`);
 }
 
-const explicitFile = process.env.BAML_DOCS_METADATA_FILE;
-const explicitUrl = process.env.BAML_DOCS_METADATA_URL;
-const explicitVersion = process.env.BAML_DOCS_VERSION;
-const explicitSelection = Boolean(explicitFile || explicitUrl || explicitVersion);
-const manifestBaseUrl = (process.env.BAML_DOCS_MANIFEST_BASE_URL ?? DEFAULT_MANIFEST_BASE_URL).replace(/\/$/, '');
-const channel = process.env.BAML_DOCS_CHANNEL ?? 'canary';
-const expectedChannel = process.env.BAML_DOCS_CHANNEL ?? (explicitSelection ? undefined : channel);
+const environment = process.env;
+const manifestBaseUrl = (environment.BAML_DOCS_MANIFEST_BASE_URL ?? DEFAULT_MANIFEST_BASE_URL).replace(/\/$/, '');
+let requested = selections(environment);
+const loaded = [];
 
-let version = explicitVersion;
-let metadataFile;
-let metadataUrl = explicitUrl;
-
-if (explicitFile) {
-  metadataFile = path.resolve(explicitFile);
-  const metadata = await readDocsMetadata(metadataFile, version, expectedChannel);
-  version = metadata.version;
-} else {
+let indexedDefaultVersion;
+if (requested.length === 1 && requested[0].type === 'index') {
   try {
-    if (!version && !metadataUrl) {
-      metadataUrl = channelManifestUrl(manifestBaseUrl, channel);
-      const releaseManifest = await fetchJson(metadataUrl);
-      version = validateChannelManifest(releaseManifest, channel);
-      metadataUrl = versionMetadataUrl(manifestBaseUrl, version);
-    } else {
-      metadataUrl ??= versionMetadataUrl(manifestBaseUrl, version);
-    }
-    const metadata = validateDocsMetadata(await fetchJson(metadataUrl), version, expectedChannel);
-    version = metadata.version;
-    metadataFile = await cacheMetadata(metadata);
+    const index = validateDocsVersionsIndex(await fetchJson(requested[0].value));
+    indexedDefaultVersion = index.defaultVersion;
+    requested = index.versions.map((entry) => ({
+      type: 'indexed',
+      value: entry.version,
+      channel: entry.channel,
+      path: entry.artifacts.stdlib.path,
+      payloadSha256: entry.artifacts.stdlib.payloadSha256,
+      explicit: false,
+    }));
   } catch (error) {
-    if (!metadataUnavailable(error) || !previewFallbackAllowed({
+    const fallback = metadataUnavailable(error) && previewFallbackAllowed({
       args: process.argv.slice(2),
-      environment: process.env,
-      explicitSelection,
-    })) {
-      throw error;
-    }
-    await writeUnavailableReferences({ channel, url: metadataUrl, version });
+      environment,
+      explicitSelection: false,
+    });
+    if (!fallback) throw error;
+    await mkdir(generatedRoot, { recursive: true });
+    await writeUnavailableReferences({
+      channel: environment.BAML_DOCS_CHANNEL ?? 'canary',
+      url: requested[0].value,
+      version: undefined,
+    });
     process.exit(0);
   }
 }
 
-const environment = {
-  ...process.env,
-  BAML_DOCS_METADATA_FILE: metadataFile,
-  BAML_DOCS_VERSION: version,
-};
-for (const generator of ['generate-baml-reference.mjs', 'generate-cli-reference.mjs']) {
-  run(process.execPath, [path.join(packageRoot, 'scripts', generator)], {
-    cwd: repositoryRoot,
-    env: environment,
-    stdio: 'inherit',
-  });
+for (const selection of requested) {
+  try {
+    loaded.push(await loadSelection(selection, manifestBaseUrl, environment));
+  } catch (error) {
+    const fallback = !selection.explicit && metadataUnavailable(error) && previewFallbackAllowed({
+      args: process.argv.slice(2),
+      environment,
+      explicitSelection: false,
+    });
+    if (!fallback) throw error;
+    const channel = selection.type === 'channel'
+      ? selection.value
+      : selection.channel ?? environment.BAML_DOCS_CHANNEL ?? 'canary';
+    const version = ['version', 'indexed'].includes(selection.type) ? selection.value : undefined;
+    const url = selection.type === 'indexed'
+      ? `${manifestBaseUrl}/docs/${selection.path}`
+      : version ? versionMetadataUrl(manifestBaseUrl, version) : channelManifestUrl(manifestBaseUrl, channel);
+    await mkdir(generatedRoot, { recursive: true });
+    await writeUnavailableReferences({ channel, url, version });
+    process.exit(0);
+  }
 }
-console.log(`Rendered all derived references from immutable metadata for BAML ${version}.`);
+
+const byVersion = new Map();
+for (const entry of loaded) {
+  const previous = byVersion.get(entry.metadata.version);
+  if (previous && previous.payloadSha256 !== entry.metadata.payloadSha256) {
+    throw new Error(`BAML ${entry.metadata.version} was selected with conflicting metadata payloads`);
+  }
+  byVersion.set(entry.metadata.version, entry.metadata);
+}
+const metadataEntries = [...byVersion.values()];
+const defaultVersion = environment.BAML_DOCS_DEFAULT_VERSION
+  ?? environment.BAML_DOCS_VERSION
+  ?? indexedDefaultVersion
+  ?? metadataEntries[0]?.version;
+if (!defaultVersion) throw new Error('No BAML docs metadata versions were loaded');
+
+for (const metadata of metadataEntries) await cacheMetadata(metadata);
+const generated = buildVersionedReferences(metadataEntries, defaultVersion);
+await Promise.all([
+  writeGeneratedTree(path.join(packageRoot, 'content', 'baml', 'language', 'reference'), generated.bamlContent),
+  writeGeneratedTree(path.join(packageRoot, 'content', 'cli', 'commands'), generated.cliContent),
+  writeGeneratedTree(path.join(generatedRoot, 'baml'), generated.bamlData),
+  writeGeneratedTree(path.join(generatedRoot, 'cli'), generated.cliData),
+  writeFile(path.join(generatedRoot, 'docs-versions.json'), `${JSON.stringify(generated.catalog, null, 2)}\n`),
+]);
+
+console.log(`Rendered ${metadataEntries.length} immutable BAML docs version${metadataEntries.length === 1 ? '' : 's'} (${metadataEntries.map((entry) => entry.version).join(', ')}); default is ${defaultVersion}.`);

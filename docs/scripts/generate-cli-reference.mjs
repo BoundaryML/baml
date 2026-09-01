@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readDocsMetadata } from './docs-metadata.mjs';
 import {
   checkGeneratedTree,
@@ -48,7 +48,8 @@ function pagePath(commandPath, hasChildren) {
   return `${path.posix.join(...commandPath)}.md`;
 }
 
-function buildFiles(entries, metadata) {
+export function buildCliReferenceFiles(metadata) {
+  const entries = metadata.cli.commands;
   const content = new Map();
   for (const entry of entries) {
     content.set(
@@ -84,31 +85,33 @@ function buildFiles(entries, metadata) {
   };
 }
 
-if (!process.env.BAML_DOCS_METADATA_FILE || !process.env.BAML_DOCS_VERSION) {
-  throw new Error('BAML_DOCS_METADATA_FILE and BAML_DOCS_VERSION are required; run pnpm generate:derived');
-}
-const metadata = await readDocsMetadata(
-  path.resolve(process.env.BAML_DOCS_METADATA_FILE),
-  process.env.BAML_DOCS_VERSION,
-);
-const entries = metadata.cli.commands;
-const expected = buildFiles(entries, metadata);
-
-if (check) {
-  const changed = [
-    ...await checkGeneratedTree(contentRoot, expected.content, 'content'),
-    ...await checkGeneratedTree(dataRoot, expected.data, 'generated'),
-  ];
-  if (changed.length > 0) {
-    console.error('Generated CLI reference is stale. Run pnpm generate:cli-reference.');
-    for (const name of changed.slice(0, 30)) console.error(`- ${name}`);
-    if (changed.length > 30) console.error(`- …and ${changed.length - 30} more`);
-    process.exitCode = 1;
-  } else {
-    console.log(`CLI reference is current (${entries.length - 1} commands).`);
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  if (!process.env.BAML_DOCS_METADATA_FILE || !process.env.BAML_DOCS_VERSION) {
+    throw new Error('BAML_DOCS_METADATA_FILE and BAML_DOCS_VERSION are required; run pnpm generate:derived');
   }
-} else {
-  await writeGeneratedTree(contentRoot, expected.content);
-  await writeGeneratedTree(dataRoot, expected.data);
-  console.log(`Generated ${entries.length - 1} CLI command pages for BAML ${metadata.version}.`);
+  const metadata = await readDocsMetadata(
+    path.resolve(process.env.BAML_DOCS_METADATA_FILE),
+    process.env.BAML_DOCS_VERSION,
+  );
+  const entries = metadata.cli.commands;
+  const expected = buildCliReferenceFiles(metadata);
+
+  if (check) {
+    const changed = [
+      ...await checkGeneratedTree(contentRoot, expected.content, 'content'),
+      ...await checkGeneratedTree(dataRoot, expected.data, 'generated'),
+    ];
+    if (changed.length > 0) {
+      console.error('Generated CLI reference is stale. Run pnpm generate:cli-reference.');
+      for (const name of changed.slice(0, 30)) console.error(`- ${name}`);
+      if (changed.length > 30) console.error(`- …and ${changed.length - 30} more`);
+      process.exitCode = 1;
+    } else {
+      console.log(`CLI reference is current (${entries.length - 1} commands).`);
+    }
+  } else {
+    await writeGeneratedTree(contentRoot, expected.content);
+    await writeGeneratedTree(dataRoot, expected.data);
+    console.log(`Generated ${entries.length - 1} CLI command pages for BAML ${metadata.version}.`);
+  }
 }

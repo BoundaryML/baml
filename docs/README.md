@@ -24,11 +24,18 @@ https://pkg.boundaryml.com/manifest/v1/docs/v<version>/stdlib.json
 ```
 
 The Fumadocs build is a TypeScript-only consumer. By default it resolves the
-current canary channel to an exact version and renders that immutable artifact.
-Use `BAML_DOCS_VERSION`, `BAML_DOCS_METADATA_URL`, or
-`BAML_DOCS_METADATA_FILE` to select another version or a local artifact. The
-release JSON contains all toolchain-discovered packages—not a docs-maintained
-list—and generated symbols use fully qualified names such as
+curated release index at
+`https://pkg.boundaryml.com/manifest/v1/docs/versions.json`, fetches every
+listed immutable artifact, and renders the versions side by side. Unversioned
+reference routes remain aliases for the index's default version; exact routes
+include `v<version>` after `/baml/language/reference` or `/cli/commands`.
+
+Use `BAML_DOCS_VERSIONS` (comma-separated), `BAML_DOCS_METADATA_URLS`, or
+`BAML_DOCS_METADATA_FILES` to build an explicit set. Their singular forms stay
+supported for deterministic one-version and pull-request builds.
+`BAML_DOCS_DEFAULT_VERSION` selects the unversioned alias and must be present
+in the set. Each release JSON contains all toolchain-discovered packages—not a
+docs-maintained list—and generated symbols use fully qualified names such as
 `baml.http.Request`.
 
 To exercise the complete producer/consumer path locally:
