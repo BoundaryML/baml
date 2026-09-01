@@ -1191,6 +1191,57 @@ fn impl_display_segment<'db>(
     )
 }
 
+/// The link-key `where` suffix for an impl-provided interface body: the
+/// impl's canonical constraint set, rendered with frame indices.
+///
+/// The impl identity key must include every input coherence's admissibility
+/// check discriminates on (see `interfaces::coherence` in `hir_ty`). Under the
+/// open-world regime, positive bounds cannot separate two impls sharing a
+/// head — some later type can satisfy both — so coherence rejects such
+/// pairs and this suffix never distinguishes two admitted impls today. It
+/// exists because that argument is a property of the REGIME: negative
+/// bounds or specialization would admit same-head impls that differ only in
+/// constraints, so the constraint set joins the KEY now while the
+/// human-facing display stays head-only. Bound-side associated pins are
+/// inputs and participate; the impl's own associated BINDINGS are match
+/// outputs and do not.
+///
+/// `None` for anything that is not an impl-provided body (interface default
+/// bodies are interface-owned and carry no constraint set) and for an
+/// unbounded impl — so the common case's key is exactly its display spelling.
+/// Within a param the bounds are sorted by rendering, so a written reorder
+/// (`A + B` vs `B + A`) cannot fork the key.
+pub fn interface_body_link_bounds_suffix<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Option<String> {
+    use baml_compiler2_ppir::item_data::{MethodOwner, method_owner};
+    let Some(MethodOwner::Impl(impl_loc)) = method_owner(db, func_loc) else {
+        return None;
+    };
+    let impl_params = baml_compiler2_hir_ty::lower::impl_frame(db, impl_loc);
+    let impl_bounds = baml_compiler2_hir_ty::lower::impl_generic_bounds(db, impl_loc);
+    let mut parts: Vec<String> = Vec::new();
+    for (index, param) in impl_params.iter().enumerate() {
+        let Some(bounds) = impl_bounds.get(param) else {
+            continue;
+        };
+        if bounds.is_empty() {
+            continue;
+        }
+        let mut rendered: Vec<String> = bounds
+            .iter()
+            .map(|bound| render_with_frame_indices(db, &bound.to_ty(), &impl_params))
+            .collect();
+        rendered.sort_unstable();
+        parts.push(format!("#{index}: {}", rendered.join(" + ")));
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    Some(format!(" where {}", parts.join(", ")))
+}
+
 /// Render `ty` canonically with the impl frame's type variables spelled as
 /// their frame indices (`#0`) instead of their declared names — the declared
 /// names are the block's private spelling, not part of its identity.

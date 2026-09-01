@@ -224,6 +224,14 @@ fn impls_conflict<'db>(
 /// with *both* impls' generic params as fresh unification variables. Associated
 /// bindings are interface *outputs*, so only the args participate. Bounds a
 /// pinned ground witness provably violates make the pair disjoint.
+///
+/// CONTRACT with `bex_vm_types::ImplCoherenceKey`: that key must carry every
+/// input this admissibility check discriminates on — today the subject
+/// (for-type + interface args) and the per-param constraint set — so that it
+/// stays injective over the impls this check ADMITS. Extending this check
+/// with a new discriminant (negative bounds, specialization priority, …)
+/// obligates extending the key in the same change; the decompose link-key
+/// uniqueness hard-error is the backstop that fires if the two ever drift.
 fn impls_overlap<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     pkg_id: baml_base::SourceRoot,

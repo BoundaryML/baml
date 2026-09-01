@@ -42,7 +42,7 @@ use baml_type::{ParamTy, RuntimeTy, TyAttr};
 use bex_vm_types::{
     Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
     FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex, Instruction,
-    Object, ObjectIndex, ObjectPool, Program,
+    InterfaceBound, Object, ObjectIndex, ObjectPool, Program,
     unit::{
         CompilationUnit, LocalRef, ProgramImplRuleFrag, ProgramMethodImplFrag, ProgramPackageFrag,
         Symbol, SymbolKind,
@@ -597,10 +597,35 @@ struct ImplRuleTarget {
     for_ty_pattern: bex_vm_types::TyTemplate,
     impl_params: Vec<ParamTy>,
     impl_bounds: ImplBoundsMap,
+    /// Each declared param's bound conjunction, in frame order, each
+    /// conjunction canonically sorted — the constraint-set third of the
+    /// rule's [`ImplCoherenceKey`]. The bake stores exactly this, so a rule
+    /// and its declaring block cannot disagree on it.
+    generic_param_bounds: Vec<Vec<InterfaceBound>>,
+}
+
+impl ImplRuleTarget {
+    /// The block's identity key (see [`ImplCoherenceKey`]'s invariant).
+    fn coherence_key(&self) -> bex_vm_types::ImplCoherenceKey {
+        bex_vm_types::ImplCoherenceKey {
+            for_ty_pattern: self.for_ty_pattern.clone(),
+            interface_args: self.interface_args.clone(),
+            generic_param_bounds: self.generic_param_bounds.clone(),
+        }
+    }
 }
 
 /// Lower one `implements` block's target and for-type. `None` when the target
-/// does not lower to an interface (already diagnosed upstream).
+/// does not lower to an interface (already diagnosed upstream), or when a
+/// declared bound failed to lower: the uniform bound surface
+/// (`impl_generic_bounds`) keeps only bounds that lower to interfaces —
+/// E0145 / unresolved-name diagnostics own the rest — so a declared/lowered
+/// count mismatch means the declared rule is NARROWER than anything bakeable.
+/// Baking without the bound WIDENS the rule; declining here drops the whole
+/// rule from BOTH the bake and the decompose attribution (the two callers),
+/// which loses a dispatch — recoverable — and can never over-match or
+/// mis-attribute. Fires only on programs that already carry diagnostics and
+/// never reach a runnable artifact.
 fn impl_rule_target<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     file: baml_base::SourceFile,
@@ -633,6 +658,44 @@ fn impl_rule_target<'db>(
         resolved,
         &impl_params,
     ));
+    // Fail closed on a bound the LOWERING dropped (doc above).
+    let (declared_generics, _) =
+        baml_compiler2_ppir::item_data::impl_declared_generics(db, impl_loc);
+    let declared_bound_count: usize = declared_generics.iter().map(|g| g.bounds.len()).sum();
+    let lowered_bound_count: usize = impl_params
+        .iter()
+        .map(|param| impl_bounds.get(param).map_or(0, Vec::len))
+        .sum();
+    if lowered_bound_count != declared_bound_count {
+        return None;
+    }
+    // Each declared param's bound conjunction, converted through the same
+    // `split_interface` road as the target. The Option-collect is a second
+    // belt on the same law (a bound that does not split drops the rule);
+    // with the arity gate above it should never fire. Each conjunction is
+    // sorted canonically so a written reorder cannot fork the identity key.
+    let generic_param_bounds: Option<Vec<Vec<InterfaceBound>>> = impl_params
+        .iter()
+        .map(|param| {
+            let mut bounds: Vec<InterfaceBound> = impl_bounds
+                .get(param)
+                .into_iter()
+                .flatten()
+                .map(|bound| {
+                    split_interface(&bound.to_ty(), resolved, &impl_params).map(
+                        |(interface, args, assoc)| InterfaceBound {
+                            interface: bex_vm_types::TypeHead::of_name(&interface),
+                            args,
+                            assoc,
+                        },
+                    )
+                })
+                .collect::<Option<_>>()?;
+            bounds.sort_by_cached_key(|bound| format!("{bound:?}"));
+            Some(bounds)
+        })
+        .collect();
+    let generic_param_bounds = generic_param_bounds?;
     Some(ImplRuleTarget {
         iface_tn,
         iface_ty,
@@ -642,6 +705,7 @@ fn impl_rule_target<'db>(
         for_ty_pattern,
         impl_params,
         impl_bounds,
+        generic_param_bounds,
     })
 }
 
@@ -665,7 +729,7 @@ fn build_packages<'db>(
     use baml_type as ty;
     use bex_vm_types::{
         ObjectIndex,
-        types::{InterfaceBound, ProgramImplRule, ProgramMethodImpl},
+        types::{ProgramImplRule, ProgramMethodImpl},
     };
     type BoundsMap = ImplBoundsMap;
 
@@ -952,6 +1016,7 @@ fn build_packages<'db>(
                 for_ty_pattern,
                 impl_params,
                 impl_bounds,
+                generic_param_bounds,
             }) = impl_rule_target(db, *file, impl_loc, resolved)
             else {
                 continue;
@@ -974,54 +1039,10 @@ fn build_packages<'db>(
                 &impl_params,
                 resolved,
             );
-            // Fail closed on a bound the LOWERING dropped: the uniform bound
-            // surface (`impl_generic_bounds`) keeps only bounds that lower
-            // to interfaces — E0145 / unresolved-name diagnostics own the
-            // rest — so a declared/lowered count mismatch means the declared
-            // rule is NARROWER than anything bakeable. Baking without the
-            // bound WIDENS the rule (a rule narrowed by two bounds must stay
-            // narrowed by both); dropping the whole rule loses a dispatch,
-            // which is recoverable — over-matching is not. Fires only on
-            // programs that already carry diagnostics and never reach a
-            // runnable artifact.
-            let (declared_generics, _) =
-                baml_compiler2_ppir::item_data::impl_declared_generics(db, impl_loc);
-            let declared_bound_count: usize =
-                declared_generics.iter().map(|g| g.bounds.len()).sum();
-            let lowered_bound_count: usize = impl_params
-                .iter()
-                .map(|param| impl_bounds.get(param).map_or(0, Vec::len))
-                .sum();
-            if lowered_bound_count != declared_bound_count {
-                continue;
-            }
-            // Each declared param's bound conjunction, in frame order — the
-            // same uniform surface, converted through the same
-            // `split_interface` road as the target. The Option-collect is a
-            // second belt on the same law (a bound that does not split drops
-            // the rule); with the arity gate above it should never fire.
-            let generic_param_bounds: Option<Vec<Vec<InterfaceBound>>> = impl_params
-                .iter()
-                .map(|param| {
-                    impl_bounds
-                        .get(param)
-                        .into_iter()
-                        .flatten()
-                        .map(|bound| {
-                            split_interface(&bound.to_ty(), resolved, &impl_params).map(
-                                |(interface, args, assoc)| InterfaceBound {
-                                    interface: bex_vm_types::TypeHead::of_name(&interface),
-                                    args,
-                                    assoc,
-                                },
-                            )
-                        })
-                        .collect()
-                })
-                .collect();
-            let Some(generic_param_bounds) = generic_param_bounds else {
-                continue;
-            };
+            // The constraint set was lowered (and fail-closed gated) inside
+            // `impl_rule_target`, so the bake, the decompose attribution,
+            // and the rule's `ImplCoherenceKey` all carry the identical
+            // canonicalized bounds.
             // A block's own method is compiled against the owner frame — the
             // impl's declared generics, which for an in-class block ARE the
             // class's.
@@ -2007,6 +2028,27 @@ fn decompose_units<'db>(
     decompose_units_after_prefix(db, files, program, coords, 0)
 }
 
+/// The unit export/import key for a function: the display spelling plus —
+/// for an impl-provided interface body — the impl's canonical constraint-set
+/// suffix (`interface_body_link_bounds_suffix`).
+///
+/// Display stays head-only everywhere a human reads it; the KEY carries the
+/// full [`bex_vm_types::ImplCoherenceKey`] discriminant so two admitted
+/// same-head impls can never share a link key, even under a coherence regime
+/// that separates them only by bounds. Identity for named functions and
+/// interface defaults (no impl owner, no suffix) — for those the key IS the
+/// display spelling.
+fn interface_body_link_key<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> String {
+    let mut key = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+    if let Some(suffix) = baml_compiler2_mir::interface_body_link_bounds_suffix(db, func_loc) {
+        key.push_str(&suffix);
+    }
+    key
+}
+
 #[expect(clippy::too_many_lines)]
 fn decompose_units_after_prefix<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
@@ -2081,7 +2123,7 @@ fn decompose_units_after_prefix<'db>(
             if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
                 continue;
             }
-            let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+            let fq = interface_body_link_key(db, func_loc);
             func_name_to_file.insert(fq, fi);
         }
         for &let_loc in file_lets(db, *file) {
@@ -2093,6 +2135,12 @@ fn decompose_units_after_prefix<'db>(
     // obj idx -> fq name for named functions (reverse of `function_indices`)
     // and interface bodies (recovered below). Decomposition treats a body like
     // any slot-owning function — its key is a link-internal string.
+    //
+    // Body keys carry the impl's constraint-set suffix
+    // (`interface_body_link_key`), so every map in this region that joins on
+    // a function's key — `func_name_to_file`, `fn_obj_name`,
+    // `interface_body_slot_names`, and the export tables built from them —
+    // must be filled through that one helper.
     let mut fn_obj_name: HashMap<usize, String> = HashMap::new();
     for (name, &idx) in &program.function_indices {
         fn_obj_name.insert(idx, name.clone());
@@ -2110,7 +2158,7 @@ fn decompose_units_after_prefix<'db>(
         let Some(slot) = placement.interface_body_slot() else {
             continue;
         };
-        let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+        let fq = interface_body_link_key(db, func_loc);
         fn_obj_name.insert(placement.reference_object(), fq.clone());
         interface_body_slot_names.push((slot, fq));
     }
@@ -2120,10 +2168,14 @@ fn decompose_units_after_prefix<'db>(
     interface_body_slot_names.sort_unstable();
     // Body spellings are LINK KEYS — the unit export/import tables key by
     // string — so they must be unique across the union of bodies and named
-    // functions. Coherence plus the canonical `<(target as iface)>`
-    // rendering guarantee that for accepted programs; this converts the
-    // prose invariant into the same hard error named items get at Pass 1,
-    // instead of a silent last-writer-wins at link.
+    // functions. The key is the display spelling plus the impl's
+    // constraint-set suffix: the rendered [`bex_vm_types::ImplCoherenceKey`],
+    // which coherence guarantees injective over admitted impls (the key
+    // carries coherence's full discriminant — see that type's invariant).
+    // This hard error is the backstop for the day coherence gains a
+    // discriminant the key lacks, converting the prose invariant into the
+    // same loud failure named items get at Pass 1 instead of a silent
+    // last-writer-wins at link.
     let mut interface_body_names: HashSet<String> = HashSet::new();
     for (_, name) in &interface_body_slot_names {
         if program.function_indices.contains_key(name) || !interface_body_names.insert(name.clone())
@@ -2556,17 +2608,14 @@ fn decompose_units_after_prefix<'db>(
     // provided-method bodies are that unit's own `code` objects, referenced by
     // bucket offset — a body has no name on any wire. Pairing each baked rule
     // back to its block replays the same per-block lowering `build_packages`
-    // bakes from (`impl_rule_target`) and matches on the rule's COHERENCE KEY
-    // — per interface head, `(for_ty_pattern, interface_args)` — so
-    // canonicalized rule order and same-package sibling churn cannot skew the
-    // attribution.
+    // bakes from (`impl_rule_target`) and matches on the rule's
+    // [`ImplCoherenceKey`] — per interface head: for-pattern, interface args,
+    // and the constraint set — so canonicalized rule order and same-package
+    // sibling churn cannot skew the attribution, and two same-head rules
+    // differing only in bounds attribute exactly.
     {
         // Per pooled interface: each declaring block's coherence key + file.
-        type RuleOwner = (
-            bex_vm_types::TyTemplate,
-            Vec<bex_vm_types::TyTemplate>,
-            usize,
-        );
+        type RuleOwner = (bex_vm_types::ImplCoherenceKey, usize);
         let alias_caches = build_alias_caches(db, all_files);
         // Pooled interface object index by declared type name (the bake's
         // `interface_indices` reconstructed from the pool, exactly as
@@ -2587,11 +2636,10 @@ fn decompose_units_after_prefix<'db>(
                 let Some(&iface_idx) = iface_idx_by_tn.get(&target.iface_tn) else {
                     continue;
                 };
-                rule_owners.entry(iface_idx).or_default().push((
-                    target.for_ty_pattern,
-                    target.interface_args,
-                    fi,
-                ));
+                rule_owners
+                    .entry(iface_idx)
+                    .or_default()
+                    .push((target.coherence_key(), fi));
             }
         }
         // Per unit, rules grouped by interface (insertion order = package/
@@ -2616,16 +2664,18 @@ fn decompose_units_after_prefix<'db>(
                 };
                 let owners = rule_owners.get(&iface_idx.raw());
                 for rule in rules {
+                    let rule_key = rule.coherence_key();
                     let fi = owners
                         .and_then(|owners| {
-                            owners.iter().find_map(|(pattern, args, fi)| {
-                                (*pattern == rule.for_ty_pattern && args == &rule.interface_args)
-                                    .then_some(*fi)
-                            })
+                            owners
+                                .iter()
+                                .find_map(|(key, fi)| (*key == rule_key).then_some(*fi))
                         })
                         .ok_or_else(|| {
                             LoweringError::Internal(format!(
-                                "impl rule for `{iface_fq}` matches no declaring `implements` block"
+                                "impl rule for `{iface_fq}` matches no declaring `implements` \
+                                 block by its coherence key (if coherence gained a discriminant, \
+                                 `ImplCoherenceKey` must gain it too)"
                             ))
                         })?;
                     // Provided-method bodies must be this unit's own pooled

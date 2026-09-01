@@ -205,6 +205,11 @@ impl ProgramPackage {
                     rule.for_ty_pattern.to_string(),
                     format!("{:?}", rule.for_ty_pattern),
                     format!("{:?}", rule.interface_args),
+                    // Bounds are part of the identity (`ImplCoherenceKey`):
+                    // without them, two bound-disjoint same-head rules would
+                    // sort by insertion order — nondeterministic bytes the
+                    // day coherence admits such a pair.
+                    format!("{:?}", rule.generic_param_bounds),
                     format!("{:?}", rule.interface_assoc),
                 )
             });
@@ -226,6 +231,53 @@ pub struct ProgramImplRule {
     /// Positional, so — unlike the name-keyed maps — it needs no canonical ordering
     /// pass in [`ProgramPackage::canonicalize_impl_rules`].
     pub field_links: Box<[u32]>,
+}
+
+/// The impl identity key, per interface: everything coherence's admissibility
+/// check discriminates on.
+///
+/// THE INVARIANT: this key is injective over the set of impls coherence
+/// ADMITS — which holds exactly when it carries at least coherence's full
+/// discriminant (see `interfaces::coherence` in `baml_compiler2_hir_ty`; the
+/// two carry cross-referencing contracts). Under today's open-world regime
+/// two same-head impls differing only in (positive) bounds genuinely
+/// overlap — a later package can always introduce a type satisfying both —
+/// so coherence rejects them and the constraint set never separates two
+/// admitted impls. The set is in the key anyway because the REGIME is what
+/// that argument depends on: negative bounds would make same-head
+/// disjointness provable and specialization would make same-head overlap
+/// admissible, and this key must not need rediscovering on that day. If
+/// coherence ever gains a discriminant this key lacks, the decompose
+/// link-key uniqueness hard-error fires on the first legal program that
+/// exercises it — extend BOTH together.
+///
+/// The impl's own associated BINDINGS are deliberately absent: they are
+/// outputs of the match, not inputs to admissibility. Bound-side associated
+/// pins are inputs and ride inside each [`InterfaceBound`]. The interface
+/// itself is not a field because every consumer already groups per
+/// interface; this struct is the per-interface discriminant.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImplCoherenceKey {
+    pub for_ty_pattern: TyTemplate,
+    pub interface_args: Vec<TyTemplate>,
+    /// The canonical constraint set: per impl-frame param in frame order,
+    /// that param's bounds canonically sorted (a written reorder of
+    /// `A + B` cannot fork the key).
+    pub generic_param_bounds: Vec<Vec<InterfaceBound>>,
+}
+
+impl ProgramImplRule {
+    /// This rule's identity key. The bake stores the same canonicalized
+    /// bounds the key carries, so a rule and its declaring block compare
+    /// equal by construction.
+    #[must_use]
+    pub fn coherence_key(&self) -> ImplCoherenceKey {
+        ImplCoherenceKey {
+            for_ty_pattern: self.for_ty_pattern.clone(),
+            interface_args: self.interface_args.clone(),
+            generic_param_bounds: self.generic_param_bounds.clone(),
+        }
+    }
 }
 
 /// The global-index-keyed twin of [`MethodImpl`](super::MethodImpl); `fqn` is the

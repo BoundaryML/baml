@@ -1671,6 +1671,24 @@ pub(crate) fn class_impl_methods<'db>(
                 row.interface.name == fact_iface.name
                     && row.for_ty_pattern == for_ty
                     && row.interface.generics == fact_iface.generics
+                    // The constraint set is part of the impl identity
+                    // (`ImplCoherenceKey`'s invariant): two same-head rows
+                    // may one day differ only by bounds, and matching the
+                    // wrong one would pair this block's methods with the
+                    // other impl's exported signatures. Positional compare
+                    // is exact here — both sides lower the same declaration.
+                    && row.param_bounds.len() == facts.generic_params.len()
+                    && row
+                        .param_bounds
+                        .iter()
+                        .zip(facts.generic_params.iter())
+                        .all(|(exported, (_, fact))| {
+                            exported.len() == fact.len()
+                                && exported
+                                    .iter()
+                                    .zip(fact.iter())
+                                    .all(|(e, f)| *e == f.to_plain())
+                        })
             })
         });
         for &method_loc in &item_data::impl_block_data(db, block).methods {

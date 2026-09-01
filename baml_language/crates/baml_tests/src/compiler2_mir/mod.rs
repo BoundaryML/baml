@@ -385,6 +385,62 @@ macro_rules! mir_snapshot {
     };
 }
 
+/// The link-key `where` suffix is the rendered constraint set of the impl —
+/// the third leg of `ImplCoherenceKey`. Pins: bounds render at frame indices
+/// and canonically SORTED (the written `B & A` order must not fork the key),
+/// an unbounded impl gets no suffix (its key stays exactly its display
+/// spelling), and an interface default body — interface-owned, no constraint
+/// set — gets none either.
+#[test]
+fn interface_body_link_bounds_suffix_is_sorted_and_scoped_to_bounded_impls() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r"
+interface SfxA { function a(self) -> int throws never }
+interface SfxB { function b(self) -> int throws never }
+interface SfxConv {
+    function conv(self) -> int throws never
+    function dflt(self) -> int throws never { return 0 }
+}
+class SfxBox<T> { inner T }
+implements<T extends SfxB & SfxA> SfxConv for SfxBox<T> {
+    function conv(self) -> int throws never { return 1 }
+}
+implements SfxConv for int {
+    function conv(self) -> int throws never { return 2 }
+}
+",
+    );
+    let suffixes: Vec<(String, Option<String>)> = file_functions(&db, file)
+        .iter()
+        .filter(|&&loc| {
+            baml_compiler2_mir::function_is_interface_body(&db, loc)
+                && !baml_compiler2_ppir::item_data::is_required_interface_method(&db, loc)
+        })
+        .map(|&loc| {
+            (
+                function_data(&db, loc).name.to_string(),
+                baml_compiler2_mir::interface_body_link_bounds_suffix(&db, loc),
+            )
+        })
+        .collect();
+    assert_eq!(
+        suffixes,
+        vec![
+            // The interface's own default body: no impl owner, no suffix.
+            ("dflt".to_string(), None),
+            // The bounded impl: written `SfxB & SfxA`, rendered sorted.
+            (
+                "conv".to_string(),
+                Some(" where #0: user.SfxA + user.SfxB".to_string()),
+            ),
+            // The unbounded impl: key = display spelling.
+            ("conv".to_string(), None),
+        ],
+    );
+}
+
 #[test]
 fn literal_return() {
     let mut db = make_db();
