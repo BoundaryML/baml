@@ -14,7 +14,7 @@
         "python": { "runner": "macos-latest" },
         "nodejs": {},
         "java": { "platform": "macos-aarch64", "runner": "macos-14" },
-        "cffi": { "asset": "libbaml_cffi-aarch64-apple-darwin.dylib", "runner": "macos-14", "smoke": true },
+        "cffi": { "asset": "libbaml_cffi-aarch64-apple-darwin.dylib", "runner": "blacksmith-6vcpu-macos-latest", "smoke": true },
         "csharp": { "rid": "osx-arm64", "native_asset": "libbridge_cffi.dylib", "consumer_runner": "macos-14", "package_policy": "rid-native" }
       }
     },
@@ -30,7 +30,7 @@
         "python": { "runner": "macos-latest" },
         "nodejs": {},
         "java": { "platform": "macos-x86_64", "runner": "macos-15-intel" },
-        "cffi": { "asset": "libbaml_cffi-x86_64-apple-darwin.dylib", "runner": "macos-14" },
+        "cffi": { "asset": "libbaml_cffi-x86_64-apple-darwin.dylib", "runner": "blacksmith-6vcpu-macos-latest" },
         "csharp": { "rid": "osx-x64", "native_asset": "libbridge_cffi.dylib", "consumer_runner": "macos-15-intel", "package_policy": "rid-native" }
       }
     },
