@@ -115,6 +115,12 @@ jobs:
       - name: Build docs
         run: pnpm --filter @baml/developer-docs build
 
+      - name: Install Chromium for the runner smoke test
+        run: pnpm --filter @baml/developer-docs exec playwright install --with-deps chromium
+
+      - name: Verify the runnable example in Chromium
+        run: pnpm --filter @baml/developer-docs runner:browser
+
   deploy-preview:
     name: Deploy exact-metadata preview
     needs: verify

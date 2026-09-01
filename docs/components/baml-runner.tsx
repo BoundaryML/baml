@@ -58,7 +58,7 @@ export function BamlRunner({ expected, files, functionName = 'main', showSource 
   const matched = !expected || result?.output === expected;
 
   return (
-    <div ref={root} className="baml-runner not-prose">
+    <div ref={root} className="baml-runner not-prose" data-state={state}>
       {showSource && (
         <pre className="baml-runner-source" aria-label="Runnable BAML source">
           <code>{source}</code>

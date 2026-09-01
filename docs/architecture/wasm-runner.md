@@ -49,6 +49,13 @@ CI recomputes the gzip size of the exact checked-in artifact and enforces the
 runtime files with a one-year immutable cache lifetime, while the mutable
 manifest and worker entrypoint revalidate on every navigation.
 
+The docs workflow also opens the production build in headless Chromium. Five
+isolated browser contexts prove that the WASM is not requested before the
+reader selects **Run BAML**, verify the rendered result, and measure cold and
+warm click-to-result p50/p95 latency. The local-CI ceilings are deliberately
+coarse regression alarms; preview-region browser telemetry must replace them
+before launch.
+
 ## Protocol finding
 
 The book's BAML 0.17 driver expected a successful result to contain a
