@@ -48,7 +48,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client:
 
     bb6: {
         _11 = load_type(string);
-        _7 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _11>(copy _8, copy _10) -> [bb7];
+        _7 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure><copy _11>(copy _8, copy _10) -> [bb7];
     }
 
     bb7: {
@@ -319,7 +319,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow(client: null | ai.Client, on_
 
     bb6: {
         _9 = load_type(string);
-        _5 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _9>(copy _6, copy _8) -> [bb7];
+        _5 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure><copy _9>(copy _6, copy _8) -> [bb7];
     }
 
     bb7: {

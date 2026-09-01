@@ -314,10 +314,12 @@ class Agent {
     }
 
     implements Runner {
+        // Cancellation is absent for the same reason it is absent from
+        // `ai.errors.InvokeError`: a panic unwinds past the error channel
+        // rather than travelling in it.
         type Error = baml.errors.InvalidArgument
             | baml.errors.Timeout
             | baml.errors.UnknownError
-            | baml.panics.Cancelled
             | reflect.errors.CompilationError
             | root.errors.Failure
 

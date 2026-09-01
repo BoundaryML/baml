@@ -12,15 +12,18 @@ interface Failure {
 }
 
 /// The closed error channel of the client surface: every typed failure the
-/// stack can produce, the two host signals (deadline, cancel) that must
-/// survive each boundary untouched, and schema-compilation failures from
-/// output-format rendering. `throws unknown` is not used on this surface;
-/// stored callback positions declare this alias explicitly (TYPE_SYSTEM.md
-/// rule 5) and parameter positions infer per call site.
+/// stack can produce, the deadline signal that must survive each boundary
+/// untouched, and schema-compilation failures from output-format rendering.
+/// `throws unknown` is not used on this surface; stored callback positions
+/// declare this alias explicitly (TYPE_SYSTEM.md rule 5) and parameter
+/// positions infer per call site.
+///
+/// Cancellation is absent by construction: `baml.panics.Cancelled` is a panic,
+/// so it unwinds past this channel rather than travelling in it. It reaches a
+/// caller only through an arm that names it.
 type InvokeError = Failure
     | baml.errors.Timeout
     | baml.errors.UnknownError
-    | baml.panics.Cancelled
     | reflect.errors.CompilationError;
 
 /// Every raw type the client stack is known to raise before classification.
@@ -47,7 +50,7 @@ type RaisedInClient = InvokeError
 ///   Io -> NetworkFailure (transport-adjacent; safely retryable)
 ///   baml.json.ParseError / baml.json.DecodeError -> NetworkFailure
 ///     (malformed provider wire payload; safely retryable)
-///   Timeout / Cancelled / CompilationError / Failure / UnknownError -> as-is
+///   Timeout / CompilationError / Failure / UnknownError -> as-is
 function normalize(error: RaisedInClient) -> InvokeError throws never {
     match (error) {
         let failure: Failure => failure,
@@ -58,7 +61,6 @@ function normalize(error: RaisedInClient) -> InvokeError throws never {
             baml.errors.UnknownError.from<Failure>(unknown_error)
         },
         let timeout: baml.errors.Timeout => timeout,
-        let cancelled: baml.panics.Cancelled => cancelled,
         let compilation: reflect.errors.CompilationError => compilation,
         let invalid: baml.errors.InvalidArgument => {
             InvalidRequest {

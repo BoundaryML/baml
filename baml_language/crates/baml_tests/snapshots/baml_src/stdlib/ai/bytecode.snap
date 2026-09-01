@@ -3029,7 +3029,7 @@ function ai.clients.StreamRelay.next_event(self: ai.clients.StreamRelay) -> ai.s
     return
 }
 
-function ai.clients.StreamRelay.recover(self: ai.clients.StreamRelay, error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> void {
+function ai.clients.StreamRelay.recover(self: ai.clients.StreamRelay, error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> void {
     load_var error
     call ai.errors.normalize_invoke
     store_var _3
@@ -3038,41 +3038,33 @@ function ai.clients.StreamRelay.recover(self: ai.clients.StreamRelay, error: ai.
     load_var _4
     narrow_bind baml.errors.Timeout, slot=4
     pop_jump_if_false L0
-    jump L10
+    jump L8
 
   L0:
     load_var _3
     store_var _7
     load_var _7
-    narrow_bind baml.panics.Cancelled, slot=6
+    narrow_bind ai.errors.Failure, slot=6
     pop_jump_if_false L1
-    jump L9
+    jump L4
 
   L1:
     load_var _3
-    store_var _10
-    load_var _10
-    narrow_bind ai.errors.Failure, slot=8
+    store_var _21
+    load_var _21
+    narrow_bind baml.errors.UnknownError, slot=10
     pop_jump_if_false L2
-    jump L5
+    jump L3
 
   L2:
-    load_var _3
-    store_var _24
-    load_var _24
-    narrow_bind baml.errors.UnknownError, slot=12
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
     load_var self
     call ai.clients.StreamRelay.close_current
     pop 1
     load_var _3
     throw
 
-  L4:
-    load_var _24
+  L3:
+    load_var _21
     store_var unknown_error
     load_var self
     call ai.clients.StreamRelay.close_current
@@ -3080,39 +3072,39 @@ function ai.clients.StreamRelay.recover(self: ai.clients.StreamRelay, error: ai.
     load_var unknown_error
     throw
 
-  L5:
-    load_var _10
+  L4:
+    load_var _7
     store_var failure
     load_var self
     load_field .emitted
     unary_op !
-    jump_if_false L6
+    jump_if_false L5
     pop 1
-    load_var2 9 1
+    load_var2 7 1
     load_field .retry
     call_indirect
 
-  L6:
-    pop_jump_if_false L7
-    jump L8
+  L5:
+    pop_jump_if_false L6
+    jump L7
 
-  L7:
+  L6:
     load_var self
     call ai.clients.StreamRelay.close_current
     pop 1
     load_var failure
     throw
 
-  L8:
+  L7:
     load_var self
     load_field .calls
-    store_var _18
+    store_var _15
     load_const null
     load_var failure
     call ai.clients._failed_leg_call
-    store_var _19
+    store_var _16
     load_type ai.events.LLMCall
-    load_var2 10 11
+    load_var2 8 9
     call baml.Array.push
     pop 1
     load_var self
@@ -3124,16 +3116,7 @@ function ai.clients.StreamRelay.recover(self: ai.clients.StreamRelay, error: ai.
     load_const null
     return
 
-  L9:
-    load_var _7
-    store_var cancelled
-    load_var self
-    call ai.clients.StreamRelay.close_current
-    pop 1
-    load_var cancelled
-    throw
-
-  L10:
+  L8:
     load_var _4
     store_var timeout
     load_var self
@@ -3798,13 +3781,13 @@ function ai.errors.classify_http(provider: string, status_code: int, body: strin
     return
 }
 
-function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError {
+function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError {
     load_var error
     store_var _2
     load_var _2
     narrow_bind ai.errors.Failure, slot=2
     pop_jump_if_false L0
-    jump L23
+    jump L21
 
   L0:
     load_var error
@@ -3812,7 +3795,7 @@ function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | ba
     load_var _4
     narrow_bind baml.errors.UnknownError, slot=3
     pop_jump_if_false L1
-    jump L22
+    jump L20
 
   L1:
     load_var error
@@ -3820,178 +3803,166 @@ function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | ba
     load_var _8
     narrow_bind baml.errors.Timeout, slot=4
     pop_jump_if_false L2
-    jump L21
+    jump L19
 
   L2:
     load_var error
     store_var _10
     load_var _10
-    narrow_bind baml.panics.Cancelled, slot=5
+    narrow_bind reflect.errors.CompilationError, slot=5
     pop_jump_if_false L3
-    jump L20
+    jump L18
 
   L3:
     load_var error
     store_var _12
     load_var _12
-    narrow_bind reflect.errors.CompilationError, slot=6
+    narrow_bind baml.errors.InvalidArgument, slot=6
     pop_jump_if_false L4
-    jump L19
+    jump L17
 
   L4:
     load_var error
-    store_var _14
-    load_var _14
-    narrow_bind baml.errors.InvalidArgument, slot=7
+    store_var _15
+    load_var _15
+    narrow_bind baml.errors.ParseError, slot=7
     pop_jump_if_false L5
-    jump L18
+    jump L16
 
   L5:
     load_var error
-    store_var _17
-    load_var _17
-    narrow_bind baml.errors.ParseError, slot=8
+    store_var _18
+    load_var _18
+    narrow_bind baml.json.SerializationError, slot=8
     pop_jump_if_false L6
-    jump L17
+    jump L15
 
   L6:
     load_var error
-    store_var _20
-    load_var _20
-    narrow_bind baml.json.SerializationError, slot=9
+    store_var _21
+    load_var _21
+    narrow_bind baml.errors.AccessError, slot=9
     pop_jump_if_false L7
-    jump L16
+    jump L14
 
   L7:
     load_var error
-    store_var _23
-    load_var _23
-    narrow_bind baml.errors.AccessError, slot=10
+    store_var _24
+    load_var _24
+    narrow_bind baml.errors.Unsupported, slot=10
     pop_jump_if_false L8
-    jump L15
+    jump L13
 
   L8:
     load_var error
-    store_var _26
-    load_var _26
-    narrow_bind baml.errors.Unsupported, slot=11
+    store_var _27
+    load_var _27
+    narrow_bind baml.errors.Io, slot=11
     pop_jump_if_false L9
-    jump L14
+    jump L12
 
   L9:
     load_var error
-    store_var _29
-    load_var _29
-    narrow_bind baml.errors.Io, slot=12
+    store_var _30
+    load_var _30
+    narrow_bind baml.json.ParseError, slot=12
     pop_jump_if_false L10
-    jump L13
+    jump L11
 
   L10:
+    load_const "client"
     load_var error
-    store_var _32
-    load_var _32
-    narrow_bind baml.json.ParseError, slot=13
-    pop_jump_if_false L11
-    jump L12
+    load_field .message
+    load_const null
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .status_code, .raw_body
+    jump L22
 
   L11:
     load_const "client"
-    load_var error
+    load_var _30
     load_field .message
     load_const null
     load_const null
     init_instance ai.errors.NetworkFailure .provider, .detail, .status_code, .raw_body
-    jump L24
+    jump L22
 
   L12:
     load_const "client"
-    load_var _32
+    load_var _27
     load_field .message
     load_const null
     load_const null
     init_instance ai.errors.NetworkFailure .provider, .detail, .status_code, .raw_body
-    jump L24
+    jump L22
 
   L13:
     load_const "client"
-    load_var _29
+    load_const null
+    load_var _24
     load_field .message
     load_const null
-    load_const null
-    init_instance ai.errors.NetworkFailure .provider, .detail, .status_code, .raw_body
-    jump L24
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    jump L22
 
   L14:
     load_const "client"
     load_const null
-    load_var _26
+    load_var _21
     load_field .message
     load_const null
     init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    jump L24
+    jump L22
 
   L15:
     load_const "client"
     load_const null
-    load_var _23
+    load_var _18
     load_field .message
     load_const null
     init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    jump L24
+    jump L22
 
   L16:
     load_const "client"
     load_const null
-    load_var _20
+    load_var _15
     load_field .message
     load_const null
     init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    jump L24
+    jump L22
 
   L17:
     load_const "client"
     load_const null
-    load_var _17
+    load_var _12
     load_field .message
     load_const null
     init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    jump L24
+    jump L22
 
   L18:
-    load_const "client"
-    load_const null
-    load_var _14
-    load_field .message
-    load_const null
-    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    jump L24
+    load_var _10
+    jump L22
 
   L19:
-    load_var _12
-    jump L24
+    load_var _8
+    jump L22
 
   L20:
-    load_var _10
-    jump L24
-
-  L21:
-    load_var _8
-    jump L24
-
-  L22:
     load_type ai.errors.Failure
     load_var _4
     call baml.errors.UnknownError.from
-    jump L24
+    jump L22
 
-  L23:
+  L21:
     load_var _2
 
-  L24:
+  L22:
     return
 }
 
-function ai.errors.normalize_invoke(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError {
+function ai.errors.normalize_invoke(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError {
     load_var error
     call ai.errors.normalize
     return
@@ -7575,7 +7546,7 @@ function ai.stream.TurnStream.from_chunks(chunks: string[]) -> ai.stream.TurnStr
     return
 }
 
-function ai.stream.TurnStream.from_event_source(next_event: () -> ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone | ai.stream.Done throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError) -> ai.stream.TurnStream {
+function ai.stream.TurnStream.from_event_source(next_event: () -> ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone | ai.stream.Done throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError) -> ai.stream.TurnStream {
     load_var next_event
     load_const null
     load_const null
@@ -7602,7 +7573,7 @@ function ai.stream.TurnStream.from_event_source(next_event: () -> ai.stream.Text
     return
 }
 
-function ai.stream.TurnStream.from_sse(sse: baml.http.SseStream, decode: (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError, require_terminal: string | null) -> ai.stream.TurnStream {
+function ai.stream.TurnStream.from_sse(sse: baml.http.SseStream, decode: (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError, require_terminal: string | null) -> ai.stream.TurnStream {
     load_var require_terminal
     load_const <omitted>
     cmp_op ==
@@ -7685,7 +7656,7 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string[] | ai.
     load_field ._event_source
     store_var _42
     load_var _42
-    narrow_bind () -> ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone | ai.stream.Done throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError, slot=18
+    narrow_bind () -> ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone | ai.stream.Done throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError, slot=18
     pop_jump_if_false L6
     jump L15
 
@@ -7768,7 +7739,7 @@ function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string[] | ai.
     load_field ._decode
     store_var _65
     load_var _65
-    narrow_bind (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError, slot=24
+    narrow_bind (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError, slot=24
     pop_jump_if_false L0
     load_var2 23 24
     call_indirect

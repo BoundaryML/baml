@@ -546,10 +546,6 @@ class StreamRelay {
                 self.close_current();
                 throw timeout
             },
-            let cancelled: baml.panics.Cancelled => {
-                self.close_current();
-                throw cancelled
-            },
             let failure: root.errors.Failure => {
                 if (!self.emitted && self.retry(failure)) {
                     self.calls.push(_failed_leg_call(null, failure));

@@ -393,7 +393,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null
 
     bb6: {
         _11 = load_type(#0);
-        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _11>(copy _7, copy _9) -> [bb7];
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure><copy _11>(copy _7, copy _9) -> [bb7];
     }
 
     bb7: {

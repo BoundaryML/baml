@@ -92,7 +92,7 @@ function runtime_render_identity.Render(client: ai.Client | null, on_event: ((ai
     store_var _8
     load_type #0
     load_var2 4 5
-    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
     store_var _5
@@ -215,7 +215,7 @@ function runtime_render_identity.RenderPair(client: ai.Client | null, on_event: 
     store_var _8
     load_type runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>
     load_var2 4 5
-    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
     store_var _5

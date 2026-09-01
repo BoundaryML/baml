@@ -63,7 +63,6 @@ async fn agent_implements_runner_and_custom_runners_dispatch() {
                 Error = baml.errors.InvalidArgument
                     | baml.errors.Timeout
                     | baml.errors.UnknownError
-                    | baml.panics.Cancelled
                     | reflect.errors.CompilationError
                     | ai.errors.Failure
             > = ai.Agent.new();

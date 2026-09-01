@@ -240,10 +240,20 @@ function any<T, Err>(
 }
 
 /// Run `body` under a deadline.
+///
+/// # Throws
+///
+/// - `baml.errors.Timeout` if `limit` elapses first.
+/// - whatever `body` throws.
+///
+/// # Panics
+///
+/// - `baml.panics.Cancelled` re-raised, when the cancellation came from
+///   somewhere other than this deadline.
 function with_timeout<T, E>(
     limit: baml.time.Duration,
     body: () -> T throws E,
-) -> T throws E | baml.errors.Timeout | baml.panics.Cancelled {
+) -> T throws E | baml.errors.Timeout {
     let token = baml.spawn.CancelToken.new();
     let work = spawn with baml.spawn.options(cancel = token) { body() };
     let deadline = spawn {

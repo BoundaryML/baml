@@ -9964,6 +9964,32 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    /// The non-`baml.panics.*` component of a thrown type - what a `throw`
+    /// actually contributes to the channel.
+    ///
+    /// The complement of [`Self::panic_subset`]: that one keeps the half a
+    /// catch arm may always trap, this one keeps the half a `throws` clause
+    /// must account for. `None` means the type was panics all the way down.
+    fn non_panic_subset(&mut self, ty: &Ty) -> Option<Ty> {
+        let expanded = self.expand_alias_ty(ty);
+        match expanded.kind() {
+            TyKind::Class(qtn, _, _) if qtn.is_panic_type() => None,
+            TyKind::Union(members, _) => {
+                let members = members.to_vec();
+                let rest: Vec<Ty> = members
+                    .iter()
+                    .filter_map(|member| self.non_panic_subset(member))
+                    .collect();
+                if rest.is_empty() {
+                    None
+                } else {
+                    Some(self.union_of(&rest))
+                }
+            }
+            _ => Some(expanded.clone()),
+        }
+    }
+
     /// A caught effect contribution, resolved for the error channel: still
     /// live variables resolve where possible (an unconstrained effect is
     /// `never` here too).
@@ -10093,12 +10119,28 @@ impl<'db> InferenceContext<'db> {
         if matches!(ty.kind(), TyKind::Never { .. }) || ty.has_error() {
             return;
         }
+        // Panics are RAISED, not thrown: catchable at runtime, but never part
+        // of a `throws` contract. `throw baml.panics.X` therefore contributes
+        // nothing to the channel - it re-raises, exactly as `baml.sys.panic`
+        // does, and the emitted `ThrowIfPanic` guard already carries the
+        // matching runtime behaviour past wildcard arms. A throw whose type
+        // mixes panics with ordinary errors contributes only the ordinary
+        // half. Untouched when no panic is present, so every other throw
+        // records exactly the type it always did.
+        let ty = if self.panic_subset(ty).is_some() {
+            match self.non_panic_subset(ty) {
+                Some(rest) => rest,
+                None => return,
+            }
+        } else {
+            ty.clone()
+        };
         // Thrown literals KEEP their literal types (no widening): catch
         // arms match on literal error codes, and the canonical union at
         // the channel is the generation site. The RUNTIME boundary
         // widens (the provider's conversion): `reflect.signature` on a
         // `throw "negative"` lambda reconstructs `string`.
-        let contribution = ty.clone();
+        let contribution = ty;
         // An OPEN clause (`throws T | _`) admits every contribution; the
         // remainder joins the surface at finalize instead of erroring.
         if let Some(declared) = self.declared_throws.clone()

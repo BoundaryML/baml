@@ -46,7 +46,7 @@ fn user.fixtures.json_llm_return_type.ExtractAny(client: null | ai.Client, on_ev
 
     bb6: {
         _9 = load_type(baml.json.json);
-        _5 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _9>(copy _6, copy _8) -> [bb7];
+        _5 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure><copy _9>(copy _6, copy _8) -> [bb7];
     }
 
     bb7: {

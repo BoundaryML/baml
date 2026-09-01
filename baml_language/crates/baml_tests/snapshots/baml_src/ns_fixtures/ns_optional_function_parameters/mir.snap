@@ -279,7 +279,7 @@ fn user.fixtures.optional_function_parameters.AskDocs(query: string, max_results
 
     bb6: {
         _12 = load_type(string);
-        _8 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _12>(copy _9, copy _11) -> [bb7];
+        _8 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure><copy _12>(copy _9, copy _11) -> [bb7];
     }
 
     bb7: {
