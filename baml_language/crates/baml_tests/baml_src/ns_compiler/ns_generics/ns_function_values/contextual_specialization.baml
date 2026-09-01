@@ -157,6 +157,10 @@ test "union callback adapter selection is actual aware" {
                     }
                 }
 
+                function accepts_value_or_callback(f: string | NarrowCallback) -> int throws never {
+                    5
+                }
+
                 function accepts_erased(f: reflect.AnyFunction | IncompatibleCallback) -> int throws never {
                     7
                 }
@@ -169,6 +173,10 @@ test "union callback adapter selection is actual aware" {
                     apply_optional(combine)
                 }
 
+                function concrete_union_demo() -> int throws never {
+                    accepts_value_or_callback(combine)
+                }
+
                 function selection_demo() -> int throws never {
                     accepts_erased(string_callback) * 10 + accepts_ambiguous(ambiguous_callback)
                 }
@@ -178,6 +186,10 @@ test "union callback adapter selection is actual aware" {
     let adapter_demo = package.get_function<() -> int>("root.adapter_demo")
         ?? baml.sys.panic("missing root.adapter_demo");
     assert.equal(adapter_demo(), 16)
+
+    let concrete_union_demo = package.get_function<() -> int>("root.concrete_union_demo")
+        ?? baml.sys.panic("missing root.concrete_union_demo");
+    assert.equal(concrete_union_demo(), 5)
 
     let selection_demo = package.get_function<() -> int>("root.selection_demo")
         ?? baml.sys.panic("missing root.selection_demo");
