@@ -234,7 +234,7 @@ function navigationFor(chapters) {
   };
 }
 
-async function verifySourceCheckout(sourceRoot, revision) {
+export async function verifySourceCheckout(sourceRoot, revision) {
   const [{ stdout: head }, { stdout: status }] = await Promise.all([
     execFileAsync('git', ['-C', sourceRoot, 'rev-parse', 'HEAD']),
     execFileAsync('git', ['-C', sourceRoot, 'status', '--porcelain', '--untracked-files=all']),

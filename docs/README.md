@@ -75,6 +75,21 @@ that merely exist in the `baml-book` working tree are not publishable input.
 The source checkout must be clean and at the revision pinned by the manifest,
 which also pins every included listing and quiz.
 
+Prepare a deterministic editorial bundle from a clean checkout at that pinned
+revision before approving anything:
+
+```sh
+pnpm --filter @baml/developer-docs review:book -- \
+  --source /path/to/clean/baml-book \
+  --output /tmp/baml-book-review
+```
+
+The bundle discovers the ordered chapters from `src/SUMMARY.md`, verifies that
+every include, listing, runnable project, and quiz converts to valid MDX, and
+records exact source and converted hashes. Its Markdown summary and converted
+pages are review aids only: every candidate is explicitly unapproved until a
+human copies its approval entry into `book-import.json` after auditing it.
+
 Import approved chapters from a local checkout:
 
 ```sh

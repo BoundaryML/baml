@@ -17,6 +17,7 @@
     "generate:reference": "node scripts/generate-baml-reference.mjs",
     "prepare:content": "pnpm run generate:derived && pnpm run generate:book",
     "produce:docs-metadata": "node scripts/produce-docs-metadata.mjs",
+    "review:book": "node scripts/review-baml-book.mjs",
     "runner:artifact": "node scripts/build-runner-artifact.mjs",
     "runner:bundle": "node scripts/build-runner-bundle.mjs",
     "runner:browser": "node scripts/verify-runner-browser.mjs",
