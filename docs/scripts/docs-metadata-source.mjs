@@ -68,6 +68,15 @@ export function validateDocsVersionsIndex(index) {
   return index;
 }
 
+export function selectIndexedDocsVersions(index, excludedVersions = []) {
+  const validated = validateDocsVersionsIndex(index);
+  const excluded = new Set(excludedVersions);
+  return {
+    defaultVersion: validated.defaultVersion,
+    versions: validated.versions.filter((entry) => !excluded.has(entry.version)),
+  };
+}
+
 export function previewFallbackAllowed({ args = [], environment = process.env, explicitSelection = false } = {}) {
   if (explicitSelection) return false;
   if (args.includes('--allow-unavailable') || environment.BAML_DOCS_ALLOW_UNAVAILABLE === '1') return true;

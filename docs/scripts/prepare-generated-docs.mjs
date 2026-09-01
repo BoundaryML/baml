@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readDocsMetadata, validateDocsMetadata } from './docs-metadata.mjs';
@@ -9,9 +9,9 @@ import {
   channelManifestUrl,
   docsVersionsIndexUrl,
   previewFallbackAllowed,
+  selectIndexedDocsVersions,
   unavailableReferencePage,
   validateChannelManifest,
-  validateDocsVersionsIndex,
   versionMetadataUrl,
 } from './docs-metadata-source.mjs';
 import { writeGeneratedTree } from './generated-content.mjs';
@@ -56,6 +56,7 @@ function selections(environment) {
   const singleFile = environment.BAML_DOCS_METADATA_FILE;
   const singleUrl = environment.BAML_DOCS_METADATA_URL;
   const singleVersion = environment.BAML_DOCS_VERSION;
+  const versionsIndexFile = environment.BAML_DOCS_VERSIONS_INDEX_FILE;
   const files = [...(singleFile ? [singleFile] : []), ...list(environment.BAML_DOCS_METADATA_FILES)];
   const urls = [...(singleUrl ? [singleUrl] : []), ...list(environment.BAML_DOCS_METADATA_URLS)];
   const versions = list(environment.BAML_DOCS_VERSIONS);
@@ -82,6 +83,9 @@ function selections(environment) {
     : files.length === 0 && urls.length === 0 && singleVersion ? [singleVersion] : [];
   requestedVersions.forEach((version) => selected.push({ type: 'version', value: version, explicit: true }));
   channels.forEach((channel) => selected.push({ type: 'channel', value: channel, explicit: true }));
+  if (versionsIndexFile) {
+    selected.push({ type: 'index-file', value: versionsIndexFile, explicit: true });
+  }
 
   if (selected.length === 0) {
     selected.push({ type: 'index', value: docsVersionsIndexUrl(environment.BAML_DOCS_MANIFEST_BASE_URL ?? DEFAULT_MANIFEST_BASE_URL), explicit: false });
@@ -172,34 +176,50 @@ let requested = selections(environment);
 const loaded = [];
 
 let indexedDefaultVersion;
-if (requested.length === 1 && requested[0].type === 'index') {
+const explicitlySelectedVersions = new Set(requested.flatMap((selection) => {
+  if (selection.type === 'version') return [selection.value];
+  if (selection.expectedVersion) return [selection.expectedVersion];
+  return [];
+}));
+const expanded = [];
+for (const selection of requested) {
+  if (!['index', 'index-file'].includes(selection.type)) {
+    expanded.push(selection);
+    continue;
+  }
+
   try {
-    const index = validateDocsVersionsIndex(await fetchJson(requested[0].value));
-    indexedDefaultVersion = index.defaultVersion;
-    requested = index.versions.map((entry) => ({
-      type: 'indexed',
-      value: entry.version,
-      channel: entry.channel,
-      path: entry.artifacts.stdlib.path,
-      payloadSha256: entry.artifacts.stdlib.payloadSha256,
-      explicit: false,
-    }));
+    const rawIndex = selection.type === 'index-file'
+      ? JSON.parse(await readFile(path.resolve(selection.value), 'utf8'))
+      : await fetchJson(selection.value);
+    const selectedIndex = selectIndexedDocsVersions(rawIndex, explicitlySelectedVersions);
+    indexedDefaultVersion ??= selectedIndex.defaultVersion;
+    expanded.push(...selectedIndex.versions
+      .map((entry) => ({
+        type: 'indexed',
+        value: entry.version,
+        channel: entry.channel,
+        path: entry.artifacts.stdlib.path,
+        payloadSha256: entry.artifacts.stdlib.payloadSha256,
+        explicit: selection.explicit,
+      })));
   } catch (error) {
-    const fallback = metadataUnavailable(error) && previewFallbackAllowed({
+    const fallback = selection.type === 'index' && metadataUnavailable(error) && previewFallbackAllowed({
       args: process.argv.slice(2),
       environment,
-      explicitSelection: false,
+      explicitSelection: selection.explicit,
     });
     if (!fallback) throw error;
     await mkdir(generatedRoot, { recursive: true });
     await writeUnavailableReferences({
       channel: environment.BAML_DOCS_CHANNEL ?? 'canary',
-      url: requested[0].value,
+      url: selection.value,
       version: undefined,
     });
     process.exit(0);
   }
 }
+requested = expanded;
 
 for (const selection of requested) {
   try {

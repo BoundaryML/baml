@@ -38,6 +38,12 @@ in the set. Each release JSON contains all toolchain-discovered packages—not a
 docs-maintained list—and generated symbols use fully qualified names such as
 `baml.http.Request`.
 
+Pull-request verification and its exact-metadata Vercel preview pass the
+source-built JSON together with a captured copy of the curated version index.
+The source-built toolchain becomes the default while the other immutable
+published toolchains remain available in the selector. Set
+`BAML_DOCS_VERSIONS_INDEX_FILE` to reproduce that overlay locally.
+
 The build eagerly renders authored pages, the default-version aliases, and each
 version landing page. Versioned symbol and command pages remain normal public
 routes, but render on their first request instead of multiplying release build

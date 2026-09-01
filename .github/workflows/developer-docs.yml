@@ -79,15 +79,31 @@ jobs:
             echo "BAML_DOCS_METADATA_FILE=$metadata"
           } >> "$GITHUB_ENV"
 
+      - name: Resolve curated published docs versions
+        run: |
+          set -euo pipefail
+          versions_index="$RUNNER_TEMP/baml-docs-versions.json"
+          if curl --fail --silent --show-error --retry 3 \
+            https://pkg.boundaryml.com/manifest/v1/docs/versions.json \
+            --output "$versions_index"; then
+            echo "BAML_DOCS_VERSIONS_INDEX_FILE=$versions_index" >> "$GITHUB_ENV"
+            echo "The exact source-built toolchain will be overlaid on the curated published version set."
+          else
+            rm -f "$versions_index"
+            echo "::notice::The published docs version index is not available yet; verifying only the exact source-built toolchain."
+          fi
+
       - name: Render language and CLI references from metadata
         run: pnpm --filter @baml/developer-docs generate:derived
 
-      - name: Upload exact pull request metadata
+      - name: Upload exact pull request docs inputs
         if: ${{ github.event_name == 'pull_request' }}
         uses: actions/upload-artifact@v4
         with:
           name: developer-docs-metadata
-          path: ${{ env.BAML_DOCS_METADATA_FILE }}
+          path: |
+            ${{ env.BAML_DOCS_METADATA_FILE }}
+            ${{ env.BAML_DOCS_VERSIONS_INDEX_FILE }}
           if-no-files-found: error
           retention-days: 7
 
@@ -169,12 +185,16 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.DEVELOPER_DOCS_VERCEL_PROJECT_ID }}
         run: |
           set -euo pipefail
-          metadata="$(find "$RUNNER_TEMP/developer-docs-metadata" -type f -name '*.json' -print -quit)"
+          metadata="$(find "$RUNNER_TEMP/developer-docs-metadata" -type f -name 'baml-docs-metadata-*.json' -print -quit)"
           if [[ -z "$metadata" ]]; then
             echo "::error::The verified docs metadata artifact is empty."
             exit 1
           fi
           version="$(jq -r '.version' "$metadata")"
+          versions_index="$(find "$RUNNER_TEMP/developer-docs-metadata" -type f -name 'baml-docs-versions.json' -print -quit)"
+          if [[ -n "$versions_index" ]]; then
+            export BAML_DOCS_VERSIONS_INDEX_FILE="$versions_index"
+          fi
           pnpm exec vercel pull --yes --environment=preview --token "$VERCEL_TOKEN"
           BAML_DOCS_METADATA_FILE="$metadata" BAML_DOCS_VERSION="$version" \
             pnpm exec vercel build --target=preview --token "$VERCEL_TOKEN"

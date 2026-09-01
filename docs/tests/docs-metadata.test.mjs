@@ -11,6 +11,7 @@ import {
   channelManifestUrl,
   docsVersionsIndexUrl,
   previewFallbackAllowed,
+  selectIndexedDocsVersions,
   unavailableReferencePage,
   validateChannelManifest,
   validateDocsVersionsIndex,
@@ -245,6 +246,10 @@ test('validates the curated multi-version discovery index', () => {
   };
   assert.equal(validateDocsVersionsIndex(index), index);
   assert.equal(docsVersionsIndexUrl('https://pkg.boundaryml.com/manifest/v1/'), 'https://pkg.boundaryml.com/manifest/v1/docs/versions.json');
+  assert.deepEqual(
+    selectIndexedDocsVersions(index, ['1.2.3']).versions.map((entry) => entry.version),
+    ['1.2.2'],
+  );
 
   const duplicate = structuredClone(index);
   duplicate.versions[1].version = '1.2.3';
