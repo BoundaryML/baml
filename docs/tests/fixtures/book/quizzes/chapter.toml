@@ -1,0 +1,19 @@
+[[questions]]
+id = "question-one"
+type = "MultipleChoice"
+prompt.prompt = "Which command checks a BAML project?"
+prompt.distractors = ["`baml run`", "`baml test`"]
+answer.answer = "`baml check`"
+context = "The check command reports compiler diagnostics."
+
+[[questions]]
+id = "question-two"
+type = "Tracing"
+prompt.program = """
+function main() -> string {
+  42
+}
+"""
+answer.doesCompile = false
+answer.lineNumber = 2
+context = "The return value has the wrong type."

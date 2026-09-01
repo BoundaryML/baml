@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "https://github.com/BoundaryML/baml-book",
+    "revision": "55de1c917db5a84b92fd10a381fb493d4e2675f2"
+  },
+  "approvalManifestSha256": "217a1411384b0cf2b84b4c42aa201aa3aa44eb7f4facb2ed51acb2cb01399c19",
+  "files": []
+}

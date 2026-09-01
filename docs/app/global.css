@@ -110,6 +110,147 @@ html > body[data-scroll-locked] {
   font-size: 0.75rem;
 }
 
+.book-listing {
+  margin-block: 1.5rem;
+  overflow: hidden;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.8rem;
+  background: var(--color-fd-card);
+}
+
+.book-listing-file {
+  border-bottom: 1px solid var(--color-fd-border);
+  padding: 0.55rem 1rem;
+  color: var(--color-fd-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.book-listing-body > pre,
+.book-listing-body > .baml-runner {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.book-listing-body > .baml-runner {
+  border-top: 1px solid var(--color-fd-border);
+}
+
+.book-listing figcaption {
+  border-top: 1px solid var(--color-fd-border);
+  padding: 0.7rem 1rem;
+  color: var(--color-fd-muted-foreground);
+  font-size: 0.8rem;
+}
+
+.book-listing figcaption a {
+  color: var(--color-fd-foreground);
+  font-weight: 600;
+}
+
+.book-quiz {
+  margin-block: 2rem;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.8rem;
+  padding: 1.25rem;
+  background: color-mix(in oklab, var(--color-fd-card) 88%, transparent);
+}
+
+.book-quiz > h2,
+.book-quiz-question > h3 {
+  margin: 0;
+  font-weight: 650;
+}
+
+.book-quiz > h2 {
+  font-size: 1.05rem;
+}
+
+.book-quiz-question {
+  margin-top: 1rem;
+  border-top: 1px solid var(--color-fd-border);
+  padding-top: 1rem;
+}
+
+.book-quiz-question > h3 {
+  font-size: 0.9rem;
+}
+
+.book-quiz-question p {
+  color: var(--color-fd-muted-foreground);
+  font-size: 0.86rem;
+}
+
+.book-quiz-question pre {
+  overflow-x: auto;
+  border-radius: 0.6rem;
+  padding: 0.9rem;
+  background: var(--color-fd-secondary);
+  font-size: 0.8rem;
+}
+
+.book-quiz-choices {
+  display: grid;
+  gap: 0.5rem;
+  margin-block: 0.85rem;
+}
+
+.book-quiz-choices label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.55rem;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.84rem;
+}
+
+.book-quiz-question > label {
+  display: grid;
+  gap: 0.35rem;
+  margin-block: 0.85rem;
+  color: var(--color-fd-muted-foreground);
+  font-size: 0.78rem;
+}
+
+.book-quiz-question input[type='text'],
+.book-quiz-question > label input {
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  color: var(--color-fd-foreground);
+  background: var(--color-fd-background);
+}
+
+.book-quiz-question > button {
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-fd-primary);
+  color: var(--color-fd-primary-foreground);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.book-quiz-question > button:disabled {
+  opacity: 0.5;
+}
+
+.book-quiz-feedback {
+  margin-top: 0.75rem;
+  border-left: 3px solid var(--color-fd-border);
+  padding: 0.65rem 0.8rem;
+  font-size: 0.82rem;
+}
+
+.book-quiz-feedback--correct {
+  border-left-color: var(--color-green-500);
+}
+
+.book-quiz-feedback--incorrect {
+  border-left-color: var(--color-red-500);
+}
+
 @media (max-width: 640px) {
   .baml-runner-toolbar,
   .baml-runner-result {

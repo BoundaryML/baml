@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "build": "next build",
+    "check:book": "node scripts/import-baml-book.mjs --check",
     "check:cli-reference": "node scripts/generate-cli-reference.mjs --check",
     "check:reference": "node scripts/generate-baml-reference.mjs --check",
     "check:runner-artifact": "node scripts/check-runner-artifact.mjs && node scripts/build-runner-bundle.mjs --check",
     "dev": "next dev",
+    "generate:book": "node scripts/import-baml-book.mjs",
     "generate:cli-reference": "node scripts/generate-cli-reference.mjs",
     "generate:reference": "node scripts/generate-baml-reference.mjs",
     "runner:artifact": "node scripts/build-runner-artifact.mjs",
@@ -30,6 +32,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@mdx-js/mdx": "3.1.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/mdx": "^2.0.13",
     "@types/node": "^24.0.3",
@@ -37,6 +40,7 @@
     "@types/react-dom": "^19.2.3",
     "esbuild": "0.25.2",
     "postcss": "^8.5.14",
+    "smol-toml": "1.5.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.8.3"
   }

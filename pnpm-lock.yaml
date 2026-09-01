@@ -86,6 +86,9 @@ importers:
         specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
     devDependencies:
+      '@mdx-js/mdx':
+        specifier: 3.1.1
+        version: 3.1.1
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
@@ -107,6 +110,9 @@ importers:
       postcss:
         specifier: ^8.5.14
         version: 8.5.26
+      smol-toml:
+        specifier: 1.5.2
+        version: 1.5.2
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3

@@ -13,6 +13,7 @@ type Props = {
   expected?: string;
   files: Record<string, string>;
   functionName?: string;
+  showSource?: boolean;
 };
 
 function milliseconds(value?: number) {
@@ -20,7 +21,7 @@ function milliseconds(value?: number) {
   return value >= 1000 ? `${(value / 1000).toFixed(2)} s` : `${value.toFixed(0)} ms`;
 }
 
-export function BamlRunner({ expected, files, functionName = 'main' }: Props) {
+export function BamlRunner({ expected, files, functionName = 'main', showSource = true }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [result, setResult] = useState<RunnerResponse>();
@@ -58,9 +59,11 @@ export function BamlRunner({ expected, files, functionName = 'main' }: Props) {
 
   return (
     <div ref={root} className="baml-runner not-prose">
-      <pre className="baml-runner-source" aria-label="Runnable BAML source">
-        <code>{source}</code>
-      </pre>
+      {showSource && (
+        <pre className="baml-runner-source" aria-label="Runnable BAML source">
+          <code>{source}</code>
+        </pre>
+      )}
       <div className="baml-runner-toolbar">
         <button type="button" onClick={run} disabled={state === 'running'}>
           {state === 'success' || state === 'error' ? <RotateCcw /> : <Play />}
@@ -78,7 +81,7 @@ export function BamlRunner({ expected, files, functionName = 'main' }: Props) {
           ) : result?.ok ? (
             <>
               <code>{result.output}</code>
-              <span>{matched ? 'Output verified' : `Expected ${expected}`}</span>
+              <span>{expected === undefined ? 'Run completed' : matched ? 'Output verified' : `Expected ${expected}`}</span>
             </>
           ) : (
             <span>{result?.error ?? 'The run failed.'}</span>

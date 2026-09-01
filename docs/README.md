@@ -24,6 +24,28 @@ BAML_BIN="$PWD/baml_language/target/debug/baml-cli" pnpm --filter @baml/develope
 
 The generated Markdown and source snapshots are committed. CI rebuilds the repository CLI and runs both corresponding `check:*` commands, so language or command-tree drift fails with a regeneration instruction.
 
+## BAML book imports
+
+The book remains at `/baml/book`, but publication is approval-gated. Add only
+human-audited chapters to `book-import.json` with `status: "approved"`, the
+source path, route output, and SHA-256 of the exact reviewed Markdown. Drafts
+that merely exist in the `baml-book` working tree are not publishable input.
+The source checkout must be clean and at the revision pinned by the manifest,
+which also pins every included listing and quiz.
+
+Import approved chapters from a local checkout:
+
+```sh
+pnpm --filter @baml/developer-docs generate:book -- --source /path/to/baml-book
+pnpm --filter @baml/developer-docs check:book
+```
+
+The importer converts anchored mdBook includes, semantic notes, numbered code
+listings, opt-in runnable projects, and TOML quizzes into native Fumadocs MDX.
+Generated pages and provenance are committed so previews do not depend on a
+second repository. CI verifies their hashes, navigation, and that no unmanaged
+book chapter slipped around the approval manifest.
+
 ## Runnable examples
 
 Runnable examples execute in one isolated Web Worker per page. The worker and

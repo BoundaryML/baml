@@ -16,7 +16,12 @@ test('the public route contract has a landing page for every section', async () 
 });
 
 test('the BAML book remains under /baml/book', async () => {
-  await access(path.join(packageRoot, 'content', 'baml', 'book', 'index.mdx'));
+  await Promise.all([
+    access(path.join(packageRoot, 'content', 'baml', 'book', 'index.mdx')),
+    access(path.join(packageRoot, 'content', 'baml', 'book', 'meta.json')),
+    access(path.join(packageRoot, 'book-import.json')),
+    access(path.join(packageRoot, 'generated', 'book', 'manifest.json')),
+  ]);
 });
 
 test('content is served from the domain root', async () => {
