@@ -177,7 +177,7 @@ jobs:
       # Setup Rust for Rust checks
       - name: Setup Rust
         if: contains(matrix.check, 'rust')
-        uses: ./.github/actions/setup-rust
+        uses: ./.github/actions/engine-setup-rust
         with:
           enable-wasm: ${{ matrix.check == 'rust-lint-wasm' && 'true' || 'false' }}
 
@@ -234,7 +234,7 @@ jobs:
 
       # Setup Rust for Rust checks
       - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+        uses: ./.github/actions/engine-setup-rust
         with:
           enable-wasm: true
 
@@ -257,7 +257,7 @@ jobs:
         uses: ./.github/actions/setup-tools
 
       - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+        uses: ./.github/actions/engine-setup-rust
         with:
           targets: wasm32-unknown-unknown
           enable-wasm: true
@@ -284,7 +284,7 @@ jobs:
           node-action-version: "v6"
 
       - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+        uses: ./.github/actions/engine-setup-rust
         with:
           enable-wasm: false
           enable-cross: false
@@ -339,7 +339,7 @@ jobs:
         uses: ./.github/actions/setup-tools
 
       - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+        uses: ./.github/actions/engine-setup-rust
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
@@ -422,7 +422,7 @@ jobs:
         uses: ./.github/actions/setup-tools
 
       - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+        uses: ./.github/actions/engine-setup-rust
         with:
           targets: ${{ matrix.target }}
 

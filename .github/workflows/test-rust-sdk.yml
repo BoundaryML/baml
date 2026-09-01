@@ -11,7 +11,7 @@ on:
       - "engine/**/*.rs"
       - "engine/**/*.proto"
       - ".github/actions/setup-protoc/**"
-      - ".github/actions/setup-rust/**"
+      - ".github/actions/engine-setup-rust/**"
       - ".github/workflows/test-rust-sdk.yml"
   push:
     branches: [canary]
@@ -20,7 +20,7 @@ on:
       - "engine/**/*.rs"
       - "engine/**/*.proto"
       - ".github/actions/setup-protoc/**"
-      - ".github/actions/setup-rust/**"
+      - ".github/actions/engine-setup-rust/**"
       - ".github/workflows/test-rust-sdk.yml"
   workflow_dispatch:
 

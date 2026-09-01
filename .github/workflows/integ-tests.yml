@@ -83,7 +83,7 @@ jobs:
           node-action-version: 'v6'
 
       - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+        uses: ./.github/actions/engine-setup-rust
 
       - name: Setup Go
         uses: ./.github/actions/setup-go

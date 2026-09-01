@@ -56,16 +56,29 @@ Sets up Node.js with pnpm package manager.
 ```
 
 ### setup-rust
-Sets up Rust toolchain with caching and optional WASM support.
+Sets up the baml_language Rust toolchain with caching and optional WASM support.
 
 ```yaml
 - name: Setup Rust
   uses: ./.github/actions/setup-rust
   with:
-    toolchain: 'stable'                           # Optional, default: 'stable'
+    toolchain: '1.93.0'                          # Optional, default: '1.93.0'
     enable-wasm: 'false'                         # Optional, default: 'false'
     targets: 'x86_64-pc-windows-msvc'           # Optional, space-separated targets
-    workspace: 'engine'                          # Optional, default: 'engine'
+    workspace: 'baml_language'                   # Optional, default: 'baml_language'
+```
+
+### engine-setup-rust
+Sets up the engine Rust toolchain with caching and optional WASM support.
+
+```yaml
+- name: Setup Engine Rust
+  uses: ./.github/actions/engine-setup-rust
+  with:
+    toolchain: '1.93.0'                          # Optional, default: '1.93.0'
+    enable-wasm: 'false'                         # Optional, default: 'false'
+    targets: 'x86_64-pc-windows-msvc'           # Optional, space-separated targets
+    workspace: 'engine'                         # Optional, default: 'engine'
 ```
 
 ### setup-python
@@ -146,7 +159,7 @@ Only needs Node.js and pnpm:
 Only needs Rust toolchain:
 ```yaml
 - name: Setup Rust
-  uses: ./.github/actions/setup-rust
+  uses: ./.github/actions/engine-setup-rust
   with:
     toolchain: ${{ env.RUST_TOOLCHAIN }}
     targets: ${{ matrix.target }}
@@ -156,7 +169,7 @@ Only needs Rust toolchain:
 Needs Rust with WASM support:
 ```yaml
 - name: Setup Rust
-  uses: ./.github/actions/setup-rust
+  uses: ./.github/actions/engine-setup-rust
   with:
     toolchain: ${{ env.RUST_TOOLCHAIN }}
     enable-wasm: 'true'
@@ -166,7 +179,7 @@ Needs Rust with WASM support:
 Needs multiple technologies:
 ```yaml
 - name: Setup Rust
-  uses: ./.github/actions/setup-rust
+  uses: ./.github/actions/engine-setup-rust
   with:
     toolchain: ${{ env.RUST_TOOLCHAIN }}
 

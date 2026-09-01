@@ -112,7 +112,7 @@ runs:
 
     - name: Setup Rust
       if: inputs.setup-rust == 'true'
-      uses: ./.github/actions/setup-rust
+      uses: ./.github/actions/engine-setup-rust
       with:
         toolchain: ${{ inputs.rust-toolchain }}
         enable-wasm: ${{ inputs.rust-enable-wasm }}
