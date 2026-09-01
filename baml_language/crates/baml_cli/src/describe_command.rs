@@ -49,6 +49,14 @@ pub struct DescribeArgs {
     #[arg(long, hide_short_help = true)]
     pub symbols: bool,
 
+    /// List every standard-library package embedded in this toolchain.
+    #[arg(
+        long,
+        conflicts_with_all = ["name", "symbols", "search", "export"],
+        help_heading = "Output options"
+    )]
+    pub packages: bool,
+
     /// Deprecated alias for `--project`.
     #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
@@ -289,6 +297,26 @@ fn resolve_unqualified_builtin_member<'db>(
 impl DescribeArgs {
     /// Run the describe command and return the CLI exit code.
     pub fn run(&self) -> Result<crate::ExitCode> {
+        if self.packages {
+            let packages = baml_builtins2::stdlib_package_names();
+            if self.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "format_version": 1,
+                        "packages": packages,
+                    }))
+                    .unwrap_or_else(|_| unreachable!("stdlib package names serialize"))
+                );
+            } else {
+                println!("Standard library packages:");
+                for package in packages {
+                    println!("  {package}");
+                }
+            }
+            return Ok(crate::ExitCode::Success);
+        }
+
         // Introspection never requires a `baml.toml`: with no project, we
         // fall back to a stdlib-only "default state" so `baml describe
         // baml.String` works anywhere. An empty user-file set is therefore

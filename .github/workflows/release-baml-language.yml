@@ -1800,6 +1800,9 @@ jobs:
         with:
           name: swift-xcframework
           path: dist/swift
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
@@ -1814,6 +1817,7 @@ jobs:
           CHANNEL: ${{ needs.plan.outputs.channel }}
           VERSION: ${{ needs.plan.outputs.version }}
           RELEASED_AT: ${{ needs.plan.outputs.released_at }}
+          SOURCE_REVISION: ${{ needs.plan.outputs.source_sha }}
           PYPI_VERSION: ${{ needs.plan.outputs.pypi_version }}
           WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
@@ -1856,6 +1860,18 @@ jobs:
             --pypi-version "$PYPI_VERSION" \
             --wrapper-version "$WRAPPER_VERSION" \
             "${args[@]}"
+          docs_work="$(mktemp -d)"
+          trap 'rm -rf "$docs_work"' EXIT
+          toolchain_archive="dist/toolchain/baml-language-$VERSION-x86_64-unknown-linux-gnu.tar.gz"
+          test -f "$toolchain_archive"
+          tar -xzf "$toolchain_archive" -C "$docs_work"
+          BAML_BIN="$docs_work/bin/baml-cli" \
+            node docs/scripts/produce-docs-metadata.mjs \
+              --version "$VERSION" \
+              --channel "$CHANNEL" \
+              --source-revision "$SOURCE_REVISION" \
+              --released-at "$RELEASED_AT" \
+              --output "manifests/docs/v$VERSION/stdlib.json"
       - uses: actions/upload-artifact@v4
         with:
           name: release-manifests
@@ -1900,6 +1916,7 @@ jobs:
 
           version="${{ needs.plan.outputs.version }}"
           upload_immutable "manifests/version/$version.json" "manifest/v1/version/$version.json"
+          upload_immutable "manifests/docs/v$version/stdlib.json" "manifest/v1/docs/v$version/stdlib.json"
           if [[ -f manifests/wrapper.json ]]; then
             aws s3 cp manifests/wrapper.json "s3://$PKG_BUCKET/manifest/v1/wrapper.json" \
               --content-type application/json \
@@ -2049,6 +2066,16 @@ jobs:
             "s3://$PKG_BUCKET/manifest/v1/$CHANNEL.json" \
             --content-type application/json \
             --cache-control "public, max-age=60, must-revalidate"
+      - name: Rebuild developer docs from the promoted release
+        env:
+          DEPLOY_HOOK: ${{ secrets.DEVELOPER_DOCS_VERCEL_DEPLOY_HOOK }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$DEPLOY_HOOK" ]]; then
+            echo "::notice::Developer docs deploy hook is not configured; the promoted release will be picked up by the next Vercel build."
+            exit 0
+          fi
+          curl --fail --silent --show-error --retry 3 --request POST "$DEPLOY_HOOK"
 
   publish-homebrew:
     name: Publish Homebrew wrapper formula
@@ -2200,6 +2227,9 @@ jobs:
         with:
           name: swift-xcframework
           path: dist/swift
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
       - name: Generate dry-run files
         env:
           WRAPPER_CHANGED: ${{ needs.plan.outputs.wrapper_changed }}
@@ -2209,6 +2239,7 @@ jobs:
           CHANNEL: ${{ needs.plan.outputs.channel }}
           VERSION: ${{ needs.plan.outputs.version }}
           RELEASED_AT: ${{ needs.plan.outputs.released_at }}
+          SOURCE_REVISION: ${{ needs.plan.outputs.source_sha }}
           PYPI_VERSION: ${{ needs.plan.outputs.pypi_version }}
           WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
@@ -2257,6 +2288,18 @@ jobs:
             --wrapper-dir dist/wrapper \
             --version "$WRAPPER_VERSION" \
             --out dry-run/package-manager
+          docs_work="$(mktemp -d)"
+          trap 'rm -rf "$docs_work"' EXIT
+          toolchain_archive="dist/toolchain/baml-language-$VERSION-x86_64-unknown-linux-gnu.tar.gz"
+          test -f "$toolchain_archive"
+          tar -xzf "$toolchain_archive" -C "$docs_work"
+          BAML_BIN="$docs_work/bin/baml-cli" \
+            node docs/scripts/produce-docs-metadata.mjs \
+              --version "$VERSION" \
+              --channel "$CHANNEL" \
+              --source-revision "$SOURCE_REVISION" \
+              --released-at "$RELEASED_AT" \
+              --output "dry-run/manifest/v1/docs/v$VERSION/stdlib.json"
       - uses: actions/upload-artifact@v4
         with:
           name: dry-run-release-files

@@ -1,9 +1,0 @@
-{
-  "title": "baml auth",
-  "pages": [
-    "index",
-    "login",
-    "whoami",
-    "logout"
-  ]
-}

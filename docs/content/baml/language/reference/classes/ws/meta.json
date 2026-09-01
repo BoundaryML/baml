@@ -1,7 +1,0 @@
-{
-  "title": "ws",
-  "pages": [
-    "WsStream",
-    "WsStream$stream"
-  ]
-}

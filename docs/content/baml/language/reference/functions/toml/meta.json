@@ -1,8 +1,0 @@
-{
-  "title": "toml",
-  "pages": [
-    "item_from_json",
-    "item_to_json",
-    "table_from_json"
-  ]
-}

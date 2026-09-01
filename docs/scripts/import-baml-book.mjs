@@ -334,7 +334,8 @@ async function main() {
   const check = args.includes('--check');
   const sourceIndex = args.indexOf('--source');
   const manifestIndex = args.indexOf('--manifest');
-  const sourceRoot = sourceIndex === -1 ? undefined : path.resolve(args[sourceIndex + 1]);
+  const sourceArgument = sourceIndex === -1 ? process.env.BAML_BOOK_SOURCE : args[sourceIndex + 1];
+  const sourceRoot = sourceArgument ? path.resolve(sourceArgument) : undefined;
   const manifestPath = manifestIndex === -1 ? defaultManifestPath : path.resolve(args[manifestIndex + 1]);
   const approval = await readApprovalManifest(manifestPath);
 

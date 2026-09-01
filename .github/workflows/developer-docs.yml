@@ -32,7 +32,7 @@ permissions:
 
 jobs:
   verify:
-    name: Verify generated references and site
+    name: Generate references and verify site
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 20
     env:
@@ -60,20 +60,42 @@ jobs:
           node-action-version: "v6"
 
       - name: Build the repository CLI
-        run: cargo build -p baml_cli --bin baml-cli
+        run: cargo build --locked -p baml_cli --bin baml-cli
         working-directory: baml_language
 
-      - name: Verify generated language reference
+      - name: Produce versioned docs metadata from the source-built CLI
         run: |
-          if ! pnpm --filter @baml/developer-docs check:reference; then
-            pnpm --filter @baml/developer-docs generate:reference
-            git diff --stat -- docs/content/baml/language/reference docs/generated/baml
-            git diff -- docs/content/baml/language/reference docs/generated/baml | sed -n '1,400p'
-            exit 1
-          fi
+          version="$($BAML_BIN --version | awk '{print $2}')"
+          metadata="$RUNNER_TEMP/baml-docs-metadata-$version.json"
+          released_at="$(git show -s --format=%cI "$GITHUB_SHA")"
+          pnpm --filter @baml/developer-docs produce:docs-metadata -- \
+            --version "$version" \
+            --channel canary \
+            --source-revision "$GITHUB_SHA" \
+            --released-at "$released_at" \
+            --output "$metadata"
+          {
+            echo "BAML_DOCS_VERSION=$version"
+            echo "BAML_DOCS_METADATA_FILE=$metadata"
+          } >> "$GITHUB_ENV"
 
-      - name: Verify generated CLI reference
-        run: pnpm --filter @baml/developer-docs check:cli-reference
+      - name: Render language and CLI references from metadata
+        run: pnpm --filter @baml/developer-docs generate:derived
+
+      - name: Upload exact pull request metadata
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: developer-docs-metadata
+          path: ${{ env.BAML_DOCS_METADATA_FILE }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce build-time-only generated references
+        run: pnpm --filter @baml/developer-docs check:derived-policy
+
+      - name: Render approved book imports
+        run: pnpm --filter @baml/developer-docs generate:book
 
       - name: Verify approved book imports
         run: pnpm --filter @baml/developer-docs check:book
@@ -92,3 +114,64 @@ jobs:
 
       - name: Build docs
         run: pnpm --filter @baml/developer-docs build
+
+  deploy-preview:
+    name: Deploy exact-metadata preview
+    needs: verify
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check Vercel preview configuration
+        id: config
+        env:
+          VERCEL_TOKEN: ${{ secrets.DEVELOPER_DOCS_VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.DEVELOPER_DOCS_VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.DEVELOPER_DOCS_VERCEL_PROJECT_ID }}
+        run: |
+          if [[ -n "$VERCEL_TOKEN" && -n "$VERCEL_ORG_ID" && -n "$VERCEL_PROJECT_ID" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping exact-metadata preview until the developer docs Vercel secrets are configured."
+          fi
+
+      - name: Checkout
+        if: ${{ steps.config.outputs.configured == 'true' }}
+        uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js and pnpm
+        if: ${{ steps.config.outputs.configured == 'true' }}
+        uses: ./.github/actions/setup-node
+        with:
+          node-action-version: "v6"
+
+      - name: Download exact pull request metadata
+        if: ${{ steps.config.outputs.configured == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: developer-docs-metadata
+          path: ${{ runner.temp }}/developer-docs-metadata
+
+      - name: Build and deploy the preview
+        if: ${{ steps.config.outputs.configured == 'true' }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.DEVELOPER_DOCS_VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.DEVELOPER_DOCS_VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.DEVELOPER_DOCS_VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          metadata="$(find "$RUNNER_TEMP/developer-docs-metadata" -type f -name '*.json' -print -quit)"
+          if [[ -z "$metadata" ]]; then
+            echo "::error::The verified docs metadata artifact is empty."
+            exit 1
+          fi
+          version="$(jq -r '.version' "$metadata")"
+          pnpm exec vercel pull --yes --environment=preview --token "$VERCEL_TOKEN"
+          BAML_DOCS_METADATA_FILE="$metadata" BAML_DOCS_VERSION="$version" \
+            pnpm exec vercel build --target=preview --token "$VERCEL_TOKEN"
+          preview_url="$(pnpm exec vercel deploy --prebuilt --target=preview --token "$VERCEL_TOKEN")"
+          echo "### Developer docs preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "Built from the verified metadata for BAML $version: $preview_url" >> "$GITHUB_STEP_SUMMARY"

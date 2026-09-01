@@ -567,6 +567,23 @@ fn render_describe_ns_item() {
 
 // ── Builtin / standard library listing tests ────────────────────────────────
 
+#[test]
+fn stdlib_package_enumeration_is_complete_and_unique() {
+    let packages = baml_builtins2::stdlib_package_names();
+    assert!(!packages.is_empty());
+    let unique = packages
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(unique.len(), packages.len());
+    for expected in ["baml", "ai", "reflect", "testing", "assert"] {
+        assert!(
+            packages.contains(&expected),
+            "missing {expected}: {packages:?}"
+        );
+    }
+}
+
 /// `baml describe baml` — list all items in the builtin `baml` package.
 #[test]
 fn render_builtin_package_listing() {

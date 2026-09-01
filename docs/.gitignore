@@ -3,6 +3,15 @@
 
 # generated content
 /.source
+/content/baml/language/reference/
+/content/cli/commands/
+/content/baml/book/**/*.mdx
+!/content/baml/book/index.mdx
+/content/baml/book/meta.json
+/generated/baml/
+/generated/cli/
+/generated/book/
+/generated/docs-metadata.json
 
 # build and typecheck output
 /.next

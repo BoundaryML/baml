@@ -1,9 +1,0 @@
-{
-  "title": "glob",
-  "pages": [
-    "Glob",
-    "Glob$stream",
-    "ScanOptions",
-    "ScanOptions$stream"
-  ]
-}

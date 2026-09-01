@@ -798,6 +798,7 @@ mod tests {
             &["baml", "auth", "login"],
             &["baml", "auth", "login", "--no-open"],
             &["baml", "describe"],
+            &["baml", "describe", "--packages", "--json"],
             &["baml", "describe", "baml"],
             &["baml", "describe", "baml.json"],
             &["baml", "describe", "Array"],

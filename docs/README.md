@@ -14,15 +14,39 @@ The portal imports the canonical BAML TextMate grammar from `typescript2/pkg-gra
 
 ## Generated references
 
-Build the repository CLI, then point both generators at that exact binary:
+Language and CLI reference pages are build artifacts. They are never checked
+in. A nightly or canary release asks its exact stamped CLI for the authoritative
+standard-library package list, exports every package plus the CLI command tree,
+and publishes one immutable JSON document at:
+
+```text
+https://pkg.boundaryml.com/manifest/v1/docs/v<version>/stdlib.json
+```
+
+The Fumadocs build is a TypeScript-only consumer. By default it resolves the
+current canary channel to an exact version and renders that immutable artifact.
+Use `BAML_DOCS_VERSION`, `BAML_DOCS_METADATA_URL`, or
+`BAML_DOCS_METADATA_FILE` to select another version or a local artifact. The
+release JSON contains all toolchain-discovered packages—not a docs-maintained
+list—and generated symbols use fully qualified names such as
+`baml.http.Request`.
+
+To exercise the complete producer/consumer path locally:
 
 ```sh
 cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
-BAML_BIN="$PWD/baml_language/target/debug/baml-cli" pnpm --filter @baml/developer-docs generate:reference
-BAML_BIN="$PWD/baml_language/target/debug/baml-cli" pnpm --filter @baml/developer-docs generate:cli-reference
+version="$($PWD/baml_language/target/debug/baml-cli --version | awk '{print $2}')"
+metadata="$PWD/.tmp/baml-docs-metadata-$version.json"
+BAML_BIN="$PWD/baml_language/target/debug/baml-cli" \
+  pnpm --filter @baml/developer-docs produce:docs-metadata -- \
+    --version "$version" \
+    --channel canary \
+    --source-revision "$(git rev-parse HEAD)" \
+    --released-at "$(git show -s --format=%cI HEAD)" \
+    --output "$metadata"
+BAML_DOCS_VERSION="$version" BAML_DOCS_METADATA_FILE="$metadata" \
+  pnpm --filter @baml/developer-docs build
 ```
-
-The generated Markdown and source snapshots are committed. CI rebuilds the repository CLI and runs both corresponding `check:*` commands, so language or command-tree drift fails with a regeneration instruction.
 
 ## BAML book imports
 
@@ -42,9 +66,10 @@ pnpm --filter @baml/developer-docs check:book
 
 The importer converts anchored mdBook includes, semantic notes, numbered code
 listings, opt-in runnable projects, and TOML quizzes into native Fumadocs MDX.
-Generated pages and provenance are committed so previews do not depend on a
-second repository. CI verifies their hashes, navigation, and that no unmanaged
-book chapter slipped around the approval manifest.
+Generated pages, navigation, and provenance are ignored build outputs. CI
+regenerates them from the pinned, clean source checkout and verifies their
+hashes and that no unmanaged chapter slipped around the approval manifest. Set
+`BAML_BOOK_SOURCE` (or pass `--source`) once approved chapters are present.
 
 ## Runnable examples
 
@@ -75,3 +100,11 @@ The repository is connected to the Vercel project `baml/developer-docs` with the
 - Preview deployments: enabled for pull requests
 
 The project currently uses its generated `vercel.app` domain. Assigning `developer.boundaryml.com` requires access to the existing `boundaryml.com` domain or DNS account.
+
+Configure `DEVELOPER_DOCS_VERCEL_DEPLOY_HOOK` so the release workflow rebuilds
+production only after its channel manifest has been promoted. Configure
+`DEVELOPER_DOCS_VERCEL_TOKEN`, `DEVELOPER_DOCS_VERCEL_ORG_ID`, and
+`DEVELOPER_DOCS_VERCEL_PROJECT_ID` for the docs workflow to build pull request
+previews from the exact metadata it just verified. That workflow preview is the
+authoritative review surface for generated references; a standalone Vercel Git
+integration build can only resolve the latest published channel artifact.
