@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "channels": {
+    "latest": {
+      "version": "0.18.0",
+      "track": "canary"
+    }
+  },
+  "releases": [
+    {
+      "version": "0.18.0",
+      "packages": [
+        "baml"
+      ]
+    }
+  ]
+}

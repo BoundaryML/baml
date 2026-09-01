@@ -3,14 +3,11 @@ import "server-only"
 import { readFile, readdir } from "node:fs/promises"
 import path from "node:path"
 
-import type { LanguageRegistration } from "shiki"
-import { createHighlighter } from "shiki"
-
+import { highlightBaml } from "@/lib/baml-highlight"
 import { extractAnchor, parseTrackMetadata } from "./markers"
 import { verificationModes, type ExampleManifest, type LoadedBamlExample } from "./types"
 
 const examplesRoot = path.join(process.cwd(), "examples")
-const grammarPath = path.resolve(process.cwd(), "../../../typescript2/pkg-grammar/baml.tmLanguage.json")
 const runtimeVersion = "0.18.1-nightly.20260828.a"
 
 function assertManifest(value: unknown, requestedId: string): asserts value is ExampleManifest {
@@ -48,22 +45,6 @@ async function readFixtureFiles(directory: string) {
   return files
 }
 
-let highlighterPromise: ReturnType<typeof createHighlighter> | undefined
-async function highlight(code: string) {
-  if (!highlighterPromise) {
-    highlighterPromise = (async () => {
-      const grammar = JSON.parse(await readFile(grammarPath, "utf8")) as LanguageRegistration
-      return createHighlighter({ langs: [grammar], themes: ["github-light", "github-dark"] })
-    })()
-  }
-  const highlighter = await highlighterPromise
-  return highlighter.codeToHtml(code, {
-    lang: "baml",
-    themes: { light: "github-light", dark: "github-dark" },
-    defaultColor: false,
-  })
-}
-
 export async function loadBamlExample(id: string): Promise<LoadedBamlExample> {
   const directory = safeExampleDirectory(id)
   const manifest = JSON.parse(await readFile(path.join(directory, "example.json"), "utf8")) as unknown
@@ -80,6 +61,6 @@ export async function loadBamlExample(id: string): Promise<LoadedBamlExample> {
     ...anchor,
     files,
     runtimeVersion,
-    highlightedHtml: await highlight(anchor.code),
+    highlightedHtml: await highlightBaml(anchor.code),
   }
 }

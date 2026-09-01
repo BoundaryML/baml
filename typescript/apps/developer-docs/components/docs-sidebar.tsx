@@ -46,9 +46,11 @@ function FolderItems({ node, pathname }: { node: Extract<TreeNode, { type: "fold
 
 export function DocsSidebar({ tree, ...props }: React.ComponentProps<typeof Sidebar> & { tree: typeof source.pageTree }) {
   const pathname = usePathname()
+  const pathSegments = pathname.split("/").filter(Boolean)
   const contentRef = React.useRef<HTMLDivElement>(null)
-  const activeProduct = pathname.split("/").filter(Boolean)[0]
+  const activeProduct = pathSegments[0]
   const activeFolder = tree.children.find((node) => node.type === "folder" && node.$id === activeProduct)
+  const packageSelector = activeProduct === "baml" && pathSegments[1] === "packages" ? pathSegments[2] ?? "latest" : null
 
   React.useLayoutEffect(() => {
     const container = contentRef.current
@@ -94,6 +96,25 @@ export function DocsSidebar({ tree, ...props }: React.ComponentProps<typeof Side
           <SidebarGroup>
             <SidebarGroupLabel className="font-medium text-muted-foreground">{activeFolder.name}</SidebarGroupLabel>
             <SidebarGroupContent><SidebarMenu className="gap-0.5"><FolderItems node={activeFolder} pathname={pathname} /></SidebarMenu></SidebarGroupContent>
+          </SidebarGroup>
+        ) : null}
+        {packageSelector ? (
+          <SidebarGroup>
+            <SidebarGroupLabel className="font-medium text-muted-foreground">Packages</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-0.5">
+                {[
+                  { href: `/baml/packages/${packageSelector}/baml`, label: "baml" },
+                  { href: `/baml/packages/${packageSelector}/baml/Array`, label: "Array" },
+                ].map(({ href, label }) => (
+                  <SidebarMenuItem key={href}>
+                    <SidebarMenuButton asChild isActive={pathname === href} className="relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48">
+                      <Link href={href}><span className="absolute inset-0 flex w-(--sidebar-menu-width) bg-transparent" />{label}</Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
           </SidebarGroup>
         ) : null}
       </SidebarContent>
