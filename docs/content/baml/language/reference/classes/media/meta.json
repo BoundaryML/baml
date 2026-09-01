@@ -1,0 +1,13 @@
+{
+  "title": "media",
+  "pages": [
+    "Audio",
+    "Audio$stream",
+    "Image",
+    "Image$stream",
+    "Pdf",
+    "Pdf$stream",
+    "Video",
+    "Video$stream"
+  ]
+}

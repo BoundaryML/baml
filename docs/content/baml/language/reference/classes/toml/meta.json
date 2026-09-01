@@ -1,0 +1,9 @@
+{
+  "title": "toml",
+  "pages": [
+    "Table",
+    "Table$stream",
+    "TomlParseError",
+    "TomlParseError$stream"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "title": "ops",
+  "pages": [
+    "Add",
+    "BitAnd",
+    "BitOr",
+    "BitXor",
+    "Compare",
+    "Divide",
+    "Equals",
+    "Index",
+    "Multiply",
+    "Negate",
+    "Remainder",
+    "ShiftLeft",
+    "ShiftRight",
+    "Subtract"
+  ]
+}

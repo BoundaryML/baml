@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "package": "baml",
+  "exportFormatVersion": 1,
+  "toolchain": "baml-cli 0.18.0",
+  "sha256": "089237fd79583ddfad7a5564443fc54faca90b83ff11087bcdef19b331092d85",
+  "items": 444,
+  "impls": 183,
+  "counts": {
+    "class": 262,
+    "enum": 3,
+    "function": 139,
+    "interface": 30,
+    "type_alias": 10
+  }
+}

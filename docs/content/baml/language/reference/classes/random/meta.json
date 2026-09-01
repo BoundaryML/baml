@@ -1,0 +1,11 @@
+{
+  "title": "random",
+  "pages": [
+    "ChaCha20",
+    "ChaCha20$stream",
+    "SystemRandom",
+    "SystemRandom$stream",
+    "Xoshiro256PlusPlus",
+    "Xoshiro256PlusPlus$stream"
+  ]
+}

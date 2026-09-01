@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "build": "next build",
+    "check:reference": "node scripts/generate-baml-reference.mjs --check",
     "dev": "next dev",
+    "generate:reference": "node scripts/generate-baml-reference.mjs",
     "runner:measure": "node scripts/measure-wasm.mjs",
     "start": "next start",
     "test": "node --test tests/*.test.mjs",

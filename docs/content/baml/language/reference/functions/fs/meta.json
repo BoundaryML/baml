@@ -1,0 +1,18 @@
+{
+  "title": "fs",
+  "pages": [
+    "chmod",
+    "exists",
+    "mkdir",
+    "open",
+    "read",
+    "read_dir",
+    "remove",
+    "remove_dir",
+    "remove_dir_all",
+    "size",
+    "symlink",
+    "write",
+    "write_bytes"
+  ]
+}

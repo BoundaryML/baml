@@ -1,0 +1,11 @@
+{
+  "title": "baml package",
+  "pages": [
+    "index",
+    "classes",
+    "enums",
+    "functions",
+    "interfaces",
+    "type-aliases"
+  ]
+}

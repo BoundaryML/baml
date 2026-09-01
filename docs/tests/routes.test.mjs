@@ -28,3 +28,12 @@ test('highlighting consumes the monorepo BAML grammar', async () => {
   const config = await readFile(path.join(packageRoot, 'source.config.ts'), 'utf8');
   assert.match(config, /typescript2\/pkg-grammar\/baml\.tmLanguage\.json/);
 });
+
+test('generated package reference is part of the language route tree', async () => {
+  await Promise.all([
+    access(path.join(packageRoot, 'content', 'baml', 'language', 'reference', 'index.md')),
+    access(path.join(packageRoot, 'content', 'baml', 'language', 'reference', 'classes', 'Array.md')),
+    access(path.join(packageRoot, 'content', 'baml', 'language', 'reference', 'functions', 'env', 'ref.md')),
+    access(path.join(packageRoot, 'generated', 'baml', 'manifest.json')),
+  ]);
+});

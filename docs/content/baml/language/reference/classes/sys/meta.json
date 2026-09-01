@@ -1,0 +1,19 @@
+{
+  "title": "sys",
+  "pages": [
+    "Process",
+    "Process$stream",
+    "ProcessExit",
+    "ProcessExit$stream",
+    "ProcessOptions",
+    "ProcessOptions$stream",
+    "ReadPipe",
+    "ReadPipe$stream",
+    "ReadPipeLines",
+    "ReadPipeLines$stream",
+    "ShellOutput",
+    "ShellOutput$stream",
+    "WritePipe",
+    "WritePipe$stream"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "title": "Type aliases",
+  "pages": [
+    "csv",
+    "json",
+    "panics",
+    "time",
+    "toml"
+  ]
+}
