@@ -1,0 +1,85 @@
+name: Developer Docs
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "baml_language/**"
+      - "typescript2/pkg-grammar/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/developer-docs.yml"
+  push:
+    branches:
+      - canary
+    paths:
+      - "docs/**"
+      - "baml_language/**"
+      - "typescript2/pkg-grammar/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/developer-docs.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify generated references and site
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
+    env:
+      BAML_BIN: ${{ github.workspace }}/baml_language/target/debug/baml-cli
+    steps:
+      - name: Checkout
+        uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install
+        working-directory: baml_language
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "linux-cargo"
+
+      - name: Set up Node.js and pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          node-action-version: "v6"
+
+      - name: Build the repository CLI
+        run: cargo build -p baml_cli --bin baml-cli
+        working-directory: baml_language
+
+      - name: Verify generated language reference
+        run: |
+          if ! pnpm --filter @baml/developer-docs check:reference; then
+            pnpm --filter @baml/developer-docs generate:reference
+            git diff --stat -- docs/content/baml/language/reference docs/generated/baml
+            git diff -- docs/content/baml/language/reference docs/generated/baml | sed -n '1,400p'
+            exit 1
+          fi
+
+      - name: Verify generated CLI reference
+        run: pnpm --filter @baml/developer-docs check:cli-reference
+
+      - name: Run docs tests
+        run: pnpm --filter @baml/developer-docs test
+
+      - name: Typecheck docs
+        run: pnpm --filter @baml/developer-docs typecheck
+
+      - name: Build docs
+        run: pnpm --filter @baml/developer-docs build

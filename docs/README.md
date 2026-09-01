@@ -1,30 +1,36 @@
-# Boundary Developer Documentation
+# Boundary developer docs
 
-This package builds the documentation portal for `developer.boundaryml.com`.
-It is a Next.js application using Fumadocs and MDX.
+This package serves the Fumadocs portal planned for `developer.boundaryml.com`.
 
 ## Local development
 
-From the monorepo root:
+From the repository root:
 
-```bash
-pnpm install
+```sh
 pnpm --filter @baml/developer-docs dev
 ```
 
-Validate a change with:
+The portal imports the canonical BAML TextMate grammar from `typescript2/pkg-grammar` so local highlighting stays aligned with the language tooling.
 
-```bash
-pnpm --filter @baml/developer-docs test
-pnpm --filter @baml/developer-docs typecheck
-pnpm --filter @baml/developer-docs build
+## Generated references
+
+Build the repository CLI, then point both generators at that exact binary:
+
+```sh
+cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
+BAML_BIN="$PWD/baml_language/target/debug/baml-cli" pnpm --filter @baml/developer-docs generate:reference
+BAML_BIN="$PWD/baml_language/target/debug/baml-cli" pnpm --filter @baml/developer-docs generate:cli-reference
 ```
 
-## Content model
+The generated Markdown and source snapshots are committed. CI rebuilds the repository CLI and runs both corresponding `check:*` commands, so language or command-tree drift fails with a regeneration instruction.
 
-- People author explanations, tutorials, examples, and the BAML book in MDX.
-- Generators own implementation facts such as language signatures, standard-library declarations, and CLI flags.
-- The BAML grammar comes directly from `typescript2/pkg-grammar/baml.tmLanguage.json` so highlighting changes with the language.
-- Pull-request deployments must remain `noindex`; production is indexable.
+## Deployment
 
-The route contract is checked by `tests/routes.test.mjs`.
+The repository is connected to the Vercel project `baml/developer-docs` with these settings:
+
+- Root Directory: `docs`
+- Framework Preset: Next.js
+- Production Branch: `canary`
+- Preview deployments: enabled for pull requests
+
+The project currently uses its generated `vercel.app` domain. Assigning `developer.boundaryml.com` requires access to the existing `boundaryml.com` domain or DNS account.
