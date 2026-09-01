@@ -1,0 +1,67 @@
+name: Test - Wrapper installer E2E (canary baseline)
+
+on:
+  push:
+    branches:
+      - sxlijin/issue-4624-wrapper-e2e-before
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  docker:
+    name: Canary (${{ matrix.distro }}, ${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: debian
+            arch: x86_64
+            image: debian:bookworm-slim
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - distro: alpine
+            arch: x86_64
+            image: alpine:3.22
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - distro: debian
+            arch: aarch64
+            image: debian:bookworm-slim
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - distro: alpine
+            arch: aarch64
+            image: alpine:3.22
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Exercise published canary install.sh, wrapper, and CLI
+        env:
+          DISTRO: ${{ matrix.distro }}
+          IMAGE: ${{ matrix.image }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          case "$DISTRO" in
+            debian)
+              setup='export DEBIAN_FRONTEND=noninteractive; apt-get update -qq; apt-get install -y -qq --no-install-recommends ca-certificates curl >/dev/null'
+              ;;
+            alpine)
+              setup='apk add --no-cache ca-certificates curl >/dev/null'
+              ;;
+          esac
+          docker run --rm --pull always --platform "$PLATFORM" --env HOME=/tmp/e2e-home --entrypoint /bin/sh "$IMAGE" -c "
+            set -eu
+            $setup
+            curl -fsSL https://pkg.boundaryml.com/install.sh -o /tmp/install.sh
+            sh /tmp/install.sh --channel canary --yes --no-modify-path
+            \"\$HOME/.baml/bin/baml\" --version
+            \"\$HOME/.baml/bin/baml\" --color never --no-progress init /tmp/project --name canary-control
+            \"\$HOME/.baml/bin/baml\" --color never --no-progress --directory /tmp/project check
+          "
