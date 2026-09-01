@@ -438,7 +438,8 @@ jobs:
           # --no-confirm: Non-interactive mode
           # --execute: Actually perform the release (not a dry run)
           # --no-verify: Skip build verification (already verified in CI)
-          cargo release ${{ needs.determine-version.outputs.version_string }} --no-tag --no-push --no-confirm --execute --no-verify
+          # --allow-branch HEAD: Tag checkouts are detached, so cargo-release reports the branch as HEAD
+          cargo release ${{ needs.determine-version.outputs.version_string }} --allow-branch HEAD --no-tag --no-push --no-confirm --execute --no-verify
 
   publish-to-open-vsx:
     environment: release
