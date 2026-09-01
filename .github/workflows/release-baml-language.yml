@@ -1318,23 +1318,20 @@ jobs:
         needs.plan.outputs.source_branch == 'canary'
       }}
     runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
+    env:
+      GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: go-sdk-mirror
           path: /tmp/go-sdk-package
       - name: Clone BoundaryML/baml-go
-        env:
-          DEPLOY_KEY: ${{ secrets.BAML_GO_DEPLOY_KEY }}
         run: |
           set -euo pipefail
-          test -n "$DEPLOY_KEY"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/baml_go_mirror_key
-          chmod 600 ~/.ssh/baml_go_mirror_key
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_go_mirror_key -o IdentitiesOnly=yes"
-          git clone git@github.com:BoundaryML/baml-go.git /tmp/baml-go
+          test -n "$GH_TOKEN"
+          gh auth setup-git
+          git clone https://github.com/BoundaryML/baml-go.git /tmp/baml-go
           if ! git -C /tmp/baml-go rev-parse --verify HEAD >/dev/null 2>&1; then
             git -C /tmp/baml-go switch --orphan main
           fi
@@ -1345,7 +1342,6 @@ jobs:
           GO_VERSION: ${{ needs.plan.outputs.go_version }}
         run: |
           set -euo pipefail
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_go_mirror_key -o IdentitiesOnly=yes"
           tag="$GO_VERSION"
           manifest_url="https://pkg.boundaryml.com/manifest/v1/version/$CANONICAL_VERSION.json"
 
