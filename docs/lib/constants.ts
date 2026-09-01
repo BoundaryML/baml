@@ -1,5 +1,5 @@
 export const siteName = 'Boundary Developer';
 export const siteDescription =
-  'Build with BAML, the BAML CLI, and Boundary Workflow Service.';
+  'Documentation for BAML, the BAML CLI, and upcoming Boundary Web Services.';
 export const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ?? 'https://developer.boundaryml.com';
