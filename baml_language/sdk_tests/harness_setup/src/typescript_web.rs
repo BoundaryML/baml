@@ -215,17 +215,23 @@ mod {name} {{
 "#,
             );
         }
-        if fixture.has_workers_tests {
-            buffer.push_str(
-                r#"
+        buffer.push_str(
+            r#"
     #[test]
     fn vitest_workers() {
-        cmd("pnpm exec vitest run --config vitest.workers.config.ts");
-        cmd("pnpm exec vitest run --config vitest.integration.config.ts");
-    }
+"#,
+        );
+        if fixture.has_workers_tests {
+            buffer.push_str(
+                r#"        cmd("pnpm exec vitest run --config vitest.workers.config.ts");
 "#,
             );
         }
+        buffer.push_str(
+            r#"        cmd("pnpm exec vitest run --config vitest.integration.config.ts");
+    }
+"#,
+        );
         buffer.push_str("\n}\n");
     }
 
