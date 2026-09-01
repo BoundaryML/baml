@@ -928,12 +928,12 @@ jobs:
         env:
           VERSION: ${{ steps.ver.outputs.version }}
           # In-memory PGP signing path in build.gradle.kts keys on GPG_PRIVATE_KEY.
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_PRIVATE_KEY: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
           if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
-            echo "::error::GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
+            echo "::error::MAVEN_CENTRAL_GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
             exit 1
           fi
           # One staging run produces the full main+sources+javadoc+pom+module
@@ -948,12 +948,12 @@ jobs:
         working-directory: baml_language/sdks/java/gradle-plugin
         env:
           VERSION: ${{ steps.ver.outputs.version }}
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_PRIVATE_KEY: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
           if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
-            echo "::error::GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
+            echo "::error::MAVEN_CENTRAL_GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
             exit 1
           fi
           # Stage the plugin jar+sources+javadoc AND the plugin-marker POM
@@ -970,12 +970,12 @@ jobs:
         working-directory: baml_language/sdks/java/baml-bridge-kotlin
         env:
           VERSION: ${{ steps.ver.outputs.version }}
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_PRIVATE_KEY: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
           if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
-            echo "::error::GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
+            echo "::error::MAVEN_CENTRAL_GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
             exit 1
           fi
           # Stage the kotlin jar+sources+javadoc+POM into baml-bridge's
@@ -995,8 +995,8 @@ jobs:
           BRIDGE_PUBLISH: ${{ steps.exists.outputs.bridge_publish }}
           PLUGIN_PUBLISH: ${{ steps.exists.outputs.plugin_publish }}
           KOTLIN_PUBLISH: ${{ steps.exists.outputs.kotlin_publish }}
-          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
-          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
         run: |
           set -euo pipefail
           staging="baml_language/sdks/java/baml_bridge/build/staging-deploy"
@@ -1024,7 +1024,7 @@ jobs:
           unzip -l "$GITHUB_WORKSPACE/central-bundle.zip"
 
           if [[ -z "$CENTRAL_USERNAME" || -z "$CENTRAL_PASSWORD" ]]; then
-            echo "::error::CENTRAL_USERNAME / CENTRAL_PASSWORD secrets are not set — cannot publish to Maven Central"
+            echo "::error::MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD secrets are not set — cannot publish to Maven Central"
             exit 1
           fi
           # Portal auth: Bearer <base64(username:password)> (env → shell var, never
