@@ -5,6 +5,7 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
+    "runner:measure": "node scripts/measure-wasm.mjs",
     "start": "next start",
     "test": "node --test tests/*.test.mjs",
     "typecheck": "fumadocs-mdx && next typegen && tsc --noEmit",
