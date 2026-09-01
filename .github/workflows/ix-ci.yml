@@ -13,10 +13,12 @@ name: CI on ix (preview)
 permissions:
   contents: read
 
+# Temporarily disabled for push and pull_request events. The ix runner pool has
+# not assigned a job since 2026-08-28, leaving jobs queued until GitHub's 24-hour
+# runner-acquisition limit or until a newer workflow supersedes them. Keep a
+# manual entry point for an explicitly authorized smoke test after the runner
+# pool is healthy again.
 on:
-  push:
-    branches: [canary]
-  pull_request:
   workflow_dispatch:
 
 concurrency:
