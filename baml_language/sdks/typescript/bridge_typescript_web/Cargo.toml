@@ -10,6 +10,7 @@ crate-type = [ "cdylib", "rlib" ]
 
 [dependencies]
 baml_version = { workspace = true }
+bex_prof_store = { workspace = true }
 bex_project = { workspace = true }
 bridge_cffi = { workspace = true, default-features = false }
 bridge_ctypes = { workspace = true }

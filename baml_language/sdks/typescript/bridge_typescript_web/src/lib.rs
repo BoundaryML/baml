@@ -32,6 +32,14 @@ pub fn init() -> Result<(), JsValue> {
     .map_err(|error| JsValue::from_str(&error))
 }
 
+/// Configure the workerd-only non-cryptographic `UUIDv4` source before a
+/// generated SDK stages bytecode at module scope.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = configureWorkerdUuidSeed)]
+pub fn configure_workerd_uuid_seed(seed: u64) -> Result<(), JsValue> {
+    bex_prof_store::ids::configure_workerd_uuid_seed(seed).map_err(JsValue::from_str)
+}
+
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(js_name = newFunctionCall)]
 pub fn new_function_call() -> u64 {

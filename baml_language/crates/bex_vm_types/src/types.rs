@@ -126,8 +126,8 @@ pub struct Program {
     /// (streams spec §2.3): SHA-256 over the domain string, compiler
     /// version, and every (path, bytes) pair. `None` when the compiling
     /// host chose not to provide one (e.g. mounted-unit links) — the
-    /// profiler then falls back to a deterministic hash of the compiled
-    /// program for `ProgramId`, without claiming a `SourceSnapshotId`.
+    /// profiler then falls back to a random per-engine `ProgramId`, which
+    /// over-splits (the safe direction).
     ///
     /// In-memory metadata, NOT compiled content: it is `borsh(skip)`ped so
     /// program/unit byte-identity oracles compare compiled output only,

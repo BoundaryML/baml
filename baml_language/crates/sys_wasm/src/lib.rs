@@ -19,7 +19,7 @@ pub use host_value::{
 };
 #[doc(hidden)]
 pub use send_wrapper::{SendFuture, SendWrapper};
-use web_sysops::{WebFs, WebHttp};
+use web_sysops::{WebFs, WebHttp, WebTime};
 
 #[derive(Clone)]
 struct WebSysopConfig {
@@ -67,5 +67,6 @@ pub fn build() -> Result<sys_ops::SysOps, String> {
         .with_http_fetch_instance(http)
         .with_fs_read_instance(fs)
         .with_host_instance(host)
+        .with_time_instance(Arc::new(WebTime))
         .build())
 }

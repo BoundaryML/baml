@@ -123,7 +123,17 @@ fn codegen_fixture(
             "vitest.integration.config.ts",
             VITEST_INTEGRATION_CONFIG.to_string(),
         ),
-        ("worker_startup.test.ts", WORKER_STARTUP_TEST.to_string()),
+        (
+            "worker_startup.test.ts",
+            WORKER_STARTUP_TEST.replace(
+                "__EXPECTED_BODY__",
+                if fixture == "function_calls" {
+                    "hello world"
+                } else {
+                    "sdk-test-typescript-workers"
+                },
+            ),
+        ),
         (
             "wrangler.jsonc",
             r#"{
@@ -138,7 +148,17 @@ fn codegen_fixture(
         ),
         (
             "worker.js",
-            r#"import "./workers/baml_sdk/index.js";
+            if fixture == "function_calls" {
+                r#"import { worker_runtime_smoke } from "./workers/baml_sdk/index.js";
+
+export default {
+  fetch() {
+    return new Response(worker_runtime_smoke());
+  },
+};
+"#
+            } else {
+                r#"import "./workers/baml_sdk/index.js";
 
 export default {
   fetch() {
@@ -146,6 +166,7 @@ export default {
   },
 };
 "#
+            }
             .to_string(),
         ),
     ];

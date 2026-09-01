@@ -53,6 +53,12 @@ export function completeWebHostCall(call_id: number, is_error: number, content: 
 
 export function configureWebSysops(fetch_key: bigint, read_file_sync_key: bigint): void;
 
+/**
+ * Configure the workerd-only non-cryptographic `UUIDv4` source before a
+ * generated SDK stages bytecode at module scope.
+ */
+export function configureWorkerdUuidSeed(seed: bigint): void;
+
 export function flushEvents(): void;
 
 export function getBridgeRuntimeVersion(): string;
@@ -128,19 +134,8 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
-    readonly _testWebFireHostRelease: (a: bigint) => void;
-    readonly _testWebHostCallableCount: () => number;
-    readonly _testWebHostReleaseCallbackInstalled: () => number;
-    readonly _testWebInFlightHostCallCount: () => number;
-    readonly _testWebMissingHostCallableError: (a: bigint) => any;
-    readonly _testWebSyncPendingHostCallableError: (a: bigint) => [number, number];
-    readonly completeWebHostCall: (a: number, b: number, c: number, d: number) => number;
-    readonly configureWebSysops: (a: bigint, b: bigint) => [number, number];
-    readonly mintWebHostValueKey: () => bigint;
-    readonly registerWebHostCallable: (a: any) => bigint;
-    readonly registerWebHostValueReleaseCallback: (a: any) => number;
-    readonly releaseWebHostCallable: (a: bigint) => void;
     readonly cancelFunctionCall: (a: bigint) => number;
+    readonly configureWorkerdUuidSeed: (a: bigint) => [number, number];
     readonly flushEvents: () => void;
     readonly getBridgeRuntimeVersion: () => [number, number];
     readonly getToolchainVersion: () => [number, number];
@@ -154,23 +149,35 @@ export interface InitOutput {
     readonly mediaFromUrl: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
     readonly mediaMimeType: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaUrl: (a: bigint, b: number) => [number, number, number, number];
-    readonly callFunction: (a: number, b: number) => any;
-    readonly callFunctionSync: (a: number, b: number) => [number, number];
-    readonly stageRuntimeBytecode: (a: number, b: number, c: number, d: number) => [number, number];
-    readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
     readonly _testHandleTableEntryCount: () => [number, number, number];
     readonly cloneHandle: (a: bigint) => [bigint, number, number];
     readonly releaseHandle: (a: bigint) => number;
     readonly seedFunctionRefHandle: (a: number) => [bigint, number, number];
     readonly seedGenericMediaHandle: () => [bigint, number, number];
+    readonly callFunction: (a: number, b: number) => any;
+    readonly callFunctionSync: (a: number, b: number) => [number, number];
+    readonly stageRuntimeBytecode: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
+    readonly _testWebFireHostRelease: (a: bigint) => void;
+    readonly _testWebHostCallableCount: () => number;
+    readonly _testWebHostReleaseCallbackInstalled: () => number;
+    readonly _testWebInFlightHostCallCount: () => number;
+    readonly _testWebMissingHostCallableError: (a: bigint) => any;
+    readonly _testWebSyncPendingHostCallableError: (a: bigint) => [number, number];
+    readonly completeWebHostCall: (a: number, b: number, c: number, d: number) => number;
+    readonly configureWebSysops: (a: bigint, b: bigint) => [number, number];
+    readonly mintWebHostValueKey: () => bigint;
+    readonly registerWebHostCallable: (a: any) => bigint;
+    readonly registerWebHostValueReleaseCallback: (a: any) => number;
+    readonly releaseWebHostCallable: (a: bigint) => void;
     readonly completeHostCall: (a: number, b: number, c: number, d: number) => number;
     readonly mintHostValueKey: () => bigint;
     readonly registerHostCallable: (a: any) => bigint;
     readonly registerHostValueReleaseCallback: (a: any) => number;
     readonly releaseHostCallable: (a: bigint) => void;
-    readonly free_buffer: (a: number) => void;
     readonly cancel_function_call: (a: bigint) => number;
     readonly new_function_call: () => bigint;
+    readonly free_buffer: (a: number) => void;
     readonly wasm_bindgen__convert__closures_____invoke__h06cf218e7899498c: (a: number, b: number, c: any) => [number, number];
     readonly wasm_bindgen__convert__closures_____invoke__hc1aeb8686748a7da: (a: number, b: number, c: any, d: any) => void;
     readonly wasm_bindgen__convert__closures_____invoke__h5b34bf2d90ad8f2b: (a: number, b: number) => number;

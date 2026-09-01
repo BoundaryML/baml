@@ -1706,6 +1706,7 @@ name = "bridge_typescript_web"
 version = "0.0.0-beta"
 dependencies = [
  "baml_version",
+ "bex_prof_store",
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
@@ -7046,6 +7047,7 @@ dependencies = [
  "sys_ops",
  "sys_types",
  "wasm-bindgen",
+ "web-time",
 ]
 
 [[package]]

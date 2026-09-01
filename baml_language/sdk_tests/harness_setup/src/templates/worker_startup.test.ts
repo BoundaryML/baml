@@ -13,8 +13,8 @@ afterAll(async () => {
   await server.close();
 });
 
-test("starts the configured Worker with the generated SDK", async () => {
+test("starts the configured Worker and executes its generated SDK", async () => {
   const response = await server.fetch("/");
   expect(response.status).toBe(200);
-  expect(await response.text()).toBe("sdk-test-typescript-workers");
+  expect(await response.text()).toBe("__EXPECTED_BODY__");
 });

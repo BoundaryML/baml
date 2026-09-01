@@ -46,34 +46,6 @@ pub fn program_content_hash<'a>(files: impl IntoIterator<Item = (&'a str, &'a [u
     hasher.finalize().into()
 }
 
-/// Stable identity for a compiled program when the host no longer has the
-/// source files needed by [`program_content_hash`].
-///
-/// `Program::source_content_hash` is deliberately omitted from its Borsh
-/// representation, so this hashes only executable compiled content. It is a
-/// `ProgramId` fallback, not a `SourceSnapshotId`: source-only changes such as
-/// comments may compile to the same identity.
-#[must_use]
-pub fn compiled_program_content_hash(program: &crate::Program) -> [u8; 32] {
-    use sha2::{Digest, Sha256};
-    let encoded = borsh::to_vec(program).expect("serializing Program to a Vec cannot fail");
-    let mut hasher = Sha256::new();
-    hasher.update(b"baml-compiled-program-v1");
-    hasher.update(
-        u64::try_from(baml_version::CANONICAL_VERSION.len())
-            .unwrap_or(u64::MAX)
-            .to_be_bytes(),
-    );
-    hasher.update(baml_version::CANONICAL_VERSION.as_bytes());
-    hasher.update(
-        u64::try_from(encoded.len())
-            .unwrap_or(u64::MAX)
-            .to_be_bytes(),
-    );
-    hasher.update(encoded);
-    hasher.finalize().into()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,28 +123,6 @@ mod tests {
             program_content_hash([("a\0b.baml", b"c".as_slice())]),
             program_content_hash([("a.baml", b"\0bc".as_slice())]),
             "field boundaries must not depend on the content bytes"
-        );
-    }
-
-    #[test]
-    fn compiled_program_hash_is_stable_and_ignores_source_only_metadata() {
-        let program = crate::Program::default();
-        let base = compiled_program_content_hash(&program);
-
-        let mut restamped = program.clone();
-        restamped.source_content_hash = Some([0xAB; 32]);
-        assert_eq!(
-            base,
-            compiled_program_content_hash(&restamped),
-            "in-memory source metadata is not compiled content"
-        );
-
-        let mut changed = program;
-        changed.package_init_order.push("user.$init".to_string());
-        assert_ne!(
-            base,
-            compiled_program_content_hash(&changed),
-            "a compiled-program change must split the identity"
         );
     }
 }
