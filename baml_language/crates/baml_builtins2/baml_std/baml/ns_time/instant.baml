@@ -90,31 +90,31 @@ class Instant {
 
     /// (internal) RFC 3339 formatter. Throws `InvalidArgument` when the year is
     /// outside the 4-digit RFC 3339 range; `baml.ToString.to_string` turns that
-    /// into a panic, while `to_json` surfaces it as a `JsonSerializationError`.
+    /// into a panic, while `to_json` surfaces it as a `baml.json.SerializationError`.
     function _to_string_impl(self) -> string throws root.errors.InvalidArgument {
         $rust_function
     }
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             match (j) {
                 string => {
                     Instant.parse(j) catch (_) {
                         root.errors.ParseError { message } => {
-                            throw baml.json.JsonDecodeError { message: message, path: "" }
+                            throw baml.json.DecodeError { message: message, path: "" }
                         },
                     }
                 },
                 _ => {
-                    throw baml.json.JsonDecodeError { message: "Expected timestamp string", path: "" }
+                    throw baml.json.DecodeError { message: "Expected timestamp string", path: "" }
                 },
             }
         }
     }
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             self._to_string_impl() catch (_) {
                 root.errors.InvalidArgument { message } => {
-                    throw baml.json.JsonSerializationError { message: message, path: "" }
+                    throw baml.json.SerializationError { message: message, path: "" }
                 },
             }
         }

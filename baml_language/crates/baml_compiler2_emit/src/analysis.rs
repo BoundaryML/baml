@@ -632,7 +632,7 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
         }
     }
 
-    // The VM also materializes the caught error's `ErrorContext` into the
+    // The VM also materializes the caught error's `baml.errors.Context` into the
     // context (second-binding) slot, and the BEP-042 cause-chain pre-walk reads
     // it from an *enclosing* handler — uses the static walk can't see. Mark it
     // used so it isn't classified Dead and always gets a slot, even when the

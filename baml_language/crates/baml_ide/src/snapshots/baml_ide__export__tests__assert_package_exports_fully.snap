@@ -13,8 +13,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "docstring": "Asserts that two floats are within `eps` of each other.\n\nParameters:\n- `actual`: The observed floating-point value.\n- `expected`: The expected floating-point value.\n- `eps`: The maximum allowed absolute difference (`|actual - expected|`).\n\nReturns:\n- Nothing. Returns normally when `|actual - expected| <= eps`.\n\nErrors/Panics:\n- Panics when `eps` is negative or NaN.\n- Panics when the absolute difference exceeds `eps` or cannot be compared\n  (for example, when `actual`/`expected` produce NaN deltas).",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 2552,
-        "end": 2998
+        "start": 2768,
+        "end": 3214
       },
       "detail": "function",
       "signature": {
@@ -56,8 +56,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "docstring": "Asserts that `haystack` contains `needle` as a substring. Panics if not.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 3077,
-        "end": 3271
+        "start": 3293,
+        "end": 3487
       },
       "detail": "function",
       "signature": {
@@ -92,8 +92,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "docstring": "Asserts that `actual` equals `expected` exactly. Panics if they differ.\n\nParameters:\n- `actual`: The observed value.\n- `expected`: The expected value.\n\nReturns:\n- Nothing. Returns normally when `actual` and `expected` are exactly equal.\n\nErrors/Panics:\n- Panics when `actual != expected`.\n- For floating-point values this comparison is exact; prefer\n  `assert.approx_equal(actual, expected, eps)` when comparing computed\n  results within a tolerance.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 1758,
-        "end": 1993
+        "start": 1974,
+        "end": 2209
       },
       "detail": "function",
       "signature": {
@@ -126,8 +126,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "docstring": "Renders one operand of a failed assertion.\n\nQuoted if it is a string, bare otherwise, so the reader can tell the two\napart. Interpolating every operand inside literal quotes printed an int as\n`\"1\"` — a number wearing a string's clothes — and interpolating none printed\n`assert.equal(1, \"1\")` as `left = 1, right = 1`: two identical-looking\nvalues for an assertion that failed precisely because they differ.\n\nParameters:\n- `value`: The operand value to render.\n\nReturns:\n- A JSON-style string representation for panic messages.\n\nErrors/Panics:\n- Never throws.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 1099,
-        "end": 1252
+        "start": 1315,
+        "end": 1468
       },
       "detail": "function",
       "signature": {
@@ -152,11 +152,11 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "id": "V:assert.is_true",
       "kind": "function",
       "name": "is_true",
-      "docstring": "Asserts that `condition` is `true`. Panics with a failure message if not.",
+      "docstring": "Asserts that `condition` is `true`. Panics with a failure message if not.\n\n# Examples\n```\nassert.is_true(true)  // no panic\nassert.is_true(false)  // panic\n```",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 139,
-        "end": 270
+        "start": 248,
+        "end": 379
       },
       "detail": "function",
       "signature": {
@@ -184,8 +184,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "docstring": "Asserts that `actual` is of type `T`. Panics if not.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 3330,
-        "end": 3604
+        "start": 3546,
+        "end": 3820
       },
       "detail": "function",
       "signature": {
@@ -215,11 +215,11 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "id": "V:assert.not_null",
       "kind": "function",
       "name": "not_null",
-      "docstring": "Asserts that `value` is not `null`. Panics if it is.",
+      "docstring": "Asserts that `value` is not `null`. Panics if it is.\n\n# Examples\n```\nassert.not_null(1)  // no panic\nassert.not_null(null)  // panic\n```",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 329,
-        "end": 474
+        "start": 545,
+        "end": 690
       },
       "detail": "function",
       "signature": {

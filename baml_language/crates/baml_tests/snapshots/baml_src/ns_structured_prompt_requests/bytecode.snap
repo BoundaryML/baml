@@ -249,7 +249,7 @@ function structured_prompt_requests.AudioShape$spec(sound: audio) -> ai.Function
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call google.GoogleClient.new
+    call google.GeminiClient.new
     store_var _6
     load_const "AudioShape"
     load_deref ?1
@@ -1059,7 +1059,7 @@ function structured_prompt_requests.MediaAll$spec(photo: image, sound: audio, do
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call google.GoogleClient.new
+    call google.GeminiClient.new
     store_var _9
     load_const "MediaAll"
     load_deref ?1
@@ -1216,7 +1216,7 @@ function structured_prompt_requests.MediaImageAudioPdf$spec(photo: image, sound:
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call google.GoogleClient.new
+    call google.GeminiClient.new
     store_var _8
     load_const "MediaImageAudioPdf"
     load_deref ?1
@@ -1365,7 +1365,7 @@ function structured_prompt_requests.MediaImagePdf$spec(photo: image, document: p
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call google.GoogleClient.new
+    call google.GeminiClient.new
     store_var _7
     load_const "MediaImagePdf"
     load_deref ?1

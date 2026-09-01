@@ -4,7 +4,7 @@
 // token counts are deterministic on both drain paths.
 
 class StreamScript {
-    events: (ai.stream.StreamEvent | ai.stream.Done)[],
+    events: (ai.stream.Event | ai.stream.Done)[],
     cursor: int,
 
     implements ai.Client {
@@ -30,7 +30,7 @@ class StreamScript {
                 let e = self.events.at(self.cursor);
                 self.cursor += 1;
                 match (e) {
-                    let ev: ai.stream.StreamEvent => ev,
+                    let ev: ai.stream.Event => ev,
                     let d: ai.stream.Done => d,
                     null => ai.stream.Done {  },
                 }

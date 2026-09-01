@@ -16,13 +16,13 @@ client SecondResponses = openai.ResponsesClient.new(
     base_url = "http://localhost:5678/v1",
 );
 
-client PreviewAnthropic = anthropic.AnthropicClient.new(
+client PreviewAnthropic = anthropic.Client.new(
     model = "claude-test",
     api_key = "test-key",
     base_url = "http://localhost:1234",
 );
 
-client PreviewGemini = google.GoogleClient.new(
+client PreviewGemini = google.GeminiClient.new(
     model = "gemini-test",
     api_key = "test-key",
     base_url = "http://localhost:1234/v1",
@@ -231,7 +231,7 @@ function _roled_body(request: baml.http.Request) -> baml.json.json {
 test "openai preserves prompt message roles" {
     let input = _input_for(RoledShape$spec());
     let body = _roled_body(
-        openai.internal.openai_render(
+        openai.internal.render(
             openai.ResponsesClient.new(model = "gpt-test", api_key = "test-key"),
             input,
         ),
@@ -249,8 +249,8 @@ test "openai preserves prompt message roles" {
 test "anthropic splits system from prompt messages" {
     let input = _input_for(RoledShape$spec());
     let body = _roled_body(
-        anthropic.internal._anthropic_request(
-            anthropic.AnthropicClient.new(model = "claude-test", api_key = "test-key"),
+        anthropic.internal._request(
+            anthropic.Client.new(model = "claude-test", api_key = "test-key"),
             input,
             false,
         ),
@@ -266,8 +266,8 @@ test "anthropic splits system from prompt messages" {
 test "google splits system and maps user prompt" {
     let input = _input_for(RoledShape$spec());
     let body = _roled_body(
-        google.internal.google_render(
-            google.GoogleClient.new(model = "gemini-test", api_key = "test-key"),
+        google.internal.render(
+            google.GeminiClient.new(model = "gemini-test", api_key = "test-key"),
             input,
         ),
     );
@@ -382,7 +382,7 @@ test "openai lowers image audio and pdf parts" {
     );
     let body = baml.json.parse(
         openai.internal
-            .openai_render(
+            .render(
                 openai.ResponsesClient.new(model = "gpt-test", api_key = "test-key"),
                 _input_for(spec),
             )
@@ -413,8 +413,8 @@ test "anthropic lowers image and pdf parts" {
     let spec = MediaImagePdf$spec(image.from_base64("image-data", "image/png"), pdf.from_base64("pdf-data", "application/pdf"));
     let body = baml.json.parse(
         anthropic.internal
-            ._anthropic_request(
-                anthropic.AnthropicClient.new(model = "claude-test", api_key = "test-key"),
+            ._request(
+                anthropic.Client.new(model = "claude-test", api_key = "test-key"),
                 _input_for(spec),
                 false,
             )
@@ -445,8 +445,8 @@ function AudioShape(sound: audio) -> string {
 test "anthropic rejects audio parts" {
     let spec = AudioShape$spec(audio.from_base64("audio-data", "audio/mpeg"));
     let message = anthropic.internal
-        ._anthropic_request(
-            anthropic.AnthropicClient.new(model = "claude-test", api_key = "test-key"),
+        ._request(
+            anthropic.Client.new(model = "claude-test", api_key = "test-key"),
             _input_for(spec),
             false,
         )
@@ -465,8 +465,8 @@ test "google lowers every supported media part" {
     );
     let body = baml.json.parse(
         google.internal
-            .google_render(
-                google.GoogleClient.new(model = "gemini-test", api_key = "test-key"),
+            .render(
+                google.GeminiClient.new(model = "gemini-test", api_key = "test-key"),
                 _input_for(spec),
             )
             .body,

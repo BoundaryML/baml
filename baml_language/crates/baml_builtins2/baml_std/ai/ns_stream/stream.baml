@@ -97,7 +97,7 @@ class TurnDone {
 /// One provider-agnostic event decoded from an SSE batch: a piece of
 /// assistant text, the turn metadata that arrived alongside it, or the
 /// provider's end-of-turn marker.
-type StreamEvent = TextDelta | TurnMeta | TurnDone;
+type Event = TextDelta | TurnMeta | TurnDone;
 
 /// The single end-of-stream marker returned by both raw turn streams and typed
 /// function streams. A nominal sentinel is required because null may itself be
@@ -110,7 +110,7 @@ class Done {
 /// The callback behind `TurnStream.from_event_source`: it lets a composite
 /// client relay a member's events without exposing that member's wire
 /// format.
-type EventSource = () -> StreamEvent | Done throws root.errors.InvokeError;
+type EventSource = () -> Event | Done throws root.errors.InvokeError;
 
 /// The raw text-delta stream of ONE model turn. Pull-based: nothing is read
 /// from the wire until `next()` or `final_turn()` is called.
@@ -127,12 +127,12 @@ class TurnStream {
     // wire-backed streams: the SSE connection plus a per-provider decoder
     // that turns one `SseStream.next()` batch into StreamEvents.
     _sse: baml.http.SseStream?,
-    _decode: ((string) -> StreamEvent[] throws root.errors.InvokeError)?,
+    _decode: ((string) -> Event[] throws root.errors.InvokeError)?,
     // scripted streams (tests): literal delta chunks, no network.
     _chunks: string[],
     _cursor: int,
     // decoded events not yet delivered.
-    _pending: StreamEvent[],
+    _pending: Event[],
     _pcursor: int,
     // folded state.
     _text: string,
@@ -172,7 +172,7 @@ class TurnStream {
     /// sole end-of-turn signal IS the socket closing.
     function from_sse(
         sse: baml.http.SseStream,
-        decode: (string) -> StreamEvent[] throws root.errors.InvokeError,
+        decode: (string) -> Event[] throws root.errors.InvokeError,
         require_terminal: string? = null,
     ) -> TurnStream {
         TurnStream {
@@ -376,7 +376,7 @@ class TurnStream {
             }
             if let source: EventSource = self._event_source {
                 match (source()) {
-                    let event: StreamEvent => {
+                    let event: Event => {
                         self._pending.push(event);
                         null
                     },
@@ -400,7 +400,7 @@ class TurnStream {
                         },
                         let batch: string => {
                             self._capture_batch(batch);
-                            if let decode: (string) -> StreamEvent[] throws root.errors.InvokeError = self._decode {
+                            if let decode: (string) -> Event[] throws root.errors.InvokeError = self._decode {
                                 for (let e in decode(batch)) {
                                     self._pending.push(e);
                                 }

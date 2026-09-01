@@ -632,7 +632,7 @@ fn count_local_uses(body: &MirFunctionBody) -> Vec<usize> {
         uses[local.0] += 1;
     }
 
-    // The VM also materializes the caught error's `ErrorContext` into the
+    // The VM also materializes the caught error's `baml.errors.Context` into the
     // context (second-binding) slot at unwind time, and the BEP-042 cause-chain
     // pre-walk reads it from an *enclosing* handler — a use the static analysis
     // can't see. Keep it alive even when the `ctx` binding looks dead.
@@ -1318,7 +1318,7 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
     // second (`ctx`/`st`) catch bindings have a payload local the VM writes
     // into; if the context local isn't renumbered alongside the error local,
     // the emitter computes a stale `stack_trace_slot` and the binding reads an
-    // uninitialized (Null) slot — see BEP-042 ErrorContext nested-catch bug.
+    // uninitialized (Null) slot — see BEP-042 baml.errors.Context nested-catch bug.
     for region in &mut body.catch_regions {
         if let Some(new_local) = old_to_new[region.error_local.0] {
             region.error_local = new_local;

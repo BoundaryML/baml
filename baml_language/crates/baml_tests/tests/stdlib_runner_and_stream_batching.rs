@@ -81,7 +81,7 @@ async fn agent_implements_runner_and_custom_runners_dispatch() {
 async fn turnstream_backlog_drains_in_one_batch_with_boundaries() {
     let source = r####"
         function make_backlog(n: int) -> ai.stream.TurnStream {
-            let pending: ai.stream.StreamEvent[] = [];
+            let pending: ai.stream.Event[] = [];
             let i = 0;
             while (i < n) {
                 pending.push(ai.stream.TextDelta { text: `chunk${i};` });

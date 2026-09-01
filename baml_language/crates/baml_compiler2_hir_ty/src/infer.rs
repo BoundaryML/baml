@@ -86,14 +86,14 @@ fn callback_root_fn(ty: &Ty) -> Option<&Ty> {
     }
 }
 
-/// The implicit `baml.spawn.SpawnParams<V, E>` a spawn's `with` chain
+/// The implicit `baml.spawn.Params<V, E>` a spawn's `with` chain
 /// threads (BEP-034).
 fn spawn_params_ty(value: Ty, error: Ty) -> Ty {
     Ty::intern(TyKind::Class(
         baml_type::TypeName::new(
             baml_type::Name::new("baml"),
             vec![baml_type::Name::new("spawn")],
-            baml_type::Name::new("SpawnParams"),
+            baml_type::Name::new("Params"),
         ),
         Box::new([value, error]),
         TyAttr::default(),
@@ -104,7 +104,7 @@ fn is_spawn_params_qtn(qtn: &baml_type::TypeName) -> bool {
     qtn.package().as_str() == "baml"
         && qtn.namespace().len() == 1
         && qtn.namespace()[0].as_str() == "spawn"
-        && qtn.name().as_str() == "SpawnParams"
+        && qtn.name().as_str() == "Params"
 }
 
 /// Negate a numeric literal into the negative literal TYPE (ruling 2:
@@ -4273,8 +4273,8 @@ impl<'db> InferenceContext<'db> {
     /// channel (the S12 discipline) is the future's error side, read
     /// straight off the lambda's fn type. Fresh literals widen out of
     /// both slots. `with` transformers fold left-to-right over
-    /// `SpawnParams<T, E>`: each checks against
-    /// `(SpawnParams<cur>) -> SpawnParams<unknown, unknown>`, the
+    /// `Params<T, E>`: each checks against
+    /// `(Params<cur>) -> Params<unknown, unknown>`, the
     /// concrete input binding a generic transformer's params through
     /// ordinary unification (TIR needs a value-ref workaround here;
     /// inference variables make it unnecessary), and the transformer's
@@ -9836,20 +9836,20 @@ impl<'db> InferenceContext<'db> {
                 .insert(clause.binding, clause_binding_ty);
             if let Some(context) = clause.stack_trace_binding {
                 // The second binding (`catch (e, ctx)`) is the full error
-                // CONTEXT - `baml.errors.ErrorContext` (the AST field's
+                // CONTEXT - `baml.errors.Context` (the AST field's
                 // "stack trace" name understates it; TIR resolves the
                 // class). Lookup-gated, fail-safe to Error.
                 let context_ty = match self.facts.definition_of(&baml_type::TypeName::new(
                     baml_type::Name::new("baml"),
                     vec![baml_type::Name::new("errors")],
-                    baml_type::Name::new("ErrorContext"),
+                    baml_type::Name::new("Context"),
                 )) {
                     Some(baml_compiler2_hir::contributions::Definition::Class(_)) => {
                         Ty::intern(TyKind::Class(
                             baml_type::TypeName::new(
                                 baml_type::Name::new("baml"),
                                 vec![baml_type::Name::new("errors")],
-                                baml_type::Name::new("ErrorContext"),
+                                baml_type::Name::new("Context"),
                             ),
                             Box::new([]),
                             TyAttr::default(),

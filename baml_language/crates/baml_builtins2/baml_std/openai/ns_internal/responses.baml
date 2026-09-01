@@ -213,9 +213,9 @@ class OaResponse {
 /// subtree: a tool's `parameters` is the caller's own JSON Schema, where
 /// `"default": null` / `"const": null` are legitimate members rather than unset
 /// optionals. Those subtrees are written back verbatim afterwards by
-/// `_openai_restore_tool_schemas`; `request_body` is merged after the prune and
+/// `_restore_tool_schemas`; `request_body` is merged after the prune and
 /// never sees it at all.
-function _openai_prune_nulls(value: baml.json.json) -> baml.json.json {
+function _prune_nulls(value: baml.json.json) -> baml.json.json {
     match (value) {
         let object: map<string, baml.json.json> => {
             let out: map<string, baml.json.json> = {};
@@ -224,7 +224,7 @@ function _openai_prune_nulls(value: baml.json.json) -> baml.json.json {
                 match (entry) {
                     null => null,
                     _ => {
-                        let _ = out.set(key, _openai_prune_nulls(entry));
+                        let _ = out.set(key, _prune_nulls(entry));
                         null
                     },
                 };
@@ -234,7 +234,7 @@ function _openai_prune_nulls(value: baml.json.json) -> baml.json.json {
         let items: baml.json.json[] => {
             let out: baml.json.json[] = [];
             for (let item in items) {
-                out.push(_openai_prune_nulls(item));
+                out.push(_prune_nulls(item));
             }
             out
         },
@@ -246,7 +246,7 @@ function _openai_prune_nulls(value: baml.json.json) -> baml.json.json {
 /// pruned `tools` array is positionally identical to the typed one (prune drops
 /// map ENTRIES, never array elements), so tool i's schema goes back at index i.
 /// Only `OaFunctionTool` carries a schema; a builtin tool has nothing to restore.
-function _openai_restore_tool_schemas(body: baml.json.json, tools: OaTool[]?) -> baml.json.json {
+function _restore_tool_schemas(body: baml.json.json, tools: OaTool[]?) -> baml.json.json {
     let list: OaTool[] = tools ?? [];
     if (list.length() == 0) {
         return body;
@@ -284,7 +284,7 @@ function _openai_restore_tool_schemas(body: baml.json.json, tools: OaTool[]?) ->
 }
 
 /// (internal) Percent-encode one query-string component (RFC 3986 unreserved set kept).
-function _openai_percent_encode(raw: string) -> string {
+function _percent_encode(raw: string) -> string {
     let out = "";
     for (let byte in raw.to_utf8().to_array()) {
         let unreserved = (byte >= 48 && byte <= 57)
@@ -308,7 +308,7 @@ function _openai_percent_encode(raw: string) -> string {
 
 /// (internal) The filename an `input_file` part carries. The API wants one alongside
 /// `file_data`, and the basename of the source is more useful than a constant.
-function _openai_file_name(source: string?) -> string {
+function _file_name(source: string?) -> string {
     if let raw: string = source {
         let without_query = raw.split("?").at(0) ?? raw;
         let segments = without_query.split("/");
@@ -323,7 +323,7 @@ function _openai_file_name(source: string?) -> string {
 /// (internal) The Responses API's `input_audio.format`. mp3 and wav are the documented
 /// formats; the remaining mappings are carried over from sys_llm so a provider
 /// that widens the set keeps working.
-function _openai_audio_format(mime_type: string) -> string {
+function _audio_format(mime_type: string) -> string {
     match (mime_type) {
         "audio/wav" | "audio/x-wav" => "wav",
         "audio/mpeg" | "audio/mp3" => "mp3",
@@ -334,7 +334,7 @@ function _openai_audio_format(mime_type: string) -> string {
     }
 }
 
-function _openai_media_role_error(kind: string, role: string) -> ai.errors.Failure {
+function _media_role_error(kind: string, role: string) -> ai.errors.Failure {
     let detail = `OpenAI Responses only supports ${kind} input in user messages, found ${role}`;
     ai.errors.InvalidRequest {
         provider: "openai",
@@ -345,7 +345,7 @@ function _openai_media_role_error(kind: string, role: string) -> ai.errors.Failu
 }
 
 /// (internal) A rendered structural prompt message becomes typed Responses content parts.
-function _openai_prompt_content(
+function _prompt_content(
     message: ai.PromptMessage,
     role: string,
     preview: bool = false,
@@ -369,7 +369,7 @@ function _openai_prompt_content(
                 // that compatibility while still rejecting assistant/tool
                 // authored media, which has no valid Responses input shape.
                 if (role != "user" && role != "system") {
-                    throw _openai_media_role_error("image", role)
+                    throw _media_role_error("image", role)
                 }
                 let resolved = if (preview) {
                     ai.wire.resolve_media_preview(image)
@@ -389,7 +389,7 @@ function _openai_prompt_content(
             },
             let audio: baml.media.Audio => {
                 if (role != "user") {
-                    throw _openai_media_role_error("audio", role)
+                    throw _media_role_error("audio", role)
                 }
                 // audio has no URL form on the wire: always inline base64.
                 let resolved = if (preview) {
@@ -408,7 +408,7 @@ function _openai_prompt_content(
                         type: "input_audio",
                         input_audio: OaAudioPayload {
                             data: resolved.base64 ?? "",
-                            format: _openai_audio_format(resolved.mime_type),
+                            format: _audio_format(resolved.mime_type),
                         },
                     },
                 );
@@ -416,14 +416,14 @@ function _openai_prompt_content(
             },
             let pdf: baml.media.Pdf => {
                 if (role != "user") {
-                    throw _openai_media_role_error("PDF", role)
+                    throw _media_role_error("PDF", role)
                 }
                 let resolved = if (preview) {
                     ai.wire.resolve_media_preview(pdf)
                 } else {
                     ai.wire.resolve_media(pdf, false)
                 };
-                let name = _openai_file_name(pdf.file() ?? pdf.url());
+                let name = _file_name(pdf.file() ?? pdf.url());
                 if let url: string = resolved.url {
                     content.push(
                         OaInputFile {
@@ -465,7 +465,7 @@ function _openai_prompt_content(
 /// Role-less content uses the ordinary user role; `tool` is not a valid
 /// free-standing Responses message role, so authored tool context is user
 /// content (actual tool outputs come from the journal path below).
-function openai_lower_prompt(prompt: ai.Prompt, preview: bool = false) -> OaInputItem[] {
+function lower_prompt(prompt: ai.Prompt, preview: bool = false) -> OaInputItem[] {
     let items: OaInputItem[] = [];
     for (let message in prompt.messages()) {
         let role = match (message.role) {
@@ -473,10 +473,7 @@ function openai_lower_prompt(prompt: ai.Prompt, preview: bool = false) -> OaInpu
             _ => message.role,
         };
         items.push(
-            OaMessageItem {
-                role: role,
-                content: _openai_prompt_content(message, role, preview = preview),
-            },
+            OaMessageItem { role: role, content: _prompt_content(message, role, preview = preview) },
         );
     }
     items
@@ -484,7 +481,7 @@ function openai_lower_prompt(prompt: ai.Prompt, preview: bool = false) -> OaInpu
 
 /// Per-message provider directives (`ai.PromptMessage.metadata`, authored as
 /// `${ai.Role { name: "user", metadata: { … } }}`), in prompt order and
-/// aligned one-to-one with the items `openai_lower_prompt` produced — the prompt
+/// aligned one-to-one with the items `lower_prompt` produced — the prompt
 /// items are always the FIRST items of `input`, the journal's are appended after.
 ///
 /// The Responses API has no per-message directive slot, so PLAN §5's accepted
@@ -493,7 +490,7 @@ function openai_lower_prompt(prompt: ai.Prompt, preview: bool = false) -> OaInpu
 /// (the same "everything up to and including this block" rule the engine used).
 /// Applied to the SERIALIZED body, after the null-prune, because a directive is
 /// a provider shape: an explicit null in it is the caller's, not an unset field.
-function openai_prompt_metadata(prompt: ai.Prompt) -> map<string, baml.json.json>[] {
+function prompt_metadata(prompt: ai.Prompt) -> map<string, baml.json.json>[] {
     let out: map<string, baml.json.json>[] = [];
     for (let message in prompt.messages()) {
         out.push(message.metadata);
@@ -501,7 +498,7 @@ function openai_prompt_metadata(prompt: ai.Prompt) -> map<string, baml.json.json
     out
 }
 
-function _openai_merge_onto_last_part(
+function _merge_onto_last_part(
     item: baml.json.json,
     directives: map<string, baml.json.json>,
 ) -> void {
@@ -526,7 +523,7 @@ function _openai_merge_onto_last_part(
     }
 }
 
-function _openai_apply_message_metadata(
+function _apply_message_metadata(
     body: baml.json.json,
     metadata: map<string, baml.json.json>[],
 ) -> baml.json.json {
@@ -537,7 +534,7 @@ function _openai_apply_message_metadata(
                     let index = 0;
                     for (let directives in metadata) {
                         if (directives.keys().length() > 0) {
-                            _openai_merge_onto_last_part(items.at(index), directives);
+                            _merge_onto_last_part(items.at(index), directives);
                         }
                         index += 1;
                     }
@@ -554,8 +551,8 @@ function _openai_apply_message_metadata(
 
 /// ai.Journal -> Responses API input items. Only promptable events lower;
 /// ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are
-/// journal-only. Callers pass the SANITIZED journal (see _openai_request).
-function openai_lower_journal(j: ai.Journal) -> OaInputItem[] {
+/// journal-only. Callers pass the SANITIZED journal (see _request).
+function lower_journal(j: ai.Journal) -> OaInputItem[] {
     let items: OaInputItem[] = [];
     for (let e in j.entries()) {
         match (e) {
@@ -636,11 +633,11 @@ function openai_lower_journal(j: ai.Journal) -> OaInputItem[] {
 /// `image` enables the provider-side image_generation tool. sys_llm set
 /// `tool_choice` for both Required and Available, so the two modes only ever
 /// differed in that one is unreachable — one predicate is enough.
-function _openai_wants_image(output_type: reflect.Type) -> bool {
+function _wants_image(output_type: reflect.Type) -> bool {
     ai.internal._media_shape(output_type).ends_with(":image")
 }
 
-function _openai_tools(toolbox: ai.tools.Toolbox, wants_image: bool) -> OaTool[]? {
+function _tools(toolbox: ai.tools.Toolbox, wants_image: bool) -> OaTool[]? {
     let tools: OaTool[] = [];
     for (let t in toolbox.list()) {
         tools.push(
@@ -663,10 +660,7 @@ function _openai_tools(toolbox: ai.tools.Toolbox, wants_image: bool) -> OaTool[]
     }
 }
 
-function _openai_tool_choice(
-    tools: OaTool[]?,
-    wants_image: bool,
-) -> (string | OaToolChoiceObject)? {
+function _tool_choice(tools: OaTool[]?, wants_image: bool) -> (string | OaToolChoiceObject)? {
     if (wants_image) {
         return OaToolChoiceObject { type: "image_generation" };
     }
@@ -676,7 +670,7 @@ function _openai_tool_choice(
     }
 }
 
-function _openai_reasoning(c: root.ResponsesClient) -> OaReasoningParams? {
+function _reasoning(c: root.ResponsesClient) -> OaReasoningParams? {
     if (c.reasoning_effort == null && c.reasoning_summary == null) {
         null
     } else {
@@ -684,7 +678,7 @@ function _openai_reasoning(c: root.ResponsesClient) -> OaReasoningParams? {
     }
 }
 
-function _openai_text(c: root.ResponsesClient) -> OaTextParams? {
+function _text(c: root.ResponsesClient) -> OaTextParams? {
     if (c.verbosity == null) {
         null
     } else {
@@ -694,7 +688,7 @@ function _openai_text(c: root.ResponsesClient) -> OaTextParams? {
 
 /// (internal) content-type, then the caller's headers (lowercased), then authorization —
 /// credentials are the client's own business and always win.
-function _openai_headers(c: root.ResponsesClient, preview: bool = false) -> map<string, string> {
+function _headers(c: root.ResponsesClient, preview: bool = false) -> map<string, string> {
     let headers: map<string, string> = { "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
         for (let name in extra.keys()) {
@@ -707,7 +701,7 @@ function _openai_headers(c: root.ResponsesClient, preview: bool = false) -> map<
     headers
 }
 
-function _openai_url(c: root.ResponsesClient) -> string {
+function _url(c: root.ResponsesClient) -> string {
     let base = c.resolved_base_url() ?? "https://api.openai.com/v1";
     let trimmed = if (base.ends_with("/")) {
         base.slice(0, base.length() - 1)
@@ -718,9 +712,7 @@ function _openai_url(c: root.ResponsesClient) -> string {
     if let params: map<string, string> = c.query_params {
         let pairs: string[] = [];
         for (let key in params.keys()) {
-            pairs.push(
-                `${_openai_percent_encode(key)}=${_openai_percent_encode(params.get(key) ?? "")}`,
-            );
+            pairs.push(`${_percent_encode(key)}=${_percent_encode(params.get(key) ?? "")}`);
         }
         if (pairs.length() > 0) {
             return `${url}?${pairs.join("&")}`;
@@ -730,34 +722,34 @@ function _openai_url(c: root.ResponsesClient) -> string {
 }
 
 /// ai.ModelTurnInput -> one Responses API request.
-function openai_render(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _openai_request(c, input, false, preview = false)
+function render(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.Request {
+    _request(c, input, false, preview = false)
 }
 
 /// The request one `render` would send. This path never reads local media or
 /// downloads URLs; provider-unsupported URL forms return PreviewUnsupported.
-function openai_preview(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _openai_request(c, input, false, preview = true)
+function preview(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.Request {
+    _request(c, input, false, preview = true)
 }
 
 /// (internal) The shared request builder: identical body for both paths, plus the
 /// `stream: true` flag on the streaming one.
-function _openai_request(
+function _request(
     c: root.ResponsesClient,
     input: ai.ModelTurnInput,
     stream: bool,
     preview: bool = false,
 ) -> baml.http.Request {
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
-    let items = openai_lower_prompt(prompt, preview = preview);
+    let items = lower_prompt(prompt, preview = preview);
     // sanitize BEFORE lowering: foreign reasoning, empty turns and orphaned
     // tool calls are everyone's problem, fixed once in ai.wire.
     let journal = ai.wire.sanitize_for_client(input.journal, c.id());
-    for (let item in openai_lower_journal(journal)) {
+    for (let item in lower_journal(journal)) {
         items.push(item);
     }
-    let wants_image = _openai_wants_image(input.output_type);
-    let tools = _openai_tools(input.toolbox, wants_image);
+    let wants_image = _wants_image(input.output_type);
+    let tools = _tools(input.toolbox, wants_image);
     let request = OaResponsesRequest {
         model: c.model,
         input: items,
@@ -770,24 +762,24 @@ function _openai_request(
         temperature: c.temperature,
         top_p: c.top_p,
         max_output_tokens: c.max_output_tokens,
-        reasoning: _openai_reasoning(c),
-        text: _openai_text(c),
+        reasoning: _reasoning(c),
+        text: _text(c),
         parallel_tool_calls: c.parallel_tool_calls,
         tools: tools,
-        tool_choice: _openai_tool_choice(tools, wants_image),
+        tool_choice: _tool_choice(tools, wants_image),
     };
     // typed request -> json -> drop unset optionals -> put the caller's own
     // open-ended JSON back (tool schemas, then the per-message directives that
     // ride on a content part) -> user passthrough LAST.
-    let pruned = _openai_restore_tool_schemas(_openai_prune_nulls(baml.json.to_json(request)), tools);
+    let pruned = _restore_tool_schemas(_prune_nulls(baml.json.to_json(request)), tools);
     let body = ai.wire.merge_request_body(
-        _openai_apply_message_metadata(pruned, openai_prompt_metadata(prompt)),
+        _apply_message_metadata(pruned, prompt_metadata(prompt)),
         c.request_body,
     );
     baml.http.Request {
         method: "POST",
-        url: _openai_url(c),
-        headers: _openai_headers(c, preview = preview),
+        url: _url(c),
+        headers: _headers(c, preview = preview),
         body: baml.json.stringify(body),
     }
 }
@@ -796,7 +788,7 @@ function _openai_request(
 // Response parsing.
 
 /// (internal) The mime type of an image_generation_call payload.
-function _openai_image_mime(output_format: string?) -> string {
+function _image_mime(output_format: string?) -> string {
     let format = (output_format ?? "").trim().to_lower_case();
     match (format) {
         "jpeg" | "jpg" => "image/jpeg",
@@ -812,7 +804,7 @@ function _openai_image_mime(output_format: string?) -> string {
 /// there). Classifying the in-body form as InvalidRequest instead would make it
 /// permanently non-retryable under ai.Retry's default judgment, purely because
 /// of which envelope the provider chose.
-function _openai_transient_code(code: string) -> bool {
+function _transient_code(code: string) -> bool {
     code.includes("server_error")
         || code.includes("timeout")
         || code.includes("timed_out")
@@ -824,7 +816,7 @@ function _openai_transient_code(code: string) -> bool {
 /// (internal) A provider-reported error becomes the precise ai.errors class, never a
 /// blanket NetworkFailure: a retry-safe classification on a 400-shaped failure
 /// is what makes a Retry policy replay an invalid request forever.
-function _openai_error_failure(err: OaErrorBody) -> ai.errors.Failure {
+function _error_failure(err: OaErrorBody) -> ai.errors.Failure {
     // Billing errors split the signal across `type` ("insufficient_quota")
     // and `code` ("credit_balance_exhausted"), so classify on both.
     let code = ((err.code ?? "") + " " + (err.type ?? "")).to_lower_case();
@@ -839,7 +831,7 @@ function _openai_error_failure(err: OaErrorBody) -> ai.errors.Failure {
         }
     } else if (code.includes("content_filter") || code.includes("moderation") || code.includes("refusal")) {
         ai.errors.Refused { provider: "openai", reason: detail, raw_body: raw }
-    } else if (_openai_transient_code(code)) {
+    } else if (_transient_code(code)) {
         ai.errors.NetworkFailure {
             status_code: null,
             provider: "openai",
@@ -856,11 +848,11 @@ function _openai_error_failure(err: OaErrorBody) -> ai.errors.Failure {
     }
 }
 
-function _openai_response_failure(resp: OaResponse) -> ai.errors.Failure {
+function _response_failure(resp: OaResponse) -> ai.errors.Failure {
     match (resp.error) {
-        let err: OaErrorBody => _openai_error_failure(err),
+        let err: OaErrorBody => _error_failure(err),
         null => {
-            _openai_error_failure(
+            _error_failure(
                 OaErrorBody {
                     code: null,
                     message: `the response ended with status ${resp.status ?? "failed"}`,
@@ -871,11 +863,11 @@ function _openai_response_failure(resp: OaResponse) -> ai.errors.Failure {
 }
 
 /// One decoded response -> canonical content blocks and a stop reason.
-function openai_parse(resp: OaResponse) -> ai.ModelTurn {
+function parse(resp: OaResponse) -> ai.ModelTurn {
     // A 200 whose response object failed (background mode, and every
     // `response.failed` stream event) is an error, not an empty turn.
     if ((resp.status ?? "") == "failed" || resp.error != null) {
-        throw _openai_response_failure(resp)
+        throw _response_failure(resp)
     }
     let content: ai.content.Block[] = [];
     let has_call = false;
@@ -888,7 +880,7 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
                 let args: map<string, unknown> = {};
                 if let s: string = item.arguments {
                     // Provider-malformed output, not a bug in the caller's code:
-                    // the raw baml JsonParseError would escape as an untyped
+                    // the raw baml baml.json.ParseError would escape as an untyped
                     // UnknownError, so it is classified like every other
                     // undecodable provider payload (ai.wire.send_as does the
                     // same for the response body).
@@ -937,7 +929,7 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
                 // The provider-side image tool already ran: its result is turn
                 // content, NOT a tool call the runner has to execute.
                 if let encoded: string = item.result {
-                    let mime = _openai_image_mime(item.output_format);
+                    let mime = _image_mime(item.output_format);
                     content.push(
                         ai.content.Media.new(
                             baml.media.Image.from_base64(encoded, mime),
@@ -982,7 +974,7 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
 
 /// The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let req = openai_render(c, input);
+    let req = render(c, input);
     let sent = ai.wire.send_as_with_wire<OaResponse>(
         req,
         "openai",
@@ -990,7 +982,7 @@ function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTu
         capture_wire = c.capture_wire,
         request_timeout_ms = c.request_timeout_ms,
     );
-    let turn = openai_parse(sent.value);
+    let turn = parse(sent.value);
     ai.ModelTurn { ...turn, calls: [sent.call] }
 }
 
@@ -998,7 +990,7 @@ function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTu
 // Streaming (Responses API SSE).
 //
 // Every event carries `type`; the terminal ones carry the whole response object,
-// which yields the stop reason and usage through the same openai_parse as the
+// which yields the stop reason and usage through the same parse as the
 // non-streaming path. `response.failed` and a bare `error` event THROW the
 // classified failure instead of ending the turn.
 
@@ -1045,7 +1037,7 @@ class OaStreamState {
 /// distinguishes the parts within one item: a message may carry several text
 /// parts, and keying by item alone would let a delta on part 0 suppress the
 /// `output_text.done` that is the only delivery of part 1.
-function _openai_event_key(event: OaStreamEvent) -> string {
+function _event_key(event: OaStreamEvent) -> string {
     let item = if let id: string = event.item_id {
         id
     } else if let index: int = event.output_index {
@@ -1060,29 +1052,29 @@ function _openai_event_key(event: OaStreamEvent) -> string {
     }
 }
 
-function _openai_stream_failure(event: OaStreamEvent) -> ai.errors.Failure {
+function _stream_failure(event: OaStreamEvent) -> ai.errors.Failure {
     if let response: OaResponse = event.response {
-        return _openai_response_failure(response);
+        return _response_failure(response);
     };
     if let nested: OaErrorBody = event.error {
-        return _openai_error_failure(nested);
+        return _error_failure(nested);
     };
-    _openai_error_failure(OaErrorBody { code: event.code, message: event.message, type: null })
+    _error_failure(OaErrorBody { code: event.code, message: event.message, type: null })
 }
 
 /// (internal) One decoded SSE event -> provider-agnostic stream events.
-function _openai_stream_events(
+function _stream_events(
     event: OaStreamEvent,
     sse_name: string?,
     state: OaStreamState,
-) -> ai.stream.StreamEvent[] {
-    let out: ai.stream.StreamEvent[] = [];
+) -> ai.stream.Event[] {
+    let out: ai.stream.Event[] = [];
     let kind = event.type ?? sse_name ?? "";
     // A top-level `error` envelope only ever appears on failures; surface it
     // even when the rejection line carries no recognizable event type.
     if (kind != "response.failed" && kind != "error") {
         if let nested: OaErrorBody = event.error {
-            throw _openai_error_failure(nested);
+            throw _error_failure(nested);
         };
     };
     match (kind) {
@@ -1096,7 +1088,7 @@ function _openai_stream_events(
         },
         "response.output_text.delta" => {
             if let delta: string = event.delta {
-                let _ = state.text_started.set(_openai_event_key(event), true);
+                let _ = state.text_started.set(_event_key(event), true);
                 out.push(ai.stream.TextDelta { text: delta });
             };
             null
@@ -1104,7 +1096,7 @@ function _openai_stream_events(
         "response.output_text.done" => {
             // The full text of the item. Emitted only when no delta arrived for
             // it, so a server that sends both does not duplicate the text.
-            let key = _openai_event_key(event);
+            let key = _event_key(event);
             if (!(state.text_started.get(key) ?? false)) {
                 if let full: string = event.text {
                     let _ = state.text_started.set(key, true);
@@ -1117,25 +1109,25 @@ function _openai_stream_events(
             null
         },
         "response.function_call_arguments.delta" => {
-            // ai.stream.StreamEvent cannot carry tool calls (PLAN §6), so the
+            // ai.stream.Event cannot carry tool calls (PLAN §6), so the
             // arguments accumulate here and the completed call is read from the
             // terminal event's response object.
             if let delta: string = event.delta {
-                let key = _openai_event_key(event);
+                let key = _event_key(event);
                 let _ = state.call_arguments.set(key, (state.call_arguments.get(key) ?? "") + delta);
             };
             null
         },
         "response.function_call_arguments.done" => {
             if let full: string = event.arguments {
-                let _ = state.call_arguments.set(_openai_event_key(event), full);
+                let _ = state.call_arguments.set(_event_key(event), full);
             };
             null
         },
-        "response.failed" | "error" => throw _openai_stream_failure(event),
+        "response.failed" | "error" => throw _stream_failure(event),
         "response.completed" | "response.incomplete" => {
             if let final_response: OaResponse = event.response {
-                let turn = openai_parse(final_response);
+                let turn = parse(final_response);
                 out.push(
                     ai.stream.TurnMeta {
                         stop_reason: turn.stop_reason,
@@ -1153,15 +1145,15 @@ function _openai_stream_events(
 }
 
 /// (internal) One SseStream batch -> provider-agnostic stream events.
-function _openai_decode_batch(batch: string, state: OaStreamState) -> ai.stream.StreamEvent[] {
-    let out: ai.stream.StreamEvent[] = [];
+function _decode_batch(batch: string, state: OaStreamState) -> ai.stream.Event[] {
+    let out: ai.stream.Event[] = [];
     for (let raw in ai.stream.decode_sse_batch(batch)) {
         if let data: string = raw.data {
             let decoded: OaStreamEvent? = baml.json.from_string<OaStreamEvent>(data) catch_all (e) {
                 _ => null,
             };
             if let event: OaStreamEvent = decoded {
-                for (let e in _openai_stream_events(event, raw.event, state)) {
+                for (let e in _stream_events(event, raw.event, state)) {
                     out.push(e);
                 }
             };
@@ -1176,7 +1168,7 @@ function _openai_decode_batch(batch: string, state: OaStreamState) -> ai.stream.
 /// status is recovered and classified exactly like ai.wire.send_as does — a 401
 /// or 429 on the streaming path must NOT be reported as a retry-safe transport
 /// failure.
-function _openai_sse_failure(error: unknown) -> ai.errors.Failure {
+function _sse_failure(error: unknown) -> ai.errors.Failure {
     let text = match (error) {
         let io: baml.errors.Io => io.message,
         _ => error.to_string(),
@@ -1205,25 +1197,25 @@ function _openai_sse_failure(error: unknown) -> ai.errors.Failure {
     }
 }
 
-function _openai_stream_open_failure(error: unknown) -> never {
+function _stream_open_failure(error: unknown) -> never {
     match (error) {
         let timeout: baml.errors.Timeout => throw timeout,
         let cancelled: baml.panics.Cancelled => throw cancelled,
-        _ => throw _openai_sse_failure(error),
+        _ => throw _sse_failure(error),
     }
 }
 
 /// The streaming entry point: the same request as `invoke` with `stream: true`,
 /// wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-    let req = _openai_request(c, input, true, preview = false);
+    let req = _request(c, input, true, preview = false);
     let started = baml.time.Instant.now();
     let sse = baml.http.fetch_sse(
         req,
         timeout = baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
         first_event_timeout = baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
     ) catch_all (e) {
-        _ => _openai_stream_open_failure(e),
+        _ => _stream_open_failure(e),
     };
     let state = OaStreamState.new();
     // The Responses protocol always ends a live turn with an explicit terminal
@@ -1235,7 +1227,7 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
     let stream = ai.stream.TurnStream.from_sse(
         sse,
         (batch: string) -> {
-            _openai_decode_batch(batch, state) catch_all (e) {
+            _decode_batch(batch, state) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         },

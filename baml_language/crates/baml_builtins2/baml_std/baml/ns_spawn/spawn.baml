@@ -2,19 +2,19 @@
 //!
 //! This namespace holds the values a `spawn` can be configured with: a
 //! `CancelToken` for cooperative cancellation, a `TaskGroup` for rate
-//! limiting, and the `detach` flag — plus `SpawnParams`, the value a
+//! limiting, and the `detach` flag — plus `Params`, the value a
 //! `spawn ... with` middleware pipeline transforms before the runtime
 //! creates the future.
 
 /// The parameters for spawning a new green thread.
 ///
-/// Every `spawn` implicitly constructs a `SpawnParams` from its name and
+/// Every `spawn` implicitly constructs a `Params` from its name and
 /// body; the `with` pipeline transforms it left-to-right before the runtime
 /// creates the future. Each transformer is an ordinary function
-/// `(SpawnParams<T, E>) -> SpawnParams<U, F>` — it may set config fields,
+/// `(Params<T, E>) -> Params<U, F>` — it may set config fields,
 /// wrap `body` (retry, timing), or replace it entirely (type-changing
 /// transformers like a fallback that erases the error type).
-class SpawnParams<T, E> {
+class Params<T, E> {
     // NOTE for the runtime: the engine reads these fields BY INDEX at the spawn
     // dispatch site (body=0, name=1, group=2, cancel=3, detach=4) — keep the
     // declaration order in sync with `bex_engine`'s `read_spawn_params`.
@@ -140,9 +140,9 @@ function options<T, E>(
     group: TaskGroup? = null,
     cancel: CancelToken? = null,
     detach: bool? = null,
-) -> (SpawnParams<T, E>) -> SpawnParams<T, E> throws never {
-    (params: SpawnParams<T, E>) -> SpawnParams<T, E> {
-        SpawnParams {
+) -> (Params<T, E>) -> Params<T, E> throws never {
+    (params: Params<T, E>) -> Params<T, E> {
+        Params {
             body: params.body,
             name: params.name,
             group: group ?? params.group,

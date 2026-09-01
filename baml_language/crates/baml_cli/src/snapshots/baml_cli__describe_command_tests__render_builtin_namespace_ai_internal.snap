@@ -3,10 +3,10 @@ source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
 function         ai.internal._gcp_access_token    <builtin>/ai/ns_internal/auth.baml:23
-function         ai.internal._gcp_project_id      <builtin>/ai/ns_internal/auth.baml:34
-function         ai.internal._gcp_quota_project_id <builtin>/ai/ns_internal/auth.baml:43
-function         ai.internal._aws_sign_request    <builtin>/ai/ns_internal/auth.baml:61
-function         ai.internal._aws_resolve_region  <builtin>/ai/ns_internal/auth.baml:76
+function         ai.internal._gcp_project_id      <builtin>/ai/ns_internal/auth.baml:42
+function         ai.internal._gcp_quota_project_id <builtin>/ai/ns_internal/auth.baml:56
+function         ai.internal._aws_sign_request    <builtin>/ai/ns_internal/auth.baml:72
+function         ai.internal._aws_resolve_region  <builtin>/ai/ns_internal/auth.baml:92
 function         ai.internal._shorthand_prefixes  <builtin>/ai/ns_internal/clients.baml:7
 function         ai.internal._from_shorthand      <builtin>/ai/ns_internal/clients.baml:34
 function         ai.internal._schema_for_signature <builtin>/ai/ns_internal/helpers.baml:5

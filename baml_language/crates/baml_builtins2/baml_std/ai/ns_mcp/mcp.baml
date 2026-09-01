@@ -2,7 +2,7 @@
 // primitives (baml.sys.start_process, root.raw_tool), not part of
 // ai: the core namespace carries no protocol knowledge.
 //
-// One McpConnection is one server child process speaking JSON-RPC 2.0 over
+// One Connection is one server child process speaking JSON-RPC 2.0 over
 // stdio, one message per line. tools() projects the server's catalog into
 // root.Tool values whose handlers proxy tools/call, so MCP calls are
 // executed by the runner, journaled as ToolRequested/ToolCompleted, and
@@ -21,7 +21,7 @@ function rpc_line(id: int?, method: string, params: map<string, unknown>?) -> st
     baml.json.stringify(baml.json.to_json(m))
 }
 
-class McpConnection {
+class Connection {
     server_name: string,
     p: baml.sys.Process,
     out: baml.sys.ReadPipeLines,
@@ -35,7 +35,7 @@ class McpConnection {
         command: string,
         args: string[],
         timeout_ms: int = 30000,
-    ) -> McpConnection {
+    ) -> Connection {
         let p = baml.sys.start_process(
             command,
             args,
@@ -49,7 +49,7 @@ class McpConnection {
                 }
             },
         };
-        let conn = McpConnection {
+        let conn = Connection {
             server_name: name,
             p: p,
             out: p.stdout.lines(),

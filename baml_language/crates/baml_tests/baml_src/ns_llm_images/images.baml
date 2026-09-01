@@ -23,7 +23,7 @@
 //
 // There is deliberately NO SSE test here: neither endpoint streams. The
 // OpenAI Images API's `stream`/`partial_images` mode emits partially rendered
-// previews, which `ai.stream.StreamEvent` (text deltas + turn metadata) cannot
+// previews, which `ai.stream.Event` (text deltas + turn metadata) cannot
 // carry, and the gateway answers once with finished images. Both clients
 // therefore omit `ai.stream.StreamingClient`, and
 // `openai_images_streaming_unsupported` / `gateway_images_streaming_unsupported`

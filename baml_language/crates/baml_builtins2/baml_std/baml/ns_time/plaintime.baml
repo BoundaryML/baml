@@ -90,25 +90,25 @@ class PlainTime {
     }
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             match (j) {
                 string => {
                     PlainTime.parse(j) catch (_) {
                         root.errors.ParseError { message } => {
-                            throw baml.json.JsonDecodeError { message: message, path: "" }
+                            throw baml.json.DecodeError { message: message, path: "" }
                         },
                     }
                 },
                 _ => {
-                    throw baml.json.JsonDecodeError { message: "Expected ISO 8601 time string", path: "" }
+                    throw baml.json.DecodeError { message: "Expected ISO 8601 time string", path: "" }
                 },
             }
         }
     }
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             // Route through `baml.json.from` so the body can throw the
-            // `JsonSerializationError` the interface declares (a `string`-returning
+            // `baml.json.SerializationError` the interface declares (a `string`-returning
             // `to_string()` is `throws never`, which would trip the extraneous-throws
             // check on a BAML-bodied impl). The string flows into `json` unchanged.
             baml.json.from(self.to_string())

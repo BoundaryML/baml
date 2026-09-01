@@ -1,4 +1,4 @@
-// Internal helper behind `ai.mcp.McpConnection.tools()`. Nothing here is part
+// Internal helper behind `ai.mcp.Connection.tools()`. Nothing here is part
 // of the public ai surface.
 
 /// (internal) A tools/call proxy bound to one tool name. A helper function rather than
@@ -6,7 +6,7 @@
 /// loop variable's slot, so every tool would proxy the last catalog entry;
 /// a parameter is a fresh binding per call.
 function _proxy(
-    conn: root.mcp.McpConnection,
+    conn: root.mcp.Connection,
     name: string,
 ) -> (map<string, unknown>) -> string throws unknown {
     (args: map<string, unknown>) -> {

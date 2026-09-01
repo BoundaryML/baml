@@ -2,17 +2,17 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-225..229 'boom': throws user.Boom
-259..288 '{\n   ..." }\n}': never
-271..286 'Boom { m: "x" }': user.Boom
-281..284 '"x"': "x"
-299..300 'f': throws never
-326..434 '{\n   ...  }\n}': string
-332..336 'boom': () -> string throws user.Boom
-332..338 'boom()': string
-332..432 'boom()...n    }': string
-346..347 'e': user.Boom
-349..352 'ctx': baml.errors.ErrorContext
-364..368 'Boom': user.Boom
-372..385 'ctx.to_string': (self: baml.errors.ErrorContext) -> string throws never
-372..387 'ctx.to_string()': string
+220..224 'boom': throws user.Boom
+254..283 '{\n   ..." }\n}': never
+266..281 'Boom { m: "x" }': user.Boom
+276..279 '"x"': "x"
+294..295 'f': throws never
+321..429 '{\n   ...  }\n}': string
+327..331 'boom': () -> string throws user.Boom
+327..333 'boom()': string
+327..427 'boom()...n    }': string
+341..342 'e': user.Boom
+344..347 'ctx': baml.errors.Context
+359..363 'Boom': user.Boom
+367..380 'ctx.to_string': (self: baml.errors.Context) -> string throws never
+367..382 'ctx.to_string()': string

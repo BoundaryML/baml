@@ -153,7 +153,7 @@ class ImageClient {
     }
 
     // No ai.stream.StreamingClient: the endpoint's streaming mode emits
-    // partially rendered image previews, which ai.stream.StreamEvent (text
+    // partially rendered image previews, which ai.stream.Event (text
     // deltas plus turn metadata) cannot carry. `ai.stream.from_spec` reports
     // that as ai.errors.StreamingUnsupported.
 }

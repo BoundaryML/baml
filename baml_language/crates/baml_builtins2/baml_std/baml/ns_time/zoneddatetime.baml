@@ -237,29 +237,29 @@ class ZonedDateTime {
     }
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             match (j) {
                 string => {
                     ZonedDateTime.parse(j) catch (_) {
                         root.errors.ParseError { message } => {
-                            throw baml.json.JsonDecodeError { message: message, path: "" }
+                            throw baml.json.DecodeError { message: message, path: "" }
                         },
                     }
                 },
                 _ => {
-                    throw baml.json.JsonDecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string", path: "" }
+                    throw baml.json.DecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string", path: "" }
                 },
             }
         }
     }
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) catch (_) {
                 root.errors.InvalidArgument { message } => {
-                    throw baml.json.JsonSerializationError { message: message, path: "" }
+                    throw baml.json.SerializationError { message: message, path: "" }
                 },
                 UnknownTimezoneError { timezone } => {
-                    throw baml.json.JsonSerializationError { message: "unknown timezone: " + timezone, path: "" }
+                    throw baml.json.SerializationError { message: "unknown timezone: " + timezone, path: "" }
                 },
             }
         }

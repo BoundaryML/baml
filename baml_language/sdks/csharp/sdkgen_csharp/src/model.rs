@@ -43,9 +43,9 @@ pub(crate) struct CodegenModel {
 }
 
 /// Runtime names from the compiled Canary program. Generator-facing class
-/// methods retain their source identity (`CsvRows.next`), while an interface
+/// methods retain their source identity (`Rows.next`), while an interface
 /// implementation is emitted under its dispatch identity
-/// (`CsvRows.root.iter.Iterator.next`). C# calls the engine by name, so it must
+/// (`Rows.root.iter.Iterator.next`). C# calls the engine by name, so it must
 /// use the latter without changing the shared symbol-pool contract.
 pub(crate) struct RuntimeCallableIdentities {
     function_names: BTreeSet<String>,
@@ -327,18 +327,18 @@ mod tests {
     fn interface_method_uses_the_compiled_runtime_identity() {
         let identities = RuntimeCallableIdentities {
             function_names: BTreeSet::from([
-                "baml.csv.CsvRows.root.iter.Iterator.next".to_string(),
-                "baml.csv.CsvRows.root.iter.Iterable.iter".to_string(),
+                "baml.csv.Rows.root.iter.Iterator.next".to_string(),
+                "baml.csv.Rows.root.iter.Iterable.iter".to_string(),
             ]),
         };
         let owner = Name::new(
             BaseName::new("baml"),
             vec![BaseName::new("csv")],
-            BaseName::new("CsvRows"),
+            BaseName::new("Rows"),
         );
         assert_eq!(
             identities.method_identity(&owner, &BaseName::new("next")),
-            Ok("baml.csv.CsvRows.root.iter.Iterator.next".to_string())
+            Ok("baml.csv.Rows.root.iter.Iterator.next".to_string())
         );
     }
 }

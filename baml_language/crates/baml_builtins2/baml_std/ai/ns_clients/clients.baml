@@ -12,9 +12,9 @@
 /// What a `client:` position accepts: an already-built client, a
 /// `"provider/model"` shorthand string, or a `baml.env.Ref` naming a variable
 /// that holds one. `ai.clients.resolve` turns any of them into a `ai.Client`.
-type ClientSelector = root.Client | string | baml.env.Ref;
+type Selector = root.Client | string | baml.env.Ref;
 
-/// Resolve a `ClientSelector` to the client to call, at CALL time.
+/// Resolve a `Selector` to the client to call, at CALL time.
 ///
 ///   * a `ai.Client` is returned unchanged (identity);
 ///   * a string is the `"provider/model"` shorthand, constructed here — the
@@ -26,7 +26,7 @@ type ClientSelector = root.Client | string | baml.env.Ref;
 ///
 /// This is what makes `client: env.MODEL.get() ?? "openai/gpt-4o-mini"` work:
 /// nothing about the selection is decided until the call happens.
-function resolve(selector: ClientSelector) -> root.Client {
+function resolve(selector: Selector) -> root.Client {
     match (selector) {
         let shorthand: string => root.internal._from_shorthand(shorthand),
         let named: baml.env.Ref => {
@@ -526,7 +526,7 @@ class StreamRelay {
     // one TextDelta at a time so downstream granularity is preserved.
     pending_text: string[],
     pending_cursor: int,
-    terminal: root.stream.StreamEvent[],
+    terminal: root.stream.Event[],
     terminal_cursor: int,
     finished: bool,
     // Wire records, oldest first: failed legs pushed on retry, the selected
@@ -571,7 +571,7 @@ class StreamRelay {
         }
     }
 
-    function next_event(self) -> root.stream.StreamEvent | root.stream.Done {
+    function next_event(self) -> root.stream.Event | root.stream.Done {
         if (self.pending_cursor < self.pending_text.length()) {
             let text = self.pending_text.at(self.pending_cursor)
                 ?? baml.sys.panic("StreamRelay lost a pending delta");

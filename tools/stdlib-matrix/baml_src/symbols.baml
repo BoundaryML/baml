@@ -42,7 +42,7 @@ class ImplStep {
     }
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             ImplStep {
                 base: baml.json.to<string>(baml.json.field(j, "base")),
                 iface: baml.json.to<string[]>(baml.json.field(j, "interface")),

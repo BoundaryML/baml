@@ -9,7 +9,7 @@
 //! `File` handle, the `on_skip` closure) in regular GC-traced instance
 //! fields — the `RustData` state holds plain Rust data only.
 //!
-//! Error values are `baml.csv.CsvError` instances built from plain-Rust
+//! Error values are `baml.csv.Error` instances built from plain-Rust
 //! [`ErrInfo`] records; skip diagnostics are retained as `ErrInfo` and
 //! materialized on demand by `skipped()`.
 
@@ -48,15 +48,15 @@ use time::{
 };
 
 use super::{
-    BamlClassCsvCsvReader, BamlClassCsvCsvRecord, BamlClassCsvCsvWriter, BamlNamespaceCsv,
-    PackageBamlImpl, copy, view,
+    BamlClassCsvReader, BamlClassCsvRecord, BamlClassCsvWriter, BamlNamespaceCsv, PackageBamlImpl,
+    copy, view,
 };
 use crate::{
     BexVm,
     errors::{VmInternalError, VmRustFnError},
 };
 
-const CSV_ERROR_KIND_FQN: &str = "baml.csv.CsvErrorKind";
+const CSV_ERROR_KIND_FQN: &str = "baml.csv.ErrorKind";
 const ITER_DONE_FQN: &str = "baml.iter.Done";
 use baml_type::typetag::TypeTag;
 
@@ -105,7 +105,7 @@ impl Kind {
     }
 }
 
-/// Plain-Rust mirror of `baml.csv.CsvError`, safe to retain inside `RustData`
+/// Plain-Rust mirror of `baml.csv.Error`, safe to retain inside `RustData`
 /// state (no heap `Value`s). Materialized via [`error_value`].
 #[derive(Clone, Debug)]
 struct ErrInfo {
@@ -166,7 +166,7 @@ fn error_value(vm: &mut BexVm, e: &ErrInfo) -> Result<Value, VmRustFnError> {
         Some(c) => Value::object(vm.alloc_string(c.clone())),
         None => Value::NULL,
     };
-    Ok(copy::csv::CsvError {
+    Ok(copy::csv::Error {
         kind,
         message,
         line: opt_int_value(e.line),
@@ -187,7 +187,7 @@ fn throw_err(vm: &mut BexVm, e: &ErrInfo) -> VmRustFnError {
 }
 
 fn need_data_value(vm: &mut BexVm) -> Value {
-    let class_ptr = vm.resolve_class("baml.csv._CsvNeedData");
+    let class_ptr = vm.resolve_class("baml.csv._NeedData");
     Value::object(vm.alloc_instance(class_ptr, vec![]))
 }
 
@@ -1655,7 +1655,7 @@ fn decode_record_to_instance(
 }
 
 fn current_type_arg(vm: &mut BexVm, who: &str) -> Result<bex_vm_types::RealizedTy, VmRustFnError> {
-    // `.first()` is the method's own first generic only because `CsvRecord` is
+    // `.first()` is the method's own first generic only because `Record` is
     // non-generic, so MIR's receiver-class-type-arg prepend (which would push
     // class args ahead of the method's) contributes nothing here. A generic
     // receiver class would shift the index — see `map_result_element_ty`'s
@@ -1917,7 +1917,7 @@ fn instant_cell_text(inst: &Instance) -> Result<String, CellTextErr> {
         .map_err(|_| CellTextErr::Unsupported("Instant out of RFC 3339 range".to_string()))
 }
 
-/// Canonical cell text for a BAML value (`CsvValue` or a typed-row field).
+/// Canonical cell text for a BAML value (`Value` or a typed-row field).
 fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, CellTextErr> {
     Ok(match v.kind() {
         ValueKind::Null => null_value.to_string(),
@@ -2107,7 +2107,7 @@ fn render_markdown(headers: &[String], rows: &[Vec<String>], total_rows: usize) 
 // Trait implementations
 // =============================================================================
 
-impl BamlClassCsvCsvReader for PackageBamlImpl {
+impl BamlClassCsvReader for PackageBamlImpl {
     fn skipped(vm: &mut BexVm, csvreader: &Value) -> Vec<Value> {
         let Ok(st) = state_arc::<Mutex<ReaderState>>(vm, *csvreader, 0) else {
             return Vec::new();
@@ -2119,7 +2119,7 @@ impl BamlClassCsvCsvReader for PackageBamlImpl {
             .collect()
     }
 
-    fn skipped_count(vm: &BexVm, csvreader: &view::csv::CsvReader<'_>) -> i64 {
+    fn skipped_count(vm: &BexVm, csvreader: &view::csv::Reader<'_>) -> i64 {
         lock(csvreader._handle::<Mutex<ReaderState>>(vm)).skipped_count
     }
 
@@ -2130,9 +2130,9 @@ impl BamlClassCsvCsvReader for PackageBamlImpl {
                     let s = lock(&st);
                     (s.byte, s.line, s.record)
                 };
-                copy::csv::CsvPosition { byte, line, record }.to_value(vm)
+                copy::csv::Position { byte, line, record }.to_value(vm)
             }
-            Err(_) => copy::csv::CsvPosition {
+            Err(_) => copy::csv::Position {
                 byte: 0,
                 line: 1,
                 record: 0,
@@ -2152,9 +2152,9 @@ impl BamlClassCsvCsvReader for PackageBamlImpl {
             Ok(Polled::Done) => done_value(vm),
             Ok(Polled::Skipped(info)) => {
                 let error = error_value(vm, &info)?;
-                Ok(copy::csv::CsvSkip { error }.to_value(vm))
+                Ok(copy::csv::Skip { error }.to_value(vm))
             }
-            Ok(Polled::Rec(rd)) => Ok(copy::csv::CsvRecord {
+            Ok(Polled::Rec(rd)) => Ok(copy::csv::Record {
                 _handle: Arc::new(rd),
             }
             .to_value(vm)),
@@ -2182,31 +2182,31 @@ impl BamlClassCsvCsvReader for PackageBamlImpl {
                         Value::object(vm.alloc_array(bex_vm_types::RealizedTy::string(), items))
                     }
                 };
-                Ok(copy::csv::CsvHeaders { names: names_value }.to_value(vm))
+                Ok(copy::csv::Headers { names: names_value }.to_value(vm))
             }
             Err(info) => Err(throw_err(vm, &info)),
         }
     }
 
-    fn _feed(vm: &BexVm, csvreader: &view::csv::CsvReader<'_>, chunk: &[u8]) {
+    fn _feed(vm: &BexVm, csvreader: &view::csv::Reader<'_>, chunk: &[u8]) {
         let mut s = lock(csvreader._handle::<Mutex<ReaderState>>(vm));
         s.buf.extend_from_slice(chunk);
     }
 
-    fn _feed_eof(vm: &BexVm, csvreader: &view::csv::CsvReader<'_>) {
+    fn _feed_eof(vm: &BexVm, csvreader: &view::csv::Reader<'_>) {
         lock(csvreader._handle::<Mutex<ReaderState>>(vm)).eof = true;
     }
 
-    fn _mark_closed(vm: &BexVm, csvreader: &view::csv::CsvReader<'_>) {
+    fn _mark_closed(vm: &BexVm, csvreader: &view::csv::Reader<'_>) {
         lock(csvreader._handle::<Mutex<ReaderState>>(vm)).closed = true;
     }
 
-    fn _mark_exhausted(vm: &BexVm, csvreader: &view::csv::CsvReader<'_>) {
+    fn _mark_exhausted(vm: &BexVm, csvreader: &view::csv::Reader<'_>) {
         lock(csvreader._handle::<Mutex<ReaderState>>(vm)).finished = true;
     }
 }
 
-impl BamlClassCsvCsvRecord for PackageBamlImpl {
+impl BamlClassCsvRecord for PackageBamlImpl {
     fn fields(vm: &mut BexVm, csvrecord: &Value) -> Vec<bex_str::BexStr> {
         match record_arc(vm, *csvrecord) {
             Ok(rd) => rd
@@ -2218,19 +2218,19 @@ impl BamlClassCsvCsvRecord for PackageBamlImpl {
         }
     }
 
-    fn length(vm: &BexVm, csvrecord: &view::csv::CsvRecord<'_>) -> i64 {
+    fn length(vm: &BexVm, csvrecord: &view::csv::Record<'_>) -> i64 {
         csvrecord._handle::<RecordData>(vm).cells.len() as i64
     }
 
     fn position(vm: &mut BexVm, csvrecord: &Value) -> Value {
         match record_arc(vm, *csvrecord) {
-            Ok(rd) => copy::csv::CsvPosition {
+            Ok(rd) => copy::csv::Position {
                 byte: rd.byte,
                 line: rd.line,
                 record: rd.record,
             }
             .to_value(vm),
-            Err(_) => copy::csv::CsvPosition {
+            Err(_) => copy::csv::Position {
                 byte: 0,
                 line: 1,
                 record: 0,
@@ -2272,8 +2272,8 @@ impl BamlClassCsvCsvRecord for PackageBamlImpl {
     }
 }
 
-impl BamlClassCsvCsvWriter for PackageBamlImpl {
-    fn records_written(vm: &BexVm, csvwriter: &view::csv::CsvWriter<'_>) -> i64 {
+impl BamlClassCsvWriter for PackageBamlImpl {
+    fn records_written(vm: &BexVm, csvwriter: &view::csv::Writer<'_>) -> i64 {
         lock(csvwriter._handle::<Mutex<WriterState>>(vm)).records_written
     }
 
@@ -2363,11 +2363,11 @@ impl BamlClassCsvCsvWriter for PackageBamlImpl {
         Ok(bex_str::BexStr::from(out.as_str()))
     }
 
-    fn _bytes_written(vm: &BexVm, csvwriter: &view::csv::CsvWriter<'_>) -> i64 {
+    fn _bytes_written(vm: &BexVm, csvwriter: &view::csv::Writer<'_>) -> i64 {
         lock(csvwriter._handle::<Mutex<WriterState>>(vm)).bytes_written
     }
 
-    fn _mark_closed(vm: &BexVm, csvwriter: &view::csv::CsvWriter<'_>) {
+    fn _mark_closed(vm: &BexVm, csvwriter: &view::csv::Writer<'_>) {
         lock(csvwriter._handle::<Mutex<WriterState>>(vm)).closed = true;
     }
 }
@@ -2400,7 +2400,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         };
 
         let state = ReaderState::new(opts, initial, eof);
-        Ok(copy::csv::CsvReader {
+        Ok(copy::csv::Reader {
             _handle: Arc::new(Mutex::new(state)),
             _file: file,
             _on_skip: on_skip,
@@ -2416,7 +2416,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         owns_file: bool,
     ) -> Result<Value, VmRustFnError> {
         let opts = parse_writer_options(vm, options)?;
-        Ok(copy::csv::CsvWriter {
+        Ok(copy::csv::Writer {
             _handle: Arc::new(Mutex::new(WriterState::new(opts, false))),
             _file: *file,
             _owns_file: owns_file,
@@ -2426,7 +2426,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
 
     fn _buffer(vm: &mut BexVm, options: Option<&Value>) -> Result<Value, VmRustFnError> {
         let opts = parse_writer_options(vm, options)?;
-        Ok(copy::csv::CsvWriter {
+        Ok(copy::csv::Writer {
             _handle: Arc::new(Mutex::new(WriterState::new(opts, true))),
             _file: Value::NULL,
             _owns_file: false,
@@ -2512,7 +2512,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
                 };
                 if skip {
                     let error = error_value(vm, &info)?;
-                    Ok(copy::csv::CsvSkip { error }.to_value(vm))
+                    Ok(copy::csv::Skip { error }.to_value(vm))
                 } else {
                     Err(throw_err(vm, &info))
                 }

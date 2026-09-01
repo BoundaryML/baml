@@ -1189,8 +1189,8 @@ fn error_surfaces_source(origin: &str) -> String {
             let sap_message = if sap is string {{ sap }} else {{ "sap accepted a null" }}
 
             let decoded = baml.json.from_string<Item>("[1, 2]") catch (e) {{
-                baml.json.JsonDecodeError => e.message,
-                _ => "not a JsonDecodeError",
+                baml.json.DecodeError => e.message,
+                _ => "not a DecodeError",
             }}
             let decode_message = if decoded is string {{ decoded }} else {{ "decode accepted a list" }}
 

@@ -139,7 +139,7 @@ class ResponsesClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            openai.internal.openai_preview(self, input) catch_all (e) {
+            openai.internal.preview(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

@@ -2140,11 +2140,11 @@ fn ai.clients.StreamRelay.close_current(self: ai.clients.StreamRelay) -> void {
     }
 }
 
-fn ai.clients.StreamRelay.recover(self: ai.clients.StreamRelay, error: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure) -> void {
+fn ai.clients.StreamRelay.recover(self: ai.clients.StreamRelay, error: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: ai.clients.StreamRelay // self // param
-    let _2: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure // error // param
+    let _2: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure // error // param
     let _3: baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _4: baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _5: baml.errors.Timeout // timeout
@@ -2320,7 +2320,7 @@ fn ai.clients.StreamRelay.next_event(self: ai.clients.StreamRelay) -> ai.stream.
     let _32: ai.clients.StreamRelayError | ai.stream.TurnStream
     let _33: ai.clients.StreamRelayError // failed
     let _34: void
-    let _35: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _35: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _36: ai.clients.StreamRelayError | ai.stream.TurnStream
     let _37: ai.stream.TurnStream // stream
     let _38: null | ai.stream.TurnStream
@@ -2344,7 +2344,7 @@ fn ai.clients.StreamRelay.next_event(self: ai.clients.StreamRelay) -> ai.stream.
     let _56: ai.ModelTurn | ai.clients.StreamRelayError
     let _57: ai.clients.StreamRelayError // failed
     let _58: void
-    let _59: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _59: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _60: ai.ModelTurn | ai.clients.StreamRelayError
     let _61: ai.ModelTurn // turn
     let _62: ai.events.LLMCall[]
@@ -2370,7 +2370,7 @@ fn ai.clients.StreamRelay.next_event(self: ai.clients.StreamRelay) -> ai.stream.
     let _82: ai.stream.TurnDone
     let _83: ai.clients.StreamRelayError // failed
     let _84: void
-    let _85: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _85: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
 
     bb0: {
         _3 = copy _1.5;
@@ -2812,7 +2812,7 @@ fn ai.content.Media.new(value: image | audio | video | pdf, provider_id: string 
     }
 
     bb9: {
-        _12 = load_type(baml.json.JsonSerializationError);
+        _12 = load_type(baml.json.SerializationError);
         _11 = call const fn baml.String.from<copy _12>(copy _7) -> [bb10];
     }
 
@@ -2832,7 +2832,7 @@ fn ai.content.Media.new(value: image | audio | video | pdf, provider_id: string 
     }
 
     bb13: {
-        _22 = load_type(baml.json.JsonDecodeError);
+        _22 = load_type(baml.json.DecodeError);
         _21 = call const fn baml.String.from<copy _22>(copy _15) -> [bb14];
     }
 
@@ -2858,44 +2858,44 @@ fn ai.errors.Failure.retry_safety(_1: void) -> void {
     }
 }
 
-fn ai.errors.normalize(error: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure) -> baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure {
+fn ai.errors.normalize(error: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure) -> baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure {
     // Locals:
     let _0: baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure // _0 // return
-    let _1: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure // error // param
-    let _2: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _1: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure // error // param
+    let _2: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _3: ai.errors.Failure // failure
-    let _4: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _4: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _5: baml.errors.UnknownError // unknown_error
     let _6: baml.errors.UnknownError
     let _7: reflect.Type
-    let _8: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _8: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _9: baml.errors.Timeout // timeout
-    let _10: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _10: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _11: baml.panics.Cancelled // cancelled
-    let _12: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _12: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _13: reflect.errors.CompilationError // compilation
-    let _14: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _14: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _15: baml.errors.InvalidArgument // invalid
     let _16: string
-    let _17: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _17: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _18: baml.errors.ParseError // parse
     let _19: string
-    let _20: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
-    let _21: baml.json.JsonSerializationError // serialize
+    let _20: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _21: baml.json.SerializationError // serialize
     let _22: string
-    let _23: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _23: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _24: baml.errors.AccessError // access
     let _25: string
-    let _26: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _26: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _27: baml.errors.Unsupported // unsupported
     let _28: string
-    let _29: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _29: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     let _30: baml.errors.Io // io
     let _31: string
-    let _32: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
-    let _33: baml.json.JsonParseError // json_parse
+    let _32: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _33: baml.json.ParseError // json_parse
     let _34: string
-    let _35: baml.json.JsonDecodeError // json_decode
+    let _35: baml.json.DecodeError // json_decode
     let _36: string
 
     bb0: {
@@ -2935,7 +2935,7 @@ fn ai.errors.normalize(error: baml.errors.AccessError | baml.errors.InvalidArgum
 
     bb7: {
         _20 = copy _1;
-        _20 = narrow_bind copy _20 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "JsonSerializationError" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb8];
+        _20 = narrow_bind copy _20 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "SerializationError" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb8];
     }
 
     bb8: {
@@ -2955,7 +2955,7 @@ fn ai.errors.normalize(error: baml.errors.AccessError | baml.errors.InvalidArgum
 
     bb11: {
         _32 = copy _1;
-        _32 = narrow_bind copy _32 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "JsonParseError" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb13, bb12];
+        _32 = narrow_bind copy _32 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["json"], name: "ParseError" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb13, bb12];
     }
 
     bb12: {
@@ -3050,10 +3050,10 @@ fn ai.errors.normalize(error: baml.errors.AccessError | baml.errors.InvalidArgum
     }
 }
 
-fn ai.errors.normalize_invoke(error: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure) -> baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure {
+fn ai.errors.normalize_invoke(error: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure) -> baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure {
     // Locals:
     let _0: baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure // _0 // return
-    let _1: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.JsonDecodeError | baml.json.JsonParseError | baml.json.JsonSerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure // error // param
+    let _1: baml.errors.AccessError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.errors.Unsupported | baml.json.DecodeError | baml.json.ParseError | baml.json.SerializationError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure // error // param
 
     bb0: {
         _0 = call const fn ai.errors.normalize(copy _1) -> [bb1];
@@ -3599,12 +3599,12 @@ fn ai.internal._from_shorthand(shorthand: string) -> ai.Client {
 
     bb26: {
         _27 = copy _7;
-        _11 = call const fn google.GoogleClient.new(copy _27, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn google.GeminiClient.new(copy _27, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb27: {
         _25 = copy _7;
-        _11 = call const fn anthropic.AnthropicClient.new(copy _25, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
+        _11 = call const fn anthropic.Client.new(copy _25, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb34];
     }
 
     bb28: {
@@ -4289,10 +4289,10 @@ fn ai.internal._retry_after_ms(headers: null | map<string, string>) -> int | nul
     }
 }
 
-fn ai.internal._proxy(conn: ai.mcp.McpConnection, name: string) -> (map<string, unknown>) -> string throws unknown {
+fn ai.internal._proxy(conn: ai.mcp.Connection, name: string) -> (map<string, unknown>) -> string throws unknown {
     // Locals:
     let _0: (map<string, unknown>) -> string throws unknown // _0 // return
-    let _1: ai.mcp.McpConnection // conn // param [captured]
+    let _1: ai.mcp.Connection // conn // param [captured]
     let _2: string // name // param [captured]
 
     bb0: {
@@ -4314,7 +4314,7 @@ fn .<lambda(_proxy, 0)>(args: map<string, unknown>) -> string {
 
     bb0: {
         _2 = copy capture[1];
-        _0 = call const fn ai.mcp.McpConnection.call_tool(copy capture[0], copy _2, copy _1) -> [bb1];
+        _0 = call const fn ai.mcp.Connection.call_tool(copy capture[0], copy _2, copy _1) -> [bb1];
     }
 
     bb1: {
@@ -4609,7 +4609,7 @@ fn ai.internal._media_envelope(m: ai.content.Media) -> int | float | string | bo
     let _2: unknown // e
     let _3: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
     let _4: baml.errors.UnknownError
-    let _5: baml.json.JsonSerializationError
+    let _5: baml.json.SerializationError
     let _6: string[]
     let _7: string
     let _8: reflect.Type
@@ -4629,7 +4629,7 @@ fn ai.internal._media_envelope(m: ai.content.Media) -> int | float | string | bo
 
     bb3: {
         _5 = copy _2;
-        _8 = load_type(baml.json.JsonSerializationError);
+        _8 = load_type(baml.json.SerializationError);
         _7 = call const fn baml.String.from<copy _8>(copy _2) -> [bb4];
     }
 
@@ -6772,9 +6772,9 @@ fn ai.mcp.rpc_line(id: int | null, method: string, params: null | map<string, un
     }
 }
 
-fn ai.mcp.McpConnection.connect(name: string, command: string, args: string[], timeout_ms: int) -> ai.mcp.McpConnection {
+fn ai.mcp.Connection.connect(name: string, command: string, args: string[], timeout_ms: int) -> ai.mcp.Connection {
     // Locals:
-    let _0: ai.mcp.McpConnection // _0 // return
+    let _0: ai.mcp.Connection // _0 // return
     let _1: string // name // param
     let _2: string // command // param
     let _3: string[] // args // param
@@ -6792,7 +6792,7 @@ fn ai.mcp.McpConnection.connect(name: string, command: string, args: string[], t
     let _15: string
     let _16: reflect.Type
     let _17: reflect.Type
-    let _18: ai.mcp.McpConnection // conn
+    let _18: ai.mcp.Connection // conn
     let _19: baml.sys.Process
     let _20: baml.sys.ReadPipeLines
     let _21: (baml.sys.ReadPipe) -> baml.sys.ReadPipeLines throws never
@@ -6826,12 +6826,12 @@ fn ai.mcp.McpConnection.connect(name: string, command: string, args: string[], t
     }
 
     bb4: {
-        _18 = ai.mcp.McpConnection { copy _1, copy _19, copy _20, copy _4, const 1_i64 };
+        _18 = ai.mcp.Connection { copy _1, copy _19, copy _20, copy _4, const 1_i64 };
         _23 = {  }: map<string, unknown>;
         _24 = { const "name": const "baml-mcp", const "version": const "0.1" }: map<string, string>;
         _22 = { const "protocolVersion": const "2025-06-18", const "capabilities": copy _23, const "clientInfo": copy _24 }: map<string, unknown>;
         _26 = copy _22;
-        _25 = call const fn ai.mcp.McpConnection._request(copy _18, const "initialize", copy _26) -> [bb5];
+        _25 = call const fn ai.mcp.Connection._request(copy _18, const "initialize", copy _26) -> [bb5];
     }
 
     bb5: {
@@ -6839,7 +6839,7 @@ fn ai.mcp.McpConnection.connect(name: string, command: string, args: string[], t
     }
 
     bb6: {
-        _27 = call const fn ai.mcp.McpConnection._send(copy _18, copy _28) -> [bb7];
+        _27 = call const fn ai.mcp.Connection._send(copy _18, copy _28) -> [bb7];
     }
 
     bb7: {
@@ -6878,10 +6878,10 @@ fn ai.mcp.McpConnection.connect(name: string, command: string, args: string[], t
     }
 }
 
-fn ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> void {
+fn ai.mcp.Connection._send(self: ai.mcp.Connection, line: string) -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: ai.mcp.McpConnection // self // param
+    let _1: ai.mcp.Connection // self // param
     let _2: string // line // param
     let _3: string // framed
     let _4: string[]
@@ -6950,10 +6950,10 @@ fn ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> void 
     }
 }
 
-fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, params: map<string, unknown>) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+fn ai.mcp.Connection._request(self: ai.mcp.Connection, method: string, params: map<string, unknown>) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
-    let _1: ai.mcp.McpConnection // self // param [captured]
+    let _1: ai.mcp.Connection // self // param [captured]
     let _2: string // method // param [captured]
     let _3: map<string, unknown> // params // param
     let _4: int // id [captured]
@@ -6986,7 +6986,7 @@ fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, par
     }
 
     bb1: {
-        _5 = call const fn ai.mcp.McpConnection._send(copy _1, copy _6) -> [bb2];
+        _5 = call const fn ai.mcp.Connection._send(copy _1, copy _6) -> [bb2];
     }
 
     bb2: {
@@ -7036,7 +7036,7 @@ fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, par
 }
 
 // lambda[0]
-fn .<lambda(McpConnection._request, 0)>() -> never {
+fn .<lambda(Connection._request, 0)>() -> never {
     // Locals:
     let _0: never // _0 // return
     let _1: string | baml.iter.Done // next
@@ -7284,10 +7284,10 @@ fn .<lambda(McpConnection._request, 0)>() -> never {
     }
 }
 
-fn ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool[] {
+fn ai.mcp.Connection.tools(self: ai.mcp.Connection) -> ai.tools.Tool[] {
     // Locals:
     let _0: ai.tools.Tool[] // _0 // return
-    let _1: ai.mcp.McpConnection // self // param
+    let _1: ai.mcp.Connection // self // param
     let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // result
     let _3: map<string, unknown>
     let _4: ai.tools.Tool[] // out
@@ -7324,7 +7324,7 @@ fn ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool[] {
 
     bb0: {
         _3 = {  }: map<string, unknown>;
-        _2 = call const fn ai.mcp.McpConnection._request(copy _1, const "tools/list", copy _3) -> [bb1];
+        _2 = call const fn ai.mcp.Connection._request(copy _1, const "tools/list", copy _3) -> [bb1];
     }
 
     bb1: {
@@ -7411,10 +7411,10 @@ fn ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool[] {
     }
 }
 
-fn ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string, args: map<string, unknown>) -> string {
+fn ai.mcp.Connection.call_tool(self: ai.mcp.Connection, name: string, args: map<string, unknown>) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: ai.mcp.McpConnection // self // param
+    let _1: ai.mcp.Connection // self // param
     let _2: string // name // param
     let _3: map<string, unknown> // args // param
     let _4: map<string, unknown> // params
@@ -7457,7 +7457,7 @@ fn ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string, args
     bb0: {
         _4 = { const "name": copy _2, const "arguments": copy _3 }: map<string, unknown>;
         _6 = copy _4;
-        _5 = call const fn ai.mcp.McpConnection._request(copy _1, const "tools/call", copy _6) -> [bb1];
+        _5 = call const fn ai.mcp.Connection._request(copy _1, const "tools/call", copy _6) -> [bb1];
     }
 
     bb1: {
@@ -7550,10 +7550,10 @@ fn ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string, args
     }
 }
 
-fn ai.mcp.McpConnection.close(self: ai.mcp.McpConnection) -> void {
+fn ai.mcp.Connection.close(self: ai.mcp.Connection) -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: ai.mcp.McpConnection // self // param
+    let _1: ai.mcp.Connection // self // param
     let _2: null
     let _3: (baml.sys.Process) -> null throws never
 
@@ -12190,7 +12190,7 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
     bb63: {
         _108 = copy _109 + copy _114;
         _107 = copy _108 + const ": ";
-        _119 = load_type(baml.json.JsonDecodeError);
+        _119 = load_type(baml.json.DecodeError);
         _118 = call const fn baml.String.from<copy _119>(copy _102) -> [bb64];
     }
 
@@ -12892,7 +12892,7 @@ fn ai.Agent.Runner.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.RunResu
     let _117: unknown // e
     let _118: Out
     let _119: baml.errors.UnknownError
-    let _120: baml.json.JsonSerializationError
+    let _120: baml.json.SerializationError
     let _121: reflect.Type
     let _122: void
     let _123: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]

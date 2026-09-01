@@ -207,7 +207,7 @@ async fn throws_wildcard_absorbs_stdlib_throws() {
 /// full inferred union (the named `BadInput` plus the stdlib json throws), not
 /// just the declared member.
 #[tokio::test]
-#[should_panic(expected = "JsonParseError")]
+#[should_panic(expected = "ParseError")]
 async fn throws_wildcard_caller_sees_full_union() {
     let _ = baml_test!(
         r#"

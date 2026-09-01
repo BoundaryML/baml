@@ -767,7 +767,7 @@ fn user.fixtures.llm_spec_mode.NamedTools$spec(q: string) -> ai.FunctionSpec<fix
     let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
-    let _6: anthropic.AnthropicClient
+    let _6: anthropic.Client
 
     bb0: {
         _2 = { const "q": copy _1 }: map<string, unknown>;
@@ -780,7 +780,7 @@ fn user.fixtures.llm_spec_mode.NamedTools$spec(q: string) -> ai.FunctionSpec<fix
     }
 
     bb2: {
-        _6 = call const fn anthropic.AnthropicClient.new(const "claude-haiku-4-5", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
+        _6 = call const fn anthropic.Client.new(const "claude-haiku-4-5", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {

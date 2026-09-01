@@ -1,5 +1,5 @@
 // The Gemini `generateContent` wire format, shared by both Google backends:
-// root.GoogleClient (generativelanguage.googleapis.com) and root.VertexClient
+// root.GeminiClient (generativelanguage.googleapis.com) and root.VertexClient
 // (aiplatform.googleapis.com). Only URL construction and authentication differ
 // between them, so everything below — typed request classes, prompt/journal
 // lowering, the response envelope, the SSE decoder — is written once here and
@@ -493,7 +493,7 @@ function _gm_prompt_parts(
     parts
 }
 
-class GooglePrompt {
+class Prompt {
     system_parts: GmPart[],
     contents: GmContent[],
 }
@@ -504,11 +504,7 @@ class GooglePrompt {
 /// ALL system messages merge into one `systemInstruction` (PLAN §5: google
 /// merges, the other providers demote the 2nd+ to user) — matching sys_llm's
 /// builder and the shipped native behavior.
-function google_lower_prompt(
-    prompt: ai.Prompt,
-    fetch_url: bool = true,
-    preview: bool = false,
-) -> GooglePrompt {
+function lower_prompt(prompt: ai.Prompt, fetch_url: bool = true, preview: bool = false) -> Prompt {
     let system_parts: GmPart[] = [];
     let contents: GmContent[] = [];
     for (let message in prompt.messages()) {
@@ -528,7 +524,7 @@ function google_lower_prompt(
             null
         };
     }
-    GooglePrompt { system_parts: system_parts, contents: contents }
+    Prompt { system_parts: system_parts, contents: contents }
 }
 
 /// (internal) ---------------------------------------------------------------------------
@@ -543,7 +539,7 @@ function google_lower_prompt(
 /// metadata slot.
 ///
 /// The id is the one field this client OWNS: Gemini sends no call ids at all,
-/// `google_parse` synthesizes them (`call_<seq>_<i>`), and they are opaque
+/// `parse` synthesizes them (`call_<seq>_<i>`), and they are opaque
 /// correlation handles everywhere else (`ai.wire` documents id shape as "that
 /// provider's business" and deliberately never rewrites them). So the signature
 /// rides the id: `call_0_0~gts~<signature>`. It round-trips through
@@ -608,7 +604,7 @@ function _gm_tool_name_for(j: ai.Journal, id: string) -> string {
 /// ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are journal-only.
 /// Consecutive tool results merge into ONE user content of functionResponse
 /// parts, matching how Gemini expects results for a multi-call turn.
-function google_lower_journal(j: ai.Journal) -> GmContent[] {
+function lower_journal(j: ai.Journal) -> GmContent[] {
     let contents: GmContent[] = [];
     let pending: GmPart[] = []; // functionResponse parts awaiting flush
     for (let e in j.entries()) {
@@ -719,10 +715,10 @@ function gemini_build_body(
     preview: bool = false,
 ) -> string {
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
-    let lowered = google_lower_prompt(prompt, fetch_url = fetch_url, preview = preview);
+    let lowered = lower_prompt(prompt, fetch_url = fetch_url, preview = preview);
     let contents = lowered.contents;
     let journal = ai.wire.sanitize_for_client(input.journal, client_id);
-    for (let item in google_lower_journal(journal)) {
+    for (let item in lower_journal(journal)) {
         contents.push(item);
     }
 
@@ -743,7 +739,7 @@ function gemini_build_body(
     };
 
     // Gemini answers `contents: []` with an HTTP 400. Say so locally instead,
-    // the way the Anthropic (`anthropic_messages_request`) and Bedrock
+    // the way the Anthropic (`messages_request`) and Bedrock
     // (`converse_request`) clients do for the same shape.
     if (contents.length() == 0) {
         throw ai.errors.InvalidRequest {
@@ -853,7 +849,7 @@ function _gm_usage(usage: GmUsageMetadata?) -> ai.events.Usage? {
 /// `{"error": …}` body served with a 200) is a FAILURE, not an empty answer:
 /// silently returning an empty Complete turn makes a `-> string` function
 /// return "" as a success. `provider` names the backend in that failure.
-function google_parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.ModelTurn {
+function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.ModelTurn {
     // An error document that reached this far was served with a 2xx status
     // (`ai.wire.send_as` classifies the non-2xx case). Classify it the same
     // way rather than reading a turn out of a body that has none.
@@ -1020,8 +1016,8 @@ function _gm_open_sse(
 /// A `data:` payload that is not decodable is a failure too. Dropping it (what
 /// this used to do) turns a cut or a proxy's error page into missing text that
 /// no caller can see.
-function _gm_decode_batch(batch: string, provider: string) -> ai.stream.StreamEvent[] {
-    let out: ai.stream.StreamEvent[] = [];
+function _gm_decode_batch(batch: string, provider: string) -> ai.stream.Event[] {
+    let out: ai.stream.Event[] = [];
     for (let raw in ai.stream.decode_sse_batch(batch)) {
         let payload = (raw.data ?? "").trim();
         // A comment/keep-alive carries no data; `[DONE]` is not Gemini's
@@ -1094,23 +1090,23 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.StreamEv
 }
 
 // ---------------------------------------------------------------------------
-// root.GoogleClient — the Gemini Developer API backend.
+// root.GeminiClient — the Gemini Developer API backend.
 
 /// ai.ModelTurnInput -> one generateContent request.
-function google_render(c: root.GoogleClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _google_request(c, input, false, preview = false)
+function render(c: root.GeminiClient, input: ai.ModelTurnInput) -> baml.http.Request {
+    _request(c, input, false, preview = false)
 }
 
 /// The request one `render` would send. URL media unsupported by the Gemini
 /// Developer API is rejected before any download is attempted.
-function google_preview(c: root.GoogleClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _google_request(c, input, false, preview = true)
+function preview(c: root.GeminiClient, input: ai.ModelTurnInput) -> baml.http.Request {
+    _request(c, input, false, preview = true)
 }
 
 /// (internal) The shared request builder: identical body for both paths; streaming swaps
 /// the RPC verb for `:streamGenerateContent?alt=sse`.
-function _google_request(
-    c: root.GoogleClient,
+function _request(
+    c: root.GeminiClient,
     input: ai.ModelTurnInput,
     stream: bool,
     preview: bool = false,
@@ -1146,28 +1142,28 @@ function _google_request(
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
-function gemini_invoke(c: root.GoogleClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
+function gemini_invoke(c: root.GeminiClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     // ai.Journal position before this turn commits; the ai.AssistantMessage
     // the runner appends will land at this index, so ids synthesized
     // from it are stable across re-renders.
     let seq = input.journal.entries().length();
-    let req = google_render(c, input);
+    let req = render(c, input);
     let sent = ai.wire.send_as_with_wire<GmResponse>(req, "google", c.id(), capture_wire = c.capture_wire);
-    let turn = google_parse(sent.value, seq);
+    let turn = parse(sent.value, seq);
     ai.ModelTurn { ...turn, calls: [sent.call] }
 }
 
-function _google_decode_batch(batch: string) -> ai.stream.StreamEvent[] {
+function _decode_batch(batch: string) -> ai.stream.Event[] {
     _gm_decode_batch(batch, "google")
 }
 
 /// The streaming entry point: the same request body as `gemini_invoke` against
 /// the `:streamGenerateContent?alt=sse` verb, wrapped in an ai.TurnStream.
 function gemini_invoke_stream(
-    c: root.GoogleClient,
+    c: root.GeminiClient,
     input: ai.ModelTurnInput,
 ) -> ai.stream.TurnStream {
-    let req = _google_request(c, input, true);
+    let req = _request(c, input, true);
     let started = baml.time.Instant.now();
     let sse = _gm_open_sse(req, "google");
     // Strict termination: the `finishReason` fragment decodes as TurnDone, so
@@ -1175,7 +1171,7 @@ function gemini_invoke_stream(
     let stream = ai.stream.TurnStream.from_sse(
         sse,
         (batch: string) -> {
-            _google_decode_batch(batch) catch_all (e) {
+            _decode_batch(batch) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         },

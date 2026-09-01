@@ -5669,7 +5669,7 @@ impl LoweringContext<'_> {
         let mut shared_error: Option<Local> = None;
         // BEP-042 cause chain: a throw inside a defer pad — a sibling defer that
         // throws while the scope is already unwinding — is "during handling of"
-        // the in-flight error. All pads in this block share one ErrorContext
+        // the in-flight error. All pads in this block share one baml.errors.Context
         // slot; the throw funnel materializes the in-flight error into it when
         // an error reaches a pad, and the next sibling defer's throw chains onto
         // it. Lazily declared alongside `shared_error`.
@@ -5717,7 +5717,7 @@ impl LoweringContext<'_> {
                         handler: pad,
                         // handler_body and body_blocks are filled in once the
                         // pad bodies are lowered (below). `stack_trace_local`
-                        // holds the in-flight error's ErrorContext so a sibling
+                        // holds the in-flight error's baml.errors.Context so a sibling
                         // defer that throws while unwinding chains onto it
                         // (BEP-042 cause chain).
                         handler_body: Vec::new(),
@@ -6088,7 +6088,7 @@ impl LoweringContext<'_> {
                 // `AstStmt::Throw`) rather than a static jump to
                 // `catch_context.unwind_target`. The funnel computes the
                 // BEP-042 cause chain (`find_cause_context`) and materializes
-                // the destination handler's `ErrorContext`; a static goto
+                // the destination handler's `baml.errors.Context`; a static goto
                 // bypasses both, so a `throw` in expression position inside a
                 // `defer` region (or a `catch` arm/base) would drop its cause
                 // and leave a bound `ctx` unmaterialized (B-611). The exception
@@ -6205,9 +6205,9 @@ impl LoweringContext<'_> {
         };
 
         // BEP-034 middleware: with transformers present, package the body
-        // closure + name into a `baml.spawn.SpawnParams` instance, apply each
+        // closure + name into a `baml.spawn.Params` instance, apply each
         // `with` expression to it left-to-right (each is a function
-        // `(SpawnParams<T, E>) -> SpawnParams<U, F>`), and hand the FINAL
+        // `(Params<T, E>) -> Params<U, F>`), and hand the FINAL
         // params to the spawn as the config operand. The engine reads
         // body/name/group/cancel/detach from its fields — a transformer may
         // have replaced any of them, including the body. Fields are built in
@@ -6223,7 +6223,7 @@ impl LoweringContext<'_> {
                 Place::Local(params_local),
                 Rvalue::Aggregate {
                     kind: AggregateKind::Class {
-                        name: "baml.spawn.SpawnParams".to_string(),
+                        name: "baml.spawn.Params".to_string(),
                         type_arg_templates: Vec::new(),
                     },
                     fields: vec![
@@ -8264,7 +8264,7 @@ impl<'db> LoweringContext<'db> {
     /// `implements baml.ToJson` (a bare one is banned), handled by the dispatch
     /// paths in `lower_call`. `baml.json.from` honors any `baml.ToJson` override via
     /// its runtime shim, so it matches a real call. Unlike `string.from` it throws
-    /// `JsonSerializationError`, so the call's unwind target carries the throw.
+    /// `SerializationError`, so the call's unwind target carries the throw.
     /// Returns `true` (and emits the call) when it handled the expression.
     fn try_lower_to_json_fallback(
         &mut self,

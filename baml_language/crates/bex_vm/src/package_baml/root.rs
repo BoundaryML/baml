@@ -142,7 +142,7 @@ impl BamlPackageBaml for PackageBamlImpl {
     /// `value` to a `json` value for `baml.json.from`, honoring `baml.ToJson`
     /// overrides at every depth. The json analog of `_to_string_default`; both
     /// delegate to the override-honoring walker in `json.rs`. Unlike the string
-    /// renderer, this can throw `JsonSerializationError` for values with no json
+    /// renderer, this can throw `SerializationError` for values with no json
     /// representation.
     fn _to_json_default(vm: &mut BexVm, value: &Value) -> NativeCallResult {
         super::json::render_to_json_honoring_overrides(vm, *value)

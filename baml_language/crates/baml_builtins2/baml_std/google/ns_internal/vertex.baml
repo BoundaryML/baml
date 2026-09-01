@@ -264,7 +264,7 @@ function _vertex_anthropic_body(
     preview: bool = false,
 ) -> string {
     let vertex_fields: baml.json.json = { "anthropic_version": "vertex-2023-10-16", "model": null };
-    let params = anthropic.internal.AnthropicBodyParams {
+    let params = anthropic.internal.BodyParams {
         model: c.model,
         max_tokens: c.max_output_tokens ?? 8192,
         temperature: c.temperature,
@@ -278,7 +278,7 @@ function _vertex_anthropic_body(
         request_body: ai.wire.merge_request_body(vertex_fields, c.request_body),
         client_id: c.id(),
     };
-    anthropic.internal.anthropic_messages_body(params, input, stream, preview = preview)
+    anthropic.internal.messages_body(params, input, stream, preview = preview)
 }
 
 /// ai.ModelTurnInput -> one Vertex generateContent request.
@@ -366,14 +366,14 @@ function _vertex_request(
 function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = vertex_render(c, input);
     if (_vertex_publisher(c) == "anthropic") {
-        let sent = ai.wire.send_as_with_wire<anthropic.internal.AnthropicResponse>(
+        let sent = ai.wire.send_as_with_wire<anthropic.internal.Response>(
             req,
             "vertex",
             c.id(),
             capture_wire = c.capture_wire,
             request_timeout_ms = c.request_timeout_ms,
         );
-        let turn = anthropic.internal.anthropic_parse(sent.value);
+        let turn = anthropic.internal.parse(sent.value);
         return ai.ModelTurn { ...turn, calls: [sent.call] };
     }
     let seq = input.journal.entries().length();
@@ -384,11 +384,11 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
         capture_wire = c.capture_wire,
         request_timeout_ms = c.request_timeout_ms,
     );
-    let turn = root.internal.google_parse(sent.value, seq, provider = "vertex");
+    let turn = root.internal.parse(sent.value, seq, provider = "vertex");
     ai.ModelTurn { ...turn, calls: [sent.call] }
 }
 
-function _vertex_decode_batch(batch: string) -> ai.stream.StreamEvent[] {
+function _vertex_decode_batch(batch: string) -> ai.stream.Event[] {
     root.internal._gm_decode_batch(batch, "vertex")
 }
 
@@ -417,7 +417,7 @@ function vertex_invoke_stream(
         ai.stream.TurnStream.from_sse(
             sse,
             (batch: string) -> {
-                anthropic.internal.anthropic_decode_batch(batch, state) catch_all (e) {
+                anthropic.internal.decode_batch(batch, state) catch_all (e) {
                     _ => throw ai.errors.normalize(e),
                 }
             },

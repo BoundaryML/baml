@@ -1,4 +1,4 @@
-/// Gemini on Vertex AI: the same models as `google.GoogleClient`, reached
+/// Gemini on Vertex AI: the same models as `google.GeminiClient`, reached
 /// through a Google Cloud project with Google Cloud credentials.
 ///
 /// Three ways to authenticate, in the order the client tries them:

@@ -40,7 +40,7 @@ class MockRequest {
     body: string,
 
     // The request body parsed as JSON, for `baml.json.path<T>(req.json(), ".model")`.
-    // Throws `baml.json.JsonParseError` if the client did not send JSON.
+    // Throws `baml.json.ParseError` if the client did not send JSON.
     function json(self) -> json {
         baml.json.parse(self.body)
     }

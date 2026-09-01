@@ -18,7 +18,7 @@
 /// Surface enumeration mirroring the runtime's `bex_vm_types::FutureRead`
 /// states. Used by `Future.state(self)` to expose the settle status of
 /// a future to BAML code.
-enum FutureState {
+enum State {
     Pending,
     Ready,
     Error,
@@ -61,10 +61,10 @@ class Future<T, E> {
         $rust_function
     }
 
-    /// Return the current state of the future as a [`FutureState`]
+    /// Return the current state of the future as a [`State`]
     /// variant.
     //baml:mut_vm
-    function state(self) -> FutureState throws never {
+    function state(self) -> State throws never {
         $rust_function
     }
 }

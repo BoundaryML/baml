@@ -570,7 +570,7 @@ function _prompt_content(message: ai.PromptMessage, preview: bool = false) -> Co
                 // Converse rejects empty and whitespace-only text blocks, and a
                 // rendered prompt routinely produces them around media parts —
                 // the same filter the Anthropic client applies in
-                // `_anthropic_prompt_blocks`.
+                // `_prompt_blocks`.
                 if (text.trim() != "") {
                     blocks.push(ContentBlock.of_text(text));
                 }
@@ -806,7 +806,7 @@ function _lower_journal(journal: ai.Journal, with_status: bool) -> Message[] {
                 // shape: `_assistant_content` drops Reasoning and Media, and
                 // `ai.wire.sanitize_for_client` KEEPS same-client reasoning,
                 // so nothing upstream removes it. Mirrors the Anthropic
-                // client's guard in `_anthropic_lower_journal`.
+                // client's guard in `_lower_journal`.
                 if (content.length() > 0) {
                     pending.push(
                         PendingMessage {
@@ -1144,7 +1144,7 @@ function build_request(
 function sign(client: root.BedrockClient, request: baml.http.Request) -> baml.http.Request {
     root.internal.sign_request(
         request,
-        root.internal.AwsSignOptions {
+        root.internal.SignOptions {
             region: client.region,
             profile: client.profile,
             access_key_id: client.access_key_id,

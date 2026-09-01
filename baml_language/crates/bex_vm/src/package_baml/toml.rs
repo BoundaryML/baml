@@ -160,6 +160,6 @@ fn convert_toml_datetime(
 
 fn make_toml_parse_error(vm: &mut BexVm, message: String) -> Value {
     let err_msg = Value::object(vm.alloc_string(message));
-    let class = vm.resolve_class("baml.toml.TomlParseError");
+    let class = vm.resolve_class("baml.toml.ParseError");
     Value::object(vm.alloc_instance(class, vec![err_msg]))
 }

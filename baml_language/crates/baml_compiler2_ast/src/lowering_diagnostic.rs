@@ -268,8 +268,8 @@ pub enum LoweringDiagnostic {
 /// `strategy` list — the diagnostic does not carry the block's option values.
 fn client_replacement_expr(provider: Option<&str>) -> &'static str {
     match provider.map(str::trim).map(|p| p.trim_matches('"')) {
-        Some("anthropic") => "anthropic.AnthropicClient.new(model = \"...\")",
-        Some("google-ai" | "google" | "gemini") => "google.GoogleClient.new(model = \"...\")",
+        Some("anthropic") => "anthropic.Client.new(model = \"...\")",
+        Some("google-ai" | "google" | "gemini") => "google.GeminiClient.new(model = \"...\")",
         Some("vertex-ai" | "vertex") => "google.VertexClient.new(model = \"...\")",
         Some("aws-bedrock" | "bedrock") => "aws.BedrockClient.new(model = \"...\")",
         Some("azure-openai" | "azure") => {

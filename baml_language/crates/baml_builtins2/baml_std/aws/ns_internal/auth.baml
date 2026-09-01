@@ -9,7 +9,7 @@
 ///
 /// Each field mirrors a client option. Everything except `service` is optional;
 /// unset fields fall through to the AWS provider chain.
-class AwsSignOptions {
+class SignOptions {
     /// Explicit region; `null` resolves from `AWS_REGION`, `AWS_DEFAULT_REGION`,
     /// or the active profile.
     region: string?,
@@ -41,7 +41,7 @@ class AwsSignOptions {
 /// AWS provider chain: environment, the shared config/credentials files (static
 /// keys, `credential_process`, SSO cache), the container endpoint, then EC2
 /// IMDS.
-function sign_request(req: baml.http.Request, opts: AwsSignOptions) -> baml.http.Request {
+function sign_request(req: baml.http.Request, opts: SignOptions) -> baml.http.Request {
     ai.internal._aws_sign_request(
         req,
         opts.service,

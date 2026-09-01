@@ -19,7 +19,7 @@ class Table {
     items: map<string, Item>,
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             // Render the items map structurally; `baml.json.from` recurses each
             // `Item` value, honoring the `baml.ToJson` overrides on the nested
             // `baml.time.*` types (and nested `Table`s).
@@ -31,7 +31,7 @@ class Table {
     /// This is lossy: JSON `null` values are skipped, and datetime strings
     /// stay strings (JSON has no datetime type to distinguish them by).
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             // Delegate to a concrete-`Table`-returning helper: matching the
             // recursive `map<string, baml.json.json>` pattern against the abstract
             // `Self` return type confuses arm-reachability analysis.
@@ -41,7 +41,7 @@ class Table {
 
     /// Parses the text of a TOML file into a table.
     //baml:mut_vm
-    function parse(s: string) -> Table throws TomlParseError {
+    function parse(s: string) -> Table throws ParseError {
         $rust_function
     }
 }
@@ -49,7 +49,7 @@ class Table {
 /// Decodes a JSON object into a `Table`, skipping null values. Returns a
 /// concrete `Table` so arm-reachability over the recursive `json` map pattern
 /// is analyzed without the abstract `Self` of `Table`'s `baml.FromJson` impl.
-function table_from_json(j: baml.json.json) -> Table throws baml.json.JsonDecodeError {
+function table_from_json(j: baml.json.json) -> Table throws baml.json.DecodeError {
     match (j) {
         map<string, baml.json.json> => {
             let items: map<string, Item> = map {  };
@@ -64,7 +64,7 @@ function table_from_json(j: baml.json.json) -> Table throws baml.json.JsonDecode
             }
             Table { items: items }
         },
-        _ => throw baml.json.JsonDecodeError { message: "expected map", path: "" },
+        _ => throw baml.json.DecodeError { message: "expected map", path: "" },
     }
 }
 
@@ -72,7 +72,7 @@ function table_from_json(j: baml.json.json) -> Table throws baml.json.JsonDecode
 ///
 /// This is lossy: TOML datetime values are converted to JSON strings
 /// (`ZonedDateTime` as RFC 3339, the `Plain*` types as zoneless ISO 8601).
-function item_to_json(item: Item) -> baml.json.json throws baml.json.JsonSerializationError {
+function item_to_json(item: Item) -> baml.json.json throws baml.json.SerializationError {
     match (item) {
         bool | int | float | string => item,
         Table => item.to_json(),
@@ -86,15 +86,15 @@ function item_to_json(item: Item) -> baml.json.json throws baml.json.JsonSeriali
 
 /// Errors if the JSON value is `null`.
 /// Usually `Table.from_json` is a better entrypoint, as it will skip null values without erroring.
-function item_from_json(json: baml.json.json) -> Item throws baml.json.JsonDecodeError {
+function item_from_json(json: baml.json.json) -> Item throws baml.json.DecodeError {
     match (json) {
         bool | int | float | string => json,
-        null => throw baml.json.JsonDecodeError { message: "TOML does not support null", path: "" },
+        null => throw baml.json.DecodeError { message: "TOML does not support null", path: "" },
         map<string, baml.json.json> => Table.from_json(json),
         baml.json.json[] => json.map(item_from_json),
     }
 }
 
-class TomlParseError {
+class ParseError {
     message: string,
 }

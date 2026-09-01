@@ -406,7 +406,7 @@ function images_parse(c: root.ImageClient, resp: OaImagesResponse) -> ai.ModelTu
 
 /// The one internal entry point: render, send, normalize — one model turn.
 /// There is no streaming counterpart: the Images API's `stream`/`partial_images`
-/// mode emits partially-rendered previews, which `ai.stream.StreamEvent` (text
+/// mode emits partially-rendered previews, which `ai.stream.Event` (text
 /// deltas) cannot carry, so `openai.ImageClient` deliberately does not implement
 /// ai.stream.StreamingClient.
 function images_invoke(c: root.ImageClient, input: ai.ModelTurnInput) -> ai.ModelTurn {

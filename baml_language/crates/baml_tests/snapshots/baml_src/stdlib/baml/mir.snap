@@ -1689,10 +1689,10 @@ fn baml.crypto.Sha256.Hasher.update = builtin(vm)
 
 fn baml.crypto.Sha256.Hasher.finish = builtin(vm)
 
-fn baml.csv.CsvRecord.get(self: baml.csv.CsvRecord, column: string) -> null | T {
+fn baml.csv.Record.get(self: baml.csv.Record, column: string) -> null | T {
     // Locals:
     let _0: null | T // _0 // return
-    let _1: baml.csv.CsvRecord // self // param
+    let _1: baml.csv.Record // self // param
     let _2: string // column // param
     let _3: reflect.Type
 
@@ -1706,10 +1706,10 @@ fn baml.csv.CsvRecord.get(self: baml.csv.CsvRecord, column: string) -> null | T 
     }
 }
 
-fn baml.csv.CsvRecord.get_at(self: baml.csv.CsvRecord, index: int) -> null | T {
+fn baml.csv.Record.get_at(self: baml.csv.Record, index: int) -> null | T {
     // Locals:
     let _0: null | T // _0 // return
-    let _1: baml.csv.CsvRecord // self // param
+    let _1: baml.csv.Record // self // param
     let _2: int // index // param
     let _3: reflect.Type
 
@@ -1723,16 +1723,16 @@ fn baml.csv.CsvRecord.get_at(self: baml.csv.CsvRecord, index: int) -> null | T {
     }
 }
 
-fn baml.csv.CsvRecord.fields = builtin(vm)
+fn baml.csv.Record.fields = builtin(vm)
 
-fn baml.csv.CsvRecord.length = builtin(vm)
+fn baml.csv.Record.length = builtin(vm)
 
-fn baml.csv.CsvRecord.position = builtin(vm)
+fn baml.csv.Record.position = builtin(vm)
 
-fn baml.csv.CsvRecord.decode(self: baml.csv.CsvRecord) -> T {
+fn baml.csv.Record.decode(self: baml.csv.Record) -> T {
     // Locals:
     let _0: T // _0 // return
-    let _1: baml.csv.CsvRecord // self // param
+    let _1: baml.csv.Record // self // param
     let _2: reflect.Type
 
     bb0: {
@@ -1745,12 +1745,12 @@ fn baml.csv.CsvRecord.decode(self: baml.csv.CsvRecord) -> T {
     }
 }
 
-fn baml.csv.CsvRecord.to_map = builtin(vm)
+fn baml.csv.Record.to_map = builtin(vm)
 
-fn baml.csv.CsvReader.root.iter.Iterable.iter(self: baml.csv.CsvReader) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord> {
+fn baml.csv.Reader.root.iter.Iterable.iter(self: baml.csv.Reader) -> baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord> // _0 // return
-    let _1: baml.csv.CsvReader // self // param
+    let _0: baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record> // _0 // return
+    let _1: baml.csv.Reader // self // param
 
     bb0: {
         _0 = copy _1;
@@ -1762,23 +1762,23 @@ fn baml.csv.CsvReader.root.iter.Iterable.iter(self: baml.csv.CsvReader) -> baml.
     }
 }
 
-fn baml.csv.CsvReader.root.iter.Iterator.next(self: baml.csv.CsvReader) -> baml.csv.CsvRecord | baml.iter.Done {
+fn baml.csv.Reader.root.iter.Iterator.next(self: baml.csv.Reader) -> baml.csv.Record | baml.iter.Done {
     // Locals:
-    let _0: baml.csv.CsvRecord | baml.iter.Done // _0 // return
-    let _1: baml.csv.CsvReader // self // param
-    let _2: baml.csv.CsvNeedData | baml.csv.CsvRecord | baml.csv.CsvSkip | baml.iter.Done
-    let _3: baml.csv.CsvNeedData | baml.csv.CsvRecord | baml.csv.CsvSkip | baml.iter.Done
-    let _4: baml.csv.CsvRecord // rec
-    let _5: baml.csv.CsvNeedData | baml.csv.CsvRecord | baml.csv.CsvSkip | baml.iter.Done
+    let _0: baml.csv.Record | baml.iter.Done // _0 // return
+    let _1: baml.csv.Reader // self // param
+    let _2: baml.csv.Record | baml.csv._NeedData | baml.csv._Skip | baml.iter.Done
+    let _3: baml.csv.Record | baml.csv._NeedData | baml.csv._Skip | baml.iter.Done
+    let _4: baml.csv.Record // rec
+    let _5: baml.csv.Record | baml.csv._NeedData | baml.csv._Skip | baml.iter.Done
     let _6: baml.iter.Done // d
-    let _7: baml.csv.CsvNeedData | baml.csv.CsvRecord | baml.csv.CsvSkip | baml.iter.Done
-    let _8: baml.csv.CsvSkip // s
+    let _7: baml.csv.Record | baml.csv._NeedData | baml.csv._Skip | baml.iter.Done
+    let _8: baml.csv._Skip // s
     let _9: null
-    let _10: null | ((baml.csv.CsvError) -> null throws never)
+    let _10: null | ((baml.csv.Error) -> null throws never)
     let _11: bool
-    let _12: (baml.csv.CsvError) -> null throws never // cb
-    let _13: (baml.csv.CsvError) -> null throws never
-    let _14: baml.csv.CsvError
+    let _12: (baml.csv.Error) -> null throws never // cb
+    let _13: (baml.csv.Error) -> null throws never
+    let _14: baml.csv.Error
     let _15: void
 
     bb0: {
@@ -1790,16 +1790,16 @@ fn baml.csv.CsvReader.root.iter.Iterator.next(self: baml.csv.CsvReader) -> baml.
     }
 
     bb2: {
-        _0 = call const fn baml.sys.panic(const "unreachable: CsvReader.next loop ended") -> [bb13];
+        _0 = call const fn baml.sys.panic(const "unreachable: Reader.next loop ended") -> [bb13];
     }
 
     bb3: {
-        _2 = call const fn baml.csv.CsvReader._poll(copy _1) -> [bb4];
+        _2 = call const fn baml.csv.Reader._poll(copy _1) -> [bb4];
     }
 
     bb4: {
         _3 = copy _2;
-        _3 = narrow_bind copy _3 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["csv"], name: "CsvRecord" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb12, bb5];
+        _3 = narrow_bind copy _3 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["csv"], name: "Record" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb12, bb5];
     }
 
     bb5: {
@@ -1809,11 +1809,11 @@ fn baml.csv.CsvReader.root.iter.Iterator.next(self: baml.csv.CsvReader) -> baml.
 
     bb6: {
         _7 = copy _2;
-        _7 = narrow_bind copy _7 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["csv"], name: "CsvSkip" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb8, bb7];
+        _7 = narrow_bind copy _7 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["csv"], name: "_Skip" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb8, bb7];
     }
 
     bb7: {
-        _15 = call const fn baml.csv.CsvReader._read_chunk(copy _1) -> [bb1];
+        _15 = call const fn baml.csv.Reader._read_chunk(copy _1) -> [bb1];
     }
 
     bb8: {
@@ -1852,13 +1852,13 @@ fn baml.csv.CsvReader.root.iter.Iterator.next(self: baml.csv.CsvReader) -> baml.
     }
 }
 
-fn baml.csv.CsvReader.headers(self: baml.csv.CsvReader) -> null | string[] {
+fn baml.csv.Reader.headers(self: baml.csv.Reader) -> null | string[] {
     // Locals:
     let _0: null | string[] // _0 // return
-    let _1: baml.csv.CsvReader // self // param
-    let _2: baml.csv.CsvHeaders | baml.csv.CsvNeedData
-    let _3: baml.csv.CsvHeaders | baml.csv.CsvNeedData
-    let _4: baml.csv.CsvHeaders // h
+    let _1: baml.csv.Reader // self // param
+    let _2: baml.csv._Headers | baml.csv._NeedData
+    let _3: baml.csv._Headers | baml.csv._NeedData
+    let _4: baml.csv._Headers // h
     let _5: void
 
     bb0: {
@@ -1870,20 +1870,20 @@ fn baml.csv.CsvReader.headers(self: baml.csv.CsvReader) -> null | string[] {
     }
 
     bb2: {
-        _0 = call const fn baml.sys.panic(const "unreachable: CsvReader.headers loop ended") -> [bb7];
+        _0 = call const fn baml.sys.panic(const "unreachable: Reader.headers loop ended") -> [bb7];
     }
 
     bb3: {
-        _2 = call const fn baml.csv.CsvReader._poll_headers(copy _1) -> [bb4];
+        _2 = call const fn baml.csv.Reader._poll_headers(copy _1) -> [bb4];
     }
 
     bb4: {
         _3 = copy _2;
-        _3 = narrow_bind copy _3 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["csv"], name: "CsvHeaders" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb6, bb5];
+        _3 = narrow_bind copy _3 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["csv"], name: "_Headers" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb6, bb5];
     }
 
     bb5: {
-        _5 = call const fn baml.csv.CsvReader._read_chunk(copy _1) -> [bb1];
+        _5 = call const fn baml.csv.Reader._read_chunk(copy _1) -> [bb1];
     }
 
     bb6: {
@@ -1897,16 +1897,16 @@ fn baml.csv.CsvReader.headers(self: baml.csv.CsvReader) -> null | string[] {
     }
 }
 
-fn baml.csv.CsvReader.rows(self: baml.csv.CsvReader) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = T> {
+fn baml.csv.Reader.rows(self: baml.csv.Reader) -> baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = T> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = T> // _0 // return
-    let _1: baml.csv.CsvReader // self // param
+    let _0: baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = T> // _0 // return
+    let _1: baml.csv.Reader // self // param
     let _2: null | string[]
     let _3: void
     let _4: reflect.Type
 
     bb0: {
-        _2 = call const fn baml.csv.CsvReader.headers(copy _1) -> [bb1];
+        _2 = call const fn baml.csv.Reader.headers(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1915,7 +1915,7 @@ fn baml.csv.CsvReader.rows(self: baml.csv.CsvReader) -> baml.iter.Iterator<Error
     }
 
     bb2: {
-        _0 = baml.csv.CsvRows<#0> { copy _1 };
+        _0 = baml.csv.Rows<#0> { copy _1 };
         goto -> bb3;
     }
 
@@ -1924,16 +1924,16 @@ fn baml.csv.CsvReader.rows(self: baml.csv.CsvReader) -> baml.iter.Iterator<Error
     }
 }
 
-fn baml.csv.CsvReader.skipped = builtin(vm)
+fn baml.csv.Reader.skipped = builtin(vm)
 
-fn baml.csv.CsvReader.skipped_count = builtin(vm)
+fn baml.csv.Reader.skipped_count = builtin(vm)
 
-fn baml.csv.CsvReader.position = builtin(vm)
+fn baml.csv.Reader.position = builtin(vm)
 
-fn baml.csv.CsvReader.close(self: baml.csv.CsvReader) -> null {
+fn baml.csv.Reader.close(self: baml.csv.Reader) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.csv.CsvReader // self // param
+    let _1: baml.csv.Reader // self // param
     let _2: null
     let _3: null | baml.fs.File
     let _4: bool
@@ -1942,7 +1942,7 @@ fn baml.csv.CsvReader.close(self: baml.csv.CsvReader) -> null {
     let _7: null
 
     bb0: {
-        _2 = call const fn baml.csv.CsvReader._mark_closed(copy _1) -> [bb1];
+        _2 = call const fn baml.csv.Reader._mark_closed(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1976,22 +1976,22 @@ fn baml.csv.CsvReader.close(self: baml.csv.CsvReader) -> null {
     }
 }
 
-fn baml.csv.CsvReader._poll = builtin(vm)
+fn baml.csv.Reader._poll = builtin(vm)
 
-fn baml.csv.CsvReader._poll_headers = builtin(vm)
+fn baml.csv.Reader._poll_headers = builtin(vm)
 
-fn baml.csv.CsvReader._feed = builtin(vm)
+fn baml.csv.Reader._feed = builtin(vm)
 
-fn baml.csv.CsvReader._feed_eof = builtin(vm)
+fn baml.csv.Reader._feed_eof = builtin(vm)
 
-fn baml.csv.CsvReader._mark_closed = builtin(vm)
+fn baml.csv.Reader._mark_closed = builtin(vm)
 
-fn baml.csv.CsvReader._mark_exhausted = builtin(vm)
+fn baml.csv.Reader._mark_exhausted = builtin(vm)
 
-fn baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> void {
+fn baml.csv.Reader._read_chunk(self: baml.csv.Reader) -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: baml.csv.CsvReader // self // param
+    let _1: baml.csv.Reader // self // param
     let _2: null | uint8array // chunk
     let _3: unknown // e
     let _4: null | baml.fs.File
@@ -2029,7 +2029,7 @@ fn baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> void {
     bb4: {
         _11 = copy _2;
         _13 = copy _11;
-        _12 = call const fn baml.csv.CsvReader._feed(copy _1, copy _13) -> [bb5];
+        _12 = call const fn baml.csv.Reader._feed(copy _1, copy _13) -> [bb5];
     }
 
     bb5: {
@@ -2038,7 +2038,7 @@ fn baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> void {
     }
 
     bb6: {
-        _10 = call const fn baml.csv.CsvReader._feed_eof(copy _1) -> [bb7];
+        _10 = call const fn baml.csv.Reader._feed_eof(copy _1) -> [bb7];
     }
 
     bb7: {
@@ -2060,7 +2060,7 @@ fn baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> void {
     }
 
     bb11: {
-        _8 = call const fn baml.csv.CsvReader._mark_exhausted(copy _1) -> [bb12];
+        _8 = call const fn baml.csv.Reader._mark_exhausted(copy _1) -> [bb12];
     }
 
     bb12: {
@@ -2068,10 +2068,10 @@ fn baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> void {
     }
 }
 
-fn baml.csv.CsvRows.root.iter.Iterable.iter(self: baml.csv.CsvRows) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = T> {
+fn baml.csv.Rows.root.iter.Iterable.iter(self: baml.csv.Rows) -> baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = T> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = T> // _0 // return
-    let _1: baml.csv.CsvRows // self // param
+    let _0: baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = T> // _0 // return
+    let _1: baml.csv.Rows // self // param
 
     bb0: {
         _0 = copy _1;
@@ -2083,27 +2083,27 @@ fn baml.csv.CsvRows.root.iter.Iterable.iter(self: baml.csv.CsvRows) -> baml.iter
     }
 }
 
-fn baml.csv.CsvRows.root.iter.Iterator.next(self: baml.csv.CsvRows) -> baml.iter.Done | T {
+fn baml.csv.Rows.root.iter.Iterator.next(self: baml.csv.Rows) -> baml.iter.Done | T {
     // Locals:
     let _0: baml.iter.Done | T // _0 // return
-    let _1: baml.csv.CsvRows // self // param
-    let _2: baml.csv.CsvRecord | baml.iter.Done
-    let _3: baml.csv.CsvReader
-    let _4: baml.csv.CsvRecord | baml.iter.Done
+    let _1: baml.csv.Rows // self // param
+    let _2: baml.csv.Record | baml.iter.Done
+    let _3: baml.csv.Reader
+    let _4: baml.csv.Record | baml.iter.Done
     let _5: baml.iter.Done // d
-    let _6: baml.csv.CsvRecord // rec
-    let _7: baml.csv.CsvSkip | T
-    let _8: baml.csv.CsvRecord
-    let _9: baml.csv.CsvReader
+    let _6: baml.csv.Record // rec
+    let _7: baml.csv._Skip | T
+    let _8: baml.csv.Record
+    let _9: baml.csv.Reader
     let _10: reflect.Type
-    let _11: baml.csv.CsvSkip | T
-    let _12: baml.csv.CsvSkip // s
+    let _11: baml.csv._Skip | T
+    let _12: baml.csv._Skip // s
     let _13: null
-    let _14: null | ((baml.csv.CsvError) -> null throws never)
+    let _14: null | ((baml.csv.Error) -> null throws never)
     let _15: bool
-    let _16: (baml.csv.CsvError) -> null throws never // cb
-    let _17: (baml.csv.CsvError) -> null throws never
-    let _18: baml.csv.CsvError
+    let _16: (baml.csv.Error) -> null throws never // cb
+    let _17: (baml.csv.Error) -> null throws never
+    let _18: baml.csv.Error
     let _19: T // v
 
     bb0: {
@@ -2115,12 +2115,12 @@ fn baml.csv.CsvRows.root.iter.Iterator.next(self: baml.csv.CsvRows) -> baml.iter
     }
 
     bb2: {
-        _0 = call const fn baml.sys.panic(const "unreachable: CsvRows.next loop ended") -> [bb12];
+        _0 = call const fn baml.sys.panic(const "unreachable: Rows.next loop ended") -> [bb12];
     }
 
     bb3: {
         _3 = copy _1.0;
-        _2 = virtual_call next as baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>(copy _3) -> [bb4];
+        _2 = virtual_call next as baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>(copy _3) -> [bb4];
     }
 
     bb4: {
@@ -2138,7 +2138,7 @@ fn baml.csv.CsvRows.root.iter.Iterator.next(self: baml.csv.CsvRows) -> baml.iter
 
     bb6: {
         _11 = copy _7;
-        _11 = narrow_bind copy _11 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["csv"], name: "CsvSkip" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb8, bb7];
+        _11 = narrow_bind copy _11 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["csv"], name: "_Skip" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb8, bb7];
     }
 
     bb7: {
@@ -2177,19 +2177,19 @@ fn baml.csv.CsvRows.root.iter.Iterator.next(self: baml.csv.CsvRows) -> baml.iter
     }
 }
 
-fn baml.csv.CsvWriter.write_record(self: baml.csv.CsvWriter, record: (int | bigint | float | string | bool | null)[]) -> null {
+fn baml.csv.Writer.write_record(self: baml.csv.Writer, record: (int | bigint | float | string | bool | null)[]) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.csv.CsvWriter // self // param
+    let _1: baml.csv.Writer // self // param
     let _2: (int | bigint | float | string | bool | null)[] // record // param
     let _3: string
 
     bb0: {
-        _3 = call const fn baml.csv.CsvWriter._encode_record(copy _1, copy _2) -> [bb1];
+        _3 = call const fn baml.csv.Writer._encode_record(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn baml.csv.CsvWriter._emit(copy _1, copy _3) -> [bb2];
+        _0 = call const fn baml.csv.Writer._emit(copy _1, copy _3) -> [bb2];
     }
 
     bb2: {
@@ -2197,10 +2197,10 @@ fn baml.csv.CsvWriter.write_record(self: baml.csv.CsvWriter, record: (int | bigi
     }
 }
 
-fn baml.csv.CsvWriter.write_row(self: baml.csv.CsvWriter, row: T) -> null {
+fn baml.csv.Writer.write_row(self: baml.csv.Writer, row: T) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.csv.CsvWriter // self // param
+    let _1: baml.csv.Writer // self // param
     let _2: T // row // param
     let _3: string
     let _4: reflect.Type
@@ -2211,7 +2211,7 @@ fn baml.csv.CsvWriter.write_row(self: baml.csv.CsvWriter, row: T) -> null {
     }
 
     bb1: {
-        _0 = call const fn baml.csv.CsvWriter._emit(copy _1, copy _3) -> [bb2];
+        _0 = call const fn baml.csv.Writer._emit(copy _1, copy _3) -> [bb2];
     }
 
     bb2: {
@@ -2219,10 +2219,10 @@ fn baml.csv.CsvWriter.write_row(self: baml.csv.CsvWriter, row: T) -> null {
     }
 }
 
-fn baml.csv.CsvWriter.write_rows(self: baml.csv.CsvWriter, rows: T[]) -> null {
+fn baml.csv.Writer.write_rows(self: baml.csv.Writer, rows: T[]) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.csv.CsvWriter // self // param
+    let _1: baml.csv.Writer // self // param
     let _2: T[] // rows // param
     let _3: string
     let _4: reflect.Type
@@ -2233,7 +2233,7 @@ fn baml.csv.CsvWriter.write_rows(self: baml.csv.CsvWriter, rows: T[]) -> null {
     }
 
     bb1: {
-        _0 = call const fn baml.csv.CsvWriter._emit(copy _1, copy _3) -> [bb2];
+        _0 = call const fn baml.csv.Writer._emit(copy _1, copy _3) -> [bb2];
     }
 
     bb2: {
@@ -2241,19 +2241,19 @@ fn baml.csv.CsvWriter.write_rows(self: baml.csv.CsvWriter, rows: T[]) -> null {
     }
 }
 
-fn baml.csv.CsvWriter.write_header(self: baml.csv.CsvWriter, names: string[]) -> null {
+fn baml.csv.Writer.write_header(self: baml.csv.Writer, names: string[]) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.csv.CsvWriter // self // param
+    let _1: baml.csv.Writer // self // param
     let _2: string[] // names // param
     let _3: string
 
     bb0: {
-        _3 = call const fn baml.csv.CsvWriter._encode_header(copy _1, copy _2) -> [bb1];
+        _3 = call const fn baml.csv.Writer._encode_header(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn baml.csv.CsvWriter._emit(copy _1, copy _3) -> [bb2];
+        _0 = call const fn baml.csv.Writer._emit(copy _1, copy _3) -> [bb2];
     }
 
     bb2: {
@@ -2261,14 +2261,14 @@ fn baml.csv.CsvWriter.write_header(self: baml.csv.CsvWriter, names: string[]) ->
     }
 }
 
-fn baml.csv.CsvWriter.records_written = builtin(vm)
+fn baml.csv.Writer.records_written = builtin(vm)
 
-fn baml.csv.CsvWriter.text = builtin(vm)
+fn baml.csv.Writer.text = builtin(vm)
 
-fn baml.csv.CsvWriter.flush(self: baml.csv.CsvWriter) -> null {
+fn baml.csv.Writer.flush(self: baml.csv.Writer) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.csv.CsvWriter // self // param
+    let _1: baml.csv.Writer // self // param
 
     bb0: {
         _0 = const null;
@@ -2280,10 +2280,10 @@ fn baml.csv.CsvWriter.flush(self: baml.csv.CsvWriter) -> null {
     }
 }
 
-fn baml.csv.CsvWriter.close(self: baml.csv.CsvWriter) -> null {
+fn baml.csv.Writer.close(self: baml.csv.Writer) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.csv.CsvWriter // self // param
+    let _1: baml.csv.Writer // self // param
     let _2: null
     let _3: null | baml.fs.File
     let _4: bool
@@ -2292,7 +2292,7 @@ fn baml.csv.CsvWriter.close(self: baml.csv.CsvWriter) -> null {
     let _7: null
 
     bb0: {
-        _2 = call const fn baml.csv.CsvWriter._mark_closed(copy _1) -> [bb1];
+        _2 = call const fn baml.csv.Writer._mark_closed(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -2326,18 +2326,18 @@ fn baml.csv.CsvWriter.close(self: baml.csv.CsvWriter) -> null {
     }
 }
 
-fn baml.csv.CsvWriter._encode_record = builtin(vm)
+fn baml.csv.Writer._encode_record = builtin(vm)
 
-fn baml.csv.CsvWriter._encode_header = builtin(vm)
+fn baml.csv.Writer._encode_header = builtin(vm)
 
-fn baml.csv.CsvWriter._bytes_written = builtin(vm)
+fn baml.csv.Writer._bytes_written = builtin(vm)
 
-fn baml.csv.CsvWriter._mark_closed = builtin(vm)
+fn baml.csv.Writer._mark_closed = builtin(vm)
 
-fn baml.csv.CsvWriter._emit(self: baml.csv.CsvWriter, out: string) -> null {
+fn baml.csv.Writer._emit(self: baml.csv.Writer, out: string) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.csv.CsvWriter // self // param
+    let _1: baml.csv.Writer // self // param
     let _2: string // out // param
     let _3: null | baml.fs.File
     let _4: bool
@@ -2381,9 +2381,9 @@ fn baml.csv.CsvWriter._emit(self: baml.csv.CsvWriter, out: string) -> null {
     }
 }
 
-fn baml.csv.reader(source: string | uint8array | baml.fs.File, options: null | baml.csv.ReaderOptions) -> baml.csv.CsvReader {
+fn baml.csv.reader(source: string | uint8array | baml.fs.File, options: null | baml.csv.ReaderOptions) -> baml.csv.Reader {
     // Locals:
-    let _0: baml.csv.CsvReader // _0 // return
+    let _0: baml.csv.Reader // _0 // return
     let _1: string | uint8array | baml.fs.File // source // param
     let _2: null | baml.csv.ReaderOptions // options // param
     let _3: bool
@@ -2407,9 +2407,9 @@ fn baml.csv.reader(source: string | uint8array | baml.fs.File, options: null | b
     }
 }
 
-fn baml.csv.open(path: string, options: null | baml.csv.ReaderOptions) -> baml.csv.CsvReader {
+fn baml.csv.open(path: string, options: null | baml.csv.ReaderOptions) -> baml.csv.Reader {
     // Locals:
-    let _0: baml.csv.CsvReader // _0 // return
+    let _0: baml.csv.Reader // _0 // return
     let _1: string // path // param
     let _2: null | baml.csv.ReaderOptions // options // param
     let _3: bool
@@ -2469,9 +2469,9 @@ fn baml.csv.read(path: string, options: null | baml.csv.ReaderOptions) -> T[] {
     let _1: string // path // param
     let _2: null | baml.csv.ReaderOptions // options // param
     let _3: bool
-    let _4: baml.csv.CsvReader // r
+    let _4: baml.csv.Reader // r
     let _5: T[] // result
-    let _6: baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = T>
+    let _6: baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = T>
     let _7: reflect.Type
     let _8: null
 
@@ -2491,15 +2491,15 @@ fn baml.csv.read(path: string, options: null | baml.csv.ReaderOptions) -> T[] {
 
     bb3: {
         _7 = load_type(#0);
-        _6 = call const fn baml.csv.CsvReader.rows<copy _7>(copy _4) -> [bb4];
+        _6 = call const fn baml.csv.Reader.rows<copy _7>(copy _4) -> [bb4];
     }
 
     bb4: {
-        _5 = virtual_call collect as baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = #0>(copy _6) -> [bb5];
+        _5 = virtual_call collect as baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = #0>(copy _6) -> [bb5];
     }
 
     bb5: {
-        _8 = call const fn baml.csv.CsvReader.close(copy _4) -> [bb6];
+        _8 = call const fn baml.csv.Reader.close(copy _4) -> [bb6];
     }
 
     bb6: {
@@ -2519,11 +2519,11 @@ fn baml.csv.parse(source: string | uint8array, options: null | baml.csv.ReaderOp
     let _2: null | baml.csv.ReaderOptions // options // param
     let _3: bool
     let _4: unknown // _
-    let _5: baml.csv.CsvReader // r
+    let _5: baml.csv.Reader // r
     let _6: string[][] // out
-    let _7: baml.csv.CsvRecord | baml.iter.Done
+    let _7: baml.csv.Record | baml.iter.Done
     let _8: bool
-    let _9: baml.csv.CsvRecord // rec
+    let _9: baml.csv.Record // rec
     let _10: int
     let _11: string[]
     let _12: reflect.Type
@@ -2557,7 +2557,7 @@ fn baml.csv.parse(source: string | uint8array, options: null | baml.csv.ReaderOp
     }
 
     bb5: {
-        _7 = virtual_call next as baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>(copy _5) -> [bb6, unwind: bb10];
+        _7 = virtual_call next as baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>(copy _5) -> [bb6, unwind: bb10];
     }
 
     bb6: {
@@ -2567,7 +2567,7 @@ fn baml.csv.parse(source: string | uint8array, options: null | baml.csv.ReaderOp
 
     bb7: {
         _9 = copy _7;
-        _11 = call const fn baml.csv.CsvRecord.fields(copy _9) -> [bb8, unwind: bb10];
+        _11 = call const fn baml.csv.Record.fields(copy _9) -> [bb8, unwind: bb10];
     }
 
     bb8: {
@@ -2609,8 +2609,8 @@ fn baml.csv.decode(source: string | uint8array, options: null | baml.csv.ReaderO
     let _2: null | baml.csv.ReaderOptions // options // param
     let _3: bool
     let _4: unknown // _
-    let _5: baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = T>
-    let _6: baml.csv.CsvReader
+    let _5: baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = T>
+    let _6: baml.csv.Reader
     let _7: reflect.Type
     let _8: bool
     let _9: string
@@ -2634,11 +2634,11 @@ fn baml.csv.decode(source: string | uint8array, options: null | baml.csv.ReaderO
 
     bb3: {
         _7 = load_type(#0);
-        _5 = call const fn baml.csv.CsvReader.rows<copy _7>(copy _6) -> [bb4, unwind: bb5];
+        _5 = call const fn baml.csv.Reader.rows<copy _7>(copy _6) -> [bb4, unwind: bb5];
     }
 
     bb4: {
-        _0 = virtual_call collect as baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = #0>(copy _5) -> [bb8, unwind: bb5];
+        _0 = virtual_call collect as baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = #0>(copy _5) -> [bb8, unwind: bb5];
     }
 
     bb5: {
@@ -2673,7 +2673,7 @@ fn baml.csv.decode_optional(source: string | uint8array, options: null | baml.cs
     let _5: reflect.Type
     let _6: bool
     let _7: int
-    let _8: baml.csv.CsvError
+    let _8: baml.csv.Error
     let _9: string
     let _10: string
     let _11: int
@@ -2724,7 +2724,7 @@ fn baml.csv.decode_optional(source: string | uint8array, options: null | baml.cs
 
     bb9: {
         _9 = const "expected at most one data record, found " + copy _10;
-        _8 = call const fn baml.csv._error(const baml.csv.CsvErrorKind.TooManyRows, copy _9) -> [bb10];
+        _8 = call const fn baml.csv._error(const baml.csv.ErrorKind.TooManyRows, copy _9) -> [bb10];
     }
 
     bb10: {
@@ -2742,10 +2742,10 @@ fn baml.csv.decode_one(source: string | uint8array, options: null | baml.csv.Rea
     let _5: reflect.Type
     let _6: bool
     let _7: int
-    let _8: baml.csv.CsvError
+    let _8: baml.csv.Error
     let _9: bool
     let _10: int
-    let _11: baml.csv.CsvError
+    let _11: baml.csv.Error
     let _12: string
     let _13: string
     let _14: int
@@ -2824,7 +2824,7 @@ fn baml.csv.decode_one(source: string | uint8array, options: null | baml.csv.Rea
 
     bb14: {
         _12 = const "expected exactly one data record, found " + copy _13;
-        _11 = call const fn baml.csv._error(const baml.csv.CsvErrorKind.TooManyRows, copy _12) -> [bb15];
+        _11 = call const fn baml.csv._error(const baml.csv.ErrorKind.TooManyRows, copy _12) -> [bb15];
     }
 
     bb15: {
@@ -2832,7 +2832,7 @@ fn baml.csv.decode_one(source: string | uint8array, options: null | baml.csv.Rea
     }
 
     bb16: {
-        _8 = call const fn baml.csv._error(const baml.csv.CsvErrorKind.NotFound, const "expected exactly one data record, found none") -> [bb17];
+        _8 = call const fn baml.csv._error(const baml.csv.ErrorKind.NotFound, const "expected exactly one data record, found none") -> [bb17];
     }
 
     bb17: {
@@ -2840,9 +2840,9 @@ fn baml.csv.decode_one(source: string | uint8array, options: null | baml.csv.Rea
     }
 }
 
-fn baml.csv.writer(file: baml.fs.File, options: null | baml.csv.WriterOptions) -> baml.csv.CsvWriter {
+fn baml.csv.writer(file: baml.fs.File, options: null | baml.csv.WriterOptions) -> baml.csv.Writer {
     // Locals:
-    let _0: baml.csv.CsvWriter // _0 // return
+    let _0: baml.csv.Writer // _0 // return
     let _1: baml.fs.File // file // param
     let _2: null | baml.csv.WriterOptions // options // param
     let _3: bool
@@ -2866,9 +2866,9 @@ fn baml.csv.writer(file: baml.fs.File, options: null | baml.csv.WriterOptions) -
     }
 }
 
-fn baml.csv.create(path: string, options: null | baml.csv.WriterOptions) -> baml.csv.CsvWriter {
+fn baml.csv.create(path: string, options: null | baml.csv.WriterOptions) -> baml.csv.Writer {
     // Locals:
-    let _0: baml.csv.CsvWriter // _0 // return
+    let _0: baml.csv.Writer // _0 // return
     let _1: string // path // param
     let _2: null | baml.csv.WriterOptions // options // param
     let _3: bool
@@ -2922,9 +2922,9 @@ fn baml.csv.create(path: string, options: null | baml.csv.WriterOptions) -> baml
     }
 }
 
-fn baml.csv.buffer(options: null | baml.csv.WriterOptions) -> baml.csv.CsvWriter {
+fn baml.csv.buffer(options: null | baml.csv.WriterOptions) -> baml.csv.Writer {
     // Locals:
-    let _0: baml.csv.CsvWriter // _0 // return
+    let _0: baml.csv.Writer // _0 // return
     let _1: null | baml.csv.WriterOptions // options // param
     let _2: bool
 
@@ -2954,7 +2954,7 @@ fn baml.csv.write(path: string, rows: T[], options: null | baml.csv.WriterOption
     let _2: T[] // rows // param
     let _3: null | baml.csv.WriterOptions // options // param
     let _4: bool
-    let _5: baml.csv.CsvWriter // w
+    let _5: baml.csv.Writer // w
     let _6: null
     let _7: reflect.Type
     let _8: null
@@ -2975,15 +2975,15 @@ fn baml.csv.write(path: string, rows: T[], options: null | baml.csv.WriterOption
 
     bb3: {
         _7 = load_type(#0);
-        _6 = call const fn baml.csv.CsvWriter.write_rows<copy _7>(copy _5, copy _2) -> [bb4];
+        _6 = call const fn baml.csv.Writer.write_rows<copy _7>(copy _5, copy _2) -> [bb4];
     }
 
     bb4: {
-        _8 = call const fn baml.csv.CsvWriter.close(copy _5) -> [bb5];
+        _8 = call const fn baml.csv.Writer.close(copy _5) -> [bb5];
     }
 
     bb5: {
-        _0 = call const fn baml.csv.CsvWriter._bytes_written(copy _5) -> [bb6];
+        _0 = call const fn baml.csv.Writer._bytes_written(copy _5) -> [bb6];
     }
 
     bb6: {
@@ -2998,7 +2998,7 @@ fn baml.csv.stringify(rows: T[], options: null | baml.csv.WriterOptions) -> stri
     let _2: null | baml.csv.WriterOptions // options // param
     let _3: bool
     let _4: unknown // _
-    let _5: baml.csv.CsvWriter // w
+    let _5: baml.csv.Writer // w
     let _6: null
     let _7: reflect.Type
     let _8: bool
@@ -3023,11 +3023,11 @@ fn baml.csv.stringify(rows: T[], options: null | baml.csv.WriterOptions) -> stri
 
     bb3: {
         _7 = load_type(#0);
-        _6 = call const fn baml.csv.CsvWriter.write_rows<copy _7>(copy _5, copy _1) -> [bb4, unwind: bb5];
+        _6 = call const fn baml.csv.Writer.write_rows<copy _7>(copy _5, copy _1) -> [bb4, unwind: bb5];
     }
 
     bb4: {
-        _0 = call const fn baml.csv.CsvWriter.text(copy _5) -> [bb8, unwind: bb5];
+        _0 = call const fn baml.csv.Writer.text(copy _5) -> [bb8, unwind: bb5];
     }
 
     bb5: {
@@ -3059,7 +3059,7 @@ fn baml.csv.stringify_records(records: (int | bigint | float | string | bool | n
     let _2: null | baml.csv.WriterOptions // options // param
     let _3: bool
     let _4: unknown // _
-    let _5: baml.csv.CsvWriter // w
+    let _5: baml.csv.Writer // w
     let _6: baml.iter.Iterator<Error = never, Item = (int | bigint | float | string | bool | null)[]>
     let _7: unknown
     let _8: bool
@@ -3105,11 +3105,11 @@ fn baml.csv.stringify_records(records: (int | bigint | float | string | bool | n
         fresh_cell(_10);
         _10 = copy _9;
         _12 = copy _10;
-        _11 = call const fn baml.csv.CsvWriter.write_record(copy _5, copy _12) -> [bb4, unwind: bb8];
+        _11 = call const fn baml.csv.Writer.write_record(copy _5, copy _12) -> [bb4, unwind: bb8];
     }
 
     bb7: {
-        _0 = call const fn baml.csv.CsvWriter.text(copy _5) -> [bb11, unwind: bb8];
+        _0 = call const fn baml.csv.Writer.text(copy _5) -> [bb11, unwind: bb8];
     }
 
     bb8: {
@@ -3224,14 +3224,14 @@ fn baml.csv._to_markdown = builtin(vm)
 
 fn baml.csv._to_markdown_records = builtin(vm)
 
-fn baml.csv._error(kind: baml.csv.CsvErrorKind, message: string) -> baml.csv.CsvError {
+fn baml.csv._error(kind: baml.csv.ErrorKind, message: string) -> baml.csv.Error {
     // Locals:
-    let _0: baml.csv.CsvError // _0 // return
-    let _1: baml.csv.CsvErrorKind // kind // param
+    let _0: baml.csv.Error // _0 // return
+    let _1: baml.csv.ErrorKind // kind // param
     let _2: string // message // param
 
     bb0: {
-        _0 = baml.csv.CsvError { copy _1, copy _2, const null, const null, const null, const null, const null, const null };
+        _0 = baml.csv.Error { copy _1, copy _2, const null, const null, const null, const null, const null, const null };
         goto -> bb1;
     }
 
@@ -3401,13 +3401,13 @@ fn baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string {
     }
 }
 
-fn baml.errors.ErrorContext.root_cause(self: baml.errors.ErrorContext) -> baml.errors.ErrorContext {
+fn baml.errors.Context.root_cause(self: baml.errors.Context) -> baml.errors.Context {
     // Locals:
-    let _0: baml.errors.ErrorContext // _0 // return
-    let _1: baml.errors.ErrorContext // self // param
-    let _2: null | baml.errors.ErrorContext
+    let _0: baml.errors.Context // _0 // return
+    let _1: baml.errors.Context // self // param
+    let _2: null | baml.errors.Context
     let _3: bool
-    let _4: baml.errors.ErrorContext // c
+    let _4: baml.errors.Context // c
 
     bb0: {
         _2 = copy _1.2;
@@ -3417,7 +3417,7 @@ fn baml.errors.ErrorContext.root_cause(self: baml.errors.ErrorContext) -> baml.e
 
     bb1: {
         _4 = copy _2;
-        _0 = call const fn baml.errors.ErrorContext.root_cause(copy _4) -> [bb3];
+        _0 = call const fn baml.errors.Context.root_cause(copy _4) -> [bb3];
     }
 
     bb2: {
@@ -3430,13 +3430,13 @@ fn baml.errors.ErrorContext.root_cause(self: baml.errors.ErrorContext) -> baml.e
     }
 }
 
-fn baml.errors.ErrorContext.baml.ToString.to_string(self: baml.errors.ErrorContext) -> string {
+fn baml.errors.Context.baml.ToString.to_string(self: baml.errors.Context) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: baml.errors.ErrorContext // self // param
+    let _1: baml.errors.Context // self // param
 
     bb0: {
-        _0 = call const fn baml.errors.ErrorContext._to_string_impl(copy _1) -> [bb1];
+        _0 = call const fn baml.errors.Context._to_string_impl(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -3444,7 +3444,7 @@ fn baml.errors.ErrorContext.baml.ToString.to_string(self: baml.errors.ErrorConte
     }
 }
 
-fn baml.errors.ErrorContext._to_string_impl = builtin(vm)
+fn baml.errors.Context._to_string_impl = builtin(vm)
 
 fn baml.errors.StackTrace.baml.ToString.to_string(self: baml.errors.StackTrace) -> string {
     // Locals:
@@ -4437,7 +4437,7 @@ fn baml.future.with_timeout(limit: baml.time.Duration, body: () -> T throws E) -
     let _4: baml.future.Future<T, E> // work
     let _5: null
     let _6: null
-    let _7: (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, E> throws never
+    let _7: (baml.spawn.Params<T, E>) -> baml.spawn.Params<T, E> throws never
     let _8: baml.spawn.CancelToken
     let _9: reflect.Type
     let _10: reflect.Type
@@ -4473,7 +4473,7 @@ fn baml.future.with_timeout(limit: baml.time.Duration, body: () -> T throws E) -
 
     bb1: {
         _5 = make_closure lambda[0]<2 type_args>(copy _2);
-        _6 = baml.spawn.SpawnParams { copy _5, const null, const null, const null, const false };
+        _6 = baml.spawn.Params { copy _5, const null, const null, const null, const false };
         _8 = copy _3;
         _9 = load_type(#0);
         _10 = load_type(#1);
@@ -7062,12 +7062,12 @@ fn baml.json._path_field(current: int | float | string | bool | null | baml.json
     let _7: bool
     let _8: reflect.Type
     let _9: reflect.Type
-    let _10: baml.json.JsonPathError
+    let _10: baml.json.PathError
     let _11: string
     let _12: string
     let _13: reflect.Type
     let _14: reflect.Type
-    let _15: baml.json.JsonPathError
+    let _15: baml.json.PathError
     let _16: string
     let _17: string
 
@@ -7079,7 +7079,7 @@ fn baml.json._path_field(current: int | float | string | bool | null | baml.json
     bb1: {
         _17 = const "field access '." + copy _2;
         _16 = copy _17 + const "' on a non-object";
-        _15 = baml.json.JsonPathError { copy _16, copy _3 };
+        _15 = baml.json.PathError { copy _16, copy _3 };
         throw copy _15;
     }
 
@@ -7108,7 +7108,7 @@ fn baml.json._path_field(current: int | float | string | bool | null | baml.json
     bb6: {
         _12 = const "missing field '" + copy _2;
         _11 = copy _12 + const "'";
-        _10 = baml.json.JsonPathError { copy _11, copy _3 };
+        _10 = baml.json.PathError { copy _11, copy _3 };
         throw copy _10;
     }
 }
@@ -7124,7 +7124,7 @@ fn baml.json._path_index(current: int | float | string | bool | null | baml.json
     let _6: bool
     let _7: bool
     let _8: int
-    let _9: baml.json.JsonPathError
+    let _9: baml.json.PathError
     let _10: string
     let _11: string
     let _12: string
@@ -7135,7 +7135,7 @@ fn baml.json._path_index(current: int | float | string | bool | null | baml.json
     let _17: int
     let _18: reflect.Type
     let _19: reflect.Type
-    let _20: baml.json.JsonPathError
+    let _20: baml.json.PathError
     let _21: string
     let _22: string
     let _23: string
@@ -7154,7 +7154,7 @@ fn baml.json._path_index(current: int | float | string | bool | null | baml.json
     bb2: {
         _22 = const "index [" + copy _23;
         _21 = copy _22 + const "] on a non-array";
-        _20 = baml.json.JsonPathError { copy _21, copy _3 };
+        _20 = baml.json.PathError { copy _21, copy _3 };
         throw copy _20;
     }
 
@@ -7207,7 +7207,7 @@ fn baml.json._path_index(current: int | float | string | bool | null | baml.json
     bb12: {
         _11 = copy _12 + copy _16;
         _10 = copy _11 + const ")";
-        _9 = baml.json.JsonPathError { copy _10, copy _3 };
+        _9 = baml.json.PathError { copy _10, copy _3 };
         throw copy _9;
     }
 }
@@ -7220,7 +7220,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     let _3: bool
     let _4: bool
     let _5: bool
-    let _6: baml.json.JsonPathError
+    let _6: baml.json.PathError
     let _7: string
     let _8: string
     let _9: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // current
@@ -7257,14 +7257,14 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     let _40: int
     let _41: bool
     let _42: string
-    let _43: baml.json.JsonPathError
+    let _43: baml.json.PathError
     let _44: string
     let _45: string
     let _46: reflect.Type
     let _47: bool
     let _48: int
     let _49: int
-    let _50: baml.json.JsonPathError
+    let _50: baml.json.PathError
     let _51: string // first
     let _52: int
     let _53: int
@@ -7289,7 +7289,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     let _72: int
     let _73: int
     let _74: int
-    let _75: baml.json.JsonPathError
+    let _75: baml.json.PathError
     let _76: string
     let _77: string
     let _78: int
@@ -7311,7 +7311,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     let _94: int
     let _95: int
     let _96: int
-    let _97: baml.json.JsonPathError
+    let _97: baml.json.PathError
     let _98: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _99: string
     let _100: int // start
@@ -7326,7 +7326,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     let _109: bool
     let _110: int
     let _111: int
-    let _112: baml.json.JsonPathError
+    let _112: baml.json.PathError
     let _113: string // token
     let _114: int
     let _115: int
@@ -7334,7 +7334,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     let _117: unknown // _
     let _118: string
     let _119: bool
-    let _120: baml.json.JsonPathError
+    let _120: baml.json.PathError
     let _121: string
     let _122: string
     let _123: string
@@ -7344,7 +7344,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     let _127: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _128: reflect.Type
     let _129: bool
-    let _130: baml.json.JsonPathError
+    let _130: baml.json.PathError
 
     bb0: {
         _5 = call const fn baml.String.starts_with(copy _2, const ".") -> [bb1];
@@ -7502,7 +7502,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     }
 
     bb29: {
-        _112 = baml.json.JsonPathError { const "unterminated '[' segment", copy _2 };
+        _112 = baml.json.PathError { const "unterminated '[' segment", copy _2 };
         throw copy _112;
     }
 
@@ -7607,7 +7607,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     }
 
     bb47: {
-        _97 = baml.json.JsonPathError { const "unterminated quoted bracket key", copy _2 };
+        _97 = baml.json.PathError { const "unterminated quoted bracket key", copy _2 };
         throw copy _97;
     }
 
@@ -7638,12 +7638,12 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     }
 
     bb52: {
-        _75 = baml.json.JsonPathError { const "unterminated escape in quoted bracket key", copy _2 };
+        _75 = baml.json.PathError { const "unterminated escape in quoted bracket key", copy _2 };
         throw copy _75;
     }
 
     bb53: {
-        _50 = baml.json.JsonPathError { const "unterminated '[' segment", copy _2 };
+        _50 = baml.json.PathError { const "unterminated '[' segment", copy _2 };
         throw copy _50;
     }
 
@@ -7654,7 +7654,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
 
     bb55: {
         _44 = const "expected '.' or '[' at offset " + copy _45;
-        _43 = baml.json.JsonPathError { copy _44, copy _2 };
+        _43 = baml.json.PathError { copy _44, copy _2 };
         throw copy _43;
     }
 
@@ -7732,7 +7732,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     bb69: {
         _8 = const "selector must start with '.' or '[' (jq style), got '" + copy _2;
         _7 = copy _8 + const "'";
-        _6 = baml.json.JsonPathError { copy _7, copy _2 };
+        _6 = baml.json.PathError { copy _7, copy _2 };
         throw copy _6;
     }
 
@@ -7749,12 +7749,12 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
         _123 = copy _113;
         _122 = const "bad bracket token '[" + copy _123;
         _121 = copy _122 + const "]'";
-        _120 = baml.json.JsonPathError { copy _121, copy _2 };
+        _120 = baml.json.PathError { copy _121, copy _2 };
         throw copy _120;
     }
 
     bb73: {
-        _129 = is_type(copy _126, baml.json.JsonDecodeError);
+        _129 = is_type(copy _126, baml.json.DecodeError);
         branch copy _129 -> [bb75, bb74];
     }
 
@@ -7763,7 +7763,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     }
 
     bb75: {
-        _130 = baml.json.JsonPathError { const "leaf does not coerce to the requested type", copy _2 };
+        _130 = baml.json.PathError { const "leaf does not coerce to the requested type", copy _2 };
         throw copy _130;
     }
 }
@@ -7784,7 +7784,7 @@ fn baml.json.path_or(j: int | float | string | bool | null | baml.json.json[] | 
     }
 
     bb1: {
-        _6 = is_type(copy _4, baml.json.JsonPathError);
+        _6 = is_type(copy _4, baml.json.PathError);
         branch copy _6 -> [bb3, bb2];
     }
 
@@ -8937,9 +8937,9 @@ fn baml.spawn.CancelToken.cancel = builtin(vm)
 
 fn baml.spawn.CancelToken.is_cancelled = builtin(vm)
 
-fn baml.spawn.options(group: null | baml.spawn.TaskGroup, cancel: null | baml.spawn.CancelToken, detach: bool | null) -> (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, E> throws never {
+fn baml.spawn.options(group: null | baml.spawn.TaskGroup, cancel: null | baml.spawn.CancelToken, detach: bool | null) -> (baml.spawn.Params<T, E>) -> baml.spawn.Params<T, E> throws never {
     // Locals:
-    let _0: (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, E> throws never // _0 // return
+    let _0: (baml.spawn.Params<T, E>) -> baml.spawn.Params<T, E> throws never // _0 // return
     let _1: null | baml.spawn.TaskGroup // group // param [captured]
     let _2: null | baml.spawn.CancelToken // cancel // param [captured]
     let _3: bool | null // detach // param [captured]
@@ -8988,10 +8988,10 @@ fn baml.spawn.options(group: null | baml.spawn.TaskGroup, cancel: null | baml.sp
 }
 
 // lambda[0]
-fn .<lambda(options, 0)>(params: baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, E> {
+fn .<lambda(options, 0)>(params: baml.spawn.Params<T, E>) -> baml.spawn.Params<T, E> {
     // Locals:
-    let _0: baml.spawn.SpawnParams<T, E> // _0 // return
-    let _1: baml.spawn.SpawnParams<T, E> // params // param
+    let _0: baml.spawn.Params<T, E> // _0 // return
+    let _1: baml.spawn.Params<T, E> // params // param
     let _2: () -> T throws E
     let _3: string | null
     let _4: null | baml.spawn.TaskGroup
@@ -9049,7 +9049,7 @@ fn .<lambda(options, 0)>(params: baml.spawn.SpawnParams<T, E>) -> baml.spawn.Spa
 
     bb6: {
         _12 = copy _13;
-        _0 = baml.spawn.SpawnParams<#0, #1> { copy _2, copy _3, copy _4, copy _8, copy _12 };
+        _0 = baml.spawn.Params<#0, #1> { copy _2, copy _3, copy _4, copy _8, copy _12 };
         goto -> bb7;
     }
 
@@ -9968,9 +9968,9 @@ fn baml.time.Instant.baml.FromJson.from_json(j: int | float | string | bool | nu
     let _4: bool
     let _5: string
     let _6: string // message
-    let _7: baml.json.JsonDecodeError
+    let _7: baml.json.DecodeError
     let _8: string
-    let _9: baml.json.JsonDecodeError
+    let _9: baml.json.DecodeError
 
     bb0: {
         _2 = is_type(copy _1, string);
@@ -9978,7 +9978,7 @@ fn baml.time.Instant.baml.FromJson.from_json(j: int | float | string | bool | nu
     }
 
     bb1: {
-        _9 = baml.json.JsonDecodeError { const "Expected timestamp string", const "" };
+        _9 = baml.json.DecodeError { const "Expected timestamp string", const "" };
         throw copy _9;
     }
 
@@ -10003,7 +10003,7 @@ fn baml.time.Instant.baml.FromJson.from_json(j: int | float | string | bool | nu
         _5 = copy _3.0;
         _6 = copy _5;
         _8 = copy _6;
-        _7 = baml.json.JsonDecodeError { copy _8, const "" };
+        _7 = baml.json.DecodeError { copy _8, const "" };
         throw copy _7;
     }
 }
@@ -10016,7 +10016,7 @@ fn baml.time.Instant.baml.ToJson.to_json(self: baml.time.Instant) -> int | float
     let _3: bool
     let _4: string
     let _5: string // message
-    let _6: baml.json.JsonSerializationError
+    let _6: baml.json.SerializationError
     let _7: string
 
     bb0: {
@@ -10040,7 +10040,7 @@ fn baml.time.Instant.baml.ToJson.to_json(self: baml.time.Instant) -> int | float
         _4 = copy _2.0;
         _5 = copy _4;
         _7 = copy _5;
-        _6 = baml.json.JsonSerializationError { copy _7, const "", const null };
+        _6 = baml.json.SerializationError { copy _7, const "", const null };
         throw copy _6;
     }
 }
@@ -10434,9 +10434,9 @@ fn baml.time.PlainDate.baml.FromJson.from_json(j: int | float | string | bool | 
     let _4: bool
     let _5: string
     let _6: string // message
-    let _7: baml.json.JsonDecodeError
+    let _7: baml.json.DecodeError
     let _8: string
-    let _9: baml.json.JsonDecodeError
+    let _9: baml.json.DecodeError
 
     bb0: {
         _2 = is_type(copy _1, string);
@@ -10444,7 +10444,7 @@ fn baml.time.PlainDate.baml.FromJson.from_json(j: int | float | string | bool | 
     }
 
     bb1: {
-        _9 = baml.json.JsonDecodeError { const "Expected ISO 8601 date string", const "" };
+        _9 = baml.json.DecodeError { const "Expected ISO 8601 date string", const "" };
         throw copy _9;
     }
 
@@ -10469,7 +10469,7 @@ fn baml.time.PlainDate.baml.FromJson.from_json(j: int | float | string | bool | 
         _5 = copy _3.0;
         _6 = copy _5;
         _8 = copy _6;
-        _7 = baml.json.JsonDecodeError { copy _8, const "" };
+        _7 = baml.json.DecodeError { copy _8, const "" };
         throw copy _7;
     }
 }
@@ -10482,7 +10482,7 @@ fn baml.time.PlainDate.baml.ToJson.to_json(self: baml.time.PlainDate) -> int | f
     let _3: bool
     let _4: string
     let _5: string // message
-    let _6: baml.json.JsonSerializationError
+    let _6: baml.json.SerializationError
     let _7: string
 
     bb0: {
@@ -10506,7 +10506,7 @@ fn baml.time.PlainDate.baml.ToJson.to_json(self: baml.time.PlainDate) -> int | f
         _4 = copy _2.0;
         _5 = copy _4;
         _7 = copy _5;
-        _6 = baml.json.JsonSerializationError { copy _7, const "", const null };
+        _6 = baml.json.SerializationError { copy _7, const "", const null };
         throw copy _6;
     }
 }
@@ -10910,9 +10910,9 @@ fn baml.time.PlainDateTime.baml.FromJson.from_json(j: int | float | string | boo
     let _4: bool
     let _5: string
     let _6: string // message
-    let _7: baml.json.JsonDecodeError
+    let _7: baml.json.DecodeError
     let _8: string
-    let _9: baml.json.JsonDecodeError
+    let _9: baml.json.DecodeError
 
     bb0: {
         _2 = is_type(copy _1, string);
@@ -10920,7 +10920,7 @@ fn baml.time.PlainDateTime.baml.FromJson.from_json(j: int | float | string | boo
     }
 
     bb1: {
-        _9 = baml.json.JsonDecodeError { const "Expected zoneless ISO 8601 string", const "" };
+        _9 = baml.json.DecodeError { const "Expected zoneless ISO 8601 string", const "" };
         throw copy _9;
     }
 
@@ -10945,7 +10945,7 @@ fn baml.time.PlainDateTime.baml.FromJson.from_json(j: int | float | string | boo
         _5 = copy _3.0;
         _6 = copy _5;
         _8 = copy _6;
-        _7 = baml.json.JsonDecodeError { copy _8, const "" };
+        _7 = baml.json.DecodeError { copy _8, const "" };
         throw copy _7;
     }
 }
@@ -10958,7 +10958,7 @@ fn baml.time.PlainDateTime.baml.ToJson.to_json(self: baml.time.PlainDateTime) ->
     let _3: bool
     let _4: string
     let _5: string // message
-    let _6: baml.json.JsonSerializationError
+    let _6: baml.json.SerializationError
     let _7: string
 
     bb0: {
@@ -10982,7 +10982,7 @@ fn baml.time.PlainDateTime.baml.ToJson.to_json(self: baml.time.PlainDateTime) ->
         _4 = copy _2.0;
         _5 = copy _4;
         _7 = copy _5;
-        _6 = baml.json.JsonSerializationError { copy _7, const "", const null };
+        _6 = baml.json.SerializationError { copy _7, const "", const null };
         throw copy _6;
     }
 }
@@ -11245,9 +11245,9 @@ fn baml.time.PlainTime.baml.FromJson.from_json(j: int | float | string | bool | 
     let _4: bool
     let _5: string
     let _6: string // message
-    let _7: baml.json.JsonDecodeError
+    let _7: baml.json.DecodeError
     let _8: string
-    let _9: baml.json.JsonDecodeError
+    let _9: baml.json.DecodeError
 
     bb0: {
         _2 = is_type(copy _1, string);
@@ -11255,7 +11255,7 @@ fn baml.time.PlainTime.baml.FromJson.from_json(j: int | float | string | bool | 
     }
 
     bb1: {
-        _9 = baml.json.JsonDecodeError { const "Expected ISO 8601 time string", const "" };
+        _9 = baml.json.DecodeError { const "Expected ISO 8601 time string", const "" };
         throw copy _9;
     }
 
@@ -11280,7 +11280,7 @@ fn baml.time.PlainTime.baml.FromJson.from_json(j: int | float | string | bool | 
         _5 = copy _3.0;
         _6 = copy _5;
         _8 = copy _6;
-        _7 = baml.json.JsonDecodeError { copy _8, const "" };
+        _7 = baml.json.DecodeError { copy _8, const "" };
         throw copy _7;
     }
 }
@@ -12336,9 +12336,9 @@ fn baml.time.ZonedDateTime.baml.FromJson.from_json(j: int | float | string | boo
     let _4: bool
     let _5: string
     let _6: string // message
-    let _7: baml.json.JsonDecodeError
+    let _7: baml.json.DecodeError
     let _8: string
-    let _9: baml.json.JsonDecodeError
+    let _9: baml.json.DecodeError
 
     bb0: {
         _2 = is_type(copy _1, string);
@@ -12346,7 +12346,7 @@ fn baml.time.ZonedDateTime.baml.FromJson.from_json(j: int | float | string | boo
     }
 
     bb1: {
-        _9 = baml.json.JsonDecodeError { const "Expected RFC 3339 / RFC 9557 timestamp string", const "" };
+        _9 = baml.json.DecodeError { const "Expected RFC 3339 / RFC 9557 timestamp string", const "" };
         throw copy _9;
     }
 
@@ -12371,7 +12371,7 @@ fn baml.time.ZonedDateTime.baml.FromJson.from_json(j: int | float | string | boo
         _5 = copy _3.0;
         _6 = copy _5;
         _8 = copy _6;
-        _7 = baml.json.JsonDecodeError { copy _8, const "" };
+        _7 = baml.json.DecodeError { copy _8, const "" };
         throw copy _7;
     }
 }
@@ -12389,11 +12389,11 @@ fn baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTime) ->
     let _8: bool
     let _9: string
     let _10: string // message
-    let _11: baml.json.JsonSerializationError
+    let _11: baml.json.SerializationError
     let _12: string
     let _13: string
     let _14: string // timezone
-    let _15: baml.json.JsonSerializationError
+    let _15: baml.json.SerializationError
     let _16: string
     let _17: string
 
@@ -12431,7 +12431,7 @@ fn baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTime) ->
         _14 = copy _13;
         _17 = copy _14;
         _16 = const "unknown timezone: " + copy _17;
-        _15 = baml.json.JsonSerializationError { copy _16, const "", const null };
+        _15 = baml.json.SerializationError { copy _16, const "", const null };
         throw copy _15;
     }
 
@@ -12439,7 +12439,7 @@ fn baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTime) ->
         _9 = copy _2.0;
         _10 = copy _9;
         _12 = copy _10;
-        _11 = baml.json.JsonSerializationError { copy _12, const "", const null };
+        _11 = baml.json.SerializationError { copy _12, const "", const null };
         throw copy _11;
     }
 }
@@ -12577,7 +12577,7 @@ fn baml.toml.table_from_json(j: int | float | string | bool | null | baml.json.j
     let _18: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _19: int | float | string | bool | baml.time.PlainDate | baml.time.PlainDateTime | baml.time.PlainTime | baml.time.ZonedDateTime | baml.toml.Table | baml.toml.Item[]
     let _20: map<string, baml.toml.Item>
-    let _21: baml.json.JsonDecodeError
+    let _21: baml.json.DecodeError
 
     bb0: {
         _2 = is_type_tag(copy _1, MAP);
@@ -12585,7 +12585,7 @@ fn baml.toml.table_from_json(j: int | float | string | bool | null | baml.json.j
     }
 
     bb1: {
-        _21 = baml.json.JsonDecodeError { const "expected map", const "" };
+        _21 = baml.json.DecodeError { const "expected map", const "" };
         throw copy _21;
     }
 
@@ -12679,7 +12679,7 @@ fn baml.toml.item_to_json(item: int | float | string | bool | baml.time.PlainDat
 
     bb6: {
         _3 = load_type(baml.json.json);
-        _4 = load_type(baml.json.JsonSerializationError);
+        _4 = load_type(baml.json.SerializationError);
         _5 = load_type(baml.toml.Item);
         _0 = call const fn baml.Array.map<copy _5, copy _3, copy _4>(copy _1, const fn baml.toml.item_to_json) -> [bb9];
     }
@@ -12703,7 +12703,7 @@ fn baml.toml.item_from_json(json: int | float | string | bool | null | baml.json
     let _0: int | float | string | bool | baml.time.PlainDate | baml.time.PlainDateTime | baml.time.PlainTime | baml.time.ZonedDateTime | baml.toml.Table | baml.toml.Item[] // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // json // param
     let _2: int
-    let _3: baml.json.JsonDecodeError
+    let _3: baml.json.DecodeError
     let _4: reflect.Type
     let _5: reflect.Type
     let _6: reflect.Type
@@ -12719,7 +12719,7 @@ fn baml.toml.item_from_json(json: int | float | string | bool | null | baml.json
 
     bb2: {
         _4 = load_type(baml.toml.Item);
-        _5 = load_type(baml.json.JsonDecodeError);
+        _5 = load_type(baml.json.DecodeError);
         _6 = load_type(baml.json.json);
         _0 = call const fn baml.Array.map<copy _6, copy _4, copy _5>(copy _1, const fn baml.toml.item_from_json) -> [bb6];
     }
@@ -12729,7 +12729,7 @@ fn baml.toml.item_from_json(json: int | float | string | bool | null | baml.json
     }
 
     bb4: {
-        _3 = baml.json.JsonDecodeError { const "TOML does not support null", const "" };
+        _3 = baml.json.DecodeError { const "TOML does not support null", const "" };
         throw copy _3;
     }
 

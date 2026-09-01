@@ -1152,7 +1152,7 @@ function ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: str
     load_var _115
     call baml.String.from
     store_var _114
-    load_type baml.json.JsonDecodeError
+    load_type baml.json.DecodeError
     load_var e
     call baml.String.from
     store_var _118
@@ -3029,7 +3029,7 @@ function ai.clients.StreamRelay.next_event(self: ai.clients.StreamRelay) -> ai.s
     return
 }
 
-function ai.clients.StreamRelay.recover(self: ai.clients.StreamRelay, error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> void {
+function ai.clients.StreamRelay.recover(self: ai.clients.StreamRelay, error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> void {
     load_var error
     call ai.errors.normalize_invoke
     store_var _3
@@ -3619,7 +3619,7 @@ function ai.content.Media.new(value: image | audio | video | pdf, provider_id: s
     jump L2
     load_var e
     throw_if_panic
-    load_type baml.json.JsonSerializationError
+    load_type baml.json.SerializationError
     load_var e
     call baml.String.from
     store_var _11
@@ -3641,7 +3641,7 @@ function ai.content.Media.new(value: image | audio | video | pdf, provider_id: s
     jump L3
     load_var e
     throw_if_panic
-    load_type baml.json.JsonDecodeError
+    load_type baml.json.DecodeError
     load_var e
     call baml.String.from
     store_var _21
@@ -3798,7 +3798,7 @@ function ai.errors.classify_http(provider: string, status_code: int, body: strin
     return
 }
 
-function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError {
+function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError {
     load_var error
     store_var _2
     load_var _2
@@ -3858,7 +3858,7 @@ function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | ba
     load_var error
     store_var _20
     load_var _20
-    narrow_bind baml.json.JsonSerializationError, slot=9
+    narrow_bind baml.json.SerializationError, slot=9
     pop_jump_if_false L7
     jump L16
 
@@ -3890,7 +3890,7 @@ function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | ba
     load_var error
     store_var _32
     load_var _32
-    narrow_bind baml.json.JsonParseError, slot=13
+    narrow_bind baml.json.ParseError, slot=13
     pop_jump_if_false L11
     jump L12
 
@@ -3991,7 +3991,7 @@ function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | ba
     return
 }
 
-function ai.errors.normalize_invoke(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError {
+function ai.errors.normalize_invoke(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError {
     load_var error
     call ai.errors.normalize
     return
@@ -4394,7 +4394,7 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call google.GoogleClient.new
+    call google.GeminiClient.new
     jump L26
 
   L19:
@@ -4414,7 +4414,7 @@ function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call anthropic.AnthropicClient.new
+    call anthropic.Client.new
     jump L26
 
   L20:
@@ -4710,7 +4710,7 @@ function ai.internal._media_envelope(m: ai.content.Media) -> baml.json.json {
     jump L0
     load_var e
     throw_if_panic
-    load_type baml.json.JsonSerializationError
+    load_type baml.json.SerializationError
     load_var e
     call baml.String.from
     store_var _7
@@ -5535,7 +5535,7 @@ function ai.internal._merge_json(base: baml.json.json, patch: baml.json.json) ->
     return
 }
 
-function ai.internal._proxy(conn: ai.mcp.McpConnection, name: string) -> (map<string, unknown>) -> string throws unknown {
+function ai.internal._proxy(conn: ai.mcp.Connection, name: string) -> (map<string, unknown>) -> string throws unknown {
     load_var ?1
     make_cell
     store_var ?1
@@ -6612,7 +6612,7 @@ function ai.internal.validate_output_type(return_type: reflect.Type) -> void {
     throw
 }
 
-function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, params: map<string, unknown>) -> baml.json.json {
+function ai.mcp.Connection._request(self: ai.mcp.Connection, method: string, params: map<string, unknown>) -> baml.json.json {
     load_var ?1
     make_cell
     store_var ?1
@@ -6638,7 +6638,7 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
     store_var _6
     load_deref ?1
     load_var _6
-    call ai.mcp.McpConnection._send
+    call ai.mcp.Connection._send
     pop 1
     load_deref ?1
     load_field .timeout_ms
@@ -6648,7 +6648,7 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
     load_type ai.errors.InvalidRequest | ai.errors.NetworkFailure
     load_var2 7 1
     load_var2 4 2
-    make_closure .<lambda(McpConnection._request, 0)>, 3
+    make_closure .<lambda(Connection._request, 0)>, 3
     call baml.future.with_timeout
     jump L2
     load_var e
@@ -6688,7 +6688,7 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
     return
 }
 
-function ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> void {
+function ai.mcp.Connection._send(self: ai.mcp.Connection, line: string) -> void {
     load_type string
     load_var line
     load_const "\n"
@@ -6737,7 +6737,7 @@ function ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) ->
     return
 }
 
-function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string, args: map<string, unknown>) -> string {
+function ai.mcp.Connection.call_tool(self: ai.mcp.Connection, name: string, args: map<string, unknown>) -> string {
     load_var self
     load_const "tools/call"
     load_var2 2 3
@@ -6746,7 +6746,7 @@ function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string
     load_type string
     load_type unknown
     alloc_map 2
-    call ai.mcp.McpConnection._request
+    call ai.mcp.Connection._request
     store_var result
     load_type string
     alloc_array 0
@@ -6834,7 +6834,7 @@ function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string
     throw
 }
 
-function ai.mcp.McpConnection.close(self: ai.mcp.McpConnection) -> void {
+function ai.mcp.Connection.close(self: ai.mcp.Connection) -> void {
     load_var self
     load_field .p
     sys_op baml.sys.Process.close
@@ -6843,7 +6843,7 @@ function ai.mcp.McpConnection.close(self: ai.mcp.McpConnection) -> void {
     return
 }
 
-function ai.mcp.McpConnection.connect(name: string, command: string, args: string[], timeout_ms: int) -> ai.mcp.McpConnection {
+function ai.mcp.Connection.connect(name: string, command: string, args: string[], timeout_ms: int) -> ai.mcp.Connection {
     load_var timeout_ms
     load_const <omitted>
     cmp_op ==
@@ -6895,7 +6895,7 @@ function ai.mcp.McpConnection.connect(name: string, command: string, args: strin
     load_var2 1 5
     load_var2 11 4
     load_const 1
-    init_instance ai.mcp.McpConnection .server_name, .p, .out, .timeout_ms, .next_id
+    init_instance ai.mcp.Connection .server_name, .p, .out, .timeout_ms, .next_id
     store_var conn
     load_var conn
     load_const "initialize"
@@ -6916,7 +6916,7 @@ function ai.mcp.McpConnection.connect(name: string, command: string, args: strin
     load_type string
     load_type unknown
     alloc_map 3
-    call ai.mcp.McpConnection._request
+    call ai.mcp.Connection._request
     pop 1
     load_const null
     load_const "notifications/initialized"
@@ -6924,19 +6924,19 @@ function ai.mcp.McpConnection.connect(name: string, command: string, args: strin
     call ai.mcp.rpc_line
     store_var _28
     load_var2 10 12
-    call ai.mcp.McpConnection._send
+    call ai.mcp.Connection._send
     pop 1
     load_var conn
     return
 }
 
-function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool[] {
+function ai.mcp.Connection.tools(self: ai.mcp.Connection) -> ai.tools.Tool[] {
     load_var self
     load_const "tools/list"
     load_type string
     load_type unknown
     alloc_map 0
-    call ai.mcp.McpConnection._request
+    call ai.mcp.Connection._request
     store_var result
     load_type ai.tools.Tool
     alloc_array 0

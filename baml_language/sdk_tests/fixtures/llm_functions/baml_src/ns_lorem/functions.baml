@@ -118,7 +118,7 @@ function stream_e2e_extract_resume(text: string) -> Resume {
 // Rust recording harness can send the exact request with curl and retain the
 // raw response bytes.
 function _stream_recording_request<T>(spec: ai.FunctionSpec<T>) -> baml.http.Request {
-  openai.internal._openai_request(
+  openai.internal._request(
     StreamStub,
     ai.ModelTurnInput {
       prompt: spec.prompt_template,

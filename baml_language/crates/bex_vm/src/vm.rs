@@ -4657,7 +4657,7 @@ impl BexVm {
         self.alloc_error_value(ErrorClass::StackTrace, vec![frames_array])
     }
 
-    /// Construct a `baml.errors.ErrorContext` for a thrown value: the error
+    /// Construct a `baml.errors.Context` for a thrown value: the error
     /// itself, the `StackTrace` where it was thrown, and the `cause` it
     /// superseded while unwinding (or `Value::NULL` for a fresh error).
     ///
@@ -4671,7 +4671,7 @@ impl BexVm {
         cause: Value,
     ) -> Value {
         let stack_trace = self.alloc_stack_trace(trace);
-        self.alloc_error_value(ErrorClass::ErrorContext, vec![error, stack_trace, cause])
+        self.alloc_error_value(ErrorClass::Context, vec![error, stack_trace, cause])
     }
 
     pub fn panic_to_exception_value(&mut self, panic: VmPanic) -> Value {
@@ -8292,7 +8292,7 @@ impl BexVm {
                     } else if let Some(ptr) = config_value.as_object_ptr()
                         && matches!(unsafe { ptr.get() }, Object::Instance(_))
                     {
-                        // Must be an instance (`baml.spawn.SpawnParams`) — an
+                        // Must be an instance (`baml.spawn.Params`) — an
                         // arbitrary heap object here would turn a local type
                         // error into a VM→engine contract break downstream.
                         Some(ptr)

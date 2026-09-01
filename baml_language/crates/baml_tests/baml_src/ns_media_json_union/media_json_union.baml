@@ -41,7 +41,7 @@ function rejects_media_json<T>(json: string) -> bool {
         baml.json.from_string<T>(json);
         false
     } catch (e) {
-        baml.json.JsonDecodeError => true
+        baml.json.DecodeError => true
     }
 }
 

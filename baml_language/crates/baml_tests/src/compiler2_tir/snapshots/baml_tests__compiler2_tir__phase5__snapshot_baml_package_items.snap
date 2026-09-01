@@ -46,19 +46,19 @@ namespace baml.crypto:
   class Sha256 { methods: [new, update, finish] }
   class XChaCha20Poly1305 { methods: [new, encrypt, decrypt, random_key] }
 namespace baml.csv:
-  class CsvError { methods: [] }
-  enum CsvErrorKind
-  class CsvHeaders { methods: [] }
-  class CsvNeedData { methods: [] }
-  class CsvPosition { methods: [] }
-  class CsvReader { methods: [headers, rows, skipped, skipped_count, position, close, _poll, _poll_headers, _feed, _feed_eof, _mark_closed, _mark_exhausted, _read_chunk, iter, next] }
-  class CsvRecord { methods: [get, get_at, fields, length, position, decode, to_map] }
-  class CsvRows<T> { methods: [iter, next] }
-  class CsvSkip { methods: [] }
-  type CsvValue
-  class CsvWriter { methods: [write_record, write_row, write_rows, write_header, records_written, text, flush, close, _encode_record, _encode_header, _bytes_written, _mark_closed, _emit] }
+  class Error { methods: [] }
+  enum ErrorKind
+  class Position { methods: [] }
+  class Reader { methods: [headers, rows, skipped, skipped_count, position, close, _poll, _poll_headers, _feed, _feed_eof, _mark_closed, _mark_exhausted, _read_chunk, iter, next] }
   class ReaderOptions { methods: [] }
+  class Record { methods: [get, get_at, fields, length, position, decode, to_map] }
+  class Rows<T> { methods: [iter, next] }
+  type Value
+  class Writer { methods: [write_record, write_row, write_rows, write_header, records_written, text, flush, close, _encode_record, _encode_header, _bytes_written, _mark_closed, _emit] }
   class WriterOptions { methods: [] }
+  class _Headers { methods: [] }
+  class _NeedData { methods: [] }
+  class _Skip { methods: [] }
   function _buffer
   function _cell_by_index<T>
   function _cell_by_name<T>
@@ -96,7 +96,7 @@ namespace baml.env:
 namespace baml.errors:
   class AccessError { methods: [] }
   class CompilationError { methods: [] }
-  class ErrorContext { methods: [root_cause, _to_string_impl, to_string] }
+  class Context { methods: [root_cause, _to_string_impl, to_string] }
   class GenericSdkError { methods: [] }
   class HostCallable { methods: [] }
   class InvalidArgument { methods: [] }
@@ -131,7 +131,7 @@ namespace baml.fs:
 namespace baml.future:
   class AllFailed<E> { methods: [] }
   class Future<T, E> { methods: [cancel, is_settled, is_cancelled, is_result, is_error, state] }
-  enum FutureState
+  enum State
   function __await_any<T, E>
   function all<T, E>
   function all_complete<T, E>
@@ -143,7 +143,7 @@ namespace baml.glob:
   class ScanOptions { methods: [] }
   function new
 namespace baml.host:
-  class HostValue { methods: [] }
+  class Value { methods: [] }
   function call_host_value<T, E>
 namespace baml.http:
   class Request { methods: [] }
@@ -191,10 +191,10 @@ namespace baml.iter:
   class TakeWhile<T, E, E2> { methods: [iter, next] }
   function flatten<R, E, E3, I>
 namespace baml.json:
-  class JsonDecodeError { methods: [] }
-  class JsonParseError { methods: [] }
-  class JsonPathError { methods: [] }
-  class JsonSerializationError { methods: [] }
+  class DecodeError { methods: [] }
+  class ParseError { methods: [] }
+  class PathError { methods: [] }
+  class SerializationError { methods: [] }
   type json
   function _path_field
   function _path_index
@@ -276,7 +276,7 @@ namespace baml.sap:
   function parse_type
 namespace baml.spawn:
   class CancelToken { methods: [new, any, cancel, is_cancelled] }
-  class SpawnParams<T, E> { methods: [] }
+  class Params<T, E> { methods: [] }
   class TaskGroup { methods: [new, cancel, set_limit, limit, name, active_count, queued_count] }
   function options<T, E>
 namespace baml.sys:
@@ -316,8 +316,8 @@ namespace baml.time:
   function system_timezone
 namespace baml.toml:
   type Item
+  class ParseError { methods: [] }
   class Table { methods: [parse, to_json, from_json] }
-  class TomlParseError { methods: [] }
   function item_from_json
   function item_to_json
   function table_from_json
@@ -326,6 +326,6 @@ namespace baml.ws:
   function _connect
   function connect
 namespace baml.yaml:
-  class YamlParseError { methods: [] }
+  class ParseError { methods: [] }
   function deserialize<T>
   function parse

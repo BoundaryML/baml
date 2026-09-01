@@ -1,4 +1,4 @@
-// Wire-level tests for the two Google clients: `google.GoogleClient` (the
+// Wire-level tests for the two Google clients: `google.GeminiClient` (the
 // Gemini Developer API) and `google.VertexClient` (Gemini on Vertex AI).
 //
 // Everything here is offline: request shapes are asserted against the captured
@@ -49,7 +49,7 @@ function google_request_shape() -> string {
         (mock: root.llm_mock.MockJsonServer) -> {
             let extra_headers: map<string, string> = { "X-Custom": "yes" };
             let extra_query: map<string, string> = { "trace": "abc" };
-            let cl = google.GoogleClient.new(
+            let cl = google.GeminiClient.new(
                 model = "gemini-2.5-flash",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -106,7 +106,7 @@ function google_request_omits_unset_fields() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_canned_turn())],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let cl = google.GoogleClient.new(
+            let cl = google.GeminiClient.new(
                 model = "gemini-2.5-flash",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -136,7 +136,7 @@ function google_request_body_passthrough() -> string {
             let overrides = baml.json.parse(
                 `{"generationConfig":{"thinkingConfig":{"thinkingBudget":0},"topK":null},"cachedContent":"projects/p/cachedContents/1"}`,
             );
-            let cl = google.GoogleClient.new(
+            let cl = google.GeminiClient.new(
                 model = "gemini-2.5-flash",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -170,7 +170,7 @@ function google_tool_declarations() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_canned_turn())],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let cl = google.GoogleClient.new(
+            let cl = google.GeminiClient.new(
                 model = "gemini-2.5-flash",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -200,7 +200,7 @@ test "google_tool_declarations" {
 // and thoughtsTokenCount, which the Rust builders dropped.
 function google_parse_thoughts_and_usage() -> string {
     let raw = `{"candidates":[{"content":{"parts":[{"text":"weighing it up","thought":true},{"text":"answer"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":4,"cachedContentTokenCount":6,"thoughtsTokenCount":7,"totalTokenCount":27}}`;
-    let turn = google.internal.google_parse(
+    let turn = google.internal.parse(
         baml.json.from_string<google.internal.GmResponse>(raw),
         0,
     );
@@ -223,7 +223,7 @@ test "google_parse_thoughts_and_usage" {
 // journal position; the turn stops for tool use.
 function google_parse_function_call() -> string {
     let raw = `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"weather_lookup","args":{"city":"NYC"}}}]},"finishReason":"STOP"}]}`;
-    let turn = google.internal.google_parse(
+    let turn = google.internal.parse(
         baml.json.from_string<google.internal.GmResponse>(raw),
         7,
     );
@@ -243,7 +243,7 @@ test "google_parse_function_call" {
 // while the text parts stay text.
 function google_parse_inline_media() -> string {
     let raw = `{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"aGk="}},{"text":"here you go"}]},"finishReason":"STOP"}]}`;
-    let turn = google.internal.google_parse(
+    let turn = google.internal.parse(
         baml.json.from_string<google.internal.GmResponse>(raw),
         0,
     );
@@ -271,7 +271,7 @@ test "google_parse_inline_media" {
 // unknown finish reason must NOT be mistaken for one.
 function _stop_reason_of(raw: string) -> string {
     let resp = baml.json.from_string<google.internal.GmResponse>(raw);
-    google.internal.google_parse(resp, 0).stop_reason.to_string()
+    google.internal.parse(resp, 0).stop_reason.to_string()
 }
 
 function google_parse_stop_reasons() -> string {
@@ -297,7 +297,7 @@ test "google_parse_stop_reasons" {
 // explaining itself and still parses.
 function _parse_label(raw: string) -> string {
     let resp = baml.json.from_string<google.internal.GmResponse>(raw);
-    google.internal.google_parse(resp, 0).stop_reason.to_string() catch_all (e) {
+    google.internal.parse(resp, 0).stop_reason.to_string() catch_all (e) {
         _ => {
             match (e) {
                 let failed: ai.errors.ParseFailed => "ParseFailed",
@@ -333,7 +333,7 @@ function google_empty_response_e2e() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(`{}`)],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let cl = google.GoogleClient.new(
+            let cl = google.GeminiClient.new(
                 model = "gemini-2.5-flash",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -365,7 +365,7 @@ test "google_empty_response_e2e" {
 // re-attached to the wire part on replay.
 function google_parse_thought_signature() -> string {
     let raw = `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"weather_lookup","args":{"city":"NYC"}},"thoughtSignature":"CtwBAcu98"}]},"finishReason":"STOP"}]}`;
-    let turn = google.internal.google_parse(
+    let turn = google.internal.parse(
         baml.json.from_string<google.internal.GmResponse>(raw),
         7,
     );
@@ -389,7 +389,7 @@ function google_tool_loop_replays_signature(signature_json: string) -> string {
             ),
         ],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let cl = google.GoogleClient.new(
+            let cl = google.GeminiClient.new(
                 model = "gemini-3-flash",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -485,12 +485,12 @@ function google_media_url_inlined() -> string {
         toolbox: ai.tools.Toolbox.new([]),
         output_type: reflect.Type.of<string>(),
     };
-            let cl = google.GoogleClient.new(
+            let cl = google.GeminiClient.new(
                 model = "gemini-2.5-flash",
                 api_key = "test-key",
                 base_url = "https://example.test",
             );
-            let body = baml.json.parse(google.internal.google_render(cl, input).body);
+            let body = baml.json.parse(google.internal.render(cl, input).body);
             [
                 baml.json.path<string>(body, ".contents[0].parts[1].inlineData.mimeType"),
                 baml.json.path<string>(body, ".contents[0].parts[1].inlineData.data"),
@@ -515,12 +515,12 @@ function google_media_youtube_passthrough() -> string {
         toolbox: ai.tools.Toolbox.new([]),
         output_type: reflect.Type.of<string>(),
     };
-    let cl = google.GoogleClient.new(
+    let cl = google.GeminiClient.new(
         model = "gemini-2.5-flash",
         api_key = "test-key",
         base_url = "https://example.test",
     );
-    let body = baml.json.parse(google.internal.google_render(cl, input).body);
+    let body = baml.json.parse(google.internal.render(cl, input).body);
     [
         baml.json.path<string>(body, ".contents[0].parts[1].fileData.fileUri"),
         baml.json.path_or<string>(body, ".contents[0].parts[1].fileData.mimeType", "absent"),
@@ -552,7 +552,7 @@ function google_stream_decode() -> string {
             ),
         ],
         (mock: root.llm_mock.MockSseServer) -> {
-            let cl = google.GoogleClient.new(
+            let cl = google.GeminiClient.new(
                 model = "gemini-2.5-flash",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -583,7 +583,7 @@ function _stream_failure_label(events: string[]) -> string {
     root.llm_mock.mock_sse_serve(
         events,
         (mock: root.llm_mock.MockSseServer) -> {
-            let cl = google.GoogleClient.new(
+            let cl = google.GeminiClient.new(
                 model = "gemini-2.5-flash",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -967,7 +967,7 @@ function google_error_taxonomy() -> string {
         let label = root.llm_mock.mock_json_serve(
             [root.llm_mock.MockResponse.error(status, `{"error":{"code":${status},"message":"nope"}}`)],
             (mock: root.llm_mock.MockJsonServer) -> {
-                let cl = google.GoogleClient.new(
+                let cl = google.GeminiClient.new(
                     model = "gemini-2.5-flash",
                     api_key = "test-key",
                     base_url = mock.base_url(),
@@ -1008,10 +1008,10 @@ test "google_error_taxonomy" {
 // it. `base_url` points at a closed port, so neither branch reaches the
 // network. Both assert the same thing — no panic. (Mirrors
 // `anthropic_missing_key_resolve` / `_invoke`.)
-function _google_missing_key_client() -> google.GoogleClient {
+function _google_missing_key_client() -> google.GeminiClient {
     // `env.NAME` naming a variable that exists nowhere: the ref resolves to
     // null at REQUEST time and the client falls through to GOOGLE_API_KEY.
-    google.GoogleClient.new(
+    google.GeminiClient.new(
         model = "gemini-2.5-flash",
         api_key = env.BAML_GOOGLE_KEY_THAT_IS_NEVER_SET,
         base_url = "http://127.0.0.1:1",

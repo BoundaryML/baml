@@ -78,7 +78,7 @@ function _cleanup_begin<T>(value: T) -> bool throws never {
 /// class Temp {
 ///   celsius float
 ///   implements baml.ToJson {
-///     function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+///     function to_json(self) -> baml.json.json throws baml.json.SerializationError {
 ///       { "c": baml.json.from(self.celsius), "f": baml.json.from(self.celsius * 1.8 + 32.0) }
 ///     }
 ///   }
@@ -87,13 +87,13 @@ function _cleanup_begin<T>(value: T) -> bool throws never {
 ///
 /// Unlike `to_string`, conversion can fail: a value with no json representation
 /// (`uint8array` without explicit encoding, function values, ...) throws
-/// `baml.json.JsonSerializationError`.
+/// `baml.json.SerializationError`.
 ///
 /// `to_json` has a default body — the same structural rendering `baml.json.from`
 /// falls back to for non-implementors — so `implements baml.ToJson {}` with no
 /// override is valid and renders identically to a non-implementor.
 interface ToJson {
-  function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+  function to_json(self) -> baml.json.json throws baml.json.SerializationError {
     root._to_json_default(self)
   }
 }
@@ -104,10 +104,10 @@ interface ToJson {
 /// `{"field": value}`), enums as their variant name, media as the tagged form. A
 /// nested value whose runtime class *does* implement `baml.ToJson` is rendered
 /// via that override (so the default honors overrides at every depth, like
-/// `baml.json.from`). Throws `JsonSerializationError` for non-representable values.
+/// `baml.json.from`). Throws `baml.json.SerializationError` for non-representable values.
 //baml:mut_vm
 //baml:may_yield
-function _to_json_default<T>(value: T) -> baml.json.json throws baml.json.JsonSerializationError {
+function _to_json_default<T>(value: T) -> baml.json.json throws baml.json.SerializationError {
     $rust_function
 }
 
@@ -125,7 +125,7 @@ function _to_json_default<T>(value: T) -> baml.json.json throws baml.json.JsonSe
 /// shim can be removed.
 //baml:mut_vm
 //baml:may_yield
-function _to_json_shim<T>(value: T) -> baml.json.json throws baml.json.JsonSerializationError {
+function _to_json_shim<T>(value: T) -> baml.json.json throws baml.json.SerializationError {
     $rust_function
 }
 
@@ -143,7 +143,7 @@ function _to_json_shim<T>(value: T) -> baml.json.json throws baml.json.JsonSeria
 /// class Temp {
 ///   celsius float
 ///   implements baml.FromJson {
-///     function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+///     function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
 ///       Temp { celsius: baml.json.to<float>(baml.json.field(j, "c")) }
 ///     }
 ///   }
@@ -156,7 +156,7 @@ function _to_json_shim<T>(value: T) -> baml.json.json throws baml.json.JsonSeria
 /// it can't have a default body — an interface default method may not return
 /// `Self`; the structural fallback lives in `baml.json.to` instead.)
 interface FromJson {
-  function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError
+  function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError
 }
 
 /// (internal) Internal: dispatch `from_json` on the target type `T`, honoring a
@@ -174,6 +174,6 @@ interface FromJson {
 /// shim can be removed.
 //baml:mut_vm
 //baml:may_yield
-function _from_json_shim<T>(j: baml.json.json) -> T throws baml.json.JsonDecodeError {
+function _from_json_shim<T>(j: baml.json.json) -> T throws baml.json.DecodeError {
     $rust_function
 }

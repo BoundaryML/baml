@@ -63,7 +63,7 @@ class ToolChoice {
     }
 }
 
-class AnthropicClient {
+class Client {
     model: string,
     // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
     // time), or null to resolve ANTHROPIC_API_KEY at request time. Construction
@@ -129,8 +129,8 @@ class AnthropicClient {
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
         capture_wire: bool = true,
-    ) -> AnthropicClient {
-        AnthropicClient {
+    ) -> Client {
+        Client {
             model: model,
             api_key: api_key,
             base_url: base_url,
@@ -178,7 +178,7 @@ class AnthropicClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            anthropic.internal.anthropic_preview(self, input) catch_all (e) {
+            anthropic.internal.preview(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

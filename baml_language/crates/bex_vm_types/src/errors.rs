@@ -420,7 +420,7 @@ pub enum VmRustFnError {
     /// A pre-built exception `Value` to throw directly as a catchable error.
     ///
     /// Used by native functions that need to throw user-defined class instances
-    /// (e.g. `baml.json.JsonParseError`) without going through the
+    /// (e.g. `baml.json.ParseError`) without going through the
     /// `VmPanic` / `VmBamlError` enumeration machinery.
     #[error("thrown value")]
     Thrown {

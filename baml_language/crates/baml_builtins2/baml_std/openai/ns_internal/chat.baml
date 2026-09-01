@@ -26,7 +26,7 @@
 
 /// (internal) Every LOCAL, pre-send rejection in the chat family throws ONE error
 /// identity: `ai.errors.InvalidRequest` with a null status code — the class
-/// `ResponsesClient`, `GoogleClient`, `ImageClient` and the Bedrock client
+/// `ResponsesClient`, `GeminiClient`, `ImageClient` and the Bedrock client
 /// already use.
 ///
 /// It matters that this is an `ai.errors.Failure` and not
@@ -599,7 +599,7 @@ function _chat_media_part(
                     // is more useful than a constant, and this is the same
                     // derivation the Responses client uses (query stripped,
                     // `document.pdf` when there is nothing to derive).
-                    filename: _openai_file_name(pdf.file() ?? pdf.url()),
+                    filename: _file_name(pdf.file() ?? pdf.url()),
                     file_data: `data:${resolved.mime_type};base64,${data}`,
                 },
             }
@@ -1490,12 +1490,12 @@ class ChatToolCallBuffer {
 
 /// The stateful SSE decoder for one streamed turn.
 ///
-/// `ai.stream.StreamEvent` is `TextDelta | TurnMeta | TurnDone` and
+/// `ai.stream.Event` is `TextDelta | TurnMeta | TurnDone` and
 /// `TurnStream.final_turn()` only ever produces a single `Text` block, so
 /// streamed tool calls cannot reach the runner today (PLAN §6 — extending
-/// StreamEvent is its own stdlib change). They are still fully assembled here:
+/// Event is its own stdlib change). They are still fully assembled here:
 /// `tool_uses()` returns them once the stream ends, which is what a future
-/// StreamEvent variant will emit and what the tests assert on.
+/// Event variant will emit and what the tests assert on.
 class ChatStreamDecoder {
     provider: string,
     calls: ChatToolCallBuffer[],
@@ -1530,8 +1530,8 @@ class ChatStreamDecoder {
     }
 
     /// One `SseStream.next()` batch -> provider-agnostic stream events.
-    function decode(self, batch: string) -> ai.stream.StreamEvent[] {
-        let out: ai.stream.StreamEvent[] = [];
+    function decode(self, batch: string) -> ai.stream.Event[] {
+        let out: ai.stream.Event[] = [];
         for (let raw in ai.stream.decode_sse_batch(batch)) {
             if let data: string = raw.data {
                 if (data.trim() == "[DONE]") {

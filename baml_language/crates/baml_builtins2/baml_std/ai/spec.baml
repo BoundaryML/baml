@@ -21,8 +21,8 @@ type Credential = string | baml.env.Ref;
 
 /// What a `client:` position accepts. Defined in `ai/ns_clients/clients.baml`
 /// next to `ai.clients.resolve`, which consumes it; re-exported here so the
-/// package-root name `ai.ClientSelector` reads alongside `ai.Client`.
-type ClientSelector = root.clients.ClientSelector;
+/// package-root name `ai.Selector` reads alongside `ai.Client`.
+type Selector = root.clients.Selector;
 
 /// Provider-neutral media retained inside a rendered prompt.
 type MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf;

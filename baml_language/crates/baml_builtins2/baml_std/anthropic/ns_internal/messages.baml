@@ -10,10 +10,10 @@
 // `ai.PromptMessage.metadata`).
 //
 // Layering, so a future `vertex` package can reuse this: BODY construction
-// (`anthropic_messages_request` / `anthropic_messages_body`) is factored away
-// from URL/auth/header construction (`_anthropic_request`). Vertex's
+// (`messages_request` / `messages_body`) is factored away
+// from URL/auth/header construction (`_request`). Vertex's
 // `rawPredict` sends the same body with `model` removed and `anthropic_version`
-// added — `AnthropicBodyParams` + `request_body` express exactly that.
+// added — `BodyParams` + `request_body` express exactly that.
 
 // ---------------------------------------------------------------------------
 // Local rejections.
@@ -110,7 +110,7 @@ class AnthThinkingParam {
 
 /// The complete request body. Optional fields are dropped before serialization
 /// (see _anth_drop_nulls), so an unset option never reaches the wire.
-class AnthropicMessagesRequest {
+class MessagesRequest {
     model: string,
     max_tokens: int,
     system: AnthBlock[]?,
@@ -130,7 +130,7 @@ class AnthropicMessagesRequest {
 // client reads is typed, and EVERY field the API may omit is optional
 // (a required int here is a ParseFailed waiting to happen).
 
-class AnthropicContentBlock {
+class ContentBlock {
     type: string,
     text: string?,
     thinking: string?,
@@ -150,7 +150,7 @@ class AnthOutputTokensDetails {
     thinking_tokens: int?,
 }
 
-class AnthropicUsage {
+class Usage {
     // NOTE (cross-provider semantics, accepted): Anthropic's `input_tokens`
     // counts only the tokens AFTER the last cache breakpoint —
     // `total_input_tokens = input_tokens + cache_read_input_tokens +
@@ -173,15 +173,15 @@ class AnthropicUsage {
     cache_creation_input_tokens: int?,
 }
 
-class AnthropicResponse {
+class Response {
     id: string?,
     type: string?,
     role: string?,
     model: string?,
-    content: AnthropicContentBlock[],
+    content: ContentBlock[],
     stop_reason: string?,
     stop_sequence: string?,
-    usage: AnthropicUsage?,
+    usage: Usage?,
 }
 
 // ---------------------------------------------------------------------------
@@ -247,7 +247,7 @@ function _anth_drop_nulls(j: baml.json.json) -> baml.json.json {
 
 /// An intermediate lowered message: role plus typed wire content blocks.
 /// tool_results marks a user message that is an open tool_result group.
-class AnthropicMessage {
+class Message {
     role: string,
     tool_results: bool,
     blocks: AnthBlock[],
@@ -255,9 +255,9 @@ class AnthropicMessage {
 
 /// Anthropic carries system content outside the alternating messages list.
 /// Keep that split provider-local while preserving the authored prompt roles.
-class AnthropicPrompt {
+class Prompt {
     system: AnthBlock[],
-    messages: AnthropicMessage[],
+    messages: Message[],
 }
 
 /// (internal) Anthropic places a cache breakpoint on a CONTENT BLOCK, but the authored
@@ -304,7 +304,7 @@ function _anth_supported_image_mime(mime: string) -> bool {
     m == "image/jpeg" || m == "image/png" || m == "image/gif" || m == "image/webp"
 }
 
-function _anthropic_media_block(
+function _media_block(
     media: ai.MediaPart,
     block_type: string,
     preview: bool = false,
@@ -334,7 +334,7 @@ function _anthropic_media_block(
     AnthMediaBlock { type: block_type, source: source, cache_control: null }
 }
 
-function _anthropic_prompt_blocks(
+function _prompt_blocks(
     message: ai.PromptMessage,
     role: string,
     preview: bool = false,
@@ -356,7 +356,7 @@ function _anthropic_prompt_blocks(
                         `Anthropic only supports image input in user messages, found ${role}`,
                     )
                 }
-                blocks.push(_anthropic_media_block(image, "image", preview = preview));
+                blocks.push(_media_block(image, "image", preview = preview));
                 null
             },
             // The Messages API has NO audio input content block — audio is not
@@ -376,7 +376,7 @@ function _anthropic_prompt_blocks(
                         `Anthropic only supports PDF input in user messages, found ${role}`,
                     )
                 }
-                blocks.push(_anthropic_media_block(pdf, "document", preview = preview));
+                blocks.push(_media_block(pdf, "document", preview = preview));
                 null
             },
             let video: baml.media.Video => {
@@ -387,13 +387,13 @@ function _anthropic_prompt_blocks(
     blocks
 }
 
-function _anthropic_lower_prompt(prompt: ai.Prompt, preview: bool = false) -> AnthropicPrompt {
+function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> Prompt {
     let system: AnthBlock[] = [];
-    let messages: AnthropicMessage[] = [];
+    let messages: Message[] = [];
     for (let message in prompt.messages()) {
         let cache_control = message.metadata.get("cache_control");
         if (message.role == "system") {
-            let blocks = _anthropic_prompt_blocks(message, "system", preview = preview);
+            let blocks = _prompt_blocks(message, "system", preview = preview);
             _anth_apply_cache_control(blocks, cache_control);
             for (let block in blocks) {
                 system.push(block);
@@ -405,17 +405,17 @@ function _anthropic_lower_prompt(prompt: ai.Prompt, preview: bool = false) -> An
             } else {
                 "user"
             };
-            let blocks = _anthropic_prompt_blocks(message, role, preview = preview);
+            let blocks = _prompt_blocks(message, role, preview = preview);
             _anth_apply_cache_control(blocks, cache_control);
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a 400.
             if (blocks.length() > 0) {
-                messages.push(AnthropicMessage { role: role, tool_results: false, blocks: blocks });
+                messages.push(Message { role: role, tool_results: false, blocks: blocks });
             }
             null
         };
     }
-    AnthropicPrompt { system: system, messages: messages }
+    Prompt { system: system, messages: messages }
 }
 
 // ---------------------------------------------------------------------------
@@ -423,7 +423,7 @@ function _anthropic_lower_prompt(prompt: ai.Prompt, preview: bool = false) -> An
 // tool_result blocks in a user message immediately after the assistant
 // tool_use message, so consecutive tool results group into ONE user message.
 
-function _anthropic_assistant_blocks(content: ai.content.Block[]) -> AnthBlock[] {
+function _assistant_blocks(content: ai.content.Block[]) -> AnthBlock[] {
     let out: AnthBlock[] = [];
     for (let b in content) {
         match (b) {
@@ -458,12 +458,7 @@ function _anthropic_assistant_blocks(content: ai.content.Block[]) -> AnthBlock[]
 }
 
 /// (internal) Append one tool_result block, extending the trailing group when open.
-function _anthropic_push_tool_result(
-    msgs: AnthropicMessage[],
-    id: string,
-    content: string,
-    is_error: bool,
-) -> void {
+function _push_tool_result(msgs: Message[], id: string, content: string, is_error: bool) -> void {
     let block = AnthToolResultBlock {
         type: "tool_result",
         tool_use_id: id,
@@ -472,26 +467,26 @@ function _anthropic_push_tool_result(
         cache_control: null,
     };
     // .at returns null on an empty list, covering the no-messages case.
-    if let m: AnthropicMessage = msgs.at(msgs.length() - 1) {
+    if let m: Message = msgs.at(msgs.length() - 1) {
         if (m.tool_results) {
             m.blocks.push(block);
         } else {
-            msgs.push(AnthropicMessage { role: "user", tool_results: true, blocks: [block] });
+            msgs.push(Message { role: "user", tool_results: true, blocks: [block] });
         }
     } else {
-        msgs.push(AnthropicMessage { role: "user", tool_results: true, blocks: [block] });
+        msgs.push(Message { role: "user", tool_results: true, blocks: [block] });
     }
 }
 
 /// (internal) ai.RunStarted/ai.ToolRequested/ai.Usage/ai.FinalProduced are not promptable and skip;
 /// skipped events never close an open tool_result group.
-function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
-    let msgs: AnthropicMessage[] = [];
+function _lower_journal(j: ai.Journal) -> Message[] {
+    let msgs: Message[] = [];
     for (let e in j.entries()) {
         match (e) {
             let m: ai.events.UserMessage => {
                 msgs.push(
-                    AnthropicMessage {
+                    Message {
                         role: "user",
                         tool_results: false,
                         blocks: [AnthTextBlock { type: "text", text: m.content, cache_control: null }],
@@ -500,23 +495,21 @@ function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
                 null
             },
             let m: ai.events.AssistantMessage => {
-                let blocks = _anthropic_assistant_blocks(m.content);
+                let blocks = _assistant_blocks(m.content);
                 // An assistant turn that lowers to nothing is dropped rather
                 // than sent as `content: []` (the reasoning-only turn that made
                 // the API 400). ai.wire.sanitize_for_client removes most of
                 // these upstream; this is the belt to its braces.
                 if (blocks.length() > 0) {
-                    msgs.push(
-                        AnthropicMessage { role: "assistant", tool_results: false, blocks: blocks },
-                    );
+                    msgs.push(Message { role: "assistant", tool_results: false, blocks: blocks });
                 }
                 null
             },
             let c: ai.events.ToolCompleted => {
-                _anthropic_push_tool_result(msgs, c.id, c.output, false);
+                _push_tool_result(msgs, c.id, c.output, false);
             },
             let f: ai.events.ToolFailed => {
-                _anthropic_push_tool_result(msgs, f.id, f.message, true);
+                _push_tool_result(msgs, f.id, f.message, true);
             },
             _ => null,
         };
@@ -534,8 +527,8 @@ function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
 /// Concatenating the block lists of same-role neighbours repairs every such
 /// shape. Block order is preserved and messages are joined in order, so a
 /// `cache_control` marker still sits on exactly the block it was placed on.
-/// `_anthropic_push_tool_result`'s grouping becomes a special case of this.
-function _anthropic_render_messages(msgs: AnthropicMessage[]) -> AnthMessageParam[] {
+/// `_push_tool_result`'s grouping becomes a special case of this.
+function _render_messages(msgs: Message[]) -> AnthMessageParam[] {
     let out: AnthMessageParam[] = [];
     for (let m in msgs) {
         if let last: AnthMessageParam = out.at(out.length() - 1) {
@@ -556,8 +549,8 @@ function _anthropic_render_messages(msgs: AnthropicMessage[]) -> AnthMessagePara
 // client can reuse it verbatim.
 
 /// Everything the body builder needs that is not in ai.ModelTurnInput. A host
-/// that is not `anthropic.AnthropicClient` (Vertex, Bedrock) builds one of these.
-class AnthropicBodyParams {
+/// that is not `anthropic.Client` (Vertex, Bedrock) builds one of these.
+class BodyParams {
     model: string,
     max_tokens: int,
     temperature: float?,
@@ -571,8 +564,8 @@ class AnthropicBodyParams {
     client_id: string,
 }
 
-function _anthropic_body_params(c: root.AnthropicClient) -> AnthropicBodyParams {
-    AnthropicBodyParams {
+function _body_params(c: root.Client) -> BodyParams {
+    BodyParams {
         model: c.model,
         max_tokens: c.max_tokens,
         temperature: c.temperature,
@@ -586,7 +579,7 @@ function _anthropic_body_params(c: root.AnthropicClient) -> AnthropicBodyParams 
     }
 }
 
-function _anthropic_tool_params(toolbox: ai.tools.Toolbox) -> AnthToolParam[] {
+function _tool_params(toolbox: ai.tools.Toolbox) -> AnthToolParam[] {
     let out: AnthToolParam[] = [];
     for (let t in toolbox.list()) {
         out.push(
@@ -601,7 +594,7 @@ function _anthropic_tool_params(toolbox: ai.tools.Toolbox) -> AnthToolParam[] {
     out
 }
 
-function _anthropic_tool_choice_param(choice: root.ToolChoice?) -> AnthToolChoiceParam {
+function _tool_choice_param(choice: root.ToolChoice?) -> AnthToolChoiceParam {
     match (choice) {
         // The API's own default, sent explicitly so the wire shape is stable.
         null => AnthToolChoiceParam { type: "auto", name: null, disable_parallel_tool_use: null },
@@ -615,7 +608,7 @@ function _anthropic_tool_choice_param(choice: root.ToolChoice?) -> AnthToolChoic
     }
 }
 
-function _anthropic_thinking_param(thinking: root.ThinkingConfig?) -> AnthThinkingParam? {
+function _thinking_param(thinking: root.ThinkingConfig?) -> AnthThinkingParam? {
     match (thinking) {
         null => null,
         let t: root.ThinkingConfig => {
@@ -626,21 +619,19 @@ function _anthropic_thinking_param(thinking: root.ThinkingConfig?) -> AnthThinki
 
 /// The typed Messages request for one model turn. Public so a Vertex/Bedrock
 /// client can build the identical body and re-target it.
-function anthropic_messages_request(
-    params: AnthropicBodyParams,
+function messages_request(
+    params: BodyParams,
     input: ai.ModelTurnInput,
     stream: bool,
     preview: bool = false,
-) -> AnthropicMessagesRequest {
+) -> MessagesRequest {
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
-    let lowered_prompt = _anthropic_lower_prompt(prompt, preview = preview);
+    let lowered_prompt = _lower_prompt(prompt, preview = preview);
     let system = lowered_prompt.system;
     let lowered = lowered_prompt.messages;
     // Sanitize BEFORE lowering: foreign-client reasoning, empty turns and
     // orphaned tool calls are repaired once, in ai.wire, for every provider.
-    for (
-        let message in _anthropic_lower_journal(ai.wire.sanitize_for_client(input.journal, params.client_id))
-    ) {
+    for (let message in _lower_journal(ai.wire.sanitize_for_client(input.journal, params.client_id))) {
         lowered.push(message);
     }
 
@@ -656,11 +647,11 @@ function anthropic_messages_request(
     // synthesize the leading user turn the API insists on. Without this the
     // request is a guaranteed 400.
     let synthesize_user = lowered.length() > 0 && first_role != "user" && system.length() == 0;
-    let ordered: AnthropicMessage[] = if (promote_system) {
-        [AnthropicMessage { role: "user", tool_results: false, blocks: system }].concat(lowered)
+    let ordered: Message[] = if (promote_system) {
+        [Message { role: "user", tool_results: false, blocks: system }].concat(lowered)
     } else if (synthesize_user) {
         [
-            AnthropicMessage {
+            Message {
                 role: "user",
                 tool_results: false,
                 blocks: [AnthTextBlock { type: "text", text: "(continue)", cache_control: null }],
@@ -670,7 +661,7 @@ function anthropic_messages_request(
     } else {
         lowered
     };
-    let messages = _anthropic_render_messages(ordered);
+    let messages = _render_messages(ordered);
     if (messages.length() == 0) {
         throw ai.errors.InvalidRequest {
             provider: "anthropic",
@@ -689,12 +680,12 @@ function anthropic_messages_request(
     };
     let has_tools = !input.toolbox.is_empty();
     let tool_params: AnthToolParam[]? = if (has_tools) {
-        _anthropic_tool_params(input.toolbox)
+        _tool_params(input.toolbox)
     } else {
         null
     };
     let choice: AnthToolChoiceParam? = if (has_tools) {
-        _anthropic_tool_choice_param(params.tool_choice)
+        _tool_choice_param(params.tool_choice)
     } else {
         null
     };
@@ -703,7 +694,7 @@ function anthropic_messages_request(
     } else {
         null
     };
-    AnthropicMessagesRequest {
+    MessagesRequest {
         model: params.model,
         max_tokens: params.max_tokens,
         system: system_param,
@@ -714,20 +705,20 @@ function anthropic_messages_request(
         top_p: params.top_p,
         top_k: params.top_k,
         stop_sequences: params.stop_sequences,
-        thinking: _anthropic_thinking_param(params.thinking),
+        thinking: _thinking_param(params.thinking),
         stream: stream_flag,
     }
 }
 
 /// The serialized request body: typed request -> json -> drop unset optionals
 /// -> deep-merge the caller's `request_body` passthrough (LAST, per P0.3).
-function anthropic_messages_body(
-    params: AnthropicBodyParams,
+function messages_body(
+    params: BodyParams,
     input: ai.ModelTurnInput,
     stream: bool,
     preview: bool = false,
 ) -> string {
-    let request = anthropic_messages_request(params, input, stream, preview = preview);
+    let request = messages_request(params, input, stream, preview = preview);
     let base = _anth_drop_nulls(baml.json.to_json(request));
     baml.json.stringify(ai.wire.merge_request_body(base, params.request_body))
 }
@@ -737,7 +728,7 @@ function anthropic_messages_body(
 
 /// (internal) `?a=1&b=2` for the client's query_params, or "" when there are none.
 /// Values are used verbatim: the stdlib has no percent-encoder yet.
-function _anthropic_query_suffix(query_params: map<string, string>?) -> string {
+function _query_suffix(query_params: map<string, string>?) -> string {
     match (query_params) {
         null => "",
         let params: map<string, string> => {
@@ -758,7 +749,7 @@ function _anthropic_query_suffix(query_params: map<string, string>?) -> string {
 /// `anthropic-beta` (and `anthropic-dangerous-direct-browser-access`, which the
 /// WASM playground needs) are reachable and `anthropic-version` is overridable;
 /// `x-api-key` is applied last so a stray header cannot break authentication.
-function _anthropic_headers(c: root.AnthropicClient, preview: bool = false) -> map<string, string> {
+function _headers(c: root.Client, preview: bool = false) -> map<string, string> {
     let headers: map<string, string> = { "anthropic-version": "2023-06-01", "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
         for (let key in extra.keys()) {
@@ -773,8 +764,8 @@ function _anthropic_headers(c: root.AnthropicClient, preview: bool = false) -> m
 
 /// (internal) The shared request builder: identical body for both paths, plus the
 /// `stream: true` flag on the streaming one.
-function _anthropic_request(
-    c: root.AnthropicClient,
+function _request(
+    c: root.Client,
     input: ai.ModelTurnInput,
     stream: bool,
     preview: bool = false,
@@ -782,21 +773,21 @@ function _anthropic_request(
     let base = c.resolved_base_url() ?? "https://api.anthropic.com";
     baml.http.Request {
         method: "POST",
-        url: `${base}/v1/messages${_anthropic_query_suffix(c.query_params)}`,
-        headers: _anthropic_headers(c, preview = preview),
-        body: anthropic_messages_body(_anthropic_body_params(c), input, stream, preview = preview),
+        url: `${base}/v1/messages${_query_suffix(c.query_params)}`,
+        headers: _headers(c, preview = preview),
+        body: messages_body(_body_params(c), input, stream, preview = preview),
     }
 }
 
 /// The request one `invoke` would send, for tests and for debugging.
-function anthropic_render(c: root.AnthropicClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _anthropic_request(c, input, false, preview = false)
+function render(c: root.Client, input: ai.ModelTurnInput) -> baml.http.Request {
+    _request(c, input, false, preview = false)
 }
 
 /// The request one `render` would send. URL media remains a URL reference;
 /// local files are rejected before any filesystem read.
-function anthropic_preview(c: root.AnthropicClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _anthropic_request(c, input, false, preview = true)
+function preview(c: root.Client, input: ai.ModelTurnInput) -> baml.http.Request {
+    _request(c, input, false, preview = true)
 }
 
 /// (internal) One wire stop_reason string -> the canonical stop reason.
@@ -806,7 +797,7 @@ function anthropic_preview(c: root.AnthropicClient, input: ai.ModelTurnInput) ->
 /// and anything Anthropic ships next are TRUNCATIONS, so they map to MaxTokens
 /// (the runner's "incomplete answer" outcome) rather than silently reporting a
 /// truncated candidate as a successful completion.
-function _anthropic_stop_reason(s: string) -> ai.content.StopReason {
+function _stop_reason(s: string) -> ai.content.StopReason {
     match (s) {
         "end_turn" | "stop_sequence" => ai.content.StopReason.Complete,
         "tool_use" => ai.content.StopReason.ToolUse,
@@ -817,7 +808,7 @@ function _anthropic_stop_reason(s: string) -> ai.content.StopReason {
 }
 
 /// One decoded response -> canonical content blocks, stop reason and usage.
-function anthropic_parse(resp: AnthropicResponse) -> ai.ModelTurn {
+function parse(resp: Response) -> ai.ModelTurn {
     let content: ai.content.Block[] = [];
     for (let b in resp.content) {
         match (b.type) {
@@ -848,11 +839,11 @@ function anthropic_parse(resp: AnthropicResponse) -> ai.ModelTurn {
 
     let stop = match (resp.stop_reason) {
         null => ai.content.StopReason.Complete,
-        let s: string => _anthropic_stop_reason(s),
+        let s: string => _stop_reason(s),
     };
 
     let usage: ai.events.Usage? = match (resp.usage) {
-        let u: AnthropicUsage => {
+        let u: Usage => {
             ai.events.Usage {
                 input_tokens: u.input_tokens ?? 0,
                 output_tokens: u.output_tokens ?? 0,
@@ -872,16 +863,16 @@ function anthropic_parse(resp: AnthropicResponse) -> ai.ModelTurn {
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
-function invoke(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let req = _anthropic_request(c, input, false, preview = false);
-    let sent = ai.wire.send_as_with_wire<AnthropicResponse>(
+function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
+    let req = _request(c, input, false, preview = false);
+    let sent = ai.wire.send_as_with_wire<Response>(
         req,
         "anthropic",
         c.id(),
         capture_wire = c.capture_wire,
         request_timeout_ms = c.request_timeout_ms,
     );
-    let turn = anthropic_parse(sent.value);
+    let turn = parse(sent.value);
     ai.ModelTurn { ...turn, calls: [sent.call] }
 }
 
@@ -897,7 +888,7 @@ function invoke(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.ModelTu
 // not be mistaken for a short but successful turn.
 
 /// Streaming usage objects carry only some fields per event, so every field
-/// is optional (unlike the non-streaming AnthropicUsage).
+/// is optional (unlike the non-streaming Usage).
 class AnthStreamUsage {
     input_tokens: int?,
     output_tokens: int?,
@@ -957,7 +948,7 @@ class AnthStreamToolCall {
     args_json: string,
 }
 
-/// What a stream carried that `ai.stream.StreamEvent` cannot yet express:
+/// What a stream carried that `ai.stream.Event` cannot yet express:
 /// tool calls, extended thinking, cache-token counts and the raw stop reason.
 /// The decoder folds them here so nothing is silently dropped; wiring them to
 /// the consumer needs the stdlib extensions listed in the workstream report.
@@ -1055,9 +1046,9 @@ function _anth_stream_failure(error: AnthStreamError?, raw: string) -> ai.errors
 }
 
 /// One `SseStream.next()` batch -> provider-agnostic stream events, folding
-/// everything StreamEvent cannot carry into `state`.
-function anthropic_decode_batch(batch: string, state: AnthStreamState) -> ai.stream.StreamEvent[] {
-    let out: ai.stream.StreamEvent[] = [];
+/// everything Event cannot carry into `state`.
+function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[] {
+    let out: ai.stream.Event[] = [];
     for (let raw in ai.stream.decode_sse_batch(batch)) {
         if let data: string = raw.data {
             let ev: AnthStreamEvent? = baml.json.from_string<AnthStreamEvent>(data) catch_all (e) {
@@ -1179,7 +1170,7 @@ function anthropic_decode_batch(batch: string, state: AnthStreamState) -> ai.str
                             null => null,
                             let s: string => {
                                 state.stop_reason_raw = s;
-                                _anthropic_stop_reason(s)
+                                _stop_reason(s)
                             },
                         };
                         out.push(
@@ -1215,7 +1206,7 @@ function anthropic_decode_batch(batch: string, state: AnthStreamState) -> ai.str
 /// Recover the status and route it through the SAME classifier the non-streaming
 /// path uses: a 400 or 401 must never come back as a retry-safe NetworkFailure,
 /// or ai.clients.Retry cheerfully replays a request that can never succeed.
-function _anthropic_sse_failure(message: string) -> ai.errors.Failure {
+function _sse_failure(message: string) -> ai.errors.Failure {
     let prefix = "SSE request failed with status ";
     if (message.starts_with(prefix)) {
         let rest = message.slice(prefix.length(), message.length());
@@ -1240,25 +1231,25 @@ function _anthropic_sse_failure(message: string) -> ai.errors.Failure {
     }
 }
 
-function _anthropic_stream_open_failure(error: baml.errors.Io | baml.errors.Timeout) -> never {
+function _stream_open_failure(error: baml.errors.Io | baml.errors.Timeout) -> never {
     match (error) {
         let timeout: baml.errors.Timeout => throw timeout,
-        let io: baml.errors.Io => throw _anthropic_sse_failure(io.message),
+        let io: baml.errors.Io => throw _sse_failure(io.message),
     }
 }
 
 /// The streaming entry point: the same request as `invoke` with
 /// `stream: true`, wrapped in an ai.TurnStream over the SSE connection.
-function invoke_stream(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-    let req = _anthropic_request(c, input, true, preview = false);
+function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+    let req = _request(c, input, true, preview = false);
     let started = baml.time.Instant.now();
     let sse = baml.http.fetch_sse(
         req,
         timeout = baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
         first_event_timeout = baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
     ) catch (e) {
-        baml.errors.Io => _anthropic_stream_open_failure(e),
-        baml.errors.Timeout => _anthropic_stream_open_failure(e),
+        baml.errors.Io => _stream_open_failure(e),
+        baml.errors.Timeout => _stream_open_failure(e),
     };
     let state = AnthStreamState.new();
     // `require_terminal`: the Messages stream ends with an explicit
@@ -1269,7 +1260,7 @@ function invoke_stream(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.
     let stream = ai.stream.TurnStream.from_sse(
         sse,
         (batch: string) -> {
-            anthropic_decode_batch(batch, state) catch_all (e) {
+            decode_batch(batch, state) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         },

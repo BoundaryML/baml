@@ -2,26 +2,26 @@
 type json = null | bool | int | float | string | json[] | map<string, json>;
 
 /// Thrown when a JSON string cannot be parsed (syntax error).
-class JsonParseError {
+class ParseError {
     message: string,
 }
 
 /// Thrown when a parsed JSON value does not match the expected BAML type.
-class JsonDecodeError {
+class DecodeError {
     message: string,
     path: string,
 }
 
 /// Thrown when a BAML value cannot be serialized to JSON.
-class JsonSerializationError {
+class SerializationError {
     message: string,
     path: string,
     reason: string,
 }
 
 //baml:mut_vm
-/// Parses a JSON string `s` and returns a `json` value. Throws `JsonParseError` on invalid JSON.
-function parse(s: string) -> json throws JsonParseError {
+/// Parses a JSON string `s` and returns a `json` value. Throws `ParseError` on invalid JSON.
+function parse(s: string) -> json throws ParseError {
     $rust_function
 }
 
@@ -40,9 +40,9 @@ function stringify_pretty(j: json) -> string throws never {
 /// Serialize any BAML value to its canonical JSON string, dispatching on the
 /// value's runtime type and honoring `baml.ToJson` overrides at every depth.
 ///
-/// Throws `JsonSerializationError` for non-representable types
+/// Throws `SerializationError` for non-representable types
 /// (`uint8array` without explicit encoding, function values, etc.).
-function to_string(value: unknown) -> string throws JsonSerializationError {
+function to_string(value: unknown) -> string throws SerializationError {
     stringify(to_json(value))
 }
 
@@ -63,7 +63,7 @@ function to_string(value: unknown) -> string throws JsonSerializationError {
 /// `Array<T>.to_json`, etc.
 //baml:mut_vm
 //baml:may_yield
-function to_json(value: unknown) -> json throws JsonSerializationError {
+function to_json(value: unknown) -> json throws SerializationError {
     $rust_function
 }
 
@@ -79,9 +79,9 @@ function to_json(value: unknown) -> json throws JsonSerializationError {
 /// `string.from` uses `_to_string_shim` rather than the literal `is baml.ToJson`
 /// match form.
 ///
-/// Throws `JsonSerializationError` for non-representable values (`uint8array`
+/// Throws `SerializationError` for non-representable values (`uint8array`
 /// without explicit encoding, function values, etc.).
-function from<T>(value: T) -> json throws JsonSerializationError {
+function from<T>(value: T) -> json throws SerializationError {
     root._to_json_shim(value)
 }
 
@@ -92,10 +92,10 @@ function from<T>(value: T) -> json throws JsonSerializationError {
 /// `serde_json`, then runs SAP's coercer against the runtime `Ty` to produce
 /// a typed value.
 ///
-/// Throws `JsonParseError` if the string is not valid JSON, or
-/// `JsonDecodeError` if the parsed JSON does not match `T`.
+/// Throws `ParseError` if the string is not valid JSON, or
+/// `DecodeError` if the parsed JSON does not match `T`.
 //baml:mut_vm
-function from_string<T>(s: string) -> T throws JsonParseError | JsonDecodeError {
+function from_string<T>(s: string) -> T throws ParseError | DecodeError {
     $rust_function
 }
 
@@ -118,11 +118,11 @@ function from_string<T>(s: string) -> T throws JsonParseError | JsonDecodeError 
 /// - Primitives, enums, media, type-aliases: structural decode equivalent
 ///   to `from_string<T>(stringify(j))`.
 ///
-/// Throws `JsonDecodeError` on shape mismatch (decoding an already-parsed
-/// `json` value never re-parses, so no `JsonParseError` arises here).
+/// Throws `DecodeError` on shape mismatch (decoding an already-parsed
+/// `json` value never re-parses, so no `ParseError` arises here).
 //baml:mut_vm
 //baml:may_yield
-function from_json<T>(j: json) -> T throws JsonDecodeError {
+function from_json<T>(j: json) -> T throws DecodeError {
     $rust_function
 }
 
@@ -137,11 +137,11 @@ function from_json<T>(j: json) -> T throws JsonDecodeError {
 /// is constructed via its override; everything else decodes structurally
 /// (per-field, walking lists/maps/optionals and honoring nested overrides).
 ///
-/// Throws `JsonDecodeError` on shape mismatch (decoding an already-parsed
-/// `json` value never re-parses, so no `JsonParseError` arises here).
+/// Throws `DecodeError` on shape mismatch (decoding an already-parsed
+/// `json` value never re-parses, so no `ParseError` arises here).
 //baml:mut_vm
 //baml:may_yield
-function to<T>(j: json) -> T throws JsonDecodeError {
+function to<T>(j: json) -> T throws DecodeError {
     root._from_json_shim<T>(j)
 }
 
@@ -158,21 +158,21 @@ function field(j: json, key: string) -> json throws never {
 
 /// A missing field, shape mismatch, out-of-bounds index, malformed selector,
 /// or leaf that does not coerce to the requested type.
-class JsonPathError {
+class PathError {
     message: string,
     selector: string,
 }
 
-function _path_field(current: json, key: string, selector: string) -> json throws JsonPathError {
+function _path_field(current: json, key: string, selector: string) -> json throws PathError {
     match (current) {
         let m: map<string, json> => {
             if (!m.has(key)) {
-                throw JsonPathError { message: "missing field '" + key + "'", selector: selector };
+                throw PathError { message: "missing field '" + key + "'", selector: selector };
             }
             m.get(key)
         },
         _ => {
-            throw JsonPathError {
+            throw PathError {
       message: "field access '." + key + "' on a non-object",
       selector: selector,
     }
@@ -180,11 +180,11 @@ function _path_field(current: json, key: string, selector: string) -> json throw
     }
 }
 
-function _path_index(current: json, idx: int, selector: string) -> json throws JsonPathError {
+function _path_index(current: json, idx: int, selector: string) -> json throws PathError {
     match (current) {
         let arr: json[] => {
             if (idx < 0 || idx >= arr.length()) {
-                throw JsonPathError {
+                throw PathError {
           message: "index [" + idx.to_string() + "] out of bounds (length " + arr.length().to_string() + ")",
           selector: selector,
         };
@@ -192,7 +192,7 @@ function _path_index(current: json, idx: int, selector: string) -> json throws J
             arr.at(idx)
         },
         _ => {
-            throw JsonPathError {
+            throw PathError {
       message: "index [" + idx.to_string() + "] on a non-array",
       selector: selector,
     }
@@ -203,9 +203,9 @@ function _path_index(current: json, idx: int, selector: string) -> json throws J
 /// Navigate a jq-style selector into a JSON value and coerce the leaf to `T`.
 /// Selectors start with `.` or `[`. Dot and quoted-bracket steps address object
 /// fields; integer bracket steps address arrays.
-function path<T>(j: json, selector: string) -> T throws JsonPathError {
+function path<T>(j: json, selector: string) -> T throws PathError {
     if (!(selector.starts_with(".") || selector.starts_with("["))) {
-        throw JsonPathError {
+        throw PathError {
       message: "selector must start with '.' or '[' (jq style), got '" + selector + "'",
       selector: selector,
     };
@@ -231,7 +231,7 @@ function path<T>(j: json, selector: string) -> T throws JsonPathError {
         }
 
         if (marker != "[") {
-            throw JsonPathError {
+            throw PathError {
         message: "expected '.' or '[' at offset " + i.to_string(),
         selector: selector,
       };
@@ -239,7 +239,7 @@ function path<T>(j: json, selector: string) -> T throws JsonPathError {
 
         i += 1;
         if (i >= selector.length()) {
-            throw JsonPathError { message: "unterminated '[' segment", selector: selector };
+            throw PathError { message: "unterminated '[' segment", selector: selector };
         }
 
         let first = selector.slice(i, i + 1);
@@ -252,7 +252,7 @@ function path<T>(j: json, selector: string) -> T throws JsonPathError {
                 let ch = selector.slice(i, i + 1);
                 if (ch == "\\") {
                     if (i + 1 >= selector.length()) {
-                        throw JsonPathError { message: "unterminated escape in quoted bracket key", selector: selector };
+                        throw PathError { message: "unterminated escape in quoted bracket key", selector: selector };
                     }
                     key = key + selector.slice(i + 1, i + 2);
                     i += 2;
@@ -267,7 +267,7 @@ function path<T>(j: json, selector: string) -> T throws JsonPathError {
                 i += 1;
             }
             if (!closed || i >= selector.length() || selector.slice(i, i + 1) != "]") {
-                throw JsonPathError { message: "unterminated quoted bracket key", selector: selector };
+                throw PathError { message: "unterminated quoted bracket key", selector: selector };
             }
             i += 1;
             current = _path_field(current, key, selector);
@@ -279,20 +279,20 @@ function path<T>(j: json, selector: string) -> T throws JsonPathError {
             i += 1;
         }
         if (i >= selector.length()) {
-            throw JsonPathError { message: "unterminated '[' segment", selector: selector };
+            throw PathError { message: "unterminated '[' segment", selector: selector };
         }
         let token = selector.slice(start, i);
         i += 1;
         let idx = int.parse(token) catch (_) {
             root.errors.ParseError => {
-                throw JsonPathError { message: "bad bracket token '[" + token + "]'", selector: selector };
+                throw PathError { message: "bad bracket token '[" + token + "]'", selector: selector };
             },
         };
         current = _path_index(current, idx, selector);
     }
     to<T>(current) catch (_) {
-        JsonDecodeError => {
-            throw JsonPathError {
+        DecodeError => {
+            throw PathError {
       message: "leaf does not coerce to the requested type",
       selector: selector,
     }
@@ -303,7 +303,7 @@ function path<T>(j: json, selector: string) -> T throws JsonPathError {
 /// Return `default` when [`path`] cannot resolve or coerce the selected value.
 function path_or<T>(j: json, selector: string, default: T) -> T throws never {
     path<T>(j, selector) catch (_) {
-        JsonPathError => default,
+        PathError => default,
     }
 }
 
@@ -335,7 +335,7 @@ function schema(t: reflect.Type) -> json throws root.errors.Unsupported {
 /// instead of two, and a place to evolve the override semantics if they
 /// drift. Remove this if the host gains a direct way to invoke generic
 /// compositions without a named landing pad.
-function serialize<T>(v: T) -> string throws JsonSerializationError {
+function serialize<T>(v: T) -> string throws SerializationError {
     to_string(v)
 }
 
@@ -354,6 +354,6 @@ function serialize<T>(v: T) -> string throws JsonSerializationError {
 /// through `from_json<T>(parse(s))`. Inlining the composition into the
 /// Rust caller would mean threading two generic engine calls + their
 /// throws-types instead of one, so the wrapper pays for itself.
-function deserialize<T>(s: string) -> T throws JsonParseError | JsonDecodeError {
+function deserialize<T>(s: string) -> T throws ParseError | DecodeError {
     from_json<T>(parse(s))
 }

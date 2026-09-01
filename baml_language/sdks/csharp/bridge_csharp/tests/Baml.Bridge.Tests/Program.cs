@@ -2441,7 +2441,7 @@ internal static unsafe class Program
         Expect<BamlProtocolException>(() =>
             _ = handleContext.ReadHandle(exactHandle, "baml.glob.Glob", globMetadata));
 
-        var rowsClass = new BamlTyClass { Name = "baml.csv.CsvRows" };
+        var rowsClass = new BamlTyClass { Name = "baml.csv.Rows" };
         rowsClass.TypeArgs.Add(PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString));
         var rowsEnvelope = new BamlOutboundResult
         {
@@ -2459,7 +2459,7 @@ internal static unsafe class Program
             PrimitiveProtocol.DecodeCallResult(rowsEnvelope.ToByteArray(), "rows", api))
             .As<Baml.BamlHandle>();
         Require(
-            rows.Type.Fqn == "baml.csv.CsvRows"
+            rows.Type.Fqn == "baml.csv.Rows"
                 && rows.Type.Arguments.Count == 1
                 && rows.Type.Arguments[0].Kind == BamlTypeDescriptorKind.String,
             "generic opaque-resource descriptor arguments were dropped");

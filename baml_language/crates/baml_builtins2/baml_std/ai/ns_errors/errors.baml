@@ -31,9 +31,9 @@ type RaisedInClient = InvokeError
     | baml.errors.InvalidArgument
     | baml.errors.Io
     | baml.errors.ParseError
-    | baml.json.JsonSerializationError
-    | baml.json.JsonParseError
-    | baml.json.JsonDecodeError
+    | baml.json.SerializationError
+    | baml.json.ParseError
+    | baml.json.DecodeError
     | baml.errors.AccessError
     | baml.errors.Unsupported;
 
@@ -41,11 +41,11 @@ type RaisedInClient = InvokeError
 /// UnknownError here: each raw infrastructure type maps to a typed Failure,
 /// and UnknownError only passes through when a host boundary already
 /// produced one. Classifications:
-///   InvalidArgument / ParseError / JsonSerializationError / AccessError /
+///   InvalidArgument / ParseError / baml.json.SerializationError / AccessError /
 ///   Unsupported -> InvalidRequest
 ///     (request construction or client configuration bug; not retryable)
 ///   Io -> NetworkFailure (transport-adjacent; safely retryable)
-///   JsonParseError / JsonDecodeError -> NetworkFailure
+///   baml.json.ParseError / baml.json.DecodeError -> NetworkFailure
 ///     (malformed provider wire payload; safely retryable)
 ///   Timeout / Cancelled / CompilationError / Failure / UnknownError -> as-is
 function normalize(error: RaisedInClient) -> InvokeError throws never {
@@ -76,7 +76,7 @@ function normalize(error: RaisedInClient) -> InvokeError throws never {
                 raw_body: null,
             }
         },
-        let serialize: baml.json.JsonSerializationError => {
+        let serialize: baml.json.SerializationError => {
             InvalidRequest {
                 provider: "client",
                 status_code: null,
@@ -108,7 +108,7 @@ function normalize(error: RaisedInClient) -> InvokeError throws never {
                 raw_body: null,
             }
         },
-        let json_parse: baml.json.JsonParseError => {
+        let json_parse: baml.json.ParseError => {
             NetworkFailure {
                 status_code: null,
                 provider: "client",
@@ -116,7 +116,7 @@ function normalize(error: RaisedInClient) -> InvokeError throws never {
                 raw_body: null,
             }
         },
-        let json_decode: baml.json.JsonDecodeError => {
+        let json_decode: baml.json.DecodeError => {
             NetworkFailure {
                 status_code: null,
                 provider: "client",

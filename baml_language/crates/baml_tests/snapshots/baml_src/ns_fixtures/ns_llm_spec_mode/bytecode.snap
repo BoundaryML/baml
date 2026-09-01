@@ -98,7 +98,7 @@ function fixtures.llm_spec_mode.NamedTools$spec(q: string) -> ai.FunctionSpec<fi
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call anthropic.AnthropicClient.new
+    call anthropic.Client.new
     store_var _6
     load_const "NamedTools"
     load_deref ?1

@@ -1,7 +1,7 @@
 /// One Gemini safety filter setting, in the API's own spelling — pass a list
 /// of these as a client's `safety_settings`:
 ///
-///     google.GoogleClient.new(
+///     google.GeminiClient.new(
 ///         model = "gemini-2.5-flash",
 ///         safety_settings = [
 ///             google.SafetySetting.new("HARM_CATEGORY_DANGEROUS_CONTENT", "BLOCK_ONLY_HIGH"),
@@ -32,7 +32,7 @@ class SafetySetting {
 /// auth scheme and billing account behind an ambient env var is a footgun. Use
 /// the enterprise backend by naming it: `google.VertexClient.new(...)`, or the
 /// `"vertex/<model>"` client shorthand.
-class GoogleClient {
+class GeminiClient {
     model: string,
     // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
     // time), or null to resolve GOOGLE_API_KEY at request time. Construction
@@ -86,8 +86,8 @@ class GoogleClient {
         response_modalities: string[]? = null,
         safety_settings: SafetySetting[]? = null,
         capture_wire: bool = true,
-    ) -> GoogleClient {
-        GoogleClient {
+    ) -> GeminiClient {
+        GeminiClient {
             model: model,
             api_key: api_key,
             base_url: base_url,
@@ -133,7 +133,7 @@ class GoogleClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            google.internal.google_preview(self, input) catch_all (e) {
+            google.internal.preview(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

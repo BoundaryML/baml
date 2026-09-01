@@ -1,17 +1,17 @@
 // BEP-060: CSV standard library.
 //
-// Streaming `CsvReader` / `CsvWriter` handles built around `baml.iter.Iterator`
+// Streaming `Reader` / `Writer` handles built around `baml.iter.Iterator`
 // (BEP-051), with typed decode (`rows<T>`, `decode<T>`, `read<T>`) using the
 // same column-matching rules family as `baml.json` (BEP-038) and structured,
-// positional `CsvError` throws.
+// positional `Error` throws.
 //
 // The streaming reader is the only parser; every one-shot is a wrapper over
 // it. File IO goes through `baml.fs` handles: the reader pumps chunks via
 // `baml.io.Read` from thin BAML method bodies, while all tokenization,
 // decoding, and encoding is native.
 
-/// Classifies a `CsvError` for portable handling.
-enum CsvErrorKind {
+/// Classifies a `Error` for portable handling.
+enum ErrorKind {
     /// Invalid configuration, or an operation the handle does not support.
     Options,
     /// Unterminated or stray quote in a record.
@@ -38,8 +38,8 @@ enum CsvErrorKind {
 ///
 /// `kind` is for portable handling; `line` / `record` / `field` / `column`
 /// make "row 41,283 has 7 fields, expected 8" diagnostics cheap.
-class CsvError {
-    kind: CsvErrorKind,
+class Error {
+    kind: ErrorKind,
     message: string,
     /// 1-based line in the source where the offending record starts.
     line: int?,
@@ -56,7 +56,7 @@ class CsvError {
 }
 
 /// A position in a CSV source.
-class CsvPosition {
+class Position {
     /// 0-based byte offset into the source.
     byte: int,
     /// 1-based line number.
@@ -68,7 +68,7 @@ class CsvPosition {
 /// Options for CSV readers. All fields are optional; `null` means default.
 ///
 /// `delimiter`, `quote`, `escape`, and `comment` must be single ASCII bytes
-/// and mutually distinct; violations throw `CsvError { kind: Options }` at
+/// and mutually distinct; violations throw `Error { kind: Options }` at
 /// construction.
 class ReaderOptions {
     /// Field separator. Exactly one ASCII byte. Default `","` (`"\t"` for TSV).
@@ -111,13 +111,13 @@ class ReaderOptions {
     /// first header name.
     bom: ("strip" | "keep")?,
     /// Per-record error policy. `"throw"` (default): `next()` throws a
-    /// `CsvError` for a malformed record and the reader resumes at the next
+    /// `Error` for a malformed record and the reader resumes at the next
     /// record. `"skip"`: record-scoped errors are counted and skipped.
     on_error: ("throw" | "skip")?,
-    /// Observer invoked with each skipped record's `CsvError` when
+    /// Observer invoked with each skipped record's `Error` when
     /// `on_error = "skip"`. Constant-memory alternative to `skipped()`.
-    on_skip: ((CsvError) -> null throws never)?,
-    /// How many skipped `CsvError` values `skipped()` retains. Default 1000.
+    on_skip: ((Error) -> null throws never)?,
+    /// How many skipped `Error` values `skipped()` retains. Default 1000.
     /// `0` disables retention. `skipped_count()` stays exact regardless.
     max_skipped: int?,
     /// Stop after this many data records. Default unlimited.
@@ -154,47 +154,47 @@ class WriterOptions {
 }
 
 /// The cell value model for raw record writes.
-type CsvValue = null | bool | int | bigint | float | string;
+type Value = null | bool | int | bigint | float | string;
 
 /// (internal) Marker: the reader needs more input bytes before it can make
 /// progress. Do not use directly.
-class _CsvNeedData {
+class _NeedData {
 }
 
 /// (internal) Marker: a record was skipped under `on_error = "skip"`.
 /// Do not use directly.
-class _CsvSkip {
-    error: CsvError,
+class _Skip {
+    error: Error,
 }
 
 /// (internal) Marker: resolved header names (`null` when there are none).
 /// Do not use directly.
-class _CsvHeaders {
+class _Headers {
     names: string[]?,
 }
 
-/// One raw CSV record. Yielded by iterating a `CsvReader`.
+/// One raw CSV record. Yielded by iterating a `Reader`.
 ///
 /// Records have snapshot semantics: they remain valid after the reader
 /// advances. Cell access is lazy — `get<int>("amount")` converts one cell
 /// without touching the others.
-class CsvRecord {
+class Record {
     _handle: $rust_type,
 
     /// Converts the cell under header `column` to `T`.
     ///
     /// Returns `null` for a column name absent from the headers, a missing
-    /// cell, or a null cell. Throws `CsvError { kind: Decode }` when a cell
-    /// exists but cannot convert to `T`, and `CsvError { kind: Header }` when
+    /// cell, or a null cell. Throws `Error { kind: Decode }` when a cell
+    /// exists but cannot convert to `T`, and `Error { kind: Header }` when
     /// the name is duplicated in the header or when name-based access is used
     /// with no headers at all.
-    function get<T>(self, column: string) -> T? throws CsvError {
+    function get<T>(self, column: string) -> T? throws Error {
         _cell_by_name<T>(self, column)
     }
 
     /// Converts the cell at `index` to `T`. Returns `null` for a missing or
-    /// null cell; throws `CsvError { kind: Decode }` on conversion failure.
-    function get_at<T>(self, index: int) -> T? throws CsvError {
+    /// null cell; throws `Error { kind: Decode }` on conversion failure.
+    function get_at<T>(self, index: int) -> T? throws Error {
         _cell_by_index<T>(self, index)
     }
 
@@ -212,21 +212,21 @@ class CsvRecord {
 
     /// The position of the start of this record in the source.
     //baml:mut_vm
-    function position(self) -> CsvPosition throws never {
+    function position(self) -> Position throws never {
         $rust_function
     }
 
     /// Applies the full typed-decode rules to this one record — useful for
     /// routing heterogeneous rows. Always throws on failure, regardless of
     /// the reader's `on_error` policy.
-    function decode<T>(self) -> T throws CsvError {
+    function decode<T>(self) -> T throws Error {
         _decode_record<T>(self)
     }
 
     /// The record as a header-name → cell-text map. Throws
-    /// `CsvError { kind: Header }` when headers are unavailable or duplicated.
+    /// `Error { kind: Header }` when headers are unavailable or duplicated.
     //baml:mut_vm
-    function to_map(self) -> map<string, string> throws CsvError {
+    function to_map(self) -> map<string, string> throws Error {
         $rust_function
     }
 }
@@ -234,7 +234,7 @@ class CsvRecord {
 /// A streaming CSV reader. Create one with `baml.csv.open` or
 /// `baml.csv.reader`.
 ///
-/// `CsvReader` is a lazy iterator over `CsvRecord` values: a multi-gigabyte
+/// `Reader` is a lazy iterator over `Record` values: a multi-gigabyte
 /// file parses in constant memory, and every `baml.iter` adapter and default
 /// method (`map`, `filter`, `collect`, ...) works on it. There is one
 /// cursor; raw iteration, `rows<T>()`, and `headers()` all draw from the
@@ -243,48 +243,48 @@ class CsvRecord {
 /// A thrown record error has already consumed the offending record: the
 /// parser resynchronizes at the next record boundary and the next call to
 /// `next()` continues. One corrupt cell costs exactly one record.
-class CsvReader {
+class Reader {
     _handle: $rust_type,
     _file: root.fs.File?,
-    _on_skip: ((CsvError) -> null throws never)?,
+    _on_skip: ((Error) -> null throws never)?,
     _owns_file: bool,
 
     implements root.iter.Iterable {
-        type Item = root.csv.CsvRecord
-        type Error = root.csv.CsvError | root.errors.Io
+        type Item = root.csv.Record
+        type Error = root.csv.Error | root.errors.Io
 
         function iter(
             self,
-        ) -> root.iter.Iterator<Item = CsvRecord, Error = CsvError | root.errors.Io> throws never {
+        ) -> root.iter.Iterator<Item = Record, Error = root.csv.Error | root.errors.Io> throws never {
             self
         }
     }
 
     implements root.iter.Iterator {
-        type Item = root.csv.CsvRecord
-        type Error = root.csv.CsvError | root.errors.Io
+        type Item = root.csv.Record
+        type Error = root.csv.Error | root.errors.Io
 
-        function next(self) -> CsvRecord | root.iter.Done throws CsvError | root.errors.Io {
+        function next(self) -> Record | root.iter.Done throws Error | root.errors.Io {
             while (true) {
                 match (self._poll()) {
-                    let rec: CsvRecord => {
+                    let rec: Record => {
                         return rec;
                     },
                     let d: root.iter.Done => {
                         return d;
                     },
-                    let s: _CsvSkip => {
+                    let s: _Skip => {
                         match (self._on_skip) {
                             null => null,
-                            let cb: (CsvError) -> null throws never => cb(s.error),
+                            let cb: (Error) -> null throws never => cb(s.error),
                         };
                     },
-                    _CsvNeedData => {
+                    _NeedData => {
                         self._read_chunk();
                     },
                 }
             }
-            root.sys.panic("unreachable: CsvReader.next loop ended")
+            root.sys.panic("unreachable: Reader.next loop ended")
         }
     }
 
@@ -296,38 +296,38 @@ class CsvReader {
     /// exhaust the reader: without a trustworthy header every subsequent
     /// name-to-column mapping would be silently wrong, so the stream ends
     /// rather than mis-mapping a million rows.
-    function headers(self) -> string[]? throws CsvError | root.errors.Io {
+    function headers(self) -> string[]? throws Error | root.errors.Io {
         while (true) {
             match (self._poll_headers()) {
-                let h: _CsvHeaders => {
+                let h: _Headers => {
                     return h.names;
                 },
-                _CsvNeedData => {
+                _NeedData => {
                     self._read_chunk();
                 },
             }
         }
-        root.sys.panic("unreachable: CsvReader.headers loop ended")
+        root.sys.panic("unreachable: Reader.headers loop ended")
     }
 
     /// A typed iterator over the remaining records, decoding each into `T`.
     ///
     /// Validates eagerly: reads the header if necessary and checks that every
     /// non-optional field of `T` is satisfiable, throwing
-    /// `CsvError { kind: Header }` at the call site rather than on the
+    /// `Error { kind: Header }` at the call site rather than on the
     /// millionth row.
     function rows<T>(
         self,
-    ) -> root.iter.Iterator<Item = T, Error = CsvError | root.errors.Io> throws CsvError | root.errors.Io {
+    ) -> root.iter.Iterator<Item = T, Error = Error | root.errors.Io> throws Error | root.errors.Io {
         self.headers();
         _validate_columns<T>(self);
-        CsvRows<T> { reader: self }
+        Rows<T> { reader: self }
     }
 
-    /// The first `max_skipped` (default 1,000) `CsvError` values skipped under
+    /// The first `max_skipped` (default 1,000) `Error` values skipped under
     /// `on_error = "skip"`.
     //baml:mut_vm
-    function skipped(self) -> CsvError[] throws never {
+    function skipped(self) -> Error[] throws never {
         $rust_function
     }
 
@@ -340,7 +340,7 @@ class CsvReader {
     /// The position of the start of the next unread record. Its `record`
     /// field counts all data records consumed so far, including skipped ones.
     //baml:mut_vm
-    function position(self) -> CsvPosition throws never {
+    function position(self) -> Position throws never {
         $rust_function
     }
 
@@ -348,7 +348,7 @@ class CsvReader {
     /// only when the reader owns it (created by `open`); a handle passed to
     /// `reader(file)` stays open — its lifecycle belongs to the caller.
     /// Subsequent `next()`, `headers()`, and `rows<T>()` calls throw
-    /// `CsvError { kind: Closed }`; `skipped()`, `skipped_count()`, and
+    /// `Error { kind: Closed }`; `skipped()`, `skipped_count()`, and
     /// `position()` remain valid. As with `baml.fs.File`, closing is optional:
     /// the GC reclaims unreferenced readers.
     function close(self) -> null throws root.errors.Io {
@@ -366,13 +366,13 @@ class CsvReader {
 
     /// (internal) Advance the native parser by one step.
     //baml:mut_vm
-    function _poll(self) -> CsvRecord | _CsvSkip | _CsvNeedData | root.iter.Done throws CsvError {
+    function _poll(self) -> Record | _Skip | _NeedData | root.iter.Done throws Error {
         $rust_function
     }
 
     /// (internal) Resolve headers, or request more input.
     //baml:mut_vm
-    function _poll_headers(self) -> _CsvHeaders | _CsvNeedData throws CsvError {
+    function _poll_headers(self) -> _Headers | _NeedData throws Error {
         $rust_function
     }
 
@@ -423,38 +423,38 @@ class CsvReader {
     }
 }
 
-/// A typed iterator over a `CsvReader`, decoding each record into `T`.
-/// Create one with `CsvReader.rows<T>()`.
-class CsvRows<T> {
-    reader: CsvReader,
+/// A typed iterator over a `Reader`, decoding each record into `T`.
+/// Create one with `Reader.rows<T>()`.
+class Rows<T> {
+    reader: Reader,
 
     implements root.iter.Iterable {
         type Item = T
-        type Error = root.csv.CsvError | root.errors.Io
+        type Error = root.csv.Error | root.errors.Io
 
         function iter(
             self,
-        ) -> root.iter.Iterator<Item = T, Error = CsvError | root.errors.Io> throws never {
+        ) -> root.iter.Iterator<Item = T, Error = root.csv.Error | root.errors.Io> throws never {
             self
         }
     }
 
     implements root.iter.Iterator {
         type Item = T
-        type Error = root.csv.CsvError | root.errors.Io
+        type Error = root.csv.Error | root.errors.Io
 
-        function next(self) -> T | root.iter.Done throws CsvError | root.errors.Io {
+        function next(self) -> T | root.iter.Done throws Error | root.errors.Io {
             while (true) {
                 match (self.reader.next()) {
                     let d: root.iter.Done => {
                         return d;
                     },
-                    let rec: CsvRecord => {
+                    let rec: Record => {
                         match (_try_decode<T>(rec, self.reader)) {
-                            let s: _CsvSkip => {
+                            let s: _Skip => {
                                 match (self.reader._on_skip) {
                                     null => null,
-                                    let cb: (CsvError) -> null throws never => cb(s.error),
+                                    let cb: (Error) -> null throws never => cb(s.error),
                                 };
                             },
                             let v: T => {
@@ -464,20 +464,20 @@ class CsvRows<T> {
                     },
                 }
             }
-            root.sys.panic("unreachable: CsvRows.next loop ended")
+            root.sys.panic("unreachable: Rows.next loop ended")
         }
     }
 }
 
 /// A streaming CSV writer. Create one with `baml.csv.create`,
 /// `baml.csv.writer`, or `baml.csv.buffer`.
-class CsvWriter {
+class Writer {
     _handle: $rust_type,
     _file: root.fs.File?,
     _owns_file: bool,
 
     /// Writes one raw record. Never triggers an automatic header.
-    function write_record(self, record: CsvValue[]) -> null throws CsvError | root.errors.Io {
+    function write_record(self, record: Value[]) -> null throws Error | root.errors.Io {
         self._emit(self._encode_record(record))
     }
 
@@ -485,20 +485,20 @@ class CsvWriter {
     /// `write_header` is enabled (default) and no header has been written yet,
     /// the header derived from `T`'s field names (or `WriterOptions.headers`)
     /// is emitted first.
-    function write_row<T>(self, row: T) -> null throws CsvError | root.errors.Io {
+    function write_row<T>(self, row: T) -> null throws Error | root.errors.Io {
         self._emit(_encode_row<T>(self, row))
     }
 
     /// Writes many typed rows, as one atomic batch: on a thrown error nothing
     /// from the batch is emitted or counted. Otherwise equivalent to
     /// `write_row<T>` in a loop.
-    function write_rows<T>(self, rows: T[]) -> null throws CsvError | root.errors.Io {
+    function write_rows<T>(self, rows: T[]) -> null throws Error | root.errors.Io {
         self._emit(_encode_rows<T>(self, rows))
     }
 
-    /// Writes an explicit header record. Throws `CsvError { kind: Header }`
+    /// Writes an explicit header record. Throws `Error { kind: Header }`
     /// after data has been written.
-    function write_header(self, names: string[]) -> null throws CsvError | root.errors.Io {
+    function write_header(self, names: string[]) -> null throws Error | root.errors.Io {
         self._emit(self._encode_header(names))
     }
 
@@ -510,9 +510,9 @@ class CsvWriter {
     }
 
     /// The accumulated CSV text. Valid only on `buffer()` writers; throws
-    /// `CsvError { kind: Options }` otherwise.
+    /// `Error { kind: Options }` otherwise.
     //baml:mut_vm
-    function text(self) -> string throws CsvError {
+    function text(self) -> string throws Error {
         $rust_function
     }
 
@@ -525,7 +525,7 @@ class CsvWriter {
     /// Flushes and releases the writer. Idempotent. The underlying file
     /// handle is closed only when the writer owns it (created by `create`); a
     /// handle passed to `writer(file)` stays open — its lifecycle belongs to
-    /// the caller. Writes after close throw `CsvError { kind: Closed }`;
+    /// the caller. Writes after close throw `Error { kind: Closed }`;
     /// `records_written()` remains valid.
     function close(self) -> null throws root.errors.Io {
         self._mark_closed();
@@ -542,13 +542,13 @@ class CsvWriter {
 
     /// (internal) Encode one raw record, updating writer state.
     //baml:mut_vm
-    function _encode_record(self, record: CsvValue[]) -> string throws CsvError {
+    function _encode_record(self, record: Value[]) -> string throws Error {
         $rust_function
     }
 
     /// (internal) Encode an explicit header record, updating writer state.
     //baml:mut_vm
-    function _encode_header(self, names: string[]) -> string throws CsvError {
+    function _encode_header(self, names: string[]) -> string throws Error {
         $rust_function
     }
 
@@ -590,7 +590,7 @@ class CsvWriter {
 function reader(
     source: string | uint8array | root.fs.File,
     options: ReaderOptions? = null,
-) -> CsvReader throws CsvError {
+) -> Reader throws Error {
     _reader(source, options, false)
 }
 
@@ -598,7 +598,7 @@ function reader(
 function open(
     path: string,
     options: ReaderOptions? = null,
-) -> CsvReader throws CsvError | root.errors.Io {
+) -> Reader throws Error | root.errors.Io {
     let f = baml.fs.open(path, "r") catch (_) {
         root.errors.InvalidArgument { message } => throw root.errors.Io { message: message },
     };
@@ -612,7 +612,7 @@ function open(
 function read<T>(
     path: string,
     options: ReaderOptions? = null,
-) -> T[] throws CsvError | root.errors.Io {
+) -> T[] throws Error | root.errors.Io {
     let r = open(path, options = options);
     let result = r.rows<T>().collect();
     r.close();
@@ -623,7 +623,7 @@ function read<T>(
 function parse(
     source: string | uint8array,
     options: ReaderOptions? = null,
-) -> string[][] throws CsvError {
+) -> string[][] throws Error {
     {
         let r = reader(source, options = options);
         let out: string[][] = [];
@@ -632,7 +632,7 @@ function parse(
                 root.iter.Done => {
                     break;
                 },
-                let rec: CsvRecord => {
+                let rec: Record => {
                     out.push(rec.fields());
                 },
             }
@@ -649,7 +649,7 @@ function parse(
 function decode<T>(
     source: string | uint8array,
     options: ReaderOptions? = null,
-) -> T[] throws CsvError {
+) -> T[] throws Error {
     {
         reader(source, options = options).rows<T>().collect()
     } catch (_) {
@@ -660,21 +660,21 @@ function decode<T>(
 }
 
 /// Typed parse of an input with zero or one data record. Extra records
-/// throw `CsvError { kind: TooManyRows }`.
+/// throw `Error { kind: TooManyRows }`.
 function decode_optional<T>(
     source: string | uint8array,
     options: ReaderOptions? = null,
-) -> T? throws CsvError {
+) -> T? throws Error {
     let all = decode<T>(source, options = options);
     if (all.length() > 1) {
-        throw _error(CsvErrorKind.TooManyRows, "expected at most one data record, found " + root.json.stringify(all.length()));
+        throw _error(ErrorKind.TooManyRows, "expected at most one data record, found " + root.json.stringify(all.length()));
     }
     all.at(0)
 }
 
 /// Typed parse of an input with exactly one data record. Zero records throw
-/// `CsvError { kind: NotFound }`; extra records throw
-/// `CsvError { kind: TooManyRows }`.
+/// `Error { kind: NotFound }`; extra records throw
+/// `Error { kind: TooManyRows }`.
 ///
 /// Fits LLM output that was requested as exactly one row — with
 /// `has_header: false` for a bare row (positional decode), or default
@@ -682,13 +682,13 @@ function decode_optional<T>(
 function decode_one<T>(
     source: string | uint8array,
     options: ReaderOptions? = null,
-) -> T throws CsvError {
+) -> T throws Error {
     let all = decode<T>(source, options = options);
     if (all.length() == 0) {
-        throw _error(CsvErrorKind.NotFound, "expected exactly one data record, found none");
+        throw _error(ErrorKind.NotFound, "expected exactly one data record, found none");
     }
     if (all.length() > 1) {
-        throw _error(CsvErrorKind.TooManyRows, "expected exactly one data record, found " + root.json.stringify(all.length()));
+        throw _error(ErrorKind.TooManyRows, "expected exactly one data record, found " + root.json.stringify(all.length()));
     }
     match (all.at(0)) {
         null => root.sys.panic("unreachable: decode_one lost its record"),
@@ -700,7 +700,7 @@ function decode_one<T>(
 
 /// A streaming writer to an open file handle. Emits from the file's current
 /// cursor and never truncates; for fresh output files, use `create`.
-function writer(file: root.fs.File, options: WriterOptions? = null) -> CsvWriter throws CsvError {
+function writer(file: root.fs.File, options: WriterOptions? = null) -> Writer throws Error {
     _writer(file, options, false)
 }
 
@@ -709,7 +709,7 @@ function writer(file: root.fs.File, options: WriterOptions? = null) -> CsvWriter
 function create(
     path: string,
     options: WriterOptions? = null,
-) -> CsvWriter throws CsvError | root.errors.Io {
+) -> Writer throws Error | root.errors.Io {
     let f = baml.fs.open(path, "w") catch (_) {
         root.errors.InvalidArgument { message } => throw root.errors.Io { message: message },
     };
@@ -717,7 +717,7 @@ function create(
 }
 
 /// An in-memory writer; retrieve the accumulated CSV with `text()`.
-function buffer(options: WriterOptions? = null) -> CsvWriter throws CsvError {
+function buffer(options: WriterOptions? = null) -> Writer throws Error {
     _buffer(options = options)
 }
 
@@ -727,7 +727,7 @@ function write<T>(
     path: string,
     rows: T[],
     options: WriterOptions? = null,
-) -> int throws CsvError | root.errors.Io {
+) -> int throws Error | root.errors.Io {
     let w = create(path, options = options);
     w.write_rows<T>(rows);
     w.close();
@@ -735,7 +735,7 @@ function write<T>(
 }
 
 /// Serializes rows of `T` to CSV text.
-function stringify<T>(rows: T[], options: WriterOptions? = null) -> string throws CsvError {
+function stringify<T>(rows: T[], options: WriterOptions? = null) -> string throws Error {
     {
         let w = buffer(options = options);
         w.write_rows<T>(rows);
@@ -749,9 +749,9 @@ function stringify<T>(rows: T[], options: WriterOptions? = null) -> string throw
 
 /// Serializes raw records to CSV text.
 function stringify_records(
-    records: CsvValue[][],
+    records: Value[][],
     options: WriterOptions? = null,
-) -> string throws CsvError {
+) -> string throws Error {
     {
         let w = buffer(options = options);
         for (let rec in records) {
@@ -794,7 +794,7 @@ function _reader(
     source: string | uint8array | root.fs.File,
     options: ReaderOptions?,
     owns_file: bool,
-) -> CsvReader throws CsvError {
+) -> Reader throws Error {
     $rust_function
 }
 
@@ -804,60 +804,60 @@ function _writer(
     file: root.fs.File,
     options: WriterOptions?,
     owns_file: bool,
-) -> CsvWriter throws CsvError {
+) -> Writer throws Error {
     $rust_function
 }
 
 /// (internal) Construct a buffer writer handle. Use `buffer`.
 //baml:mut_vm
-function _buffer(options: WriterOptions?) -> CsvWriter throws CsvError {
+function _buffer(options: WriterOptions?) -> Writer throws Error {
     $rust_function
 }
 
 /// (internal) Check that every non-optional field of `T` is satisfiable by
-/// the reader's columns. Use `CsvReader.rows<T>`.
+/// the reader's columns. Use `Reader.rows<T>`.
 //baml:mut_vm
-function _validate_columns<T>(r: CsvReader) -> void throws CsvError {
+function _validate_columns<T>(r: Reader) -> void throws Error {
     $rust_function
 }
 
 /// (internal) Decode one record into `T`, honoring the reader's `on_error`
-/// policy: returns `_CsvSkip` instead of throwing under `"skip"`.
+/// policy: returns `_Skip` instead of throwing under `"skip"`.
 //baml:mut_vm
-function _try_decode<T>(rec: CsvRecord, r: CsvReader) -> T | _CsvSkip throws CsvError {
+function _try_decode<T>(rec: Record, r: Reader) -> T | _Skip throws Error {
     $rust_function
 }
 
 /// (internal) Decode one record into `T`, always throwing on failure. Use
-/// `CsvRecord.decode<T>`.
+/// `Record.decode<T>`.
 //baml:mut_vm
-function _decode_record<T>(rec: CsvRecord) -> T throws CsvError {
+function _decode_record<T>(rec: Record) -> T throws Error {
     $rust_function
 }
 
-/// (internal) Convert one cell by header name. Use `CsvRecord.get<T>`.
+/// (internal) Convert one cell by header name. Use `Record.get<T>`.
 //baml:mut_vm
-function _cell_by_name<T>(rec: CsvRecord, column: string) -> T? throws CsvError {
+function _cell_by_name<T>(rec: Record, column: string) -> T? throws Error {
     $rust_function
 }
 
-/// (internal) Convert one cell by index. Use `CsvRecord.get_at<T>`.
+/// (internal) Convert one cell by index. Use `Record.get_at<T>`.
 //baml:mut_vm
-function _cell_by_index<T>(rec: CsvRecord, index: int) -> T? throws CsvError {
+function _cell_by_index<T>(rec: Record, index: int) -> T? throws Error {
     $rust_function
 }
 
 /// (internal) Encode one typed row (plus auto-header). Use
-/// `CsvWriter.write_row<T>`.
+/// `Writer.write_row<T>`.
 //baml:mut_vm
-function _encode_row<T>(w: CsvWriter, row: T) -> string throws CsvError {
+function _encode_row<T>(w: Writer, row: T) -> string throws Error {
     $rust_function
 }
 
 /// (internal) Encode many typed rows (plus auto-header). Use
-/// `CsvWriter.write_rows<T>`.
+/// `Writer.write_rows<T>`.
 //baml:mut_vm
-function _encode_rows<T>(w: CsvWriter, rows: T[]) -> string throws CsvError {
+function _encode_rows<T>(w: Writer, rows: T[]) -> string throws Error {
     $rust_function
 }
 
@@ -878,9 +878,9 @@ function _to_markdown_records(
     $rust_function
 }
 
-/// (internal) Construct a `CsvError` with no positional fields.
-function _error(kind: CsvErrorKind, message: string) -> CsvError throws never {
-    CsvError {
+/// (internal) Construct a `Error` with no positional fields.
+function _error(kind: ErrorKind, message: string) -> Error throws never {
+    Error {
         kind: kind,
         message: message,
         line: null,

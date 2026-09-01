@@ -6,16 +6,16 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `from_json` cannot be defined as a method on class `Box`; implement the `baml.FromJson` interface instead
     ╭─[json_static_method_arity.baml:23:14]
- 23 │     function from_json(j: baml.json.json) -> Box<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+ 23 │     function from_json(j: baml.json.json) -> Box<T> throws baml.json.ParseError | baml.json.DecodeError {
     ·              ────┬────
     ·                  ╰── move this into `implements baml.FromJson { ... }`
     ╰────
 
   [type] E0097
 
-  ⚠ extraneous throws declaration: baml.json.JsonParseError
-    ╭─[json_static_method_arity.baml:23:113]
- 23 │ ╭─▶     function from_json(j: baml.json.json) -> Box<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  ⚠ extraneous throws declaration: baml.json.ParseError
+    ╭─[json_static_method_arity.baml:23:105]
+ 23 │ ╭─▶     function from_json(j: baml.json.json) -> Box<T> throws baml.json.ParseError | baml.json.DecodeError {
  24 │ │           Box<T> { value: baml.json.from_json<T>(baml.json.field(j, "value")) }
  25 │ ╰─▶     }
     ╰────

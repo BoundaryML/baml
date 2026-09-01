@@ -1305,8 +1305,8 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call anthropic.AnthropicClient.new
-    call anthropic.AnthropicClient.resolved_api_key
+    call anthropic.Client.new
+    call anthropic.Client.resolved_api_key
     store_var _32
     load_const "m"
     load_const "sk-explicit"
@@ -1322,8 +1322,8 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
-    call google.GoogleClient.new
-    call google.GoogleClient.resolved_api_key
+    call google.GeminiClient.new
+    call google.GeminiClient.resolved_api_key
     store_var _34
     load_const "m"
     load_const <omitted>
