@@ -46,6 +46,9 @@ Compiler options:
           display_all_warnings]
 
 Output options:
+      --packages
+          List every standard-library package embedded in this toolchain
+
       --budget <BUDGET>
           Soft maximum number of output lines
 
