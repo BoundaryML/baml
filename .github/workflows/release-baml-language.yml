@@ -265,16 +265,16 @@ jobs:
           name: release-plan
           path: release-plan.json
 
-  # The toolchain/wrapper build matrix (and, over time, the others) is generated
-  # from the repository's platform contract (`release/platforms.json`) so the
-  # target set + per-target runners live in one machine-readable place.
+  # The toolchain and C# build matrices are generated from the repository's
+  # platform contract (`release/platforms.json`) so the target set + per-target
+  # runners live in one machine-readable place. The reusable toolchain-selector
+  # workflow owns its wrapper matrix generation alongside its build.
   build-matrix:
     name: Compute build matrices
     needs: [plan]
     runs-on: ubuntu-latest
     outputs:
       toolchain: ${{ steps.gen.outputs.toolchain }}
-      wrapper: ${{ steps.gen.outputs.wrapper }}
       csharp: ${{ steps.gen.outputs.csharp }}
     steps:
       - uses: actions/checkout@v4
@@ -285,16 +285,15 @@ jobs:
         id: gen
         run: |
           set -euo pipefail
-          # target + toolchain runner (as `os`); `libc` rides along so the musl
-          # setup step can key on it.
+          # target + toolchain runner (as `os`); `libc` rides along so Linux
+          # setup can select musl or the plan's GNU cross image.
           toolchain="$(jq -c '[.targets[]
             | select(.artifacts.toolchain != null)
-            | {target: .triple, os: .artifacts.toolchain.runner, libc: .libc}]' release/platforms.json)"
+            | .artifacts.toolchain as $toolchain
+            | {target: .triple, os: $toolchain.runner, libc: .libc}
+              + (if $toolchain.cross_image then {cross_image: $toolchain.cross_image} else {} end)]' release/platforms.json)"
           echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
           jq . <<<"$toolchain"
-          wrapper="$(scripts/baml-release-platforms wrapper-matrix)"
-          echo "wrapper=$wrapper" >> "$GITHUB_OUTPUT"
-          jq . <<<"$wrapper"
           csharp="$(scripts/baml-csharp-release-contract matrix)"
           echo "csharp=$csharp" >> "$GITHUB_OUTPUT"
           jq . <<<"$csharp"
@@ -303,6 +302,8 @@ jobs:
     name: Build toolchain (${{ matrix.target }})
     needs: [plan, build-vsix, build-matrix]
     runs-on: ${{ matrix.os }}
+    env:
+      CARGO: cargo
     strategy:
       fail-fast: false
       matrix:
@@ -339,8 +340,27 @@ jobs:
         uses: ./.github/actions/setup-musl-cross
         with:
           target: ${{ matrix.target }}
+      - name: Setup cross for backward-compatible GNU toolchain
+        if: ${{ matrix.libc == 'gnu' }}
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache cargo:cross"
+      - name: Configure cross for GNU toolchain
+        if: ${{ matrix.libc == 'gnu' }}
+        env:
+          CROSS_IMAGE: ${{ matrix.cross_image }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          cross_config="$RUNNER_TEMP/baml-toolchain-cross.toml"
+          printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = ["BAML_WORKOS_CLIENT_ID"]\n' \
+            "$TARGET" "$CROSS_IMAGE" "$TARGET" > "$cross_config"
+          {
+            echo 'CARGO=cross'
+            echo "CROSS_CONFIG=$cross_config"
+          } >> "$GITHUB_ENV"
       - name: Build CLI and pack host
-        run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml-cli --bin baml-pack-host --target "${{ matrix.target }}"
+        run: ${CARGO} build --manifest-path baml_language/Cargo.toml --release --bin baml-cli --bin baml-pack-host --target "${{ matrix.target }}"
       - name: Archive layout smoke
         run: |
           set -euo pipefail
@@ -435,89 +455,14 @@ jobs:
           path: typescript2/app-vscode-webview/dist
 
   build-wrapper:
-    name: Build wrapper (${{ matrix.target }})
-    needs: [plan, build-matrix]
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.build-matrix.outputs.wrapper) }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.source_sha }}
-          persist-credentials: false
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          targets: ${{ matrix.target }}
-          workspace: baml_language
-          prefix-key: v5-rust-baml-wrapper-${{ matrix.target }}
-          cache-on-failure: true
-          enable-cross: false
-          skip-protoc: true
-      - name: Setup musl cross toolchain
-        if: ${{ matrix.libc == 'musl' }}
-        uses: ./.github/actions/setup-musl-cross
-        with:
-          target: ${{ matrix.target }}
-      - name: Build wrapper
-        env:
-          EXECUTABLE_SUFFIX: ${{ matrix.executable_suffix }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          set -euo pipefail
-          cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "$TARGET"
-          mkdir -p staging/bin
-          cp "baml_language/target/$TARGET/release/baml$EXECUTABLE_SUFFIX" \
-            "staging/bin/baml$EXECUTABLE_SUFFIX"
-          if test -f "staging/bin/baml-cli$EXECUTABLE_SUFFIX"; then
-            exit 1
-          fi
-      - name: Build no-self-update wrapper
-        if: ${{ matrix.no_self_update }}
-        env:
-          EXECUTABLE_SUFFIX: ${{ matrix.executable_suffix }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          set -euo pipefail
-          cargo build \
-            --manifest-path baml_language/Cargo.toml \
-            --release \
-            --bin baml \
-            --features no-self-update \
-            --target "$TARGET"
-          mkdir -p staging-no-self-update/bin
-          cp "baml_language/target/$TARGET/release/baml$EXECUTABLE_SUFFIX" \
-            "staging-no-self-update/bin/baml$EXECUTABLE_SUFFIX"
-      - name: Archive wrapper
-        env:
-          ARCHIVE_SUFFIX: ${{ matrix.archive_suffix }}
-          NO_SELF_UPDATE: ${{ matrix.no_self_update }}
-          TARGET: ${{ matrix.target }}
-          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
-        run: |
-          set -euo pipefail
-          archive() {
-            local staging="$1"
-            local product="$2"
-            local destination="$product-$WRAPPER_VERSION-$TARGET$ARCHIVE_SUFFIX"
-            case "$ARCHIVE_SUFFIX" in
-              .zip) (cd "$staging" && 7z a "../$destination" .) ;;
-              .tar.gz) tar -C "$staging" -czf "$destination" . ;;
-              *) echo "unsupported archive suffix: $ARCHIVE_SUFFIX" >&2; exit 1 ;;
-            esac
-          }
-          archive staging baml-wrapper
-          if [[ "$NO_SELF_UPDATE" == "true" ]]; then
-            archive staging-no-self-update baml-wrapper-no-self-update
-          fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wrapper-${{ matrix.target }}
-          path: |
-            baml-wrapper-${{ needs.plan.outputs.wrapper_version }}-${{ matrix.target }}.*
-            baml-wrapper-no-self-update-${{ needs.plan.outputs.wrapper_version }}-${{ matrix.target }}.*
+    name: Build toolchain selector
+    needs: [plan]
+    uses: ./.github/workflows/build2-wrapper.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+      wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
 
   build-python-sdk:
     name: Build Python SDK

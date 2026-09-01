@@ -463,7 +463,7 @@ jobs:
         with:
           # Temporarily omit Hawk while its CI check is disabled.
           # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv node clang-format"
-          install_args: "cargo:prek python uv node clang-format"
+          install_args: "sccache cargo:prek python uv node clang-format"
 
       - name: "Cache prek"
         uses: actions/cache@v5
