@@ -8,7 +8,7 @@ Engine releases are triggered by pushing a versioned `<version>-engine` source t
 2. Wait for the `canary` CI run for the exact commit intended for release to pass.
 3. Confirm that neither the trigger tag nor either release tag exists: `git ls-remote --tags origin refs/tags/0.226.2-engine refs/tags/0.226.2 refs/tags/v0.226.2` should print nothing (replace `0.226.2` with the intended version).
 
-The workflow derives the release version from `current_version` in `tools/versions/engine.cfg`. It requires the triggering ref to be exactly `refs/tags/<version>-engine`, then verifies that every other `tools/versions/*.cfg` file and the changelog agree with that version.
+The workflow derives the release version from `current_version` in `tools/versions/engine.cfg`. It requires the triggering ref to be exactly `refs/tags/<version>-engine`, verifies that its commit is the current `canary` head with a successful `BAML Runtime` push or merge-queue run, then verifies that every other `tools/versions/*.cfg` file and the changelog agree with that version.
 
 The release workflow runs `integ-tests` for informational signal, but its failures are tolerated and it is deliberately excluded from the release gate because it is currently too flaky. The green `canary` CI run is the operator's test prerequisite.
 

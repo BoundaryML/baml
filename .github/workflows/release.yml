@@ -12,6 +12,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
   id-token: write
 
@@ -61,6 +62,47 @@ jobs:
             echo "- Commit: \`$GITHUB_SHA\`"
             echo "- Production release: \`true\`"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify source is the current green canary commit
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sourceSha = context.sha;
+            const canary = await github.rest.git.getRef({
+              owner,
+              repo,
+              ref: "heads/canary",
+            });
+            const canarySha = canary.data.object.sha;
+            if (sourceSha !== canarySha) {
+              throw new Error(`Trigger tag commit ${sourceSha} is not current canary ${canarySha}`);
+            }
+
+            const runs = await github.paginate(
+              github.rest.actions.listWorkflowRunsForRepo,
+              {
+                owner,
+                repo,
+                head_sha: sourceSha,
+                status: "success",
+                per_page: 100,
+              },
+              (response) => response.data.workflow_runs,
+            );
+            const sourceCi = runs.find((run) => {
+              if (run.name !== "BAML Runtime" || run.path !== ".github/workflows/primary.yml") {
+                return false;
+              }
+              if (run.event === "push" && run.head_branch === "canary") {
+                return true;
+              }
+              return run.event === "merge_group" && run.head_branch.startsWith("gh-readonly-queue/canary/");
+            });
+            if (sourceCi === undefined) {
+              throw new Error(`Current canary ${sourceSha} has no successful BAML Runtime push or merge-queue run`);
+            }
+
+            core.info(`Verified current canary ${sourceSha} with successful CI run ${sourceCi.html_url}`);
       - name: Verify source versions
         env:
           VERSION: ${{ steps.set-version.outputs.version }}
