@@ -27,6 +27,7 @@ const VITEST_WEB_CONFIG: &str = include_str!("templates/vitest_web.config.ts");
 const VITEST_WORKERS_CONFIG: &str = include_str!("templates/vitest_workers.config.ts");
 const VITEST_INTEGRATION_CONFIG: &str = include_str!("templates/vitest_integration.config.ts");
 const WORKER_STARTUP_TEST: &str = include_str!("templates/worker_startup.test.ts");
+const WORKER_ENTROPY_GUARD: &str = include_str!("templates/worker_entropy_guard.js");
 const SETUP_ENV_VAR: &str = "SDK_TEST_TYPESCRIPT_WEB_SETUP";
 
 pub fn run_all_from_typescript_sources(relative_sources: &str) {
@@ -128,12 +129,13 @@ fn codegen_fixture(
             WORKER_STARTUP_TEST.replace(
                 "__EXPECTED_BODY__",
                 if fixture == "function_calls" {
-                    "hello world"
+                    "hello world|0|true"
                 } else {
                     "sdk-test-typescript-workers"
                 },
             ),
         ),
+        ("worker_entropy_guard.js", WORKER_ENTROPY_GUARD.to_string()),
         (
             "wrangler.jsonc",
             r#"{
@@ -149,11 +151,19 @@ fn codegen_fixture(
         (
             "worker.js",
             if fixture == "function_calls" {
-                r#"import { worker_runtime_smoke } from "./workers/baml_sdk/index.js";
+                r#"import { entropyCallCount } from "./worker_entropy_guard.js";
+import { worker_runtime_smoke } from "./workers/baml_sdk/index.js";
+
+const moduleScopeEntropyCalls = entropyCallCount();
 
 export default {
-  fetch() {
-    return new Response(worker_runtime_smoke());
+  async fetch() {
+    const beforeCall = entropyCallCount();
+    const result = await worker_runtime_smoke();
+    const requestConsumedEntropy = entropyCallCount() > beforeCall;
+    return new Response(
+      `${result}|${moduleScopeEntropyCalls}|${requestConsumedEntropy}`,
+    );
   },
 };
 "#

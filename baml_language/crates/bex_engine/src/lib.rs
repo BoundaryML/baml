@@ -81,7 +81,7 @@ use std::{
     collections::{HashMap, VecDeque},
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -91,8 +91,6 @@ use ::bex_heap::{HeapPermit as _, Tlab};
 use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
-#[cfg(target_arch = "wasm32")]
-pub use bex_events::ids::configure_workerd_uuid_seed;
 use bex_events::prof::backend::{ExecutionEndStatus, ProfilerSession, RootProfiler};
 #[cfg(not(target_arch = "wasm32"))]
 use bex_events::prof::backend::{ExecutionHandle, RootAdmission, ValueLossReason, ValueRole};
@@ -1023,9 +1021,8 @@ pub fn cancelled_unhandled_throw() -> EngineError {
 ///         └── Tlab ─── exclusive allocation region from shared heap
 /// ```
 pub struct BexEngine {
-    process_euid: ProcessEuid,
     engine_id: EngineId,
-    program_metadata: ProgramMetadata,
+    program_metadata: LazyProgramMetadata,
     /// Function identity by heap address: maps each compile-time
     /// `Object::Function`'s stable `HeapPtr` (as a raw address) to its
     /// `FunctionId`. Call notifications carry the
@@ -1126,6 +1123,65 @@ pub struct BexEngine {
     /// a superseded candidate therefore drops without registering or
     /// emitting an `engine_closed` notification.
     prof_activated: AtomicBool,
+}
+
+/// Program metadata whose fallback random identity is minted on first use.
+///
+/// Source-backed programs resolve eagerly without entropy. Packed artifacts
+/// intentionally omit `source_content_hash`; their random `ProgramId` keeps
+/// the existing safe over-splitting semantics, but is deferred until an event
+/// or request path actually needs program identity. `OnceLock` guarantees one
+/// resolution when concurrent requests race to use a freshly staged engine.
+#[derive(Debug)]
+struct LazyProgramMetadata {
+    resolved: OnceLock<ProgramMetadata>,
+    unresolved: Mutex<Option<UnresolvedProgramMetadata>>,
+}
+
+#[derive(Debug)]
+struct UnresolvedProgramMetadata {
+    source_snapshot_id: Option<bex_events::ids::SourceSnapshotId>,
+    revision_id: Option<bex_events::RevisionId>,
+    function_table: FunctionMetadataTable,
+}
+
+impl LazyProgramMetadata {
+    fn resolved(metadata: ProgramMetadata) -> Self {
+        Self {
+            resolved: OnceLock::from(metadata),
+            unresolved: Mutex::new(None),
+        }
+    }
+
+    fn unresolved(metadata: UnresolvedProgramMetadata) -> Self {
+        Self {
+            resolved: OnceLock::new(),
+            unresolved: Mutex::new(Some(metadata)),
+        }
+    }
+
+    fn get(&self) -> &ProgramMetadata {
+        self.resolved.get_or_init(|| {
+            let mut unresolved = self
+                .unresolved
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let program_id = ProgramId::new_random();
+            let unresolved = unresolved
+                .take()
+                .expect("unresolved program metadata must exist before initialization");
+            ProgramMetadata {
+                program_id,
+                source_snapshot_id: unresolved.source_snapshot_id,
+                revision_id: unresolved.revision_id,
+                function_table: unresolved.function_table,
+            }
+        })
+    }
+
+    fn get_if_resolved(&self) -> Option<&ProgramMetadata> {
+        self.resolved.get()
+    }
 }
 
 impl Drop for BexEngine {
@@ -1789,7 +1845,7 @@ impl BexEngine {
         EngineId(NEXT_ENGINE_ID.fetch_add(1, Ordering::Relaxed))
     }
 
-    fn build_program_metadata(program: &bex_vm_types::Program) -> ProgramMetadata {
+    fn build_program_metadata(program: &bex_vm_types::Program) -> LazyProgramMetadata {
         // Ids are 1-based sequential in pool order (`0` = unassigned) — the
         // exact sequence the pre-heap walk in `new()` stamps onto each
         // `Function.function_id`, so metadata and compact producer records
@@ -1897,18 +1953,19 @@ impl BexEngine {
         // builds share a program_id (so ContextKeys aggregate across
         // executions of one build); a host that provides no hash falls back
         // to random, which over-splits — the safe direction.
-        let (program_id, source_snapshot_id) = match program.source_content_hash {
-            Some(hash) => (
-                ProgramId(hash[..16].try_into().expect("fixed-width slice")),
-                Some(bex_events::ids::SourceSnapshotId(hash)),
-            ),
-            None => (ProgramId::new_random(), None),
-        };
-        ProgramMetadata {
-            program_id,
-            source_snapshot_id,
-            revision_id: None,
-            function_table: FunctionMetadataTable { functions },
+        let function_table = FunctionMetadataTable { functions };
+        match program.source_content_hash {
+            Some(hash) => LazyProgramMetadata::resolved(ProgramMetadata {
+                program_id: ProgramId(hash[..16].try_into().expect("fixed-width slice")),
+                source_snapshot_id: Some(bex_events::ids::SourceSnapshotId(hash)),
+                revision_id: None,
+                function_table,
+            }),
+            None => LazyProgramMetadata::unresolved(UnresolvedProgramMetadata {
+                source_snapshot_id: None,
+                revision_id: None,
+                function_table,
+            }),
         }
     }
 
@@ -2019,7 +2076,6 @@ impl BexEngine {
         profiler_session: Arc<ProfilerSession>,
     ) -> Result<Self, EngineError> {
         let argv: Arc<[String]> = Arc::from(argv);
-        let process_euid = ProcessEuid::current();
         let engine_id = Self::next_engine_id();
         let program_metadata = Self::build_program_metadata(&bytecode_program);
 
@@ -2335,7 +2391,6 @@ impl BexEngine {
         );
 
         Ok(Self {
-            process_euid,
             engine_id,
             program_metadata,
             next_thread_id: AtomicU64::new(1),
@@ -2400,18 +2455,19 @@ impl BexEngine {
             // engine can be admitted.
             #[cfg(not(target_arch = "wasm32"))]
             {
-                let function_table_cid = encode_engine_function_table(&self.program_metadata)
+                let program_metadata = self.program_metadata();
+                let function_table_cid = encode_engine_function_table(program_metadata)
                     .ok()
                     .and_then(|bytes| self.profiler_session.publish_function_table(&bytes));
                 self.profiler_session.engine_started(
                     self.engine_id,
-                    self.program_metadata.program_id,
+                    program_metadata.program_id,
                     function_table_cid,
-                    self.program_metadata
+                    program_metadata
                         .revision_id
                         .as_ref()
                         .map(|revision| revision.0.clone()),
-                    self.program_metadata
+                    program_metadata
                         .source_snapshot_id
                         .as_ref()
                         .map(|source| hex_bytes(&source.0)),
@@ -2422,7 +2478,7 @@ impl BexEngine {
 
     #[must_use]
     pub fn process_euid(&self) -> ProcessEuid {
-        self.process_euid
+        ProcessEuid::current()
     }
 
     #[must_use]
@@ -2432,7 +2488,16 @@ impl BexEngine {
 
     #[must_use]
     pub fn program_metadata(&self) -> &ProgramMetadata {
-        &self.program_metadata
+        self.program_metadata.get()
+    }
+
+    /// Returns metadata only when its `ProgramId` has already been resolved.
+    /// Source-backed programs are resolved at construction; packed artifacts
+    /// remain unresolved until profiling activation or the first call.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn program_metadata_if_resolved(&self) -> Option<&ProgramMetadata> {
+        self.program_metadata.get_if_resolved()
     }
 
     fn next_bex_thread_id(&self) -> BexThreadId {
@@ -3980,7 +4045,7 @@ impl BexEngine {
         // Identity seed for the `$id` surface (baml.id.*): unconditional —
         // `$id` works with profiling off, and the ids it exposes are the
         // VM-minted ids the event stream records.
-        vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
+        vm.bex_ref_seed = Some((self.process_euid(), self.engine_id));
         // No ring snapshot and no StartThread here: the permit acquisition
         // below awaits (the snapshot would go stale across an OS-thread
         // migration), and early-error returns between here and the run loop
@@ -4073,14 +4138,14 @@ impl BexEngine {
             type_args.insert(name, realized);
         }
         let root_thread_ref = ThreadRef {
-            process_euid: self.process_euid,
+            process_euid: self.process_euid(),
             engine_id: self.engine_id,
             thread_id: BexThreadId(thread.vm.prof_thread_id),
         };
         let admission = self.profiler_session.register_root(
             profile_intent,
             root_thread_ref,
-            self.program_metadata.program_id,
+            self.program_metadata().program_id,
         );
         thread.vm.root_profiler = admission.profiler();
         thread.vm.prof_boundary_handle = admission.boundary_handle();
@@ -4125,7 +4190,7 @@ impl BexEngine {
             .vm
             .install_boundary_id_for_current_call(boundary.boundary_id);
         let entry_call_ref = CallRef {
-            process_euid: self.process_euid,
+            process_euid: self.process_euid(),
             engine_id: self.engine_id,
             thread_id: BexThreadId(thread.vm.prof_thread_id),
             call_id: BexCallId(thread.vm.current_call_id()),
@@ -5237,7 +5302,7 @@ impl BexEngine {
         if let Some(capture) = capture {
             for event in events {
                 let call_ref = CallRef {
-                    process_euid: self.process_euid,
+                    process_euid: self.process_euid(),
                     engine_id: self.engine_id,
                     thread_id: BexThreadId(event.thread_id),
                     call_id: BexCallId(event.call_id),
@@ -5306,7 +5371,7 @@ impl BexEngine {
             return;
         };
         let call = bex_events::run::TraceCallKey {
-            process_euid: self.process_euid,
+            process_euid: self.process_euid(),
             engine_id: self.engine_id,
             thread_id: BexThreadId(thread.vm.prof_thread_id),
             call_id: BexCallId(thread.vm.current_call_id()),
@@ -5781,7 +5846,7 @@ impl BexEngine {
         if child_vm.root_profiler.is_active() {
             child_vm.prof_enable_await_accumulator();
         }
-        child_vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
+        child_vm.bex_ref_seed = Some((self.process_euid(), self.engine_id));
         child_vm.set_call_input_capture_hook(
             call_capture
                 .as_ref()

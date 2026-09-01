@@ -14,6 +14,27 @@ function worker_runtime_smoke() -> "hello world" {
   "hello world"
 }
 
+// The deployment-only smoke passes its Wrangler secret explicitly so the Web
+// runtime never needs ambient environment access. Local regressions generate
+// this function but do not call a provider.
+function cloudflare_llm_smoke(api_key: string) -> string {
+  client: openai.ResponsesClient.new(
+    model = "gpt-5.4-nano",
+    api_key = api_key,
+  )
+  prompt: `Return exactly this text and nothing else: B1656-LAZY-OK`
+}
+
+function runtime_identity_leaf() -> string {
+  $id
+}
+
+// A nested call has no root boundary override, so its default runtime ID
+// exposes the ProcessEuid/EngineId prefix shared by the profiling event path.
+function runtime_identity() -> string {
+  runtime_identity_leaf()
+}
+
 // One required positional argument: the host passes a single value and it
 // round-trips through the engine unchanged. The one-arg step up from the
 // nullary `hello_world`.
