@@ -115,7 +115,16 @@ use sha2::{Digest, Sha256};
 /// count flag bit from call instructions.
 ///
 /// Version 14: `Bytecode::call_layouts` records each call site's argument layout.
-pub const FORMAT_VERSION: u32 = 14;
+///
+/// Version 15: `CompilationUnit` gained `referenced_names` and
+/// `bakes_type_layout` — the incremental reverse-dependency edges, recorded
+/// by codegen at its resolution sites and carried with the unit. Previously
+/// the CLI reconstructed them from compiled operands joined against the
+/// runtime name maps, which silently severed every edge into a name class
+/// that left those maps (version 11 removed interface-machinery bodies from
+/// them, so direct calls to interface bodies stopped dirtying their
+/// callers).
+pub const FORMAT_VERSION: u32 = 15;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

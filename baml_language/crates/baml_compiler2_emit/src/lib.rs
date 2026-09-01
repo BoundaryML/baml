@@ -1306,6 +1306,46 @@ fn emitted_function_origin(
 pub(crate) type ClassFieldSnapshot =
     HashMap<baml_type::typetag::TypeTag, Vec<(String, bex_vm_types::RuntimeTy)>>;
 
+/// Statically-resolved references recorded during codegen — the emit-time
+/// source of the incremental reverse-dependency edges
+/// ([`CompilationUnit::referenced_names`] / `bakes_type_layout`).
+///
+/// Codegen calls [`Self::record`] at every site that resolves an item to a
+/// baked operand (function and `let` global slots — including
+/// interface-machinery bodies, which have no runtime name — and class/enum
+/// object indices), so the edge set is produced by the resolutions
+/// themselves. Deriving it from the finished bytecode instead (reversing
+/// operands through the runtime name maps) is forbidden: the maps cover only
+/// named items, so a name class leaving them severs every edge into it
+/// silently — exactly what happened when interface bodies became anonymous.
+#[derive(Debug, Default)]
+pub(crate) struct UnitReferences {
+    /// Last-segment names of the resolved items — the dirty partition's
+    /// grain, matching the CLI's `defined_names` (the last dotted segment of
+    /// the item's `def_to_item_ref` rendering).
+    pub(crate) names: std::collections::BTreeSet<String>,
+    /// OR of [`bex_vm_types::relink::visit_index_operands_ref`]'s
+    /// layout-baking bit over every function compiled into this record.
+    pub(crate) bakes_type_layout: bool,
+}
+
+impl UnitReferences {
+    /// Record one resolved item reference by its rendered spelling; only the
+    /// last dotted segment is kept.
+    pub(crate) fn record(&mut self, name: &str) {
+        let last = name.rsplit('.').next().unwrap_or(name);
+        if !self.names.contains(last) {
+            self.names.insert(last.to_string());
+        }
+    }
+
+    /// Fold another record into this one (per-function → per-file).
+    pub(crate) fn merge(&mut self, other: UnitReferences) {
+        self.names.extend(other.names);
+        self.bakes_type_layout |= other.bakes_type_layout;
+    }
+}
+
 /// Context for MIR codegen.
 pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub globals: &'ctx HashMap<String, usize>,
@@ -1332,6 +1372,11 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub capture_types: &'ctx [RuntimeTy],
     /// Capture slots whose cells may be touched by spawned code.
     pub spawn_capture_indices: &'ctx HashSet<usize>,
+    /// Reference record the compiled function's resolutions accumulate into
+    /// (see [`UnitReferences`]). Callers pick the accumulation target: a
+    /// per-function record on the parallel path (merged per-file at the
+    /// serial stage), the per-file record directly on the serial paths.
+    pub references: &'obj mut UnitReferences,
 }
 
 /// Database trait for compiler2 emit queries.
@@ -2351,10 +2396,20 @@ fn decompose_units_after_prefix<'db>(
 
     // ---- Bucket objects into units + record local layout --------------------
     let mut units: Vec<CompilationUnit> = (0..n_files)
-        .map(|fi| CompilationUnit {
-            source_file: unit_source[fi].clone(),
-            package: unit_package[fi].clone(),
-            ..CompilationUnit::default()
+        .map(|fi| {
+            // Stamp the emit-recorded reference edges onto the unit they
+            // describe. A file the emit never lowered (a clean file's
+            // placeholder unit, discarded at assembly) has no record.
+            let refs = coords.file_references.get(&unit_source[fi]);
+            CompilationUnit {
+                source_file: unit_source[fi].clone(),
+                package: unit_package[fi].clone(),
+                referenced_names: refs
+                    .map(|r| r.names.iter().cloned().collect())
+                    .unwrap_or_default(),
+                bakes_type_layout: refs.is_some_and(|r| r.bakes_type_layout),
+                ..CompilationUnit::default()
+            }
         })
         .collect();
     // Per pool object: its LocalRef within its owning unit (bucket + offset).
@@ -3412,6 +3467,15 @@ struct FunctionCoordinates<'db> {
     /// these files' entries from its positional owner vectors — their objects
     /// are below the prefix and never walked.
     spliced_files: usize,
+    /// Per-file reference records accumulated by this emit's codegen (see
+    /// [`UnitReferences`]), keyed by project-relative source path. Covers
+    /// every function the emit lowered — bodies, lambdas, and `let`
+    /// initializer helpers (attributed to the `let`'s file) — for user files
+    /// only. Decomposition stamps each unit's `referenced_names` /
+    /// `bakes_type_layout` from here; a clean file skipped by an incremental
+    /// emit has no entry, and its discarded placeholder unit's empty stamp
+    /// never survives assembly (the cached unit's own record does).
+    file_references: HashMap<String, UnitReferences>,
 }
 
 /// Emit the whole project (B-693 Stage 6 core).
@@ -3528,6 +3592,7 @@ fn generate_impl<'db>(
         }
         None => (Program::new(), EmitTables::default()),
     };
+    let mut file_references: HashMap<String, UnitReferences> = HashMap::new();
     if base.is_none() {
         emit_file_group(
             db,
@@ -3537,6 +3602,7 @@ fn generate_impl<'db>(
             &alias_caches,
             &mut placements,
             &mut interface_body_slots,
+            &mut file_references,
             opt,
             None,
         )?;
@@ -3549,6 +3615,7 @@ fn generate_impl<'db>(
         &alias_caches,
         &mut placements,
         &mut interface_body_slots,
+        &mut file_references,
         opt,
         skip_clean,
     )?;
@@ -3620,6 +3687,7 @@ fn generate_impl<'db>(
         FunctionCoordinates {
             placements,
             spliced_files: if base.is_some() { builtin_count } else { 0 },
+            file_references,
         },
     ))
 }
@@ -3803,6 +3871,7 @@ fn emit_file_group<'db>(
     alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     placements: &mut FunctionPlacements<'db>,
     interface_body_slots: &mut HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
+    file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
     skip_clean: Option<&HashSet<String>>,
 ) -> Result<(), LoweringError> {
@@ -4297,6 +4366,7 @@ fn emit_file_group<'db>(
             alias_caches,
             program,
             placements,
+            file_references,
             opt,
         );
     } else {
@@ -4314,6 +4384,7 @@ fn emit_file_group<'db>(
             alias_caches,
             program,
             placements,
+            file_references,
             opt,
         );
     }
@@ -4387,6 +4458,7 @@ fn emit_file_group<'db>(
                 enum_variants,
                 &class_fields,
                 &mut *program,
+                file_references,
                 opt,
             )?;
 
@@ -5523,6 +5595,7 @@ fn emit_functions_serial<'db>(
     alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     program: &mut Program,
     placements: &mut FunctionPlacements<'db>,
+    file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
 ) {
     for file in files {
@@ -5555,6 +5628,7 @@ fn emit_functions_serial<'db>(
                 MirFunctionKind::Bytecode(body) => {
                     // Compile lambda children first, collecting their ObjectPool indices.
                     let source_file = relative_source_path(db, *file);
+                    let mut references = UnitReferences::default();
                     let empty_capture_types = Vec::new();
                     let empty_spawn_capture_indices = HashSet::new();
                     let lambda_info = compile_lambdas_flat(
@@ -5573,6 +5647,7 @@ fn emit_functions_serial<'db>(
                         class_fields,
                         &mut program.objects,
                         0,
+                        &mut references,
                         opt,
                     );
                     let lambda_obj_indices: Vec<usize> =
@@ -5593,11 +5668,18 @@ fn emit_functions_serial<'db>(
                         lambda_names: &lambda_names_vec,
                         capture_types: &empty_capture_types,
                         spawn_capture_indices: &empty_spawn_capture_indices,
+                        references: &mut references,
                     };
                     let mut f =
                         compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
                     f.name.clone_from(&fq_name);
                     f.source_file.clone_from(&source_file);
+                    if !is_builtin_file {
+                        file_references
+                            .entry(source_file.clone())
+                            .or_default()
+                            .merge(references);
+                    }
                     f
                 }
                 MirFunctionKind::Builtin(kind) => {
@@ -5796,6 +5878,7 @@ fn emit_functions_parallel<'db>(
     alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     program: &mut Program,
     placements: &mut FunctionPlacements<'db>,
+    file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
 ) {
     use rayon::prelude::*;
@@ -5850,7 +5933,7 @@ fn emit_functions_parallel<'db>(
 
     // --- Stage B: compile bytecode bodies (parallel: pure codegen) ---
     let watermark = program.objects.len();
-    let compiled: Vec<Option<(Function, ObjectPool)>> = work
+    let compiled: Vec<Option<(Function, ObjectPool, UnitReferences)>> = work
         .par_iter()
         .map(|item| {
             let MirFunctionKind::Bytecode(body) = &item.mir.kind else {
@@ -5858,6 +5941,7 @@ fn emit_functions_parallel<'db>(
                 return None;
             };
             let mut fragment = ObjectPool::default();
+            let mut references = UnitReferences::default();
             let empty_capture_types = Vec::new();
             let empty_spawn_capture_indices = HashSet::new();
             let lambda_info = compile_lambdas_flat(
@@ -5876,6 +5960,7 @@ fn emit_functions_parallel<'db>(
                 class_fields,
                 &mut fragment,
                 watermark,
+                &mut references,
                 opt,
             );
             let lambda_obj_indices: Vec<usize> = lambda_info.iter().map(|(idx, _)| *idx).collect();
@@ -5895,6 +5980,7 @@ fn emit_functions_parallel<'db>(
                 lambda_names: &lambda_names_vec,
                 capture_types: &empty_capture_types,
                 spawn_capture_indices: &empty_spawn_capture_indices,
+                references: &mut references,
             };
             let mut f = compile_mir_function(
                 body,
@@ -5906,7 +5992,7 @@ fn emit_functions_parallel<'db>(
             );
             f.name.clone_from(&item.fq_name);
             f.source_file.clone_from(&item.source_file);
-            Some((f, fragment))
+            Some((f, fragment, references))
         })
         .collect();
 
@@ -5924,7 +6010,13 @@ fn emit_functions_parallel<'db>(
     for (item, slot) in work.into_iter().zip(compiled) {
         let func_loc = FunctionLoc::new(db, item.file, item.local_id);
         let mut compiled_fn = match slot {
-            Some((function, fragment)) => {
+            Some((function, fragment, references)) => {
+                if !item.is_builtin_file {
+                    file_references
+                        .entry(item.source_file.clone())
+                        .or_default()
+                        .merge(references);
+                }
                 merge_function_fragment(program, watermark, fragment, function, &mut intern)
             }
             None => {
@@ -6245,6 +6337,7 @@ fn compile_lambdas_flat<'db>(
     class_fields: &ClassFieldSnapshot,
     objects: &mut ObjectPool,
     objects_base: usize,
+    references: &mut UnitReferences,
     opt: OptLevel,
 ) -> Vec<(usize, String)> {
     let capture_infos = parent_body.map_or_else(
@@ -6281,6 +6374,7 @@ fn compile_lambdas_flat<'db>(
                     class_fields,
                     objects,
                     objects_base,
+                    references,
                     opt,
                 );
                 let nested_obj_indices: Vec<usize> =
@@ -6301,6 +6395,7 @@ fn compile_lambdas_flat<'db>(
                     lambda_names: &nested_names,
                     capture_types: &capture_info.capture_types,
                     spawn_capture_indices: &capture_info.spawn_capture_indices,
+                    references: &mut *references,
                 };
                 let mut f =
                     compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
@@ -6347,6 +6442,7 @@ fn compile_init_function<'db>(
     enum_variants: &HashMap<String, HashMap<String, usize>>,
     class_fields: &ClassFieldSnapshot,
     program: &mut Program,
+    file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
 ) -> Result<Function, LoweringError> {
     // Build the $init bytecode: a sequence of Call + StoreGlobal pairs.
@@ -6370,6 +6466,11 @@ fn compile_init_function<'db>(
                 let line_starts = build_line_starts(file.text(db));
                 // Compile lambda children first and collect their object indices.
                 let source_file = relative_source_path(db, *file);
+                // The helper's references are the `let`'s own dependencies:
+                // attribute them to the file that declares the `let`, not to
+                // the synthesized `$init` tail (which is rebuilt every
+                // compile and belongs to no file).
+                let mut references = UnitReferences::default();
                 let empty_capture_types = Vec::new();
                 let empty_spawn_capture_indices = HashSet::new();
                 let lambda_info = compile_lambdas_flat(
@@ -6388,6 +6489,7 @@ fn compile_init_function<'db>(
                     class_fields,
                     &mut program.objects,
                     0,
+                    &mut references,
                     opt,
                 );
                 let lambda_let_obj_indices: Vec<usize> =
@@ -6408,11 +6510,18 @@ fn compile_init_function<'db>(
                     lambda_names: &lambda_let_names,
                     capture_types: &empty_capture_types,
                     spawn_capture_indices: &empty_spawn_capture_indices,
+                    references: &mut references,
                 };
                 let mut helper = compile_mir_function(&mir_body, 0, None, &line_starts, ctx, opt);
                 helper.name = format!("$init_let_{i}");
                 helper.source_file.clone_from(&source_file);
                 helper.arity = 0;
+                if !source_file.starts_with("<builtin>/") {
+                    file_references
+                        .entry(source_file.clone())
+                        .or_default()
+                        .merge(references);
+                }
                 helper
             }
             None => {

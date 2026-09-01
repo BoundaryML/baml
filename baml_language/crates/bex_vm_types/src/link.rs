@@ -313,6 +313,11 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
         exports,
         package_fragment: ProgramPackageFrag::default(),
         callable_throws_fragment: Vec::new(),
+        // The stub only re-exports objects the dependency image already
+        // compiled; it performs no resolutions of its own and is never a
+        // dirty-tracking subject.
+        referenced_names: Vec::new(),
+        bakes_type_layout: false,
         init_tail: None,
     };
 
@@ -1403,6 +1408,8 @@ mod tests {
             },
             package_fragment: ProgramPackageFrag::default(),
             callable_throws_fragment: Vec::new(),
+            referenced_names: Vec::new(),
+            bakes_type_layout: false,
             init_tail: None,
         }
     }
@@ -1519,6 +1526,8 @@ mod tests {
             },
             package_fragment: ProgramPackageFrag::default(),
             callable_throws_fragment: Vec::new(),
+            referenced_names: Vec::new(),
+            bakes_type_layout: false,
             init_tail: None,
         };
         // Unit B: defines class b.D and function b.g.
@@ -1541,6 +1550,8 @@ mod tests {
             },
             package_fragment: ProgramPackageFrag::default(),
             callable_throws_fragment: Vec::new(),
+            referenced_names: Vec::new(),
+            bakes_type_layout: false,
             init_tail: None,
         };
 

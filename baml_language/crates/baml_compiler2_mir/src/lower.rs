@@ -3716,7 +3716,17 @@ impl<'db> LoweringContext<'db> {
         match value_count.checked_sub(layout.len()) {
             Some(0) => {}
             Some(1) => layout.0.insert(0, None),
-            _ => unreachable!("call operands do not match the checked parameter list"),
+            // The layout has one slot per declared parameter while `value_count`
+            // is what the call site pushes, so they can only disagree when the
+            // call is arity-wrong — which a CHECKED program cannot contain, and
+            // lowering only ever runs on one. Carrying on with no layout would
+            // emit a call whose slots nothing describes, so this stays fatal.
+            _ => unreachable!(
+                "lowered a call whose {value_count} operand(s) do not match its {} \
+                 checked parameter slot(s): this program reached MIR with a live \
+                 arity error, so a caller lowered without checking first",
+                layout.len(),
+            ),
         }
         Some(layout)
     }
