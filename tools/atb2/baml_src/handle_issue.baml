@@ -28,50 +28,81 @@ enum HandleMode {
 }
 
 // ==================== Pipeline ====================
-//#handle_issue(issue: Issue, mode: HandleMode = HandleMode.Live, update: bool = false) -> Issue
+/// A PR under review: merge_issue hands handle_issue the PR's branch and the
+/// feedback (failing checks, reviewer comments) to address on it.
+class Review {
+    branch: string,
+    /// The brief: what CI and the reviewer said, as merge_issue renders it.
+    feedback: string,
+}
+
+//#handle_issue(issue: Issue, mode: HandleMode = HandleMode.Live, update: bool = false, review: Review? = null) -> Issue
 function handle_issue(
     issue: Issue,
     mode: HandleMode = HandleMode.Live,
     update: bool = false,
+    review: Review? = null,
 ) -> Issue {
-    //# skip: not ready (not gauged / not open / already handled)
-    let skip = handle_ready(issue, update);
-    if (skip != null) {
-        log.info({ "issue": issue.id, "skipped": skip });
-        return issue;
+    if (review == null) {
+        //# skip: not ready (not gauged / not open / already handled)
+        let skip = handle_ready(issue, update);
+        if (skip != null) {
+            log.info({ "issue": issue.id, "skipped": skip });
+            return issue;
+        };
+        //# is it still broken on canary HEAD?
+        // canary is fetched and its baml-cli rebuilt (seconds when warm) so the
+        // repros are checked against what a PR would actually land on
+        ensure_cache();
+        build_canary_cli();
+        if (!still_broken(issue)) {
+            //## already fixed: nothing to do
+            log.info({ "issue": issue.id, "kind": "already_fixed", "checked_with": check_cli() });
+            return issue;
+        };
+    } else {
+        //# under review: fetch the repo
+        ensure_cache();
     };
-    let difficulty = issue.difficulty ?? baml.sys.panic("handle_issue: gauge_issue first (" + issue.id + ")");
-    //# is it still broken on canary HEAD?
-    // canary is fetched and its baml-cli rebuilt (seconds when warm) so the
-    // repros are checked against what a PR would actually land on
-    ensure_cache();
-    build_canary_cli();
-    if (!still_broken(issue)) {
-        //## already fixed: nothing to do
-        log.info({ "issue": issue.id, "kind": "already_fixed", "checked_with": check_cli() });
-        return issue;
+    let difficulty = issue.difficulty ?? Difficulty.Medium;
+    //# open a worktree: a fresh branch, or the PR's branch under review
+    let sb = match (review) {
+        null => open_sandbox(issue, update),
+        let r: Review => open_branch_sandbox(r.branch, true),
     };
-    //# open a worktree on a fresh branch
-    let sb = open_sandbox(issue, update);
     let keep_branch = false;
     defer {
         //## always: tear the sandbox down
         close_sandbox(sb, keep_branch);
     }
     let started = baml.time.Instant.now();
-    //# design pass: investigate, propose the fix, write the plan (read-only)
-    let design = run_agent_design(sb, issue, design_budget_s(difficulty));
-    if (design == null) {
-        //## stop: the design agent produced nothing
-        write_outcome(sb, stopped_outcome(sb, started));
-        return issue;
+    let doc = "";
+    if (review == null) {
+        //# design pass: investigate, propose the fix, write the plan (read-only)
+        let design = run_agent_design(sb, issue, design_budget_s(difficulty));
+        if (design == null) {
+            //## stop: the design agent produced nothing
+            write_outcome(sb, stopped_outcome(sb, started));
+            return issue;
+        };
+        doc = render_design_doc(design ?? baml.sys.panic("unreachable"));
+        baml.fs.write(sb.run_dir + "/design.md", doc);
+        if (difficulty == Difficulty.Hard) {
+            //## hard: hand the design doc to the shepherd, no code change
+            write_outcome(sb, outcome(sb, "hard", null, started, null, null, doc));
+            return with_design_doc(issue, doc);
+        };
+    } else {
+        //# under review: the feedback is the plan
+        doc = review.feedback;
+        baml.fs.write(sb.run_dir + "/review.md", doc);
     };
-    let doc = render_design_doc(design ?? baml.sys.panic("unreachable"));
-    baml.fs.write(sb.run_dir + "/design.md", doc);
-    if (difficulty == Difficulty.Hard) {
-        //## hard: hand the design doc to the shepherd, no code change
-        write_outcome(sb, outcome(sb, "hard", null, started, null, null, doc));
-        return with_design_doc(issue, doc);
+    // what the caller gets back: the design doc lands on the issue; review
+    // feedback does not
+    let out = if (review == null) {
+        with_design_doc(issue, doc)
+    } else {
+        issue
     };
     //# fix pass: implement the plan, encode the repros as tests
     warm_build(sb);
@@ -80,7 +111,7 @@ function handle_issue(
         //## stop: the fix agent ran out of budget or reported nothing
         keep_branch = mode == HandleMode.Live;
         write_outcome(sb, stopped_outcome(sb, started));
-        return with_design_doc(issue, doc);
+        return out;
     };
     let fix = report ?? baml.sys.panic("unreachable");
     //# re-run the gate ourselves (the agent's own claim is never trusted)
@@ -90,7 +121,23 @@ function handle_issue(
         //## stop: gate failed — branch kept for a human in Live mode
         keep_branch = mode == HandleMode.Live;
         write_outcome(sb, outcome(sb, "gate_failed", null, started, gate, fix, doc));
-        return with_design_doc(issue, doc);
+        return out;
+    };
+    if (review != null) {
+        //# under review: push the fix to the PR and say what was addressed
+        if (mode == HandleMode.DryRun) {
+            //## dry run: stop before the push
+            write_outcome(sb, outcome(sb, "fixed", null, started, gate, fix, null));
+            return out;
+        };
+        push_branch(sb);
+        let pr = match (issue.status) {
+            let s: InProgress => s.pr ?? "",
+            _ => "",
+        };
+        comment_on_pr(sb, pr, review_comment(fix));
+        write_outcome(sb, outcome(sb, "fixed", pr, started, gate, fix, null));
+        return out;
     };
     //# write the PR body
     let draft = PrDraft {
@@ -645,10 +692,14 @@ function branch_exists_on_origin(branch: string) -> bool {
 }
 
 function open_sandbox(issue: Issue, update: bool) -> Sandbox {
+    open_branch_sandbox(branch_for(issue), update)
+}
+
+/// The sandbox for any branch: a fresh one off origin/canary, or (`update`)
+/// the branch as it is on origin. merge_issue opens PR branches this way.
+function open_branch_sandbox(branch: string, update: bool) -> Sandbox {
     //# get the repo
     let repo = cache_repo();
-    //# get the branch
-    let branch = branch_for(issue);
     //# get the worktree
     let wt = worktree_for(branch);
     //# get the run dir
@@ -1013,9 +1064,12 @@ function implement_fix(
     prompt: `
         ${sandbox_rules(branch)}
 
-        Fix this issue in the BAML toolchain. A read-only design pass has already investigated
-        it and written the plan below; follow the plan unless the code proves it wrong, and if
-        you deviate, say so in \`summary\`.
+        Fix this issue in the BAML toolchain. Below is either the plan a read-only design pass
+        wrote, or (when this branch is already a PR) the CI failures and reviewer comments to
+        address on it; follow it unless the code proves it wrong, and if you deviate, say so in
+        \`summary\`. For review feedback: read the branch's own diff first
+        (\`git diff origin/canary...HEAD\`), address ALL of it and nothing else, and when a
+        comment is wrong leave the code and say why in \`blockers\` (one line per comment id).
 
         Title: ${issue.title}
         Subsystem: ${issue.subsystem.to_string()}
@@ -1028,7 +1082,7 @@ function implement_fix(
         Repros (${issue.repros.length().to_string()}):
         ${issue.repros.map((r: Repro) -> string { format_repro(r) }).join("\n\n")}
 
-        The plan from the design pass:
+        The plan, or the feedback to address:
         ${plan}
 
         How to work:
@@ -1573,14 +1627,14 @@ function passed_count(output: string) -> string? {
     found
 }
 
-/// Live only. Lifts the worktree's push guard, pushes, and opens a draft
-/// PR — or updates the existing PR for the branch.
-function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
-    //# lift the push guard and push the branch
-    let env = sandbox_env(true);
+/// Live only. Lifts the worktree's push guard for this one push. The
+/// guard is set by open_sandbox and is what keeps the agent from pushing.
+function push_branch(sb: Sandbox) -> null {
+    //# lift the push guard for this one push
     // pushurl is multi-valued, so it cannot be overridden with -c; the
     // no_push guard is removed here, and only here, for this one push
     git(sb.worktree, ["config", "--worktree", "--unset-all", "remote.origin.pushurl"]);
+    //# push with the host's credentials, hooks off
     let push = run_with(
         Cmd {
             program: "git",
@@ -1596,11 +1650,54 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
             cwd: sb.worktree,
             timeout_ms: 600000,
         },
-        env,
+        sandbox_env(true),
     );
     if (!push.ok) {
+        //## stop: the push was rejected
         baml.sys.panic("push failed: " + tail(push.stderr, 5));
     };
+    null
+}
+
+/// The PR comment after a review round: what was addressed, what was left
+/// and why. "@coderabbitai resolve" asks CodeRabbit to resolve its threads.
+function review_comment(r: FixReport) -> string {
+    "atb2 review round\n\n"
+        + r.summary.trim()
+        + "\n\n"
+        + (
+            match (r.blockers) {
+                null => "",
+                let b: string => "Not changed, and why:\n" + b.trim() + "\n\n",
+            }
+        )
+        + "_Files: "
+        + r.files_changed.join(", ")
+        + ". The full gate was re-run before this push._\n\n@coderabbitai resolve"
+}
+
+/// Live only. Posts `body` on the PR.
+function comment_on_pr(sb: Sandbox, pr: string, body: string) -> null {
+    let path = sb.run_dir + "/review_comment.md";
+    baml.fs.write(path, body);
+    run_with(
+        Cmd {
+            program: "gh",
+            args: ["pr", "comment", pr, "--repo", repo_slug(), "--body-file", path],
+            cwd: sb.worktree,
+            timeout_ms: 120000,
+        },
+        sandbox_env(true),
+    );
+    null
+}
+
+/// Live only. Pushes the branch and opens a draft PR — or updates the
+/// existing PR for the branch.
+function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
+    //# lift the push guard and push the branch
+    let env = sandbox_env(true);
+    push_branch(sb);
     //# update the existing PR for this branch, if there is one
     let body_path = sb.run_dir + "/pr_body.md";
     let existing = run_with(
