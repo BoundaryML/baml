@@ -9,6 +9,7 @@ packages:
   - engine/baml-runtime/src/control_flow/mermaid-sandbox/
   - engine/baml-schema-wasm/*
   - fern
+  - docs
   - engine/baml-runtime/tests/viz-runtime/web
   - examples/internal/vaibhav/*
   - examples/internal/aaron/*

@@ -1,0 +1,4 @@
+{
+  "title": "BWS",
+  "pages": ["index", "get-started", "deployment", "observability", "debugging", "api", "limits"]
+}

@@ -32,7 +32,6 @@
 /languages
 /integ-tests
 /fern
-/docs
 /examples
 # NOTE: typescript2/pkg-playground/wasm is intentionally NOT ignored here. It is
 # gitignored (so it never reaches GitHub), but we DO want the locally-prebuilt

@@ -1,0 +1,16 @@
+# dependencies
+/node_modules
+
+# generated content
+/.source
+
+# build and typecheck output
+/.next
+/out
+*.tsbuildinfo
+
+# local deployment state
+/.vercel
+
+# environment files
+.env*.local
