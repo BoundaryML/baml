@@ -33,6 +33,7 @@ NODE_BUILDER = (
     ROOT / ".github" / "workflows" / "build2-nodejs-sdk.reusable.yaml"
 )
 WEB_NPM_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-web-sdk.yaml"
+WEB_BUILDER = ROOT / ".github" / "workflows" / "build2-web-sdk.reusable.yaml"
 CSHARP_PREPARER = (
     ROOT / ".github" / "workflows" / "prepare-csharp-sdk.reusable.yaml"
 )
@@ -801,6 +802,27 @@ class WorkflowGraphTests(unittest.TestCase):
             ci_dispatch,
         )
         self.assertNotIn("--ref canary", ci_dispatch)
+
+    def test_docs_runtime_is_frozen_verified_and_indexed_with_each_release(self) -> None:
+        workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        web_builder = WEB_BUILDER.read_text(encoding="utf-8")
+        manifest = job_block(workflow, "publish-pkg-boundaryml-com")
+        channel = job_block(workflow, "publish-pkg-channel")
+        dry_run = job_block(workflow, "dry-run-artifacts")
+
+        self.assertIn("baml_language/crates/bridge_wasm", web_builder)
+        self.assertIn("name: docs-runner-dist", web_builder)
+        for block in (manifest, dry_run):
+            self.assertIn("name: docs-runner-dist", block)
+            self.assertIn("docs/scripts/package-runner-artifact.mjs", block)
+            self.assertIn("docs/scripts/verify-runnable-examples.mjs", block)
+            self.assertIn("runtime.json", block)
+        self.assertIn("application/javascript", manifest)
+        self.assertIn("application/wasm", manifest)
+        self.assertIn('--slurpfile runtime "manifests/docs/v$VERSION/runtime.json"', channel)
+        self.assertIn('path: ("v" + $version + "/runtime.json")', channel)
+        self.assertIn('payloadSha256: $runtime[0].payloadSha256', channel)
+        self.assertIn("publish-pkg-boundaryml-com", channel)
 
     def test_production_release_is_ci_attested_and_least_privilege(self) -> None:
         release = RELEASE_WORKFLOW.read_text(encoding="utf-8")

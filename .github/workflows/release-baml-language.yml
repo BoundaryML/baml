@@ -1800,6 +1800,10 @@ jobs:
         with:
           name: swift-xcframework
           path: dist/swift
+      - uses: actions/download-artifact@v4
+        with:
+          name: docs-runner-dist
+          path: dist/docs-runner
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
@@ -1872,6 +1876,15 @@ jobs:
               --source-revision "$SOURCE_REVISION" \
               --released-at "$RELEASED_AT" \
               --output "manifests/docs/v$VERSION/stdlib.json"
+          BAML_BIN="$docs_work/bin/baml-cli" \
+            node docs/scripts/package-runner-artifact.mjs \
+              --input dist/docs-runner \
+              --version "$VERSION" \
+              --source-revision "$SOURCE_REVISION" \
+              --output "manifests/docs/v$VERSION"
+          BAML_BIN="$docs_work/bin/baml-cli" \
+            node docs/scripts/verify-runnable-examples.mjs \
+              --manifest "manifests/docs/v$VERSION/runtime.json"
       - uses: actions/upload-artifact@v4
         with:
           name: release-manifests
@@ -1883,6 +1896,7 @@ jobs:
           upload_immutable() {
             local source="$1"
             local dest="$2"
+            local content_type="${3:-application/json}"
             local tmp
             local err
             tmp="$(mktemp)"
@@ -1903,7 +1917,7 @@ jobs:
               fi
             elif grep -Eq '(\(404\)|Not Found|NoSuchKey)' "$err"; then
               aws s3 cp "$source" "s3://$PKG_BUCKET/$dest" \
-                --content-type application/json \
+                --content-type "$content_type" \
                 --cache-control "public, max-age=86400, immutable"
             else
               echo "::error::failed to inspect immutable object before upload: $dest"
@@ -1917,6 +1931,18 @@ jobs:
           version="${{ needs.plan.outputs.version }}"
           upload_immutable "manifests/version/$version.json" "manifest/v1/version/$version.json"
           upload_immutable "manifests/docs/v$version/stdlib.json" "manifest/v1/docs/v$version/stdlib.json"
+          runtime_manifest="manifests/docs/v$version/runtime.json"
+          runtime_module="$(jq -r .module.path "$runtime_manifest")"
+          runtime_wasm="$(jq -r .wasm.path "$runtime_manifest")"
+          upload_immutable "$runtime_manifest" "manifest/v1/docs/v$version/runtime.json"
+          upload_immutable \
+            "manifests/docs/v$version/$runtime_module" \
+            "manifest/v1/docs/v$version/$runtime_module" \
+            application/javascript
+          upload_immutable \
+            "manifests/docs/v$version/$runtime_wasm" \
+            "manifest/v1/docs/v$version/$runtime_wasm" \
+            application/wasm
           if [[ -f manifests/wrapper.json ]]; then
             aws s3 cp manifests/wrapper.json "s3://$PKG_BUCKET/manifest/v1/wrapper.json" \
               --content-type application/json \
@@ -2078,7 +2104,8 @@ jobs:
           jq \
             --arg channel "$CHANNEL" \
             --arg version "$VERSION" \
-            --slurpfile release "manifests/docs/v$VERSION/stdlib.json" '
+            --slurpfile release "manifests/docs/v$VERSION/stdlib.json" \
+            --slurpfile runtime "manifests/docs/v$VERSION/runtime.json" '
               .schema = 1
               | .aliases = ((.aliases // {}) + {($channel): $version})
               | .defaultVersion = if $channel == "nightly" then (.defaultVersion // $version) else $version end
@@ -2091,6 +2118,10 @@ jobs:
                     stdlib: {
                       path: ("v" + $version + "/stdlib.json"),
                       payloadSha256: $release[0].payloadSha256
+                    },
+                    runtime: {
+                      path: ("v" + $version + "/runtime.json"),
+                      payloadSha256: $runtime[0].payloadSha256
                     }
                   }
                 }] + [(.versions // [])[] | select(.version != $version)])
@@ -2269,6 +2300,10 @@ jobs:
         with:
           name: swift-xcframework
           path: dist/swift
+      - uses: actions/download-artifact@v4
+        with:
+          name: docs-runner-dist
+          path: dist/docs-runner
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
@@ -2342,6 +2377,15 @@ jobs:
               --source-revision "$SOURCE_REVISION" \
               --released-at "$RELEASED_AT" \
               --output "dry-run/manifest/v1/docs/v$VERSION/stdlib.json"
+          BAML_BIN="$docs_work/bin/baml-cli" \
+            node docs/scripts/package-runner-artifact.mjs \
+              --input dist/docs-runner \
+              --version "$VERSION" \
+              --source-revision "$SOURCE_REVISION" \
+              --output "dry-run/manifest/v1/docs/v$VERSION"
+          BAML_BIN="$docs_work/bin/baml-cli" \
+            node docs/scripts/verify-runnable-examples.mjs \
+              --manifest "dry-run/manifest/v1/docs/v$VERSION/runtime.json"
       - uses: actions/upload-artifact@v4
         with:
           name: dry-run-release-files

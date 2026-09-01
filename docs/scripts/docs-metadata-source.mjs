@@ -23,6 +23,10 @@ export function versionMetadataUrl(baseUrl, version) {
   return `${baseUrl.replace(/\/$/, '')}/docs/v${encodeURIComponent(version)}/stdlib.json`;
 }
 
+export function versionRuntimeUrl(baseUrl, version) {
+  return `${baseUrl.replace(/\/$/, '')}/docs/v${encodeURIComponent(version)}/runtime.json`;
+}
+
 export function docsVersionsIndexUrl(baseUrl) {
   return `${baseUrl.replace(/\/$/, '')}/docs/versions.json`;
 }
@@ -53,6 +57,17 @@ export function validateDocsVersionsIndex(index) {
     }
     if (!/^[0-9a-f]{64}$/.test(entry.artifacts.stdlib.payloadSha256)) {
       throw new Error(`Docs versions index entry ${entry.version} has an invalid stdlib payload checksum`);
+    }
+    // Runtime publishing starts after stdlib publishing, so retained historical
+    // versions may legitimately predate this artifact. Every newly promoted
+    // release includes it; if present, it must be immutable and integrity-bound.
+    if (entry.artifacts.runtime !== undefined) {
+      if (entry.artifacts.runtime?.path !== `v${entry.version}/runtime.json`) {
+        throw new Error(`Docs versions index entry ${entry.version} has an invalid runtime artifact path`);
+      }
+      if (!/^[0-9a-f]{64}$/.test(entry.artifacts.runtime.payloadSha256)) {
+        throw new Error(`Docs versions index entry ${entry.version} has an invalid runtime payload checksum`);
+      }
     }
   }
   if (!names.has(index.defaultVersion)) {

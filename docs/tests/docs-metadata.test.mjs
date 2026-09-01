@@ -16,6 +16,7 @@ import {
   validateChannelManifest,
   validateDocsVersionsIndex,
   versionMetadataUrl,
+  versionRuntimeUrl,
 } from '../scripts/docs-metadata-source.mjs';
 import { buildBamlReferenceFiles } from '../scripts/generate-baml-reference.mjs';
 import { buildVersionedReferences, versionDirectory } from '../scripts/versioned-reference.mjs';
@@ -225,6 +226,7 @@ test('resolves a mutable channel only to its exact immutable metadata URL', () =
   const version = validateChannelManifest({ schema: 1, channel: 'canary', version: '1.2.3' }, 'canary');
   assert.equal(channelManifestUrl(base, 'canary'), `${base}canary.json`);
   assert.equal(versionMetadataUrl(base, version), `${base}docs/v1.2.3/stdlib.json`);
+  assert.equal(versionRuntimeUrl(base, version), `${base}docs/v1.2.3/runtime.json`);
 });
 
 test('validates the curated multi-version discovery index', () => {
@@ -233,7 +235,10 @@ test('validates the curated multi-version discovery index', () => {
     channel,
     releasedAt: '2026-08-31T00:00:00.000Z',
     sourceRevision: source.repeat(40),
-    artifacts: { stdlib: { path: `v${version}/stdlib.json`, payloadSha256: source.repeat(64) } },
+    artifacts: {
+      stdlib: { path: `v${version}/stdlib.json`, payloadSha256: source.repeat(64) },
+      runtime: { path: `v${version}/runtime.json`, payloadSha256: source.repeat(64) },
+    },
   });
   const index = {
     schema: 1,
@@ -254,11 +259,20 @@ test('validates the curated multi-version discovery index', () => {
   const duplicate = structuredClone(index);
   duplicate.versions[1].version = '1.2.3';
   duplicate.versions[1].artifacts.stdlib.path = 'v1.2.3/stdlib.json';
+  duplicate.versions[1].artifacts.runtime.path = 'v1.2.3/runtime.json';
   assert.throws(() => validateDocsVersionsIndex(duplicate), /duplicate version 1\.2\.3/);
 
   const unsafe = structuredClone(index);
   unsafe.versions[0].artifacts.stdlib.path = '../stdlib.json';
   assert.throws(() => validateDocsVersionsIndex(unsafe), /invalid stdlib artifact path/);
+
+  const historicalWithoutRuntime = structuredClone(index);
+  delete historicalWithoutRuntime.versions[1].artifacts.runtime;
+  assert.equal(validateDocsVersionsIndex(historicalWithoutRuntime), historicalWithoutRuntime);
+
+  const unsafeRuntime = structuredClone(index);
+  unsafeRuntime.versions[0].artifacts.runtime.path = '../runtime.json';
+  assert.throws(() => validateDocsVersionsIndex(unsafeRuntime), /invalid runtime artifact path/);
 
   const unknownAlias = structuredClone(index);
   unknownAlias.aliases.nightly = '1.2.1';

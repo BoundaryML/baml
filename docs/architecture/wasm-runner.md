@@ -1,6 +1,7 @@
 # BAML/WASM runner spike
 
-Status: browser component and a source-pinned preview artifact are implemented.
+Status: browser component, source-pinned preview artifact, and versioned release
+producer are implemented.
 
 ## Decision
 
@@ -95,7 +96,10 @@ exact checked-in WASM artifact. The outputs must agree.
 
 ## Remaining implementation work
 
-1. Publish the runtime artifact for every stable/canary language release.
+1. Make the TypeScript-only docs build materialize the indexed release runtime
+   and remove the transitional checked-in browser snapshot. Release CI now
+   publishes `v<version>/runtime.json` plus content-addressed JS/WASM and verifies
+   it against the exact native CLI before promoting the version index.
 2. Extract the docs-owned RunStore client, VFS, and result decoder into a small
    published browser-runtime package shared with the book.
 3. Run browser benchmarks in the preview environment and replace the

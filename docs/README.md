@@ -38,6 +38,13 @@ in the set. Each release JSON contains all toolchain-discovered packages—not a
 docs-maintained list—and generated symbols use fully qualified names such as
 `baml.http.Request`.
 
+The same release freezes the matching browser runtime at
+`/manifest/v1/docs/v<version>/runtime.json`, with its JavaScript and WASM files
+under content-addressed paths beside that manifest. The version index binds both
+`stdlib.json` and `runtime.json` by payload checksum. Release CI runs every
+registered example through the exact native CLI and exact packaged WASM before
+advertising either artifact.
+
 Pull-request verification and its exact-metadata Vercel preview pass the
 source-built JSON together with a captured copy of the curated version index.
 The source-built toolchain becomes the default while the other immutable

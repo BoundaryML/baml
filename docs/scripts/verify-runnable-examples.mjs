@@ -7,15 +7,27 @@ import { createSession } from '../lib/baml-runner/driver.mjs';
 import { runnableExamples } from '../lib/baml-runner/examples.mjs';
 import { formatValue } from '../lib/baml-runner/outbound.mjs';
 import { BamlVfs } from '../lib/baml-runner/vfs.mjs';
+import { resolveRuntimePath, verifyRuntimeFiles } from './runtime-artifact.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repositoryRoot = path.resolve(packageRoot, '..');
 const publicRoot = path.join(packageRoot, 'public');
+const args = process.argv.slice(2);
+const manifestIndex = args.indexOf('--manifest');
+const manifestPath = manifestIndex === -1
+  ? path.join(publicRoot, 'baml-runtime/manifest.json')
+  : path.resolve(args[manifestIndex + 1]);
 const manifest = JSON.parse(
-  await readFile(path.join(publicRoot, 'baml-runtime/manifest.json'), 'utf8'),
+  await readFile(manifestPath, 'utf8'),
 );
-const runtimeModule = path.join(publicRoot, manifest.module.slice(1));
-const runtimeWasm = path.join(publicRoot, manifest.wasm.slice(1));
+const releaseArtifact = manifest.kind === 'baml.docs-runtime';
+if (releaseArtifact) await verifyRuntimeFiles(manifest, path.dirname(manifestPath));
+const runtimeModule = releaseArtifact
+  ? resolveRuntimePath(path.dirname(manifestPath), manifest.module.path)
+  : path.join(publicRoot, manifest.module.slice(1));
+const runtimeWasm = releaseArtifact
+  ? resolveRuntimePath(path.dirname(manifestPath), manifest.wasm.path)
+  : path.join(publicRoot, manifest.wasm.slice(1));
 const wasm = await import(pathToFileURL(runtimeModule).href);
 await wasm.default({ module_or_path: await readFile(runtimeWasm) });
 

@@ -99,6 +99,25 @@ jobs:
           test "$(jq -r '.[0].name' package-dry-run.json)" = "@boundaryml/baml-bridge-web"
           test "$(jq -r '.[0].version' package-dry-run.json)" = "$plan_version"
 
+      - name: Build frozen developer-docs runtime
+        run: |
+          set -euo pipefail
+          CARGO_PROFILE_RELEASE_OPT_LEVEL=z wasm-pack build \
+            baml_language/crates/bridge_wasm \
+            --target web \
+            --release \
+            --out-dir "$RUNNER_TEMP/docs-runner-dist" \
+            --out-name bridge_wasm
+
+      - name: Upload developer-docs runtime
+        uses: actions/upload-artifact@v7
+        with:
+          name: docs-runner-dist
+          path: |
+            ${{ runner.temp }}/docs-runner-dist/bridge_wasm.js
+            ${{ runner.temp }}/docs-runner-dist/bridge_wasm_bg.wasm
+          if-no-files-found: error
+
       - name: Upload Web SDK dist
         uses: actions/upload-artifact@v7
         with:
