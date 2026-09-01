@@ -37,3 +37,12 @@ test('generated package reference is part of the language route tree', async () 
     access(path.join(packageRoot, 'generated', 'baml', 'manifest.json')),
   ]);
 });
+
+test('generated CLI reference includes nested public commands', async () => {
+  await Promise.all([
+    access(path.join(packageRoot, 'content', 'cli', 'commands', 'index.md')),
+    access(path.join(packageRoot, 'content', 'cli', 'commands', 'auth', 'index.md')),
+    access(path.join(packageRoot, 'content', 'cli', 'commands', 'auth', 'login.md')),
+    access(path.join(packageRoot, 'generated', 'cli', 'manifest.json')),
+  ]);
+});

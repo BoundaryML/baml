@@ -1,0 +1,114 @@
+---
+title: "baml test"
+description: "Run BAML tests."
+---
+
+
+Run BAML tests.
+
+CLI version: `baml-cli 0.18.0`
+
+```text
+$ baml help test
+Run BAML tests.
+
+With no filters, runs every test selected by the active profile, or every project test when no
+profile is configured. Use `--list` to discover the canonical IDs accepted by `--include` and
+`--exclude`.
+
+Usage: baml test [OPTIONS]
+
+Examples:
+  List available tests:
+    baml test --list
+
+  Run tests in the payments namespace:
+    baml test -i "root.payments::*"
+
+  Run integration tests except slow tests:
+    baml test -i "*::integration::*" -x "slow"
+
+Compiler options:
+  -F, --features <FEATURES>
+          Enable compiler features; repeatable or comma-separated [possible values: beta,
+          display_all_warnings]
+
+Profile options:
+      --profile <NAME>
+          Apply a named test profile from `baml.toml`.
+
+          Profile arguments establish the initial test set; command-line filters further narrow it.
+
+      --no-profile
+          Do not apply the default profile configured in `baml.toml`
+
+Selection options:
+      --list
+          List selected test IDs instead of running them.
+
+          Each canonical ID is valid as an `--include` or `--exclude` selector.
+
+  -i, --include <INCLUDE>
+          Include tests matching a canonical-ID selector. Repeatable
+
+  -x, --exclude <EXCLUDE>
+          Exclude tests matching a selector. Exclusions take precedence
+
+Test output options:
+      --log <LEVEL>
+          Set the BAML log level; overrides BAML_LOG [default: off] [possible values: off, error,
+          warn, info, debug, trace]
+
+Global options:
+  -q, --quiet...
+          Suppress nonessential output
+
+  -v, --verbose...
+          Increase diagnostic verbosity. Repeatable
+
+      --color <WHEN>
+          Control ANSI colors [possible values: auto, always, never]
+
+      --no-progress
+          Disable progress output
+
+      --directory <PATH>
+          Change to this directory before running the command
+
+      --project <PATH>
+          Discover the BAML project from this path
+
+      --output-preset <PRESET>
+          Select output defaults [default: auto] [possible values: auto, human, agent]
+
+      --hyperlinks <WHEN>
+          Control terminal hyperlinks [possible values: auto, always, never]
+
+      --diagnostic-format <FORMAT>
+          Select the diagnostic format [possible values: human, agent, concise]
+
+  -h, --help
+          Display concise help for this command
+
+SELECTORS:
+  Test IDs are case-sensitive and canonical: `root[.namespace]::testset::test`.
+  Plain selectors match anywhere in the full ID. A selector containing `*` is
+  an anchored full-ID glob, and `*` also matches `::`. Repeated includes are OR.
+  Excludes always win. With no includes, every non-excluded test is selected.
+
+PROFILES:
+  Profile names are case-sensitive. A profile is preset `baml test` argv, parsed
+  without shell expansion:
+
+    [test]
+    default = "regular"
+
+    [test.profiles.regular]
+    args = ["-x", "::integration::", "--color", "never"]
+
+  Profile includes establish the initial candidates; direct CLI includes narrow
+  them. Excludes accumulate and always win. Direct scalar options override
+  profile scalar options. Profile args cannot contain --profile, --no-profile,
+  --project, --directory, --from, --features, or --help. With no default profile,
+  all tests are selected.
+```

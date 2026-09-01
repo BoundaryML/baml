@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "build": "next build",
+    "check:cli-reference": "node scripts/generate-cli-reference.mjs --check",
     "check:reference": "node scripts/generate-baml-reference.mjs --check",
     "dev": "next dev",
+    "generate:cli-reference": "node scripts/generate-cli-reference.mjs",
     "generate:reference": "node scripts/generate-baml-reference.mjs",
     "runner:measure": "node scripts/measure-wasm.mjs",
     "start": "next start",

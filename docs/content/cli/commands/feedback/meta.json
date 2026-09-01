@@ -1,0 +1,11 @@
+{
+  "title": "baml feedback",
+  "pages": [
+    "index",
+    "status",
+    "list",
+    "view",
+    "disable",
+    "enable"
+  ]
+}
