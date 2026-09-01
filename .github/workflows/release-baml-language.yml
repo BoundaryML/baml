@@ -1,5 +1,7 @@
 name: BAML Language Release
 
+run-name: "${{ inputs.dry_run && 'Dry run' || 'Publish' }} · ${{ inputs.channel }} · ${{ inputs.version || 'auto-version' }}"
+
 # Channel-aware replacement for the legacy BAML language release workflow.
 # Release workflows run packaging smoke tests only; the full suite runs in CI.
 
@@ -10,6 +12,11 @@ name: BAML Language Release
 #     midnight America/Los_Angeles, when canary moved since the last nightly.
 # Both pin the run to the immutable `baml-language-source-<sha>` tag CI created
 # for the commit, which the attestation below re-checks.
+#
+# Dispatchers also compute the release plan before dispatch so the requested
+# canonical version can name the run. This workflow recomputes the plan from the
+# immutable source and refuses production unless both versions match; the input
+# is a request and display label, never the publishing source of truth.
 #
 # One dispatcher per channel is deliberate: a canary release used to chain a
 # nightly of its own, which meant two sites racing to name the same night with
@@ -36,6 +43,11 @@ on:
         type: boolean
         default: true
         required: true
+      version:
+        description: "Canonical release version requested by the dispatcher (required for production)"
+        type: string
+        default: ""
+        required: false
       source_sha:
         description: "Commit to release (defaults to the dispatched ref's head)"
         type: string
@@ -197,6 +209,7 @@ jobs:
         env:
           INPUT_CHANNEL: ${{ inputs.channel }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_VERSION: ${{ inputs.version }}
           INPUT_SOURCE_CI_RUN_ID: ${{ inputs.source_ci_run_id }}
           ATTESTED_SOURCE_BRANCH: ${{ steps.attest.outputs.source_branch }}
           GH_TOKEN: ${{ github.token }}
@@ -205,10 +218,21 @@ jobs:
           channel="${INPUT_CHANNEL:-nightly}"
           dry_run="${INPUT_DRY_RUN:-false}"
           source_branch="${ATTESTED_SOURCE_BRANCH:-${GITHUB_REF_NAME:-}}"
+          if [[ "$dry_run" == "false" && -z "$INPUT_VERSION" ]]; then
+            echo "::error::production releases require an explicit version"
+            exit 1
+          fi
           # `plan` rejects any channel other than canary/nightly.
           scripts/baml-language-version plan --channel "$channel" --out release-plan.json
           source_sha="$(git rev-parse HEAD)"
           version="$(jq -r .canonical_version release-plan.json)"
+          if [[ -n "$INPUT_VERSION" && "$version" != "$INPUT_VERSION" ]]; then
+            echo "::error::requested version $INPUT_VERSION does not match computed version $version"
+            exit 1
+          fi
+          if [[ -n "$INPUT_VERSION" ]]; then
+            echo "Verified requested release version: $version"
+          fi
           pypi_version="$(jq -r .registry_versions.pypi release-plan.json)"
           crates_io_version="$(jq -r .registry_versions.crates_io release-plan.json)"
           nuget_version="$(jq -r .registry_versions.nuget release-plan.json)"

@@ -1435,6 +1435,12 @@ jobs:
           RELEASE_WORKFLOW_REF: ${{ steps.release-workflow-ref.outputs.ref }}
         run: |
           set -euo pipefail
+          release_plan="$RUNNER_TEMP/canary-release-plan.json"
+          scripts/baml-language-version plan \
+            --channel canary \
+            --out "$release_plan"
+          release_version="$(jq -r .canonical_version "$release_plan")"
+          echo "Requested canary release version: $release_version"
           # Load the workflow definition from the same immutable commit that the
           # release checks out, even if canary advances while this CI run finishes.
           gh workflow run release-baml-language.yml \
@@ -1442,5 +1448,6 @@ jobs:
             --ref "$RELEASE_WORKFLOW_REF" \
             -f channel=canary \
             -f dry_run=false \
+            -f version="$release_version" \
             -f source_sha="$GITHUB_SHA" \
             -f source_ci_run_id="$GITHUB_RUN_ID"
