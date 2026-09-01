@@ -21,7 +21,16 @@ class MergeResult {
     /// on humans. closed: closed without merging. waiting_on_checks: gave
     /// up waiting for checks (ATB2_MAX_WAIT_S). out_of_rounds: `max_rounds`
     /// spent with feedback still pending. dry_run: one round, nothing pushed.
-    kind: "merged" | "green" | "closed" | "waiting_on_checks" | "out_of_rounds" | "dry_run",
+    /// fork_refused: the PR's branch lives in another repository; its code
+    /// would run on this host (build scripts, tests, the agent), so it is
+    /// not touched unless ATB2_ALLOW_FORKS=1.
+    kind: "merged"
+        | "green"
+        | "closed"
+        | "waiting_on_checks"
+        | "out_of_rounds"
+        | "dry_run"
+        | "fork_refused",
     pr: string,
     rounds: int,
 }
@@ -33,10 +42,23 @@ function merge_issue(
     max_rounds: int = 3,
 ) -> MergeResult {
     let started = baml.time.Instant.now();
-    let state = read_merge_state(pr_snapshot(pr).branch);
-    let done = (kind: "merged" | "green" | "closed" | "waiting_on_checks" | "out_of_rounds" | "dry_run") -> MergeResult {
+    let first = pr_snapshot(pr);
+    let state = read_merge_state(first.branch);
+    let done = (
+        kind: "merged"
+            | "green"
+            | "closed"
+            | "waiting_on_checks"
+            | "out_of_rounds"
+            | "dry_run"
+            | "fork_refused",
+    ) -> MergeResult {
         log.info({ "pr": pr, "result": kind, "rounds": state.rounds });
         MergeResult { kind: kind, pr: pr, rounds: state.rounds }
+    };
+    //# refuse: a fork's code would run on this host
+    if (first.cross_repo && !forks_allowed()) {
+        return done("fork_refused");
     };
     //# poll the PR until it merges, closes, or something needs fixing
     while (true) {
@@ -133,6 +155,12 @@ function max_wait_s() -> int {
     }
 }
 
+/// Whether a PR from a fork may be worked on. Off by default: the PR's
+/// branch is built and tested here, and the agent runs Bash in it.
+function forks_allowed() -> bool {
+    (baml.env.get("ATB2_ALLOW_FORKS") ?? "0") == "1"
+}
+
 /// GitHub logins whose review comments are acted on. Humans are not on the
 /// list by default: their comments wait for a human.
 function reviewers() -> string[] {
@@ -169,6 +197,8 @@ class PrSnapshot {
     title: string,
     body: string,
     branch: string,
+    /// The branch lives in another repository (a fork).
+    cross_repo: bool,
     /// OPEN | CLOSED | MERGED
     state: string,
     merged: bool,
@@ -183,7 +213,15 @@ function gh(args: string[]) -> CmdResult {
 
 function pr_snapshot(url: string) -> PrSnapshot {
     //# title, body, branch, state
-    let view = gh(["pr", "view", url, "--json", "number,title,body,headRefName,state,mergedAt"]);
+    let view = gh(
+        [
+            "pr",
+            "view",
+            url,
+            "--json",
+            "number,title,body,headRefName,isCrossRepository,state,mergedAt",
+        ],
+    );
     if (!view.ok) {
         baml.sys.panic("gh pr view failed: " + tail(view.stderr, 3));
     };
@@ -220,6 +258,7 @@ function pr_snapshot(url: string) -> PrSnapshot {
         title: baml.json.path_or<string>(v, ".title", ""),
         body: baml.json.path_or<string>(v, ".body", ""),
         branch: baml.json.path_or<string>(v, ".headRefName", ""),
+        cross_repo: baml.json.path_or<bool>(v, ".isCrossRepository", true),
         state: baml.json.path_or<string>(v, ".state", "OPEN"),
         merged: baml.json.path_or<string>(v, ".mergedAt", "").length() > 0,
         checks: checks,
@@ -261,7 +300,12 @@ function run_id_of(link: string?) -> string? {
     };
     let rest = l.slice((i ?? 0) + marker.length(), l.length());
     let id = rest.split("/").at(0) ?? "";
-    if (id.length() == 0) {
+    // digits only: the link is set by whoever posted the check, and the id
+    // becomes a gh argument
+    let digits = id.chars().filter((c: string) -> bool {
+        c >= "0" && c <= "9"
+    });
+    if (id.length() == 0 || digits.length() != id.length()) {
         null
     } else {
         id
@@ -384,6 +428,7 @@ function snap(checks: CheckRow[], comments: ReviewComment[]) -> PrSnapshot {
         title: "fix(compiler): x",
         body: "Fixes #1",
         branch: "agent/gh-1-x",
+        cross_repo: false,
         state: "OPEN",
         merged: false,
         checks: checks,
@@ -418,6 +463,9 @@ testset "merge_issue" {
         );
         assert.equal(run_id_of("https://example.com/status") == null, true);
         assert.equal(run_id_of(null) == null, true);
+        // a link is whatever the check's author posted: only a numeric id is used
+        assert.equal(run_id_of("https://github.com/x/y/actions/runs/--repo/1") == null, true);
+        assert.equal(run_id_of("https://github.com/x/y/actions/runs/12abc/job/1") == null, true);
     }
 
     test "reviewer comments parse with and without a path" {
@@ -516,6 +564,7 @@ testset "merge_issue" {
 
     test "config defaults" {
         assert.equal(reviewers(), ["coderabbitai[bot]"]);
+        assert.equal(forks_allowed(), false);
         assert.is_true(poll_s() > 0 && max_wait_s() > poll_s());
     }
 }
