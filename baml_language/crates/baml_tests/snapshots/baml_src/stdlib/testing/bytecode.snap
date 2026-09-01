@@ -107,7 +107,7 @@ function testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetRepo
     return
 }
 
-function testing.TestCollector.find_test(self: testing.TestCollector, name: string) -> testing.TestRegistration {
+function testing.TestCollector._find_test(self: testing.TestCollector, name: string) -> testing.TestRegistration {
     load_var self
     load_field .tests
     load_type baml.iter.Iterable<Error = never, Item = testing.TestRegistration>
@@ -143,7 +143,7 @@ function testing.TestCollector.find_test(self: testing.TestCollector, name: stri
     throw
 }
 
-function testing.TestCollector.find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration {
+function testing.TestCollector._find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration {
     load_var self
     load_field .testsets
     load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
@@ -463,138 +463,7 @@ function testing.TestCollector.register_test_set_at(self: testing.TestCollector,
     return
 }
 
-function testing.TestPool.acquire(self: testing.TestPool) -> null {
-  L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const null
-    jump L5
-
-  L2:
-    load_type int
-    load_var self
-    load_field .tokens
-    call baml.Array.pop
-    store_var _5
-    load_var _5
-    narrow_bind int, slot=2
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_const 10
-    call baml.time.Duration.from_milliseconds
-    sys_op baml.sys.sleep
-    pop 1
-    jump L0
-    load_var e
-    throw_if_panic
-    jump L0
-
-  L4:
-    load_const null
-
-  L5:
-    return
-}
-
-function testing.TestPool.release(self: testing.TestPool) -> null {
-    load_type int
-    load_var self
-    load_field .tokens
-    load_const 1
-    call baml.Array.push
-    pop 1
-    load_const null
-    return
-}
-
-function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
-    load_var self
-    load_field .collector
-    load_field .testsets
-    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _4
-
-  L0:
-    load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _5
-    load_var _5
-    is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var _5
-    store_var_load_var ts
-    load_field .name
-    load_var name
-    cmp_op ==
-    pop_jump_if_false L0
-    load_var2 1 5
-    call testing.TestRegistry.expand_testset_registry
-    pop 1
-    load_var self
-    call testing.TestRegistry.serialize
-    jump L5
-
-  L2:
-    load_type string
-    load_type testing.TestRegistry
-    load_var self
-    load_field .expansions
-    call baml.Map.keys
-    load_type baml.iter.Iterable<Error = never, Item = string>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _17
-
-  L3:
-    load_var _17
-    load_type baml.iter.Iterator<Error = never, Item = string>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _18
-    load_var _18
-    is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L6
-
-  L4:
-    load_var _18
-    store_var k
-    load_var self
-    load_field .expansions
-    load_var k
-    load_map_element
-    store_var sub
-    load_var2 2 8
-    load_const "::"
-    bin_op +
-    call baml.String.starts_with
-    pop_jump_if_false L3
-    load_var2 9 2
-    call testing.TestRegistry.expand_set
-
-  L5:
-    return
-
-  L6:
-    load_const "TestSet not found for expansion: "
-    load_var name
-    bin_op +
-    throw
-}
-
-function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: testing.TestSetRegistration) -> testing.TestRegistry {
+function testing.TestRegistry._expand_testset_registry(self: testing.TestRegistry, ts: testing.TestSetRegistration) -> testing.TestRegistry {
     load_type string
     load_type testing.TestRegistry
     load_var self
@@ -673,11 +542,122 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
     return
 }
 
+function testing.TestRegistry._run_all_pooled(self: testing.TestRegistry, pool: testing._TestPool) -> testing.TestSetReport {
+    load_var2 1 2
+    call testing._testset_children
+    load_const null
+    load_var pool
+    call testing._run_testset
+    return
+}
+
+function testing.TestRegistry._run_selected(self: testing.TestRegistry, names: string[]) -> testing.TestSetReport {
+    load_const 0
+    call testing._test_pool
+    store_var _3
+    load_var2 1 2
+    load_var _3
+    call testing.TestRegistry._run_selected_pooled
+    return
+}
+
+function testing.TestRegistry._run_selected_pooled(self: testing.TestRegistry, names: string[], pool: testing._TestPool) -> testing.TestSetReport {
+    load_var2 1 2
+    load_var pool
+    call testing._testset_children_selected
+    load_const null
+    load_var pool
+    call testing._run_testset
+    return
+}
+
+function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
+    load_var self
+    load_field .collector
+    load_field .testsets
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _5
+    store_var_load_var ts
+    load_field .name
+    load_var name
+    cmp_op ==
+    pop_jump_if_false L0
+    load_var2 1 5
+    call testing.TestRegistry._expand_testset_registry
+    pop 1
+    load_var self
+    call testing.TestRegistry.serialize
+    jump L5
+
+  L2:
+    load_type string
+    load_type testing.TestRegistry
+    load_var self
+    load_field .expansions
+    call baml.Map.keys
+    load_type baml.iter.Iterable<Error = never, Item = string>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _17
+
+  L3:
+    load_var _17
+    load_type baml.iter.Iterator<Error = never, Item = string>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _18
+    load_var _18
+    is_type baml.iter.Done
+    pop_jump_if_false L4
+    jump L6
+
+  L4:
+    load_var _18
+    store_var k
+    load_var self
+    load_field .expansions
+    load_var k
+    load_map_element
+    store_var sub
+    load_var2 2 8
+    load_const "::"
+    bin_op +
+    call baml.String.starts_with
+    pop_jump_if_false L3
+    load_var2 9 2
+    call testing.TestRegistry.expand_set
+
+  L5:
+    return
+
+  L6:
+    load_const "TestSet not found for expansion: "
+    load_var name
+    bin_op +
+    throw
+}
+
 function testing.TestRegistry.list_filtered(self: testing.TestRegistry, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
     load_var2 1 2
     load_var2 3 4
     load_var cli_exclude
-    call testing.select_names_layered
+    call testing._select_names_layered
     return
 }
 
@@ -693,19 +673,10 @@ function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.T
 
 function testing.TestRegistry.run_all(self: testing.TestRegistry) -> testing.TestSetReport {
     load_const 0
-    call testing.test_pool
+    call testing._test_pool
     store_var _2
     load_var2 1 2
-    call testing.TestRegistry.run_all_pooled
-    return
-}
-
-function testing.TestRegistry.run_all_pooled(self: testing.TestRegistry, pool: testing.TestPool) -> testing.TestSetReport {
-    load_var2 1 2
-    call testing.testset_children
-    load_const null
-    load_var pool
-    call testing.run_testset
+    call testing.TestRegistry._run_all_pooled
     return
 }
 
@@ -713,10 +684,10 @@ function testing.TestRegistry.run_filtered(self: testing.TestRegistry, profile_i
     load_var2 1 2
     load_var2 3 4
     load_var cli_exclude
-    call testing.select_names_layered
+    call testing._select_names_layered
     store_var selected_names
     load_var max_concurrency
-    call testing.test_pool
+    call testing._test_pool
     store_var pool
     load_var profile_include
     container_len
@@ -760,36 +731,16 @@ function testing.TestRegistry.run_filtered(self: testing.TestRegistry, profile_i
   L3:
     load_var2 1 7
     load_var pool
-    call testing.TestRegistry.run_selected_pooled
+    call testing.TestRegistry._run_selected_pooled
     jump L5
 
   L4:
     load_var2 1 8
-    call testing.TestRegistry.run_all_pooled
+    call testing.TestRegistry._run_all_pooled
 
   L5:
     load_var selected_names
-    call testing.flatten_with_tolerated
-    return
-}
-
-function testing.TestRegistry.run_selected(self: testing.TestRegistry, names: string[]) -> testing.TestSetReport {
-    load_const 0
-    call testing.test_pool
-    store_var _3
-    load_var2 1 2
-    load_var _3
-    call testing.TestRegistry.run_selected_pooled
-    return
-}
-
-function testing.TestRegistry.run_selected_pooled(self: testing.TestRegistry, names: string[], pool: testing.TestPool) -> testing.TestSetReport {
-    load_var2 1 2
-    load_var pool
-    call testing.testset_children_selected
-    load_const null
-    load_var pool
-    call testing.run_testset
+    call testing._flatten_with_tolerated
     return
 }
 
@@ -824,7 +775,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     load_field .body
     load_var t
     load_field .runner
-    call testing.run_test
+    call testing._run_test
     jump L5
 
   L2:
@@ -903,16 +854,16 @@ function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: stri
     cmp_op ==
     pop_jump_if_false L0
     load_const 0
-    call testing.test_pool
+    call testing._test_pool
     store_var pool
     load_var2 1 5
-    call testing.TestRegistry.expand_testset_registry
+    call testing.TestRegistry._expand_testset_registry
     load_var pool
-    call testing.testset_children
+    call testing._testset_children
     load_var ts
     load_field .runner
     load_var pool
-    call testing.run_testset
+    call testing._run_testset
     jump L5
 
   L2:
@@ -1067,88 +1018,56 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     return
 }
 
-function testing._has_selected_descendant(prefix: string, names: string[]) -> bool {
-    load_var names
-    load_type baml.iter.Iterable<Error = never, Item = string>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _4
-
+function testing._TestPool.acquire(self: testing._TestPool) -> null {
   L0:
-    load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = string>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _5
-    load_var _5
-    is_type baml.iter.Done
+    load_const true
     pop_jump_if_false L1
     jump L2
 
   L1:
-    load_var2 4 1
-    load_const "::"
-    bin_op +
-    call baml.String.starts_with
-    pop_jump_if_false L0
-    load_const true
-    jump L3
+    load_const null
+    jump L5
 
   L2:
-    load_const false
+    load_type int
+    load_var self
+    load_field .tokens
+    call baml.Array.pop
+    store_var _5
+    load_var _5
+    narrow_bind int, slot=2
+    pop_jump_if_false L3
+    jump L4
 
   L3:
-    return
-}
-
-function testing._int_to_float(value: int) -> float {
-    load_type int
-    load_var value
-    call baml.String.from
-    call baml.Float.parse
+    load_const 10
+    call baml.time.Duration.from_milliseconds
+    sys_op baml.sys.sleep
+    pop 1
     jump L0
     load_var e
     throw_if_panic
-    load_const "failed to convert int to float"
-    call baml.sys.panic
+    jump L0
 
-  L0:
+  L4:
+    load_const null
+
+  L5:
     return
 }
 
-function testing._name_selected(name: string, names: string[]) -> bool {
-    load_var names
-    load_type baml.iter.Iterable<Error = never, Item = string>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _3
-
-  L0:
-    load_var _3
-    load_type baml.iter.Iterator<Error = never, Item = string>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _4
-    load_var _4
-    is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var2 4 1
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const true
-    jump L3
-
-  L2:
-    load_const false
-
-  L3:
+function testing._TestPool.release(self: testing._TestPool) -> null {
+    load_type int
+    load_var self
+    load_field .tokens
+    load_const 1
+    call baml.Array.push
+    pop 1
+    load_const null
     return
 }
 
-function testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testing.TestSetReport {
+function testing._aggregate_reports(named_results: testing._NamedChildReport[]) -> testing.TestSetReport {
     load_const 0
     store_var passed
     load_const 0
@@ -1165,14 +1084,14 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     alloc_array 0
     store_var result_names
     load_var named_results
-    load_type baml.iter.Iterable<Error = never, Item = testing.NamedChildReport>
+    load_type baml.iter.Iterable<Error = never, Item = testing._NamedChildReport>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _8
 
   L0:
     load_var _8
-    load_type baml.iter.Iterator<Error = never, Item = testing.NamedChildReport>
+    load_type baml.iter.Iterator<Error = never, Item = testing._NamedChildReport>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
@@ -1343,7 +1262,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     return
 }
 
-function testing.any_pattern_matches(pats: string[], canonical_id: string) -> bool {
+function testing._any_pattern_matches(pats: string[], canonical_id: string) -> bool {
     load_var pats
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
@@ -1363,7 +1282,7 @@ function testing.any_pattern_matches(pats: string[], canonical_id: string) -> bo
 
   L1:
     load_var2 2 4
-    call testing.glob_match
+    call testing._glob_match
     pop_jump_if_false L0
     load_const true
     jump L3
@@ -1375,7 +1294,7 @@ function testing.any_pattern_matches(pats: string[], canonical_id: string) -> bo
     return
 }
 
-function testing.classify_selected_names(selected_names: string[], hard_failed_names: string[], all_failed_names: string[]) -> testing.LeafIdentities {
+function testing._classify_selected_names(selected_names: string[], hard_failed_names: string[], all_failed_names: string[]) -> testing._LeafIdentities {
     load_type string
     alloc_array 0
     load_type string
@@ -1388,7 +1307,7 @@ function testing.classify_selected_names(selected_names: string[], hard_failed_n
     alloc_array 0
     load_type int
     alloc_array 0
-    init_instance testing.LeafIdentities .passed, .failed, .tolerated, .passed_ms, .failed_ms, .tolerated_ms
+    init_instance testing._LeafIdentities .passed, .failed, .tolerated, .passed_ms, .failed_ms, .tolerated_ms
     store_var out
     load_var selected_names
     load_type baml.iter.Iterable<Error = never, Item = string>
@@ -1411,7 +1330,7 @@ function testing.classify_selected_names(selected_names: string[], hard_failed_n
     load_var _12
     store_var_load_var name
     load_var all_failed_names
-    call testing.failure_matches_selected
+    call testing._failure_matches_selected
     pop_jump_if_false L2
     jump L3
 
@@ -1426,7 +1345,7 @@ function testing.classify_selected_names(selected_names: string[], hard_failed_n
 
   L3:
     load_var2 7 2
-    call testing.failure_matches_selected
+    call testing._failure_matches_selected
     pop_jump_if_false L4
     jump L5
 
@@ -1453,7 +1372,7 @@ function testing.classify_selected_names(selected_names: string[], hard_failed_n
     return
 }
 
-function testing.collect_all_failed_names(report: testing.TestSetReport, out: string[]) -> void {
+function testing._collect_all_failed_names(report: testing.TestSetReport, out: string[]) -> void {
     load_var report
     load_field .failed_names
     load_type baml.iter.Iterable<Error = never, Item = string>
@@ -1476,7 +1395,7 @@ function testing.collect_all_failed_names(report: testing.TestSetReport, out: st
     load_var _5
     store_var_load_var name
     load_var out
-    call testing.name_in
+    call testing._name_in
     unary_op !
     pop_jump_if_false L0
     load_type string
@@ -1513,7 +1432,7 @@ function testing.collect_all_failed_names(report: testing.TestSetReport, out: st
 
   L5:
     load_var2 8 2
-    call testing.collect_all_failed_names
+    call testing._collect_all_failed_names
     pop 1
     jump L3
 
@@ -1522,7 +1441,7 @@ function testing.collect_all_failed_names(report: testing.TestSetReport, out: st
     return
 }
 
-function testing.collect_leaf_identities(report: testing.TestSetReport, tolerated_by_parent: bool, selected_names: string[], out: testing.LeafIdentities) -> void {
+function testing._collect_leaf_identities(report: testing.TestSetReport, tolerated_by_parent: bool, selected_names: string[], out: testing._LeafIdentities) -> void {
     load_var report
     load_field .result_names
     store_var_load_var _5
@@ -1626,7 +1545,7 @@ function testing.collect_leaf_identities(report: testing.TestSetReport, tolerate
     bin_op +
     store_var_load_var sentinel
     load_var selected_names
-    call testing.name_in
+    call testing._name_in
     pop_jump_if_false L11
     jump L14
 
@@ -1698,7 +1617,7 @@ function testing.collect_leaf_identities(report: testing.TestSetReport, tolerate
   L18:
     load_var2 17 18
     load_var2 3 4
-    call testing.collect_leaf_identities
+    call testing._collect_leaf_identities
     pop 1
     jump L27
 
@@ -1798,7 +1717,7 @@ function testing.collect_leaf_identities(report: testing.TestSetReport, tolerate
     return
 }
 
-function testing.collect_leaf_messages(results: (testing.TestReport | testing.TestSetReport)[], out: string[]) -> void {
+function testing._collect_leaf_messages(results: (testing.TestReport | testing.TestSetReport)[], out: string[]) -> void {
     load_var results
     load_type baml.iter.Iterable<Error = never, Item = testing.TestReport | testing.TestSetReport>
     load_const "iter"
@@ -1830,7 +1749,7 @@ function testing.collect_leaf_messages(results: (testing.TestReport | testing.Te
     load_var r
     load_field .results
     load_var out
-    call testing.collect_leaf_messages
+    call testing._collect_leaf_messages
     pop 1
     jump L0
 
@@ -1878,7 +1797,7 @@ function testing.collect_leaf_messages(results: (testing.TestReport | testing.Te
     return
 }
 
-function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] {
+function testing._collect_leaf_names(registry: testing.TestRegistry) -> string[] {
     load_type string
     alloc_array 0
     store_var out
@@ -1931,7 +1850,7 @@ function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] 
 
   L4:
     load_var2 1 6
-    call testing.collect_subtree_names
+    call testing._collect_subtree_names
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
@@ -1960,10 +1879,10 @@ function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] 
     return
 }
 
-function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> string[] {
+function testing._collect_subtree_names(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> string[] {
     load_var2 1 2
-    call testing.TestRegistry.expand_testset_registry
-    call testing.collect_leaf_names
+    call testing.TestRegistry._expand_testset_registry
+    call testing._collect_leaf_names
     jump L19
     load_var e
     store_var _5
@@ -2096,12 +2015,12 @@ function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testi
     return
 }
 
-function testing.collect_subtree_names_layered(registry: testing.TestRegistry, ts: testing.TestSetRegistration, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
+function testing._collect_subtree_names_layered(registry: testing.TestRegistry, ts: testing.TestSetRegistration, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
     load_var2 1 2
-    call testing.TestRegistry.expand_testset_registry
+    call testing.TestRegistry._expand_testset_registry
     load_var2 3 4
     load_var2 5 6
-    call testing.select_names_layered
+    call testing._select_names_layered
     jump L23
     load_var e
     store_var _9
@@ -2216,7 +2135,7 @@ function testing.collect_subtree_names_layered(registry: testing.TestRegistry, t
     store_var_load_var sentinel
     load_var2 3 4
     load_var2 5 6
-    call testing.leaf_selected_layered
+    call testing._leaf_selected_layered
     pop_jump_if_false L17
     jump L18
 
@@ -2239,7 +2158,7 @@ function testing.collect_subtree_names_layered(registry: testing.TestRegistry, t
     store_var_load_var sentinel
     load_var2 3 4
     load_var2 5 6
-    call testing.leaf_selected_layered
+    call testing._leaf_selected_layered
     pop_jump_if_false L20
     jump L21
 
@@ -2262,7 +2181,7 @@ function testing.collect_subtree_names_layered(registry: testing.TestRegistry, t
     return
 }
 
-function testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[], tolerated_by_parent: bool) -> testing.LeafCounts {
+function testing._count_leaves(results: (testing.TestReport | testing.TestSetReport)[], tolerated_by_parent: bool) -> testing._LeafCounts {
     load_const 0
     store_var passed
     load_const 0
@@ -2338,7 +2257,7 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
     load_const 0
     load_var tsr
     load_field .total
-    init_instance testing.LeafCounts .passed, .failed, .tolerated, .total
+    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
     store_var delta
     jump L14
 
@@ -2350,7 +2269,7 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
     load_field .failed
     load_var tsr
     load_field .total
-    init_instance testing.LeafCounts .passed, .failed, .tolerated, .total
+    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
     store_var delta
     jump L14
 
@@ -2358,7 +2277,7 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
     load_var tsr
     load_field .results
     load_var ft
-    call testing.count_leaves
+    call testing._count_leaves
     store_var delta
     jump L14
 
@@ -2380,7 +2299,7 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
     load_const 1
     load_const 0
     load_const 1
-    init_instance testing.LeafCounts .passed, .failed, .tolerated, .total
+    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
     store_var delta
     jump L14
 
@@ -2389,7 +2308,7 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
     load_const 0
     load_const 1
     load_const 1
-    init_instance testing.LeafCounts .passed, .failed, .tolerated, .total
+    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
     store_var delta
     jump L14
 
@@ -2398,7 +2317,7 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
     load_const 0
     load_const 0
     load_const 1
-    init_instance testing.LeafCounts .passed, .failed, .tolerated, .total
+    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
     store_var delta
 
   L14:
@@ -2423,11 +2342,11 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
   L15:
     load_var2 3 4
     load_var2 5 6
-    init_instance testing.LeafCounts .passed, .failed, .tolerated, .total
+    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
     return
 }
 
-function testing.expansion_error_report(name: string) -> testing.TestSetReport {
+function testing._expansion_error_report(name: string) -> testing.TestSetReport {
     load_const "error"
     load_const 0
     load_const 1
@@ -2445,9 +2364,9 @@ function testing.expansion_error_report(name: string) -> testing.TestSetReport {
     return
 }
 
-function testing.failure_matches_selected(selected: string, failed_names: string[]) -> bool {
+function testing._failure_matches_selected(selected: string, failed_names: string[]) -> bool {
     load_var2 1 2
-    call testing.name_in
+    call testing._name_in
     pop_jump_if_false L0
     jump L4
 
@@ -2505,7 +2424,7 @@ function testing.failure_matches_selected(selected: string, failed_names: string
     return
 }
 
-function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_names: string[]) -> testing.FlatTestReport {
+function testing._flatten_with_tolerated(report: testing.TestSetReport, selected_names: string[]) -> testing.FlatTestReport {
     load_var report
     load_field .outcome
     load_const "pass"
@@ -2534,7 +2453,7 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
     load_const 0
     load_var report
     load_field .total
-    init_instance testing.LeafCounts .passed, .failed, .tolerated, .total
+    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
     store_var counts
     jump L4
 
@@ -2546,7 +2465,7 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
     load_field .failed
     load_var report
     load_field .total
-    init_instance testing.LeafCounts .passed, .failed, .tolerated, .total
+    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
     store_var counts
     jump L4
 
@@ -2554,7 +2473,7 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
     load_var report
     load_field .results
     load_var top_tolerated
-    call testing.count_leaves
+    call testing._count_leaves
     store_var counts
 
   L4:
@@ -2564,13 +2483,13 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
     load_var report
     load_field .results
     load_var messages
-    call testing.collect_leaf_messages
+    call testing._collect_leaf_messages
     pop 1
     load_type string
     alloc_array 0
     store_var all_failed_names
     load_var2 1 7
-    call testing.collect_all_failed_names
+    call testing._collect_all_failed_names
     pop 1
     load_type string
     alloc_array 0
@@ -2584,11 +2503,11 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
     alloc_array 0
     load_type int
     alloc_array 0
-    init_instance testing.LeafIdentities .passed, .failed, .tolerated, .passed_ms, .failed_ms, .tolerated_ms
+    init_instance testing._LeafIdentities .passed, .failed, .tolerated, .passed_ms, .failed_ms, .tolerated_ms
     store_var executed
     load_var2 1 3
     load_var2 2 8
-    call testing.collect_leaf_identities
+    call testing._collect_leaf_identities
     pop 1
     load_var executed
     load_field .passed
@@ -2642,7 +2561,7 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
     load_const null
     load_const null
     load_const null
-    init_instance testing.LeafIdentities .passed, .failed, .tolerated, .passed_ms, .failed_ms, .tolerated_ms
+    init_instance testing._LeafIdentities .passed, .failed, .tolerated, .passed_ms, .failed_ms, .tolerated_ms
     store_var identities
     jump L11
 
@@ -2650,7 +2569,7 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
     load_var2 2 1
     load_field .failed_names
     load_var all_failed_names
-    call testing.classify_selected_names
+    call testing._classify_selected_names
     store_var identities
     jump L11
 
@@ -2686,7 +2605,7 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
     return
 }
 
-function testing.glob_match(subject: string, pattern: string) -> bool {
+function testing._glob_match(subject: string, pattern: string) -> bool {
     load_var pattern
     load_const "*"
     call baml.String.split
@@ -2821,9 +2740,9 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
     return
 }
 
-function testing.leaf_selected(name: string, include: string[], exclude: string[]) -> bool {
+function testing._leaf_selected(name: string, include: string[], exclude: string[]) -> bool {
     load_var2 3 1
-    call testing.any_pattern_matches
+    call testing._any_pattern_matches
     pop_jump_if_false L0
     jump L3
 
@@ -2839,7 +2758,7 @@ function testing.leaf_selected(name: string, include: string[], exclude: string[
 
   L1:
     load_var2 2 1
-    call testing.any_pattern_matches
+    call testing._any_pattern_matches
     jump L4
 
   L2:
@@ -2853,21 +2772,21 @@ function testing.leaf_selected(name: string, include: string[], exclude: string[
     return
 }
 
-function testing.leaf_selected_layered(name: string, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> bool {
+function testing._leaf_selected_layered(name: string, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> bool {
     load_var2 1 2
     load_var profile_exclude
-    call testing.leaf_selected
+    call testing._leaf_selected
     jump_if_false L0
     pop 1
     load_var2 1 4
     load_var cli_exclude
-    call testing.leaf_selected
+    call testing._leaf_selected
 
   L0:
     return
 }
 
-function testing.name_in(name: string, names: string[]) -> bool {
+function testing._name_in(name: string, names: string[]) -> bool {
     load_var names
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
@@ -2899,7 +2818,7 @@ function testing.name_in(name: string, names: string[]) -> bool {
     return
 }
 
-function testing.pattern_may_match_descendant(pattern: string, prefix: string) -> bool {
+function testing._pattern_may_match_descendant(pattern: string, prefix: string) -> bool {
     load_var prefix
     load_const "::"
     bin_op +
@@ -2938,14 +2857,14 @@ function testing.pattern_may_match_descendant(pattern: string, prefix: string) -
     return
 }
 
-function testing.run_children_parallel(children: testing.TestSetChild[], pool: testing.TestPool) -> testing.TestSetReport {
+function testing._run_children_parallel(children: testing.TestSetChild[], pool: testing._TestPool) -> testing.TestSetReport {
     load_var ?2
     make_cell
     store_var ?2
     load_var ?6
     make_cell
     store_var ?6
-    load_type baml.future.Future<testing.NamedChildReport, never>
+    load_type baml.future.Future<testing._NamedChildReport, never>
     alloc_array 0
     store_var futures
     load_var children
@@ -2978,17 +2897,17 @@ function testing.run_children_parallel(children: testing.TestSetChild[], pool: t
 
   L2:
     load_deref ?2
-    call testing.TestPool.acquire
+    call testing._TestPool.acquire
     pop 1
     load_var2 6 2
-    make_closure .<lambda(run_children_parallel, 1)>, 2
+    make_closure .<lambda(_run_children_parallel, 1)>, 2
     load_const null
     load_const null
-    load_type testing.NamedChildReport
+    load_type testing._NamedChildReport
     load_type never
     spawn
     store_var _18
-    load_type baml.future.Future<testing.NamedChildReport, never>
+    load_type baml.future.Future<testing._NamedChildReport, never>
     load_var2 3 8
     call baml.Array.push
     pop 1
@@ -2996,31 +2915,31 @@ function testing.run_children_parallel(children: testing.TestSetChild[], pool: t
 
   L3:
     load_var child
-    make_closure .<lambda(run_children_parallel, 0)>, 1
+    make_closure .<lambda(_run_children_parallel, 0)>, 1
     load_const null
     load_const null
-    load_type testing.NamedChildReport
+    load_type testing._NamedChildReport
     load_type never
     spawn
     store_var _13
-    load_type baml.future.Future<testing.NamedChildReport, never>
+    load_type baml.future.Future<testing._NamedChildReport, never>
     load_var2 3 7
     call baml.Array.push
     pop 1
     jump L0
 
   L4:
-    load_type testing.NamedChildReport
+    load_type testing._NamedChildReport
     load_type never
     load_var futures
     call baml.future.all_complete
     await
-    call testing.aggregate_reports
+    call testing._aggregate_reports
     return
 }
 
-function testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: bool) -> testing.TestSetReport {
-    load_type testing.NamedChildReport
+function testing._run_children_sequential(children: testing.TestSetChild[], fail_fast: bool) -> testing.TestSetReport {
+    load_type testing._NamedChildReport
     alloc_array 0
     store_var named_results
     load_var children
@@ -3046,11 +2965,11 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
     load_field .run
     call_indirect
     store_var report
-    load_type testing.NamedChildReport
+    load_type testing._NamedChildReport
     load_var2 3 6
     load_field .name
     load_var report
-    init_instance testing.NamedChildReport .name, .report
+    init_instance testing._NamedChildReport .name, .report
     call baml.Array.push
     pop 1
     load_var report
@@ -3083,23 +3002,23 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
   L5:
     pop_jump_if_false L0
     load_var named_results
-    call testing.aggregate_reports
+    call testing._aggregate_reports
     jump L7
 
   L6:
     load_var named_results
-    call testing.aggregate_reports
+    call testing._aggregate_reports
 
   L7:
     return
 }
 
-function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestReport {
+function testing._run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestReport {
     load_var ?1
     make_cell
     store_var ?1
     load_var body
-    make_closure .<lambda(run_test, 0)>, 1
+    make_closure .<lambda(_run_test, 0)>, 1
     store_var base_run
     load_var runner
     load_const null
@@ -3139,7 +3058,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
     return
 }
 
-function testing.run_testset(children: testing.TestSetChild[], runner: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null, pool: testing.TestPool) -> testing.TestSetReport {
+function testing._run_testset(children: testing.TestSetChild[], runner: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null, pool: testing._TestPool) -> testing.TestSetReport {
     load_var runner
     load_const null
     cmp_op ==
@@ -3153,24 +3072,24 @@ function testing.run_testset(children: testing.TestSetChild[], runner: ((testing
 
   L1:
     load_var2 1 3
-    call testing.run_children_parallel
+    call testing._run_children_parallel
 
   L2:
     return
 }
 
-function testing.select_names(registry: testing.TestRegistry, include: string[], exclude: string[]) -> string[] {
+function testing._select_names(registry: testing.TestRegistry, include: string[], exclude: string[]) -> string[] {
     load_var registry
     load_type string
     alloc_array 0
     load_type string
     alloc_array 0
     load_var2 2 3
-    call testing.select_names_layered
+    call testing._select_names_layered
     return
 }
 
-function testing.select_names_layered(registry: testing.TestRegistry, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
+function testing._select_names_layered(registry: testing.TestRegistry, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
     load_type string
     alloc_array 0
     store_var out
@@ -3199,7 +3118,7 @@ function testing.select_names_layered(registry: testing.TestRegistry, profile_in
     load_field .name
     load_var2 2 3
     load_var2 4 5
-    call testing.leaf_selected_layered
+    call testing._leaf_selected_layered
     pop_jump_if_false L0
     load_type string
     load_var2 6 9
@@ -3233,20 +3152,20 @@ function testing.select_names_layered(registry: testing.TestRegistry, profile_in
     store_var_load_var ts
     load_field .name
     load_var2 2 3
-    call testing.subtree_may_be_selected
+    call testing._subtree_may_be_selected
     jump_if_false L5
     pop 1
     load_var ts
     load_field .name
     load_var2 4 5
-    call testing.subtree_may_be_selected
+    call testing._subtree_may_be_selected
 
   L5:
     pop_jump_if_false L3
     load_var2 1 12
     load_var2 2 3
     load_var2 4 5
-    call testing.collect_subtree_names_layered
+    call testing._collect_subtree_names_layered
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
@@ -3275,7 +3194,7 @@ function testing.select_names_layered(registry: testing.TestRegistry, profile_in
     return
 }
 
-function testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
+function testing._subtree_excluded(prefix: string, excludes: string[]) -> bool {
     load_var prefix
     load_const "::"
     bin_op +
@@ -3324,7 +3243,7 @@ function testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
     jump_if_false L4
     pop 1
     load_var2 3 6
-    call testing.glob_match
+    call testing._glob_match
 
   L4:
     pop_jump_if_false L0
@@ -3342,9 +3261,9 @@ function testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
     return
 }
 
-function testing.subtree_may_be_selected(prefix: string, include: string[], exclude: string[]) -> bool {
+function testing._subtree_may_be_selected(prefix: string, include: string[], exclude: string[]) -> bool {
     load_var2 1 3
-    call testing.subtree_excluded
+    call testing._subtree_excluded
     pop_jump_if_false L0
     jump L6
 
@@ -3378,7 +3297,7 @@ function testing.subtree_may_be_selected(prefix: string, include: string[], excl
 
   L3:
     load_var2 6 1
-    call testing.pattern_may_match_descendant
+    call testing._pattern_may_match_descendant
     pop_jump_if_false L2
     load_const true
     jump L7
@@ -3398,7 +3317,7 @@ function testing.subtree_may_be_selected(prefix: string, include: string[], excl
     return
 }
 
-function testing.test_child(name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestSetChild {
+function testing._test_child(name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestSetChild {
     load_var ?2
     make_cell
     store_var ?2
@@ -3407,13 +3326,13 @@ function testing.test_child(name: string, body: () -> void throws unknown, runne
     store_var ?3
     load_var2 1 2
     load_var runner
-    make_closure .<lambda(test_child, 0)>, 2
+    make_closure .<lambda(_test_child, 0)>, 2
     load_const false
     init_instance testing.TestSetChild .name, .run, .is_container
     return
 }
 
-function testing.test_pool(max_concurrency: int) -> testing.TestPool {
+function testing._test_pool(max_concurrency: int) -> testing._TestPool {
     load_var max_concurrency
     load_const 0
     cmp_int_op >
@@ -3444,7 +3363,7 @@ function testing.test_pool(max_concurrency: int) -> testing.TestPool {
 
   L4:
     load_var tokens
-    init_instance testing.TestPool .tokens
+    init_instance testing._TestPool .tokens
     return
 
   L5:
@@ -3460,7 +3379,7 @@ function testing.test_pool(max_concurrency: int) -> testing.TestPool {
     jump L3
 }
 
-function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegistration, pool: testing.TestPool) -> testing.TestSetChild {
+function testing._testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegistration, pool: testing._TestPool) -> testing.TestSetChild {
     load_var ?1
     make_cell
     store_var ?1
@@ -3474,13 +3393,13 @@ function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestS
     load_field .name
     load_var2 1 2
     load_var pool
-    make_closure .<lambda(testset_child, 0)>, 3
+    make_closure .<lambda(_testset_child, 0)>, 3
     load_const true
     init_instance testing.TestSetChild .name, .run, .is_container
     return
 }
 
-function testing.testset_child_selected(registry: testing.TestRegistry, ts: testing.TestSetRegistration, names: string[], pool: testing.TestPool) -> testing.TestSetChild {
+function testing._testset_child_selected(registry: testing.TestRegistry, ts: testing.TestSetRegistration, names: string[], pool: testing._TestPool) -> testing.TestSetChild {
     load_var ?1
     make_cell
     store_var ?1
@@ -3497,13 +3416,13 @@ function testing.testset_child_selected(registry: testing.TestRegistry, ts: test
     load_field .name
     load_var2 1 2
     load_var2 3 4
-    make_closure .<lambda(testset_child_selected, 0)>, 4
+    make_closure .<lambda(_testset_child_selected, 0)>, 4
     load_const true
     init_instance testing.TestSetChild .name, .run, .is_container
     return
 }
 
-function testing.testset_children(registry: testing.TestRegistry, pool: testing.TestPool) -> testing.TestSetChild[] {
+function testing._testset_children(registry: testing.TestRegistry, pool: testing._TestPool) -> testing.TestSetChild[] {
     load_type testing.TestSetChild
     alloc_array 0
     store_var children
@@ -3534,7 +3453,7 @@ function testing.testset_children(registry: testing.TestRegistry, pool: testing.
     load_field .body
     load_var t
     load_field .runner
-    call testing.test_child
+    call testing._test_child
     store_var _11
     load_type testing.TestSetChild
     load_var2 3 7
@@ -3565,7 +3484,7 @@ function testing.testset_children(registry: testing.TestRegistry, pool: testing.
   L4:
     load_var2 1 9
     load_var pool
-    call testing.testset_child
+    call testing._testset_child
     store_var _23
     load_type testing.TestSetChild
     load_var2 3 10
@@ -3578,7 +3497,10 @@ function testing.testset_children(registry: testing.TestRegistry, pool: testing.
     return
 }
 
-function testing.testset_children_selected(registry: testing.TestRegistry, names: string[], pool: testing.TestPool) -> testing.TestSetChild[] {
+function testing._testset_children_selected(registry: testing.TestRegistry, names: string[], pool: testing._TestPool) -> testing.TestSetChild[] {
+    load_var ?12
+    make_cell
+    store_var ?12
     load_type testing.TestSetChild
     alloc_array 0
     store_var children
@@ -3603,10 +3525,11 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
 
   L1:
     load_var _7
-    store_var_load_var t
+    store_var t
+    load_type string
+    load_var2 2 7
     load_field .name
-    load_var names
-    call testing._name_selected
+    call baml.Array.includes
     pop_jump_if_false L0
     load_var t
     load_field .name
@@ -3614,8 +3537,8 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
     load_field .body
     load_var t
     load_field .runner
-    call testing.test_child
-    store_var _14
+    call testing._test_child
+    store_var _15
     load_type testing.TestSetChild
     load_var2 4 8
     call baml.Array.push
@@ -3629,32 +3552,41 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
     load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _20
+    store_var _21
 
   L3:
-    load_var _20
+    load_var _21
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _21
-    load_var _21
+    store_var _22
+    load_var _22
     is_type baml.iter.Done
     pop_jump_if_false L4
     jump L5
 
   L4:
-    load_var _21
-    store_var_load_var ts
+    load_var _22
+    store_var ts
+    load_type string
+    load_var ts
     load_field .name
-    load_var names
-    call testing._has_selected_descendant
+    call baml.String.from
+    load_const "::"
+    bin_op +
+    store_deref ?12
+    load_type string
+    load_type never
+    load_var2 2 12
+    make_closure .<lambda(_testset_children_selected, 0)>, 1
+    call baml.Array.some
     pop_jump_if_false L3
     load_var2 1 11
     load_var2 2 3
-    call testing.testset_child_selected
-    store_var _28
+    call testing._testset_child_selected
+    store_var _35
     load_type testing.TestSetChild
-    load_var2 4 12
+    load_var2 4 13
     call baml.Array.push
     pop 1
     jump L3

@@ -393,7 +393,7 @@ fn testing.TestCollector.register_test_set_at(self: testing.TestCollector, owner
     }
 }
 
-fn testing.TestCollector.find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration {
+fn testing.TestCollector._find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration {
     // Locals:
     let _0: testing.TestSetRegistration // _0 // return
     let _1: testing.TestCollector // self // param
@@ -446,7 +446,7 @@ fn testing.TestCollector.find_testset(self: testing.TestCollector, name: string)
     }
 }
 
-fn testing.TestCollector.find_test(self: testing.TestCollector, name: string) -> testing.TestRegistration {
+fn testing.TestCollector._find_test(self: testing.TestCollector, name: string) -> testing.TestRegistration {
     // Locals:
     let _0: testing.TestRegistration // _0 // return
     let _1: testing.TestCollector // self // param
@@ -712,7 +712,7 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     bb4: {
         _11 = copy _8.1;
         _12 = copy _8.2;
-        _0 = call const fn testing.run_test(copy _11, copy _12) -> [bb12];
+        _0 = call const fn testing._run_test(copy _11, copy _12) -> [bb12];
     }
 
     bb5: {
@@ -778,13 +778,13 @@ fn testing.TestRegistry.run_testset(self: testing.TestRegistry, name: string) ->
     let _8: testing.TestSetRegistration // ts
     let _9: bool
     let _10: string
-    let _11: testing.TestPool // pool
+    let _11: testing._TestPool // pool
     let _12: testing.TestSetChild[]
     let _13: testing.TestRegistry
     let _14: testing.TestSetRegistration
-    let _15: testing.TestPool
+    let _15: testing._TestPool
     let _16: null | ((testing.TestSetChild[]) -> testing.TestSetReport throws never)
-    let _17: testing.TestPool
+    let _17: testing._TestPool
     let _18: string[]
     let _19: (map<string, testing.TestRegistry>) -> string[] throws never
     let _20: reflect.Type
@@ -826,23 +826,23 @@ fn testing.TestRegistry.run_testset(self: testing.TestRegistry, name: string) ->
     }
 
     bb4: {
-        _11 = call const fn testing.test_pool(const 0_i64) -> [bb5];
+        _11 = call const fn testing._test_pool(const 0_i64) -> [bb5];
     }
 
     bb5: {
         _14 = copy _8;
-        _13 = call const fn testing.TestRegistry.expand_testset_registry(copy _1, copy _14) -> [bb6];
+        _13 = call const fn testing.TestRegistry._expand_testset_registry(copy _1, copy _14) -> [bb6];
     }
 
     bb6: {
         _15 = copy _11;
-        _12 = call const fn testing.testset_children(copy _13, copy _15) -> [bb7];
+        _12 = call const fn testing._testset_children(copy _13, copy _15) -> [bb7];
     }
 
     bb7: {
         _16 = copy _8.2;
         _17 = copy _11;
-        _0 = call const fn testing.run_testset(copy _12, copy _16, copy _17) -> [bb15];
+        _0 = call const fn testing._run_testset(copy _12, copy _16, copy _17) -> [bb15];
     }
 
     bb8: {
@@ -899,14 +899,14 @@ fn testing.TestRegistry.run_all(self: testing.TestRegistry) -> testing.TestSetRe
     // Locals:
     let _0: testing.TestSetReport // _0 // return
     let _1: testing.TestRegistry // self // param
-    let _2: testing.TestPool
+    let _2: testing._TestPool
 
     bb0: {
-        _2 = call const fn testing.test_pool(const 0_i64) -> [bb1];
+        _2 = call const fn testing._test_pool(const 0_i64) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn testing.TestRegistry.run_all_pooled(copy _1, copy _2) -> [bb2];
+        _0 = call const fn testing.TestRegistry._run_all_pooled(copy _1, copy _2) -> [bb2];
     }
 
     bb2: {
@@ -914,19 +914,19 @@ fn testing.TestRegistry.run_all(self: testing.TestRegistry) -> testing.TestSetRe
     }
 }
 
-fn testing.TestRegistry.run_all_pooled(self: testing.TestRegistry, pool: testing.TestPool) -> testing.TestSetReport {
+fn testing.TestRegistry._run_all_pooled(self: testing.TestRegistry, pool: testing._TestPool) -> testing.TestSetReport {
     // Locals:
     let _0: testing.TestSetReport // _0 // return
     let _1: testing.TestRegistry // self // param
-    let _2: testing.TestPool // pool // param
+    let _2: testing._TestPool // pool // param
     let _3: testing.TestSetChild[]
 
     bb0: {
-        _3 = call const fn testing.testset_children(copy _1, copy _2) -> [bb1];
+        _3 = call const fn testing._testset_children(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn testing.run_testset(copy _3, const null, copy _2) -> [bb2];
+        _0 = call const fn testing._run_testset(copy _3, const null, copy _2) -> [bb2];
     }
 
     bb2: {
@@ -934,19 +934,19 @@ fn testing.TestRegistry.run_all_pooled(self: testing.TestRegistry, pool: testing
     }
 }
 
-fn testing.TestRegistry.run_selected(self: testing.TestRegistry, names: string[]) -> testing.TestSetReport {
+fn testing.TestRegistry._run_selected(self: testing.TestRegistry, names: string[]) -> testing.TestSetReport {
     // Locals:
     let _0: testing.TestSetReport // _0 // return
     let _1: testing.TestRegistry // self // param
     let _2: string[] // names // param
-    let _3: testing.TestPool
+    let _3: testing._TestPool
 
     bb0: {
-        _3 = call const fn testing.test_pool(const 0_i64) -> [bb1];
+        _3 = call const fn testing._test_pool(const 0_i64) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn testing.TestRegistry.run_selected_pooled(copy _1, copy _2, copy _3) -> [bb2];
+        _0 = call const fn testing.TestRegistry._run_selected_pooled(copy _1, copy _2, copy _3) -> [bb2];
     }
 
     bb2: {
@@ -954,20 +954,20 @@ fn testing.TestRegistry.run_selected(self: testing.TestRegistry, names: string[]
     }
 }
 
-fn testing.TestRegistry.run_selected_pooled(self: testing.TestRegistry, names: string[], pool: testing.TestPool) -> testing.TestSetReport {
+fn testing.TestRegistry._run_selected_pooled(self: testing.TestRegistry, names: string[], pool: testing._TestPool) -> testing.TestSetReport {
     // Locals:
     let _0: testing.TestSetReport // _0 // return
     let _1: testing.TestRegistry // self // param
     let _2: string[] // names // param
-    let _3: testing.TestPool // pool // param
+    let _3: testing._TestPool // pool // param
     let _4: testing.TestSetChild[]
 
     bb0: {
-        _4 = call const fn testing.testset_children_selected(copy _1, copy _2, copy _3) -> [bb1];
+        _4 = call const fn testing._testset_children_selected(copy _1, copy _2, copy _3) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn testing.run_testset(copy _4, const null, copy _3) -> [bb2];
+        _0 = call const fn testing._run_testset(copy _4, const null, copy _3) -> [bb2];
     }
 
     bb2: {
@@ -985,7 +985,7 @@ fn testing.TestRegistry.run_filtered(self: testing.TestRegistry, profile_include
     let _5: string[] // cli_exclude // param
     let _6: int // max_concurrency // param
     let _7: string[] // selected_names
-    let _8: testing.TestPool // pool
+    let _8: testing._TestPool // pool
     let _9: testing.TestSetReport // report
     let _10: bool
     let _11: bool
@@ -995,18 +995,18 @@ fn testing.TestRegistry.run_filtered(self: testing.TestRegistry, profile_include
     let _15: int
     let _16: int
     let _17: int
-    let _18: testing.TestPool
+    let _18: testing._TestPool
     let _19: string[]
-    let _20: testing.TestPool
+    let _20: testing._TestPool
     let _21: testing.TestSetReport
     let _22: string[]
 
     bb0: {
-        _7 = call const fn testing.select_names_layered(copy _1, copy _2, copy _3, copy _4, copy _5) -> [bb1];
+        _7 = call const fn testing._select_names_layered(copy _1, copy _2, copy _3, copy _4, copy _5) -> [bb1];
     }
 
     bb1: {
-        _8 = call const fn testing.test_pool(copy _6) -> [bb2];
+        _8 = call const fn testing._test_pool(copy _6) -> [bb2];
     }
 
     bb2: {
@@ -1064,18 +1064,18 @@ fn testing.TestRegistry.run_filtered(self: testing.TestRegistry, profile_include
     bb13: {
         _19 = copy _7;
         _20 = copy _8;
-        _9 = call const fn testing.TestRegistry.run_selected_pooled(copy _1, copy _19, copy _20) -> [bb15];
+        _9 = call const fn testing.TestRegistry._run_selected_pooled(copy _1, copy _19, copy _20) -> [bb15];
     }
 
     bb14: {
         _18 = copy _8;
-        _9 = call const fn testing.TestRegistry.run_all_pooled(copy _1, copy _18) -> [bb15];
+        _9 = call const fn testing.TestRegistry._run_all_pooled(copy _1, copy _18) -> [bb15];
     }
 
     bb15: {
         _21 = copy _9;
         _22 = copy _7;
-        _0 = call const fn testing.flatten_with_tolerated(copy _21, copy _22) -> [bb16];
+        _0 = call const fn testing._flatten_with_tolerated(copy _21, copy _22) -> [bb16];
     }
 
     bb16: {
@@ -1093,7 +1093,7 @@ fn testing.TestRegistry.list_filtered(self: testing.TestRegistry, profile_includ
     let _5: string[] // cli_exclude // param
 
     bb0: {
-        _0 = call const fn testing.select_names_layered(copy _1, copy _2, copy _3, copy _4, copy _5) -> [bb1];
+        _0 = call const fn testing._select_names_layered(copy _1, copy _2, copy _3, copy _4, copy _5) -> [bb1];
     }
 
     bb1: {
@@ -1158,7 +1158,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
 
     bb4: {
         _12 = copy _8;
-        _11 = call const fn testing.TestRegistry.expand_testset_registry(copy _1, copy _12) -> [bb5];
+        _11 = call const fn testing.TestRegistry._expand_testset_registry(copy _1, copy _12) -> [bb5];
     }
 
     bb5: {
@@ -1215,7 +1215,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     }
 }
 
-fn testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: testing.TestSetRegistration) -> testing.TestRegistry {
+fn testing.TestRegistry._expand_testset_registry(self: testing.TestRegistry, ts: testing.TestSetRegistration) -> testing.TestRegistry {
     // Locals:
     let _0: testing.TestRegistry // _0 // return
     let _1: testing.TestRegistry // self // param
@@ -1340,11 +1340,11 @@ fn testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: 
     }
 }
 
-fn testing.testset_children(registry: testing.TestRegistry, pool: testing.TestPool) -> testing.TestSetChild[] {
+fn testing._testset_children(registry: testing.TestRegistry, pool: testing._TestPool) -> testing.TestSetChild[] {
     // Locals:
     let _0: testing.TestSetChild[] // _0 // return
     let _1: testing.TestRegistry // registry // param
-    let _2: testing.TestPool // pool // param
+    let _2: testing._TestPool // pool // param
     let _3: testing.TestSetChild[] // children
     let _4: testing.TestRegistration[]
     let _5: baml.iter.Iterator<Error = never, Item = testing.TestRegistration>
@@ -1391,7 +1391,7 @@ fn testing.testset_children(registry: testing.TestRegistry, pool: testing.TestPo
         _12 = copy _9.0;
         _13 = copy _9.1;
         _14 = copy _9.2;
-        _11 = call const fn testing.test_child(copy _12, copy _13, copy _14) -> [bb4];
+        _11 = call const fn testing._test_child(copy _12, copy _13, copy _14) -> [bb4];
     }
 
     bb4: {
@@ -1418,7 +1418,7 @@ fn testing.testset_children(registry: testing.TestRegistry, pool: testing.TestPo
         fresh_cell(_21);
         _21 = copy _20;
         _24 = copy _21;
-        _23 = call const fn testing.testset_child(copy _1, copy _24, copy _2) -> [bb9];
+        _23 = call const fn testing._testset_child(copy _1, copy _24, copy _2) -> [bb9];
     }
 
     bb9: {
@@ -1436,12 +1436,12 @@ fn testing.testset_children(registry: testing.TestRegistry, pool: testing.TestPo
     }
 }
 
-fn testing.testset_children_selected(registry: testing.TestRegistry, names: string[], pool: testing.TestPool) -> testing.TestSetChild[] {
+fn testing._testset_children_selected(registry: testing.TestRegistry, names: string[], pool: testing._TestPool) -> testing.TestSetChild[] {
     // Locals:
     let _0: testing.TestSetChild[] // _0 // return
     let _1: testing.TestRegistry // registry // param
     let _2: string[] // names // param
-    let _3: testing.TestPool // pool // param
+    let _3: testing._TestPool // pool // param
     let _4: testing.TestSetChild[] // children
     let _5: testing.TestRegistration[]
     let _6: baml.iter.Iterator<Error = never, Item = testing.TestRegistration>
@@ -1452,23 +1452,30 @@ fn testing.testset_children_selected(registry: testing.TestRegistry, names: stri
     let _11: void
     let _12: bool
     let _13: string
-    let _14: testing.TestSetChild
-    let _15: string
-    let _16: () -> void throws unknown
-    let _17: null | ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)
-    let _18: reflect.Type
-    let _19: testing.TestSetRegistration[]
-    let _20: baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
-    let _21: unknown
-    let _22: bool
-    let _23: testing.TestSetRegistration
-    let _24: testing.TestSetRegistration // ts
-    let _25: void
-    let _26: bool
-    let _27: string
-    let _28: testing.TestSetChild
-    let _29: testing.TestSetRegistration
+    let _14: reflect.Type
+    let _15: testing.TestSetChild
+    let _16: string
+    let _17: () -> void throws unknown
+    let _18: null | ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)
+    let _19: reflect.Type
+    let _20: testing.TestSetRegistration[]
+    let _21: baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
+    let _22: unknown
+    let _23: bool
+    let _24: testing.TestSetRegistration
+    let _25: testing.TestSetRegistration // ts
+    let _26: void
+    let _27: string // prefix [captured]
+    let _28: string
+    let _29: string
     let _30: reflect.Type
+    let _31: bool
+    let _32: (string) -> bool throws never
+    let _33: reflect.Type
+    let _34: reflect.Type
+    let _35: testing.TestSetChild
+    let _36: testing.TestSetRegistration
+    let _37: reflect.Type
 
     bb0: {
         _4 = []: testing.TestSetChild[];
@@ -1490,7 +1497,8 @@ fn testing.testset_children_selected(registry: testing.TestRegistry, names: stri
         fresh_cell(_10);
         _10 = copy _9;
         _13 = copy _10.0;
-        _12 = call const fn testing._name_selected(copy _13, copy _2) -> [bb4];
+        _14 = load_type(string);
+        _12 = call const fn baml.Array.includes<copy _14>(copy _2, copy _13) -> [bb4];
     }
 
     bb4: {
@@ -1503,69 +1511,95 @@ fn testing.testset_children_selected(registry: testing.TestRegistry, names: stri
     }
 
     bb6: {
-        _15 = copy _10.0;
-        _16 = copy _10.1;
-        _17 = copy _10.2;
-        _14 = call const fn testing.test_child(copy _15, copy _16, copy _17) -> [bb7];
+        _16 = copy _10.0;
+        _17 = copy _10.1;
+        _18 = copy _10.2;
+        _15 = call const fn testing._test_child(copy _16, copy _17, copy _18) -> [bb7];
     }
 
     bb7: {
-        _18 = load_type(testing.TestSetChild);
-        _11 = call const fn baml.Array.push<copy _18>(copy _4, copy _14) -> [bb1];
+        _19 = load_type(testing.TestSetChild);
+        _11 = call const fn baml.Array.push<copy _19>(copy _4, copy _15) -> [bb1];
     }
 
     bb8: {
-        _19 = copy _1.0.2;
-        _20 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>(copy _19) -> [bb9];
+        _20 = copy _1.0.2;
+        _21 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>(copy _20) -> [bb9];
     }
 
     bb9: {
-        _21 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>(copy _20) -> [bb10];
+        _22 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>(copy _21) -> [bb10];
     }
 
     bb10: {
-        _22 = is_type(copy _21, baml.iter.Done);
-        branch copy _22 -> [bb16, bb11];
+        _23 = is_type(copy _22, baml.iter.Done);
+        branch copy _23 -> [bb17, bb11];
     }
 
     bb11: {
-        _23 = copy _21;
-        fresh_cell(_24);
-        _24 = copy _23;
-        _27 = copy _24.0;
-        _26 = call const fn testing._has_selected_descendant(copy _27, copy _2) -> [bb12];
+        _24 = copy _22;
+        fresh_cell(_25);
+        _25 = copy _24;
+        _29 = copy _25.0;
+        _30 = load_type(string);
+        _28 = call const fn baml.String.from<copy _30>(copy _29) -> [bb12];
     }
 
     bb12: {
-        branch copy _26 -> [bb14, bb13];
+        _27 = copy _28 + const "::";
+        _32 = make_closure lambda[0](copy _27);
+        _33 = load_type(never);
+        _34 = load_type(string);
+        _31 = call const fn baml.Array.some<copy _34, copy _33>(copy _2, copy _32) -> [bb13];
     }
 
     bb13: {
-        _25 = const null;
-        goto -> bb9;
+        branch copy _31 -> [bb15, bb14];
     }
 
     bb14: {
-        _29 = copy _24;
-        _28 = call const fn testing.testset_child_selected(copy _1, copy _29, copy _2, copy _3) -> [bb15];
+        _26 = const null;
+        goto -> bb9;
     }
 
     bb15: {
-        _30 = load_type(testing.TestSetChild);
-        _25 = call const fn baml.Array.push<copy _30>(copy _4, copy _28) -> [bb9];
+        _36 = copy _25;
+        _35 = call const fn testing._testset_child_selected(copy _1, copy _36, copy _2, copy _3) -> [bb16];
     }
 
     bb16: {
-        _0 = copy _4;
-        goto -> bb17;
+        _37 = load_type(testing.TestSetChild);
+        _26 = call const fn baml.Array.push<copy _37>(copy _4, copy _35) -> [bb9];
     }
 
     bb17: {
+        _0 = copy _4;
+        goto -> bb18;
+    }
+
+    bb18: {
         return;
     }
 }
 
-fn testing.test_child(name: string, body: () -> void throws unknown, runner: null | ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)) -> testing.TestSetChild {
+// lambda[0]
+fn .<lambda(_testset_children_selected, 0)>(n: string) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: string // n // param
+    let _2: string
+
+    bb0: {
+        _2 = copy capture[0];
+        _0 = call const fn baml.String.starts_with(copy _1, copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn testing._test_child(name: string, body: () -> void throws unknown, runner: null | ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)) -> testing.TestSetChild {
     // Locals:
     let _0: testing.TestSetChild // _0 // return
     let _1: string // name // param
@@ -1585,7 +1619,7 @@ fn testing.test_child(name: string, body: () -> void throws unknown, runner: nul
 }
 
 // lambda[0]
-fn .<lambda(test_child, 0)>() -> testing.TestReport | testing.TestSetReport {
+fn .<lambda(_test_child, 0)>() -> testing.TestReport | testing.TestSetReport {
     // Locals:
     let _0: testing.TestReport | testing.TestSetReport // _0 // return
     let _1: () -> void throws unknown
@@ -1594,7 +1628,7 @@ fn .<lambda(test_child, 0)>() -> testing.TestReport | testing.TestSetReport {
     bb0: {
         _1 = copy capture[0];
         _2 = copy capture[1];
-        _0 = call const fn testing.run_test(copy _1, copy _2) -> [bb1];
+        _0 = call const fn testing._run_test(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -1602,12 +1636,12 @@ fn .<lambda(test_child, 0)>() -> testing.TestReport | testing.TestSetReport {
     }
 }
 
-fn testing.testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegistration, pool: testing.TestPool) -> testing.TestSetChild {
+fn testing._testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegistration, pool: testing._TestPool) -> testing.TestSetChild {
     // Locals:
     let _0: testing.TestSetChild // _0 // return
     let _1: testing.TestRegistry // registry // param [captured]
     let _2: testing.TestSetRegistration // ts // param [captured]
-    let _3: testing.TestPool // pool // param [captured]
+    let _3: testing._TestPool // pool // param [captured]
     let _4: string
     let _5: () -> testing.TestReport | testing.TestSetReport throws never
 
@@ -1624,34 +1658,34 @@ fn testing.testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegi
 }
 
 // lambda[0]
-fn .<lambda(testset_child, 0)>() -> testing.TestReport | testing.TestSetReport {
+fn .<lambda(_testset_child, 0)>() -> testing.TestReport | testing.TestSetReport {
     // Locals:
     let _0: testing.TestReport | testing.TestSetReport // _0 // return
     let _1: unknown // e
     let _2: testing.TestSetChild[]
     let _3: testing.TestRegistry
     let _4: testing.TestSetRegistration
-    let _5: testing.TestPool
+    let _5: testing._TestPool
     let _6: null | ((testing.TestSetChild[]) -> testing.TestSetReport throws never)
-    let _7: testing.TestPool
+    let _7: testing._TestPool
     let _8: int
     let _9: string
     let _10: string
 
     bb0: {
         _4 = copy capture[1];
-        _3 = call const fn testing.TestRegistry.expand_testset_registry(copy capture[0], copy _4) -> [bb1, unwind: bb3];
+        _3 = call const fn testing.TestRegistry._expand_testset_registry(copy capture[0], copy _4) -> [bb1, unwind: bb3];
     }
 
     bb1: {
         _5 = copy capture[2];
-        _2 = call const fn testing.testset_children(copy _3, copy _5) -> [bb2, unwind: bb3];
+        _2 = call const fn testing._testset_children(copy _3, copy _5) -> [bb2, unwind: bb3];
     }
 
     bb2: {
         _6 = copy capture[1].2;
         _7 = copy capture[2];
-        _0 = call const fn testing.run_testset(copy _2, copy _6, copy _7) -> [bb7, unwind: bb3];
+        _0 = call const fn testing._run_testset(copy _2, copy _6, copy _7) -> [bb7, unwind: bb3];
     }
 
     bb3: {
@@ -1665,12 +1699,12 @@ fn .<lambda(testset_child, 0)>() -> testing.TestReport | testing.TestSetReport {
 
     bb5: {
         _10 = copy capture[1].0;
-        _0 = call const fn testing.expansion_error_report(copy _10) -> [bb7];
+        _0 = call const fn testing._expansion_error_report(copy _10) -> [bb7];
     }
 
     bb6: {
         _9 = copy capture[1].0;
-        _0 = call const fn testing.expansion_error_report(copy _9) -> [bb7];
+        _0 = call const fn testing._expansion_error_report(copy _9) -> [bb7];
     }
 
     bb7: {
@@ -1678,13 +1712,13 @@ fn .<lambda(testset_child, 0)>() -> testing.TestReport | testing.TestSetReport {
     }
 }
 
-fn testing.testset_child_selected(registry: testing.TestRegistry, ts: testing.TestSetRegistration, names: string[], pool: testing.TestPool) -> testing.TestSetChild {
+fn testing._testset_child_selected(registry: testing.TestRegistry, ts: testing.TestSetRegistration, names: string[], pool: testing._TestPool) -> testing.TestSetChild {
     // Locals:
     let _0: testing.TestSetChild // _0 // return
     let _1: testing.TestRegistry // registry // param [captured]
     let _2: testing.TestSetRegistration // ts // param [captured]
     let _3: string[] // names // param [captured]
-    let _4: testing.TestPool // pool // param [captured]
+    let _4: testing._TestPool // pool // param [captured]
     let _5: string
     let _6: () -> testing.TestReport | testing.TestSetReport throws never
 
@@ -1701,7 +1735,7 @@ fn testing.testset_child_selected(registry: testing.TestRegistry, ts: testing.Te
 }
 
 // lambda[0]
-fn .<lambda(testset_child_selected, 0)>() -> testing.TestReport | testing.TestSetReport {
+fn .<lambda(_testset_child_selected, 0)>() -> testing.TestReport | testing.TestSetReport {
     // Locals:
     let _0: testing.TestReport | testing.TestSetReport // _0 // return
     let _1: unknown // e
@@ -1709,28 +1743,28 @@ fn .<lambda(testset_child_selected, 0)>() -> testing.TestReport | testing.TestSe
     let _3: testing.TestRegistry
     let _4: testing.TestSetRegistration
     let _5: string[]
-    let _6: testing.TestPool
+    let _6: testing._TestPool
     let _7: null | ((testing.TestSetChild[]) -> testing.TestSetReport throws never)
-    let _8: testing.TestPool
+    let _8: testing._TestPool
     let _9: int
     let _10: string
     let _11: string
 
     bb0: {
         _4 = copy capture[1];
-        _3 = call const fn testing.TestRegistry.expand_testset_registry(copy capture[0], copy _4) -> [bb1, unwind: bb3];
+        _3 = call const fn testing.TestRegistry._expand_testset_registry(copy capture[0], copy _4) -> [bb1, unwind: bb3];
     }
 
     bb1: {
         _5 = copy capture[2];
         _6 = copy capture[3];
-        _2 = call const fn testing.testset_children_selected(copy _3, copy _5, copy _6) -> [bb2, unwind: bb3];
+        _2 = call const fn testing._testset_children_selected(copy _3, copy _5, copy _6) -> [bb2, unwind: bb3];
     }
 
     bb2: {
         _7 = copy capture[1].2;
         _8 = copy capture[3];
-        _0 = call const fn testing.run_testset(copy _2, copy _7, copy _8) -> [bb7, unwind: bb3];
+        _0 = call const fn testing._run_testset(copy _2, copy _7, copy _8) -> [bb7, unwind: bb3];
     }
 
     bb3: {
@@ -1744,12 +1778,12 @@ fn .<lambda(testset_child_selected, 0)>() -> testing.TestReport | testing.TestSe
 
     bb5: {
         _11 = copy capture[1].0;
-        _0 = call const fn testing.expansion_error_report(copy _11) -> [bb7];
+        _0 = call const fn testing._expansion_error_report(copy _11) -> [bb7];
     }
 
     bb6: {
         _10 = copy capture[1].0;
-        _0 = call const fn testing.expansion_error_report(copy _10) -> [bb7];
+        _0 = call const fn testing._expansion_error_report(copy _10) -> [bb7];
     }
 
     bb7: {
@@ -1757,126 +1791,21 @@ fn .<lambda(testset_child_selected, 0)>() -> testing.TestReport | testing.TestSe
     }
 }
 
-fn testing._name_selected(name: string, names: string[]) -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-    let _1: string // name // param
-    let _2: string[] // names // param
-    let _3: baml.iter.Iterator<Error = never, Item = string>
-    let _4: unknown
-    let _5: bool
-    let _6: string
-    let _7: string // selected
-    let _8: bool
-    let _9: string
-
-    bb0: {
-        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _2) -> [bb1];
-    }
-
-    bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _5 = is_type(copy _4, baml.iter.Done);
-        branch copy _5 -> [bb5, bb3];
-    }
-
-    bb3: {
-        _6 = copy _4;
-        fresh_cell(_7);
-        _7 = copy _6;
-        _9 = copy _7;
-        _8 = copy _9 == copy _1;
-        branch copy _8 -> [bb4, bb1];
-    }
-
-    bb4: {
-        _0 = const true;
-        goto -> bb6;
-    }
-
-    bb5: {
-        _0 = const false;
-        goto -> bb6;
-    }
-
-    bb6: {
-        return;
-    }
-}
-
-fn testing._has_selected_descendant(prefix: string, names: string[]) -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-    let _1: string // prefix // param
-    let _2: string[] // names // param
-    let _3: string // descendant_prefix
-    let _4: baml.iter.Iterator<Error = never, Item = string>
-    let _5: unknown
-    let _6: bool
-    let _7: string
-    let _8: string // selected
-    let _9: bool
-    let _10: string
-
-    bb0: {
-        _3 = copy _1 + const "::";
-        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _2) -> [bb1];
-    }
-
-    bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _4) -> [bb2];
-    }
-
-    bb2: {
-        _6 = is_type(copy _5, baml.iter.Done);
-        branch copy _6 -> [bb6, bb3];
-    }
-
-    bb3: {
-        _7 = copy _5;
-        fresh_cell(_8);
-        _8 = copy _7;
-        _10 = copy _3;
-        _9 = call const fn baml.String.starts_with(copy _8, copy _10) -> [bb4];
-    }
-
-    bb4: {
-        branch copy _9 -> [bb5, bb1];
-    }
-
-    bb5: {
-        _0 = const true;
-        goto -> bb7;
-    }
-
-    bb6: {
-        _0 = const false;
-        goto -> bb7;
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testing.TestSetReport {
+fn testing._aggregate_reports(named_results: testing._NamedChildReport[]) -> testing.TestSetReport {
     // Locals:
     let _0: testing.TestSetReport // _0 // return
-    let _1: testing.NamedChildReport[] // named_results // param
+    let _1: testing._NamedChildReport[] // named_results // param
     let _2: int // passed
     let _3: int // failed
     let _4: bool // has_error
     let _5: string[] // failed_names
     let _6: (testing.TestReport | testing.TestSetReport)[] // results
     let _7: string[] // result_names
-    let _8: baml.iter.Iterator<Error = never, Item = testing.NamedChildReport>
+    let _8: baml.iter.Iterator<Error = never, Item = testing._NamedChildReport>
     let _9: unknown
     let _10: bool
-    let _11: testing.NamedChildReport
-    let _12: testing.NamedChildReport // named_result
+    let _11: testing._NamedChildReport
+    let _12: testing._NamedChildReport // named_result
     let _13: testing.TestReport | testing.TestSetReport // result
     let _14: int
     let _15: testing.TestReport | testing.TestSetReport
@@ -1928,11 +1857,11 @@ fn testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testi
         _5 = []: string[];
         _6 = []: testing.TestReport | testing.TestSetReport[];
         _7 = []: string[];
-        _8 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.NamedChildReport>(copy _1) -> [bb1];
+        _8 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing._NamedChildReport>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _9 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.NamedChildReport>(copy _8) -> [bb2];
+        _9 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing._NamedChildReport>(copy _8) -> [bb2];
     }
 
     bb2: {
@@ -2106,10 +2035,10 @@ fn testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testi
     }
 }
 
-fn testing.TestPool.acquire(self: testing.TestPool) -> null {
+fn testing._TestPool.acquire(self: testing._TestPool) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: testing.TestPool // self // param
+    let _1: testing._TestPool // self // param
     let _2: int | null
     let _3: (int[]) -> int | null throws never
     let _4: reflect.Type
@@ -2169,10 +2098,10 @@ fn testing.TestPool.acquire(self: testing.TestPool) -> null {
     }
 }
 
-fn testing.TestPool.release(self: testing.TestPool) -> null {
+fn testing._TestPool.release(self: testing._TestPool) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: testing.TestPool // self // param
+    let _1: testing._TestPool // self // param
     let _2: int
     let _3: (int[], int) -> int throws never
     let _4: reflect.Type
@@ -2193,9 +2122,9 @@ fn testing.TestPool.release(self: testing.TestPool) -> null {
     }
 }
 
-fn testing.test_pool(max_concurrency: int) -> testing.TestPool {
+fn testing._test_pool(max_concurrency: int) -> testing._TestPool {
     // Locals:
-    let _0: testing.TestPool // _0 // return
+    let _0: testing._TestPool // _0 // return
     let _1: int // max_concurrency // param
     let _2: int // limit
     let _3: bool
@@ -2239,7 +2168,7 @@ fn testing.test_pool(max_concurrency: int) -> testing.TestPool {
 
     bb5: {
         _12 = copy _4;
-        _0 = testing.TestPool { copy _12 };
+        _0 = testing._TestPool { copy _12 };
         goto -> bb6;
     }
 
@@ -2259,12 +2188,12 @@ fn testing.test_pool(max_concurrency: int) -> testing.TestPool {
     }
 }
 
-fn testing.run_children_parallel(children: testing.TestSetChild[], pool: testing.TestPool) -> testing.TestSetReport {
+fn testing._run_children_parallel(children: testing.TestSetChild[], pool: testing._TestPool) -> testing.TestSetReport {
     // Locals:
     let _0: testing.TestSetReport // _0 // return
     let _1: testing.TestSetChild[] // children // param
-    let _2: testing.TestPool // pool // param [captured]
-    let _3: baml.future.Future<testing.NamedChildReport, never>[] // futures
+    let _2: testing._TestPool // pool // param [captured]
+    let _3: baml.future.Future<testing._NamedChildReport, never>[] // futures
     let _4: baml.iter.Iterator<Error = never, Item = testing.TestSetChild>
     let _5: unknown
     let _6: bool
@@ -2272,24 +2201,24 @@ fn testing.run_children_parallel(children: testing.TestSetChild[], pool: testing
     let _8: testing.TestSetChild // child [captured]
     let _9: void
     let _10: bool
-    let _11: baml.future.Future<testing.NamedChildReport, never>
+    let _11: baml.future.Future<testing._NamedChildReport, never>
     let _12: null
-    let _13: baml.future.Future<testing.NamedChildReport, never>
+    let _13: baml.future.Future<testing._NamedChildReport, never>
     let _14: reflect.Type
     let _15: null
-    let _16: baml.future.Future<testing.NamedChildReport, never>
+    let _16: baml.future.Future<testing._NamedChildReport, never>
     let _17: null
-    let _18: baml.future.Future<testing.NamedChildReport, never>
+    let _18: baml.future.Future<testing._NamedChildReport, never>
     let _19: reflect.Type
-    let _20: testing.NamedChildReport[] // named_results
+    let _20: testing._NamedChildReport[] // named_results
     let _21: null
-    let _22: baml.future.Future<testing.NamedChildReport, never>[]
+    let _22: baml.future.Future<testing._NamedChildReport, never>[]
     let _23: reflect.Type
     let _24: reflect.Type
-    let _25: testing.NamedChildReport[]
+    let _25: testing._NamedChildReport[]
 
     bb0: {
-        _3 = []: baml.future.Future<testing.NamedChildReport, never>[];
+        _3 = []: baml.future.Future<testing._NamedChildReport, never>[];
         _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetChild>(copy _1) -> [bb1];
     }
 
@@ -2311,34 +2240,34 @@ fn testing.run_children_parallel(children: testing.TestSetChild[], pool: testing
     }
 
     bb4: {
-        _15 = call const fn testing.TestPool.acquire(copy _2) -> [bb5];
+        _15 = call const fn testing._TestPool.acquire(copy _2) -> [bb5];
     }
 
     bb5: {
         _17 = make_closure lambda[1](copy _8, copy _2);
-        _18 = spawn<testing.NamedChildReport, never> copy _17 name=const null -> bb6;
+        _18 = spawn<testing._NamedChildReport, never> copy _17 name=const null -> bb6;
     }
 
     bb6: {
         _16 = copy _18;
-        _19 = load_type(baml.future.Future<testing.NamedChildReport, never>);
+        _19 = load_type(baml.future.Future<testing._NamedChildReport, never>);
         _9 = call const fn baml.Array.push<copy _19>(copy _3, copy _16) -> [bb1];
     }
 
     bb7: {
         _12 = make_closure lambda[0](copy _8);
-        _13 = spawn<testing.NamedChildReport, never> copy _12 name=const null -> bb8;
+        _13 = spawn<testing._NamedChildReport, never> copy _12 name=const null -> bb8;
     }
 
     bb8: {
         _11 = copy _13;
-        _14 = load_type(baml.future.Future<testing.NamedChildReport, never>);
+        _14 = load_type(baml.future.Future<testing._NamedChildReport, never>);
         _9 = call const fn baml.Array.push<copy _14>(copy _3, copy _11) -> [bb1];
     }
 
     bb9: {
         _22 = copy _3;
-        _23 = load_type(testing.NamedChildReport);
+        _23 = load_type(testing._NamedChildReport);
         _24 = load_type(never);
         _21 = call const fn baml.future.all_complete<copy _23, copy _24>(copy _22) -> [bb10];
     }
@@ -2349,7 +2278,7 @@ fn testing.run_children_parallel(children: testing.TestSetChild[], pool: testing
 
     bb11: {
         _25 = copy _20;
-        _0 = call const fn testing.aggregate_reports(copy _25) -> [bb12];
+        _0 = call const fn testing._aggregate_reports(copy _25) -> [bb12];
     }
 
     bb12: {
@@ -2358,9 +2287,9 @@ fn testing.run_children_parallel(children: testing.TestSetChild[], pool: testing
 }
 
 // lambda[0]
-fn .<lambda(run_children_parallel, 0)>() -> testing.NamedChildReport {
+fn .<lambda(_run_children_parallel, 0)>() -> testing._NamedChildReport {
     // Locals:
-    let _0: testing.NamedChildReport // _0 // return
+    let _0: testing._NamedChildReport // _0 // return
     let _1: string
     let _2: testing.TestReport | testing.TestSetReport
     let _3: () -> testing.TestReport | testing.TestSetReport throws never
@@ -2372,7 +2301,7 @@ fn .<lambda(run_children_parallel, 0)>() -> testing.NamedChildReport {
     }
 
     bb1: {
-        _0 = testing.NamedChildReport { copy _1, copy _2 };
+        _0 = testing._NamedChildReport { copy _1, copy _2 };
         goto -> bb2;
     }
 
@@ -2382,10 +2311,10 @@ fn .<lambda(run_children_parallel, 0)>() -> testing.NamedChildReport {
 }
 
 // lambda[1]
-fn .<lambda(run_children_parallel, 1)>() -> testing.NamedChildReport {
+fn .<lambda(_run_children_parallel, 1)>() -> testing._NamedChildReport {
     // Locals:
-    let _0: testing.NamedChildReport // _0 // return
-    let _1: testing.NamedChildReport // named
+    let _0: testing._NamedChildReport // _0 // return
+    let _1: testing._NamedChildReport // named
     let _2: string
     let _3: testing.TestReport | testing.TestSetReport
     let _4: () -> testing.TestReport | testing.TestSetReport throws never
@@ -2398,8 +2327,8 @@ fn .<lambda(run_children_parallel, 1)>() -> testing.NamedChildReport {
     }
 
     bb1: {
-        _1 = testing.NamedChildReport { copy _2, copy _3 };
-        _5 = call const fn testing.TestPool.release(copy capture[1]) -> [bb2];
+        _1 = testing._NamedChildReport { copy _2, copy _3 };
+        _5 = call const fn testing._TestPool.release(copy capture[1]) -> [bb2];
     }
 
     bb2: {
@@ -2412,7 +2341,7 @@ fn .<lambda(run_children_parallel, 1)>() -> testing.NamedChildReport {
     }
 }
 
-fn testing.run_test(body: () -> void throws unknown, runner: null | ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)) -> testing.TestReport {
+fn testing._run_test(body: () -> void throws unknown, runner: null | ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)) -> testing.TestReport {
     // Locals:
     let _0: testing.TestReport // _0 // return
     let _1: () -> void throws unknown // body // param [captured]
@@ -2477,7 +2406,7 @@ fn testing.run_test(body: () -> void throws unknown, runner: null | ((() -> test
 }
 
 // lambda[0]
-fn .<lambda(run_test, 0)>() -> testing.TestReport {
+fn .<lambda(_run_test, 0)>() -> testing.TestReport {
     // Locals:
     let _0: testing.TestReport // _0 // return
     let _1: baml.time.Instant // start
@@ -2640,7 +2569,7 @@ fn .<lambda(run_test, 0)>() -> testing.TestReport {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(run_test, 0)>, 1)>() -> testing.RunReport {
+fn .<lambda(<lambda(_run_test, 0)>, 1)>() -> testing.RunReport {
     // Locals:
     let _0: testing.RunReport // _0 // return
     let _1: unknown // e
@@ -2814,7 +2743,7 @@ fn .<lambda(<lambda(run_test, 0)>, 1)>() -> testing.RunReport {
 }
 
 // lambda[1]
-fn .<lambda(<lambda(run_test, 0)>, 2)>() -> testing.RunReport {
+fn .<lambda(<lambda(_run_test, 0)>, 2)>() -> testing.RunReport {
     // Locals:
     let _0: testing.RunReport // _0 // return
     let _1: null
@@ -2861,12 +2790,12 @@ fn .<lambda(<lambda(run_test, 0)>, 2)>() -> testing.RunReport {
     }
 }
 
-fn testing.run_testset(children: testing.TestSetChild[], runner: null | ((testing.TestSetChild[]) -> testing.TestSetReport throws never), pool: testing.TestPool) -> testing.TestSetReport {
+fn testing._run_testset(children: testing.TestSetChild[], runner: null | ((testing.TestSetChild[]) -> testing.TestSetReport throws never), pool: testing._TestPool) -> testing.TestSetReport {
     // Locals:
     let _0: testing.TestSetReport // _0 // return
     let _1: testing.TestSetChild[] // children // param
     let _2: null | ((testing.TestSetChild[]) -> testing.TestSetReport throws never) // runner // param
-    let _3: testing.TestPool // pool // param
+    let _3: testing._TestPool // pool // param
     let _4: bool
     let _5: (testing.TestSetChild[]) -> testing.TestSetReport throws never // r
     let _6: (testing.TestSetChild[]) -> testing.TestSetReport throws never
@@ -2883,7 +2812,7 @@ fn testing.run_testset(children: testing.TestSetChild[], runner: null | ((testin
     }
 
     bb2: {
-        _0 = call const fn testing.run_children_parallel(copy _1, copy _3) -> [bb3];
+        _0 = call const fn testing._run_children_parallel(copy _1, copy _3) -> [bb3];
     }
 
     bb3: {
@@ -2891,7 +2820,7 @@ fn testing.run_testset(children: testing.TestSetChild[], runner: null | ((testin
     }
 }
 
-fn testing.expansion_error_report(name: string) -> testing.TestSetReport {
+fn testing._expansion_error_report(name: string) -> testing.TestSetReport {
     // Locals:
     let _0: testing.TestSetReport // _0 // return
     let _1: string // name // param
@@ -2914,7 +2843,7 @@ fn testing.expansion_error_report(name: string) -> testing.TestSetReport {
     }
 }
 
-fn testing.glob_match(subject: string, pattern: string) -> bool {
+fn testing._glob_match(subject: string, pattern: string) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: string // subject // param
@@ -3130,7 +3059,7 @@ fn testing.glob_match(subject: string, pattern: string) -> bool {
     }
 }
 
-fn testing.any_pattern_matches(pats: string[], canonical_id: string) -> bool {
+fn testing._any_pattern_matches(pats: string[], canonical_id: string) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: string[] // pats // param
@@ -3161,7 +3090,7 @@ fn testing.any_pattern_matches(pats: string[], canonical_id: string) -> bool {
         fresh_cell(_7);
         _7 = copy _6;
         _9 = copy _7;
-        _8 = call const fn testing.glob_match(copy _2, copy _9) -> [bb4];
+        _8 = call const fn testing._glob_match(copy _2, copy _9) -> [bb4];
     }
 
     bb4: {
@@ -3183,7 +3112,7 @@ fn testing.any_pattern_matches(pats: string[], canonical_id: string) -> bool {
     }
 }
 
-fn testing.leaf_selected(name: string, include: string[], exclude: string[]) -> bool {
+fn testing._leaf_selected(name: string, include: string[], exclude: string[]) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: string // name // param
@@ -3194,7 +3123,7 @@ fn testing.leaf_selected(name: string, include: string[], exclude: string[]) -> 
     let _6: int
 
     bb0: {
-        _4 = call const fn testing.any_pattern_matches(copy _3, copy _1) -> [bb1];
+        _4 = call const fn testing._any_pattern_matches(copy _3, copy _1) -> [bb1];
     }
 
     bb1: {
@@ -3212,7 +3141,7 @@ fn testing.leaf_selected(name: string, include: string[], exclude: string[]) -> 
     }
 
     bb4: {
-        _0 = call const fn testing.any_pattern_matches(copy _2, copy _1) -> [bb7];
+        _0 = call const fn testing._any_pattern_matches(copy _2, copy _1) -> [bb7];
     }
 
     bb5: {
@@ -3230,7 +3159,7 @@ fn testing.leaf_selected(name: string, include: string[], exclude: string[]) -> 
     }
 }
 
-fn testing.leaf_selected_layered(name: string, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> bool {
+fn testing._leaf_selected_layered(name: string, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: string // name // param
@@ -3241,7 +3170,7 @@ fn testing.leaf_selected_layered(name: string, profile_include: string[], profil
     let _6: bool
 
     bb0: {
-        _6 = call const fn testing.leaf_selected(copy _1, copy _2, copy _3) -> [bb1];
+        _6 = call const fn testing._leaf_selected(copy _1, copy _2, copy _3) -> [bb1];
     }
 
     bb1: {
@@ -3249,7 +3178,7 @@ fn testing.leaf_selected_layered(name: string, profile_include: string[], profil
     }
 
     bb2: {
-        _0 = call const fn testing.leaf_selected(copy _1, copy _4, copy _5) -> [bb3];
+        _0 = call const fn testing._leaf_selected(copy _1, copy _4, copy _5) -> [bb3];
     }
 
     bb3: {
@@ -3257,7 +3186,7 @@ fn testing.leaf_selected_layered(name: string, profile_include: string[], profil
     }
 }
 
-fn testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
+fn testing._subtree_excluded(prefix: string, excludes: string[]) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: string // prefix // param
@@ -3337,7 +3266,7 @@ fn testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
     bb12: {
         _17 = copy _3;
         _18 = copy _8;
-        _15 = call const fn testing.glob_match(copy _17, copy _18) -> [bb13];
+        _15 = call const fn testing._glob_match(copy _17, copy _18) -> [bb13];
     }
 
     bb13: {
@@ -3364,7 +3293,7 @@ fn testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
     }
 }
 
-fn testing.pattern_may_match_descendant(pattern: string, prefix: string) -> bool {
+fn testing._pattern_may_match_descendant(pattern: string, prefix: string) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: string // pattern // param
@@ -3419,7 +3348,7 @@ fn testing.pattern_may_match_descendant(pattern: string, prefix: string) -> bool
     }
 }
 
-fn testing.subtree_may_be_selected(prefix: string, include: string[], exclude: string[]) -> bool {
+fn testing._subtree_may_be_selected(prefix: string, include: string[], exclude: string[]) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: string // prefix // param
@@ -3437,7 +3366,7 @@ fn testing.subtree_may_be_selected(prefix: string, include: string[], exclude: s
     let _13: string
 
     bb0: {
-        _4 = call const fn testing.subtree_excluded(copy _1, copy _3) -> [bb1];
+        _4 = call const fn testing._subtree_excluded(copy _1, copy _3) -> [bb1];
     }
 
     bb1: {
@@ -3472,7 +3401,7 @@ fn testing.subtree_may_be_selected(prefix: string, include: string[], exclude: s
         fresh_cell(_11);
         _11 = copy _10;
         _13 = copy _11;
-        _12 = call const fn testing.pattern_may_match_descendant(copy _13, copy _1) -> [bb8];
+        _12 = call const fn testing._pattern_may_match_descendant(copy _13, copy _1) -> [bb8];
     }
 
     bb8: {
@@ -3504,7 +3433,7 @@ fn testing.subtree_may_be_selected(prefix: string, include: string[], exclude: s
     }
 }
 
-fn testing.select_names_layered(registry: testing.TestRegistry, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
+fn testing._select_names_layered(registry: testing.TestRegistry, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: testing.TestRegistry // registry // param
@@ -3566,7 +3495,7 @@ fn testing.select_names_layered(registry: testing.TestRegistry, profile_include:
         fresh_cell(_12);
         _12 = copy _11;
         _15 = copy _12.0;
-        _14 = call const fn testing.leaf_selected_layered(copy _15, copy _2, copy _3, copy _4, copy _5) -> [bb4];
+        _14 = call const fn testing._leaf_selected_layered(copy _15, copy _2, copy _3, copy _4, copy _5) -> [bb4];
     }
 
     bb4: {
@@ -3603,7 +3532,7 @@ fn testing.select_names_layered(registry: testing.TestRegistry, profile_include:
         fresh_cell(_23);
         _23 = copy _22;
         _26 = copy _23.0;
-        _25 = call const fn testing.subtree_may_be_selected(copy _26, copy _2, copy _3) -> [bb11];
+        _25 = call const fn testing._subtree_may_be_selected(copy _26, copy _2, copy _3) -> [bb11];
     }
 
     bb11: {
@@ -3612,7 +3541,7 @@ fn testing.select_names_layered(registry: testing.TestRegistry, profile_include:
 
     bb12: {
         _27 = copy _23.0;
-        _24 = call const fn testing.subtree_may_be_selected(copy _27, copy _4, copy _5) -> [bb13];
+        _24 = call const fn testing._subtree_may_be_selected(copy _27, copy _4, copy _5) -> [bb13];
     }
 
     bb13: {
@@ -3621,7 +3550,7 @@ fn testing.select_names_layered(registry: testing.TestRegistry, profile_include:
 
     bb14: {
         _29 = copy _23;
-        _28 = call const fn testing.collect_subtree_names_layered(copy _1, copy _29, copy _2, copy _3, copy _4, copy _5) -> [bb15];
+        _28 = call const fn testing._collect_subtree_names_layered(copy _1, copy _29, copy _2, copy _3, copy _4, copy _5) -> [bb15];
     }
 
     bb15: {
@@ -3657,7 +3586,7 @@ fn testing.select_names_layered(registry: testing.TestRegistry, profile_include:
     }
 }
 
-fn testing.select_names(registry: testing.TestRegistry, include: string[], exclude: string[]) -> string[] {
+fn testing._select_names(registry: testing.TestRegistry, include: string[], exclude: string[]) -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: testing.TestRegistry // registry // param
@@ -3669,7 +3598,7 @@ fn testing.select_names(registry: testing.TestRegistry, include: string[], exclu
     bb0: {
         _4 = []: string[];
         _5 = []: string[];
-        _0 = call const fn testing.select_names_layered(copy _1, copy _4, copy _5, copy _2, copy _3) -> [bb1];
+        _0 = call const fn testing._select_names_layered(copy _1, copy _4, copy _5, copy _2, copy _3) -> [bb1];
     }
 
     bb1: {
@@ -3677,7 +3606,7 @@ fn testing.select_names(registry: testing.TestRegistry, include: string[], exclu
     }
 }
 
-fn testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] {
+fn testing._collect_leaf_names(registry: testing.TestRegistry) -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: testing.TestRegistry // registry // param
@@ -3751,7 +3680,7 @@ fn testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] {
         fresh_cell(_17);
         _17 = copy _16;
         _19 = copy _17;
-        _18 = call const fn testing.collect_subtree_names(copy _1, copy _19) -> [bb8];
+        _18 = call const fn testing._collect_subtree_names(copy _1, copy _19) -> [bb8];
     }
 
     bb8: {
@@ -3786,7 +3715,7 @@ fn testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] {
     }
 }
 
-fn testing.collect_subtree_names(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> string[] {
+fn testing._collect_subtree_names(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: testing.TestRegistry // registry // param
@@ -3817,11 +3746,11 @@ fn testing.collect_subtree_names(registry: testing.TestRegistry, ts: testing.Tes
     let _26: string
 
     bb0: {
-        _4 = call const fn testing.TestRegistry.expand_testset_registry(copy _1, copy _2) -> [bb1, unwind: bb2];
+        _4 = call const fn testing.TestRegistry._expand_testset_registry(copy _1, copy _2) -> [bb1, unwind: bb2];
     }
 
     bb1: {
-        _0 = call const fn testing.collect_leaf_names(copy _4) -> [bb22, unwind: bb2];
+        _0 = call const fn testing._collect_leaf_names(copy _4) -> [bb22, unwind: bb2];
     }
 
     bb2: {
@@ -3937,7 +3866,7 @@ fn testing.collect_subtree_names(registry: testing.TestRegistry, ts: testing.Tes
     }
 }
 
-fn testing.collect_subtree_names_layered(registry: testing.TestRegistry, ts: testing.TestSetRegistration, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
+fn testing._collect_subtree_names_layered(registry: testing.TestRegistry, ts: testing.TestSetRegistration, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: testing.TestRegistry // registry // param
@@ -3978,11 +3907,11 @@ fn testing.collect_subtree_names_layered(registry: testing.TestRegistry, ts: tes
     let _36: string
 
     bb0: {
-        _8 = call const fn testing.TestRegistry.expand_testset_registry(copy _1, copy _2) -> [bb1, unwind: bb2];
+        _8 = call const fn testing.TestRegistry._expand_testset_registry(copy _1, copy _2) -> [bb1, unwind: bb2];
     }
 
     bb1: {
-        _0 = call const fn testing.select_names_layered(copy _8, copy _3, copy _4, copy _5, copy _6) -> [bb28, unwind: bb2];
+        _0 = call const fn testing._select_names_layered(copy _8, copy _3, copy _4, copy _5, copy _6) -> [bb28, unwind: bb2];
     }
 
     bb2: {
@@ -4078,7 +4007,7 @@ fn testing.collect_subtree_names_layered(registry: testing.TestRegistry, ts: tes
         _33 = copy _2.0;
         _32 = copy _33 + const "::(failed to expand)";
         _35 = copy _32;
-        _34 = call const fn testing.leaf_selected_layered(copy _35, copy _3, copy _4, copy _5, copy _6) -> [bb21];
+        _34 = call const fn testing._leaf_selected_layered(copy _35, copy _3, copy _4, copy _5, copy _6) -> [bb21];
     }
 
     bb21: {
@@ -4100,7 +4029,7 @@ fn testing.collect_subtree_names_layered(registry: testing.TestRegistry, ts: tes
         _28 = copy _2.0;
         _27 = copy _28 + const "::(failed to expand)";
         _30 = copy _27;
-        _29 = call const fn testing.leaf_selected_layered(copy _30, copy _3, copy _4, copy _5, copy _6) -> [bb25];
+        _29 = call const fn testing._leaf_selected_layered(copy _30, copy _3, copy _4, copy _5, copy _6) -> [bb25];
     }
 
     bb25: {
@@ -4128,9 +4057,9 @@ fn testing.collect_subtree_names_layered(registry: testing.TestRegistry, ts: tes
     }
 }
 
-fn testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[], tolerated_by_parent: bool) -> testing.LeafCounts {
+fn testing._count_leaves(results: (testing.TestReport | testing.TestSetReport)[], tolerated_by_parent: bool) -> testing._LeafCounts {
     // Locals:
-    let _0: testing.LeafCounts // _0 // return
+    let _0: testing._LeafCounts // _0 // return
     let _1: (testing.TestReport | testing.TestSetReport)[] // results // param
     let _2: bool // tolerated_by_parent // param
     let _3: int // passed
@@ -4142,7 +4071,7 @@ fn testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[],
     let _9: bool
     let _10: testing.TestReport | testing.TestSetReport
     let _11: testing.TestReport | testing.TestSetReport // r
-    let _12: testing.LeafCounts // delta
+    let _12: testing._LeafCounts // delta
     let _13: testing.TestReport | testing.TestSetReport
     let _14: testing.TestReport // tr
     let _15: bool
@@ -4226,7 +4155,7 @@ fn testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[],
         _29 = copy _17.1;
         _30 = copy _17.2;
         _31 = copy _17.3;
-        _12 = testing.LeafCounts { copy _29, copy _30, const 0_i64, copy _31 };
+        _12 = testing._LeafCounts { copy _29, copy _30, const 0_i64, copy _31 };
         goto -> bb18;
     }
 
@@ -4234,14 +4163,14 @@ fn testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[],
         _26 = copy _17.1;
         _27 = copy _17.2;
         _28 = copy _17.3;
-        _12 = testing.LeafCounts { copy _26, const 0_i64, copy _27, copy _28 };
+        _12 = testing._LeafCounts { copy _26, const 0_i64, copy _27, copy _28 };
         goto -> bb18;
     }
 
     bb11: {
         _23 = copy _17.5;
         _24 = copy _18;
-        _12 = call const fn testing.count_leaves(copy _23, copy _24) -> [bb18];
+        _12 = call const fn testing._count_leaves(copy _23, copy _24) -> [bb18];
     }
 
     bb12: {
@@ -4259,17 +4188,17 @@ fn testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[],
     }
 
     bb15: {
-        _12 = testing.LeafCounts { const 0_i64, const 1_i64, const 0_i64, const 1_i64 };
+        _12 = testing._LeafCounts { const 0_i64, const 1_i64, const 0_i64, const 1_i64 };
         goto -> bb18;
     }
 
     bb16: {
-        _12 = testing.LeafCounts { const 0_i64, const 0_i64, const 1_i64, const 1_i64 };
+        _12 = testing._LeafCounts { const 0_i64, const 0_i64, const 1_i64, const 1_i64 };
         goto -> bb18;
     }
 
     bb17: {
-        _12 = testing.LeafCounts { const 1_i64, const 0_i64, const 0_i64, const 1_i64 };
+        _12 = testing._LeafCounts { const 1_i64, const 0_i64, const 0_i64, const 1_i64 };
         goto -> bb18;
     }
 
@@ -4290,7 +4219,7 @@ fn testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[],
         _37 = copy _4;
         _38 = copy _5;
         _39 = copy _6;
-        _0 = testing.LeafCounts { copy _36, copy _37, copy _38, copy _39 };
+        _0 = testing._LeafCounts { copy _36, copy _37, copy _38, copy _39 };
         goto -> bb20;
     }
 
@@ -4299,14 +4228,14 @@ fn testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[],
     }
 }
 
-fn testing.flatten_with_tolerated(report: testing.TestSetReport, selected_names: string[]) -> testing.FlatTestReport {
+fn testing._flatten_with_tolerated(report: testing.TestSetReport, selected_names: string[]) -> testing.FlatTestReport {
     // Locals:
     let _0: testing.FlatTestReport // _0 // return
     let _1: testing.TestSetReport // report // param
     let _2: string[] // selected_names // param
     let _3: bool // top_tolerated
     let _4: "error" | "fail" | "pass"
-    let _5: testing.LeafCounts // counts
+    let _5: testing._LeafCounts // counts
     let _6: bool
     let _7: int
     let _8: ((testing.TestReport | testing.TestSetReport)[]) -> int throws never
@@ -4326,7 +4255,7 @@ fn testing.flatten_with_tolerated(report: testing.TestSetReport, selected_names:
     let _22: string[] // all_failed_names
     let _23: void
     let _24: string[]
-    let _25: testing.LeafIdentities // executed
+    let _25: testing._LeafIdentities // executed
     let _26: string[]
     let _27: string[]
     let _28: string[]
@@ -4335,8 +4264,8 @@ fn testing.flatten_with_tolerated(report: testing.TestSetReport, selected_names:
     let _31: int[]
     let _32: void
     let _33: bool
-    let _34: testing.LeafIdentities
-    let _35: testing.LeafIdentities // identities
+    let _34: testing._LeafIdentities
+    let _35: testing._LeafIdentities // identities
     let _36: bool
     let _37: bool
     let _38: bool
@@ -4395,7 +4324,7 @@ fn testing.flatten_with_tolerated(report: testing.TestSetReport, selected_names:
         _15 = copy _1.1;
         _16 = copy _1.2;
         _17 = copy _1.3;
-        _5 = testing.LeafCounts { copy _15, copy _16, const 0_i64, copy _17 };
+        _5 = testing._LeafCounts { copy _15, copy _16, const 0_i64, copy _17 };
         goto -> bb7;
     }
 
@@ -4403,27 +4332,27 @@ fn testing.flatten_with_tolerated(report: testing.TestSetReport, selected_names:
         _12 = copy _1.1;
         _13 = copy _1.2;
         _14 = copy _1.3;
-        _5 = testing.LeafCounts { copy _12, const 0_i64, copy _13, copy _14 };
+        _5 = testing._LeafCounts { copy _12, const 0_i64, copy _13, copy _14 };
         goto -> bb7;
     }
 
     bb6: {
         _9 = copy _1.5;
         _10 = copy _3;
-        _5 = call const fn testing.count_leaves(copy _9, copy _10) -> [bb7];
+        _5 = call const fn testing._count_leaves(copy _9, copy _10) -> [bb7];
     }
 
     bb7: {
         _18 = []: string[];
         _20 = copy _1.5;
         _21 = copy _18;
-        _19 = call const fn testing.collect_leaf_messages(copy _20, copy _21) -> [bb8];
+        _19 = call const fn testing._collect_leaf_messages(copy _20, copy _21) -> [bb8];
     }
 
     bb8: {
         _22 = []: string[];
         _24 = copy _22;
-        _23 = call const fn testing.collect_all_failed_names(copy _1, copy _24) -> [bb9];
+        _23 = call const fn testing._collect_all_failed_names(copy _1, copy _24) -> [bb9];
     }
 
     bb9: {
@@ -4433,10 +4362,10 @@ fn testing.flatten_with_tolerated(report: testing.TestSetReport, selected_names:
         _29 = []: int[];
         _30 = []: int[];
         _31 = []: int[];
-        _25 = testing.LeafIdentities { copy _26, copy _27, copy _28, copy _29, copy _30, copy _31 };
+        _25 = testing._LeafIdentities { copy _26, copy _27, copy _28, copy _29, copy _30, copy _31 };
         _33 = copy _3;
         _34 = copy _25;
-        _32 = call const fn testing.collect_leaf_identities(copy _1, copy _33, copy _2, copy _34) -> [bb10];
+        _32 = call const fn testing._collect_leaf_identities(copy _1, copy _33, copy _2, copy _34) -> [bb10];
     }
 
     bb10: {
@@ -4498,14 +4427,14 @@ fn testing.flatten_with_tolerated(report: testing.TestSetReport, selected_names:
         _53 = []: string[];
         _54 = []: string[];
         _55 = []: string[];
-        _35 = testing.LeafIdentities { copy _53, copy _54, copy _55, const null, const null, const null };
+        _35 = testing._LeafIdentities { copy _53, copy _54, copy _55, const null, const null, const null };
         goto -> bb23;
     }
 
     bb21: {
         _51 = copy _1.4;
         _52 = copy _22;
-        _35 = call const fn testing.classify_selected_names(copy _2, copy _51, copy _52) -> [bb23];
+        _35 = call const fn testing._classify_selected_names(copy _2, copy _51, copy _52) -> [bb23];
     }
 
     bb22: {
@@ -4535,13 +4464,13 @@ fn testing.flatten_with_tolerated(report: testing.TestSetReport, selected_names:
     }
 }
 
-fn testing.classify_selected_names(selected_names: string[], hard_failed_names: string[], all_failed_names: string[]) -> testing.LeafIdentities {
+fn testing._classify_selected_names(selected_names: string[], hard_failed_names: string[], all_failed_names: string[]) -> testing._LeafIdentities {
     // Locals:
-    let _0: testing.LeafIdentities // _0 // return
+    let _0: testing._LeafIdentities // _0 // return
     let _1: string[] // selected_names // param
     let _2: string[] // hard_failed_names // param
     let _3: string[] // all_failed_names // param
-    let _4: testing.LeafIdentities // out
+    let _4: testing._LeafIdentities // out
     let _5: string[]
     let _6: string[]
     let _7: string[]
@@ -4575,7 +4504,7 @@ fn testing.classify_selected_names(selected_names: string[], hard_failed_names: 
         _8 = []: int[];
         _9 = []: int[];
         _10 = []: int[];
-        _4 = testing.LeafIdentities { copy _5, copy _6, copy _7, copy _8, copy _9, copy _10 };
+        _4 = testing._LeafIdentities { copy _5, copy _6, copy _7, copy _8, copy _9, copy _10 };
         _11 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _1) -> [bb1];
     }
 
@@ -4593,7 +4522,7 @@ fn testing.classify_selected_names(selected_names: string[], hard_failed_names: 
         fresh_cell(_15);
         _15 = copy _14;
         _18 = copy _15;
-        _17 = call const fn testing.failure_matches_selected(copy _18, copy _3) -> [bb4];
+        _17 = call const fn testing._failure_matches_selected(copy _18, copy _3) -> [bb4];
     }
 
     bb4: {
@@ -4609,7 +4538,7 @@ fn testing.classify_selected_names(selected_names: string[], hard_failed_names: 
 
     bb6: {
         _20 = copy _15;
-        _19 = call const fn testing.failure_matches_selected(copy _20, copy _2) -> [bb7];
+        _19 = call const fn testing._failure_matches_selected(copy _20, copy _2) -> [bb7];
     }
 
     bb7: {
@@ -4640,7 +4569,7 @@ fn testing.classify_selected_names(selected_names: string[], hard_failed_names: 
     }
 }
 
-fn testing.name_in(name: string, names: string[]) -> bool {
+fn testing._name_in(name: string, names: string[]) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: string // name // param
@@ -4690,7 +4619,7 @@ fn testing.name_in(name: string, names: string[]) -> bool {
     }
 }
 
-fn testing.failure_matches_selected(selected: string, failed_names: string[]) -> bool {
+fn testing._failure_matches_selected(selected: string, failed_names: string[]) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: string // selected // param
@@ -4713,7 +4642,7 @@ fn testing.failure_matches_selected(selected: string, failed_names: string[]) ->
     let _18: string
 
     bb0: {
-        _3 = call const fn testing.name_in(copy _1, copy _2) -> [bb1];
+        _3 = call const fn testing._name_in(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -4789,13 +4718,13 @@ fn testing.failure_matches_selected(selected: string, failed_names: string[]) ->
     }
 }
 
-fn testing.collect_leaf_identities(report: testing.TestSetReport, tolerated_by_parent: bool, selected_names: string[], out: testing.LeafIdentities) -> void {
+fn testing._collect_leaf_identities(report: testing.TestSetReport, tolerated_by_parent: bool, selected_names: string[], out: testing._LeafIdentities) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: testing.TestSetReport // report // param
     let _2: bool // tolerated_by_parent // param
     let _3: string[] // selected_names // param
-    let _4: testing.LeafIdentities // out // param
+    let _4: testing._LeafIdentities // out // param
     let _5: null | string[]
     let _6: bool
     let _7: string[] // names
@@ -4981,7 +4910,7 @@ fn testing.collect_leaf_identities(report: testing.TestSetReport, tolerated_by_p
         _68 = copy _19;
         _67 = copy _68 + const "::(failed to expand)";
         _71 = copy _67;
-        _70 = call const fn testing.name_in(copy _71, copy _3) -> [bb17];
+        _70 = call const fn testing._name_in(copy _71, copy _3) -> [bb17];
     }
 
     bb17: {
@@ -5051,7 +4980,7 @@ fn testing.collect_leaf_identities(report: testing.TestSetReport, tolerated_by_p
     bb28: {
         _63 = copy _57;
         _64 = copy _58;
-        _18 = call const fn testing.collect_leaf_identities(copy _63, copy _64, copy _3, copy _4) -> [bb42];
+        _18 = call const fn testing._collect_leaf_identities(copy _63, copy _64, copy _3, copy _4) -> [bb42];
     }
 
     bb29: {
@@ -5149,7 +5078,7 @@ fn testing.collect_leaf_identities(report: testing.TestSetReport, tolerated_by_p
     }
 }
 
-fn testing.collect_all_failed_names(report: testing.TestSetReport, out: string[]) -> void {
+fn testing._collect_all_failed_names(report: testing.TestSetReport, out: string[]) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: testing.TestSetReport // report // param
@@ -5196,7 +5125,7 @@ fn testing.collect_all_failed_names(report: testing.TestSetReport, out: string[]
         fresh_cell(_8);
         _8 = copy _7;
         _12 = copy _8;
-        _11 = call const fn testing.name_in(copy _12, copy _2) -> [bb4];
+        _11 = call const fn testing._name_in(copy _12, copy _2) -> [bb4];
     }
 
     bb4: {
@@ -5240,7 +5169,7 @@ fn testing.collect_all_failed_names(report: testing.TestSetReport, out: string[]
     bb11: {
         _23 = copy _20;
         _24 = copy _23;
-        _21 = call const fn testing.collect_all_failed_names(copy _24, copy _2) -> [bb8];
+        _21 = call const fn testing._collect_all_failed_names(copy _24, copy _2) -> [bb8];
     }
 
     bb12: {
@@ -5258,7 +5187,7 @@ fn testing.collect_all_failed_names(report: testing.TestSetReport, out: string[]
     }
 }
 
-fn testing.collect_leaf_messages(results: (testing.TestReport | testing.TestSetReport)[], out: string[]) -> void {
+fn testing._collect_leaf_messages(results: (testing.TestReport | testing.TestSetReport)[], out: string[]) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: (testing.TestReport | testing.TestSetReport)[] // results // param
@@ -5313,7 +5242,7 @@ fn testing.collect_leaf_messages(results: (testing.TestReport | testing.TestSetR
     bb4: {
         _25 = copy _7;
         _27 = copy _25.5;
-        _26 = call const fn testing.collect_leaf_messages(copy _27, copy _2) -> [bb1];
+        _26 = call const fn testing._collect_leaf_messages(copy _27, copy _2) -> [bb1];
     }
 
     bb5: {
@@ -5773,7 +5702,7 @@ fn .<lambda(PassRate, 0)>(children: testing.TestSetChild[]) -> testing.TestSetRe
     let _0: testing.TestSetReport // _0 // return
     let _1: testing.TestSetChild[] // children // param
     let _2: testing.TestSetReport // report
-    let _3: testing.TestPool
+    let _3: testing._TestPool
     let _4: "error" | "fail" | "pass" // outcome
     let _5: bool
     let _6: int
@@ -5793,52 +5722,46 @@ fn .<lambda(PassRate, 0)>(children: testing.TestSetChild[]) -> testing.TestSetRe
     let _20: null | string[]
 
     bb0: {
-        _3 = call const fn testing.test_pool(const 0_i64) -> [bb1];
+        _3 = call const fn testing._test_pool(const 0_i64) -> [bb1];
     }
 
     bb1: {
-        _2 = call const fn testing.run_children_parallel(copy _1, copy _3) -> [bb2];
+        _2 = call const fn testing._run_children_parallel(copy _1, copy _3) -> [bb2];
     }
 
     bb2: {
         _6 = copy _2.3;
         _5 = copy _6 == const 0_i64;
-        branch copy _5 -> [bb8, bb3];
+        branch copy _5 -> [bb6, bb3];
     }
 
     bb3: {
         _10 = copy _2.1;
-        _9 = call const fn testing._int_to_float(copy _10) -> [bb4];
-    }
-
-    bb4: {
+        _9 = copy _10 + const 0_f64;
         _12 = copy _2.3;
-        _11 = call const fn testing._int_to_float(copy _12) -> [bb5];
-    }
-
-    bb5: {
+        _11 = copy _12 + const 0_f64;
         _8 = copy _9 / copy _11;
         _13 = copy capture[0];
         _7 = copy _8 >= copy _13;
-        branch copy _7 -> [bb7, bb6];
+        branch copy _7 -> [bb5, bb4];
+    }
+
+    bb4: {
+        _4 = const "fail";
+        goto -> bb7;
+    }
+
+    bb5: {
+        _4 = const "pass";
+        goto -> bb7;
     }
 
     bb6: {
-        _4 = const "fail";
-        goto -> bb9;
+        _4 = const "pass";
+        goto -> bb7;
     }
 
     bb7: {
-        _4 = const "pass";
-        goto -> bb9;
-    }
-
-    bb8: {
-        _4 = const "pass";
-        goto -> bb9;
-    }
-
-    bb9: {
         _14 = copy _4;
         _15 = copy _2.1;
         _16 = copy _2.2;
@@ -5847,10 +5770,10 @@ fn .<lambda(PassRate, 0)>(children: testing.TestSetChild[]) -> testing.TestSetRe
         _19 = copy _2.5;
         _20 = copy _2.6;
         _0 = testing.TestSetReport { copy _14, copy _15, copy _16, copy _17, copy _18, copy _19, copy _20 };
-        goto -> bb10;
+        goto -> bb8;
     }
 
-    bb10: {
+    bb8: {
         return;
     }
 }
@@ -5876,7 +5799,7 @@ fn .<lambda(Sequential, 0)>(children: testing.TestSetChild[]) -> testing.TestSet
     let _1: testing.TestSetChild[] // children // param
 
     bb0: {
-        _0 = call const fn testing.run_children_sequential(copy _1, const false) -> [bb1];
+        _0 = call const fn testing._run_children_sequential(copy _1, const false) -> [bb1];
     }
 
     bb1: {
@@ -5905,7 +5828,7 @@ fn .<lambda(FailFast, 0)>(children: testing.TestSetChild[]) -> testing.TestSetRe
     let _1: testing.TestSetChild[] // children // param
 
     bb0: {
-        _0 = call const fn testing.run_children_sequential(copy _1, const true) -> [bb1];
+        _0 = call const fn testing._run_children_sequential(copy _1, const true) -> [bb1];
     }
 
     bb1: {
@@ -5913,12 +5836,12 @@ fn .<lambda(FailFast, 0)>(children: testing.TestSetChild[]) -> testing.TestSetRe
     }
 }
 
-fn testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: bool) -> testing.TestSetReport {
+fn testing._run_children_sequential(children: testing.TestSetChild[], fail_fast: bool) -> testing.TestSetReport {
     // Locals:
     let _0: testing.TestSetReport // _0 // return
     let _1: testing.TestSetChild[] // children // param
     let _2: bool // fail_fast // param
-    let _3: testing.NamedChildReport[] // named_results
+    let _3: testing._NamedChildReport[] // named_results
     let _4: baml.iter.Iterator<Error = never, Item = testing.TestSetChild>
     let _5: unknown
     let _6: bool
@@ -5927,7 +5850,7 @@ fn testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: 
     let _9: testing.TestReport | testing.TestSetReport // report
     let _10: () -> testing.TestReport | testing.TestSetReport throws never
     let _11: int
-    let _12: testing.NamedChildReport
+    let _12: testing._NamedChildReport
     let _13: string
     let _14: testing.TestReport | testing.TestSetReport
     let _15: reflect.Type
@@ -5938,11 +5861,11 @@ fn testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: 
     let _20: bool
     let _21: "error" | "fail" | "pass"
     let _22: bool
-    let _23: testing.NamedChildReport[]
-    let _24: testing.NamedChildReport[]
+    let _23: testing._NamedChildReport[]
+    let _24: testing._NamedChildReport[]
 
     bb0: {
-        _3 = []: testing.NamedChildReport[];
+        _3 = []: testing._NamedChildReport[];
         _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetChild>(copy _1) -> [bb1];
     }
 
@@ -5966,8 +5889,8 @@ fn testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: 
     bb4: {
         _13 = copy _8.0;
         _14 = copy _9;
-        _12 = testing.NamedChildReport { copy _13, copy _14 };
-        _15 = load_type(testing.NamedChildReport);
+        _12 = testing._NamedChildReport { copy _13, copy _14 };
+        _15 = load_type(testing._NamedChildReport);
         _11 = call const fn baml.Array.push<copy _15>(copy _3, copy _12) -> [bb5];
     }
 
@@ -6008,45 +5931,15 @@ fn testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: 
 
     bb12: {
         _23 = copy _3;
-        _0 = call const fn testing.aggregate_reports(copy _23) -> [bb14];
+        _0 = call const fn testing._aggregate_reports(copy _23) -> [bb14];
     }
 
     bb13: {
         _24 = copy _3;
-        _0 = call const fn testing.aggregate_reports(copy _24) -> [bb14];
+        _0 = call const fn testing._aggregate_reports(copy _24) -> [bb14];
     }
 
     bb14: {
-        return;
-    }
-}
-
-fn testing._int_to_float(value: int) -> float {
-    // Locals:
-    let _0: float // _0 // return
-    let _1: int // value // param
-    let _2: unknown // e
-    let _3: string
-    let _4: reflect.Type
-
-    bb0: {
-        _4 = load_type(int);
-        _3 = call const fn baml.String.from<copy _4>(copy _1) -> [bb1, unwind: bb2];
-    }
-
-    bb1: {
-        _0 = call const fn baml.Float.parse(copy _3) -> [bb4, unwind: bb2];
-    }
-
-    bb2: {
-        throw_if_panic copy _2 -> bb3;
-    }
-
-    bb3: {
-        _0 = call const fn baml.sys.panic(const "failed to convert int to float") -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }
