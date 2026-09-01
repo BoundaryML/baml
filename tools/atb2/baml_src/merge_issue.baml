@@ -403,7 +403,7 @@ function bot(id: int, path: string?, body: string) -> ReviewComment {
 testset "merge_issue" {
     test "gh check rows parse; a failed gh call yields no rows" {
         let rows = parse_checks(
-            #"[{"name":"clippy","bucket":"fail","link":"https://github.com/BoundaryML/baml/actions/runs/123/job/456"},{"name":"fmt","bucket":"pass","link":null}]"#,
+            `[{"name":"clippy","bucket":"fail","link":"https://github.com/BoundaryML/baml/actions/runs/123/job/456"},{"name":"fmt","bucket":"pass","link":null}]`,
         );
         assert.equal(rows.length(), 2);
         assert.equal(rows.at(0)?.bucket ?? "", "fail");
@@ -422,7 +422,7 @@ testset "merge_issue" {
 
     test "reviewer comments parse with and without a path" {
         let cs = parse_comments(
-            #"[{"id":10,"login":"coderabbitai[bot]","path":"crates/x/src/lib.rs","line":40,"body":"Use `?`."},{"id":11,"login":"coderabbitai[bot]","path":null,"line":null,"body":"Summary"}]"#,
+            `[{"id":10,"login":"coderabbitai[bot]","path":"crates/x/src/lib.rs","line":40,"body":"Use \`?\`."},{"id":11,"login":"coderabbitai[bot]","path":null,"line":null,"body":"Summary"}]`,
         );
         assert.equal(cs.length(), 2);
         assert.equal(cs.at(1)?.path == null, true);
@@ -491,7 +491,7 @@ testset "merge_issue" {
     }
 
     test "the brief reaches the fix prompt as the plan" {
-        let p = implement_fix$render_prompt(issue_from_pr(snap([], [])), "agent/gh-1-x", "a Rust test", "### Failing check: clippy")
+        let p = implement_fix@render_prompt(issue_from_pr(snap([], [])), "agent/gh-1-x", "a Rust test", "### Failing check: clippy")
             .text();
         assert.contains(p, "### Failing check: clippy");
         assert.contains(p, "fix(compiler): x");
