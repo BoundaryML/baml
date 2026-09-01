@@ -399,7 +399,7 @@ fn corpus_snapshots() {
             crate::engine::named_and_interface_body_functions(&program)
                 .filter(|(name, _)| name.starts_with(&prefix))
                 .collect();
-        entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+        entries.sort_by_key(|(name, _)| *name);
 
         let functions: Vec<(String, &Function)> = entries
             .iter()

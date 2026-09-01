@@ -47,12 +47,7 @@ else
 fi
 
 # 1. Native bridge library the fixtures load at runtime (the JVM analog of
-#    typescript_node's `.node` addon build). Toolchain pinning comes from the
-#    workspace rust-toolchain.toml (1.93.0), which whichever cargo is on PATH
-#    honors - the rustup shim resolves it on the mise arm, and the nix CI
-#    shell ships that exact toolchain directly. An explicit `rustup run` here
-#    breaks the nix arm outright (its rustup owns no toolchains) and is
-#    redundant on the mise arm. Produces target/debug/libbridge_java.so.
+#    typescript_node's `.node` addon build). Produces target/debug/libbridge_java.so.
 echo "==> cargo build -p bridge_java (native bridge library)"
 (cd "$WORKSPACE_ROOT" && cargo build -p bridge_java)
 

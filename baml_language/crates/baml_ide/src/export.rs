@@ -902,13 +902,13 @@ pub fn export_package<'db>(db: &'db Db, package: PackageId<'db>) -> PackageExpor
             .iter()
             .map(|(name, def)| (name, *def))
             .collect();
-        named.sort_by(|(a, _), (b, _)| a.cmp(b));
+        named.sort_by_key(|(name, _)| *name);
         let mut values: Vec<(&Name, Definition<'db>)> = ns_items
             .values
             .iter()
             .map(|(name, def)| (name, *def))
             .collect();
-        values.sort_by(|(a, _), (b, _)| a.cmp(b));
+        values.sort_by_key(|(name, _)| *name);
         named.extend(values);
         for (_, def) in named {
             if let Some(item) = export_item(db, def, &impl_index) {

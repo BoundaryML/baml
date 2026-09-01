@@ -368,6 +368,7 @@ impl QuerySession {
     ///
     /// A planning failure still produces a terminal outcome — take it
     /// from the returned error via the second tuple element.
+    #[allow(clippy::result_large_err)] // Preserve the public result shape without adding boxing.
     pub async fn execute(&self, sql: &str) -> Result<QueryExecution, (QueryError, QueryOutcome)> {
         match self.plan_and_run(sql).await {
             Ok(stream) => Ok(QueryExecution {
