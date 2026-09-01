@@ -1319,14 +1319,14 @@ jobs:
       }}
     runs-on: ubuntu-latest
     environment: infisical-github-baml-language-release
-    env:
-      GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: go-sdk-mirror
           path: /tmp/go-sdk-package
       - name: Clone BoundaryML/baml-go
+        env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
         run: |
           set -euo pipefail
           test -n "$GH_TOKEN"
@@ -1339,6 +1339,7 @@ jobs:
         env:
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
           CANONICAL_VERSION: ${{ needs.plan.outputs.version }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           GO_VERSION: ${{ needs.plan.outputs.go_version }}
         run: |
           set -euo pipefail

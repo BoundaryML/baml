@@ -45,6 +45,9 @@ on:
       - ".github/workflows/sync-grammar-mirror.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: sync-grammar-mirror
   cancel-in-progress: false
@@ -58,8 +61,6 @@ jobs:
     name: Sync to BoundaryML/textMate-baml
     runs-on: ubuntu-latest
     environment: infisical-github-baml-language-release
-    env:
-      GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,6 +81,8 @@ jobs:
         run: pnpm --filter @b/pkg-grammar test
 
       - name: Clone mirror
+        env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
         run: |
           set -euo pipefail
           test -n "$GH_TOKEN"
@@ -112,6 +115,7 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         env:
           CURRENT: ${{ steps.diff.outputs.current }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           SOURCE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -172,8 +176,6 @@ jobs:
     name: Sync to BoundaryML/baml-highlightjs
     runs-on: ubuntu-latest
     environment: infisical-github-baml-language-release
-    env:
-      GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -187,6 +189,8 @@ jobs:
         run: pnpm --filter @b/pkg-grammar-hljs test
 
       - name: Clone mirror
+        env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
         run: |
           set -euo pipefail
           test -n "$GH_TOKEN"
@@ -216,6 +220,7 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         env:
           CURRENT: ${{ steps.diff.outputs.current }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           SOURCE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -268,8 +273,6 @@ jobs:
     name: Sync to BoundaryML/baml-treesitter
     runs-on: ubuntu-latest
     environment: infisical-github-baml-language-release
-    env:
-      GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -283,6 +286,8 @@ jobs:
         run: pnpm --filter @b/pkg-grammar-treesitter test
 
       - name: Clone mirror
+        env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
         run: |
           set -euo pipefail
           test -n "$GH_TOKEN"
@@ -307,6 +312,7 @@ jobs:
       - name: Push
         if: steps.diff.outputs.changed == 'true'
         env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           SOURCE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
