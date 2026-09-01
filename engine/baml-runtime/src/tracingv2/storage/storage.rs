@@ -361,8 +361,7 @@ fn build_function_log(
 
         if !successful_calls.is_empty() {
             // Sort successful calls by lexicographic order of request_id (ULID UUID)
-            successful_calls
-                .sort_by(|(_, a), (_, b)| a.request_id.to_string().cmp(&b.request_id.to_string()));
+            successful_calls.sort_by_key(|(_, a)| a.request_id.to_string());
 
             // Pick the first (earliest lexicographically)
             selected_idx = Some(successful_calls[0].0);

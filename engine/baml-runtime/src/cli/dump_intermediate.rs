@@ -134,10 +134,8 @@ impl DumpIntermediateArgs {
                         eprintln!("Class: {} with {} fields", c.name, c.field_names.len());
                     }
                 }
-                Object::Enum(e) => {
-                    if !baml_compiler::builtin::is_builtin_enum(&e.name) {
-                        eprintln!("Enum {}", e.name);
-                    }
+                Object::Enum(e) if !baml_compiler::builtin::is_builtin_enum(&e.name) => {
+                    eprintln!("Enum {}", e.name);
                 }
                 _ => {
                     // Skip other object types (Instance, etc.)

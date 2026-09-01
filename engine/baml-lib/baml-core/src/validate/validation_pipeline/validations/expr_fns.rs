@@ -128,11 +128,9 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
                 Stmt::Let(_) => {
                     scope.insert(s.identifier().name().to_string());
                 }
-                Stmt::ForLoop(fl) => {
+                Stmt::ForLoop(fl) if fl.has_let => {
                     // Only treat as declaration if header included `let`
-                    if fl.has_let {
-                        scope.insert(fl.identifier.name().to_string());
-                    }
+                    scope.insert(fl.identifier.name().to_string());
                 }
                 _ => {}
             }
@@ -273,10 +271,8 @@ fn validate_expr_block(
             Stmt::Let(_) => {
                 scope_for_block.insert(stmt.identifier().name().to_string());
             }
-            Stmt::ForLoop(fl) => {
-                if fl.has_let {
-                    scope_for_block.insert(fl.identifier.name().to_string());
-                }
+            Stmt::ForLoop(fl) if fl.has_let => {
+                scope_for_block.insert(fl.identifier.name().to_string());
             }
             _ => {}
         }

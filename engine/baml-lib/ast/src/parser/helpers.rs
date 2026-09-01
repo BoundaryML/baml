@@ -17,7 +17,7 @@ pub fn parsing_catch_all(token: Pair<'_>, kind: &str, diagnostics: &mut Diagnost
             let message = format!(
                 "Encountered impossible {} during parsing: {:?} {:?}",
                 kind,
-                &x,
+                x,
                 token.clone().tokens()
             );
             diagnostics.push_error(DatamodelError::new_parser_error(
