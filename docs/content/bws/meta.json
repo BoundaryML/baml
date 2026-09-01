@@ -1,4 +1,4 @@
 {
-  "title": "BWS",
-  "pages": ["index", "get-started", "deployment", "observability", "debugging", "api", "limits"]
+  "title": "Boundary Web Services",
+  "pages": ["index"]
 }
