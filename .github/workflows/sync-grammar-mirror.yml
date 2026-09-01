@@ -57,7 +57,7 @@ jobs:
     name: Sync to BoundaryML/textMate-baml
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -174,7 +174,7 @@ jobs:
     name: Sync to BoundaryML/baml-highlightjs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -273,7 +273,7 @@ jobs:
     name: Sync to BoundaryML/baml-treesitter
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 

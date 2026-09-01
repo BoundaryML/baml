@@ -70,7 +70,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # This sets up protoc-gen-go for non-Windows builds
       # and on windows this seems to hang forever since 0.217.0
@@ -87,7 +87,7 @@ jobs:
       - name: Setup Go
         uses: ./.github/actions/setup-go
 
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@v4
         if: matrix._.os != 'windows-2022'
         with:
           install_args: "protoc-gen-go"

@@ -96,7 +96,7 @@ jobs:
       wrapper_version: ${{ steps.wrapper.outputs.wrapper_version }}
       wrapper_changed: ${{ steps.wrapper.outputs.wrapper_changed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           fetch-depth: 2
@@ -260,7 +260,7 @@ jobs:
             echo "wrapper_changed=$changed"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-plan
           path: release-plan.json
@@ -277,7 +277,7 @@ jobs:
       toolchain: ${{ steps.gen.outputs.toolchain }}
       csharp: ${{ steps.gen.outputs.csharp }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -309,18 +309,18 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.build-matrix.outputs.toolchain) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-plan
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: baml-vscode-vsix
           path: vsix
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: baml-playground-dist
           path: playground-dist
@@ -389,7 +389,7 @@ jobs:
           else
             tar -C staging -czf "baml-language-$version-$target.tar.gz" .
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: toolchain-${{ matrix.target }}
           path: baml-language-${{ needs.plan.outputs.version }}-${{ matrix.target }}.*
@@ -399,11 +399,11 @@ jobs:
     needs: [plan]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-plan
       - run: scripts/baml-language-version stamp --plan release-plan.json
@@ -445,11 +445,11 @@ jobs:
           grep -Fxq 'extension/readme.md' vsix-list.txt
           grep -Fxq 'extension/baml-logo.png' vsix-list.txt
           ! grep -E 'dist/baml-cli|baml-cli|baml-pack-host' vsix-list.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: baml-vscode-vsix
           path: typescript2/app-vscode-ext/*.vsix
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: baml-playground-dist
           path: typescript2/app-vscode-webview/dist
@@ -532,16 +532,16 @@ jobs:
     needs: [plan]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-plan
       - name: Stamp version
         run: scripts/baml-language-version stamp --plan release-plan.json
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: baml_language/sdks/go/baml_go/go.mod
           cache-dependency-path: baml_language/sdks/go/baml_go/go.sum
@@ -559,7 +559,7 @@ jobs:
           test "$(go list -m)" = "github.com/boundaryml/baml-go"
           go test ./...
           go vet ./...
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: go-sdk-mirror
           path: ${{ runner.temp }}/go-sdk-mirror
@@ -570,11 +570,11 @@ jobs:
     needs: [plan]
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-plan
       - name: Stamp version
@@ -613,12 +613,12 @@ jobs:
             --out "$RUNNER_TEMP/swift-sdk-mirror" \
             --version "$VERSION" --source-sha "$SOURCE_SHA" \
             --zip-url "$url" --checksum "$CHECKSUM"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: swift-xcframework
           path: ${{ runner.temp }}/BamlBridgeFFI-*.xcframework.zip
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: swift-sdk-mirror
           path: ${{ runner.temp }}/swift-sdk-mirror
@@ -633,11 +633,11 @@ jobs:
     needs: [plan, build-swift-sdk]
     runs-on: macos-15
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: swift-xcframework
           path: ${{ runner.temp }}/xcf
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: swift-sdk-mirror
           path: ${{ runner.temp }}/mirror
@@ -769,7 +769,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: python-sdk-*
           path: dist
@@ -858,7 +858,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -915,7 +915,7 @@ jobs:
           install_args: java gradle
       - name: Download native jars
         if: ${{ steps.exists.outputs.bridge_publish == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           # The 8 per-target natives-<platform> jars (fewer if an experimental
           # target's build failed — continue-on-error — which never blocks).
@@ -1079,7 +1079,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -1135,12 +1135,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: toolchain-*
           path: dist/toolchain
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: baml-vscode-vsix
           path: dist/vsix
@@ -1186,11 +1186,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: wrapper-*
           path: dist/wrapper
@@ -1251,7 +1251,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: bridge-cffi-*
           path: dist/cffi
@@ -1319,7 +1319,7 @@ jobs:
       }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: go-sdk-mirror
           path: /tmp/go-sdk-package
@@ -1432,11 +1432,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: swift-xcframework
           path: /tmp/swift-xcframework
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: swift-sdk-mirror
           path: /tmp/swift-sdk-mirror
@@ -1521,7 +1521,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -1534,7 +1534,7 @@ jobs:
           scripts/baml-language-version stamp --plan release-plan.json
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: rust-sdk-crate
           path: dist/rust
@@ -1711,37 +1711,37 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-plan
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: toolchain-*
           path: dist/toolchain
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: bridge-cffi-*
           path: dist/cffi
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: wrapper-*
           path: dist/wrapper
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: baml-vscode-vsix
           path: dist/vsix
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: csharp-product-package
           path: dist/csharp
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: swift-xcframework
           path: dist/swift
@@ -1801,7 +1801,7 @@ jobs:
             --pypi-version "$PYPI_VERSION" \
             --wrapper-version "$WRAPPER_VERSION" \
             "${args[@]}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-manifests
           path: manifests
@@ -1872,14 +1872,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-14, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: baml_language/sdks/go/baml_go/go.mod
           cache: false
@@ -1976,7 +1976,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-manifests
           path: manifests
@@ -2001,11 +2001,11 @@ jobs:
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: wrapper-*
           path: dist/wrapper
@@ -2056,11 +2056,11 @@ jobs:
   #   if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v7
   #       with:
   #         ref: ${{ needs.plan.outputs.source_sha }}
   #         persist-credentials: false
-  #     - uses: actions/download-artifact@v4
+  #     - uses: actions/download-artifact@v8
   #       with:
   #         pattern: wrapper-*
   #         path: dist/wrapper
@@ -2114,34 +2114,34 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: toolchain-*
           path: dist/toolchain
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: bridge-cffi-*
           path: dist/cffi
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: wrapper-*
           path: dist/wrapper
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: baml-vscode-vsix
           path: dist/vsix
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: csharp-product-package
           path: dist/csharp
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: swift-xcframework
           path: dist/swift
@@ -2202,7 +2202,7 @@ jobs:
             --wrapper-dir dist/wrapper \
             --version "$WRAPPER_VERSION" \
             --out dry-run/package-manager
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dry-run-release-files
           path: dry-run
@@ -2294,7 +2294,7 @@ jobs:
       actions: read
       contents: read
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha || github.sha }}
           sparse-checkout: |

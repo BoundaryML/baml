@@ -29,7 +29,7 @@ jobs:
       version_string: ${{ steps.set-version.outputs.version }}
       is_release: ${{ steps.set-version.outputs.is_release }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set Version Info
         id: set-version
         env:
@@ -63,7 +63,7 @@ jobs:
             echo "- Production release: \`true\`"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Verify source is the current green canary commit
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -192,7 +192,7 @@ jobs:
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Create or verify annotated tags
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -313,8 +313,8 @@ jobs:
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.8"
       - uses: actions/download-artifact@v8
@@ -348,7 +348,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -386,7 +386,7 @@ jobs:
   #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v6
+  #     - uses: actions/checkout@v7
 
   #     - uses: rubygems/configure-rubygems-credentials@main
   #       with:
@@ -416,7 +416,7 @@ jobs:
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -448,7 +448,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Node.js
@@ -476,7 +476,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Node.js
@@ -504,7 +504,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Java
@@ -531,7 +531,7 @@ jobs:
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Download all baml-cli artifacts
         uses: actions/download-artifact@v8
         with:
@@ -563,7 +563,7 @@ jobs:
           touch CHANGELOG.txt
           awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d' > CHANGELOG.txt
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: BAML v0 ${{ needs.determine-version.outputs.version_string }}
           tag_name: ${{ needs.determine-version.outputs.version_string }}
