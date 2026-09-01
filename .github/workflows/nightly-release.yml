@@ -230,6 +230,16 @@ jobs:
               ;;
           esac
 
+      - name: Check out the nightly release source
+        if: ${{ steps.decide.outputs.dispatch == 'true' }}
+        uses: actions/checkout@v7.0.1
+        with:
+          # Compute the requested version from the exact source the release
+          # workflow will independently plan and verify.
+          ref: ${{ steps.select.outputs.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
       - name: Dispatch the nightly release
         if: ${{ steps.decide.outputs.dispatch == 'true' }}
         env:
@@ -252,6 +262,12 @@ jobs:
             echo "::error::$release_ref resolves to $ref_type $ref_sha, expected commit $SOURCE_SHA"
             exit 1
           fi
+          release_plan="$RUNNER_TEMP/nightly-release-plan.json"
+          scripts/baml-language-version plan \
+            --channel nightly \
+            --out "$release_plan"
+          release_version="$(jq -r .canonical_version "$release_plan")"
+          echo "Requested nightly release version: $release_version"
           # The release names the night itself, from the Seattle date at plan
           # time. That is stable however long this run queues -- it would take a
           # 24-hour delay to land on a different local date.
@@ -259,6 +275,7 @@ jobs:
             --ref "$release_ref" \
             -f channel=nightly \
             -f dry_run=false \
+            -f version="$release_version" \
             -f source_sha="$SOURCE_SHA" \
             -f source_ci_run_id="$SOURCE_CI_RUN_ID"
           echo "Dispatched a nightly release for $SOURCE_SHA (CI run $SOURCE_CI_RUN_ID)."

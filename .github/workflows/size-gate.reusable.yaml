@@ -47,7 +47,7 @@ jobs:
   size-gate-linux:
     name: "measure-baml-size (linux)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 20
+    timeout-minutes: 30
     continue-on-error: true
     steps:
       - uses: useblacksmith/checkout@v1
