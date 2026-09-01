@@ -587,7 +587,7 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
                     suffix.to_string()
                 };
                 let binding = names.callable(&companion_fqn, role);
-                let _ = writeln!(out, "        {}: {},", py_string(&key), py_string(&binding),);
+                let _ = writeln!(out, "        {}: {},", py_string(&key), py_string(&binding));
             }
         }
         out.push_str("    },\n");

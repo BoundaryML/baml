@@ -93,10 +93,10 @@ impl ExecutionHealthSnapshot {
         if bytes.len() != Self::ENCODED_LEN {
             return None;
         }
-        let mut chunks = bytes.chunks_exact(8);
+        let mut chunks = bytes.as_chunks::<8>().0.iter();
         let mut next = || {
-            let chunk: [u8; 8] = chunks.next()?.try_into().ok()?;
-            Some(u64::from_be_bytes(chunk))
+            let chunk = chunks.next()?;
+            Some(u64::from_be_bytes(*chunk))
         };
         Some(Self {
             corrupt_records: next()?,
@@ -1753,15 +1753,12 @@ impl DirectDecoder {
         // consuming a parked end never can, so opening every ready start
         // before any parked end runs resolves the same set.
         let mut opened = Vec::new();
-        loop {
+        while let Some(parked) = self.pending_starts.get(&thread_ref) {
             // A consumer can observe a spawned child's descendants before the
             // spawning thread's ring publishes the child's entry call. Only
             // remove a fact whose parent is already resolvable; removing and
             // immediately reinserting an unready fact can otherwise select the
             // same map entry forever and livelock the sole consumer.
-            let Some(parked) = self.pending_starts.get(&thread_ref) else {
-                break;
-            };
             let next = parked
                 .iter()
                 .find(|(_, pending)| self.call_start_dependency_ready(&pending.fact))

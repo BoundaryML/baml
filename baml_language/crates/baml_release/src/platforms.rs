@@ -58,8 +58,11 @@ pub struct Artifacts {
 /// The CLI toolchain artifact (baml-cli + pack host, archived per target).
 #[derive(Debug, Clone, Deserialize)]
 pub struct ToolchainArtifact {
-    /// GitHub Actions runner label (distinct from the target's `os` family).
+    /// GitHub Actions runner label used to build the artifact (distinct from the target's `os` family).
     pub runner: String,
+    /// Native GitHub Actions runner used to execute the artifact when the build runner cross-compiles it.
+    #[serde(default)]
+    pub verify_runner: Option<String>,
     /// Built best-effort: a build failure must not block the release.
     #[serde(default)]
     pub experimental: bool,

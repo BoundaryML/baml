@@ -89,7 +89,7 @@ jobs:
           # CROSS_CONFIG makes the plan's image control linking; the image's
           # host ldd does not determine the wrapper's compatibility floor.
           cross_config="$RUNNER_TEMP/baml-wrapper-cross.toml"
-          printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = ["BAML_WORKOS_CLIENT_ID"]\n' \
+          printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = ["BAML_GIT_SHA", "BAML_WORKOS_CLIENT_ID"]\n' \
             "$TARGET" "$CROSS_IMAGE" "$TARGET" > "$cross_config"
           {
             echo 'CARGO=cross'

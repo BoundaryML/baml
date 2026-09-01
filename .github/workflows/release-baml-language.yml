@@ -357,28 +357,34 @@ jobs:
           workspace: baml_language
           prefix-key: v5-rust-baml-language-toolchain-${{ matrix.target }}
           cache-on-failure: true
-          enable-cross: false
+          enable-cross: ${{ matrix.libc == 'gnu' && 'true' || 'false' }}
           skip-protoc: true
       - name: Setup musl cross toolchain
         if: ${{ matrix.libc == 'musl' }}
         uses: ./.github/actions/setup-musl-cross
         with:
           target: ${{ matrix.target }}
-      - name: Setup cross for backward-compatible GNU toolchain
+      - name: Setup sccache for backward-compatible GNU toolchain
         if: ${{ matrix.libc == 'gnu' }}
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache cargo:cross"
+          install_args: "sccache"
       - name: Configure cross for GNU toolchain
         if: ${{ matrix.libc == 'gnu' }}
         env:
           CROSS_IMAGE: ${{ matrix.cross_image }}
           TARGET: ${{ matrix.target }}
+          MANYLINUX2014_PRE_BUILD: 'for tool in gcc g++ ar ranlib strip; do ln -sf "$(command -v "$tool")" "/usr/local/bin/x86_64-unknown-linux-gnu-$tool"; done'
         run: |
           set -euo pipefail
           cross_config="$RUNNER_TEMP/baml-toolchain-cross.toml"
-          printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = ["BAML_WORKOS_CLIENT_ID"]\n' \
-            "$TARGET" "$CROSS_IMAGE" "$TARGET" > "$cross_config"
+          {
+            printf '[target.%s]\nimage = "%s"\n' "$TARGET" "$CROSS_IMAGE"
+            if [[ "$TARGET" == 'x86_64-unknown-linux-gnu' ]]; then
+              printf "pre-build = ['%s']\n" "$MANYLINUX2014_PRE_BUILD"
+            fi
+            printf '[target.%s.env]\npassthrough = ["BAML_GIT_SHA", "BAML_WORKOS_CLIENT_ID"]\n' "$TARGET"
+          } > "$cross_config"
           {
             echo 'CARGO=cross'
             echo "CROSS_CONFIG=$cross_config"

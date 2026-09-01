@@ -41,7 +41,7 @@
       "libc": "gnu",
       "archive_suffix": ".tar.gz",
       "artifacts": {
-        "toolchain": { "runner": "ubuntu-24.04-arm", "cross_image": "ghcr.io/rust-cross/manylinux_2_28-cross:aarch64" },
+        "toolchain": { "runner": "ubuntu-latest", "verify_runner": "ubuntu-24.04-arm", "cross_image": "ghcr.io/rust-cross/manylinux_2_28-cross:aarch64" },
         "wrapper": { "runner": "ubuntu-latest", "variants": ["self-update", "no-self-update"], "cross_image": "ghcr.io/rust-cross/manylinux_2_28-cross:aarch64" },
         "python": { "runner": "ubuntu-latest", "manylinux": "2_24" },
         "nodejs": {},
@@ -73,7 +73,7 @@
       "libc": "gnu",
       "archive_suffix": ".tar.gz",
       "artifacts": {
-        "toolchain": { "runner": "ubuntu-latest", "cross_image": "ghcr.io/rust-cross/manylinux2014-cross:x86_64" },
+        "toolchain": { "runner": "ubuntu-latest", "cross_image": "quay.io/pypa/manylinux2014_x86_64:latest" },
         "wrapper": { "runner": "ubuntu-latest", "variants": ["self-update", "no-self-update"], "cross_image": "ghcr.io/rust-cross/manylinux2014-cross:x86_64" },
         "python": { "runner": "ubuntu-latest", "manylinux": "2_17" },
         "nodejs": {},
