@@ -44,6 +44,11 @@ The provisional regression budgets are 5 MB gzip, 250 ms initialization, 5 s
 first project readiness, and 100 ms for a repeat zero-network run. Browser p50
 and p95 gates must replace the local numbers before launch.
 
+CI recomputes the gzip size of the exact checked-in artifact and enforces the
+5 MB download budget. The deployment explicitly serves content-addressed
+runtime files with a one-year immutable cache lifetime, while the mutable
+manifest and worker entrypoint revalidate on every navigation.
+
 ## Protocol finding
 
 The book's BAML 0.17 driver expected a successful result to contain a
