@@ -15,11 +15,6 @@ name: Size Gate (Reusable)
 
 on:
   workflow_call:
-    secrets:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID:
-        required: false
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
-        required: false
 
 defaults:
   run:
@@ -28,9 +23,6 @@ defaults:
 env:
   # Inputs read by .envrc; everything else (RUSTC_WRAPPER, SCCACHE_*) is set by
   # .envrc itself so it stays the single source of truth across CI and local.
-  # The R2 credentials .envrc maps to AWS_* for sccache.
-  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -47,8 +39,12 @@ jobs:
   size-gate-linux:
     name: "measure-baml-size (linux)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    environment: infisical-github-ci
     timeout-minutes: 30
     continue-on-error: true
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -133,8 +129,12 @@ jobs:
   size-gate-macos:
     name: "measure-baml-size (macos)"
     runs-on: blacksmith-6vcpu-macos-latest
+    environment: infisical-github-ci
     timeout-minutes: 20
     continue-on-error: true
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -219,11 +219,14 @@ jobs:
   size-gate-windows:
     name: "measure-baml-size (windows)"
     runs-on: blacksmith-8vcpu-windows-2025
+    environment: infisical-github-ci
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 45
     continue-on-error: true
     env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       CARGO_BUILD_JOBS: "16"
     steps:
       - uses: actions/checkout@v6
@@ -327,8 +330,12 @@ jobs:
   size-gate-wasm:
     name: "measure-baml-size (wasm)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    environment: infisical-github-ci
     timeout-minutes: 25
     continue-on-error: true
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -415,11 +422,15 @@ jobs:
   size-gate-report:
     name: "enforce-baml-size"
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    environment: infisical-github-ci
     if: ${{ always() && !cancelled() }}
     needs: [size-gate-linux, size-gate-macos, size-gate-windows, size-gate-wasm]
     permissions:
       contents: read
       pull-requests: write
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: useblacksmith/checkout@v1
         with:

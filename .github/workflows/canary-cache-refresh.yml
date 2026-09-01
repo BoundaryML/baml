@@ -52,4 +52,3 @@ jobs:
     # at its workflow level as defense in depth.
     permissions:
       contents: read
-    secrets: inherit

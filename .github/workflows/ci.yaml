@@ -589,14 +589,12 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/cargo-tests.reusable.yaml
-    secrets: inherit
 
   size-gate:
     name: "Size Gate"
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/size-gate.reusable.yaml
-    secrets: inherit
     permissions:
       contents: read
       pull-requests: write
