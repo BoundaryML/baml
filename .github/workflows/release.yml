@@ -87,7 +87,6 @@ jobs:
                 status: "success",
                 per_page: 100,
               },
-              (response) => response.data.workflow_runs,
             );
             const sourceCi = runs.find((run) => {
               if (run.name !== "BAML Runtime" || run.path !== ".github/workflows/primary.yml") {
