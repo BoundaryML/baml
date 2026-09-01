@@ -128,14 +128,25 @@ test "a lambda receives context from the function arm of a union" {
     assert.equal(package.diagnostics().length(), 0)
 }
 
-test "a union callback lowers an optional function adapter" {
+test "union callback adapter selection is actual aware" {
     let package = reflect.Package.compile(
         {
             "case.baml": `
                 type NarrowCallback = (x: int, b?: int) -> int throws never
+                type IncompatibleCallback = (value: int, extra?: int) -> int throws never
+                type WithB = (x: int, b?: int) -> int throws never
+                type WithC = (x: int, c?: int) -> int throws never
 
                 function combine(x: int, a: int = 10, b: int = 100) -> int throws never {
                     x + a + b
+                }
+
+                function string_callback(value: string) -> string throws never {
+                    value
+                }
+
+                function ambiguous_callback(x: int, b: int = 10, c: int = 100) -> int throws never {
+                    x + b + c
                 }
 
                 function apply_optional(f: NarrowCallback?) -> int throws never {
@@ -146,8 +157,20 @@ test "a union callback lowers an optional function adapter" {
                     }
                 }
 
+                function accepts_erased(f: reflect.AnyFunction | IncompatibleCallback) -> int throws never {
+                    7
+                }
+
+                function accepts_ambiguous(f: WithB | WithC) -> int throws never {
+                    11
+                }
+
                 function adapter_demo() -> int throws never {
                     apply_optional(combine)
+                }
+
+                function selection_demo() -> int throws never {
+                    accepts_erased(string_callback) * 10 + accepts_ambiguous(ambiguous_callback)
                 }
             `,
         },
@@ -155,6 +178,10 @@ test "a union callback lowers an optional function adapter" {
     let adapter_demo = package.get_function<() -> int>("root.adapter_demo")
         ?? baml.sys.panic("missing root.adapter_demo");
     assert.equal(adapter_demo(), 16)
+
+    let selection_demo = package.get_function<() -> int>("root.selection_demo")
+        ?? baml.sys.panic("missing root.selection_demo");
+    assert.equal(selection_demo(), 81)
 }
 
 test "a lambda does not guess between multiple function arms" {

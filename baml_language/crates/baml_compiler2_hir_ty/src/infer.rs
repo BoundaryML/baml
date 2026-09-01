@@ -2231,24 +2231,139 @@ impl<'db> InferenceContext<'db> {
     /// recording sites. Fires only on an ACCEPTED check whose value and
     /// expectation are both function-shaped but runtime-incompatible
     /// (TIR's `function_coercion_for`): lowering must synthesize an
-    /// adapter closure. Expected-shape resolution runs only after the subtype
-    /// check succeeds and follows the same unique-callback selection used by
-    /// lambda inference.
+    /// adapter closure. Target selection runs only after the subtype check
+    /// succeeds and uses the actual function to disambiguate union arms.
     fn record_checked_function_adapter(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
-        let got_shape = self.table.resolve_completely(got);
-        let got_shape = self.expand_alias_ty(&got_shape);
-        if !matches!(got_shape.kind(), TyKind::Function { .. }) {
+        let Some(adapter_expected) = self.function_adapter_target(got, expected) else {
             return;
+        };
+        self.record_function_adapter(expr, got, &adapter_expected);
+    }
+
+    /// The concrete target an accepted function value must implement at
+    /// runtime. Direct function expectations are already unambiguous. For a
+    /// union, select only a single concrete function arm that the actual
+    /// function semantically satisfies; erased or competing arms must not make
+    /// adapter lowering guess.
+    fn function_adapter_target(&mut self, actual: &Ty, expected: &Ty) -> Option<Ty> {
+        let actual = self.table.resolve_completely(actual);
+        let actual = self.expand_alias_ty(&actual);
+        if !matches!(actual.kind(), TyKind::Function { .. }) {
+            return None;
         }
 
-        // Subtyping above still judges against the declared union. Adapter
-        // lowering instead needs the unique concrete callback arm whose
-        // runtime parameter shape the accepted function must implement.
-        let expected_shape = self.table.resolve_completely(expected);
-        let adapter_expected = self
-            .callback_root_fn(&expected_shape)
-            .unwrap_or(expected_shape);
-        self.record_function_adapter(expr, got, &adapter_expected);
+        let expected = self.table.resolve_completely(expected);
+        let expected = self.expand_alias_ty(&expected);
+        match expected.kind() {
+            TyKind::Function { .. } => Some(expected),
+            TyKind::Union(..) => {
+                fn collect(
+                    this: &mut InferenceContext<'_>,
+                    actual: &Ty,
+                    ty: &Ty,
+                    compatible: &mut Vec<Ty>,
+                    fuel: u8,
+                ) -> bool {
+                    if fuel == 0 {
+                        return false;
+                    }
+                    let candidate = this.expand_alias_ty(ty);
+                    match candidate.kind() {
+                        TyKind::Function { .. } => {
+                            if this.function_adapter_candidate_compatible(actual, &candidate) {
+                                compatible.push(candidate);
+                            }
+                            true
+                        }
+                        TyKind::Union(members, _) => {
+                            let members = members.to_vec();
+                            members.iter().all(|member| {
+                                collect(this, actual, member, compatible, fuel.saturating_sub(1))
+                            })
+                        }
+                        TyKind::TypeAlias(..) => false,
+                        _ => true,
+                    }
+                }
+
+                let mut compatible = Vec::new();
+                if !collect(self, &actual, &expected, &mut compatible, 16) {
+                    return None;
+                }
+                let [target] = compatible.as_slice() else {
+                    return None;
+                };
+                Some(target.clone())
+            }
+            _ => None,
+        }
+    }
+
+    /// Tests a union's function arm without committing any additional
+    /// inference. Ground pairs can use the semantic oracle directly. An
+    /// accepted generic function may still carry inference variables here,
+    /// so probe the ordinary subtype relation under a table snapshot and
+    /// discard any deferred work or obligations created by the probe.
+    fn function_adapter_candidate_compatible(&mut self, actual: &Ty, candidate: &Ty) -> bool {
+        if !actual.has_infer() && !candidate.has_infer() {
+            return self.cached_subtype(actual, candidate);
+        }
+
+        let (
+            TyKind::Function {
+                params: actual_params,
+                ret: actual_ret,
+                throws: actual_throws,
+                ..
+            },
+            TyKind::Function {
+                params: candidate_params,
+                ret: candidate_ret,
+                throws: candidate_throws,
+                ..
+            },
+        ) = (actual.kind(), candidate.kind())
+        else {
+            return false;
+        };
+        let actual_required: Vec<_> = actual_params
+            .iter()
+            .filter(|param| param.mode == baml_type::FunctionParamMode::Required)
+            .collect();
+        let candidate_required: Vec<_> = candidate_params
+            .iter()
+            .filter(|param| param.mode == baml_type::FunctionParamMode::Required)
+            .collect();
+        if actual_required.len() != candidate_required.len() {
+            return false;
+        }
+
+        let snapshot = self.table.snapshot();
+        let deferred_len = self.deferred_subs.len();
+        let obligations_len = self.obligations.len();
+        let mut compatible = true;
+        for (actual, candidate) in actual_required.iter().zip(candidate_required.iter()) {
+            compatible &= self.sub(&candidate.ty, &actual.ty);
+        }
+        for candidate in candidate_params
+            .iter()
+            .filter(|param| param.mode == baml_type::FunctionParamMode::Optional)
+        {
+            let Some(actual) = actual_params.iter().find(|actual| {
+                actual.mode == baml_type::FunctionParamMode::Optional
+                    && actual.name == candidate.name
+            }) else {
+                compatible = false;
+                break;
+            };
+            compatible &= self.sub(&candidate.ty, &actual.ty);
+        }
+        compatible &= self.sub(actual_ret, candidate_ret);
+        compatible &= self.sub(actual_throws, candidate_throws);
+        self.table.rollback_to(snapshot);
+        self.deferred_subs.truncate(deferred_len);
+        self.obligations.truncate(obligations_len);
+        compatible
     }
 
     fn record_function_adapter(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
