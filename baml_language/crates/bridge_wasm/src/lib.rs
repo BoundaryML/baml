@@ -28,7 +28,7 @@ use std::{
     sync::{Arc, Once},
 };
 
-use baml_lsp::{GlobalState, SessionKey, executor::Executors};
+use baml_lsp::{GlobalState, LspError, SessionKey, executor::Executors};
 use js_sys::Function;
 use wasm_bindgen::prelude::*;
 
@@ -206,6 +206,11 @@ pub struct BamlWasmRuntime {
     /// access. Every borrow is confined to one JS callback, and no borrow is
     /// ever held across a call back into JS, so re-entrancy cannot observe a
     /// half-applied state.
+    ///
+    /// One case escapes that: `wasm32-unknown-unknown` cannot unwind, so a
+    /// panic inside a borrow never runs the guard's destructor and the cell
+    /// stays borrowed for the life of the tab. Entry points test for it with
+    /// [`Self::is_unavailable`] rather than tripping `already borrowed`.
     state: Rc<RefCell<GlobalState>>,
     /// `Arc` because [`baml_lsp::ClientSender`] is a `Send + Sync` trait
     /// (the native host shares one across threads); the sender's own JS
@@ -230,7 +235,17 @@ pub struct BamlWasmRuntime {
     /// knows a rebuild is owed. The observer runs *inside* `apply`, where the
     /// state is already mutably borrowed, so it can only record the fact.
     build_owed: Arc<std::sync::atomic::AtomicBool>,
+    /// Whether the user has already been told the server is unavailable, so
+    /// a wedged tab reports once instead of on every keystroke.
+    unavailable_reported: std::cell::Cell<bool>,
 }
+
+/// What the user is told when an internal error has left the tab's language
+/// server unusable. It names the fault as ours, not their file, and asks for
+/// the report that would let us fix it.
+const UNAVAILABLE_MESSAGE: &str = "BAML internal error: the language server for this tab hit a bug \
+     and can no longer analyze your code. Reload the page to restart it. Please report this at \
+     https://github.com/BoundaryML/baml/issues — including what you were editing — so we can fix it.";
 
 /// The browser session's key. One runtime, one client, one session.
 const BROWSER_SESSION: SessionKey = SessionKey(1);
@@ -291,7 +306,50 @@ impl BamlWasmRuntime {
             value_store,
             playground_callback,
             build_owed,
+            unavailable_reported: std::cell::Cell::new(false),
         }
+    }
+
+    /// Whether an earlier internal error left this runtime unusable, telling
+    /// the user once when it has.
+    ///
+    /// `wasm32-unknown-unknown` has no unwinding, so a panic raised while the
+    /// owner state was borrowed never runs the borrow guard's destructor: the
+    /// cell stays borrowed for the life of the tab and every later entry point
+    /// would trap on `already borrowed`. That trap names the symptom and not
+    /// the cause, repeats on every keystroke, and reads like the user's own
+    /// file is at fault — so entry points ask here first and refuse honestly.
+    ///
+    /// Recovery is the host's: the state is half-applied by construction, so
+    /// this runtime cannot be trusted again and the page must be reloaded.
+    fn is_unavailable(&self) -> bool {
+        // A successful test borrow is released immediately, and it also
+        // proves any earlier conflict was transient - a nested call that has
+        // since returned, not a guard leaked by a panic. Re-arm the one-shot
+        // so a later genuine failure is still reported rather than swallowed
+        // by that earlier transient.
+        if self.state.try_borrow_mut().is_ok() {
+            self.unavailable_reported.set(false);
+            return false;
+        }
+        if !self.unavailable_reported.replace(true) {
+            log::error!(
+                "the BAML language server is unavailable: an earlier internal error left its \
+                 state unrecoverable (wasm cannot unwind, so the owner borrow was never released)"
+            );
+            let params = lsp_types::ShowMessageParams {
+                typ: lsp_types::MessageType::ERROR,
+                message: UNAVAILABLE_MESSAGE.to_owned(),
+            };
+            if let Ok(params) = serde_json::to_value(params) {
+                let _ = baml_lsp::ClientSender::send_notification(
+                    self.sender.as_ref(),
+                    "window/showMessage",
+                    params,
+                );
+            }
+        }
+        true
     }
 
     /// Handle one client request and answer it through `lsp_send_response`.
@@ -299,6 +357,12 @@ impl BamlWasmRuntime {
     pub fn handle_lsp_request(&self, request: LspRequest) {
         let request: lsp_server::Request = request.into();
         let id = request.id.clone();
+        if self.is_unavailable() {
+            // Answer rather than drop: an unanswered id hangs the client.
+            self.sender
+                .respond(id, Err(LspError::Internal(UNAVAILABLE_MESSAGE.to_owned())));
+            return;
+        }
         let sender = Arc::clone(&self.sender);
         self.state.borrow_mut().dispatch_request(
             self.session,
@@ -312,6 +376,9 @@ impl BamlWasmRuntime {
     /// schedules (discovery, diagnostics) is drained by `pump`.
     #[wasm_bindgen(js_name = handleLspNotification)]
     pub fn handle_lsp_notification(&self, notification: LspNotification) {
+        if self.is_unavailable() {
+            return;
+        }
         let notification: lsp_server::Notification = notification.into();
         let method = notification.method.clone();
         if let Err(error) = self
@@ -327,6 +394,9 @@ impl BamlWasmRuntime {
     /// Push the project surface: what can be run, and what is wrong with it.
     #[wasm_bindgen(js_name = requestPlaygroundState)]
     pub fn request_playground_state(&self) {
+        if self.is_unavailable() {
+            return;
+        }
         let state = self.state.borrow();
         let playground = self.playground.borrow();
         let Some((project, update)) = playground::project_update(&state, &playground) else {
@@ -350,6 +420,9 @@ impl BamlWasmRuntime {
         function_name: &str,
         request_id: Option<u32>,
     ) {
+        if self.is_unavailable() {
+            return;
+        }
         if !self.serves(project) {
             return;
         }
@@ -366,6 +439,9 @@ impl BamlWasmRuntime {
     /// Report what the cursor is inside, so the graph view can follow along.
     #[wasm_bindgen(js_name = handleCursorPosition)]
     pub fn handle_cursor_position(&self, file: &str, line: u32, column: u32) {
+        if self.is_unavailable() {
+            return;
+        }
         let Some(context) = playground::cursor_context(&self.state.borrow(), file, line, column)
         else {
             return;
@@ -380,6 +456,9 @@ impl BamlWasmRuntime {
     /// notification, or not at all if a rebuild overtakes the collection.
     #[wasm_bindgen(js_name = requestCollectTests)]
     pub fn request_collect_tests(&self, project: &str) {
+        if self.is_unavailable() {
+            return;
+        }
         if !self.serves(project) {
             return;
         }
@@ -409,6 +488,9 @@ impl BamlWasmRuntime {
     /// parameter would reject every call the worker makes.
     #[wasm_bindgen(js_name = expandTestSet)]
     pub fn expand_test_set(&self, project: String, generation: u32, testset_name: String) {
+        if self.is_unavailable() {
+            return;
+        }
         if !self.serves(&project) {
             return;
         }
@@ -444,6 +526,9 @@ impl BamlWasmRuntime {
     /// freed by `wasm_bindgen`.
     #[wasm_bindgen(js_name = closeSession)]
     pub fn close_session(&self) {
+        if self.is_unavailable() {
+            return;
+        }
         self.state.borrow_mut().close_session(self.session);
         self.playground.borrow_mut().shutdown();
     }
