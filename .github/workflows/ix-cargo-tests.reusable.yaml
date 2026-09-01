@@ -26,8 +26,8 @@
 #
 # mise installs sccache and direnv, then each cargo job loads .envrc via
 # `direnv export gha` so CI uses the exact same sccache config as local shells:
-# .envrc is the single source of truth. The R2 credentials are passed through
-# GitHub Actions secrets using the same BAML_SCCACHE_R2_* names that the
+# .envrc is the single source of truth. The R2 credentials come from the
+# infisical-github-ci GitHub Environment using the same BAML_SCCACHE_R2_* names that the
 # RUSTC_WRAPPER maps to AWS_* before exec'ing sccache — the `tools/baml-sccache`
 # script on POSIX, and the native `tools_sccache` crate's binary on Windows
 # (built per-job; see the "Build native sccache wrapper" step).
@@ -38,11 +38,6 @@ name: Cargo Tests (Reusable)
 
 on:
   workflow_call:
-    secrets:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID:
-        required: false
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
-        required: false
 
 # Read-only by design: these jobs run PR-controlled cargo build/test code, so
 # they should not need elevated repository permissions.
@@ -56,10 +51,7 @@ defaults:
 env:
   # Inputs read by .envrc; everything else (RUSTC_WRAPPER, SCCACHE_*) is set by
   # .envrc itself so it stays the single source of truth across CI and local.
-  # The R2 credentials .envrc maps to AWS_* for sccache (mapped to AWS_*).
   # Native Cargo linker overrides live in baml_language/.cargo/config.toml.
-  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -91,9 +83,13 @@ jobs:
     name: "cargo test (x86_64-unknown-linux-gnu)"
     # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
     runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    environment: infisical-github-ci
     # 40, not 25: a machine without a warm seed compiles cold and can
     # exceed 25 minutes; the cap is a hang backstop, not a perf gate.
     timeout-minutes: 40
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -192,9 +188,12 @@ jobs:
     name: "cargo test (x86_64-unknown-linux-musl)"
     # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
     runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-musl"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    environment: infisical-github-ci
     # 45, not 35: same reasoning as the gnu lane above.
     timeout-minutes: 45
     env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
       # The ix machine image ships musl-gcc; setup-musl-cross is skipped
       # there, so wire the same env the action would export.
@@ -819,8 +818,11 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.sdk-test-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.runs-on }}
+    environment: infisical-github-ci
     timeout-minutes: ${{ matrix.timeout }}
     env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       # The machine image defaults these to 16; 32 runs clean on the
       # 64-vCPU machines.
       NEXTEST_TEST_THREADS: "32"
@@ -1043,7 +1045,11 @@ jobs:
     name: "cargo test (wasm32-unknown-unknown)"
     # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
     runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    environment: infisical-github-ci
     timeout-minutes: 45
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1157,10 +1163,14 @@ jobs:
     name: "cargo build (msrv)"
     # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
     runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-msrv"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    environment: infisical-github-ci
     # 40, not 25: the MSRV toolchain is unique to this job, so a machine
     # without a warm seed rebuilds everything from cold and can exceed 25
     # minutes. Warm runs sit far inside the old budget.
     timeout-minutes: 40
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1251,7 +1261,11 @@ jobs:
     name: "cargo doc"
     # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
     runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    environment: infisical-github-ci
     timeout-minutes: 25
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1330,8 +1344,12 @@ jobs:
     name: "snapshot tests"
     # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
     runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-16vcpu-ubuntu-2404' }}
+    environment: infisical-github-ci
     # 45, not 30: cold headroom, same reasoning as the gnu lane above.
     timeout-minutes: 45
+    env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
