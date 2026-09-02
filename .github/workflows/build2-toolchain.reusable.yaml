@@ -94,9 +94,14 @@ jobs:
             # The glibc-2.17 image's target GCC is 4.8 and cannot compile
             # mimalloc v3's warning flags. Its host GCC is current; point that
             # compiler at the image's 2.17 sysroot so C dependencies retain the
-            # same compatibility floor as the Rust linker.
+            # same compatibility floor as the Rust linker. Cross sets TARGET_CC
+            # and TARGET_CXX to the old compilers, and native build scripts give
+            # those variables precedence over the target-specific overrides.
+            passthrough+=', "TARGET_CC=gcc", "TARGET_CXX=g++"'
             passthrough+=', "CC_x86_64_unknown_linux_gnu=gcc"'
+            passthrough+=', "CXX_x86_64_unknown_linux_gnu=g++"'
             passthrough+=', "CFLAGS_x86_64_unknown_linux_gnu=--sysroot=/usr/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu/sysroot"'
+            passthrough+=', "CXXFLAGS_x86_64_unknown_linux_gnu=--sysroot=/usr/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu/sysroot"'
           fi
           printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = [%s]\n' \
             "$TARGET" "$CROSS_IMAGE" "$TARGET" "$passthrough" > "$cross_config"
