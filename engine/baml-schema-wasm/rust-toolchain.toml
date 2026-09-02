@@ -3,7 +3,7 @@
 # https://github.com/rustwasm/rust-webpack-template/issues/191
 # If you really want > 1.81 you can try using wasm-bindgen-cli 0.2.105 instead
 # Previously pinned to 1.81.0 but reverted to use stable with wasm-bindgen-cli 0.2.105
-# Using same version as root rust-toolchain.toml to avoid rustup component conflicts in CI
+# Using the same version as engine/rust-toolchain.toml to avoid rustup component conflicts in CI
 channel = "1.93.0"
 components = []
 targets = [ "wasm32-unknown-unknown" ]

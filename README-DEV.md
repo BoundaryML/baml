@@ -61,6 +61,10 @@ mise upgrade
 mise trust
 ```
 
+### Rust workspace toolchains
+
+The engine and BAML Language workspaces have independent Rust pins in `engine/rust-toolchain.toml` and `baml_language/rust-toolchain.toml`. Run commands that rely on rustup directory discovery from the appropriate workspace directory. Commands run from the repository root must select an explicit toolchain or use a setup action that provides one.
+
 ## Manual Setup (Not Recommended)
 
 If you prefer to install tools manually or need to understand what the setup script does:
