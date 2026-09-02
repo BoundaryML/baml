@@ -10,12 +10,24 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "macos-14" },
-        "wrapper": { "runner": "macos-14", "variants": ["self-update", "no-self-update"] },
+        "wrapper": {
+          "runner": "macos-14",
+          "variants": ["self-update", "no-self-update"]
+        },
         "python": { "runner": "macos-latest" },
         "nodejs": {},
         "java": { "platform": "macos-aarch64", "runner": "macos-14" },
-        "cffi": { "asset": "libbaml_cffi-aarch64-apple-darwin.dylib", "runner": "blacksmith-6vcpu-macos-latest", "smoke": true },
-        "csharp": { "rid": "osx-arm64", "native_asset": "libbridge_cffi.dylib", "consumer_runner": "macos-14", "package_policy": "rid-native" }
+        "cffi": {
+          "asset": "libbaml_cffi-aarch64-apple-darwin.dylib",
+          "runner": "blacksmith-6vcpu-macos-latest",
+          "smoke": true
+        },
+        "csharp": {
+          "rid": "osx-arm64",
+          "native_asset": "libbridge_cffi.dylib",
+          "consumer_runner": "blacksmith-6vcpu-macos-latest",
+          "package_policy": "rid-native"
+        }
       }
     },
     {
@@ -26,12 +38,23 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "macos-15-intel" },
-        "wrapper": { "runner": "macos-15-intel", "variants": ["self-update", "no-self-update"] },
+        "wrapper": {
+          "runner": "macos-15-intel",
+          "variants": ["self-update", "no-self-update"]
+        },
         "python": { "runner": "macos-latest" },
         "nodejs": {},
         "java": { "platform": "macos-x86_64", "runner": "macos-15-intel" },
-        "cffi": { "asset": "libbaml_cffi-x86_64-apple-darwin.dylib", "runner": "blacksmith-6vcpu-macos-latest" },
-        "csharp": { "rid": "osx-x64", "native_asset": "libbridge_cffi.dylib", "consumer_runner": "macos-15-intel", "package_policy": "rid-native" }
+        "cffi": {
+          "asset": "libbaml_cffi-x86_64-apple-darwin.dylib",
+          "runner": "blacksmith-6vcpu-macos-latest"
+        },
+        "csharp": {
+          "rid": "osx-x64",
+          "native_asset": "libbridge_cffi.dylib",
+          "consumer_runner": "macos-15-intel",
+          "package_policy": "rid-native"
+        }
       }
     },
     {
@@ -41,13 +64,29 @@
       "libc": "gnu",
       "archive_suffix": ".tar.gz",
       "artifacts": {
-        "toolchain": { "runner": "ubuntu-24.04-arm", "cross_image": "ghcr.io/rust-cross/manylinux_2_28-cross:aarch64" },
-        "wrapper": { "runner": "ubuntu-latest", "variants": ["self-update", "no-self-update"], "cross_image": "ghcr.io/rust-cross/manylinux_2_28-cross:aarch64" },
+        "toolchain": {
+          "runner": "ubuntu-latest",
+          "cross_image": "ghcr.io/rust-cross/manylinux_2_28-cross:aarch64"
+        },
+        "wrapper": {
+          "runner": "ubuntu-latest",
+          "variants": ["self-update", "no-self-update"],
+          "cross_image": "ghcr.io/rust-cross/manylinux_2_28-cross:aarch64"
+        },
         "python": { "runner": "ubuntu-latest", "manylinux": "2_24" },
         "nodejs": {},
         "java": { "platform": "linux-aarch64", "runner": "ubuntu-24.04-arm" },
-        "cffi": { "asset": "libbaml_cffi-aarch64-unknown-linux-gnu.so", "runner": "ubuntu-22.04", "use_cross": true },
-        "csharp": { "rid": "linux-arm64", "native_asset": "libbridge_cffi.so", "consumer_runner": "ubuntu-24.04-arm", "package_policy": "rid-native" }
+        "cffi": {
+          "asset": "libbaml_cffi-aarch64-unknown-linux-gnu.so",
+          "runner": "ubuntu-22.04",
+          "use_cross": true
+        },
+        "csharp": {
+          "rid": "linux-arm64",
+          "native_asset": "libbridge_cffi.so",
+          "consumer_runner": "ubuntu-24.04-arm",
+          "package_policy": "rid-native"
+        }
       }
     },
     {
@@ -58,12 +97,28 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "ubuntu-24.04-arm" },
-        "wrapper": { "runner": "ubuntu-24.04-arm", "variants": ["self-update"] },
+        "wrapper": {
+          "runner": "ubuntu-24.04-arm",
+          "variants": ["self-update"]
+        },
         "python": { "runner": "ubuntu-latest", "manylinux": "musllinux_1_1" },
         "nodejs": {},
-        "java": { "platform": "linux-aarch64-musl", "runner": "ubuntu-latest", "experimental": true },
-        "cffi": { "asset": "libbaml_cffi-aarch64-unknown-linux-musl.so", "runner": "ubuntu-22.04", "use_cross": true },
-        "csharp": { "rid": "linux-musl-arm64", "native_asset": "libbridge_cffi.so", "consumer_runner": "ubuntu-24.04-arm", "package_policy": "rid-native" }
+        "java": {
+          "platform": "linux-aarch64-musl",
+          "runner": "ubuntu-latest",
+          "experimental": true
+        },
+        "cffi": {
+          "asset": "libbaml_cffi-aarch64-unknown-linux-musl.so",
+          "runner": "ubuntu-22.04",
+          "use_cross": true
+        },
+        "csharp": {
+          "rid": "linux-musl-arm64",
+          "native_asset": "libbridge_cffi.so",
+          "consumer_runner": "ubuntu-24.04-arm",
+          "package_policy": "rid-native"
+        }
       }
     },
     {
@@ -73,13 +128,30 @@
       "libc": "gnu",
       "archive_suffix": ".tar.gz",
       "artifacts": {
-        "toolchain": { "runner": "ubuntu-latest", "cross_image": "ghcr.io/rust-cross/manylinux2014-cross:x86_64" },
-        "wrapper": { "runner": "ubuntu-latest", "variants": ["self-update", "no-self-update"], "cross_image": "ghcr.io/rust-cross/manylinux2014-cross:x86_64" },
+        "toolchain": {
+          "runner": "ubuntu-latest",
+          "cross_image": "ghcr.io/rust-cross/manylinux2014-cross:x86_64"
+        },
+        "wrapper": {
+          "runner": "ubuntu-latest",
+          "variants": ["self-update", "no-self-update"],
+          "cross_image": "ghcr.io/rust-cross/manylinux2014-cross:x86_64"
+        },
         "python": { "runner": "ubuntu-latest", "manylinux": "2_17" },
         "nodejs": {},
         "java": { "platform": "linux-x86_64", "runner": "ubuntu-latest" },
-        "cffi": { "asset": "libbaml_cffi-x86_64-unknown-linux-gnu.so", "runner": "ubuntu-22.04", "use_cross": true, "smoke": true },
-        "csharp": { "rid": "linux-x64", "native_asset": "libbridge_cffi.so", "consumer_runner": "ubuntu-24.04", "package_policy": "rid-native" }
+        "cffi": {
+          "asset": "libbaml_cffi-x86_64-unknown-linux-gnu.so",
+          "runner": "ubuntu-22.04",
+          "use_cross": true,
+          "smoke": true
+        },
+        "csharp": {
+          "rid": "linux-x64",
+          "native_asset": "libbridge_cffi.so",
+          "consumer_runner": "ubuntu-24.04",
+          "package_policy": "rid-native"
+        }
       }
     },
     {
@@ -93,9 +165,22 @@
         "wrapper": { "runner": "ubuntu-latest", "variants": ["self-update"] },
         "python": { "runner": "ubuntu-latest", "manylinux": "musllinux_1_1" },
         "nodejs": {},
-        "java": { "platform": "linux-x86_64-musl", "runner": "ubuntu-latest", "experimental": true },
-        "cffi": { "asset": "libbaml_cffi-x86_64-unknown-linux-musl.so", "runner": "ubuntu-22.04", "use_cross": true },
-        "csharp": { "rid": "linux-musl-x64", "native_asset": "libbridge_cffi.so", "consumer_runner": "ubuntu-24.04", "package_policy": "rid-native" }
+        "java": {
+          "platform": "linux-x86_64-musl",
+          "runner": "ubuntu-latest",
+          "experimental": true
+        },
+        "cffi": {
+          "asset": "libbaml_cffi-x86_64-unknown-linux-musl.so",
+          "runner": "ubuntu-22.04",
+          "use_cross": true
+        },
+        "csharp": {
+          "rid": "linux-musl-x64",
+          "native_asset": "libbridge_cffi.so",
+          "consumer_runner": "ubuntu-24.04",
+          "package_policy": "rid-native"
+        }
       }
     },
     {
@@ -106,12 +191,24 @@
       "archive_suffix": ".zip",
       "artifacts": {
         "toolchain": { "runner": "windows-latest" },
-        "wrapper": { "runner": "windows-latest", "variants": ["self-update", "no-self-update"] },
+        "wrapper": {
+          "runner": "windows-latest",
+          "variants": ["self-update", "no-self-update"]
+        },
         "python": { "runner": "windows-latest" },
         "nodejs": {},
         "java": { "platform": "windows-x86_64", "runner": "windows-latest" },
-        "cffi": { "asset": "baml_cffi-x86_64-pc-windows-msvc.dll", "runner": "windows-2022", "smoke": true },
-        "csharp": { "rid": "win-x64", "native_asset": "bridge_cffi.dll", "consumer_runner": "windows-2022", "package_policy": "rid-native" }
+        "cffi": {
+          "asset": "baml_cffi-x86_64-pc-windows-msvc.dll",
+          "runner": "windows-2022",
+          "smoke": true
+        },
+        "csharp": {
+          "rid": "win-x64",
+          "native_asset": "bridge_cffi.dll",
+          "consumer_runner": "windows-2022",
+          "package_policy": "rid-native"
+        }
       }
     },
     {
@@ -122,12 +219,28 @@
       "archive_suffix": ".zip",
       "artifacts": {
         "toolchain": { "runner": "windows-latest" },
-        "wrapper": { "runner": "windows-latest", "variants": ["self-update", "no-self-update"] },
+        "wrapper": {
+          "runner": "windows-latest",
+          "variants": ["self-update", "no-self-update"]
+        },
         "python": { "runner": "windows-11-arm", "architecture": "arm64" },
         "nodejs": {},
-        "java": { "platform": "windows-aarch64", "runner": "windows-11-arm", "experimental": true },
-        "cffi": { "asset": "baml_cffi-aarch64-pc-windows-msvc.dll", "runner": "windows-11-arm", "smoke": true },
-        "csharp": { "rid": "win-arm64", "native_asset": "bridge_cffi.dll", "consumer_runner": "windows-11-arm", "package_policy": "rid-native" }
+        "java": {
+          "platform": "windows-aarch64",
+          "runner": "windows-11-arm",
+          "experimental": true
+        },
+        "cffi": {
+          "asset": "baml_cffi-aarch64-pc-windows-msvc.dll",
+          "runner": "windows-11-arm",
+          "smoke": true
+        },
+        "csharp": {
+          "rid": "win-arm64",
+          "native_asset": "bridge_cffi.dll",
+          "consumer_runner": "windows-11-arm",
+          "package_policy": "rid-native"
+        }
       }
     }
   ]
