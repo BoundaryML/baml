@@ -12,6 +12,8 @@ const SKILL_OUTDATED_WARNING: &str =
     "your baml skill does not match this toolchain; use `baml agent install` to upgrade it";
 const SKILL_MISSING_WARNING: &str =
     "no baml skill is installed; set it up with `baml agent install`";
+const SKILL_OUTDATED_ERROR: &str = "the installed BAML agent skill does not match this toolchain";
+const SKILL_MISSING_ERROR: &str = "the BAML agent skill is required but is not installed";
 
 fn project_with_skill(content: &str) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
@@ -21,15 +23,39 @@ fn project_with_skill(content: &str) -> tempfile::TempDir {
     dir
 }
 
-fn run_args_from(args: &[&str], cwd: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_baml-cli"))
+fn command(args: &[&str], cwd: &Path) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_baml-cli"));
+    command
         .args(args)
         .current_dir(cwd)
         .env("HOME", cwd.parent().unwrap_or(cwd))
         .env("BAML_WRAPPER_EXEC", "1")
-        .env("DO_NOT_TRACK", "1")
+        .env("DO_NOT_TRACK", "1");
+    command
+}
+
+fn run_args_from(args: &[&str], cwd: &Path) -> Output {
+    command(args, cwd)
+        .env("BAML_AGENT_SKILL_CHECK", "warn")
         .output()
         .unwrap()
+}
+
+fn run_as_detected_agent(args: &[&str], cwd: &Path) -> Output {
+    let mut command = command(args, cwd);
+    for variable in [
+        "CLAUDECODE",
+        "CODEX_SANDBOX",
+        "PI_CODING_AGENT",
+        "OPENCODE_CLIENT",
+        "AI_AGENT",
+        "CURSOR_TRACE_ID",
+        "REPL_ID",
+        "AGENT",
+    ] {
+        command.env_remove(variable);
+    }
+    command.env("AGENT", "1").output().unwrap()
 }
 
 fn stderr_of(output: &Output) -> String {
@@ -37,13 +63,62 @@ fn stderr_of(output: &Output) -> String {
 }
 
 #[test]
-fn non_authoring_commands_never_warn() {
+fn exempt_commands_never_warn() {
     let empty = tempfile::tempdir().unwrap();
 
-    for command in [["check"].as_slice(), ["fmt"].as_slice()] {
-        let stderr = stderr_of(&run_args_from(command, empty.path()));
+    for args in [["clean"].as_slice(), ["telemetry"].as_slice()] {
+        let stderr = stderr_of(&run_args_from(args, empty.path()));
         assert!(!stderr.contains(SKILL_MISSING_WARNING), "{stderr}");
     }
+}
+
+#[test]
+fn detected_agent_cannot_run_without_skill() {
+    let project = tempfile::tempdir().unwrap();
+    let output = run_as_detected_agent(&["init"], project.path());
+    let stderr = stderr_of(&output);
+
+    assert_eq!(output.status.code(), Some(4), "{stderr}");
+    assert!(stderr.contains(SKILL_MISSING_ERROR), "{stderr}");
+    assert!(!project.path().join("baml.toml").exists());
+}
+
+#[test]
+fn require_rejects_outdated_skill() {
+    let project = project_with_skill("old");
+    let output = command(&["init"], project.path())
+        .env("BAML_AGENT_SKILL_CHECK", "require")
+        .output()
+        .unwrap();
+    let stderr = stderr_of(&output);
+
+    assert_eq!(output.status.code(), Some(4), "{stderr}");
+    assert!(stderr.contains(SKILL_OUTDATED_ERROR), "{stderr}");
+    assert!(!project.path().join("baml.toml").exists());
+}
+
+#[test]
+fn matching_skill_allows_detected_agent() {
+    let project = project_with_skill(&common::installed_skill_content());
+    let output = run_as_detected_agent(&["init"], project.path());
+
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    assert!(project.path().join("baml.toml").is_file());
+}
+
+#[test]
+fn off_bypasses_agent_skill_validation() {
+    let project = tempfile::tempdir().unwrap();
+    let output = command(&["init"], project.path())
+        .env("AGENT", "1")
+        .env("BAML_AGENT_SKILL_CHECK", "off")
+        .output()
+        .unwrap();
+    let stderr = stderr_of(&output);
+
+    assert!(output.status.success(), "{stderr}");
+    assert!(!stderr.contains("baml skill"), "{stderr}");
+    assert!(project.path().join("baml.toml").is_file());
 }
 
 #[test]
@@ -123,7 +198,13 @@ fn stale_copy_in_either_agent_directory_prompts_upgrade() {
 #[test]
 fn agent_command_never_nags() {
     let empty = tempfile::tempdir().unwrap();
-    let stderr = stderr_of(&run_args_from(&["agent", "install"], empty.path()));
+    let output = command(&["agent", "install"], empty.path())
+        .env("AGENT", "1")
+        .env("BAML_AGENT_SKILL_CHECK", "require")
+        .output()
+        .unwrap();
+    let stderr = stderr_of(&output);
 
+    assert!(output.status.success(), "{stderr}");
     assert!(!stderr.contains(SKILL_MISSING_WARNING), "{stderr}");
 }

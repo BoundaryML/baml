@@ -57,6 +57,7 @@ fn run_with_env(dir: &Path, args: &[&str], env: Option<(&str, &str)>) -> std::pr
         // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
         // cannot flip `--output-preset auto` to `agent` and hide progress lines.
         .env("BAML_OUTPUT_PRESET", "human")
+        .env("BAML_AGENT_SKILL_CHECK", "off")
         .env("BAML_HOME", home)
         .env("BAML_CACHE_DIR", dir.join(".baml-cache"));
     if let Some((name, value)) = env {

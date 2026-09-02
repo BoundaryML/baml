@@ -1,4 +1,4 @@
-//! Passive warning for missing or stale BAML agent skills.
+//! Validation for missing or stale BAML agent skills.
 //!
 //! The active toolchain compares the installed skill's frontmatter version
 //! with its own version. This keeps skill freshness local and gives each
@@ -12,12 +12,14 @@ use std::{
 
 use serde::Deserialize;
 
-use crate::agent_command::SKILL_NAME;
+use crate::{agent_command::SKILL_NAME, output::AgentSkillCheckPolicy};
 
 const SKILL_OUTDATED_WARNING: &str =
     "your baml skill does not match this toolchain; use `baml agent install` to upgrade it";
 const SKILL_MISSING_WARNING: &str =
     "no baml skill is installed; set it up with `baml agent install`";
+const SKILL_OUTDATED_ERROR: &str = "the installed BAML agent skill does not match this toolchain; run `baml agent install`, restart the agent, then retry; set BAML_AGENT_SKILL_CHECK=off to bypass this check";
+const SKILL_MISSING_ERROR: &str = "the BAML agent skill is required but is not installed; run `baml agent install`, restart the agent, then retry; set BAML_AGENT_SKILL_CHECK=off to bypass this check";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SkillStatus {
@@ -37,9 +39,28 @@ struct SkillMetadata {
     toolchain_version: String,
 }
 
-pub(crate) fn check() {
-    if let Some(message) = skill_warning_message(project_skill_status()) {
-        crate::reporter::print_warning(format_args!("{message}"));
+pub(crate) fn check() -> anyhow::Result<()> {
+    let policy = crate::output::policy().agent_skill_check;
+    if policy == AgentSkillCheckPolicy::Off {
+        return Ok(());
+    }
+
+    let status = project_skill_status();
+    match (policy, status) {
+        (_, SkillStatus::Current) => Ok(()),
+        (AgentSkillCheckPolicy::Warn, status) => {
+            if let Some(message) = skill_warning_message(status) {
+                crate::reporter::print_warning(format_args!("{message}"));
+            }
+            Ok(())
+        }
+        (AgentSkillCheckPolicy::Require, SkillStatus::Missing) => {
+            anyhow::bail!(SKILL_MISSING_ERROR)
+        }
+        (AgentSkillCheckPolicy::Require, SkillStatus::Outdated) => {
+            anyhow::bail!(SKILL_OUTDATED_ERROR)
+        }
+        (AgentSkillCheckPolicy::Off, _) => Ok(()),
     }
 }
 
