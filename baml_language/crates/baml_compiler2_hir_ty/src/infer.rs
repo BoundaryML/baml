@@ -2209,7 +2209,12 @@ impl<'db> InferenceContext<'db> {
                 self.runtime_static_skeleton_matches(&ty, expected, &runtime_params);
             let dynamic_holes: Vec<_> = runtime_params
                 .into_iter()
-                .map(|parameter| (parameter, self.table.new_establishment_var_ty()))
+                .map(|parameter| {
+                    (
+                        parameter,
+                        self.table.new_var_ty_of(unify::VarPolicy::RuntimeHole),
+                    )
+                })
                 .collect();
             let static_expected = dynamic_holes
                 .iter()
@@ -4011,7 +4016,11 @@ impl<'db> InferenceContext<'db> {
         }
         let resolved = self.table.shallow_resolve(ty);
         if let InferTy::InferVar { var, .. } = resolved.kind() {
-            if self.table.is_establishment_var(*var) {
+            if self
+                .table
+                .unsolved_policy(*var)
+                .is_some_and(unify::VarPolicy::absorbs_unknown)
+            {
                 self.table.solve(
                     *var,
                     Ty::intern(InferTy::Unknown {
@@ -4564,7 +4573,7 @@ impl<'db> InferenceContext<'db> {
             InferTy::Never { .. } => resolved,
             InferTy::InferVar { .. } => {
                 let value = self.table.new_var_ty();
-                let error = self.table.new_effect_var_ty();
+                let error = self.table.new_var_ty_of(unify::VarPolicy::Effect);
                 let demanded = Ty::intern(InferTy::Future(
                     value.clone(),
                     error.clone(),
@@ -8958,7 +8967,7 @@ impl<'db> InferenceContext<'db> {
     /// `never`, not Error - S12's defaulting rule).
     fn fresh_generic_arg(&mut self, param: &baml_type::ParamTy) -> Ty {
         if baml_type::is_synthetic_effect_param(param.name()) {
-            self.table.new_effect_var_ty()
+            self.table.new_var_ty_of(unify::VarPolicy::Effect)
         } else {
             self.table.new_var_ty()
         }
@@ -10882,7 +10891,7 @@ impl<'db> InferenceContext<'db> {
         expr: ExprId,
         make_container: impl FnOnce(Ty) -> Ty,
     ) -> Ty {
-        let slot = self.table.new_establishment_var_ty();
+        let slot = self.table.new_var_ty_of(unify::VarPolicy::ContainerSlot);
         let InferTy::InferVar { var, .. } = slot.kind() else {
             unreachable!("a fresh establishment variable must be an inference type");
         };
@@ -10905,7 +10914,7 @@ impl<'db> InferenceContext<'db> {
         parameter_index: usize,
         name: baml_type::Name,
     ) -> Ty {
-        let ty = self.table.new_first_demand_var_ty();
+        let ty = self.table.new_var_ty_of(unify::VarPolicy::LambdaParam);
         let InferTy::InferVar { var, .. } = ty.kind() else {
             unreachable!("a fresh lambda parameter variable must be an inference type");
         };
@@ -12722,7 +12731,11 @@ impl<'db> InferenceContext<'db> {
                     // demands report through the provisional re-check at
                     // finalize. Other vars, such as call instantiations, fail
                     // resolution instead.
-                    if self.table.is_first_demand_var(var) {
+                    if self
+                        .table
+                        .unsolved_policy(var)
+                        .is_some_and(unify::VarPolicy::first_demand_commits)
+                    {
                         widened.first().cloned().unwrap_or_else(Ty::error)
                     } else {
                         return false;
