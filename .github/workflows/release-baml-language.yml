@@ -2243,7 +2243,7 @@ jobs:
       actions: read
       contents: read
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha || github.sha }}
           sparse-checkout: |
