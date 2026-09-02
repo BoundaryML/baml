@@ -1451,7 +1451,6 @@ jobs:
     environment: infisical-github-baml-language-release
     env:
       GH_REPO: ${{ github.repository }}
-      GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
     permissions:
       contents: write
     steps:
@@ -1484,6 +1483,8 @@ jobs:
             echo "uploaded: $name"
           fi
       - name: Clone BoundaryML/baml-swift
+        env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
         run: |
           set -euo pipefail
           test -n "$GH_TOKEN"
@@ -1494,6 +1495,7 @@ jobs:
           fi
       - name: Publish immutable package tag
         env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
           VERSION: ${{ needs.plan.outputs.swiftpm_version }}
         run: |
