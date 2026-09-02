@@ -223,23 +223,24 @@ function build_project_reports(
         let head_attempts = head.reports.filter((attempt) -> {
             attempt.project_id == id
         });
-        let base_attempts = if let base: BenchmarkManifest = baseline {
-            base.reports.filter((attempt) -> {
-                attempt.project_id == id
-            })
-        } else {
-            []
-        };
+        let base_attempts: AttemptReport[] = [];
+        if let base: BenchmarkManifest = baseline {
+            base_attempts
+                = base.reports.filter((attempt) -> {
+                    attempt.project_id == id
+                });
+        }
         let base_metrics = if (base_attempts.length() > 0) {
             aggregate_attempts(base_attempts)
         } else {
             null
         };
         let head_metrics = aggregate_attempts(head_attempts);
+        let first_head_attempt = head_attempts.at(0) ?? baml.sys.panic(`missing head attempt for project ${id}`);
         projects.push(
             ProjectReport {
                 id: id,
-                name: head_attempts[0].project_name,
+                name: first_head_attempt.project_name,
                 classification: classify_change(base_metrics, head_metrics),
                 base: base_metrics,
                 head: head_metrics,

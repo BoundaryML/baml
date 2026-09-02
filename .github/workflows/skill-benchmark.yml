@@ -47,11 +47,13 @@ jobs:
             baml_language
             tools/skill-benchmark/shim
 
-      - name: Build BAML CLI and audit shim
+      - name: Build BAML wrapper, CLI, and audit shim
         run: |
+          cargo build --manifest-path baml_language/Cargo.toml -p baml --bin baml
           cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
           cargo build --manifest-path tools/skill-benchmark/shim/Cargo.toml --release
           mkdir -p dist/bin dist/shim
+          cp baml_language/target/debug/baml dist/bin/baml
           cp baml_language/target/debug/baml-cli dist/bin/baml-cli
           cp tools/skill-benchmark/shim/target/release/baml dist/shim/baml
           cp tools/skill-benchmark/shim/target/release/claude dist/shim/claude
@@ -73,6 +75,7 @@ jobs:
     needs: prepare
     name: skill benchmark / ${{ matrix.project.name }} / attempt ${{ matrix.attempt }}
     runs-on: blacksmith-8vcpu-ubuntu-2404
+    environment: boundary-tools-dev
     timeout-minutes: 50
     strategy:
       fail-fast: false
@@ -87,7 +90,7 @@ jobs:
         attempt: [1, 2, 3]
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      BAML_VERSION: ${{ github.workspace }}/dist/bin/baml-cli
     steps:
       - uses: actions/checkout@v6
 
@@ -98,6 +101,14 @@ jobs:
       - name: Install Claude Code
         run: npm install --global "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
 
+      - name: Validate Claude credentials
+        shell: bash
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "::error::ANTHROPIC_API_KEY is unavailable in boundary-tools-dev"
+            exit 1
+          fi
+
       - uses: actions/download-artifact@v8
         with:
           name: skill-benchmark-tools
@@ -107,15 +118,15 @@ jobs:
         name: Prepare isolated workspace
         shell: bash
         run: |
-          chmod +x dist/bin/baml-cli dist/shim/baml dist/shim/claude
+          chmod +x dist/bin/baml dist/bin/baml-cli dist/shim/baml dist/shim/claude
           workspace="$RUNNER_TEMP/${{ matrix.project.id }}-${{ matrix.attempt }}"
           run_dir="$RUNNER_TEMP/run-${{ matrix.project.id }}-${{ matrix.attempt }}"
-          mkdir -p "$workspace" "$workspace/.claude/skills/baml-core" "$run_dir/audit"
+          mkdir -p "$workspace" "$run_dir/audit"
           cp -R "tools/skill-benchmark/benchmarks/${{ matrix.project.id }}/." "$workspace/"
-          cp skills/baml-core/SKILL.md "$workspace/.claude/skills/baml-core/SKILL.md"
+          dist/bin/baml agent install --project "$workspace"
           echo "workspace=$workspace" >> "$GITHUB_OUTPUT"
           echo "run_dir=$run_dir" >> "$GITHUB_OUTPUT"
-          echo "real_baml=$GITHUB_WORKSPACE/dist/bin/baml-cli" >> "$GITHUB_OUTPUT"
+          echo "real_baml=$GITHUB_WORKSPACE/dist/bin/baml" >> "$GITHUB_OUTPUT"
           echo "real_claude=$(command -v claude)" >> "$GITHUB_OUTPUT"
           echo "$GITHUB_WORKSPACE/dist/shim" >> "$GITHUB_PATH"
 
@@ -261,6 +272,8 @@ jobs:
     needs: [prepare, attempt]
     name: skill benchmark report
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    env:
+      BAML_VERSION: ${{ github.workspace }}/dist/bin/baml-cli
     steps:
       - uses: actions/checkout@v6
 
@@ -280,7 +293,7 @@ jobs:
           merge-multiple: true
 
       - name: Prepare report tools
-        run: chmod +x dist/bin/baml-cli
+        run: chmod +x dist/bin/baml dist/bin/baml-cli
 
       - id: baseline
         name: Download latest canary baseline
@@ -299,7 +312,7 @@ jobs:
       - name: Build head manifest
         run: |
           generated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          dist/bin/baml-cli run build_manifest \
+          dist/bin/baml run build_manifest \
             --project tools/skill-benchmark \
             --output-format json \
             --log off \
@@ -326,7 +339,7 @@ jobs:
           if [ -f baseline/head-manifest.json ]; then
             args+=(--baseline_manifest_path "$GITHUB_WORKSPACE/baseline/head-manifest.json")
           fi
-          dist/bin/baml-cli run generate_benchmark_report "${args[@]}"
+          dist/bin/baml run generate_benchmark_report "${args[@]}"
 
       - name: Build agent log links
         env:
@@ -337,7 +350,7 @@ jobs:
 
       - name: Render PR report
         run: |
-          dist/bin/baml-cli run render_report_file \
+          dist/bin/baml run render_report_file \
             --project tools/skill-benchmark \
             --output-format json \
             --log off \

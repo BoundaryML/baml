@@ -47,6 +47,18 @@ function test_attempt(id: string, outcome: AttemptOutcome) -> AttemptReport {
     }
 }
 
+function test_manifest(reports: AttemptReport[]) -> BenchmarkManifest {
+    BenchmarkManifest {
+        schema_version: 1,
+        generated_at: "2026-09-02T00:00:00Z",
+        skill_revision: "head",
+        suite_revision: "suite",
+        model: "opus",
+        attempts_per_project: 1,
+        reports: reports,
+    }
+}
+
 test "classification requires a baseline" {
     assert.equal(
         classify_change(null, test_metrics(3, 3, 20.0, 30.0, 1.0)),
@@ -93,6 +105,23 @@ test "one project regression makes the overall result a regression" {
         ),
         ChangeClassification.LikelyRegression,
     )
+}
+
+test "project reports use the matching attempt name" {
+    let attempt = test_attempt("chess-head-1", AttemptOutcome.Passed);
+    let projects = build_project_reports(test_manifest([attempt]), null);
+    assert.equal(projects.length(), 1);
+    assert.equal(projects.at(0)?.id, "chess");
+    assert.equal(projects.at(0)?.name, "Chess engine")
+}
+
+test "project reports include matching baseline attempts" {
+    let head_attempt = test_attempt("chess-head-1", AttemptOutcome.Passed);
+    let base_attempt = test_attempt("chess-base-1", AttemptOutcome.Passed);
+    let projects = build_project_reports(test_manifest([head_attempt]), test_manifest([base_attempt]));
+    let project = projects.at(0) ?? baml.sys.panic("missing project report");
+    assert.equal(project.base_attempts.length(), 1);
+    assert.equal(project.classification, ChangeClassification.LikelyNeutral)
 }
 
 test "renderer creates one project detail block" {
