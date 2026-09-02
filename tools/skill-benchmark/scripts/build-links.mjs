@@ -39,23 +39,27 @@ async function allJobs() {
 
 function evidenceLine(log, invocationId) {
   const lines = log.split("\n");
-  const target = lines.findIndex((line) => line.includes(invocationId));
-  if (target < 0) {
+  const marker = lines.findIndex((line) => line.includes("SKILL_BENCH_INDEX_BEGIN"));
+  const target = lines.findIndex((line, index) => index > marker && line.includes(invocationId));
+  if (marker < 0 || target < 0) {
     return 1;
   }
 
-  let group = target;
-  while (group > 0 && !lines[group].includes("SKILL_BENCH_INDEX_BEGIN")) {
+  let group = marker;
+  while (group > 0 && !lines[group].includes("##[group]Run")) {
     group -= 1;
-  }
-  if (!lines[group].includes("SKILL_BENCH_INDEX_BEGIN")) {
-    return 1;
   }
   return target - group + 1;
 }
 
 const reports = [];
-for (const entry of await readdir(reportsDirectory, { recursive: true })) {
+const reportEntries = await readdir(reportsDirectory, { recursive: true }).catch((error) => {
+  if (error.code === "ENOENT") {
+    return [];
+  }
+  throw error;
+});
+for (const entry of reportEntries) {
   if (entry.endsWith(".json")) {
     reports.push(JSON.parse(await readFile(join(reportsDirectory, entry), "utf8")));
   }
