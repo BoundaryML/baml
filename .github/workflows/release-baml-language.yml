@@ -289,38 +289,49 @@ jobs:
           name: release-plan
           path: release-plan.json
 
-  # The C# build matrix is generated from the repository's platform contract
-  # (`release/platforms.json`) so the target set + per-target runners live in
-  # one machine-readable place. The reusable toolchain and toolchain-selector
-  # workflows own their matrices alongside their builds.
+  # The toolchain and C# build matrices are generated from the repository's
+  # platform contract (`release/platforms.json`) so the target set + per-target
+  # runners live in one machine-readable place. The reusable toolchain-selector
+  # workflow owns its wrapper matrix generation alongside its build.
   build-matrix:
-    name: Compute C# build matrix
+    name: Compute build matrices
     needs: [plan]
     runs-on: ubuntu-latest
     outputs:
+      toolchain: ${{ steps.gen.outputs.toolchain }}
       csharp: ${{ steps.gen.outputs.csharp }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - name: Generate the C# build matrix from the platform contract
+      - name: Generate build matrices from the platform contract
         id: gen
         run: |
           set -euo pipefail
+          # target + toolchain runner (as `os`); `libc` rides along so Linux
+          # setup can select musl or the plan's GNU cross image.
+          toolchain="$(jq -c '[.targets[]
+            | select(.artifacts.toolchain != null)
+            | .artifacts.toolchain as $toolchain
+            | {target: .triple, os: $toolchain.runner, libc: .libc}
+              + (if $toolchain.cross_image then {cross_image: $toolchain.cross_image} else {} end)]' release/platforms.json)"
+          echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
+          jq . <<<"$toolchain"
           csharp="$(scripts/baml-csharp-release-contract matrix)"
           echo "csharp=$csharp" >> "$GITHUB_OUTPUT"
           jq . <<<"$csharp"
 
   build-toolchain:
     name: Build BAML toolchain
-    needs: [plan, build-vsix]
+    needs: [plan, build-vsix, build-matrix]
     uses: ./.github/workflows/build2-toolchain.reusable.yaml
     permissions:
       contents: read
     with:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       version: ${{ needs.plan.outputs.version }}
+      toolchain_matrix_json: ${{ needs.build-matrix.outputs.toolchain }}
 
   build-vsix:
     name: Build platform-neutral VSIX

@@ -11,6 +11,10 @@ on:
         description: "Canonical toolchain version used in archive names"
         type: string
         required: true
+      toolchain_matrix_json:
+        description: "Serialized toolchain build matrix from release/platforms.json"
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -27,38 +31,15 @@ env:
   BAML_WORKOS_CLIENT_ID: ${{ vars.BAML_WORKOS_CLIENT_ID }}
 
 jobs:
-  matrix:
-    name: Compute target matrix
-    runs-on: ubuntu-latest
-    outputs:
-      include: ${{ steps.gen.outputs.include }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.source_sha }}
-          persist-credentials: false
-      - name: Generate the toolchain matrix from the platform contract
-        id: gen
-        run: |
-          set -euo pipefail
-          include="$(jq -c '[.targets[]
-            | select(.artifacts.toolchain != null)
-            | .artifacts.toolchain as $toolchain
-            | {target: .triple, os: $toolchain.runner, libc: .libc}
-              + (if $toolchain.cross_image then {cross_image: $toolchain.cross_image} else {} end)]' release/platforms.json)"
-          echo "include=$include" >> "$GITHUB_OUTPUT"
-          jq . <<<"$include"
-
   build:
     name: Build toolchain (${{ matrix.target }})
-    needs: matrix
     runs-on: ${{ matrix.os }}
     env:
       CARGO: cargo
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.matrix.outputs.include) }}
+        include: ${{ fromJson(inputs.toolchain_matrix_json) }}
     steps:
       - uses: actions/checkout@v4
         with:
