@@ -798,7 +798,13 @@ jobs:
     # dedicated publish-gradle-plugin job additionally pushes canary/stable cuts
     # to the Portal. Per-coordinate idempotency lets either family be (re)published
     # independently when only one is missing from Central.
+    #
+    # The MAVEN_CENTRAL_* secrets (Central Portal user token + the CI signing
+    # key/passphrase) live in Infisical (boundary-tools →
+    # gh-baml-language-release) and are synced into this GitHub Environment —
+    # they are not repository secrets, so the job must bind to it to see them.
     runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
     permissions:
       contents: read
     steps:
@@ -1020,6 +1026,9 @@ jobs:
     # mavenCentral() to pluginManagement to resolve the plugin from there).
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.plan.outputs.channel != 'nightly' }}
     runs-on: ubuntu-latest
+    # GRADLE_PUBLISH_KEY / GRADLE_PUBLISH_SECRET are Infisical-synced Environment
+    # secrets (see publish-maven), not repository secrets.
+    environment: infisical-github-baml-language-release
     permissions:
       contents: read
     steps:
