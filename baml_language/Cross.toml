@@ -13,7 +13,7 @@
 passthrough = [
   "AWS_ACCESS_KEY_ID",
   "AWS_SECRET_ACCESS_KEY",
-  "RUSTC_WRAPPER=/project/target/sccache-host",
+  "RUSTC_WRAPPER=/target/sccache-host",
   "SCCACHE_BUCKET",
   "SCCACHE_ENDPOINT",
   "SCCACHE_ERROR_LOG",
