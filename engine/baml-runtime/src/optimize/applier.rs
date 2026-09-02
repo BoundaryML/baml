@@ -562,19 +562,17 @@ fn find_attribute_end(s: &str) -> Option<usize> {
                 }
             }
             '"' => in_string = !in_string,
-            '#' if !in_string => {
+            '#' if !in_string && chars.peek() == Some(&'"') => {
                 // Check for #"..."# raw string
-                if chars.peek() == Some(&'"') {
-                    chars.next();
+                chars.next();
+                pos += 1;
+                // Find the closing "#
+                while let Some(c) = chars.next() {
                     pos += 1;
-                    // Find the closing "#
-                    while let Some(c) = chars.next() {
+                    if c == '"' && chars.peek() == Some(&'#') {
+                        chars.next();
                         pos += 1;
-                        if c == '"' && chars.peek() == Some(&'#') {
-                            chars.next();
-                            pos += 1;
-                            break;
-                        }
+                        break;
                     }
                 }
             }

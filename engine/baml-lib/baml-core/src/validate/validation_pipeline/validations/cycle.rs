@@ -187,11 +187,9 @@ fn insert_required_class_deps(
                         }
                     }
                 }
-                Some(TypeWalker::TypeAlias(alias)) => {
+                Some(TypeWalker::TypeAlias(alias)) if !alias_cycles.contains(&alias.id) => {
                     // This code runs after aliases are already resolved.
-                    if !alias_cycles.contains(&alias.id) {
-                        insert_required_class_deps(id, alias.resolved(), ctx, deps, alias_cycles)
-                    }
+                    insert_required_class_deps(id, alias.resolved(), ctx, deps, alias_cycles)
                 }
                 _ => {}
             }
