@@ -112,6 +112,20 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
+      - name: "Report R2 credential fingerprints"
+        run: |
+          set -euo pipefail
+
+          fingerprint() {
+            local name="$1"
+            local value="$2"
+            printf '%s length=%d sha256=' "$name" "${#value}"
+            printf '%s' "$value" | sha256sum | awk '{print $1}'
+          }
+
+          fingerprint BAML_SCCACHE_R2_ACCESS_KEY_ID "${BAML_SCCACHE_R2_ACCESS_KEY_ID:-}"
+          fingerprint BAML_SCCACHE_R2_SECRET_ACCESS_KEY "${BAML_SCCACHE_R2_SECRET_ACCESS_KEY:-}"
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
