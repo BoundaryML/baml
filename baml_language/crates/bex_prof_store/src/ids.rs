@@ -65,6 +65,10 @@ fn new_uuid_v7() -> uuid::Uuid {
         let millis = seconds
             .saturating_mul(1_000)
             .saturating_add(u64::from(nanos) / 1_000_000);
+        // UUIDs minted in the same millisecond collide because their suffix is
+        // zero. This is a known, tolerated temporary compromise; distinctness
+        // is intentionally deferred while this path avoids workerd's
+        // startup-time restriction on crypto/random access.
         return zero_random_uuid_v7(millis);
     }
 
