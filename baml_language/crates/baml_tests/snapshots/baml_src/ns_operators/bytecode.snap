@@ -768,27 +768,6 @@ function operators.drv_catch_div_min_by_minus_one() -> int {
     return
 }
 
-function operators.drv_catch_float_div_zero() -> float {
-    load_const 1.0
-    load_const 0.0
-    call user.operators.drv_float_div
-    jump L2
-    load_var e
-    is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var e
-    rethrow
-
-  L1:
-    load_const -1.0
-
-  L2:
-    return
-}
-
 function operators.drv_catch_int_div_zero() -> int {
     load_const 1
     load_const 0
@@ -902,6 +881,24 @@ function operators.drv_float_div(a: float, b: float) -> float {
     load_type float
     load_var2 1 2
     call user.operators.drv_div
+    return
+}
+
+function operators.drv_float_div_zero_is_infinite() -> bool {
+    load_const 1.0
+    load_const 0.0
+    call user.operators.drv_float_div
+    load_const 100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0
+    cmp_float_op >
+    jump_if_false L0
+    pop 1
+    load_const 1.0
+    load_const 0.0
+    div_float
+    load_const 100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0
+    cmp_float_op >
+
+  L0:
     return
 }
 

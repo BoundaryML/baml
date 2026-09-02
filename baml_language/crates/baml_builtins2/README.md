@@ -46,6 +46,14 @@ Describing what it returns
 
 Doc strings should use the package name (e.g. `baml`) instead of `root` when referring to items.
 
+A doc comment is written for a caller, so it never references internals or
+implementation details: no `_`-prefixed items, no Rust crates or types, no compiler or
+VM machinery (opcodes, bytecode, MIR, TIR). State the observable behaviour instead.
+Knowledge that only a maintainer needs belongs in a plain `//` comment.
+
+Doc comments do not go on `implement` blocks. Behaviour a caller needs belongs on the
+interface, which carries the contract, or on the concrete type's own documentation.
+
 ## Internals
 
 Until such time as we have private items/members, the standard library's internal functions are differentiated only by convention to inform users that they should not be called directly or relied upon.

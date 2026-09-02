@@ -1,8 +1,9 @@
 /// Returns the value of the environment variable `key`, or `null` if not set.
 ///
 /// # Throws
-/// - `Io` if environment variable access is not available.
-/// - `ParseError` if the variable is set but its value is not valid UTF-8.
+///
+/// - `baml.errors.Io` if environment variable access is not available.
+/// - `baml.errors.ParseError` if the variable is set but its value is not valid UTF-8.
 function get(key: string) -> string? throws root.errors.Io | root.errors.ParseError {
     $rust_io_function
 }

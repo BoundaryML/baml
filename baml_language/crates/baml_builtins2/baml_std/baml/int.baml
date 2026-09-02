@@ -1,36 +1,51 @@
-/// A 63-bit signed integer. Range: -2^62 to 2^62-1
-/// (`-4_611_686_018_427_387_904` to `4_611_686_018_427_387_903`).
+/// A 63-bit signed integer, from `-2^62` (`-4_611_686_018_427_387_904`) to
+/// `2^62 - 1` (`4_611_686_018_427_387_903`).
 ///
-/// The value is stored in a 64-bit machine word with one bit reserved for the
-/// runtime's pointer/value tag, so the usable range is 63-bit, not 64-bit. Use
-/// `bigint` for arbitrary-precision integers.
+/// The runtime reserves one bit of a 64-bit machine word for its pointer/value
+/// tag, so the usable width is 63 bits rather than 64. Unlike Python's `int`,
+/// an `int` does not grow to fit; use `bigint` for arbitrary precision.
 ///
-/// Literals may be written in decimal (`42`), hex (`0xFF`), octal (`0o755`),
-/// or binary (`0b1010`), with `_` digit separators allowed (`1_000_000`).
+/// Literals may be decimal (`42`), hex (`0xFF`), octal (`0o755`), or binary
+/// (`0b1010`), with `_` digit separators allowed (`1_000_000`).
 ///
-/// Arithmetic (`+`, `-`, `*`, `/`, unary `-`) that would leave this range
-/// throws a catchable `baml.panics.IntegerOverflow` rather than wrapping or
-/// crashing; `/` and `%` by zero throw `baml.panics.DivisionByZero`.
+/// Bit operations such as `leading_zeros` and `count_ones` read `self` as a
+/// 64-bit two's-complement word. The value is stored sign-extended, so those
+/// counts include the high sign/tag bits: `(1).leading_zeros()` is `63`, not
+/// `62`.
 ///
-/// `<<` is the exception: it discards the bits shifted past the 63-bit width
-/// rather than throwing, so `1 << 62` is `int.min_value()` (bit 62 is the sign
-/// bit) and `1 << 63` is `0`. A negative count on either shift throws
-/// `baml.panics.NegativeBitShift`.
+/// # Panics
+///
+/// Arithmetic panics rather than wrapping. These panics are catchable, but are
+/// not declared in `throws` clauses.
+///
+/// - `baml.panics.IntegerOverflow` if `+`, `-`, `*`, `/`, or unary `-` leaves
+///   the `int` range.
+/// - `baml.panics.DivisionByZero` if the right operand of `/` or `%` is zero.
+/// - `baml.panics.NegativeBitShift` if the count given to `<<` or `>>` is
+///   negative.
+///
+/// `<<` is the exception to the overflow rule: it truncates, discarding
+/// whatever is shifted past the 63-bit width. `1 << 62` is `int.min_value()`
+/// (bit 62 is the sign bit) and `1 << 63` is `0`. `>>` cannot overflow either;
+/// a count of 63 or more saturates to the sign, giving `0` for a non-negative
+/// `self` and `-1` for a negative one.
+
 class Int {
     // ─── Comparisons / clamping ───────────────────────────────────────────────
 
     /// Returns the absolute value of `self`.
     ///
-    /// Panics with `baml.panics.IntegerOverflow` for `int.min_value()`, whose
-    /// absolute value (`2^62`) does not fit in an `int` — the same channel
-    /// `-int.min_value()` and the arithmetic operators use for an overflow.
+    /// # Panics
+    ///
+    /// - `baml.panics.IntegerOverflow` for `int.min_value()`, whose absolute
+    ///   value `2^62` is one past `int.max_value()`.
     ///
     /// # Examples
-    /// ```
-    /// (-7).abs()         // 7
-    /// (3).abs()          // 3
-    /// (0).abs()          // 0
-    /// int.min_value().abs()  // panics — overflow
+    ///
+    /// ```baml
+    /// (-7).abs()             // 7
+    /// (3).abs()              // 3
+    /// int.min_value().abs()  // panics
     /// ```
     //baml:fallible
     function abs(self) -> int throws never {
@@ -40,9 +55,9 @@ class Int {
     /// Returns the smaller of `self` and `other`.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (3).min(5)   // 3
-    /// (3).min(3)   // 3
     /// (-2).min(0)  // -2
     /// ```
     function min(self, other: int) -> int throws never {
@@ -52,9 +67,9 @@ class Int {
     /// Returns the larger of `self` and `other`.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (3).max(5)   // 5
-    /// (3).max(3)   // 3
     /// (-2).max(0)  // 0
     /// ```
     function max(self, other: int) -> int throws never {
@@ -63,12 +78,12 @@ class Int {
 
     /// Clamps `self` into the range `[min, max]`.
     ///
-    /// Equivalent to `self.min(max).max(min)`. Callers should pass `min <= max`;
-    /// if `min > max` the result is always `min` (the lower-clamp wins because
-    /// it runs after the upper-clamp).
+    /// Equivalent to `self.min(max).max(min)`. Pass `min <= max`; if `min > max`
+    /// the result is always `min`, because the lower clamp runs last.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (5).clamp(0, 10)    // 5
     /// (-3).clamp(0, 10)   // 0
     /// (15).clamp(0, 10)   // 10
@@ -79,53 +94,56 @@ class Int {
 
     // ─── Math ─────────────────────────────────────────────────────────────────
 
-    /// Returns the integer square root of `self` — that is, the largest `int`
-    /// `r` such that `r * r <= self`.
+    /// Returns the largest `r` such that `r * r <= self`: the integer square
+    /// root of `self`.
     ///
-    /// Throws `InvalidArgument` if `self` is negative.
+    /// # Throws
+    ///
+    /// - `baml.errors.InvalidArgument` if `self` is negative.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (10).isqrt()   // 3
     /// (16).isqrt()   // 4
-    /// (0).isqrt()    // 0
     /// (-1).isqrt()   // throws
     /// ```
     function isqrt(self) -> int throws root.errors.InvalidArgument {
         $rust_function
     }
 
-    /// Returns `self ** exp`. Saturates on overflow (positive overflow returns
-    /// `int.max_value()`, negative overflow returns `int.min_value()`).
+    /// Returns `self ** exp`, saturating instead of panicking on overflow:
+    /// `int.max_value()` for positive overflow, `int.min_value()` for negative.
     ///
-    /// `0 ** 0` returns `1`, by convention.
-    ///
-    /// If `exp` is negative the result is `0`, since the mathematical value
-    /// `self ** -n = 1 / self ** n` is in `(-1, 1)` for `|self| > 1` and rounds
-    /// to zero. (For `self == 1` or `self == -1` the value is `±1` which rounds
-    /// to itself; this implementation still returns `0` for negative exponents
-    /// uniformly.)
+    /// `0 ** 0` is `1`, by convention. A negative `exp` gives `0`, because the
+    /// exact value `1 / self ** -exp` lies in `(-1, 1)` for `|self| > 1` and
+    /// rounds toward zero. That holds uniformly: for `self == 1` or
+    /// `self == -1` the exact value is `±1`, and the result is still `0`.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (2).pow(10)      // 1024
     /// (2).pow(0)       // 1
     /// (0).pow(0)       // 1   (convention)
     /// (2).pow(-1)      // 0
-    /// (10).pow(100)    // saturates to int.max_value()
     /// (-2).pow(3)      // -8
+    /// (10).pow(100)    // saturates to int.max_value()
     /// ```
     function pow(self, exp: int) -> int throws never {
         $rust_function
     }
 
-    /// Returns the integer logarithm of `self` in the given `base`, rounded
-    /// down — i.e. the largest `n` such that `base ** n <= self`.
+    /// Returns the largest `n` such that `base ** n <= self`: the logarithm of
+    /// `self` in `base`, rounded down.
     ///
-    /// Throws `InvalidArgument` if `self <= 0` or `base < 2`.
+    /// # Throws
+    ///
+    /// - `baml.errors.InvalidArgument` if `self <= 0` or `base < 2`.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (1000).ilog(10)   // 3
     /// (1024).ilog(2)    // 10
     /// (1).ilog(10)      // 0
@@ -144,24 +162,24 @@ class Int {
     // (e.g. `count_zeros` of a small positive value counts the high tag/sign
     // bits too).
 
-    /// Returns the number of leading zero bits in the 64-bit two's-complement
-    /// representation of `self`.
+    /// Returns the number of leading zero bits.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (0).leading_zeros()  // 64
     /// (1).leading_zeros()  // 63
-    /// (-1).leading_zeros() // 0  (all-ones)
+    /// (-1).leading_zeros() // 0   (all ones)
     /// ```
     function leading_zeros(self) -> int throws never {
         $rust_function
     }
 
-    /// Returns the number of leading one bits in the 64-bit two's-complement
-    /// representation of `self`.
+    /// Returns the number of leading one bits.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (0).leading_ones()   // 0
     /// (-1).leading_ones()  // 64
     /// ```
@@ -172,7 +190,8 @@ class Int {
     /// Returns the number of trailing zero bits.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (0).trailing_zeros()  // 64
     /// (8).trailing_zeros()  // 3   (binary 1000)
     /// (1).trailing_zeros()  // 0
@@ -184,7 +203,8 @@ class Int {
     /// Returns the number of trailing one bits.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (7).trailing_ones()   // 3   (binary 111)
     /// (8).trailing_ones()   // 0
     /// (-1).trailing_ones()  // 64
@@ -193,11 +213,11 @@ class Int {
         $rust_function
     }
 
-    /// Returns the total number of zero bits in the 64-bit two's-complement
-    /// representation of `self`.
+    /// Returns the total number of zero bits.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (0).count_zeros()   // 64
     /// (-1).count_zeros()  // 0
     /// ```
@@ -205,12 +225,12 @@ class Int {
         $rust_function
     }
 
-    /// Returns the total number of one bits in the 64-bit two's-complement
-    /// representation of `self`. Also known as the population count or
-    /// "popcount".
+    /// Returns the total number of one bits, also known as the population
+    /// count or "popcount".
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (0).count_ones()   // 0
     /// (7).count_ones()   // 3
     /// (-1).count_ones()  // 64
@@ -221,23 +241,26 @@ class Int {
 
     // ─── Parsing ──────────────────────────────────────────────────────────────
 
-    /// Parses `text` as a base-ten signed integer.
+    /// Parses `text` as a base ten signed integer.
     ///
-    /// Accepts an optional leading `+` or `-` sign followed by one or more
-    /// ASCII digits. No surrounding whitespace, no underscores, no other
-    /// numeric formats. The result must fit in the `int` range (63-bit signed).
+    /// Accepts an optional leading `+` or `-` followed by one or more ASCII
+    /// digits, and nothing else: no surrounding whitespace, no underscores, no
+    /// other numeric formats. The value must fit the 63-bit `int` range.
     ///
-    /// Throws `ParseError` if `text` is empty, contains a non-digit character,
-    /// or represents a value outside the `int` range.
+    /// # Throws
+    ///
+    /// - `baml.errors.ParseError` if `text` is empty, holds a non-digit
+    ///   character, or names a value outside the `int` range.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// int.parse("42")       // 42
     /// int.parse("-7")       // -7
     /// int.parse("+0")       // 0
     /// int.parse("")         // throws — empty
     /// int.parse("12a")      // throws — non-digit
-    /// int.parse(" 5 ")      // throws — whitespace not allowed; trim first
+    /// int.parse(" 5 ")      // throws — whitespace; trim first
     /// int.parse("99999999999999999999")  // throws — out of range
     /// ```
     function parse(text: string) -> int throws root.errors.ParseError {
@@ -247,14 +270,19 @@ class Int {
     /// Returns a uniformly distributed random integer in the half-open range
     /// `[lower, upper)`, drawn from `rng`.
     ///
-    /// Throws `InvalidArgument` if `lower >= upper` (the range would be empty).
     /// `rng` defaults to `random.SystemRandom`, the host's cryptographic entropy
-    /// source; pass a seeded generator to make the draw reproducible. The largest
-    /// representable half-open range is supported. Rejection sampling avoids
-    /// modulo bias, so one result may consume multiple values from `rng`.
+    /// source; pass a seeded generator to make the draw reproducible. Even the
+    /// widest representable half-open range works. Rejection sampling avoids
+    /// modulo bias, so one result may consume several values from `rng`.
+    ///
+    /// # Throws
+    ///
+    /// - `baml.errors.InvalidArgument` if `lower >= upper`, which would leave
+    ///   the range empty.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// int.random(0, 10)         // some value in {0, 1, ..., 9}
     /// int.random(-5, 5)         // some value in {-5, -4, ..., 4}
     /// int.random(0, 1)          // always 0  (single-element range)
@@ -272,7 +300,7 @@ class Int {
     ) -> int throws root.errors.InvalidArgument {
         if (lower >= upper) {
             throw root.errors.InvalidArgument {
-                message: "int.random: lower (" + string.from(lower) + ") must be less than upper (" + string.from(upper) + ")"
+                message: `int.random: lower (${lower}) must be less than upper (${upper})`
             };
         }
         // Rust maps each draw; BAML owns retries because it can call `rng` again.
@@ -283,7 +311,7 @@ class Int {
         r
     }
 
-    /// (internal) Internal: maps one full-range draw onto `[lower, upper)`, returning
+    /// (internal) Maps one full-range draw onto `[lower, upper)`, returning
     /// `upper` when the draw must be rejected.
     function _random_in_range(draw: int, lower: int, upper: int) -> int throws never {
         $rust_function
@@ -291,19 +319,15 @@ class Int {
 
     // ─── Constants (as zero-arg static methods) ───────────────────────────────
 
-    /// Returns the largest representable `int`, equal to `2^62 - 1`
+    /// Returns the largest representable `int`, `2^62 - 1`
     /// (`4_611_686_018_427_387_903`).
-    ///
-    /// Note: BAML integers are 63-bit signed (the runtime reserves one bit
-    /// for the tagged-pointer Value encoding). Values outside the
-    /// `[min_value(), max_value()]` range cannot round-trip through int.
-    function max_value() -> int {
+    function max_value() -> int throws never {
         4611686018427387903
     }
 
-    /// Returns the smallest representable `int`, equal to `-2^62`
-    /// (`-4_611_686_018_427_387_904`). Note `int.min_value().abs()` throws.
-    function min_value() -> int {
+    /// Returns the smallest representable `int`, `-2^62`
+    /// (`-4_611_686_018_427_387_904`). `int.min_value().abs()` panics.
+    function min_value() -> int throws never {
         // Written as `-MAX - 1` to avoid the literal parser; same trick as the
         // old i64::MIN definition.
         -4611686018427387903 - 1

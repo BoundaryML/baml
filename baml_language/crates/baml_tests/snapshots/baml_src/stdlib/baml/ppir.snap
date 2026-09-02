@@ -249,7 +249,7 @@ function baml.min_value() -> int  [expr] {
 function baml.parse(text: string) -> int  [builtin]
 function baml.pow(self: ?, exp: int) -> int  [builtin]
 function baml.random(lower: int, upper: int, rng: root.random.Rng = root.random.SystemRandom.get()) -> int  [expr] {
-  { if (lower Ge upper) { throw root.errors.InvalidArgument { message: "int.random: lower (" Add string.from(lower) Add ") must be less th..." Add string.from(upper) Add ")" } }; let r = int._random_in_range(rng.random_int(), lower, upper); while r Eq upper { r = int._random_in_range(rng.random_int(), lower, upper) } } r
+  { if (lower Ge upper) { throw root.errors.InvalidArgument { message: `...` } }; let r = int._random_in_range(rng.random_int(), lower, upper); while r Eq upper { r = int._random_in_range(rng.random_int(), lower, upper) } } r
 }
 function baml.trailing_ones(self: ?) -> int  [builtin]
 function baml.trailing_zeros(self: ?) -> int  [builtin]
@@ -1689,10 +1689,10 @@ class baml.panics.Cancelled$stream {
   message: string | null
 }
 class baml.panics.DivisionByZero {
-  dividend: int
+  dividend: int | bigint
 }
 class baml.panics.DivisionByZero$stream {
-  dividend: int | null
+  dividend: int | bigint | null
 }
 class baml.panics.Exit {
   code: int

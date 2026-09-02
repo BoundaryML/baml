@@ -2,29 +2,45 @@
 //! Rust's `ops::Index` shape: `Idx` as the interface input, the element as
 //! the `Output` associated type.
 //!
-//! The compiler special-cases indexing for statically-typed operands
-//! (emitting the direct index bytecode); these implementations back the
-//! same operation when reached through a generic bound
-//! (`T extends Index<int>`). Their bodies use the operator on the
-//! statically-typed `self`, which lowers to the direct instruction - the
-//! same delegation discipline as `Equals for T[]` (no native glue needed).
+//! `a[i]` and `baml.ops.Index.index(a, i)` always agree, whether `a`'s type
+//! is known statically or only reached through a bound
+//! (`T extends Index<int>`).
 //!
 //! `Idx` and `Output` are deliberately UNBOUNDED: a map's key may be a
 //! string-literal union and a container's element any type, neither of
-//! which is `baml.Concrete`. Panics are orthogonal to `throws` (see
-//! `math.baml`): an out-of-range list or uint8array index raises the
-//! catchable `baml.panics.IndexOutOfBounds`, exactly like the bytecode.
+//! which is `baml.Concrete`. Indexing a `uint8array` yields the byte as an
+//! `int` in `[0, 255]`; BAML has no byte scalar.
+//!
+//! Panics are orthogonal to `throws` (see `math.baml`): indexing raises the
+//! catchable `baml.panics.IndexOutOfBounds` for an out-of-range list or
+//! `uint8array` index, and `baml.panics.MapKeyNotFound` for a missing map
+//! key.
 
-/// `self[idx]`
+/// The indexing operator, `self[idx]`.
+///
+/// `Idx` is the index type and `Output` the element type, the shape of Rust's
+/// [`ops::Index`](https://doc.rust-lang.org/std/ops/trait.Index.html). `Idx` is
+/// an interface parameter, so one type could be indexable at several index
+/// types; the standard library gives each container just one.
+///
+/// This is read-only. There is no `IndexMut` counterpart: assigning through
+/// `self[idx] = v` is not routed through an interface.
+///
+/// An implementation may panic, which `throws never` does not rule out; a
+/// caller working through a generic bound cannot enumerate the panics and must
+/// be ready for one it cannot describe. See `baml.ops.Add`.
 interface Index<Idx> requires root.Concrete {
-    /// The type `self[idx]` produces.
+    /// The element type. Unbounded, deliberately: an element may be any type at
+    /// all, including ones that are not `baml.Concrete`.
     type Output;
-    /// The `[]` operator.
+    /// Reads the element of `self` at `idx`.
     ///
-    /// # Panics
-    ///
-    /// - `baml.panics.IndexOutOfBounds` for a list or `uint8array` index
-    ///   outside the container.
+    /// The standard library's containers index as Python does: a list or
+    /// `uint8array` index is a zero-based `int` and a negative one counts back
+    /// from the end, `-1` being the last element; a map index is its `string`
+    /// key. They are all-or-nothing, so use a list's `at` or a map's `get` —
+    /// both of which return an optional — when a missing element should be a
+    /// value rather than a panic.
     function index(self, idx: Idx) -> Self.Output throws never
 }
 

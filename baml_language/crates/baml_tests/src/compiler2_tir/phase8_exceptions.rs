@@ -436,7 +436,7 @@ fn single_panic_catch_binding_allows_field_access() {
   1 / 0
 }
 
-function f() -> int {
+function f() -> int | bigint {
   return fail() catch (e) {
     DivisionByZero => e.dividend
     _ => 0

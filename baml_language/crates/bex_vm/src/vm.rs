@@ -9966,9 +9966,10 @@ impl BexVm {
                     self.stack.push(v);
                 }
                 OpCode::DivFloat => {
-                    // Keep the Value handles around so the DivisionByZero
-                    // panic can reuse them instead of allocating two more
-                    // `Object::Float` boxes on the TLAB just to error.
+                    // IEEE-754: a zero divisor yields `±inf`, and `0.0 / 0.0`
+                    // yields `NaN`. Unlike `int` and `bigint`, `float` has
+                    // values for those results, so there is nothing to panic
+                    // about.
                     let right_v = self.stack.ensure_pop();
                     let left_v = self.stack.ensure_pop();
                     let Some(r) = value_as_float(right_v) else {
@@ -9977,14 +9978,6 @@ impl BexVm {
                     let Some(l) = value_as_float(left_v) else {
                         std::hint::unreachable_unchecked()
                     };
-                    if r == 0.0 {
-                        return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                            VmPanic::DivisionByZero {
-                                left: left_v,
-                                right: right_v,
-                            },
-                        )));
-                    }
                     let v = Value::object(self.alloc_float(l / r));
                     self.stack.push(v);
                 }

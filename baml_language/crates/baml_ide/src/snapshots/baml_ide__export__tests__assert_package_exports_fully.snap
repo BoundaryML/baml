@@ -10,11 +10,11 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "id": "V:assert.approx_equal",
       "kind": "function",
       "name": "approx_equal",
-      "docstring": "Asserts that two floats are within `eps` of each other.\n\n# Parameters\n\n- `actual`: The observed floating-point value.\n- `expected`: The expected floating-point value.\n- `eps`: The maximum allowed absolute difference (`|actual - expected|`).\n\n# Panics\n\n- Panics when `eps` is negative or NaN.\n- Panics when the absolute difference exceeds `eps` or cannot be compared\n  (for example, when `actual`/`expected` produce NaN deltas).",
+      "docstring": "Asserts that two floats are within `eps` of each other.\n\n# Parameters\n\n- `actual`: The observed floating-point value.\n- `expected`: The expected floating-point value.\n- `eps`: The maximum allowed absolute difference (`|actual - expected|`).\n\n# Panics\n\n- `baml.panics.AssertionFailed` when `eps` is negative or NaN.\n- `baml.panics.AssertionFailed` when the absolute difference exceeds `eps` or cannot be compared\n  (for example, when `actual`/`expected` produce NaN deltas).",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 2225,
-        "end": 2671
+        "start": 2472,
+        "end": 3014
       },
       "detail": "function",
       "signature": {
@@ -53,11 +53,11 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "id": "V:assert.contains",
       "kind": "function",
       "name": "contains",
-      "docstring": "Asserts that `haystack` contains `needle` as a substring.\n\n# Parameters\n\n- `haystack`: The string to search within.\n- `needle`: The substring to search for.\n\n# Panics\n\n- Panics when `haystack` does not contain `needle` as a substring.",
+      "docstring": "Asserts that `haystack` contains `needle` as a substring.\n\n# Parameters\n\n- `haystack`: The string to search within.\n- `needle`: The substring to search for.\n\n# Panics\n\n- `baml.panics.AssertionFailed` when `haystack` does not contain `needle` as a substring.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 2944,
-        "end": 3138
+        "start": 3310,
+        "end": 3570
       },
       "detail": "function",
       "signature": {
@@ -89,11 +89,11 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "id": "V:assert.equal",
       "kind": "function",
       "name": "equal",
-      "docstring": "Asserts that `actual` equals `expected` exactly. Panics if they differ.\nUses the `==` operator (`baml.ops.equals_equals`) to compare values.\n\nWhen comparing floating-point values, use `assert.approx_equal(actual, expected, eps)`\ninstead to compare within a tolerance.\n\n# Parameters\n\n- `actual`: The observed value.\n- `expected`: The expected value.\n\n# Panics\n\n- Panics when `actual != expected`.",
+      "docstring": "Asserts that `actual` equals `expected` exactly. Panics if they differ.\nUses the `==` operator (`baml.ops.equals_equals`) to compare values.\n\nWhen comparing floating-point values, use `assert.approx_equal(actual, expected, eps)`\ninstead to compare within a tolerance.\n\n# Parameters\n\n- `actual`: The observed value.\n- `expected`: The expected value.\n\n# Panics\n\n- `baml.panics.AssertionFailed` when `actual != expected`.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 1258,
-        "end": 1747
+        "start": 1429,
+        "end": 1948
       },
       "detail": "function",
       "signature": {
@@ -123,11 +123,11 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "id": "V:assert.is_true",
       "kind": "function",
       "name": "is_true",
-      "docstring": "Asserts that `condition` is `true`. Panics with a failure message if not.\n\n# Panics\n\n- If `condition` is `false`.\n\n# Examples\n\n```baml\nassert.is_true(true)  // no panic\nassert.is_true(false)  // panic\n```",
+      "docstring": "Asserts that `condition` is `true`. Panics with a failure message if not.\n\n# Panics\n\n- `baml.panics.AssertionFailed` if `condition` is `false`.\n\n# Examples\n\n```baml\nassert.is_true(true)  // no panic\nassert.is_true(false)  // panic\n```",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 310,
-        "end": 441
+        "start": 340,
+        "end": 515
       },
       "detail": "function",
       "signature": {
@@ -152,11 +152,11 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "id": "V:assert.is_type",
       "kind": "function",
       "name": "is_type",
-      "docstring": "Asserts that `actual` is of type `T`.\n\n# Returns\n\n`actual` if it is of type `T`. This can be used to assert the type of a value and use it in further computations.\n\n# Panics\n\n- Panics when `actual` is not of type `T`.",
+      "docstring": "Asserts that `actual` is of type `T`.\n\n# Returns\n\n`actual` if it is of type `T`. This can be used to assert the type of a value and use it in further computations.\n\n# Panics\n\n- `baml.panics.AssertionFailed` when `actual` is not of type `T`.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 3390,
-        "end": 3664
+        "start": 3845,
+        "end": 4180
       },
       "detail": "function",
       "signature": {
@@ -186,11 +186,11 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "id": "V:assert.not_null",
       "kind": "function",
       "name": "not_null",
-      "docstring": "Asserts that `value` is not `null`. Panics if it is.\n\n# Panics\n\n- If `value` is `null`.\n\n# Examples\n\n```baml\nassert.not_null(1)  // no panic\nassert.not_null(null)  // panic\n```",
+      "docstring": "Asserts that `value` is not `null`. Panics if it is.\n\n# Panics\n\n- `baml.panics.AssertionFailed` if `value` is `null`.\n\n# Examples\n\n```baml\nassert.not_null(1)  // no panic\nassert.not_null(null)  // panic\n```",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 664,
-        "end": 809
+        "start": 768,
+        "end": 957
       },
       "detail": "function",
       "signature": {
@@ -204,35 +204,6 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
         ],
         "returns": {
           "display": "void"
-        },
-        "throws": {
-          "display": "never"
-        }
-      }
-    },
-    {
-      "id": "V:assert.raise",
-      "kind": "function",
-      "name": "raise",
-      "docstring": "Raises a `baml.panics.AssertionFailed` with the given `message`.\n\n# Parameters\n\n- `message`: The error message to use.\n\n# Panics\n\n- Always raises a `baml.panics.AssertionFailed`.",
-      "source": {
-        "file": "<builtin>/assert/assert.baml",
-        "start": 3877,
-        "end": 3953
-      },
-      "detail": "function",
-      "signature": {
-        "params": [
-          {
-            "name": "message",
-            "ty": {
-              "display": "string",
-              "head": "T:baml.String"
-            }
-          }
-        ],
-        "returns": {
-          "display": "never"
         },
         "throws": {
           "display": "never"

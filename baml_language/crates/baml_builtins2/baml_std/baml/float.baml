@@ -1,24 +1,29 @@
-/// A 64-bit floating-point number (f64).
+/// A 64-bit IEEE-754 floating-point number.
 ///
-/// Note: division by zero (`x / 0.0`) does not follow raw IEEE — it throws a
-/// catchable `baml.panics.DivisionByZero` rather than yielding `±inf`/`NaN`,
-/// matching integer division. `inf` and `NaN` still arise from `float.inf()` /
-/// `float.nan()`, from overflow (e.g. `1e308 * 10.0` → `inf`), and from other
-/// invalid operations (e.g. `(-1.0).sqrt()` → `NaN`).
+/// Arithmetic follows IEEE-754 throughout, so `float` never panics. Division
+/// by zero has an answer: `1.0 / 0.0` is `inf` and `0.0 / 0.0` is `NaN`, as in
+/// JavaScript. `int` and `bigint` have no value to give and panic instead.
+///
+/// `inf` and `NaN` also come from `float.inf()` and `float.nan()`, from
+/// overflow (`1e308 * 10.0` is `inf`), and from other invalid operations
+/// (`(-1.0).sqrt()` is `NaN`).
+///
+/// Neither has a JSON representation, so `baml.json.from` renders NaN and both
+/// infinities as `null`.
 class Float {
-    /// Serializes this float to a JSON number. NaN and Infinity are serialized as null.
     // mut_vm: Float values are heap-boxed (Object::Float); construction needs a TLAB.
     // ─── Predicates ───────────────────────────────────────────────────────────
 
-    /// Returns `true` if `self` is NaN (a "not a number" sentinel produced by
-    /// invalid operations such as `(-1.0).sqrt()` or `float.inf() - float.inf()`).
-    /// Note `0.0 / 0.0` throws `DivisionByZero` rather than producing NaN.
+    /// Returns `true` if `self` is NaN — the "not a number" sentinel invalid
+    /// operations produce, such as `(-1.0).sqrt()`, `float.inf() - float.inf()`,
+    /// or `0.0 / 0.0`.
     ///
-    /// NaN is the only float value that is not equal to itself (`x != x` iff
-    /// `x.is_nan()`), so this predicate is the only correct way to test for NaN.
+    /// NaN is the only float that is not equal to itself, so this is the only
+    /// correct test for it: `x != x` exactly when `x.is_nan()`.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (0.0).is_nan()         // false
     /// float.nan().is_nan()   // true
     /// float.inf().is_nan()   // false
@@ -30,7 +35,8 @@ class Float {
     /// Returns `true` if `self` is positive or negative infinity.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// float.inf().is_infinite()                 // true
     /// (-float.inf()).is_infinite()              // true
     /// (1000000.0 * 1000000.0).is_infinite()     // false  (1e12, large but finite)
@@ -40,11 +46,12 @@ class Float {
         $rust_function
     }
 
-    /// Returns `true` if `self` is neither NaN nor infinite (i.e. an ordinary
-    /// finite float, including subnormals and `±0.0`).
+    /// Returns `true` if `self` is neither NaN nor infinite. Subnormals and
+    /// `±0.0` count as finite.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (3.14).is_finite()         // true
     /// (0.0).is_finite()          // true
     /// float.inf().is_finite()    // false
@@ -56,10 +63,11 @@ class Float {
 
     // ─── Comparisons / clamping ───────────────────────────────────────────────
 
-    /// Returns the absolute value of `self`. Preserves NaN.
+    /// Returns the absolute value of `self`. NaN stays NaN.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (-3.5).abs()           // 3.5
     /// (3.5).abs()            // 3.5
     /// (-0.0).abs()           // 0.0
@@ -71,12 +79,13 @@ class Float {
 
     /// Returns the smaller of `self` and `other`.
     ///
-    /// **NaN handling:** if exactly one operand is NaN, returns the non-NaN one
-    /// (ergonomic NaN suppression — matches Rust `f64::min`). If both are NaN,
-    /// the result is NaN. Use `is_nan()` upstream if you need stricter handling.
+    /// A single NaN operand is suppressed: if exactly one of the two is NaN,
+    /// the other one is returned. Only two NaNs give NaN. Check with
+    /// `is_nan()` beforehand if you need stricter handling.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (3.0).min(5.0)              // 3.0
     /// (3.0).min(float.nan())      // 3.0  (NaN suppressed)
     /// float.nan().min(float.nan()) // NaN
@@ -85,27 +94,27 @@ class Float {
         $rust_function
     }
 
-    /// Returns the larger of `self` and `other`.
-    ///
-    /// NaN handling matches `min`: a non-NaN operand is preferred over NaN.
+    /// Returns the larger of `self` and `other`. NaN is suppressed exactly as
+    /// `min` suppresses it.
     function max(self, other: float) -> float throws never {
         $rust_function
     }
 
     /// Clamps `self` into the range `[min, max]`.
     ///
-    /// Equivalent to `self.min(max).max(min)`. Callers should pass `min <= max`;
-    /// if `min > max` the result is always `min` (the lower-clamp wins because
-    /// it runs after the upper-clamp).
+    /// Equivalent to `self.min(max).max(min)`. Pass `min <= max`; if `min > max`
+    /// the result is always `min`, because the lower clamp runs last.
     ///
-    /// NaN propagates through both `min` and `max` calls — if `self` is NaN,
-    /// the result is NaN.
+    /// A NaN `self` clamps to `max`, not NaN: `self.min(max)` suppresses the
+    /// NaN and yields `max`, which then passes through `.max(min)` unchanged.
     ///
     /// # Examples
-    /// ```
-    /// (5.0).clamp(0.0, 10.0)     // 5.0
-    /// (-3.0).clamp(0.0, 10.0)    // 0.0
-    /// (15.0).clamp(0.0, 10.0)    // 10.0
+    ///
+    /// ```baml
+    /// (5.0).clamp(0.0, 10.0)         // 5.0
+    /// (-3.0).clamp(0.0, 10.0)        // 0.0
+    /// (15.0).clamp(0.0, 10.0)        // 10.0
+    /// float.nan().clamp(0.0, 10.0)   // 10.0  (NaN suppressed; clamps to max)
     /// ```
     function clamp(self, min: float, max: float) -> float throws never {
         $rust_function
@@ -116,11 +125,12 @@ class Float {
     // These return `float` because the rounded value may exceed the `int`
     // range; for fallible conversions to `int`, use the `i*` variants below.
 
-    /// Returns the largest integer ≤ `self`, as a float.
-    /// Preserves the sign of `±0.0` and propagates NaN/±∞.
+    /// Returns the largest integer less than or equal to `self`, as a float.
+    /// The sign of `±0.0` is preserved; NaN and `±inf` pass through.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (3.7).floor()    // 3.0
     /// (-1.5).floor()   // -2.0
     /// (3.0).floor()    // 3.0
@@ -129,11 +139,12 @@ class Float {
         $rust_function
     }
 
-    /// Returns the smallest integer ≥ `self`, as a float.
-    /// Preserves the sign of `±0.0` and propagates NaN/±∞.
+    /// Returns the smallest integer greater than or equal to `self`, as a
+    /// float. The sign of `±0.0` is preserved; NaN and `±inf` pass through.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (3.2).ceil()    // 4.0
     /// (-1.5).ceil()   // -1.0
     /// ```
@@ -141,11 +152,12 @@ class Float {
         $rust_function
     }
 
-    /// Returns the integer nearest to `self`, with ties rounded away from zero
-    /// (so `0.5 → 1.0`, `-0.5 → -1.0`, `1.5 → 2.0`).
+    /// Returns the integer nearest to `self`, as a float, with ties rounded
+    /// away from zero: `0.5` to `1.0`, `-0.5` to `-1.0`, `1.5` to `2.0`.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (1.5).round()    // 2.0
     /// (-1.5).round()   // -2.0
     /// (1.4).round()    // 1.0
@@ -155,11 +167,12 @@ class Float {
         $rust_function
     }
 
-    /// Returns `self` truncated toward zero — i.e. the integer part with the
-    /// fractional part discarded.
+    /// Returns the integer part of `self`, discarding the fraction — that is,
+    /// `self` rounded toward zero.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (3.7).trunc()    // 3.0
     /// (-3.7).trunc()   // -3.0
     /// ```
@@ -167,10 +180,11 @@ class Float {
         $rust_function
     }
 
-    /// Returns the fractional part of `self` (`self - self.trunc()`).
+    /// Returns the fractional part of `self`, `self - self.trunc()`.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (3.7).fract()    // 0.7
     /// (-3.7).fract()   // -0.7
     /// (5.0).fract()    // 0.0
@@ -182,41 +196,58 @@ class Float {
     // ─── Rounding to int (fallible) ───────────────────────────────────────────
     //
     // Each of these throws `InvalidArgument` if `self` is NaN, ±∞, or — after
-    // rounding — falls outside the `int` (`i64`) range. The exact threshold is
-    // `[-2^63, 2^63)`; values strictly less than `i64.min_value()` or ≥ `2^63`
-    // (one past `i64.max_value()`, the smallest value not representable as `int`)
+    // rounding — falls outside the `int` (`i63`) range. The exact threshold is
+    // `[-2^62, 2^62)`; values strictly less than `int.min_value()` or ≥ `2^62`
+    // (one past `int.max_value()`, the smallest value not representable as `int`)
     // throw.
 
-    /// Like `floor`, but returns `int`. Throws if the floored value would not
-    /// fit in `int` or `self` is NaN.
+    /// Like `floor`, but returns `int`.
+    ///
+    /// # Throws
+    ///
+    /// - `baml.errors.InvalidArgument` if `self` is NaN or `±inf`, or rounds to
+    ///   a value outside the `int` range.
     function ifloor(self) -> int throws root.errors.InvalidArgument {
         $rust_function
     }
 
-    /// Like `ceil`, but returns `int`. Throws if the ceiled value would not fit
-    /// in `int` or `self` is NaN.
+    /// Like `ceil`, but returns `int`.
+    ///
+    /// # Throws
+    ///
+    /// - `baml.errors.InvalidArgument` if `self` is NaN or `±inf`, or rounds to
+    ///   a value outside the `int` range.
     function iceil(self) -> int throws root.errors.InvalidArgument {
         $rust_function
     }
 
-    /// Like `round`, but returns `int`. Throws if the rounded value would not
-    /// fit in `int` or `self` is NaN.
+    /// Like `round`, but returns `int`.
+    ///
+    /// # Throws
+    ///
+    /// - `baml.errors.InvalidArgument` if `self` is NaN or `±inf`, or rounds to
+    ///   a value outside the `int` range.
     function iround(self) -> int throws root.errors.InvalidArgument {
         $rust_function
     }
 
-    /// Like `trunc`, but returns `int`. Throws if the integer part would not
-    /// fit in `int` or `self` is NaN/±∞.
+    /// Like `trunc`, but returns `int`.
+    ///
+    /// # Throws
+    ///
+    /// - `baml.errors.InvalidArgument` if `self` is NaN or `±inf`, or rounds to
+    ///   a value outside the `int` range.
     function itrunc(self) -> int throws root.errors.InvalidArgument {
         $rust_function
     }
 
     // ─── Power / logarithm ────────────────────────────────────────────────────
 
-    /// Returns the square root of `self`. For negative inputs returns NaN.
+    /// Returns the square root of `self`, or NaN if `self` is negative.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (4.0).sqrt()       // 2.0
     /// (2.0).sqrt()       // 1.4142...
     /// (-1.0).sqrt()      // NaN
@@ -226,13 +257,14 @@ class Float {
         $rust_function
     }
 
-    /// Returns `self ** exp` (floating-point exponentiation).
+    /// Returns `self ** exp`, computed in floating point.
     ///
-    /// Returns NaN for inputs where the mathematical value is not real (e.g.
-    /// negative base raised to a non-integer power).
+    /// Gives NaN wherever the mathematical value is not real, such as a
+    /// negative base raised to a non-integer power.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (2.0).pow(10.0)         // 1024.0
     /// (2.0).pow(-1.0)         // 0.5
     /// (2.0).pow(0.5)          // sqrt(2)
@@ -242,25 +274,31 @@ class Float {
         $rust_function
     }
 
-    /// Returns the logarithm of `self` in the given `base`. Equivalent to
-    /// `self.ln() / base.ln()`.
+    /// Returns the logarithm of `self` in the given `base`, computed as
+    /// `ln(self) / ln(base)`.
     ///
-    /// The boundary behavior follows directly from that formula:
-    /// - `self < 0` → NaN  (since `ln(negative) = NaN`)
-    /// - `self == 0`, `base > 0`, `base != 1` → `-∞`
-    /// - `base < 0` → NaN
-    /// - `base == 0`, `self > 0` → `±0` (sign opposite of `ln(self)`, since
-    ///   `±finite / -∞ = ∓0`)
-    /// - `base == 1`, `self > 0`, `self != 1` → `±∞` (sign matches `ln(self)`,
-    ///   since `ln(1) == +0.0` and `±finite / +0.0 = ±∞`)
-    /// - `base == 1`, `self == 1` → NaN (`0 / 0`)
+    /// Every boundary case falls out of that division:
+    ///
+    /// - `self < 0` gives NaN, since `ln` of a negative is NaN.
+    /// - `self == 0` with `base > 1` gives `-inf`: `-inf / positive`.
+    /// - `self == 0` with `0 < base < 1` gives `+inf`; `ln(base)` is negative,
+    ///   so the sign flips relative to the case above.
+    /// - `self == 0` with `base == 1` gives `-inf`, since `ln(1)` is `+0.0`.
+    /// - `base < 0` gives NaN.
+    /// - `base == 0` with `self > 0` gives `±0`, signed opposite `ln(self)`,
+    ///   since `±finite / -inf` is `∓0`.
+    /// - `base == 1` with `self > 0` and `self != 1` gives `±inf`, signed to
+    ///   match `ln(self)`, since `±finite / +0.0` is `±inf`.
+    /// - `base == 1` with `self == 1` gives NaN: `0 / 0`.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (1000.0).log(10.0)   // 3.0
     /// (8.0).log(2.0)       // 3.0
     /// (-1.0).log(10.0)     // NaN
     /// (0.0).log(10.0)      // -infinity
+    /// (0.0).log(0.5)       // +infinity
     /// (2.0).log(1.0)       // +infinity
     /// (1.0).log(1.0)       // NaN
     /// ```
@@ -268,11 +306,12 @@ class Float {
         $rust_function
     }
 
-    /// Returns the Euclidean distance `sqrt(self² + other²)`, computed in a way
-    /// that avoids spurious overflow even when both magnitudes are large.
+    /// Returns the Euclidean distance `sqrt(self² + other²)`, computed so that
+    /// large magnitudes do not overflow along the way.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (3.0).hypot(4.0)    // 5.0
     /// (0.0).hypot(0.0)    // 0.0
     /// ```
@@ -285,44 +324,42 @@ class Float {
     // All angle arguments and return values are in radians. Use `to_radians()`
     // to convert from degrees (or `to_degrees()` to convert results back).
 
-    /// Sine of `self` (in radians).
+    /// Sine of `self`, in radians.
     function sin(self) -> float throws never {
         $rust_function
     }
 
-    /// Cosine of `self` (in radians).
+    /// Cosine of `self`, in radians.
     function cos(self) -> float throws never {
         $rust_function
     }
 
-    /// Tangent of `self` (in radians). Very large near odd multiples of π/2.
+    /// Tangent of `self`, in radians. Very large near odd multiples of π/2.
     function tan(self) -> float throws never {
         $rust_function
     }
 
-    /// Inverse sine, returning a value in `[-π/2, π/2]`.
-    /// Returns NaN if `self` is outside `[-1, 1]`.
+    /// Inverse sine, in `[-π/2, π/2]`. NaN if `self` is outside `[-1, 1]`.
     function asin(self) -> float throws never {
         $rust_function
     }
 
-    /// Inverse cosine, returning a value in `[0, π]`.
-    /// Returns NaN if `self` is outside `[-1, 1]`.
+    /// Inverse cosine, in `[0, π]`. NaN if `self` is outside `[-1, 1]`.
     function acos(self) -> float throws never {
         $rust_function
     }
 
-    /// Inverse tangent, returning a value in `(-π/2, π/2)`.
+    /// Inverse tangent, in `(-π/2, π/2)`.
     function atan(self) -> float throws never {
         $rust_function
     }
 
-    /// Returns the angle (in radians) of the vector `(other, self)` — i.e. the
-    /// angle from the positive x-axis to the point `(x = other, y = self)`.
-    /// The result is in `[-π, π]`.
+    /// Returns the angle in radians from the positive x-axis to the point
+    /// `(x = other, y = self)`, in `[-π, π]`.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (1.0).atan2(1.0)        // π/4    (45°)
     /// (1.0).atan2(0.0)        // π/2    (90°, due north)
     /// (0.0).atan2(-1.0)       // π      (180°, due west)
@@ -341,23 +378,23 @@ class Float {
         $rust_function
     }
 
-    /// Hyperbolic tangent. Bounded to `(-1, 1)`.
+    /// Hyperbolic tangent, bounded to `(-1, 1)`.
     function tanh(self) -> float throws never {
         $rust_function
     }
 
-    /// Inverse hyperbolic sine. Domain: all reals.
+    /// Inverse hyperbolic sine, defined for every real.
     function asinh(self) -> float throws never {
         $rust_function
     }
 
-    /// Inverse hyperbolic cosine. Domain: `[1, ∞)`. Returns NaN for `self < 1`.
+    /// Inverse hyperbolic cosine, defined on `[1, ∞)`. NaN for `self < 1`.
     function acosh(self) -> float throws never {
         $rust_function
     }
 
-    /// Inverse hyperbolic tangent. Domain: `(-1, 1)`. Returns NaN outside that
-    /// range, and ±∞ at the endpoints.
+    /// Inverse hyperbolic tangent, defined on `(-1, 1)`. `±∞` at the
+    /// endpoints, NaN outside them.
     function atanh(self) -> float throws never {
         $rust_function
     }
@@ -365,12 +402,12 @@ class Float {
     // ─── Angle conversions ────────────────────────────────────────────────────
 
     /// Converts `self` from degrees to radians.
-    function to_radians(self) -> float {
+    function to_radians(self) -> float throws never {
         self * float.pi() / 180.0
     }
 
     /// Converts `self` from radians to degrees.
-    function to_degrees(self) -> float {
+    function to_degrees(self) -> float throws never {
         self * 180.0 / float.pi()
     }
 
@@ -378,17 +415,21 @@ class Float {
 
     /// Parses `text` as a floating-point number.
     ///
-    /// Accepts decimal notation (`1.5`, `-0.25`), scientific notation
-    /// (`1e3`, `-1.5E-3`), and the special tokens `inf` / `infinity` / `nan`
-    /// (case-insensitive). An optional leading `+` or `-` sign is allowed.
-    /// No surrounding whitespace, no underscore separators.
+    /// Accepts decimal notation (`1.5`, `-0.25`), scientific notation (`1e3`,
+    /// `-1.5E-3`), and the case-insensitive tokens `inf`, `infinity`, and
+    /// `nan`, each with an optional leading `+` or `-`. No surrounding
+    /// whitespace, no underscore separators.
     ///
-    /// Throws `ParseError` if `text` cannot be parsed. Note that successfully
-    /// parsing `"nan"` gives a NaN value — use `result.is_nan()` to detect it
-    /// rather than equality.
+    /// Parsing `"nan"` succeeds and yields a NaN value, so test the result with
+    /// `is_nan()` rather than equality.
+    ///
+    /// # Throws
+    ///
+    /// - `baml.errors.ParseError` if `text` cannot be parsed.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// float.parse("1.5")        // 1.5
     /// float.parse("-0.25")      // -0.25
     /// float.parse("1e3")        // 1000.0
@@ -396,7 +437,7 @@ class Float {
     /// float.parse("NaN")        // NaN
     /// float.parse("")           // throws — empty
     /// float.parse("hello")      // throws — non-numeric
-    /// float.parse(" 1.0 ")      // throws — whitespace not allowed; trim first
+    /// float.parse(" 1.0 ")      // throws — whitespace; trim first
     /// ```
     function parse(text: string) -> float throws root.errors.ParseError {
         $rust_function
@@ -407,10 +448,11 @@ class Float {
     ///
     /// `rng` defaults to `random.SystemRandom`, the host's cryptographic entropy
     /// source; pass a seeded generator to make the draw reproducible. Each call
-    /// consumes one `random_int` value and uses 53 random bits.
+    /// consumes one `random_int` value and uses 53 of its bits.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// float.random()              // some x with 0 <= x < 1
     /// float.random() * 100.0      // some x with 0 <= x < 100
     ///
@@ -422,15 +464,15 @@ class Float {
         float._unit_from_draw(rng.random_int())
     }
 
-    /// (internal) Internal: maps 53 bits of an `int` draw onto `[0.0, 1.0)`.
+    /// (internal) Maps 53 bits of an `int` draw onto `[0.0, 1.0)`.
     function _unit_from_draw(draw: int) -> float throws never {
         $rust_function
     }
 
     // ─── Constants (as zero-arg static methods) ───────────────────────────────
 
-    /// Returns π, the ratio of a circle's circumference to its diameter,
-    /// rounded to f64 precision (~15 decimal digits).
+    /// Returns π, the ratio of a circle's circumference to its diameter, to
+    /// float precision (about 15 decimal digits).
     function pi() -> float throws never {
         $rust_function
     }
@@ -440,17 +482,18 @@ class Float {
         $rust_function
     }
 
-    /// Returns the golden ratio `φ = (1 + √5) / 2`, approximately `1.618`.
+    /// Returns the golden ratio `φ = (1 + √5) / 2`, about `1.618`.
     function golden_ratio() -> float throws never {
         $rust_function
     }
 
-    /// Returns a NaN value. Use `x.is_nan()` (not equality) to test for NaN.
+    /// Returns a NaN value. Test for it with `x.is_nan()`, never with equality.
     function nan() -> float throws never {
         $rust_function
     }
 
-    /// Returns positive infinity. Use `-float.inf()` for negative infinity.
+    /// Returns positive infinity. Negate it — `-float.inf()` — for negative
+    /// infinity.
     function inf() -> float throws never {
         $rust_function
     }
@@ -458,13 +501,16 @@ class Float {
 
 // ─── Internal (private) native helpers ────────────────────────────────────────
 
-/// (internal) Truncates `value` toward zero and returns the integer part, **saturating**
-/// to the `int` range and mapping NaN to `0` — it never throws.
+/// (internal) Truncates `value` toward zero and returns the integer part,
+/// saturating to the full 64-bit machine range rather than BAML's narrower
+/// 63-bit `int` range, and mapping NaN to `0`. It never throws, so a saturated
+/// result for a very large magnitude or `±∞` input can itself land outside
+/// `[int.min_value(), int.max_value()]`.
 ///
-/// Private helper (leading `_`; formerly the public `baml.math.trunc`) backing
-/// internal retry-delay math. User code should prefer the
-/// range-checked, throwing `float.itrunc()` (or the float-returning
-/// `float.trunc()`); this saturating form is intentionally not public surface.
+/// Backs internal retry-delay math, whose inputs stay well within `int`'s range
+/// in practice. User code should prefer the range-checked `float.itrunc()`, or
+/// the float-returning `float.trunc()`; this saturating form is deliberately
+/// not public surface.
 function _trunc_to_int(value: float) -> int throws never {
     $rust_function
 }

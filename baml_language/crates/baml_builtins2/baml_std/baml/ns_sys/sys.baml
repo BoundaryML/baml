@@ -39,11 +39,13 @@ class ShellOutput {
 
 /// The terminal status of a process created with `start_process`.
 class ProcessExit {
+    /// The exit code of the process.
     exit_code: int,
+    /// The signal that caused the process to exit, if any.
     signal: string?,
 
     /// Returns `true` if the process exited normally with code `0`.
-    function ok(self) -> bool {
+    function ok(self) -> bool throws never {
         self.exit_code == 0
     }
 }
@@ -253,9 +255,9 @@ function argv() -> string[] throws never {
 
 /// Returns the process ID of the current process.
 ///
-/// ## Panics
-/// If the environment does not support process IDs (e.g. in a browser), with
-/// `baml.panics.HostUnavailable`.
+/// # Panics
+///
+/// - `baml.panics.HostUnavailable` if the environment does not support process IDs (e.g. in a browser).
 function pid() -> int throws never {
     $rust_io_function
 }

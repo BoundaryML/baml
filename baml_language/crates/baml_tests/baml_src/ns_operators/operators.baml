@@ -558,8 +558,10 @@ function drv_catch_int_div_zero() -> int {
 function drv_catch_int_rem_zero() -> int {
     drv_int_rem(1, 0) catch (e) { baml.panics.DivisionByZero => -1 }
 }
-function drv_catch_float_div_zero() -> float {
-    drv_float_div(1.0, 0.0) catch (e) { baml.panics.DivisionByZero => -1.0 }
+// `float` division by zero is IEEE-754 on both paths — no panic to catch — so
+// this checks the driver produces the same `inf` the opcode does.
+function drv_float_div_zero_is_infinite() -> bool {
+    drv_float_div(1.0, 0.0) > 1.0e308 && (1.0 / 0.0) > 1.0e308
 }
 function drv_catch_bigint_div_zero() -> bigint {
     drv_bigint_div(1n, 0n) catch (e) { baml.panics.DivisionByZero => -1n }
@@ -572,7 +574,7 @@ test "driver_panics_match_opcodes" {
     assert.equal(drv_catch_div_min_by_minus_one(), -1)
     assert.equal(drv_catch_int_div_zero(), -1)
     assert.equal(drv_catch_int_rem_zero(), -1)
-    assert.equal(drv_catch_float_div_zero(), -1.0)
+    assert.is_true(drv_float_div_zero_is_infinite())
     assert.equal(drv_catch_bigint_div_zero(), -1n)
 }
 

@@ -29,7 +29,6 @@
 
 use std::sync::Arc;
 
-use bex_heap::TlabHolder;
 use bex_vm_types::{Value, errors::VmPanic};
 use num_bigint::BigInt;
 
@@ -85,12 +84,10 @@ const fn widen(n: i64) -> f64 {
 /// `baml.panics.DivisionByZero`, exactly like the `DivFloat` opcode and the
 /// generic mixed int/float path — never IEEE `inf`/`NaN`. The operand `Value`s
 /// are allocated only on the cold path.
-fn float_div(vm: &mut BexVm, l: f64, r: f64) -> Result<f64, VmRustFnError> {
-    if r == 0.0 {
-        let left = Value::object(vm.alloc_float(l));
-        let right = Value::object(vm.alloc_float(r));
-        return Err(division_by_zero(left, right));
-    }
+/// `float / float`, IEEE-754 throughout: division by zero yields `±inf` (or
+/// `NaN` for `0.0 / 0.0`) rather than panicking. Only the integer types treat a
+/// zero divisor as a panic, because they have no value to represent it with.
+fn float_div(_vm: &mut BexVm, l: f64, r: f64) -> Result<f64, VmRustFnError> {
     Ok(l / r)
 }
 

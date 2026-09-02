@@ -1,4 +1,7 @@
-/// Raised when an integer is divided by zero.
+/// Raised when an `int` or `bigint` is divided by zero, by either `/` or `%`.
+///
+/// `float` division does not raise this: IEEE-754 has values for the result,
+/// so `1.0 / 0.0` is `inf` and `0.0 / 0.0` is `NaN`.
 ///
 /// # Examples
 ///
@@ -6,7 +9,8 @@
 /// let result = 1 / 0; // panics
 /// ```
 class DivisionByZero {
-    dividend: int,
+    /// The left operand, in whichever integer type the division used.
+    dividend: int | bigint,
 }
 
 /// Raised when an array or string is accessed with an out-of-bounds index.
