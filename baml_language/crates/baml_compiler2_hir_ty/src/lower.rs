@@ -82,6 +82,39 @@ pub enum LoweringDiagKind {
     /// A written function TYPE without a `throws` clause in a position
     /// elaboration could not legalize (E0151).
     FnTypeMissingThrows,
+    /// An inference hole (`_`) in a position with nothing to infer it from.
+    /// Lowering fills the error sentinel; the surface layer renders `reason`
+    /// as that position's own user-facing diagnostic.
+    HoleNotAllowed { reason: NoInferReason },
+}
+
+/// Why a position forbids an inference hole - the payload of
+/// [`LoweringDiagKind::HoleNotAllowed`] and of [`HolePolicy::Forbidden`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoInferReason {
+    /// An interface method's signature. It is a dispatch contract, so no
+    /// part of it may be inferred: the only body to infer from is a default
+    /// that binds no implementor (`TYPE_SYSTEM.md` Functions rule 1).
+    InterfaceSignature,
+}
+
+/// Whether the types a [`LowerCtx`] lowers may contain an inference hole.
+///
+/// Admissibility is a property of the POSITION, so the context settles it
+/// once - at the hole, where the span is - instead of every consumer
+/// re-deciding it afterwards and silently ([`reject_holes`]). This is
+/// rust-analyzer's `TyLoweringContext::infer_vars`: a context with no
+/// inference table to draw the hole from diagnoses it and lowers it to the
+/// error sentinel, rather than emitting a hole node that each caller must
+/// remember to refuse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HolePolicy {
+    /// The position has something to infer the hole from - a `let`
+    /// annotation, or a `throws` clause backed by a body.
+    #[default]
+    Allowed,
+    /// The position has nothing to infer from.
+    Forbidden(NoInferReason),
 }
 
 /// Where a type reference stands - TIR's `TypePosition`. An existential
@@ -134,6 +167,9 @@ pub struct LowerCtx<'db> {
     /// Body-local runtime type atoms replaced by their synthesized rigid
     /// parameters. Empty for declaration signatures.
     runtime_type_params: FxHashMap<TypeRefId, ParamTy>,
+    /// Whether `_` may appear in the types this context lowers. See
+    /// [`HolePolicy`].
+    holes: HolePolicy,
 }
 
 /// A lowering context for type syntax written in `file`, with an empty
@@ -156,6 +192,7 @@ pub fn lower_ctx_for_file(
         self_impl_target: None,
         bounds: FxHashMap::default(),
         runtime_type_params: FxHashMap::default(),
+        holes: HolePolicy::Allowed,
     }
 }
 
@@ -179,6 +216,7 @@ pub fn lower_ctx_for_package<'db>(
         self_impl_target: None,
         bounds: FxHashMap::default(),
         runtime_type_params: FxHashMap::default(),
+        holes: HolePolicy::Allowed,
     }
 }
 
@@ -202,6 +240,17 @@ impl<'db> LowerCtx<'db> {
                     expected,
                     got,
                 },
+            });
+        }
+    }
+
+    /// Record a hole this context's [`HolePolicy`] forbids. Anchored at the
+    /// hole's own `TypeRefId`, so the report lands on the `_` the user wrote.
+    fn record_no_infer(&self, reason: NoInferReason) {
+        if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get()) {
+            diags.borrow_mut().push(LoweringDiag {
+                type_ref,
+                kind: LoweringDiagKind::HoleNotAllowed { reason },
             });
         }
     }
@@ -246,6 +295,14 @@ impl<'db> LowerCtx<'db> {
         bounds: FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     ) -> LowerCtx<'db> {
         self.bounds = bounds;
+        self
+    }
+
+    /// Forbid inference holes in everything this context lowers. See
+    /// [`HolePolicy`].
+    #[must_use]
+    pub fn with_holes_forbidden(mut self, reason: NoInferReason) -> LowerCtx<'db> {
+        self.holes = HolePolicy::Forbidden(reason);
         self
     }
 
@@ -374,6 +431,7 @@ impl<'db> LowerCtx<'db> {
             self_impl_target: self.self_impl_target.clone(),
             bounds: self.bounds.clone(),
             runtime_type_params: self.runtime_type_params.clone(),
+            holes: self.holes,
         }
     }
 
@@ -562,10 +620,21 @@ impl<'db> LowerCtx<'db> {
                     _ => LoweringTy::error(),
                 }
             }
-            // `_` lowers to the hole node; consumers apply policy (signatures
-            // reject holes, inference instantiates them as fresh table
-            // variables) - the rust-analyzer pure-lowering + funnel discipline.
-            TypeRefKind::Infer => LoweringTy::infer(),
+            // `_` lowers to the hole node WHERE THE POSITION CAN FILL IT
+            // (inference instantiates a fresh table variable; a partial
+            // `throws` clause opens to its body's effect). Where it cannot,
+            // the context says so and the hole becomes the error sentinel
+            // right here, with its own span - rust-analyzer's
+            // `TyLoweringContext::next_ty_var`, which pushes
+            // `InferVarsNotAllowed` and yields `error` rather than handing a
+            // hole to a consumer that must remember to refuse it.
+            TypeRefKind::Infer => match self.holes {
+                HolePolicy::Allowed => LoweringTy::infer(),
+                HolePolicy::Forbidden(reason) => {
+                    self.record_no_infer(reason);
+                    LoweringTy::error()
+                }
+            },
             // `Missing` is an omitted annotation (a signature must be
             // explicit; the diagnostic arrives with S17), `Error` was
             // already diagnosed at parse time.
@@ -1976,14 +2045,42 @@ pub struct FunctionSignature {
     pub generic_params: Vec<ParamTy>,
     pub params: Vec<SignatureParam>,
     pub ret: baml_type::Ty,
-    /// The declared clause when written, else the INFERRED effect via
-    /// `callable_throws` (S12) - body-derived, fixpoint over mutual
-    /// recursion, `never` when nothing throws.
+    /// The effective error type - total, whatever its provenance: the
+    /// written clause when closed; the body-inferred effect when the clause
+    /// is open (omitted `throws` means `throws _`, spec Functions rule 3);
+    /// the error sentinel when the position poisons holes (an interface's
+    /// dispatch contract). Nothing past inference cares which - consumers
+    /// want the type, and the paired diagnostics carry the why.
     pub throws: baml_type::Ty,
-    /// Whether `throws` was written. The owner's own inference checks its
-    /// throw sites against a DECLARED clause (the contract) and ignores an
-    /// inferred one (which is derived FROM those sites).
-    pub throws_declared: bool,
+}
+
+/// [`function_signature_with_diagnostics`]' full result: the signature and
+/// the diagnostics the same run recorded - rust-analyzer's
+/// `TyLoweringResult { value, diagnostics }`. The check layer renders the
+/// recorded decision instead of re-deriving a second predicate that can
+/// drift from it; semantic consumers project through
+/// [`function_signature`] and never see the diagnostics side.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionSignatureResult {
+    pub signature: FunctionSignature,
+    pub diagnostics: Box<[SignatureDiag]>,
+}
+
+/// A diagnostic recorded while lowering a signature. Anchors are arena ids
+/// into the ELABORATED signature store (or absent when nothing was
+/// written); the check layer resolves spans through the elaborated source
+/// map - spans never enter salsa results.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignatureDiag {
+    /// An interface method wrote no `throws` clause. Omitted `throws`
+    /// means `throws _` (spec Functions rule 3), and a dispatch contract
+    /// poisons holes - but with nothing written there is no arena anchor;
+    /// renders at the declaration's name.
+    MissingThrows,
+    /// An inference hole in an interface method's `throws` clause,
+    /// anchored at the `_` itself: `throws T | _` defers part of the
+    /// contract to a default body no implementor is bound by.
+    ThrowsHole { type_ref: TypeRefId },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2314,21 +2411,44 @@ unsafe impl salsa::Update for FunctionSignature {
     }
 }
 
+/// Whether `function`'s signature is an interface's dispatch contract - the
+/// positions where inference holes are forbidden and the `throws` contract
+/// must be taken from the signature alone, never from a (default) body.
+/// Generated language-internal declarations are exempt.
+///
+/// The ONE predicate shared by [`function_signature`] (which rejects open
+/// contracts) and `callable_throws` (which defers to the signature instead
+/// of inferring): if the two tested different conditions, a method matching
+/// only one would either re-enter the fixpoint or lose its body's effect.
+pub(crate) fn signature_is_interface_contract<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+) -> bool {
+    matches!(
+        baml_compiler2_ppir::item_data::method_owner(db, function),
+        Some(MethodOwner::Interface(_))
+    ) && !baml_compiler2_ppir::item_data::function_data(db, function)
+        .metadata
+        .is_language_internal
+}
+
 fn function_signature_cycle_initial<'db>(
     _db: &'db dyn baml_compiler2_ppir::Db,
     _id: salsa::Id,
     _function: FunctionLoc<'db>,
-) -> FunctionSignature {
+) -> FunctionSignatureResult {
     // The fixpoint seed for the signature/throws/inference cycle (an
     // omitted or partial throws clause reads `callable_throws`, which
     // runs `infer_body`, which reads the signature): a degenerate empty
     // signature; iteration converges to the real one.
-    FunctionSignature {
-        generic_params: Vec::new(),
-        params: Vec::new(),
-        ret: baml_type::Ty::error(),
-        throws: baml_type::Ty::never(),
-        throws_declared: false,
+    FunctionSignatureResult {
+        signature: FunctionSignature {
+            generic_params: Vec::new(),
+            params: Vec::new(),
+            ret: baml_type::Ty::error(),
+            throws: baml_type::Ty::never(),
+        },
+        diagnostics: Box::new([]),
     }
 }
 
@@ -2428,6 +2548,13 @@ pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTy
         LoweringDiagKind::Projection(error) => (**error).clone(),
         LoweringDiagKind::FnTypeMissingThrows => TirTypeError::FunctionTypeMissingThrows,
         LoweringDiagKind::RuntimeTypeHasNoScope => TirTypeError::RuntimeTypeHasNoScope,
+        // The position's own report is the specific one (an interface
+        // signature's is E0170, raised once per method by
+        // `interface_lowering_diagnostics`); this is the generic spelling for
+        // any other consumer that drains the sink.
+        LoweringDiagKind::HoleNotAllowed {
+            reason: NoInferReason::InterfaceSignature,
+        } => TirTypeError::CannotInferType,
     }
 }
 
@@ -2844,20 +2971,39 @@ pub fn interface_lowering_diagnostics<'db>(
             }
         }
     }
-    // Every interface method — required or default — must declare its
-    // `throws` clause explicitly: the signature is a dispatch contract, so
-    // it is never inferred (`TYPE_SYSTEM.md` rule 1). E0170.
+    // Every interface method - required or default - must declare its
+    // `throws` clause explicitly AND COMPLETELY: the signature is a dispatch
+    // contract, so no part of it is ever inferred (`TYPE_SYSTEM.md` rule 1).
+    // A PARTIAL clause (`throws T | _`) declares one but defers the rest to
+    // the default body, which binds no implementor - so it is open for this
+    // purpose, exactly as an omitted clause is. E0170.
+    //
+    // This RENDERS the diagnostics the signature run recorded when it
+    // filled the error sentinel; it does not re-derive them. The
+    // two-predicate version is what let a partial clause slip through, the
+    // check testing `throws.is_none()` while the signature tested "absent
+    // or partial".
     for &method in &data.methods {
-        let function = baml_compiler2_ppir::item_data::function_data(db, method);
-        if function.metadata.is_language_internal {
-            continue;
-        }
-        if function.throws.is_none() {
+        for diag in &function_signature_with_diagnostics(db, method).diagnostics {
+            let span = match diag {
+                SignatureDiag::MissingThrows => {
+                    baml_compiler2_ppir::item_data::function_source_map(db, method).name_span
+                }
+                // Anchored at the `_` itself, in the elaborated store the
+                // signature run lowered from.
+                SignatureDiag::ThrowsHole { type_ref } => {
+                    baml_compiler2_ppir::item_data::elaborated_function_source_map(db, method)
+                        .type_refs
+                        .span(*type_ref)
+                }
+            };
             out.push((
-                baml_compiler2_ppir::item_data::function_source_map(db, method).name_span,
+                span,
                 TirTypeError::InterfaceMethodMissingThrows {
                     interface: interface_qualified_name(db, interface),
-                    method: function.name.clone(),
+                    method: baml_compiler2_ppir::item_data::function_data(db, method)
+                        .name
+                        .clone(),
                 },
             ));
         }
@@ -2952,11 +3098,21 @@ pub fn type_alias_lowering_diagnostics<'db>(
     out
 }
 
-#[salsa::tracked(returns(ref), cycle_initial = function_signature_cycle_initial)]
+/// The semantic projection of [`function_signature_with_diagnostics`] -
+/// what every consumer of the TYPES calls (r-a's `field_types_query`
+/// projecting `field_types_with_diagnostics`).
 pub fn function_signature<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
-) -> FunctionSignature {
+) -> &'db FunctionSignature {
+    &function_signature_with_diagnostics(db, function).signature
+}
+
+#[salsa::tracked(returns(ref), cycle_initial = function_signature_cycle_initial)]
+pub fn function_signature_with_diagnostics<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+) -> FunctionSignatureResult {
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
     let bounds = function_generic_bounds(db, function);
@@ -2968,12 +3124,22 @@ pub fn function_signature<'db>(
     // frame's universal slot 0, resolved as a param.
     let concrete_self = owner_self_ty(db, function);
     let impl_target = owner_impl_target(db, function, &frame);
+    let owner = baml_compiler2_ppir::item_data::method_owner(db, function);
+    // An interface method's signature is a dispatch contract, so NO part of
+    // it may be inferred - there is no body to infer from that binds any
+    // implementor. The context enforces that at each hole; generated
+    // declarations are exempt, as they are from the diagnostic.
+    let interface_owner = signature_is_interface_contract(db, function);
     let ctx = lower_ctx_for_file(db, function.file(db))
         .with_frame(frame.clone())
         .with_bounds(bounds)
         .with_self_ty(concrete_self.clone())
         .with_impl_target(impl_target);
-    let owner = baml_compiler2_ppir::item_data::method_owner(db, function);
+    let ctx = if interface_owner {
+        ctx.with_holes_forbidden(NoInferReason::InterfaceSignature)
+    } else {
+        ctx
+    };
     let self_ty = |param: &baml_compiler2_ppir::item_data::ElaboratedParamData| {
         if param.name.as_str() != "self"
             || !matches!(data.type_refs[param.type_ref].kind, TypeRefKind::Missing)
@@ -3006,31 +3172,53 @@ pub fn function_signature<'db>(
         .return_type
         .map(|ret| reject_holes(&ctx.lower_type_ref(&data.type_refs, ret)))
         .unwrap_or_else(baml_type::Ty::error);
-    let throws_declared = data.throws.is_some();
-    let throws = data
-        .throws
-        .map(|throws| {
+    // Omitted `throws` means `throws _` (spec Functions rule 3): every
+    // signature HAS a throws type, and the position decides how a hole
+    // fills. In an interface's dispatch contract nothing may be inferred,
+    // so holes poison (the ctx policy above) and an unwritten clause is a
+    // missing contract - which is also what keeps an interface signature
+    // out of the `callable_throws` fixpoint, whose seed cannot represent
+    // its generic frame. Everywhere else an open clause (`_` member,
+    // or wholly omitted = one bare hole) fills from the body's inferred
+    // effect; a closed clause is taken verbatim.
+    let mut diagnostics = Vec::new();
+    let throws = match (data.throws, interface_owner) {
+        (Some(throws), true) => {
+            let (lowered, diags) = ctx.lower_type_ref_with_diagnostics(&data.type_refs, throws);
+            diagnostics.extend(diags.iter().filter_map(|diag| match diag.kind {
+                LoweringDiagKind::HoleNotAllowed { .. } => Some(SignatureDiag::ThrowsHole {
+                    type_ref: diag.type_ref,
+                }),
+                _ => None,
+            }));
+            reject_holes(&lowered)
+        }
+        (None, true) => {
+            diagnostics.push(SignatureDiag::MissingThrows);
+            baml_type::Ty::error()
+        }
+        (Some(throws), false) => {
             let lowered = ctx.lower_type_ref(&data.type_refs, throws);
             if throws_clause_parts(&lowered).1 {
-                // A PARTIAL clause (`throws T | _`, spec rule 3): callers
-                // see the merged surface (declared + inferred), which is
-                // what `callable_throws` computes through the body run.
+                // Open: the named members join the body-inferred remainder
+                // (what `callable_throws` computes through the body run).
                 crate::callable::callable_throws(db, function).0
             } else {
                 reject_holes(&lowered)
             }
-        })
-        .unwrap_or_else(|| {
-            // Omitted: the body-inferred effect, fixpoint over mutual
-            // recursion (S12's callable_throws).
-            crate::callable::callable_throws(db, function).0
-        });
-    FunctionSignature {
-        generic_params: frame,
-        params,
-        ret,
-        throws,
-        throws_declared,
+        }
+        // Omitted = `throws _`: entirely body-inferred, fixpoint over
+        // mutual recursion (S12's callable_throws).
+        (None, false) => crate::callable::callable_throws(db, function).0,
+    };
+    FunctionSignatureResult {
+        signature: FunctionSignature {
+            generic_params: frame,
+            params,
+            ret,
+            throws,
+        },
+        diagnostics: diagnostics.into_boxed_slice(),
     }
 }
 

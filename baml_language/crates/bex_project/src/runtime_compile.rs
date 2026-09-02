@@ -240,9 +240,6 @@ fn enrich_runtime_mount(
             *param = param.map_heads(&mut |name| relocated_name(name, alias));
         }
         relocate_ty(&mut function.return_type, alias);
-        if let Some(throws) = &mut function.declared_throws {
-            relocate_ty(throws, alias);
-        }
         relocate_ty(&mut function.callable_throws, alias);
         relocate_bounds(&mut function.generic_param_bounds, alias);
 

@@ -149,7 +149,6 @@ pub struct ExportedFunction {
     pub name: Name,
     pub params: Vec<FunctionParamTy>,
     pub return_type: Ty,
-    pub declared_throws: Option<Ty>,
     pub callable_throws: Ty,
     /// Function-level generic parameters, including any synthetic callback
     /// effect parameters introduced by bounded signature elaboration.
@@ -200,7 +199,6 @@ pub struct ResolvedFunction {
     pub name: Name,
     pub params: Vec<FunctionParamTy>,
     pub return_type: Ty,
-    pub declared_throws: Option<Ty>,
     pub callable_throws: Ty,
     pub generic_params: Vec<ParamTy>,
     pub generic_param_bounds: Vec<Vec<baml_type::Interface>>,
@@ -248,7 +246,6 @@ pub(crate) fn resolved_exported_function(
         name: function.name.clone(),
         params: function.params.clone(),
         return_type: function.return_type.clone(),
-        declared_throws: function.declared_throws.clone(),
         callable_throws: function.callable_throws.clone(),
         generic_params: function.generic_params.clone(),
         generic_param_bounds: function.generic_param_bounds.clone(),
@@ -593,18 +590,12 @@ fn exported_function<'db>(
             )
         })
         .collect();
-    let declared_throws = sig
-        .throws_declared
-        .then(|| crate::impls::reduce_ground_projections_plain(db, &sig.throws, 8));
     let callable_throws =
         if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
-            if sig.throws_declared {
-                sig.throws.clone()
-            } else {
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                }
-            }
+            // Total: an interface contract is written or REJECTED to the
+            // error sentinel (already diagnosed as E0170) - never inferred,
+            // so no body run and no Unknown stand-in.
+            sig.throws.clone()
         } else {
             crate::callable::callable_throws(db, func_loc).0
         };
@@ -619,7 +610,6 @@ fn exported_function<'db>(
         name: name.clone(),
         params,
         return_type: crate::impls::reduce_ground_projections_plain(db, &sig.ret, 8),
-        declared_throws,
         callable_throws,
         generic_param_bounds: plain_bounds(&own_generic_params, &all_bounds),
         generic_params: own_generic_params,
@@ -1520,7 +1510,6 @@ impl<'db> PackageResolutionContext<'db> {
                     name: exported.name,
                     params: exported.params,
                     return_type: exported.return_type,
-                    declared_throws: exported.declared_throws,
                     callable_throws: exported.callable_throws,
                     generic_params: exported.generic_params,
                     generic_param_bounds: exported.generic_param_bounds,

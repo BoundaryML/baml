@@ -1218,19 +1218,23 @@ pub(crate) mod support {
                                 types.join(" | ")
                             })
                     };
-                    let throws = if sig.throws_declared {
-                        let declared = sig.throws.render_canonical();
-                        match &inferred_throws {
-                            Some(inferred) => {
-                                format!(" throws {declared} infers {inferred}")
-                            }
-                            None => format!(" throws {declared}"),
+                    // "Written a clause?" is a source-level question, so the
+                    // display reads the syntax side; the signature itself
+                    // carries only the effective type.
+                    let clause_written =
+                        baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc)
+                            .throws
+                            .is_some();
+                    let throws = match (clause_written, &inferred_throws) {
+                        (true, Some(inferred)) => {
+                            format!(
+                                " throws {} infers {inferred}",
+                                sig.throws.render_canonical()
+                            )
                         }
-                    } else {
-                        match &inferred_throws {
-                            Some(inferred) => format!(" throws {inferred}"),
-                            None => " throws never".to_string(),
-                        }
+                        (true, None) => format!(" throws {}", sig.throws.render_canonical()),
+                        (false, Some(inferred)) => format!(" throws {inferred}"),
+                        (false, None) => " throws never".to_string(),
                     };
                     sig_display =
                         format!("{generics_display}({}) -> {ret}{throws}", params.join(", "));
