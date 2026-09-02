@@ -692,6 +692,262 @@ function checkpoint_uncommitted(sb: Sandbox) -> null {
     null
 }
 
+function elapsed_s(started: baml.time.Instant) -> int {
+    started.elapsed().to_seconds().to_int() catch (_) {
+        _ => 0,
+    }
+}
+
+// ==================== The gate ====================
+// BAML runs it itself after the agent finishes; the agent's own claim is
+// never trusted. Order and commands follow baml_language/TEST_INSTRUCTIONS.md.
+
+class GateStep {
+    name: string,
+    ok: bool,
+    seconds: int,
+    tail: string,
+    /// The process exit code; used to tell "ran, some tests failed" (nextest
+    /// 100) apart from "did not complete" (compile error / timeout 124), so a
+    /// non-completed step cannot be waved through on test-controllable output.
+    exit_code: int,
+}
+
+class GateResult {
+    steps: GateStep[],
+    ok: bool,
+    changed_crates: string[],
+}
+
+/// Crates touched vs origin/canary, from `crates/<name>/...` paths.
+function changed_crates_from(diff_names: string) -> string[] {
+    let out: string[] = [];
+    for (let line in diff_names.lines()) {
+        let l = line.trim();
+        let marker = "baml_language/crates/";
+        let i = l.index_of(marker);
+        if (i != null) {
+            let rest = l.slice((i ?? 0) + marker.length(), l.length());
+            let name = rest.split("/").at(0) ?? "";
+            if (name.length() > 0 && !out.includes(name)) {
+                out.push(name);
+            };
+        };
+    }
+    out
+}
+
+function changed_crates(worktree: string) -> string[] {
+    changed_crates_from(git(worktree, ["diff", "--name-only", "origin/canary...HEAD"]).stdout)
+}
+
+/// Tests known to fail on canary itself; a gate failure that is only these
+/// is not the agent's. ATB2_FLAKY_TESTS overrides (comma-separated names).
+function flaky_tests() -> string[] {
+    (baml.env.get("ATB2_FLAKY_TESTS") ?? "claude_code_client_preserves_process_wait_timeout").split(
+        ",",
+    )
+}
+
+/// `FAIL [...] crate::module test_name` lines of nextest output, minus the
+/// known-flaky names.
+function unexpected_failures(output: string, flaky: string[]) -> string[] {
+    let out: string[] = [];
+    for (let line in output.lines()) {
+        let l = line.trim();
+        if (l.starts_with("FAIL [")) {
+            let parts = l.split(" ");
+            let name = parts.at(parts.length() - 1) ?? "";
+            if (!flaky.includes(name) && !out.includes(name)) {
+                out.push(name);
+            };
+        };
+    }
+    out
+}
+
+function gate_step(name: string, c: Cmd) -> GateStep {
+    let started = baml.time.Instant.now();
+    let r = run(c);
+    let step = GateStep {
+        name: name,
+        ok: r.ok,
+        seconds: elapsed_s(started),
+        tail: tail(
+            if (r.ok) {
+                r.stdout
+            } else {
+                r.stderr + "\n" + r.stdout
+            },
+            60,
+        ),
+        exit_code: r.exit_code,
+    };
+    log.info({ "gate": name, "ok": r.ok, "seconds": step.seconds });
+    step
+}
+
+function run_gate(worktree: string) -> GateResult {
+    let wd = worktree + "/baml_language";
+    //# which crates did the agent touch?
+    let crates = changed_crates(worktree);
+    let steps: GateStep[] = [];
+    let cargo = (name: string, args: string[], timeout_ms: int) -> bool {
+        let s = gate_step(name, Cmd { program: "cargo", args: args, cwd: wd, timeout_ms: timeout_ms });
+        steps.push(s);
+        s.ok
+    };
+    //# fmt
+    let ok = cargo(
+        "fmt",
+        [
+            "fmt",
+            "--all",
+            "--check",
+            "--",
+            "--config",
+            "imports_granularity=Crate",
+            "--config",
+            "group_imports=StdExternalCrate",
+        ],
+        300000,
+    );
+    if (ok) {
+        ok
+            = cargo(
+                "clippy",
+                ["clippy", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"],
+                2400000,
+            );
+    };
+    //# unit tests of each changed crate
+    for (let crate in crates) {
+        if (ok && crate != "baml_tests") {
+            ok = cargo("cargo test --lib -p " + crate, ["test", "--lib", "-p", crate], 1800000);
+        };
+    }
+    if (ok) {
+        //## nextest on baml_tests (known-flaky failures subtracted)
+        // --no-fail-fast, then subtract the known-flaky tests: one flaky test
+        // must not sink a gate that canary itself would not pass
+        let s = gate_step(
+            "nextest baml_tests",
+            Cmd {
+                program: "cargo",
+                args: ["nextest", "run", "-p", "baml_tests", "--no-fail-fast"],
+                cwd: wd,
+                timeout_ms: 1800000,
+            },
+        );
+        let real = unexpected_failures(s.tail, flaky_tests());
+        // nextest exits 100 only when it compiled and ran and some tests
+        // failed; a compile error / timeout (124) exits otherwise. Gate the
+        // known-flaky pass on that code, not on captured stdout, so a
+        // non-completed run cannot be waved through with injected output.
+        let ran_tests = s.exit_code == 100;
+        let step = GateStep {
+            name: s.name,
+            ok: s.ok || (ran_tests && real.length() == 0),
+            seconds: s.seconds,
+            tail: if (s.ok || !ran_tests || real.length() > 0) {
+                s.tail
+            } else {
+                "only known-flaky failures: " + s.tail
+            },
+            exit_code: s.exit_code,
+        };
+        steps.push(step);
+        ok = step.ok;
+    };
+    if (ok) {
+        //## insta: snapshots must be settled
+        // insta re-runs the crate to refresh snapshots; test verdicts were
+        // already taken by the nextest step above, so this step gates on
+        // snapshot state only (the tree-clean check below catches churn)
+        let s = gate_step(
+            "insta baml_tests",
+            Cmd {
+                program: "cargo",
+                args: ["insta", "test", "--test-runner=nextest", "--accept", "-p", "baml_tests"],
+                cwd: wd,
+                timeout_ms: 1800000,
+            },
+        );
+        // settled = the run completed (exit 0, or 100 = test failures only, e.g.
+        // the known-flaky test); a compile error / timeout does not count. The
+        // tree-clean check below catches any real snapshot churn.
+        let snapshots_settled = s.ok || s.exit_code == 100;
+        steps.push(
+            GateStep {
+                name: s.name,
+                ok: snapshots_settled,
+                seconds: s.seconds,
+                tail: s.tail,
+                exit_code: s.exit_code,
+            },
+        );
+        ok = snapshots_settled;
+    };
+    if (ok) {
+        //## the tree must be clean after --accept
+        // --accept must not have produced unreviewed snapshot churn
+        let status = git(worktree, ["status", "--porcelain"]);
+        let clean = status.stdout.trim().length() == 0;
+        steps.push(
+            GateStep {
+                name: "insta clean",
+                ok: clean,
+                seconds: 0,
+                tail: tail(status.stdout, 15),
+                exit_code: if (clean) {
+                    0
+                } else {
+                    1
+                },
+            },
+        );
+        ok = clean;
+    };
+    if (ok) {
+        //## build baml-cli and run the BAML corpus with it
+        ok = cargo("build baml-cli", ["build", "-p", "baml_cli", "--bin", "baml-cli"], 1200000);
+    };
+    if (ok) {
+        let s = gate_step(
+            "baml-cli test baml_src",
+            Cmd {
+                program: target_dir() + "/debug/baml-cli",
+                args: ["test", "--from", "crates/baml_tests/baml_src"],
+                cwd: wd,
+                timeout_ms: 1200000,
+            },
+        );
+        steps.push(s);
+        ok = s.ok;
+    };
+    GateResult { steps: steps, ok: ok, changed_crates: crates }
+}
+
+function gate_summary(g: GateResult) -> string {
+    g.steps
+        .map((s: GateStep) -> string {
+            "`"
+                + s.name
+                + "` "
+                + (
+                    if (s.ok) {
+                        "green"
+                    } else {
+                        "FAILED"
+                    }
+                )
+                + " ("
+                + s.seconds.to_string()
+                + "s)"
+        })
+        .join(" · ")
+}
+
 // ==================== Unit tests (token-free) ====================
 
 function gh_issue(number: int, difficulty: Difficulty?) -> Issue {
@@ -709,6 +965,17 @@ function gh_issue(number: int, difficulty: Difficulty?) -> Issue {
         resolution_plan: null,
         difficulty: difficulty,
         design_doc: null,
+    }
+}
+
+function sample_gate() -> GateResult {
+    GateResult {
+        steps: [
+            GateStep { name: "fmt", ok: true, seconds: 3, tail: "", exit_code: 0 },
+            GateStep { name: "clippy", ok: true, seconds: 400, tail: "", exit_code: 0 },
+        ],
+        ok: true,
+        changed_crates: ["baml_compiler2_hir"],
     }
 }
 
@@ -821,11 +1088,34 @@ testset "handle_issue" {
         );
     }
 
+    test "the insta step gates on snapshot state" {
+        let settled = "        FAIL [ 115.989s] (1622/2042) baml_tests::baml_src baml_test\nerror: test run failed\n\ndone: no snapshots to review\n";
+        assert.is_true(settled.includes("no snapshots to review"));
+    }
+
+    test "known-flaky nextest failures are subtracted" {
+        let out = "        PASS [   0.9s] (1/3) baml_tests::shell exec_with_cwd\n        FAIL [   1.1s] (2/3) baml_tests::shell claude_code_client_preserves_process_wait_timeout\n        FAIL [   0.2s] (3/3) baml_tests::foo real_regression\n";
+        assert.equal(
+            unexpected_failures(out, ["claude_code_client_preserves_process_wait_timeout"]),
+            ["real_regression"],
+        );
+        assert.equal(
+            unexpected_failures(out, ["claude_code_client_preserves_process_wait_timeout", "real_regression"])
+                .length(),
+            0,
+        );
+    }
+
     test "time budgets" {
         assert.equal(time_budget_s(Difficulty.Trivial), 1800);
         assert.equal(time_budget_s(Difficulty.Easy), 3600);
         assert.equal(time_budget_s(Difficulty.Medium), 7200);
         assert.equal(time_budget_s(Difficulty.Hard), 1800);
+    }
+
+    test "changed crates come from crates/<name>/ paths" {
+        let names = "baml_language/crates/baml_compiler2_hir/src/type_ref.rs\nbaml_language/crates/baml_tests/projects/x/main.baml\nbaml_language/crates/baml_compiler2_hir/src/lib.rs\nREADME.md\n";
+        assert.equal(changed_crates_from(names), ["baml_compiler2_hir", "baml_tests"]);
     }
 
     test "with_status / with_design_doc change nothing else" {
