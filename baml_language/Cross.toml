@@ -9,6 +9,18 @@
 # `cross` runs the build inside a container and forwards only a curated set of
 # environment variables, so the source fingerprint and Rust/native remapping
 # flags must be listed here explicitly or they never reach the compilers.
+[build.env]
+passthrough = [
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "RUSTC_WRAPPER",
+  "SCCACHE_BUCKET",
+  "SCCACHE_ENDPOINT",
+  "SCCACHE_ERROR_LOG",
+  "SCCACHE_IDLE_TIMEOUT",
+  "SCCACHE_REGION",
+  "SCCACHE_S3_KEY_PREFIX",
+]
 [target.x86_64-unknown-linux-gnu.env]
 passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
 

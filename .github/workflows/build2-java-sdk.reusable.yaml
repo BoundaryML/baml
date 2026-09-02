@@ -48,6 +48,11 @@ on:
         type: string
         default: ""
         required: false
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
   # Manual standalone trigger for validating this reusable workflow before it is
   # wired into the release graph (with no inputs it builds a canary-stamped set).
   workflow_dispatch:
@@ -104,9 +109,12 @@ jobs:
       matrix:
         _: ${{ fromJson(needs.matrix.outputs.include) }}
     runs-on: ${{ matrix._.os }}
+    environment: infisical-github-ci
     # Experimental targets are built when possible but never block the release.
     continue-on-error: ${{ matrix._.experimental || false }}
     env:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       # Let aws-lc-sys use its prebuilt NASM objects on Windows x86-64 if the
       # runner has no NASM installed (consulted only there; harmless elsewhere).
       AWS_LC_SYS_PREBUILT_NASM: "1"
@@ -145,8 +153,15 @@ jobs:
           workspace: baml_language
           prefix-key: v5-rust-baml-java-${{ matrix._.target }}
           cache-on-failure: true
+          cache-all-crates: true
+          cache-targets: false
           enable-cross: false
           skip-protoc: true
+
+      - name: Setup shared R2 sccache
+        uses: ./.github/actions/setup-r2-sccache
+        with:
+          prepare-cross: ${{ matrix._.libc == 'musl' }}
 
       - name: Setup cross (musl targets)
         # musl builds run inside `cross` containers (mirroring
@@ -158,7 +173,7 @@ jobs:
         if: ${{ matrix._.libc == 'musl' }}
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache cargo:cross"
+          install_args: "cargo:cross"
 
       - name: Select cross (musl targets)
         if: ${{ matrix._.libc == 'musl' }}

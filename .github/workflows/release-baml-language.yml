@@ -404,6 +404,9 @@ jobs:
     uses: ./.github/workflows/build2-wrapper.reusable.yaml
     permissions:
       contents: read
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     with:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
@@ -414,6 +417,9 @@ jobs:
     uses: ./.github/workflows/build2-python-sdk.reusable.yaml
     permissions:
       contents: read
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
@@ -424,6 +430,9 @@ jobs:
     uses: ./.github/workflows/build2-nodejs-sdk.reusable.yaml
     permissions:
       contents: read
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
@@ -434,6 +443,9 @@ jobs:
     uses: ./.github/workflows/build2-java-sdk.reusable.yaml
     permissions:
       contents: read
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
@@ -444,6 +456,9 @@ jobs:
     uses: ./.github/workflows/build2-web-sdk.reusable.yaml
     permissions:
       contents: read
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
@@ -467,6 +482,9 @@ jobs:
     uses: ./.github/workflows/build2-bridge-cffi.reusable.yaml
     permissions:
       contents: read
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
@@ -659,6 +677,9 @@ jobs:
     uses: ./.github/workflows/build2-rust-sdk.reusable.yaml
     permissions:
       contents: read
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
