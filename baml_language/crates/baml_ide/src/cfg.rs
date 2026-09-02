@@ -729,7 +729,7 @@ fn dispatch_bindings_for_call(
         let Some(concrete) = inference.type_of_expr.get(&arg_expr) else {
             return;
         };
-        bindings.insert(param.name.to_string(), concrete.to_plain());
+        bindings.insert(param.name.to_string(), concrete.clone());
     };
 
     if let Some(plan) = inference.call_plans.get(&call_expr) {
@@ -759,11 +759,10 @@ fn interface_method_impl_loc<'db>(
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     method_name: &baml_base::Name,
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
-    let interned = baml_compiler2_hir_ty::impls::try_interned_ty(concrete)?;
     let method_of = |func_loc: &baml_compiler2_hir::loc::FunctionLoc<'db>| {
         baml_compiler2_ppir::item_data::function_data(db, *func_loc).name == *method_name
     };
-    let mut methods = baml_compiler2_hir_ty::impls::impls_for_type(db, &interned)
+    let mut methods = baml_compiler2_hir_ty::impls::impls_for_type(db, concrete)
         .into_iter()
         .filter_map(|resolved| resolved.source_block())
         .filter(|block| {

@@ -1332,7 +1332,7 @@ mod tests {
                     "r",
                     Ty::Class(
                         name("user", &["lorem"], "Resume"),
-                        vec![],
+                        Box::new([]),
                         baml_base::TyAttr::EMPTY,
                     ),
                 )],
@@ -1404,7 +1404,7 @@ mod tests {
                     vec![],
                     Ty::Class(
                         name("boundary", &[], "LocalId"),
-                        vec![],
+                        Box::new([]),
                         baml_base::TyAttr::EMPTY,
                     ),
                 ),
@@ -1415,7 +1415,7 @@ mod tests {
                     vec![],
                     Ty::Class(
                         name("boundary", &[], "LocalId"),
-                        vec![],
+                        Box::new([]),
                         baml_base::TyAttr::EMPTY,
                     ),
                 ),

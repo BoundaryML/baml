@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.Aliased {
+}
+class user.Aliased$stream {
+}
+class user.Ok {
+}
+class user.Ok$stream {
+}
+type user.AliasedName = user.Aliased
+type user.AliasedName$stream = user.Aliased$stream
+function user.flag(self: ?) -> string  [missing]
+function user.flag(self: ?) -> string  [expr] {
+  {  } "union"
+}
+function user.flag(self: ?) -> string  [expr] {
+  {  } "optional"
+}
+function user.flag(self: ?) -> string  [expr] {
+  {  } "alias"
+}
+function user.flag(self: ?) -> string  [expr] {
+  {  } "ok"
+}

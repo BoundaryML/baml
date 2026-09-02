@@ -805,7 +805,7 @@ pub(crate) mod tests {
         })));
         let bound = TypeValue::new(bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),
-            Vec::new(),
+            Box::new([]),
             baml_type::TyAttr::default(),
         ));
         let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
@@ -873,7 +873,7 @@ pub(crate) mod tests {
         };
         frame.type_args = vec![bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),
-            Vec::new(),
+            Box::new([]),
             baml_type::TyAttr::default(),
         )];
         assert!(frame.type_metadata.is_none());
@@ -927,7 +927,7 @@ pub(crate) mod tests {
         })));
         vm.pending_call_type_args = vec![bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),
-            Vec::new(),
+            Box::new([]),
             baml_type::TyAttr::default(),
         )];
 
@@ -971,7 +971,7 @@ pub(crate) mod tests {
         );
         let exact = TypeValue::new(bex_vm_types::RealizedTy::Class(
             head,
-            Vec::new(),
+            Box::new([]),
             baml_type::TyAttr::default(),
         ));
 
@@ -1675,7 +1675,7 @@ fn function_object_ty<C: baml_type::normalize::TypeContext<bex_vm_types::TypeHea
         })
         .collect::<Result<Vec<_>, VmInternalError>>()?;
     Ok(ConcreteRealizedTy::Function {
-        params,
+        params: params.into(),
         ret: Box::new(materialize(&f.return_type)?),
         throws: Box::new(materialize(&f.throws_type)?),
         attr: TyAttr::default(),
@@ -1691,7 +1691,7 @@ pub(crate) struct CallableSignature {
     /// The declaration's fully qualified name; `None` for host closures and
     /// compiler-synthesized callables (lambda names are `<lambda(...)>`).
     pub(crate) name: Option<String>,
-    pub(crate) params: Vec<bex_vm_types::RealizedFunctionParamTy>,
+    pub(crate) params: Box<[bex_vm_types::RealizedFunctionParamTy]>,
     pub(crate) ret: bex_vm_types::RealizedTy,
     /// The error type; `never` when the callable cannot throw — the same
     /// spelling a function *type* uses, so a value's reconstructed signature
@@ -1748,7 +1748,7 @@ fn nominal_identity(
 ) -> Option<(bex_vm_types::TypeHead, &[bex_vm_types::RealizedTy])> {
     use bex_vm_types::RealizedTy as T;
     match ty {
-        T::Class(head, args, _) => Some((*head, args.as_slice())),
+        T::Class(head, args, _) => Some((*head, &**args)),
         T::Enum(head, _) => Some((*head, &[])),
         // Structural, abstract, and literal types name no declaration. An
         // enum *variant* names one but is a proper subset of it, so it is not
@@ -3005,7 +3005,7 @@ impl BexVm {
             Object::HostClosure(hc) => Some(CallableSignature {
                 // Host closures are FFI-constructed; they carry no name.
                 name: None,
-                params: (*hc.params).clone(),
+                params: (*hc.params).clone().into(),
                 // A host callable's declared bottom/unit throws is normalized to
                 // `unknown` when the closure is bound (see the engine's
                 // conversion): foreign code may surface a native exception no
@@ -3311,7 +3311,7 @@ impl BexVm {
                         // `ConcreteRealizedTy::Class` argument list.
                         ConcreteRealizedTy::Class(
                             bex_vm_types::TypeHead::new(inst.class, class.type_tag),
-                            inst.class_type_args.to_vec(),
+                            inst.class_type_args.clone(),
                             TyAttr::default(),
                         )
                     }
@@ -3381,7 +3381,7 @@ impl BexVm {
             }
             Object::HostClosure(hc) => ConcreteRealizedTy::Function {
                 // The host-closure signature is already stored as realized types.
-                params: (*hc.params).clone(),
+                params: (*hc.params).clone().into(),
                 ret: Box::new((*hc.ret_ty).clone()),
                 throws: Box::new((*hc.throws_ty).clone()),
                 attr: TyAttr::default(),
@@ -3489,9 +3489,7 @@ impl BexVm {
             unreachable!("as_object_ptr(Type) guarantees a Type object")
         };
         let (interface_head, interface_args) = match &type_value.ty {
-            bex_vm_types::RealizedTy::Interface(head, args, _, _) => {
-                (*head, args.clone().into_boxed_slice())
-            }
+            bex_vm_types::RealizedTy::Interface(head, args, _, _) => (*head, args.clone()),
             other => unreachable!(
                 "VirtualCall interface operand must be an Interface type, found {other:?}"
             ),
@@ -4938,7 +4936,7 @@ impl BexVm {
     fn pop_interface_operand(
         &mut self,
         iface_value: Value,
-    ) -> Result<(bex_vm_types::TypeHead, Vec<bex_vm_types::RealizedTy>), VmError> {
+    ) -> Result<(bex_vm_types::TypeHead, Box<[bex_vm_types::RealizedTy]>), VmError> {
         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
         match self.get_object(iface_ptr) {
             Object::Type(type_value) => match &type_value.ty {
@@ -8600,7 +8598,7 @@ impl BexVm {
                         };
                         let (interface_head, interface_args) = match &type_value.ty {
                             bex_vm_types::RealizedTy::Interface(head, args, _, _) => {
-                                (*head, args.clone().into_boxed_slice())
+                                (*head, args.clone())
                             }
                             other => unreachable!(
                                 "VirtualCall interface operand must be an Interface type, found {other:?}"

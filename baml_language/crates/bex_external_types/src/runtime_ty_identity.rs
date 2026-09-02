@@ -159,7 +159,7 @@ mod tests {
     use super::runtime_ty_structurally_equal;
 
     fn union(members: Vec<RuntimeTy>) -> RuntimeTy {
-        RuntimeTy::Union(members, TyAttr::default())
+        RuntimeTy::Union(members.into(), TyAttr::default())
     }
 
     #[test]

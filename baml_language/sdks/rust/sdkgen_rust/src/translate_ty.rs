@@ -393,27 +393,27 @@ mod tests {
     fn open_interface() -> Ty {
         Ty::Interface(
             name("user", &[], "OpenError"),
-            Vec::new(),
-            Vec::new(),
+            Box::new([]),
+            Box::new([]),
             baml_base::TyAttr::EMPTY,
         )
     }
 
     fn concrete_or_open_interface() -> Ty {
         Ty::Union(
-            vec![
+            Box::new([
                 Ty::Int {
                     attr: baml_base::TyAttr::EMPTY,
                 },
                 open_interface(),
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         )
     }
 
     #[test]
     fn throws_with_no_representable_union_arms_is_infallible() {
-        let throws = Ty::Union(vec![open_interface()], baml_base::TyAttr::EMPTY);
+        let throws = Ty::Union(Box::new([open_interface()]), baml_base::TyAttr::EMPTY);
         assert_eq!(
             rendered_throws(&throws, &SymbolPool::default()),
             ":: core :: convert :: Infallible"
@@ -465,7 +465,7 @@ mod tests {
         let pool = SymbolPool::from([(envelope.clone(), envelope_symbol)]);
         let throws = Ty::Class(
             envelope,
-            vec![concrete_or_open_interface()],
+            Box::new([concrete_or_open_interface()]),
             baml_base::TyAttr::EMPTY,
         );
 
@@ -540,28 +540,28 @@ mod tests {
         let expected = ":: std :: option :: Option < :: core :: primitive :: i64 >";
         assert_eq!(
             rendered(&Ty::Union(
-                vec![
+                Box::new([
                     Ty::Int {
                         attr: baml_base::TyAttr::EMPTY
                     },
                     Ty::Null {
                         attr: baml_base::TyAttr::EMPTY
                     }
-                ],
+                ]),
                 baml_base::TyAttr::EMPTY
             )),
             expected
         );
         assert_eq!(
             rendered(&Ty::Union(
-                vec![
+                Box::new([
                     Ty::Null {
                         attr: baml_base::TyAttr::EMPTY
                     },
                     Ty::Int {
                         attr: baml_base::TyAttr::EMPTY
                     }
-                ],
+                ]),
                 baml_base::TyAttr::EMPTY
             )),
             expected
@@ -616,14 +616,14 @@ mod tests {
         assert!(
             translate(
                 &Ty::Union(
-                    vec![
+                    Box::new([
                         Ty::Int {
                             attr: baml_base::TyAttr::EMPTY
                         },
                         Ty::String {
                             attr: baml_base::TyAttr::EMPTY
                         }
-                    ],
+                    ]),
                     baml_base::TyAttr::EMPTY
                 ),
                 &ctx
@@ -633,7 +633,7 @@ mod tests {
         assert!(
             translate(
                 &Ty::Union(
-                    vec![
+                    Box::new([
                         Ty::Int {
                             attr: baml_base::TyAttr::EMPTY
                         },
@@ -643,7 +643,7 @@ mod tests {
                         Ty::Null {
                             attr: baml_base::TyAttr::EMPTY
                         }
-                    ],
+                    ]),
                     baml_base::TyAttr::EMPTY
                 ),
                 &ctx
@@ -678,7 +678,7 @@ mod tests {
         };
         assert_eq!(
             translate(
-                &Ty::Class(resume, Vec::new(), baml_base::TyAttr::EMPTY),
+                &Ty::Class(resume, Box::new([]), baml_base::TyAttr::EMPTY),
                 &ctx
             )
             .unwrap()
@@ -711,7 +711,13 @@ mod tests {
             boxing_for: None,
             generic_params: &[],
         };
-        assert!(translate(&Ty::Class(bad, Vec::new(), baml_base::TyAttr::EMPTY), &ctx).is_err());
+        assert!(
+            translate(
+                &Ty::Class(bad, Box::new([]), baml_base::TyAttr::EMPTY),
+                &ctx
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -720,18 +726,18 @@ mod tests {
         // already heap-indirected).
         let tree = name("user", &[], "Tree");
         let optional_self = Ty::Union(
-            vec![
-                Ty::Class(tree.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+            Box::new([
+                Ty::Class(tree.clone(), Box::new([]), baml_base::TyAttr::EMPTY),
                 Ty::Null {
                     attr: baml_base::TyAttr::EMPTY,
                 },
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let self_list = Ty::List(
             Box::new(Ty::Class(
                 tree.clone(),
-                Vec::new(),
+                Box::new([]),
                 baml_base::TyAttr::EMPTY,
             )),
             baml_base::TyAttr::EMPTY,
@@ -770,21 +776,21 @@ mod tests {
         let a = name("user", &[], "A");
         let b = name("user", &[], "B");
         let a_field = Ty::Union(
-            vec![
-                Ty::Class(b.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+            Box::new([
+                Ty::Class(b.clone(), Box::new([]), baml_base::TyAttr::EMPTY),
                 Ty::Null {
                     attr: baml_base::TyAttr::EMPTY,
                 },
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let b_field = Ty::Union(
-            vec![
-                Ty::Class(a.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+            Box::new([
+                Ty::Class(a.clone(), Box::new([]), baml_base::TyAttr::EMPTY),
                 Ty::Null {
                     attr: baml_base::TyAttr::EMPTY,
                 },
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let pool = SymbolPool::from([
@@ -820,7 +826,7 @@ mod tests {
                     &outer,
                     vec![(
                         "inner",
-                        Ty::Class(inner.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+                        Ty::Class(inner.clone(), Box::new([]), baml_base::TyAttr::EMPTY),
                     )],
                 ),
             ),
@@ -851,7 +857,7 @@ mod tests {
                     &holder,
                     vec![(
                         "bad",
-                        Ty::Class(bad.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+                        Ty::Class(bad.clone(), Box::new([]), baml_base::TyAttr::EMPTY),
                     )],
                 ),
             ),
@@ -1009,7 +1015,7 @@ mod tests {
         assert!(warnings.is_empty());
         assert_eq!(
             translate(
-                &Ty::Class(in_foo_ns, Vec::new(), baml_base::TyAttr::EMPTY),
+                &Ty::Class(in_foo_ns, Box::new([]), baml_base::TyAttr::EMPTY),
                 &TyCtx {
                     analysis: &analysis,
                     unions: &NO_UNIONS,

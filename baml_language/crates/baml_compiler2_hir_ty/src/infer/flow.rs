@@ -25,7 +25,7 @@
 
 use baml_compiler2_ast::{Expr, ExprBody, ExprId, StmtId};
 use baml_compiler2_hir::semantic_index::BindingId;
-use baml_type::interned::{Ty, TyKind};
+use baml_type::interned::{InferTy, Ty};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::InferenceContext;
@@ -140,7 +140,7 @@ impl InferenceContext<'_> {
     fn drop_members_by_truthiness(scrut: &Ty, drop_truthy: bool) -> Ty {
         use crate::infer::truthy::{Truthiness, truthiness};
         let members: Vec<Ty> = match scrut.kind() {
-            TyKind::Union(members, _) => members.to_vec(),
+            InferTy::Union(members, _) => members.to_vec(),
             _ => vec![scrut.clone()],
         };
         let dropped = if drop_truthy {
@@ -261,7 +261,7 @@ impl InferenceContext<'_> {
     /// (never a fabricated narrower type), everything dropped is `never`.
     pub(super) fn subtract_narrow(&mut self, scrut: &Ty, matched: &Ty) -> Ty {
         let members: Vec<Ty> = match scrut.kind() {
-            TyKind::Union(members, _) => members.to_vec(),
+            InferTy::Union(members, _) => members.to_vec(),
             _ => vec![scrut.clone()],
         };
         let kept: Vec<Ty> = members

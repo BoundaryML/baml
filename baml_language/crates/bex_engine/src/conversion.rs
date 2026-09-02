@@ -500,10 +500,10 @@ mod host_call_parameter_type_tests {
     #[test]
     fn resolves_required_and_exact_optional_wire_names() {
         let union = bex_vm_types::RealizedTy::Union(
-            vec![
+            Box::new([
                 bex_vm_types::RealizedTy::int(),
                 bex_vm_types::RealizedTy::string(),
-            ],
+            ]),
             TyAttr::default(),
         );
         let params = vec![
@@ -710,7 +710,7 @@ impl BexEngine {
                             .class_type_args
                             .iter()
                             .map(|arg| overlay_wire_ty(&bex_vm_types::RuntimeTy::from(arg)))
-                            .collect::<Result<Vec<_>, _>>()?,
+                            .collect::<Result<Box<[_]>, _>>()?,
                         baml_type::TyAttr::default(),
                     );
                     return Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
@@ -735,7 +735,7 @@ impl BexEngine {
                             .class_type_args
                             .iter()
                             .map(|arg| overlay_wire_ty(&bex_vm_types::RuntimeTy::from(arg)))
-                            .collect::<Result<Vec<_>, _>>()?,
+                            .collect::<Result<Box<[_]>, _>>()?,
                         baml_type::TyAttr::default(),
                     );
                     return Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
@@ -1010,7 +1010,7 @@ impl BexEngine {
                     if type_args.is_empty() && self.class_generic_arity(class_name) > 0 {
                         SynthTy::HostOnly
                     } else {
-                        SynthTy::Known(RuntimeTy::Class(tn, type_args.clone(), attr()))
+                        SynthTy::Known(RuntimeTy::Class(tn, type_args.clone().into(), attr()))
                     }
                 }
                 None => SynthTy::HostOnly,
@@ -1232,7 +1232,7 @@ impl BexEngine {
                     self.resolve_class_type_name(class_name),
                     self.reconstruct_unbound_instance_args(class_name, fields, formal_args),
                 ) {
-                    return RuntimeTy::Class(tn, args, baml_type::TyAttr::default());
+                    return RuntimeTy::Class(tn, args.into(), baml_type::TyAttr::default());
                 }
             }
         }
@@ -1541,7 +1541,7 @@ impl BexEngine {
                 if let Some(RuntimeTy::Class(expected_name, expected_args, _)) = expected_ty {
                     class_name = expected_name.to_string();
                     if type_args.is_empty() {
-                        type_args.clone_from(expected_args);
+                        type_args = expected_args.to_vec();
                     }
                 }
                 let class_ptr = self
@@ -4803,7 +4803,7 @@ fn coerce_arg_to_declared_type_with_aliases(
         (BexExternalValue::Map { entries, .. }, RuntimeTy::Class(type_name, class_args, _)) => {
             Ok(BexExternalValue::Instance {
                 class_name: type_name.to_string(),
-                type_args: class_args.clone(),
+                type_args: class_args.to_vec(),
                 fields: entries,
             })
         }
@@ -5070,7 +5070,11 @@ mod union_container_selection_tests {
             MediaKind::Pdf => "baml.media.Pdf",
             MediaKind::Generic => panic!("generic media has no stdlib wrapper class"),
         };
-        RuntimeTy::Class(TypeName::from_dotted_path(name), vec![], TyAttr::default())
+        RuntimeTy::Class(
+            TypeName::from_dotted_path(name),
+            Box::new([]),
+            TyAttr::default(),
+        )
     }
 
     fn media_wrapper_value(kind: MediaKind) -> BexExternalValue {
@@ -5086,7 +5090,7 @@ mod union_container_selection_tests {
 
     fn callback_ty(param_freshness: Freshness) -> RuntimeTy {
         RuntimeTy::Function {
-            params: vec![RuntimeFunctionParamTy {
+            params: Box::new([RuntimeFunctionParamTy {
                 name: Some(Name::new("status")),
                 ty: RuntimeTy::Literal(
                     Literal::String("draft".to_string()),
@@ -5094,7 +5098,7 @@ mod union_container_selection_tests {
                     TyAttr::default(),
                 ),
                 mode: FunctionParamMode::Required,
-            }],
+            }]),
             ret: Box::new(RuntimeTy::int()),
             throws: Box::new(RuntimeTy::Never {
                 attr: TyAttr::default(),
@@ -5383,15 +5387,19 @@ mod union_container_selection_tests {
         let done_value = Value::object(tlab.alloc_instance(done_class, Vec::new()));
 
         let partial_arm = RuntimeTy::Union(
-            vec![
-                RuntimeTy::Class(TypeName::local(dynamic_name), Vec::new(), TyAttr::default()),
+            Box::new([
+                RuntimeTy::Class(
+                    TypeName::local(dynamic_name),
+                    Box::new([]),
+                    TyAttr::default(),
+                ),
                 RuntimeTy::Null {
                     attr: TyAttr::default(),
                 },
-            ],
+            ]),
             TyAttr::default(),
         );
-        let done_arm = RuntimeTy::Class(done_name, Vec::new(), TyAttr::default());
+        let done_arm = RuntimeTy::Class(done_name, Box::new([]), TyAttr::default());
         let members = [partial_arm.clone(), done_arm.clone()];
 
         assert_eq!(
@@ -5537,8 +5545,8 @@ mod union_container_selection_tests {
     #[test]
     fn nominal_generic_class_annotation_refines_from_context() {
         let name = TypeName::from_dotted_path("user.generics.Box");
-        let nominal = RuntimeTy::Class(name.clone(), vec![], TyAttr::default());
-        let declared = RuntimeTy::Class(name, vec![RuntimeTy::int()], TyAttr::default());
+        let nominal = RuntimeTy::Class(name.clone(), Box::new([]), TyAttr::default());
+        let declared = RuntimeTy::Class(name, Box::new([RuntimeTy::int()]), TyAttr::default());
         let typed = BexExternalValue::typed(
             BexExternalValue::Instance {
                 class_name: String::new(),
@@ -5565,10 +5573,14 @@ mod union_container_selection_tests {
     #[test]
     fn nominal_generic_class_annotation_cannot_choose_concrete_union_arm() {
         let name = TypeName::from_dotted_path("user.generics.Box");
-        let nominal = RuntimeTy::Class(name.clone(), vec![], TyAttr::default());
+        let nominal = RuntimeTy::Class(name.clone(), Box::new([]), TyAttr::default());
         let declared = RuntimeTy::union([
-            RuntimeTy::Class(name.clone(), vec![RuntimeTy::int()], TyAttr::default()),
-            RuntimeTy::Class(name, vec![RuntimeTy::string()], TyAttr::default()),
+            RuntimeTy::Class(
+                name.clone(),
+                Box::new([RuntimeTy::int()]),
+                TyAttr::default(),
+            ),
+            RuntimeTy::Class(name, Box::new([RuntimeTy::string()]), TyAttr::default()),
         ]);
         let typed = BexExternalValue::typed(
             BexExternalValue::Instance {
@@ -5819,7 +5831,7 @@ mod union_container_selection_tests {
     #[test]
     fn unannotated_structurally_duplicate_members_select_first_canonical_arm() {
         let declared = RuntimeTy::Union(
-            vec![RuntimeTy::int(), RuntimeTy::int(), RuntimeTy::string()],
+            Box::new([RuntimeTy::int(), RuntimeTy::int(), RuntimeTy::string()]),
             TyAttr::default(),
         );
 
@@ -5924,7 +5936,10 @@ mod union_container_selection_tests {
             RuntimeTy::float(),
             RuntimeTy::bool(),
         ]);
-        let optional = RuntimeTy::Union(vec![inner.clone(), RuntimeTy::null()], TyAttr::default());
+        let optional = RuntimeTy::Union(
+            Box::new([inner.clone(), RuntimeTy::null()]),
+            TyAttr::default(),
+        );
 
         let wrapped =
             wrap_selected_union_member(BexExternalValue::String("alias".into()), &optional, &inner)
@@ -5997,7 +6012,7 @@ mod union_container_selection_tests {
                 vec![Name::new("baml"), Name::new("media")],
                 Name::new("Image"),
             ),
-            vec![],
+            Box::new([]),
             TyAttr::default(),
         );
         let RuntimeTy::Class(name, ..) = &local_spoof else {
@@ -6076,7 +6091,7 @@ mod union_container_selection_tests {
         let primitive_image = media_ty(MediaKind::Image);
         let user_image = RuntimeTy::Class(
             TypeName::from_dotted_path("user.media.Image"),
-            vec![],
+            Box::new([]),
             TyAttr::default(),
         );
         let declared = RuntimeTy::union([primitive_image.clone(), user_image]);
@@ -6163,7 +6178,7 @@ mod union_container_selection_tests {
         };
         let wrapped = maybe_wrap_union(
             value,
-            &RuntimeTy::Union(vec![int_list, string_list.clone()], TyAttr::default()),
+            &RuntimeTy::Union(Box::new([int_list, string_list.clone()]), TyAttr::default()),
         )
         .unwrap();
         let BexExternalValue::Union { metadata, .. } = wrapped else {
@@ -6183,7 +6198,7 @@ mod union_container_selection_tests {
         };
         let wrapped = maybe_wrap_union(
             value,
-            &RuntimeTy::Union(vec![int_map, string_map.clone()], TyAttr::default()),
+            &RuntimeTy::Union(Box::new([int_map, string_map.clone()]), TyAttr::default()),
         )
         .unwrap();
         let BexExternalValue::Union { metadata, .. } = wrapped else {
@@ -6235,12 +6250,12 @@ mod peel_to_rust_type_tests {
         // `RustType | null` — only one non-null arm so the peel
         // unambiguously picks `RustType`.
         let ty = RuntimeTy::Union(
-            vec![
+            Box::new([
                 rust_type(),
                 RuntimeTy::Null {
                     attr: TyAttr::default(),
                 },
-            ],
+            ]),
             TyAttr::default(),
         );
         assert_eq!(peel_to_rust_type(&ty), Some(()));
@@ -6253,12 +6268,12 @@ mod peel_to_rust_type_tests {
         // shape (non-`RustType` arms count as "doesn't match" and don't
         // contribute to the duplicate-count).
         let ty = RuntimeTy::Union(
-            vec![
+            Box::new([
                 rust_type(),
                 RuntimeTy::String {
                     attr: TyAttr::default(),
                 },
-            ],
+            ]),
             TyAttr::default(),
         );
         assert_eq!(peel_to_rust_type(&ty), Some(()));
@@ -6268,7 +6283,7 @@ mod peel_to_rust_type_tests {
     fn union_with_two_rust_type_arms_is_ambiguous() {
         // `RustType | RustType` — two arms peel to the target. The
         // function rejects to avoid silently picking one.
-        let ty = RuntimeTy::Union(vec![rust_type(), rust_type()], TyAttr::default());
+        let ty = RuntimeTy::Union(Box::new([rust_type(), rust_type()]), TyAttr::default());
         assert_eq!(peel_to_rust_type(&ty), None);
     }
 
@@ -6303,14 +6318,14 @@ mod peel_to_rust_type_tests {
     #[test]
     fn union_with_no_rust_type_arm_does_not_match() {
         let ty = RuntimeTy::Union(
-            vec![
+            Box::new([
                 RuntimeTy::String {
                     attr: TyAttr::default(),
                 },
                 RuntimeTy::Int {
                     attr: TyAttr::default(),
                 },
-            ],
+            ]),
             TyAttr::default(),
         );
         assert_eq!(peel_to_rust_type(&ty), None);
@@ -6326,12 +6341,12 @@ mod peel_function_ty_tests {
     /// `(int) -> string` — the canonical concrete function shape.
     fn fn_ty() -> RuntimeTy {
         RuntimeTy::Function {
-            params: vec![RuntimeFunctionParamTy::required(
+            params: Box::new([RuntimeFunctionParamTy::required(
                 None,
                 RuntimeTy::Int {
                     attr: TyAttr::default(),
                 },
-            )],
+            )]),
             ret: Box::new(RuntimeTy::String {
                 attr: TyAttr::default(),
             }),
@@ -6346,7 +6361,7 @@ mod peel_function_ty_tests {
     /// uniqueness rule rejects two function members in a union.
     fn other_fn_ty() -> RuntimeTy {
         RuntimeTy::Function {
-            params: vec![],
+            params: Box::new([]),
             ret: Box::new(RuntimeTy::Int {
                 attr: TyAttr::default(),
             }),
@@ -6385,12 +6400,12 @@ mod peel_function_ty_tests {
     fn union_with_single_function_arm_peels_through() {
         // `((int) -> string) | null` — only one function member.
         let ty = RuntimeTy::Union(
-            vec![
+            Box::new([
                 fn_ty(),
                 RuntimeTy::Null {
                     attr: TyAttr::default(),
                 },
-            ],
+            ]),
             TyAttr::default(),
         );
         assert!(peel_function_ty(&ty).is_some());
@@ -6400,12 +6415,12 @@ mod peel_function_ty_tests {
     fn union_with_function_plus_non_function_arm_peels_through() {
         // `((int) -> string) | string` — exactly one function member.
         let ty = RuntimeTy::Union(
-            vec![
+            Box::new([
                 fn_ty(),
                 RuntimeTy::String {
                     attr: TyAttr::default(),
                 },
-            ],
+            ]),
             TyAttr::default(),
         );
         assert!(peel_function_ty(&ty).is_some());
@@ -6416,7 +6431,7 @@ mod peel_function_ty_tests {
         // `((int) -> string) | (() -> int)` — two function members.
         // The peel rejects to avoid silently picking one. Pins the
         // determinism contract of the helper.
-        let ty = RuntimeTy::Union(vec![fn_ty(), other_fn_ty()], TyAttr::default());
+        let ty = RuntimeTy::Union(Box::new([fn_ty(), other_fn_ty()]), TyAttr::default());
         assert!(peel_function_ty(&ty).is_none());
     }
 
@@ -6439,14 +6454,14 @@ mod peel_function_ty_tests {
     #[test]
     fn union_with_no_function_arm_does_not_match() {
         let ty = RuntimeTy::Union(
-            vec![
+            Box::new([
                 RuntimeTy::String {
                     attr: TyAttr::default(),
                 },
                 RuntimeTy::Int {
                     attr: TyAttr::default(),
                 },
-            ],
+            ]),
             TyAttr::default(),
         );
         assert!(peel_function_ty(&ty).is_none());
@@ -6454,7 +6469,7 @@ mod peel_function_ty_tests {
 
     #[test]
     fn empty_union_does_not_match() {
-        let ty = RuntimeTy::Union(vec![], TyAttr::default());
+        let ty = RuntimeTy::Union(Box::new([]), TyAttr::default());
         assert!(peel_function_ty(&ty).is_none());
     }
 }
@@ -6505,12 +6520,12 @@ mod inference_unifier_tests {
         }
     }
     fn union(members: Vec<RuntimeTy>) -> RuntimeTy {
-        RuntimeTy::Union(members, TyAttr::default())
+        RuntimeTy::Union(members.into(), TyAttr::default())
     }
     fn class(name: &str, args: Vec<RuntimeTy>) -> RuntimeTy {
         RuntimeTy::Class(
             baml_type::TypeName::local(Name::new(name)),
-            args,
+            args.into(),
             TyAttr::default(),
         )
     }
@@ -6666,12 +6681,12 @@ mod union_media_annotation_tests {
     fn annotated_media_matches_declared_media_or_string_union() {
         let media_ty = RuntimeTy::Media(baml_type::MediaKind::Image, baml_type::TyAttr::default());
         let declared = RuntimeTy::Union(
-            vec![
+            Box::new([
                 media_ty.clone(),
                 RuntimeTy::String {
                     attr: baml_type::TyAttr::default(),
                 },
-            ],
+            ]),
             baml_type::TyAttr::default(),
         );
         let wrapper = BexExternalValue::Instance {

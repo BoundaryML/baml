@@ -111,7 +111,11 @@ impl ToBamlTy for MapTy<'_, DefKey> {
 
 impl ToBamlTy for ClassTy<'_, DefKey> {
     fn to_baml_ty(&self, _db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        SapTy::Class(self.name.clone(), Vec::new(), baml_type::TyAttr::default())
+        SapTy::Class(
+            self.name.clone(),
+            Box::new([]),
+            baml_type::TyAttr::default(),
+        )
     }
 }
 
@@ -131,7 +135,7 @@ impl ToBamlTy for EnumVariantTy<'_, DefKey> {
 impl ToBamlTy for UnionTy<'_, DefKey> {
     fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
         let members: Vec<SapTy> = self.variants.iter().map(|v| v.ty.to_baml_ty(db)).collect();
-        SapTy::Union(members, baml_type::TyAttr::default())
+        SapTy::Union(members.into(), baml_type::TyAttr::default())
     }
 }
 

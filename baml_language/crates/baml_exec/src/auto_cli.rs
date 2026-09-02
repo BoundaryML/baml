@@ -146,7 +146,11 @@ mod tests {
         RuntimeTy::List(Box::new(elem), TyAttr::default())
     }
     fn ty_class(name: &str) -> RuntimeTy {
-        RuntimeTy::Class(TypeName::local(name.into()), vec![], TyAttr::default())
+        RuntimeTy::Class(
+            TypeName::local(name.into()),
+            Box::new([]),
+            TyAttr::default(),
+        )
     }
 
     fn assert_string(raw: &BexExternalValue, expected: &str) {
@@ -295,7 +299,7 @@ mod tests {
     #[test]
     fn parse_cli_value_engine_internal_type_rejected() {
         let ty = RuntimeTy::Function {
-            params: vec![],
+            params: Box::new([]),
             ret: Box::new(RuntimeTy::Int {
                 attr: TyAttr::default(),
             }),

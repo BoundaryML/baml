@@ -74,7 +74,7 @@ jobs:
     outputs:
       include: ${{ steps.gen.outputs.include }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -111,7 +111,7 @@ jobs:
       # runner has no NASM installed (consulted only there; harmless elsewhere).
       AWS_LC_SYS_PREBUILT_NASM: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -214,7 +214,7 @@ jobs:
           ls -la build/libs
 
       - name: Upload natives jar
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: java-sdk-natives-${{ matrix._.platform }}
           path: baml_language/sdks/java/baml_bridge/build/libs/*natives*.jar
@@ -227,7 +227,7 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -265,7 +265,7 @@ jobs:
           ls -la build/libs
 
       - name: Upload main/sources/javadoc jars
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: java-sdk-main
           path: |

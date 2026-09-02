@@ -130,7 +130,7 @@ fn package_impls_with_spans<'db>(
                 data,
                 span,
                 interface: interface_loc_qtn(db, data.interface),
-                bounds: data.generic_params.iter().cloned().collect(),
+                loc,
                 valid_subject: OnceCell::new(),
             })
         })
@@ -147,14 +147,11 @@ struct PreparedImpl<'db> {
     /// The implemented interface, or `None` when it did not resolve (such an
     /// impl conflicts with nothing).
     interface: Option<TypeName>,
-    /// The impl's declared generic bounds — the exact map the E0138 gate
-    /// normalizes under (`validate_impl_signatures`), so the two gates judge
-    /// one spelling: a bound can change it (`T | Shape` with `T: Shape`
-    /// absorbs to the valid subject `Shape`).
-    bounds: baml_type::pattern_overlap::TypeVarBoundsMap,
-    /// Memoized [`Self::valid_subject`]. Lazy because the gate costs a
-    /// normalization and is only ever consulted for impls that meet a
-    /// same-interface partner.
+    /// The block itself, so the subject gate can read the header's one
+    /// validity decision instead of re-deriving it.
+    loc: baml_compiler2_hir::loc::ImplLoc<'db>,
+    /// Memoized [`Self::valid_subject`]. Lazy because it is only ever
+    /// consulted for impls that meet a same-interface partner.
     valid_subject: OnceCell<bool>,
 }
 
@@ -178,9 +175,15 @@ impl<'db> PreparedImpl<'db> {
     /// `is_same_normalized_type`; only the head matters here.)
     fn valid_subject(&self, db: &'db dyn baml_compiler2_ppir::Db) -> bool {
         *self.valid_subject.get_or_init(|| {
-            let ctx =
-                crate::facts::Facts::with_bounds(db, self.bounds.clone().into_iter().collect());
-            baml_type::normalize::normalize(&self.data.for_ty_pattern, &ctx).is_valid_impl_subject()
+            // Read the header's ONE validity decision rather than re-deriving
+            // it. Re-deriving is what let this gate and E0138 disagree about
+            // the same block: whichever spelling each judged, an impl could
+            // be invalid to one and valid to the other, so an overlap either
+            // escaped both or got stacked on top of a rejection.
+            matches!(
+                crate::impls::impl_facts(db, self.loc),
+                crate::impls::ImplHeaderResolution::Resolved(_)
+            )
         })
     }
 }

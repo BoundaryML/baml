@@ -149,7 +149,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
         })));
         let ty = RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, type_tag),
-            Vec::new(),
+            Box::new([]),
             TyAttr::default(),
         );
         let type_ptr = tlab.alloc_type(TypeValue::new(ty));
@@ -1385,7 +1385,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
     })));
     let returns = RealizedTy::Class(
         bex_vm_types::TypeHead::new(class_ptr, type_tag),
-        Vec::new(),
+        Box::new([]),
         TyAttr::default(),
     );
     let future = bex_vm_types::types::Future::pending(

@@ -167,8 +167,7 @@ impl StubViewpoint<'_> {
             | Ty::TypeVar(..)
             | Ty::Unknown { .. }
             | Ty::Never { .. }
-            | Ty::Error { .. }
-            | Ty::Infer { .. } => false,
+            | Ty::Error { .. } => false,
         }
     }
 }
@@ -237,9 +236,6 @@ fn enrich_runtime_mount(
             *param = param.map_heads(&mut |name| relocated_name(name, alias));
         }
         relocate_ty(&mut function.return_type, alias);
-        if let Some(throws) = &mut function.declared_throws {
-            relocate_ty(throws, alias);
-        }
         relocate_ty(&mut function.callable_throws, alias);
         relocate_bounds(&mut function.generic_param_bounds, alias);
 
@@ -453,17 +449,17 @@ fn enrich_runtime_mount(
             .collect::<Vec<_>>()
             .join(", ");
         let return_type = stub_type(&function.return_type, viewpoint);
-        let throws = match &function.declared_throws {
-            Some(throws) => format!(" throws {}", stub_type(throws, viewpoint)),
-            None if matches!(
-                function.callable_throws,
-                baml_type::Ty::Never { .. } | baml_type::Ty::Void { .. }
-            ) =>
-            {
-                String::new()
-            }
-            None => " throws unknown".to_string(),
-        };
+        // `callable_throws` is the one effective contract (declared when
+        // written, inferred otherwise) - the stub spells it exactly, ALWAYS:
+        // a required interface method's signature and a `$rust_function`
+        // body both demand an explicit clause, and `throws never` is that
+        // clause when nothing throws. A type this world cannot name
+        // degrades per-slot through `stub_type` rather than widening the
+        // whole clause to `unknown`.
+        let throws = format!(
+            " throws {}",
+            stub_type(&function.callable_throws, viewpoint)
+        );
         let body = match kind {
             MethodStubKind::InterfaceRequired => "",
             MethodStubKind::ClassMethod | MethodStubKind::InterfaceDefault => " { $rust_function }",
@@ -1003,7 +999,7 @@ fn enrich_runtime_mount(
                 for_ty_pattern: root_ty.clone(),
                 generic_params: Vec::new(),
                 param_bounds: Vec::new(),
-                associated_types: witness.associated_types.clone(),
+                associated_types: witness.associated_types.to_vec(),
                 field_links,
                 origin: ExportedImplOrigin::OutOfBody,
                 methods: Vec::new(),
@@ -1459,12 +1455,8 @@ fn let_initializer_type(db: &ProjectDatabase, name: &str) -> Option<baml_type::T
     let LetBody::Expr(body) = body.as_ref() else {
         return None;
     };
-    body.root_expr.and_then(|root| {
-        inference
-            .type_of_expr
-            .get(&root)
-            .map(baml_type::interned::Ty::to_plain)
-    })
+    body.root_expr
+        .and_then(|root| inference.type_of_expr.get(&root).cloned())
 }
 
 fn lower_session_submission(
@@ -2355,7 +2347,7 @@ mod tests {
             baml_type::Ty::List(
                 Box::new(baml_type::Ty::Class(
                     qtn,
-                    Vec::new(),
+                    Box::new([]),
                     baml_type::TyAttr::default(),
                 )),
                 baml_type::TyAttr::default(),
@@ -2487,26 +2479,24 @@ mod tests {
             baml_type::QualifiedTypeName::new(app.clone(), Vec::new(), Name::new("Describable"));
         let self_param = ParamTy::new(0, Name::new("Self"));
         let self_ty = Ty::TypeVar(self_param.clone(), TyAttr::default());
-        let function = |name: &str,
-                        params: Vec<FunctionParamTy>,
-                        declared_throws: Option<Ty>,
-                        target: ExternalCallTarget| ExportedFunction {
-            name: Name::new(name),
-            params,
-            return_type: Ty::string(),
-            declared_throws,
-            callable_throws: Ty::Never {
-                attr: TyAttr::default(),
-            },
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
-            builtin_kind: None,
-            target,
-            linkability: ExternalLinkability::Linkable,
+        let function = |name: &str, params: Vec<FunctionParamTy>, target: ExternalCallTarget| {
+            ExportedFunction {
+                name: Name::new(name),
+                params,
+                return_type: Ty::string(),
+                callable_throws: Ty::Never {
+                    attr: TyAttr::default(),
+                },
+                generic_params: Vec::new(),
+                generic_param_bounds: Vec::new(),
+                builtin_kind: None,
+                target,
+                linkability: ExternalLinkability::Linkable,
+            }
         };
         let class_self = FunctionParamTy::required(
             Some(Name::new("self")),
-            Ty::Class(class_qtn.clone(), Vec::new(), TyAttr::default()),
+            Ty::Class(class_qtn.clone(), Box::new([]), TyAttr::default()),
         );
         let interface_self = FunctionParamTy::required(Some(Name::new("self")), self_ty);
         let mut types = IndexMap::new();
@@ -2523,9 +2513,6 @@ mod tests {
                             class_self,
                             FunctionParamTy::optional(Some(Name::new("punct")), Ty::string()),
                         ],
-                        Some(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
                         ExternalCallTarget::Method {
                             package: app.clone(),
                             namespace: Vec::new(),
@@ -2539,7 +2526,6 @@ mod tests {
                             Some(Name::new("name")),
                             Ty::string(),
                         )],
-                        None,
                         ExternalCallTarget::Method {
                             package: app,
                             namespace: Vec::new(),
@@ -2565,9 +2551,6 @@ mod tests {
                 required_methods: vec![function(
                     "describe",
                     vec![interface_self.clone()],
-                    Some(Ty::Never {
-                        attr: TyAttr::default(),
-                    }),
                     ExternalCallTarget::Interface {
                         interface: iface_qtn.clone(),
                         method: Name::new("describe"),
@@ -2576,7 +2559,6 @@ mod tests {
                 default_methods: vec![function(
                     "shout",
                     vec![interface_self],
-                    None,
                     ExternalCallTarget::Interface {
                         interface: iface_qtn,
                         method: Name::new("shout"),
@@ -2633,13 +2615,13 @@ mod tests {
         assert_eq!(
             source_of("Host"),
             "class Host {\n  name string\n  function greet(self, punct: string = null) -> string \
-             throws never { $rust_function }\n  function make(name: string) -> string \
-             { $rust_function }\n}\n"
+             throws never { $rust_function }\n  function make(name: string) -> string throws \
+             never { $rust_function }\n}\n"
         );
         assert_eq!(
             source_of("Describable"),
             "interface Describable {\n  function describe(self) -> string throws never\n  \
-             function shout(self) -> string { $rust_function }\n}\n"
+             function shout(self) -> string throws never { $rust_function }\n}\n"
         );
     }
 
@@ -2705,7 +2687,7 @@ mod tests {
                     export_name: Name::new("ClassAlias"),
                     ty: baml_type::RealizedTy::Class(
                         class_qtn,
-                        Vec::new(),
+                        Box::new([]),
                         baml_type::TyAttr::default(),
                     ),
                     classes: vec![bex_vm_types::RuntimeMountedClass {

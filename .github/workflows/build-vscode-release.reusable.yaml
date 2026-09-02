@@ -55,12 +55,12 @@ jobs:
         uses: ./.github/actions/setup-tools
 
       - name: Setup Node.js
-        uses: ./.github/actions/setup-node
+        uses: ./.github/actions/engine-setup-node
         with:
           node-action-version: 'v6'
 
       - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+        uses: ./.github/actions/engine-setup-rust
         with:
           enable-wasm: true
 

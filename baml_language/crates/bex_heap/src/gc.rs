@@ -2884,7 +2884,7 @@ mod tests {
         })));
         let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Class(
             TypeHead::new(class_ptr, type_tag),
-            vec![],
+            Box::new([]),
             TyAttr::default(),
         )));
 

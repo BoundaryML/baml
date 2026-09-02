@@ -493,7 +493,7 @@ fn target_type_info(
             // The owner is the class's own self type — the same subject-type
             // rule as methods, so generic owners anchor their params
             // (`user.Box<T>` above `item: T`).
-            let self_ty = baml_compiler2_hir_ty::lower::class_self_ty(db, class).to_plain();
+            let self_ty = baml_compiler2_hir_ty::lower::class_self_ty(db, class);
             Some(TypeInfo::LocalVar {
                 name: field.name.as_str().to_string(),
                 ty,
@@ -838,7 +838,7 @@ fn method_owner_path(
 
     match item_data::method_owner(db, func)? {
         MethodOwner::Class(class) => {
-            let self_ty = baml_compiler2_hir_ty::lower::class_self_ty(db, class).to_plain();
+            let self_ty = baml_compiler2_hir_ty::lower::class_self_ty(db, class);
             Some(render::display_owner_ty(&self_ty))
         }
         MethodOwner::Interface(iface) => {
@@ -865,12 +865,10 @@ fn template_frame_param_info(
     offset: TextSize,
     name: &Name,
 ) -> Option<TypeInfo> {
-    use baml_type::interned::TyKind;
-
     let driver = crate::resolve::template_driver_at(db, file, offset)?;
     let signature = baml_compiler2_hir_ty::lower::function_signature(db, driver);
     let body_param = signature.params.first()?;
-    let TyKind::Function { params, .. } = body_param.ty.kind() else {
+    let baml_type::Ty::Function { params, .. } = &body_param.ty else {
         return None;
     };
     let param = params
@@ -878,7 +876,7 @@ fn template_frame_param_info(
         .find(|param| param.name.as_ref() == Some(name))?;
     Some(TypeInfo::LocalVar {
         name: name.as_str().to_string(),
-        ty: render::display_ty_canonical_for_file(db, file, &param.ty.to_plain()),
+        ty: render::display_ty_canonical_for_file(db, file, &param.ty),
         is_let: false,
         owner: None,
     })
@@ -1212,7 +1210,7 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
             let alias_name = alias_data.name.as_str().to_string();
 
             // Use the resolved (lowered) type for display.
-            let resolved = baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc).to_plain();
+            let resolved = baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc);
             let expansion = render::display_ty_for_file(db, alias_loc.file(db), &resolved);
 
             TypeInfo::TypeAlias {
@@ -1391,7 +1389,7 @@ fn find_binding_ty_in_scopes(
             continue;
         };
         if let Some(ty) = inference.type_of_pat.get(&pat_id) {
-            return Some(ty.to_plain());
+            return Some(ty.clone());
         }
     }
     None
@@ -1650,16 +1648,11 @@ pub(crate) fn class_impl_methods<'db>(
         let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).resolved();
         let row = facts.and_then(|facts| {
             let for_ty = facts.for_ty_pattern.to_plain();
+            let fact_iface = facts.interface.to_plain();
             iface.impls.iter().find(|row| {
-                row.interface.name == facts.interface.name
+                row.interface.name == fact_iface.name
                     && row.for_ty_pattern == for_ty
-                    && row.interface.generics.len() == facts.interface.generics.len()
-                    && row
-                        .interface
-                        .generics
-                        .iter()
-                        .zip(facts.interface.generics.iter())
-                        .all(|(exported, fact)| *exported == fact.to_plain())
+                    && row.interface.generics == fact_iface.generics
             })
         });
         for &method_loc in &item_data::impl_block_data(db, block).methods {

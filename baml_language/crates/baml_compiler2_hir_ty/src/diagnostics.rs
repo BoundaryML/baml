@@ -278,7 +278,7 @@ pub enum TirTypeError {
     /// A type-inference placeholder `_` (a `TypeExprKind::Infer` wildcard) could not have its
     /// type inferred — inference for `_` is unavailable, so the type must be written explicitly.
     /// Lowered to `Ty::Error` so it never reaches the canonical normalizer, which treats
-    /// `Ty::Infer` as `unreachable!`.
+    /// the inference hole as `unreachable!`.
     CannotInferType,
     /// An ordinary inference variable remained unresolved at writeback.
     TypeMustBeKnown { full_type: Ty },

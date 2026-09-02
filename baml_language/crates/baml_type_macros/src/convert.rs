@@ -39,14 +39,15 @@
 //! are laid out identically wherever they differ. `#[repr(C, u8)]` (enums) and
 //! `#[repr(C)]` (satellites) pin the tag and field order, and the per-site
 //! `const` assert pins total size + align. Beyond that, reinterpreting a nested
-//! position — `Vec<Ty> -> Vec<RuntimeTy>`, `(Name, Ty) -> (Name, RuntimeTy)` —
-//! rests on a *de-facto*, not language-guaranteed, property: `Vec<T>` is a
-//! `(ptr, cap, len)` triple whose layout is independent of `T`, and a
-//! `#[repr(Rust)]` tuple's layout is a deterministic function of its fields'
-//! sizes + aligns (equal here, since `Ty` and its members are equal size +
-//! align). This holds on current `rustc` but is not a stability guarantee; the
-//! unit tests plus a `cargo +nightly miri test -p baml_type` run in CI are what
-//! guard it against a future layout change.
+//! position — `Box<[Ty]> -> Box<[RuntimeTy]>`, `(Name, Ty) -> (Name, RuntimeTy)`
+//! — rests on a *de-facto*, not language-guaranteed, property: `Box<[T]>` is a
+//! `(ptr, len)` fat pointer (and `Vec<T>` a `(ptr, cap, len)` triple) whose
+//! layout is independent of `T`, and a `#[repr(Rust)]` tuple's layout is a
+//! deterministic function of its fields' sizes + aligns (equal here, since `Ty`
+//! and its members are equal size + align). This holds on current `rustc` but
+//! is not a stability guarantee; the unit tests plus a
+//! `cargo +nightly miri test -p baml_type` run in CI are what guard it against
+//! a future layout change.
 
 use std::collections::HashSet;
 
@@ -56,7 +57,7 @@ use syn::{Fields, GenericArgument, Generics, Index, PathArguments, Type, parse_q
 
 use crate::{
     emit::{member_variants, satellite_name_for, with_clone_bounds},
-    parse::{Family, MVariant, Satellite},
+    parse::{Child, Family, MVariant, Member, Satellite},
 };
 
 pub(crate) fn emit_conversions(family: &Family) -> TokenStream {
@@ -69,8 +70,10 @@ pub(crate) fn emit_conversions(family: &Family) -> TokenStream {
         if (0..family.members.len()).any(|j| j != i && is_le(family, i, j)) {
             out.extend(gen_error(&member.name));
         }
-        if member.child != i {
-            out.extend(gen_error_bridge(family, member.child, i));
+        if let Child::Member(child_idx) = member.child
+            && child_idx != i
+        {
+            out.extend(gen_error_bridge(family, child_idx, i));
         }
     }
 
@@ -318,7 +321,7 @@ fn gen_narrow_reinterpret(family: &Family, sub: usize, sup: usize) -> TokenStrea
 
         impl #impl_g ::core::convert::TryFrom<#sup_ty> for #sub_ty #where_c {
             type Error = #err;
-            fn try_from(value: #sup_ty) -> ::core::result::Result<Self, Self::Error> {
+            fn try_from(value: #sup_ty) -> ::core::result::Result<Self, #err> {
                 #assert
                 #vfn(&value)?;
                 ::core::result::Result::Ok(#narrowed)
@@ -327,7 +330,7 @@ fn gen_narrow_reinterpret(family: &Family, sub: usize, sup: usize) -> TokenStrea
 
         impl #clone_impl_g ::core::convert::TryFrom<&#sup_ty> for #sub_ty #clone_where_c {
             type Error = #err;
-            fn try_from(value: &#sup_ty) -> ::core::result::Result<Self, Self::Error> {
+            fn try_from(value: &#sup_ty) -> ::core::result::Result<Self, #err> {
                 #assert
                 #vfn(value)?;
                 // A borrow can't be moved out, so clone the validated tree and
@@ -339,7 +342,7 @@ fn gen_narrow_reinterpret(family: &Family, sub: usize, sup: usize) -> TokenStrea
         #[doc = #ref_doc]
         impl #borrow_impl_g ::core::convert::TryFrom<&'a #sup_ty> for &'a #sub_ty #borrow_where_c {
             type Error = #err;
-            fn try_from(value: &'a #sup_ty) -> ::core::result::Result<Self, Self::Error> {
+            fn try_from(value: &'a #sup_ty) -> ::core::result::Result<Self, #err> {
                 #assert
                 #vfn(value)?;
                 // SAFETY: the walk proved every node is a valid `#sub_name`, and
@@ -362,7 +365,7 @@ fn gen_validators(family: &Family, sub: usize, sup: usize) -> TokenStream {
     let vfn = enum_validator_name(family, sub, sup);
     let body = validate_body(family, sub, sup);
     let (impl_g, _, where_c) = family.generics.split_for_impl();
-    let reachable = reachable_satellites(family, sub);
+    let reachable = reachable_satellites(family, &family.members[sub]);
     let sats = family
         .satellites
         .iter()
@@ -474,6 +477,10 @@ fn validate_expr(
             return quote! { #f(#binding) };
         }
     }
+    if let Some(inner) = boxed_slice_arg(ty) {
+        let e = validate_expr(family, sub, sup, inner, quote!(__v));
+        return quote! { #binding.iter().try_for_each(|__v| #e) };
+    }
     if let Some(inner) = wrapper_arg(ty, "Box") {
         return validate_expr(family, sub, sup, inner, quote!(&**#binding));
     }
@@ -534,7 +541,7 @@ fn gen_sat_validator(family: &Family, sub: usize, sup: usize, sat: &Satellite) -
 /// excluded variant (e.g. `Interface`, reachable solely via the `typevar`
 /// `AssociatedTypeProjection`) needs no validator. Emitting one anyway would be
 /// dead code — this prunes it.
-fn reachable_satellites(family: &Family, sub: usize) -> HashSet<String> {
+pub(crate) fn reachable_satellites(family: &Family, member: &Member) -> HashSet<String> {
     let sat_names: HashSet<String> = family
         .satellites
         .iter()
@@ -557,7 +564,7 @@ fn reachable_satellites(family: &Family, sub: usize) -> HashSet<String> {
 
     let mut work: Vec<String> = Vec::new();
     for v in &family.variants {
-        if family.members[sub].includes.contains(&v.axis) {
+        if member.includes.contains(&v.axis) {
             collect(&v.fields, &mut work);
         }
     }
@@ -597,19 +604,31 @@ fn sat_validator_name(family: &Family, sub: usize, sup: usize, sat: &Satellite) 
 
 // ── Product order ────────────────────────────────────────────────────────────
 
+/// The child index of a member on a comparable pair's side. Comparable pairs
+/// exist only between plain members ([`is_le`] makes interned members
+/// incomparable), so an interned member cannot reach here.
+fn plain_child(member: &Member) -> usize {
+    member
+        .child_member()
+        .unwrap_or_else(|| unreachable!("comparable pairs exist only between plain members"))
+}
+
 fn subset(a: &[usize], b: &[usize]) -> bool {
     a.iter().all(|x| b.contains(x))
 }
 
 /// `a ≤ b` (a is a sub-member of b): top-level include-sets and child
-/// include-sets are both subsets.
+/// include-sets are both subsets. Interned members are incomparable to
+/// everything — their nested positions hold handles, not member trees, so no
+/// structural widening/narrowing exists; their boundary conversions are
+/// hand-written semantic ones (interning / finalization).
 fn is_le(family: &Family, a: usize, b: usize) -> bool {
     let (ma, mb) = (&family.members[a], &family.members[b]);
+    let (Some(ca), Some(cb)) = (ma.child_member(), mb.child_member()) else {
+        return false;
+    };
     subset(&ma.includes, &mb.includes)
-        && subset(
-            &family.members[ma.child].includes,
-            &family.members[mb.child].includes,
-        )
+        && subset(&family.members[ca].includes, &family.members[cb].includes)
 }
 
 /// All ordered pairs `(sub, super)` with `sub < super`.
@@ -676,8 +695,8 @@ fn widen_body(family: &Family, sub: usize, sup: usize, own: Own) -> TokenStream 
     let sup_name = &family.members[sup].name;
     let cx = Cx {
         family,
-        sub_child: family.members[sub].child,
-        sup_child: family.members[sup].child,
+        sub_child: plain_child(&family.members[sub]),
+        sup_child: plain_child(&family.members[sup]),
         own,
     };
     let arms = member_variants(family, &family.members[sub])
@@ -697,11 +716,11 @@ fn gen_narrow(family: &Family, sub: usize, sup: usize) -> TokenStream {
     quote! {
         impl #clone_impl_g ::core::convert::TryFrom<&#sup_ty> for #sub_ty #clone_where_c {
             type Error = #err;
-            fn try_from(value: &#sup_ty) -> ::core::result::Result<Self, Self::Error> { #by_ref }
+            fn try_from(value: &#sup_ty) -> ::core::result::Result<Self, #err> { #by_ref }
         }
         impl #impl_g ::core::convert::TryFrom<#sup_ty> for #sub_ty #where_c {
             type Error = #err;
-            fn try_from(value: #sup_ty) -> ::core::result::Result<Self, Self::Error> { #owned }
+            fn try_from(value: #sup_ty) -> ::core::result::Result<Self, #err> { #owned }
         }
     }
 }
@@ -713,8 +732,8 @@ fn narrow_body(family: &Family, sub: usize, sup: usize, own: Own) -> TokenStream
     let sub_includes = &family.members[sub].includes;
     let cx = Cx {
         family,
-        sub_child: family.members[sub].child,
-        sup_child: family.members[sup].child,
+        sub_child: plain_child(&family.members[sub]),
+        sup_child: plain_child(&family.members[sup]),
         own,
     };
     let arms = member_variants(family, &family.members[sup]).map(|v| {
@@ -832,6 +851,11 @@ fn widen_expr(cx: &Cx, ty: &Type, binding: TokenStream) -> TokenStream {
     if let Some(target) = terminal_target(cx, ty, cx.sup_child) {
         return quote! { #target::from(#binding) };
     }
+    if let Some(inner) = boxed_slice_arg(ty) {
+        let iter = iter(cx.own);
+        let e = widen_expr(cx, inner, quote!(__v));
+        return quote! { #binding.#iter().map(|__v| #e).collect() };
+    }
     if let Some(inner) = wrapper_arg(ty, "Box") {
         let e = widen_expr(cx, inner, deref(cx.own, &binding));
         return quote! { ::std::boxed::Box::new(#e) };
@@ -864,6 +888,13 @@ fn narrow_expr(cx: &Cx, ty: &Type, binding: TokenStream) -> TokenStream {
     }
     if let Some(target) = terminal_target(cx, ty, cx.sub_child) {
         return quote! { #target::try_from(#binding) };
+    }
+    if let Some(inner) = boxed_slice_arg(ty) {
+        let iter = iter(cx.own);
+        let e = narrow_expr(cx, inner, quote!(__v));
+        return quote! {
+            #binding.#iter().map(|__v| #e).collect::<::core::result::Result<::std::boxed::Box<[_]>, _>>()
+        };
     }
     if let Some(inner) = wrapper_arg(ty, "Box") {
         let e = narrow_expr(cx, inner, deref(cx.own, &binding));
@@ -990,11 +1021,11 @@ fn gen_sat(family: &Family, sub: usize, sup: usize, sat: &Satellite) -> TokenStr
         }
         impl #clone_impl_g ::core::convert::TryFrom<&#sup_sat> for #sub_sat #clone_where_c {
             type Error = #err;
-            fn try_from(value: &#sup_sat) -> ::core::result::Result<Self, Self::Error> { #narrow_ref }
+            fn try_from(value: &#sup_sat) -> ::core::result::Result<Self, #err> { #narrow_ref }
         }
         impl #impl_g ::core::convert::TryFrom<#sup_sat> for #sub_sat #where_c {
             type Error = #err;
-            fn try_from(value: #sup_sat) -> ::core::result::Result<Self, Self::Error> { #narrow_owned }
+            fn try_from(value: #sup_sat) -> ::core::result::Result<Self, #err> { #narrow_owned }
         }
     }
 }
@@ -1094,6 +1125,17 @@ pub(crate) fn path_head(ty: &Type) -> Option<&Ident> {
     Some(&p.path.segments[0].ident)
 }
 
+/// If `ty` is `Box<[Inner]>` (a boxed slice — the family's frozen-sequence
+/// shape), the `Inner` type. Checked before the plain `Box` wrapper wherever
+/// both could match: `wrapper_arg(_, "Box")` would surface the bare slice
+/// type, which no walker can traverse.
+pub(crate) fn boxed_slice_arg(ty: &Type) -> Option<&Type> {
+    match wrapper_arg(ty, "Box")? {
+        Type::Slice(slice) => Some(&slice.elem),
+        _ => None,
+    }
+}
+
 /// If `ty` is `Wrapper<Inner>` (one type arg), the `Inner` type.
 pub(crate) fn wrapper_arg<'a>(ty: &'a Type, wrapper: &str) -> Option<&'a Type> {
     let Type::Path(p) = ty else { return None };
@@ -1111,7 +1153,7 @@ pub(crate) fn wrapper_arg<'a>(ty: &'a Type, wrapper: &str) -> Option<&'a Type> {
 }
 
 /// Whether `ty` mentions the master ident or any satellite name.
-fn contains_recursion(family: &Family, ty: &Type) -> bool {
+pub(crate) fn contains_recursion(family: &Family, ty: &Type) -> bool {
     fn walk(ts: TokenStream, names: &HashSet<String>) -> bool {
         ts.into_iter().any(|tt| match tt {
             TokenTree::Ident(id) => names.contains(&id.to_string()),

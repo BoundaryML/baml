@@ -155,7 +155,7 @@ pub enum TypeExprKind {
     /// The wildcard `_` — an inference hole. Valid only where the type at this
     /// slot can be inferred from context (a generic type argument whose binding
     /// is fixed by an initializer, or a `throws`-clause member). Lowered to
-    /// `Ty::Infer` and filled during TIR checking.
+    /// an inference hole and filled during TIR checking.
     Infer {
         attrs: Vec<RawAttribute>,
     },

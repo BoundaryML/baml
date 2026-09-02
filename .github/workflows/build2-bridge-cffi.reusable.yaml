@@ -86,7 +86,7 @@ jobs:
     outputs:
       include: ${{ steps.gen.outputs.include }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -119,6 +119,7 @@ jobs:
     # Experimental targets are built when possible but never block the release.
     continue-on-error: ${{ matrix._.experimental || false }}
     env:
+      BAML_GIT_SHA: ${{ inputs.source_sha || github.sha }}
       CARGO: cargo
       # Let aws-lc-sys use its prebuilt NASM objects on Windows x86-64 if the
       # runner has no NASM installed (consulted only there; harmless elsewhere).
@@ -136,7 +137,7 @@ jobs:
               Add-Content -Path "$env:GITHUB_PATH" -Value "$env:USERPROFILE\.cargo\bin" -Encoding utf8
           }
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -408,7 +409,7 @@ jobs:
           }
 
       - name: Upload cdylib artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bridge-cffi-${{ matrix._.target }}
           path: |

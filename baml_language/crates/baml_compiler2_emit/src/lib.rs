@@ -110,7 +110,7 @@ fn build_interface_def(
                     store: &TypeRefStore,
                     id: TypeRefId|
      -> bex_vm_types::RuntimeTy {
-        let ty = ctx.lower_type_ref(store, id).to_plain();
+        let ty = baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(store, id));
         let runtime = baml_type::lower_to_runtime(&ty, resolved).unwrap_or_else(|e| {
             unreachable!("interface `{iface_tn}` declares a non-runtime type: {e:?}")
         });
@@ -128,13 +128,11 @@ fn build_interface_def(
         // position eagerly realizes omitted associated defaults and fills
         // the rest with Error sentinels — a bound like `type A extends
         // Iface` with unpinned associated types would panic `to_runtime`.
-        let lowered = ctx
-            .lower_type_ref_at(
-                store,
-                id,
-                baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
-            )
-            .to_plain();
+        let lowered = baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref_at(
+            store,
+            id,
+            baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
+        ));
         let baml_type::Ty::Interface(qtn, args, assoc, _) = lowered else {
             return None;
         };
@@ -507,8 +505,7 @@ impl<'db> InterfaceBodyStore<'_, 'db> {
 }
 
 /// Generic-parameter bound sets, keyed by the declared parameter.
-type ImplBoundsMap =
-    rustc_hash::FxHashMap<baml_type::ParamTy, Vec<baml_type::interned::InterfaceRef>>;
+type ImplBoundsMap = rustc_hash::FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>;
 
 type IfaceParts = (
     baml_type::TypeName,
@@ -591,14 +588,14 @@ fn impl_rule_target<'db>(
             store,
             block.interface_target,
             baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
-        )
-        .to_plain();
+        );
+    let iface_ty = baml_compiler2_hir_ty::lower::reject_holes(&iface_ty);
     let (iface_tn, interface_args, interface_assoc) =
         split_interface(&iface_ty, resolved, &impl_params)?;
     // The implementor: `Self` in `Ty` space, off the UNIFORM impl surface —
     // `impl_self_ty` (with `impl_frame`/`impl_generic_bounds` above) owns the
     // in-body-vs-free distinction; emit never matches the subject.
-    let for_ty = baml_compiler2_hir_ty::lower::impl_self_ty(db, impl_loc).to_plain();
+    let for_ty = baml_compiler2_hir_ty::lower::impl_self_ty(db, impl_loc);
     let for_ty_pattern = bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
         &for_ty,
         resolved,
@@ -861,11 +858,12 @@ fn build_packages<'db>(
                      generics: &[ParamTy],
                      bounds: &BoundsMap|
          -> ty::Ty {
-            baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, *file)
-                .with_frame(generics.to_vec())
-                .with_bounds(bounds.clone())
-                .lower_type_ref(store, id)
-                .to_plain()
+            baml_compiler2_hir_ty::lower::reject_holes(
+                &baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, *file)
+                    .with_frame(generics.to_vec())
+                    .with_bounds(bounds.clone())
+                    .lower_type_ref(store, id),
+            )
         };
         // Associated-type bindings written in an `implements` block body
         // (`type Item = int`) live beside the target, not in it (`split_interface`
@@ -970,12 +968,13 @@ fn build_packages<'db>(
                         .into_iter()
                         .flatten()
                         .map(|bound| {
-                            split_interface(&bound.existential().to_plain(), resolved, &impl_params)
-                                .map(|(interface, args, assoc)| InterfaceBound {
+                            split_interface(&bound.to_ty(), resolved, &impl_params).map(
+                                |(interface, args, assoc)| InterfaceBound {
                                     interface: bex_vm_types::TypeHead::of_name(&interface),
                                     args,
                                     assoc,
-                                })
+                                },
+                            )
                         })
                         .collect()
                 })
@@ -3786,10 +3785,11 @@ fn emit_file_group<'db>(
                         // erased-`Ty` (TypeVar→Unknown) used by codegen and to
                         // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
                         // typed runtime walking.
-                        let tir_ty = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, *file)
-                            .with_frame(class_generic_params.clone())
-                            .lower_type_ref(store, *id)
-                            .to_plain();
+                        let tir_ty = baml_compiler2_hir_ty::lower::reject_holes(
+                            &baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, *file)
+                                .with_frame(class_generic_params.clone())
+                                .lower_type_ref(store, *id),
+                        );
                         let resolved_ty = cache.convert(&tir_ty);
                         let template =
                             bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
@@ -4445,7 +4445,7 @@ fn compute_throws_type(
     if converted.len() == 1 {
         converted.into_iter().next().unwrap()
     } else {
-        baml_type::TyTemplate::Union(converted, baml_type::TyAttr::default())
+        baml_type::TyTemplate::Union(converted.into(), baml_type::TyAttr::default())
     }
 }
 
@@ -4691,7 +4691,7 @@ fn compute_function_metadata<'db>(
     } else {
         // `owner_self_ty` resolves both the class receiver (with the
         // builtin-container sugar) and a free impl's `for` target.
-        baml_compiler2_hir_ty::lower::owner_self_ty(db, func_loc).map(|ty| ty.to_plain())
+        baml_compiler2_hir_ty::lower::owner_self_ty(db, func_loc)
     };
 
     // Lower a signature type ref (in `store`) against this method's scope. For an
@@ -4709,11 +4709,7 @@ fn compute_function_metadata<'db>(
             ctx.with_frame(interface_binding_params.clone())
         } else {
             ctx.with_frame(enclosing_generics.clone())
-                .with_self_ty(
-                    receiver_ty
-                        .as_ref()
-                        .map(baml_type::interned::Ty::from_plain),
-                )
+                .with_self_ty(receiver_ty.clone())
                 .with_impl_target(baml_compiler2_hir_ty::lower::owner_impl_target(
                     db,
                     func_loc,
@@ -4723,7 +4719,8 @@ fn compute_function_metadata<'db>(
     };
     let lower_scoped =
         |store: &TypeRefStore, id: TypeRefId, _diags: &mut Vec<TirTypeError>| -> Ty {
-            let lowered = scoped_ctx().lower_type_ref(store, id).to_plain();
+            let lowered =
+                baml_compiler2_hir_ty::lower::reject_holes(&scoped_ctx().lower_type_ref(store, id));
             let realized = if enclosing_interface.is_some() {
                 substitute_ty(&lowered, &interface_signature_bindings)
             } else {
@@ -4766,7 +4763,7 @@ fn compute_function_metadata<'db>(
                         id,
                         baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
                     );
-                    let lowered = lowered.to_plain();
+                    let lowered = baml_compiler2_hir_ty::lower::reject_holes(&lowered);
                     let clean = diagnostics.is_empty();
                     let bound_ty = if enclosing_interface.is_some() {
                         substitute_ty(&lowered, &interface_signature_bindings)
@@ -4818,15 +4815,16 @@ fn compute_function_metadata<'db>(
                 let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
                 let id = builder.lower(&te);
                 let (store, _spans) = builder.finish();
-                let lowered = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
-                    .with_bounds(scope_bounds.clone())
-                    .with_frame(interface_binding_params.clone())
-                    .lower_type_ref_at(
-                        &store,
-                        id,
-                        baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
-                    )
-                    .to_plain();
+                let lowered = baml_compiler2_hir_ty::lower::reject_holes(
+                    &baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
+                        .with_bounds(scope_bounds.clone())
+                        .with_frame(interface_binding_params.clone())
+                        .lower_type_ref_at(
+                            &store,
+                            id,
+                            baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
+                        ),
+                );
                 Some(substitute_ty(&lowered, &interface_signature_bindings))
             }
             None => receiver_ty.clone(),
@@ -4857,15 +4855,11 @@ fn compute_function_metadata<'db>(
                 .flatten()
                 .map(|bound| baml_compiler2_mir::RuntimeInterfaceBound {
                     interface: bound.name.clone(),
-                    args: bound
-                        .generics
-                        .iter()
-                        .map(|ty| to_template(&ty.to_plain()))
-                        .collect(),
+                    args: bound.generics.iter().map(to_template).collect(),
                     assoc: bound
                         .associated_types
                         .iter()
-                        .map(|(name, ty)| (name.clone(), to_template(&ty.to_plain())))
+                        .map(|(name, ty)| (name.clone(), to_template(ty)))
                         .collect(),
                 })
                 .collect()

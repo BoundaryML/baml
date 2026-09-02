@@ -1,0 +1,26 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.AppError {
+  msg: string
+}
+class user.AppError$stream {
+  msg: string | null
+}
+class user.Impl {
+}
+class user.Impl$stream {
+}
+function user.m(self: ?) -> int  [expr] {
+  {  } 1
+}
+function user.m(self: ?) -> int  [expr] {
+  {  } 1
+}
+function user.m(self: ?) -> int  [expr] {
+  {  } 1
+}
+function user.m(self: ?) -> int  [expr] {
+  {  } 1
+}

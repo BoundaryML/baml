@@ -527,7 +527,7 @@ mod schema {
         }
 
         fn class_ty(name: &TypeName) -> RuntimeTy {
-            RuntimeTy::Class(key(name), Vec::new(), TyAttr::default())
+            RuntimeTy::Class(key(name), Box::new([]), TyAttr::default())
         }
 
         /// A lane key for a compiled test declaration.
