@@ -35,6 +35,10 @@ const THREAD_REF_LEN: usize = 1 + 16 + 8 + 8;
 const BOUNDARY_ID_LEN: usize = 16;
 
 #[cfg(target_arch = "wasm32")]
+// Workerd forbids access to crypto/random while a Worker isolate is starting,
+// and it may reuse that isolate for an arbitrary number of requests. The
+// workerd-only loader sets this flag before WASM startup so every identity
+// minted by that isolate consistently uses the workerd-safe UUID source.
 static WORKERD_RUNTIME: AtomicBool = AtomicBool::new(false);
 
 /// Select the workerd-safe UUID source before any runtime identity is minted.
