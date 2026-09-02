@@ -753,7 +753,7 @@ testset "llm_parsing" {
               "expectation": { "check": "should_evaluate_to", "expected": -1 }
             }
         `;
-        let repro = create_repro$parse(raw);
+        let repro = create_repro@parse(raw);
         assert.is_true(repro.files.has("main.baml"));
         match (repro.expectation) {
             let e: ShouldEvaluateTo => assert.equal(baml.json.stringify(e.expected), "-1"),
@@ -778,7 +778,7 @@ testset "llm_parsing" {
               ]
             }
         `;
-        let draft = write_issue$parse(raw);
+        let draft = write_issue@parse(raw);
         assert.equal(draft.subsystem, Subsystem.StdLibrary);
         assert.equal(draft.more_repros.length(), 1);
     }
@@ -786,7 +786,7 @@ testset "llm_parsing" {
 
 testset "judge_parsing" {
     test "judge_issue reply parses" {
-        let j = judge_issue$parse(`{ "similarity": 0.8, "missing": null }`);
+        let j = judge_issue@parse(`{ "similarity": 0.8, "missing": null }`);
         assert.equal(j.similarity, 0.8);
     }
 }
