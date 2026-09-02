@@ -23,6 +23,11 @@ name: Size Gate (Reusable)
 
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
 
 # Read-only: these jobs run PR-controlled code and only upload artifacts,
 # so they must not inherit whatever the caller grants.

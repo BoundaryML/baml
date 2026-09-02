@@ -26,33 +26,6 @@ env:
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
-  r2-credential-diagnostic:
-    name: "R2 repository credential diagnostic"
-    if: ${{ (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: ubuntu-latest
-    env:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
-    steps:
-      - name: "Report R2 credential fingerprints"
-        run: |
-          set -euo pipefail
-
-          fingerprint() {
-            local name="$1"
-            local value="$2"
-            printf '%s length=%d sha256=' "$name" "${#value}"
-            printf '%s' "$value" | sha256sum | awk '{print $1}'
-          }
-
-          fingerprint BAML_SCCACHE_R2_ACCESS_KEY_ID "${BAML_SCCACHE_R2_ACCESS_KEY_ID:-}"
-          fingerprint BAML_SCCACHE_R2_SECRET_ACCESS_KEY "${BAML_SCCACHE_R2_SECRET_ACCESS_KEY:-}"
-
-          if [[ -z "${BAML_SCCACHE_R2_ACCESS_KEY_ID:-}" || -z "${BAML_SCCACHE_R2_SECRET_ACCESS_KEY:-}" ]]; then
-            echo "::error::Trusted CI requires both R2 sccache credentials"
-            exit 1
-          fi
-
   determine_changes:
     name: "Determine changes"
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -616,13 +589,18 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/cargo-tests.reusable.yaml
-    secrets: inherit
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
   size-gate:
     name: "Size Gate"
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/size-gate.reusable.yaml
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     permissions:
       contents: read
       pull-requests: write
