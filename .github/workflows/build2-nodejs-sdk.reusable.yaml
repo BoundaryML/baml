@@ -103,7 +103,7 @@ jobs:
     runs-on: ${{ matrix._.host }}
     container: ${{ matrix._.container }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
