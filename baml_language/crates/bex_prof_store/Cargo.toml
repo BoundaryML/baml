@@ -29,13 +29,13 @@ rustc-hash = { workspace = true }
 sha2 = { workspace = true }
 smallvec = { workspace = true }
 uuid = { workspace = true }
+web-time = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 fs2 = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { workspace = true, features = [ "js" ] }
-web-time = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

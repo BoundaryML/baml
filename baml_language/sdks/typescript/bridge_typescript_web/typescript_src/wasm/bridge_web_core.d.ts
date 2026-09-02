@@ -53,12 +53,6 @@ export function completeWebHostCall(call_id: number, is_error: number, content: 
 
 export function configureWebSysops(fetch_key: bigint, read_file_sync_key: bigint): void;
 
-/**
- * Configure the workerd-only non-cryptographic `UUIDv4` source before a
- * generated SDK stages bytecode at module scope.
- */
-export function configureWorkerdUuidSeed(seed: bigint): void;
-
 export function flushEvents(): void;
 
 export function getBridgeRuntimeVersion(): string;
@@ -135,7 +129,6 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly cancelFunctionCall: (a: bigint) => number;
-    readonly configureWorkerdUuidSeed: (a: bigint) => [number, number];
     readonly flushEvents: () => void;
     readonly getBridgeRuntimeVersion: () => [number, number];
     readonly getToolchainVersion: () => [number, number];

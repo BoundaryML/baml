@@ -524,11 +524,11 @@ async fn one_unwind_fans_out_and_rethrow_gets_a_new_error_id() {
     assert_eq!(fanout.summary.stream, rethrow.summary.stream);
 }
 
-/// Program identity (streams spec §2.3/§9): byte-identical builds share a
-/// `program_id` and produce identical root `ContextKey`s; flipping one
-/// comment byte changes both.
+/// The temporary `Date.now()`-backed `ProgramId` ignores source content and
+/// splits only by millisecond. Matching call paths collide when their program
+/// timestamps collide and split when their timestamps differ.
 #[tokio::test]
-async fn byte_identical_builds_share_program_identity_and_context_keys() {
+async fn temporary_program_timestamp_drives_context_keys() {
     async fn run_once(
         store_root: &std::path::Path,
         source: &str,
@@ -568,6 +568,10 @@ async fn byte_identical_builds_share_program_identity_and_context_keys() {
     }
 
     let _guard = PROFILER_TEST_LOCK.lock().await;
+    let assert_zero_random_uuid_v7 = |id: bex_events::ids::ProgramId| {
+        assert_eq!(id.0[6..], [0x70, 0, 0x80, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(id.0[6] >> 4, 7);
+    };
     let source = r#"
         function main() -> int { 41 + 1 }
     "#;
@@ -578,10 +582,12 @@ async fn byte_identical_builds_share_program_identity_and_context_keys() {
     let (id_a, keys_a) = run_once(&temp_a.path().join(".baml/profiles-v1"), source, 0xD1).await;
     let temp_b = tempfile::TempDir::new().unwrap();
     let (id_b, keys_b) = run_once(&temp_b.path().join(".baml/profiles-v1"), source, 0xD2).await;
-    assert_eq!(id_a, id_b, "byte-identical builds share a program_id");
+    assert_zero_random_uuid_v7(id_a);
+    assert_zero_random_uuid_v7(id_b);
     assert_eq!(
-        keys_a, keys_b,
-        "byte-identical builds produce identical ContextKeys"
+        id_a == id_b,
+        keys_a == keys_b,
+        "ContextKey equality must follow the temporary ProgramId"
     );
 
     let temp_c = tempfile::TempDir::new().unwrap();
@@ -591,6 +597,10 @@ async fn byte_identical_builds_share_program_identity_and_context_keys() {
         0xD3,
     )
     .await;
-    assert_ne!(id_a, id_c, "a comment byte splits the program identity");
-    assert_ne!(keys_a, keys_c, "new program_id ⇒ new ContextKeys");
+    assert_zero_random_uuid_v7(id_c);
+    assert_eq!(
+        id_a == id_c,
+        keys_a == keys_c,
+        "source bytes must not independently affect ContextKeys"
+    );
 }
