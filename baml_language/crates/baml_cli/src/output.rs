@@ -76,6 +76,22 @@ pub(crate) struct OutputArgs {
         display_order = 90
     )]
     pub diagnostic_format: Option<DiagnosticFormatChoice>,
+
+    #[arg(
+        long = "agent-skill-check",
+        env = "BAML_AGENT_SKILL_CHECK",
+        value_enum,
+        value_name = "MODE",
+        help = "Control BAML agent skill validation [default: auto] [possible values: auto, require, warn, off]",
+        hide_default_value = true,
+        hide_env = true,
+        hide_possible_values = true,
+        default_value_t = AgentSkillCheckChoice::Auto,
+        global = true,
+        help_heading = "Global options",
+        display_order = 95
+    )]
+    pub agent_skill_check: AgentSkillCheckChoice,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -119,12 +135,33 @@ pub(crate) enum DiagnosticFormatChoice {
     Concise,
 }
 
+#[derive(ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum AgentSkillCheckChoice {
+    /// Require a matching skill for agents; warn for humans.
+    #[default]
+    Auto,
+    /// Fail when the matching skill is missing or outdated.
+    Require,
+    /// Warn when the matching skill is missing or outdated.
+    Warn,
+    /// Skip agent skill validation.
+    Off,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AgentSkillCheckPolicy {
+    Require,
+    Warn,
+    Off,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct OutputPolicy {
     pub stdout: StreamPolicy,
     pub stderr: StreamPolicy,
     pub diagnostics: DiagnosticPolicy,
     pub progress: bool,
+    pub agent_skill_check: AgentSkillCheckPolicy,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -163,6 +200,7 @@ const DEFAULT_POLICY: OutputPolicy = OutputPolicy {
         show_error_codes: true,
     },
     progress: true,
+    agent_skill_check: AgentSkillCheckPolicy::Warn,
 };
 
 static OUTPUT_POLICY: RwLock<OutputPolicy> = RwLock::new(DEFAULT_POLICY);
@@ -219,6 +257,12 @@ fn resolve(args: OutputArgs, signals: OutputSignals) -> OutputPolicy {
     if args.no_progress {
         policy.progress = false;
     }
+    policy.agent_skill_check = match args.agent_skill_check {
+        AgentSkillCheckChoice::Auto if signals.running_in_agent => AgentSkillCheckPolicy::Require,
+        AgentSkillCheckChoice::Auto | AgentSkillCheckChoice::Warn => AgentSkillCheckPolicy::Warn,
+        AgentSkillCheckChoice::Require => AgentSkillCheckPolicy::Require,
+        AgentSkillCheckChoice::Off => AgentSkillCheckPolicy::Off,
+    };
 
     policy
 }
@@ -240,6 +284,7 @@ impl OutputPreset {
                     show_error_codes: true,
                 },
                 progress: false,
+                agent_skill_check: AgentSkillCheckPolicy::Warn,
             },
             Self::Human | Self::Auto => OutputPolicy {
                 stdout: StreamPolicy {
@@ -255,6 +300,7 @@ impl OutputPreset {
                     show_error_codes: true,
                 },
                 progress: true,
+                agent_skill_check: AgentSkillCheckPolicy::Warn,
             },
         }
     }
@@ -336,6 +382,7 @@ mod tests {
             no_progress: false,
             hyperlinks: None,
             diagnostic_format: None,
+            agent_skill_check: AgentSkillCheckChoice::Auto,
         }
     }
 
@@ -355,6 +402,7 @@ mod tests {
         assert!(!policy.stderr.hyperlinks);
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Agent);
         assert!(!policy.progress);
+        assert_eq!(policy.agent_skill_check, AgentSkillCheckPolicy::Require);
     }
 
     #[test]
@@ -376,6 +424,7 @@ mod tests {
         assert!(policy.stderr.hyperlinks);
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Human);
         assert!(policy.progress);
+        assert_eq!(policy.agent_skill_check, AgentSkillCheckPolicy::Warn);
     }
 
     #[test]
@@ -420,5 +469,48 @@ mod tests {
         assert!(!policy.stdout.hyperlinks);
         assert!(!policy.stderr.hyperlinks);
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Agent);
+    }
+
+    #[test]
+    fn explicit_agent_skill_check_overrides_detection() {
+        for (choice, running_in_agent, expected) in [
+            (
+                AgentSkillCheckChoice::Require,
+                false,
+                AgentSkillCheckPolicy::Require,
+            ),
+            (
+                AgentSkillCheckChoice::Warn,
+                true,
+                AgentSkillCheckPolicy::Warn,
+            ),
+            (AgentSkillCheckChoice::Off, true, AgentSkillCheckPolicy::Off),
+        ] {
+            let mut output_args = args(OutputPreset::Auto);
+            output_args.agent_skill_check = choice;
+            let policy = resolve(
+                output_args,
+                OutputSignals {
+                    running_in_agent,
+                    ..INTERACTIVE
+                },
+            );
+
+            assert_eq!(policy.agent_skill_check, expected);
+        }
+    }
+
+    #[test]
+    fn explicit_human_output_does_not_disable_agent_skill_requirement() {
+        let policy = resolve(
+            args(OutputPreset::Human),
+            OutputSignals {
+                running_in_agent: true,
+                ..INTERACTIVE
+            },
+        );
+
+        assert_eq!(policy.diagnostics.format, DiagnosticFormat::Human);
+        assert_eq!(policy.agent_skill_check, AgentSkillCheckPolicy::Require);
     }
 }

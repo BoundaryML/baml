@@ -10,6 +10,7 @@ fn run_from(project: &std::path::Path, args: &[&str]) -> std::process::Output {
         .current_dir(project)
         .env("HOME", project.parent().unwrap_or(project))
         .env("DO_NOT_TRACK", "1")
+        .env("BAML_AGENT_SKILL_CHECK", "warn")
         .env("HTTP_PROXY", "http://127.0.0.1:1")
         .env("HTTPS_PROXY", "http://127.0.0.1:1")
         .env("ALL_PROXY", "http://127.0.0.1:1")

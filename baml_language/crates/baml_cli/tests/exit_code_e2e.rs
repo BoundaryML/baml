@@ -45,6 +45,7 @@ fn run_baml_cli_with_env(built: &Path, dir: &Path, args: &[&str], env: &[(&str, 
     // CLAUDECODE/AI_AGENT/… environment flips `--output-preset auto` to
     // `agent`, which disables the progress lines some assertions read.
     cmd.env("BAML_OUTPUT_PRESET", "human");
+    cmd.env("BAML_AGENT_SKILL_CHECK", "off");
     cmd.env("BAML_HOME", &home);
     // Tests are quiet unless they explicitly exercise the inherited log level.
     cmd.env_remove("BAML_LOG");
@@ -1216,6 +1217,7 @@ test "streams" {
         // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
         // cannot flip `--output-preset auto` to `agent` and hide progress lines.
         .env("BAML_OUTPUT_PRESET", "human")
+        .env("BAML_AGENT_SKILL_CHECK", "off")
         .env("BAML_HOME", &home)
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .stdout(Stdio::piped())
@@ -2196,6 +2198,7 @@ fn run_file_script_mode_passes_args_after_separator_as_argv() {
     let output = Command::new(&script)
         .args(["--", "alpha", "--beta", "gamma"])
         .current_dir(tmp.path())
+        .env("BAML_AGENT_SKILL_CHECK", "off")
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .output()
         .expect("execute the shebang script directly");
@@ -2249,6 +2252,7 @@ fn shebang_can_name_a_specific_function() {
 
     let output = Command::new(&script)
         .current_dir(tmp.path())
+        .env("BAML_AGENT_SKILL_CHECK", "off")
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .output()
         .expect("execute the shebang script directly");
@@ -2302,6 +2306,7 @@ fn executable_baml_script_runs_via_kernel_shebang() {
     // takes none. The kernel drives `#! … run --file <this script>`.
     let output = Command::new(&script)
         .current_dir(tmp.path())
+        .env("BAML_AGENT_SKILL_CHECK", "off")
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .output()
         .expect("execute the shebang script directly");

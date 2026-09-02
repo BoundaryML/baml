@@ -350,6 +350,13 @@ impl RuntimeCli {
             return args.run(crate::output::policy().stdout.color);
         }
 
+        // Resolve every output dial once, before any subcommand writes.
+        crate::output::init(self.output);
+
+        if self.command.requires_agent_skill() {
+            crate::skill_check::check(self.command.agent_skill_project_path())?;
+        }
+
         // Fire anonymous, best-effort telemetry for this invocation. The
         // event is appended to an on-disk queue (one atomic write); on drop
         // of the guard (after the match below returns) the queue file is
@@ -358,18 +365,6 @@ impl RuntimeCli {
         let _telemetry = crate::telemetry::record_invocation(
             self.invoked_subcommand.as_deref().unwrap_or("unknown"),
         );
-
-        // Resolve every output dial once, before any subcommand writes.
-        crate::output::init(self.output);
-
-        // Warn about a missing or stale embedded skill only on the core
-        // authoring commands, keeping machine-facing utilities quiet.
-        if matches!(
-            &self.command,
-            Commands::Init(_) | Commands::Run(_) | Commands::Generate(_) | Commands::Pack(_)
-        ) {
-            crate::skill_check::check();
-        }
 
         match &self.command {
             Commands::Init(args) => args.run(),
@@ -405,6 +400,41 @@ impl RuntimeCli {
 }
 
 impl Commands {
+    fn agent_skill_project_path(&self) -> Option<&Path> {
+        match self {
+            Self::Check(args) => args.from.as_deref(),
+            Self::Describe(args) => args.from.as_deref(),
+            Self::Query(args) => args.from.as_deref(),
+            Self::Format(args) => args.from.as_deref(),
+            Self::Generate(args) => match &args.command {
+                Some(crate::generate::GenerateCommand::Add(args)) => args.from.as_deref(),
+                None => args.from.as_deref(),
+            },
+            Self::Test(args) => args.from.as_deref(),
+            Self::Run(args) => args.from.as_deref(),
+            Self::Pack(args) => args.from.as_deref(),
+            Self::Playground(args) => args.from.as_deref(),
+            _ => None,
+        }
+    }
+
+    fn requires_agent_skill(&self) -> bool {
+        matches!(
+            self,
+            Self::Check(_)
+                | Self::Describe(_)
+                | Self::Query(_)
+                | Self::Format(_)
+                | Self::Generate(_)
+                | Self::Test(_)
+                | Self::Init(_)
+                | Self::New(_)
+                | Self::Run(_)
+                | Self::Pack(_)
+                | Self::Playground(_)
+        )
+    }
+
     fn has_legacy_project(&self) -> bool {
         match self {
             Self::Check(args) => args.from.is_some(),
@@ -658,6 +688,8 @@ mod tests {
             "always".into(),
             "--diagnostic-format".into(),
             "agent".into(),
+            "--agent-skill-check".into(),
+            "off".into(),
         ]);
 
         assert_eq!(cli.output.preset, crate::output::OutputPreset::Human);
@@ -670,6 +702,10 @@ mod tests {
             cli.output.diagnostic_format,
             Some(crate::output::DiagnosticFormatChoice::Agent)
         );
+        assert_eq!(
+            cli.output.agent_skill_check,
+            crate::output::AgentSkillCheckChoice::Off
+        );
     }
 
     #[test]
@@ -680,6 +716,7 @@ mod tests {
             ("color", "BAML_COLOR"),
             ("hyperlinks", "BAML_HYPERLINKS"),
             ("diagnostic_format", "BAML_DIAGNOSTIC_FORMAT"),
+            ("agent_skill_check", "BAML_AGENT_SKILL_CHECK"),
         ];
 
         for (id, env) in expected {
@@ -702,6 +739,7 @@ mod tests {
                     "--output-preset <PRESET>\n          Select output defaults [default: auto] [possible values: auto, human, agent]",
                     "--hyperlinks <WHEN>\n          Control terminal hyperlinks [possible values: auto, always, never]",
                     "--diagnostic-format <FORMAT>\n          Select the diagnostic format [possible values: human, agent, concise]",
+                    "--agent-skill-check <MODE>\n          Control BAML agent skill validation [default: auto] [possible values: auto, require, warn,\n          off]",
                 ],
             ),
             (

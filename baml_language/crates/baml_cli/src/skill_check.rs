@@ -1,4 +1,4 @@
-//! Passive warning for missing or stale BAML agent skills.
+//! Validation for missing or stale BAML agent skills.
 //!
 //! The active toolchain compares the installed skill's frontmatter version
 //! with its own version. This keeps skill freshness local and gives each
@@ -12,12 +12,14 @@ use std::{
 
 use serde::Deserialize;
 
-use crate::agent_command::SKILL_NAME;
+use crate::{agent_command::SKILL_NAME, output::AgentSkillCheckPolicy};
 
 const SKILL_OUTDATED_WARNING: &str =
     "your baml skill does not match this toolchain; use `baml agent install` to upgrade it";
 const SKILL_MISSING_WARNING: &str =
     "no baml skill is installed; set it up with `baml agent install`";
+const SKILL_OUTDATED_ERROR: &str = "the installed BAML agent skill does not match this toolchain; run `baml agent install`, restart the agent, then retry; set BAML_AGENT_SKILL_CHECK=off to bypass this check";
+const SKILL_MISSING_ERROR: &str = "the BAML agent skill is required but is not installed; run `baml agent install`, restart the agent, then retry; set BAML_AGENT_SKILL_CHECK=off to bypass this check";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SkillStatus {
@@ -37,9 +39,28 @@ struct SkillMetadata {
     toolchain_version: String,
 }
 
-pub(crate) fn check() {
-    if let Some(message) = skill_warning_message(project_skill_status()) {
-        crate::reporter::print_warning(format_args!("{message}"));
+pub(crate) fn check(project: Option<&Path>) -> anyhow::Result<()> {
+    let policy = crate::output::policy().agent_skill_check;
+    if policy == AgentSkillCheckPolicy::Off {
+        return Ok(());
+    }
+
+    let status = project_skill_status(project)?;
+    match (policy, status) {
+        (_, SkillStatus::Current) => Ok(()),
+        (AgentSkillCheckPolicy::Warn, status) => {
+            if let Some(message) = skill_warning_message(status) {
+                crate::reporter::print_warning(format_args!("{message}"));
+            }
+            Ok(())
+        }
+        (AgentSkillCheckPolicy::Require, SkillStatus::Missing) => {
+            anyhow::bail!(SKILL_MISSING_ERROR)
+        }
+        (AgentSkillCheckPolicy::Require, SkillStatus::Outdated) => {
+            anyhow::bail!(SKILL_OUTDATED_ERROR)
+        }
+        (AgentSkillCheckPolicy::Off, _) => Ok(()),
     }
 }
 
@@ -51,9 +72,16 @@ fn skill_warning_message(status: SkillStatus) -> Option<&'static str> {
     }
 }
 
-fn project_skill_status() -> SkillStatus {
-    let Ok(mut dir) = std::env::current_dir() else {
-        return SkillStatus::Missing;
+fn project_skill_status(project: Option<&Path>) -> anyhow::Result<SkillStatus> {
+    let mut dir = match project {
+        Some(project) => match crate::project_load::find_project_root_from(Some(project))? {
+            Some(root) => root,
+            None => return Ok(SkillStatus::Missing),
+        },
+        None => match std::env::current_dir() {
+            Ok(dir) => dir,
+            Err(_) => return Ok(SkillStatus::Missing),
+        },
     };
     let home = std::env::var_os("HOME").map(PathBuf::from);
 
@@ -61,17 +89,17 @@ fn project_skill_status() -> SkillStatus {
         let statuses = [".agents/skills", ".claude/skills"]
             .map(|relative| installed_skill_status(&dir.join(relative)));
         if statuses.contains(&SkillStatus::Outdated) {
-            return SkillStatus::Outdated;
+            return Ok(SkillStatus::Outdated);
         }
         if statuses.contains(&SkillStatus::Current) {
-            return SkillStatus::Current;
+            return Ok(SkillStatus::Current);
         }
         if home.as_ref().is_some_and(|home| dir == *home) || !dir.pop() {
             break;
         }
     }
 
-    SkillStatus::Missing
+    Ok(SkillStatus::Missing)
 }
 
 fn installed_skill_status(skills_dir: &Path) -> SkillStatus {
