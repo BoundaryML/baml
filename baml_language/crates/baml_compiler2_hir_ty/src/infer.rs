@@ -4789,13 +4789,19 @@ impl<'db> InferenceContext<'db> {
         lhs: &Ty,
         rhs: Option<&Ty>,
     ) {
-        // SHALLOW error/unknown screening (TIR's gate): a nested error slot
-        // (an incomplete existential's recovered pin) does not silence the
+        // SHALLOW error screening (TIR's gate): a nested error slot (an
+        // incomplete existential's recovered pin) does not silence the
         // operator report - the operand as written still has no impl, and
         // that is this diagnostic's claim.
-        let dirty = |ty: &Ty| {
-            matches!(ty.kind(), InferTy::Error { .. } | InferTy::Unknown { .. }) || ty.has_infer()
-        };
+        //
+        // The `unknown` top type is NOT screened: it is a type the reader
+        // wrote, not a cascade from an earlier failure, and it implements
+        // no operator - so `a + 1` on an `unknown` is a real E0004 rather
+        // than something to stay quiet about. Only the error sentinel and
+        // an unresolved inference var are cascades. (`dispatch_operator`
+        // still suppresses the RESULT to the sentinel for unknown - that is
+        // the ordinary diagnose-then-fill split, not a disagreement.)
+        let dirty = |ty: &Ty| matches!(ty.kind(), InferTy::Error { .. }) || ty.has_infer();
         if dirty(lhs) || rhs.is_some_and(dirty) {
             return;
         }
