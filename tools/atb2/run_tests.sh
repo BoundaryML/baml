@@ -99,9 +99,11 @@ run_stage() {
             echo "run_tests: testing ISSUE ORGANIZATION (organize_issue, gauge_issue, difficulty_estimate)"
             exec "$BAML" test -i "root::organize_issue::*" -i "root::gauge_issue::*" -i "root::difficulty_estimate::*" ;;
         pr|3|"PR creation")
-            echo "run_tests: testing PR CREATION (fix_in_budget, design_doc)"
+            echo "run_tests: testing PR CREATION (handle_issue, then fix_in_budget, design_doc)"
             echo "run_tests: real agent sessions — tens of minutes each; needs 'claude' logged in.${ATB2_ISSUES:+ Issues: $ATB2_ISSUES}"
-            exec "$BAML" test -i "root::fix_in_budget::*" -i "root::design_doc::*" ;;
+            # the token-free handle_issue tests first: verdicts, budgets, path
+            # sanitizing; a regression there should not cost an agent session
+            exec "$BAML" test -i "root::handle_issue::*" -i "root::fix_in_budget::*" -i "root::design_doc::*" ;;
         *)  die "unknown stage: $1 (use create | organize | pr)" ;;
     esac
 }
