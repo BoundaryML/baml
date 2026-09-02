@@ -11,7 +11,7 @@ use baml_compiler2_hir::{
 use baml_type::{BuiltinTypeName, Package};
 use text_size::TextSize;
 
-use crate::line_index::LineIndex;
+use crate::{line_index::LineIndex, symbols::Internals};
 
 // ── ResolvedTarget ────────────────────────────────────────────────────────────
 
@@ -226,10 +226,11 @@ impl ListingEntry {
 pub fn list_package_items(
     db: &dyn baml_compiler2_ppir::Db,
     package_id: baml_base::SourceRoot,
+    internals: Internals,
 ) -> Vec<ListingEntry> {
     let pkg = package_items(db, package_id);
     let package_name = spelling(db).of(package_id).clone();
-    collect_entries_from_package(db, pkg, &package_name)
+    collect_entries_from_package(db, pkg, &package_name, internals)
 }
 
 /// Collect listing entries from a `PackageItems`, including all namespaces.
@@ -237,6 +238,7 @@ fn collect_entries_from_package(
     db: &dyn baml_compiler2_ppir::Db,
     pkg: &PackageItems<'_>,
     package_name: &Name,
+    internals: Internals,
 ) -> Vec<ListingEntry> {
     let mut entries = Vec::new();
     let mut line_indexes = HashMap::new();
@@ -252,6 +254,7 @@ fn collect_entries_from_package(
                 ns_path.clone(),
                 name.clone(),
                 *def,
+                internals,
             ) {
                 entries.push(entry);
             }
@@ -281,6 +284,7 @@ pub fn list_namespace_items(
     db: &dyn baml_compiler2_ppir::Db,
     package_id: baml_base::SourceRoot,
     namespace_path: &[Name],
+    internals: Internals,
 ) -> Option<Vec<ListingEntry>> {
     let pkg = package_items(db, package_id);
     let package_name = spelling(db).of(package_id).clone();
@@ -316,6 +320,7 @@ pub fn list_namespace_items(
                 ns_path.clone(),
                 name.clone(),
                 *def,
+                internals,
             ) {
                 entries.push(entry);
             }
@@ -356,11 +361,15 @@ fn make_entry<'db>(
     ns_path: Vec<Name>,
     item_name: Name,
     def: Definition<'db>,
+    internals: Internals,
 ) -> Option<ListingEntry> {
     if def.is_language_internal(db) || is_hidden_synthesized_type(db, &item_name, def) {
         return None;
     }
     let (file, name_span) = crate::syntax::definition_span(db, def)?;
+    if internals.hides(db, item_name.as_str(), file) {
+        return None;
+    }
     let file_path = file.path(db).display().to_string();
     let line = entry_line(db, line_indexes, file, name_span.start());
 
@@ -404,7 +413,7 @@ mod tests {
     /// Run `list_package_items()` for the fixture's workspace package.
     fn list_package_items_user(project: &ProjectTest) -> Vec<ListingEntry> {
         let package_id = project.package;
-        list_package_items(&project.db, package_id)
+        list_package_items(&project.db, package_id, Internals::Hide)
     }
 
     /// Run `list_namespace_items()` for a workspace-package namespace.
@@ -414,7 +423,7 @@ mod tests {
     ) -> Option<Vec<ListingEntry>> {
         let package_id = project.package;
         let ns_path: Vec<Name> = ns_segments.iter().map(Name::new).collect();
-        list_namespace_items(&project.db, package_id, &ns_path)
+        list_namespace_items(&project.db, package_id, &ns_path, Internals::Hide)
     }
 
     /// Format a `ListingEntry` for snapshot comparison.
@@ -544,7 +553,7 @@ class Baz {
     fn list_package_items_builtin_fqns_include_package_name() {
         let project = make_multi_ns_project();
         let pkg_id = spelling(&project.db).root(&Name::new("baml")).unwrap();
-        let entries = list_package_items(&project.db, pkg_id);
+        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
 
         assert!(
             entries.iter().any(|e| e.fqn() == "baml.iter.Range"),
@@ -583,7 +592,7 @@ test "identity" {
 
         assert!(internal_def.is_language_internal(&project.db));
         assert!(
-            list_package_items(&project.db, pkg_id)
+            list_package_items(&project.db, pkg_id, Internals::Hide)
                 .iter()
                 .all(|entry| entry.item_name.as_str() != internal_name.as_str())
         );
@@ -616,7 +625,7 @@ function summarize_structured(input: string) -> Summary {
         );
         let project = builder.build();
         let pkg_id = project.package;
-        let entries = list_package_items(&project.db, pkg_id);
+        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
 
         for name in [
             "summarize@spec",
@@ -693,7 +702,7 @@ function summarize_structured(input: string) -> Summary {
     fn round_trip_listing_to_resolve() {
         let project = make_multi_ns_project();
         let pkg_id = project.package;
-        let entries = list_package_items(&project.db, pkg_id);
+        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
 
         for entry in &entries {
             let fqn = entry.fqn();
@@ -711,7 +720,7 @@ function summarize_structured(input: string) -> Summary {
     fn round_trip_listing_to_resolve_deep_ns() {
         let project = make_deep_ns_project();
         let pkg_id = project.package;
-        let entries = list_package_items(&project.db, pkg_id);
+        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
 
         assert!(
             !entries.is_empty(),
@@ -790,7 +799,7 @@ function summarize_structured(input: string) -> Summary {
     fn round_trip_member() {
         let project = make_multi_ns_project();
         let pkg_id = project.package;
-        let entries = list_package_items(&project.db, pkg_id);
+        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
 
         let mut checked = 0;
 

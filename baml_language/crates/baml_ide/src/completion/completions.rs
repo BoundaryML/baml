@@ -1,9 +1,10 @@
 //! The accumulator (rust-analyzer's `Completions`): providers say WHAT is
 //! offered, and this module is the one place that decides HOW an offer is
 //! presented — its insert text, its kind, and the relevance facts it ranks
-//! by. A presentation rule stated here holds for every provider at once,
-//! which is exactly what the hand-built item literals this replaces could
-//! not promise.
+//! by — and WHETHER it is offered at all, which is the same argument: a
+//! visibility rule stated here holds for every provider at once, which is
+//! exactly what the hand-built item literals this replaces could not
+//! promise.
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_hir::contributions::DefinitionKind;
@@ -20,16 +21,32 @@ use super::{
     render::MemberForm,
 };
 
-pub(super) struct Completions {
+pub(super) struct Completions<'db> {
+    db: &'db dyn baml_compiler2_ppir::Db,
+    /// The file being edited: types render relative to it.
+    file: SourceFile,
     /// The range every accepted item replaces: the fragment already typed.
     source_range: TextRange,
+    /// Whether the stdlib's internals belong in this list, decided once
+    /// from what the reader has typed.
+    internals: crate::symbols::Internals,
     items: Vec<Completion>,
 }
 
-impl Completions {
-    pub(super) fn new(source_range: TextRange) -> Self {
+impl<'db> Completions<'db> {
+    /// `typed` is the fragment the reader has already written at the cursor
+    /// — exactly the text `source_range` covers.
+    pub(super) fn new(
+        db: &'db dyn baml_compiler2_ppir::Db,
+        file: SourceFile,
+        source_range: TextRange,
+        typed: &str,
+    ) -> Self {
         Self {
+            db,
+            file,
             source_range,
+            internals: crate::symbols::Internals::for_query(typed),
             items: Vec::new(),
         }
     }
@@ -48,15 +65,18 @@ impl Completions {
 
     /// A member reached through a dot — of a value or of a type; `form`
     /// says which, and decides how its signature reads.
-    pub(super) fn add_member(
-        &mut self,
-        db: &dyn baml_compiler2_ppir::Db,
-        file: SourceFile,
-        candidate: &MemberCandidate<'_>,
-        form: MemberForm,
-    ) {
-        let (detail, documentation) = render::member(db, file, &candidate.decl, form);
-        self.push(Completion {
+    pub(super) fn add_member(&mut self, candidate: &MemberCandidate<'_>, form: MemberForm) {
+        let (detail, documentation) = render::member(self.db, self.file, &candidate.decl, form);
+        let declared_in = match candidate.decl {
+            MemberDecl::Method(function) => Some(function.file(self.db)),
+            MemberDecl::ClassField { class, .. } => Some(class.file(self.db)),
+            MemberDecl::InterfaceField { interface, .. } => Some(interface.file(self.db)),
+            MemberDecl::EnumVariant { enum_loc, .. } => Some(enum_loc.file(self.db)),
+            // A mounted package exports rows, not source: there is no
+            // stdlib file to point at, and no mounted package is one.
+            MemberDecl::Mounted => None,
+        };
+        let item = Completion {
             label: candidate.name.as_str().to_string(),
             source_range: self.source_range,
             insert: insert_for_name(&candidate.name, candidate.is_method),
@@ -71,28 +91,24 @@ impl Completions {
                 is_inherent: matches!(candidate.source, MemberSource::Inherent),
                 ..CompletionRelevance::default()
             },
-        });
+        };
+        self.push(declared_in, item);
     }
 
     /// An item or child namespace reached through a package qualifier.
     /// Everything a qualifier reaches is equally "in" it — the reader
     /// narrowed the space by writing the qualifier — so relevance is flat.
-    pub(super) fn add_namespace_member(
-        &mut self,
-        db: &dyn baml_compiler2_ppir::Db,
-        file: SourceFile,
-        member: &NamespaceMember<'_>,
-    ) {
+    pub(super) fn add_namespace_member(&mut self, member: &NamespaceMember<'_>) {
         let (kind, detail, documentation) = match &member.kind {
             NamespaceMemberKind::Item(def) => {
-                let (detail, documentation) = render::definition(db, file, def);
+                let (detail, documentation) = render::definition(self.db, self.file, def);
                 (definition_kind(def.kind()), detail, documentation)
             }
             NamespaceMemberKind::Namespace => {
                 (CompletionKind::Package, Some("namespace".to_string()), None)
             }
         };
-        self.push(Completion {
+        let item = Completion {
             label: member.name.as_str().to_string(),
             source_range: self.source_range,
             insert: insert_for_name(&member.name, kind == CompletionKind::Function),
@@ -100,29 +116,35 @@ impl Completions {
             detail,
             documentation,
             relevance: CompletionRelevance::default(),
-        });
+        };
+        // A child namespace is a path component, not a declaration; only
+        // the items in it can carry the mark.
+        let declared_in = match &member.kind {
+            NamespaceMemberKind::Item(def) => Some(def.file(self.db)),
+            NamespaceMemberKind::Namespace => None,
+        };
+        self.push(declared_in, item);
     }
 
     /// A bare name in scope: a local, an own-package item, or a dependency
     /// package's name.
-    pub(super) fn add_scope_name(
-        &mut self,
-        db: &dyn baml_compiler2_ppir::Db,
-        file: SourceFile,
-        entry: &ScopeName<'_>,
-    ) {
+    pub(super) fn add_scope_name(&mut self, entry: &ScopeName<'_>) {
         let (kind, is_local, is_own_package) = match &entry.kind {
             ScopeNameKind::Local { .. } => (CompletionKind::Local, true, false),
             ScopeNameKind::Item(def) => (definition_kind(def.kind()), false, true),
             ScopeNameKind::Package => (CompletionKind::Package, false, false),
         };
         let (detail, documentation) = match &entry.kind {
-            ScopeNameKind::Item(def) => render::definition(db, file, def),
+            ScopeNameKind::Item(def) => render::definition(self.db, self.file, def),
             // A local's type is the inferred one, which hover already
             // renders; the list stays quiet rather than restating a guess.
             ScopeNameKind::Local { .. } | ScopeNameKind::Package => (None, None),
         };
-        self.push(Completion {
+        // A bare name reaches the file's own namespace and nothing else, so
+        // an item here is the reader's by construction; a local is theirs by
+        // definition, and a package NAME is the only spelling that reaches
+        // the package at all.
+        let item = Completion {
             label: entry.name.as_str().to_string(),
             source_range: self.source_range,
             insert: insert_for_name(&entry.name, kind == CompletionKind::Function),
@@ -134,17 +156,13 @@ impl Completions {
                 is_own_package,
                 ..CompletionRelevance::default()
             },
-        });
+        };
+        self.push(None, item);
     }
 
     /// A bare name that resolves as a TYPE: an own-namespace type, a
     /// generic parameter, or a package rooting a qualified type path.
-    pub(super) fn add_type_scope_name(
-        &mut self,
-        db: &dyn baml_compiler2_ppir::Db,
-        file: SourceFile,
-        entry: &TypeScopeName<'_>,
-    ) {
+    pub(super) fn add_type_scope_name(&mut self, entry: &TypeScopeName<'_>) {
         let (kind, is_local, is_own_package) = match &entry.kind {
             TypeScopeNameKind::Item(def) => (definition_kind(def.kind()), false, true),
             // A generic parameter is the type-side analogue of a local:
@@ -153,10 +171,12 @@ impl Completions {
             TypeScopeNameKind::Package => (CompletionKind::Package, false, false),
         };
         let (detail, documentation) = match &entry.kind {
-            TypeScopeNameKind::Item(def) => render::definition(db, file, def),
+            TypeScopeNameKind::Item(def) => render::definition(self.db, self.file, def),
             TypeScopeNameKind::GenericParam | TypeScopeNameKind::Package => (None, None),
         };
-        self.push(Completion {
+        // Own-namespace types, the reader's own generic parameters, and
+        // package names — the same three the expression side offers.
+        let item = Completion {
             label: entry.name.as_str().to_string(),
             source_range: self.source_range,
             insert: CompletionInsert::Plain(entry.name.as_str().to_string()),
@@ -168,13 +188,14 @@ impl Completions {
                 is_own_package,
                 ..CompletionRelevance::default()
             },
-        });
+        };
+        self.push(None, item);
     }
 
     /// A builtin type alias (`int`, `string`, `json`) — the language's own
     /// spelling table, offered wherever a type can be written.
     pub(super) fn add_builtin_type(&mut self, alias: &str) {
-        self.push(Completion {
+        let item = Completion {
             label: alias.to_string(),
             source_range: self.source_range,
             insert: CompletionInsert::Plain(alias.to_string()),
@@ -182,14 +203,15 @@ impl Completions {
             detail: None,
             documentation: baml_builtins2::language_topic(alias).map(|topic| topic.summary.clone()),
             relevance: CompletionRelevance::default(),
-        });
+        };
+        self.push(None, item);
     }
 
     /// A declaration keyword with its skeleton: accepting `class` writes
     /// `class Name { … }` with tab stops, not the bare word. The label and
     /// filter stay the keyword, so typing narrows exactly as before.
     pub(super) fn add_declaration(&mut self, keyword: &str, snippet: &str) {
-        self.push(Completion {
+        let item = Completion {
             label: keyword.to_string(),
             source_range: self.source_range,
             insert: CompletionInsert::Snippet(snippet.to_string()),
@@ -198,12 +220,13 @@ impl Completions {
             documentation: baml_builtins2::language_topic(keyword)
                 .map(|topic| topic.summary.clone()),
             relevance: CompletionRelevance::default(),
-        });
+        };
+        self.push(None, item);
     }
 
     /// An `@attribute` name the compiler gives meaning to.
     pub(super) fn add_attribute(&mut self, name: &str) {
-        self.push(Completion {
+        let item = Completion {
             label: name.to_string(),
             source_range: self.source_range,
             insert: CompletionInsert::Plain(name.to_string()),
@@ -211,12 +234,13 @@ impl Completions {
             detail: None,
             documentation: baml_builtins2::language_topic(name).map(|topic| topic.summary.clone()),
             relevance: CompletionRelevance::default(),
-        });
+        };
+        self.push(None, item);
     }
 
     /// A keyword that can open a form the grammar accepts at the position.
     pub(super) fn add_keyword(&mut self, keyword: &str) {
-        self.push(Completion {
+        let item = Completion {
             label: keyword.to_string(),
             source_range: self.source_range,
             insert: CompletionInsert::Plain(keyword.to_string()),
@@ -225,59 +249,77 @@ impl Completions {
             documentation: baml_builtins2::language_topic(keyword)
                 .map(|topic| topic.summary.clone()),
             relevance: CompletionRelevance::default(),
-        });
+        };
+        self.push(None, item);
     }
 
     /// An argument label in the call it belongs to — the most specific
     /// thing an argument slot can be, which the relevance says.
-    pub(super) fn add_argument_label(
-        &mut self,
-        db: &dyn baml_compiler2_ppir::Db,
-        file: SourceFile,
-        name: &Name,
-        ty: &baml_type::Ty,
-    ) {
-        self.push(Completion {
+    pub(super) fn add_argument_label(&mut self, name: &Name, ty: &baml_type::Ty) {
+        // A named-only parameter's name IS the calling convention: hiding it
+        // would leave the parameter unpassable, so a label is never a
+        // package's internal.
+        let item = Completion {
             label: name.as_str().to_string(),
             source_range: self.source_range,
             // `name = ` — the value is what comes next, so the caret lands
             // after the equals rather than inside a placeholder.
             insert: CompletionInsert::Plain(format!("{} = ", name.as_str())),
             kind: CompletionKind::Parameter,
-            detail: Some(crate::render::display_ty_canonical_for_file(db, file, ty)),
+            detail: Some(crate::render::display_ty_canonical_for_file(
+                self.db, self.file, ty,
+            )),
             documentation: None,
             relevance: CompletionRelevance {
                 is_parameter: true,
                 ..CompletionRelevance::default()
             },
-        });
+        };
+        self.push(None, item);
     }
 
     /// An unwritten field in an object literal, inserted ready for its
     /// value.
     pub(super) fn add_record_field(
         &mut self,
-        db: &dyn baml_compiler2_ppir::Db,
-        file: SourceFile,
+        class: baml_compiler2_hir::loc::ClassLoc<'_>,
         field: &baml_compiler2_ppir::item_data::FieldData,
         ty: Option<&baml_type::Ty>,
     ) {
-        self.push(Completion {
+        let item = Completion {
             label: field.name.as_str().to_string(),
             source_range: self.source_range,
             insert: CompletionInsert::Plain(format!("{}: ", field.name.as_str())),
             kind: CompletionKind::Field,
-            detail: ty.map(|ty| crate::render::display_ty_canonical_for_file(db, file, ty)),
+            detail: ty
+                .map(|ty| crate::render::display_ty_canonical_for_file(self.db, self.file, ty)),
             documentation: field.docstring.clone(),
             relevance: CompletionRelevance {
                 is_inherent: true,
                 ..CompletionRelevance::default()
             },
-        });
+        };
+        self.push(Some(class.file(self.db)), item);
     }
 
-    fn push(&mut self, item: Completion) {
+    /// `declared_in` is the source file the offered name is declared in,
+    /// or `None` when it is not a source declaration at all — a local, a
+    /// generic parameter, a keyword, a builtin spelling, a package name, an
+    /// argument label, a mounted package's exported row.
+    fn push(&mut self, declared_in: Option<SourceFile>, item: Completion) {
+        if self.is_hidden(&item, declared_in) {
+            return;
+        }
         self.items.push(item);
+    }
+
+    /// Whether the stdlib's `_` convention keeps this name out of the list.
+    ///
+    /// The policy is [`crate::symbols::Internals`], which describe's search
+    /// and listings take too; this is the one place completion reads it, so
+    /// every provider obeys at once.
+    fn is_hidden(&self, item: &Completion, declared_in: Option<SourceFile>) -> bool {
+        declared_in.is_some_and(|file| self.internals.hides(self.db, &item.label, file))
     }
 }
 

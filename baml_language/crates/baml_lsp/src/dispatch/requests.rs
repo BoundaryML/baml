@@ -424,14 +424,22 @@ pub(super) fn completion(
         return Ok(None);
     }
     let codec = PositionCodec::new(file.text(db), snap.cx().encoding);
-    Ok(Some(lsp_types::CompletionResponse::Array(
-        items
-            .iter()
-            .enumerate()
-            .map(|(rank, item)| {
-                super::proto::completion_item(item, rank, &codec, snap.cx().snippet_support)
-            })
-            .collect(),
+    Ok(Some(lsp_types::CompletionResponse::List(
+        lsp_types::CompletionList {
+            // Always incomplete, as rust-analyzer's lists are: the set
+            // depends on what has been typed, not just on the position. A
+            // leading `_` asks for a package's internals, so a client that
+            // re-filtered a cached list would answer that question itself —
+            // with the one list that deliberately left them out.
+            is_incomplete: true,
+            items: items
+                .iter()
+                .enumerate()
+                .map(|(rank, item)| {
+                    super::proto::completion_item(item, rank, &codec, snap.cx().snippet_support)
+                })
+                .collect(),
+        },
     )))
 }
 

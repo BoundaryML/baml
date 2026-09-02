@@ -26,7 +26,7 @@ pub(crate) fn complete(
     db: &dyn baml_compiler2_ppir::Db,
     file: SourceFile,
     offset: TextSize,
-    out: &mut Completions,
+    out: &mut Completions<'_>,
 ) {
     for entry in names_in_scope_at(db, file, offset) {
         // The resolver would resolve a `$`-companion if a reader could write
@@ -37,7 +37,7 @@ pub(crate) fn complete(
         {
             continue;
         }
-        out.add_scope_name(db, file, &entry);
+        out.add_scope_name(&entry);
     }
 
     for keyword in EXPRESSION_KEYWORDS {

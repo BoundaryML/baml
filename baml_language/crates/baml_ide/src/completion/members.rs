@@ -8,7 +8,6 @@
 //! already resolved; what remains here is each arm's own filter — which
 //! names a reader can actually write at this position.
 
-use baml_base::SourceFile;
 use baml_compiler2_hir::contributions::Definition;
 use baml_compiler2_hir_ty::method_resolution::MemberDecl;
 use baml_compiler2_ppir::resolve::NamespaceMemberKind;
@@ -22,10 +21,9 @@ use crate::symbols;
 
 pub(crate) fn complete(
     db: &dyn baml_compiler2_ppir::Db,
-    file: SourceFile,
     target: &DotTarget<'_>,
     kind: PathKind,
-    out: &mut Completions,
+    out: &mut Completions<'_>,
 ) {
     match target {
         DotTarget::Value { owner, receiver } => {
@@ -41,7 +39,7 @@ pub(crate) fn complete(
                 if candidate.is_static {
                     continue;
                 }
-                out.add_member(db, file, &candidate, MemberForm::Instance);
+                out.add_member(&candidate, MemberForm::Instance);
             }
         }
         DotTarget::Type(definition) => {
@@ -54,7 +52,7 @@ pub(crate) fn complete(
                 {
                     continue;
                 }
-                out.add_member(db, file, &candidate, MemberForm::Qualified);
+                out.add_member(&candidate, MemberForm::Qualified);
             }
         }
         DotTarget::Namespace(members) => {
@@ -71,7 +69,7 @@ pub(crate) fn complete(
                         continue;
                     }
                 }
-                out.add_namespace_member(db, file, member);
+                out.add_namespace_member(member);
             }
         }
     }

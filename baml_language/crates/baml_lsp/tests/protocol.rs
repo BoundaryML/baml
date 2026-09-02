@@ -1377,7 +1377,11 @@ fn completion_after_a_dot_offers_the_receivers_members() {
             position_params(&uri, pos_of(FUNCS_FIXTURE, "at(0")),
         )
         .expect("completion succeeds");
-    let items = response.as_array().expect("an item array");
+    assert_eq!(
+        response["isIncomplete"], true,
+        "the list depends on the typed prefix, so the client must re-ask"
+    );
+    let items = response["items"].as_array().expect("an item array");
     let at = items
         .iter()
         .find(|item| item["label"] == "at")
@@ -1403,6 +1407,57 @@ fn completion_after_a_dot_offers_the_receivers_members() {
     let mut sorted = ranks.clone();
     sorted.sort_unstable();
     assert_eq!(ranks, sorted, "items arrive best-first");
+}
+
+/// Two cursors on the same qualifier: one bare, one after a typed `_`.
+const INTERNALS_FIXTURE: &str = "function a() -> int throws never {\n    baml.time.AAA\n    0\n}\n\n\
+                                 function b() -> int throws never {\n    baml.time._BBB\n    0\n}\n";
+
+/// The editor half of the `_`-privacy rule: the stdlib's internals are
+/// absent until the reader asks for them, and asking means a SECOND request
+/// — which is why the list is always incomplete.
+#[test]
+fn a_typed_underscore_re_asks_for_the_stdlibs_internals() {
+    let mut harness = feature_harness();
+    let uri = harness.uri("internals.baml");
+    harness.open(SessionKey(1), &uri, 1, INTERNALS_FIXTURE);
+    harness.settle();
+
+    let labels = |response: &Value| -> Vec<String> {
+        response["items"]
+            .as_array()
+            .expect("an item array")
+            .iter()
+            .map(|item| item["label"].as_str().unwrap().to_string())
+            .collect()
+    };
+
+    let bare = harness
+        .request(
+            SessionKey(1),
+            "textDocument/completion",
+            position_params(&uri, pos_of(INTERNALS_FIXTURE, "AAA")),
+        )
+        .expect("completion succeeds");
+    let bare = labels(&bare);
+    assert!(bare.iter().any(|label| label == "Instant"), "{bare:?}");
+    assert!(
+        !bare.iter().any(|label| label.starts_with('_')),
+        "the stdlib's internal helpers stay out of the list, got {bare:?}"
+    );
+
+    let asked = harness
+        .request(
+            SessionKey(1),
+            "textDocument/completion",
+            position_params(&uri, pos_of(INTERNALS_FIXTURE, "BBB")),
+        )
+        .expect("completion succeeds");
+    let asked = labels(&asked);
+    assert!(
+        asked.iter().any(|label| label == "_tz_offset_at"),
+        "a typed `_` reaches them, got {asked:?}"
+    );
 }
 
 #[test]

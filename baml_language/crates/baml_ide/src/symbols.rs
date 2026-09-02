@@ -41,6 +41,61 @@ pub(crate) fn is_synthesized(
     }
 }
 
+/// The mark the stdlib uses for a helper that is its own business: until
+/// BAML has `public`/`private`, a leading `_` is the whole convention.
+const INTERNAL_PREFIX: &str = "_";
+
+/// Whether an enumeration of the language surface includes the stdlib's
+/// `_`-marked internal helpers.
+///
+/// The stdlib prefixes hundreds of helpers with `_`, and every surface that
+/// SUGGESTS what to reach for — completion, `baml describe`'s search, its
+/// listings, its did-you-mean — would otherwise bury the answer in them. So
+/// the policy is a parameter those enumerations take rather than a rule each
+/// caller remembers to apply: a new consumer has to say which it wants.
+///
+/// Narrow by design. It is the STDLIB's convention, so [`Internals::hides`]
+/// reads stdlib roots and nothing else; a name in the reader's own source is
+/// theirs, however it is spelled. And it only ever hides a SUGGESTION —
+/// never a resolution, and never an answer to a question that named the
+/// symbol, which is what [`Internals::for_query`] is for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Internals {
+    Hide,
+    Show,
+}
+
+impl Internals {
+    /// What the reader wrote decides: a leading `_` on any word of it asks
+    /// for the internals.
+    ///
+    /// Words split on whitespace and `.`, because a dotted path is how BAML
+    /// addresses a symbol — `baml.time._tz_offset_at` names one as plainly
+    /// as `_tz_offset_at` does.
+    pub fn for_query(query: &str) -> Self {
+        if query
+            .split(|c: char| c.is_whitespace() || c == '.')
+            .any(|word| word.starts_with(INTERNAL_PREFIX))
+        {
+            Self::Show
+        } else {
+            Self::Hide
+        }
+    }
+
+    /// Whether this policy keeps `name`, declared in `declared_in`, out.
+    pub fn hides(
+        self,
+        db: &dyn baml_compiler2_ppir::Db,
+        name: &str,
+        declared_in: baml_base::SourceFile,
+    ) -> bool {
+        self == Self::Hide
+            && name.starts_with(INTERNAL_PREFIX)
+            && declared_in.source_root(db).kind(db) == baml_base::SourceRootKind::Stdlib
+    }
+}
+
 /// Symbol kind — locally defined since v1 HIR is removed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolKind {

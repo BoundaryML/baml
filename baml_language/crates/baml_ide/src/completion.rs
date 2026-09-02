@@ -52,13 +52,16 @@ pub fn completions(
     let Some(context) = CompletionContext::new(db, file, offset) else {
         return Vec::new();
     };
-    let mut out = Completions::new(context.source_range);
+    // The fragment already typed. The accumulator reads it to decide whether
+    // the reader is reaching for a package's internals on purpose.
+    let typed = &file.text(db)[context.source_range];
+    let mut out = Completions::new(db, file, context.source_range, typed);
     match &context.analysis {
         CompletionAnalysis::Path {
             kind,
             qualifier: Some(target),
         } => {
-            members::complete(db, file, target, *kind, &mut out);
+            members::complete(db, target, *kind, &mut out);
         }
         CompletionAnalysis::Path {
             kind: PathKind::Expr,
@@ -75,11 +78,11 @@ pub fn completions(
         CompletionAnalysis::CallArgument { call } => {
             // A slot takes a named argument OR an expression, so it offers
             // both; relevance is what puts the callee's own labels first.
-            args::complete(db, file, call, &mut out);
+            args::complete(call, &mut out);
             values::complete(db, file, offset, &mut out);
         }
         CompletionAnalysis::RecordField { literal } => {
-            record::complete(db, file, literal, &mut out);
+            record::complete(db, literal, &mut out);
         }
         CompletionAnalysis::Item { container } => {
             declarations::complete_items(*container, &mut out);
@@ -1187,5 +1190,152 @@ function f() -> int throws <[CURSOR]
         // Variant names are the reader's own; there is nothing to offer.
         let test = CursorTest::new("enum E {\n    A\n    <[CURSOR]\n}\n");
         assert!(complete(&test).is_empty());
+    }
+
+    /// Until BAML has `public`/`private`, a leading `_` is how the stdlib
+    /// marks a helper as its own business. The tests below are the rule's
+    /// two halves: the stdlib's internals stay out of the list, and
+    /// everything in the reader's own source — or asked for by name —
+    /// stays in.
+    #[test]
+    fn the_stdlibs_internal_members_are_not_offered() {
+        let test = CursorTest::new(
+            r#"function f() -> int throws never {
+    let t = reflect.Type.of<int>();
+    t.<[CURSOR]
+    0
+}
+"#,
+        );
+        let labels = labels(&complete(&test))
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        assert!(!labels.is_empty(), "the receiver still offers its surface");
+        assert!(
+            !labels.iter().any(|label| label.starts_with('_')),
+            "`reflect.Type`'s internals are the stdlib's business, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn a_typed_underscore_asks_for_the_internals() {
+        let test = CursorTest::new(
+            r#"function f() -> int throws never {
+    let t = reflect.Type.of<int>();
+    t._<[CURSOR]
+    0
+}
+"#,
+        );
+        let items = complete(&test);
+        let internal = items
+            .iter()
+            .find(|item| item.label == "_to_string_impl")
+            .unwrap_or_else(|| {
+                unreachable!(
+                    "a typed `_` brings the internals back, got {:?}",
+                    labels(&items)
+                )
+            });
+        // The `_` the reader typed is part of what an accepted item
+        // replaces, or the insert would read `t.__to_string_impl`.
+        assert_eq!(
+            &test.cursor.file.text(&test.db)[internal.source_range],
+            "_",
+            "the accepted item replaces the typed fragment"
+        );
+    }
+
+    #[test]
+    fn the_stdlibs_internal_items_are_not_offered_under_its_qualifier() {
+        let hidden = CursorTest::new(
+            r#"function f() -> int throws never {
+    baml.time.<[CURSOR]
+    0
+}
+"#,
+        );
+        let hidden_labels = labels(&complete(&hidden))
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        assert!(hidden_labels.iter().any(|label| label == "Instant"));
+        assert!(
+            !hidden_labels.iter().any(|label| label.starts_with('_')),
+            "`baml.time`'s helpers are the stdlib's own, got {hidden_labels:?}"
+        );
+
+        let asked = CursorTest::new(
+            r#"function f() -> int throws never {
+    baml.time._<[CURSOR]
+    0
+}
+"#,
+        );
+        let asked_items = complete(&asked);
+        let asked_labels = labels(&asked_items);
+        assert!(
+            asked_labels.contains(&"_tz_offset_at"),
+            "a typed `_` reaches them, got {asked_labels:?}"
+        );
+    }
+
+    #[test]
+    fn a_type_qualifier_hides_the_stdlibs_internal_statics() {
+        let test = CursorTest::new(
+            r#"function f() -> int throws never {
+    int.<[CURSOR]
+    0
+}
+"#,
+        );
+        let items = complete(&test);
+        let labels = labels(&items);
+        assert!(labels.contains(&"max_value"), "got {labels:?}");
+        assert!(
+            !labels.iter().any(|label| label.starts_with('_')),
+            "the UFCS rung reads the same convention, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn the_readers_own_internals_are_always_offered() {
+        // The reader's own source, so the convention has nothing to hide:
+        // a member through a dot, a top-level item, and a local.
+        let test = CursorTest::new(
+            r#"class Point {
+    x: int
+
+    function _norm(self) -> int throws never { self.x }
+}
+
+function f(p: Point) -> int throws never {
+    p.<[CURSOR]
+    0
+}
+"#,
+        );
+        let dotted = complete(&test);
+        let dotted_labels = labels(&dotted);
+        assert!(dotted_labels.contains(&"_norm"), "got {dotted_labels:?}");
+
+        let bare = CursorTest::new(
+            r#"function _helper() -> int throws never { 1 }
+
+function f() -> int throws never {
+    let _seen = 1;
+    <[CURSOR]
+    0
+}
+"#,
+        );
+        let bare_items = complete(&bare);
+        let bare_labels = labels(&bare_items);
+        assert!(
+            bare_labels.contains(&"_helper"),
+            "own item: {bare_labels:?}"
+        );
+        assert!(bare_labels.contains(&"_seen"), "own local: {bare_labels:?}");
     }
 }
