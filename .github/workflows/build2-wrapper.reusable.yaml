@@ -146,7 +146,7 @@ jobs:
           if [[ "$NO_SELF_UPDATE" == "true" ]]; then
             archive staging-no-self-update baml-wrapper-no-self-update
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wrapper-${{ matrix.target }}
           path: |

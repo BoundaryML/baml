@@ -39,7 +39,7 @@ jobs:
         with:
           dotnet-version: 10.0.301
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: csharp-product-package
           path: product-package

@@ -49,13 +49,13 @@ jobs:
           done
           echo "$llvm_bin" >> "$GITHUB_PATH"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: bridge-cffi-*
           path: native-downloads
           merge-multiple: false
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: csharp-neutral-preparation
           path: neutral-preparation
@@ -164,7 +164,7 @@ jobs:
             sha256sum "$(basename "$package")" > product-package.sha256
           )
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: csharp-product-package
           path: product-output
@@ -190,7 +190,7 @@ jobs:
         with:
           dotnet-version: 10.0.301
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: csharp-product-package
           path: product-package

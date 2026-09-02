@@ -46,14 +46,14 @@ jobs:
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-plan
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: baml-vscode-vsix
           path: vsix
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: baml-playground-dist
           path: playground-dist
@@ -140,7 +140,7 @@ jobs:
           else
             tar -C staging -czf "baml-language-$VERSION-$TARGET.tar.gz" .
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: toolchain-${{ matrix.target }}
           path: baml-language-${{ inputs.version }}-${{ matrix.target }}.*

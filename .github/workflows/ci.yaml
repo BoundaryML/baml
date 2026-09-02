@@ -1109,7 +1109,7 @@ jobs:
       # re-cloning git deps on the bare codspeed-macro runner (~24 min). Comes
       # via artifact, not cache — see the build job for why cache misses here.
       - name: "Download cargo home"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: codspeed-cargo-home
           path: /tmp/cargo-home
@@ -1122,7 +1122,7 @@ jobs:
           tool: cargo-codspeed@4.7.0
 
       - name: "Download prebuilt benchmark binaries"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: codspeed-walltime-benches
           path: baml_language/target/codspeed/walltime

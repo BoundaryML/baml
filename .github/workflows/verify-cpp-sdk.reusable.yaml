@@ -81,7 +81,7 @@ jobs:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: bridge-cffi-${{ matrix.target }}
           path: runtime-dist
