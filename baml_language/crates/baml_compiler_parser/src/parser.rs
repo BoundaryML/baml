@@ -548,6 +548,11 @@ impl<'a> Parser<'a> {
                 // Unambiguous here: class bodies and `.member` access have no
                 // `client` construct.
                 | TokenKind::Client
+                // `match` introduces a match expression, but stays valid as a
+                // member name so `re.match(haystack)` on `baml.regex.Regex`
+                // parses. Unambiguous here: a match expression never starts
+                // immediately after a `.`.
+                | TokenKind::Match
         )
     }
 
@@ -3674,13 +3679,16 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::Function);
 
             // Accept BEP-044 keyword tokens as method names — see
-            // the matching block in `parse_function`.
+            // the matching block in `parse_function`. A required method is
+            // parsed here rather than there, so the two lists have to stay in
+            // step: `match` is accepted in both.
             if p.at(TokenKind::Word)
                 || p.at(TokenKind::Implements)
                 || p.at(TokenKind::Implement)
                 || p.at(TokenKind::Extends)
                 || p.at(TokenKind::Requires)
                 || p.at(TokenKind::Interface)
+                || p.at(TokenKind::Match)
             {
                 p.bump();
             } else {
@@ -4160,6 +4168,9 @@ impl<'a> Parser<'a> {
                 || p.at(TokenKind::Extends)
                 || p.at(TokenKind::Requires)
                 || p.at(TokenKind::Interface)
+                // `baml.regex.Regex.match` — the name position after
+                // `function` cannot begin a match expression.
+                || p.at(TokenKind::Match)
             {
                 p.bump();
             } else {
@@ -7505,8 +7516,15 @@ impl<'a> Parser<'a> {
         // `spawn` / `await` are reserved keywords but are valid as path
         // segments after a `.` (e.g. the `baml.spawn` namespace). They are
         // unambiguous in segment position — a leading `spawn`/`await` is
-        // handled before this point. `is_ident_token` in
-        // `baml_compiler2_ast::lower_expr_body` must mirror this set.
+        // handled before this point. `is_member_name_token` in
+        // `baml_compiler2_ast::lower_expr_body` must mirror this set, as must
+        // `is_path_segment_kind` in `baml_fmt`.
+        //
+        // `match` is here for `baml.regex.Regex.match(haystack)`. Without it
+        // the loop below bumps the `.` and then fails on the segment, so a
+        // qualified receiver could not reach a `match` member at all. A
+        // *leading* `match` never gets here: `parse_prefix` claims a match
+        // expression first.
         let segment = |k: TokenKind| {
             matches!(
                 k,
@@ -7518,6 +7536,7 @@ impl<'a> Parser<'a> {
                     | TokenKind::Enum
                     | TokenKind::Interface
                     | TokenKind::Function
+                    | TokenKind::Match
             )
         };
 
@@ -8488,6 +8507,53 @@ mod tests {
                 .count(),
             1,
             "recovery must stop before the following declaration"
+        );
+    }
+
+    /// `match` is a keyword, but a name position after `function` or after a
+    /// `.` cannot begin a match expression, so `baml.regex.Regex.match` needs
+    /// it accepted in four places: the function-name list, the required
+    /// interface-method list, the member-name list, and the qualified-path
+    /// segment list. Each spelling below reaches a different one.
+    #[test]
+    fn match_is_accepted_in_every_name_position() {
+        for source in [
+            // Declaration with a body.
+            "class Re {\n  function match(self, haystack: string) -> int { 1 }\n}\n",
+            // Required interface method — no body, a separate parse path.
+            "interface Matcher {\n  function match(self, haystack: string) -> int\n}\n",
+            // Member access on a simple receiver.
+            "function f(re: Re, s: string) -> int { re.match(s) }\n",
+            // Member access on a qualified path: the segment loop has to stop
+            // at `match` and hand the `.` to the postfix member-access road.
+            "function f(s: string) -> int { baml.regex.Regex.match(s) }\n",
+            // Member access on a compound receiver (FIELD_ACCESS_EXPR).
+            "function f(s: string) -> int { g().match(s) }\n",
+        ] {
+            let (root, errors) = parse_source(source);
+            assert_no_errors(&errors);
+            assert_eq!(
+                root.text().to_string(),
+                source,
+                "parsing must remain lossless"
+            );
+        }
+    }
+
+    /// A bare `match` still starts a match expression: widening the name
+    /// positions must not shadow the statement form.
+    #[test]
+    fn match_still_parses_as_an_expression() {
+        let source =
+            "function f(x: int) -> int {\n  match (x) {\n    1 => 2,\n    _ => 3,\n  }\n}\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::MATCH_EXPR)
+                .count(),
+            1,
+            "a leading `match` must still build a MATCH_EXPR"
         );
     }
 

@@ -1,0 +1,499 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function regex.$init_test_ns_regex_regex(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_is_match"
+    make_closure .<lambda($init_test_ns_regex_regex, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_match_reports_text_and_offsets"
+    make_closure .<lambda($init_test_ns_regex_regex, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_match_groups_and_names"
+    make_closure .<lambda($init_test_ns_regex_regex, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_nonparticipating_group_is_null"
+    make_closure .<lambda($init_test_ns_regex_regex, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_match_returns_null_when_absent"
+    make_closure .<lambda($init_test_ns_regex_regex, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_match_all"
+    make_closure .<lambda($init_test_ns_regex_regex, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_match_all_terminates_on_empty_matches"
+    make_closure .<lambda($init_test_ns_regex_regex, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_alternation_is_leftmost_first"
+    make_closure .<lambda($init_test_ns_regex_regex, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_exact_match"
+    make_closure .<lambda($init_test_ns_regex_regex, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_exact_match_beats_hand_anchoring"
+    make_closure .<lambda($init_test_ns_regex_regex, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_exact_match_ignores_multiline_flag"
+    make_closure .<lambda($init_test_ns_regex_regex, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_split"
+    make_closure .<lambda($init_test_ns_regex_regex, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_split_interleaves_captured_delimiters"
+    make_closure .<lambda($init_test_ns_regex_regex, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_split_drops_nonparticipating_groups"
+    make_closure .<lambda($init_test_ns_regex_regex, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_word_boundaries_follow_the_literal"
+    make_closure .<lambda($init_test_ns_regex_regex, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_word_escapes_its_literal"
+    make_closure .<lambda($init_test_ns_regex_regex, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_word_ignore_case"
+    make_closure .<lambda($init_test_ns_regex_regex, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_word_empty_literal_matches_nowhere"
+    make_closure .<lambda($init_test_ns_regex_regex, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_word_keeps_interior_whitespace_exact"
+    make_closure .<lambda($init_test_ns_regex_regex, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_escape"
+    make_closure .<lambda($init_test_ns_regex_regex, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_escape_makes_dynamic_data_literal"
+    make_closure .<lambda($init_test_ns_regex_regex, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_offsets_are_codepoints"
+    make_closure .<lambda($init_test_ns_regex_regex, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_group_offsets_are_codepoints"
+    make_closure .<lambda($init_test_ns_regex_regex, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_is_stateless_across_calls"
+    make_closure .<lambda($init_test_ns_regex_regex, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_inline_flags_in_both_dialects"
+    make_closure .<lambda($init_test_ns_regex_regex, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_python_named_group_spelling"
+    make_closure .<lambda($init_test_ns_regex_regex, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_unicode_classes_in_both_dialects"
+    make_closure .<lambda($init_test_ns_regex_regex, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_default_dialect_handles_catastrophic_shape"
+    make_closure .<lambda($init_test_ns_regex_regex, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_backtracking_lookahead_and_lookbehind"
+    make_closure .<lambda($init_test_ns_regex_regex, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_backtracking_backreference"
+    make_closure .<lambda($init_test_ns_regex_regex, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_backtracking_recursive_subroutine"
+    make_closure .<lambda($init_test_ns_regex_regex, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_recursion_depth_limit_fails_to_match"
+    make_closure .<lambda($init_test_ns_regex_regex, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_match_through_a_qualified_path"
+    make_closure .<lambda($init_test_ns_regex_regex, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_match_names_a_required_interface_method"
+    make_closure .<lambda($init_test_ns_regex_regex, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_dynamic_pattern_errors_reach_runtime"
+    make_closure .<lambda($init_test_ns_regex_regex, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_unsupported_is_distinct_from_syntax"
+    make_closure .<lambda($init_test_ns_regex_regex, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_unbounded_recursion_is_rejected"
+    make_closure .<lambda($init_test_ns_regex_regex, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_error_carries_pattern_and_span"
+    make_closure .<lambda($init_test_ns_regex_regex, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "regex_matching_never_throws"
+    make_closure .<lambda($init_test_ns_regex_regex, 40)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function regex.$init_test_ns_regex_replace(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_literal_first_and_all"
+    make_closure .<lambda($init_test_ns_regex_replace, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_literal_replacement_stays_literal"
+    make_closure .<lambda($init_test_ns_regex_replace, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_literal_no_match_returns_input"
+    make_closure .<lambda($init_test_ns_regex_replace, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_pattern_search_is_a_pattern"
+    make_closure .<lambda($init_test_ns_regex_replace, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_pattern_template_expands_groups"
+    make_closure .<lambda($init_test_ns_regex_replace, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_pattern_template_edge_cases"
+    make_closure .<lambda($init_test_ns_regex_replace, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_pattern_first_only_vs_all"
+    make_closure .<lambda($init_test_ns_regex_replace, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_pattern_callback"
+    make_closure .<lambda($init_test_ns_regex_replace, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_pattern_callback_reads_captures"
+    make_closure .<lambda($init_test_ns_regex_replace, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_pattern_callback_reads_offsets"
+    make_closure .<lambda($init_test_ns_regex_replace, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_pattern_callback_result_is_verbatim"
+    make_closure .<lambda($init_test_ns_regex_replace, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_literal_callback_match_shape"
+    make_closure .<lambda($init_test_ns_regex_replace, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_literal_callback_first_and_all"
+    make_closure .<lambda($init_test_ns_regex_replace, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_empty_search_agrees_across_roads"
+    make_closure .<lambda($init_test_ns_regex_replace, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_empty_haystack"
+    make_closure .<lambda($init_test_ns_regex_replace, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_is_codepoint_correct"
+    make_closure .<lambda($init_test_ns_regex_replace, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_callback_error_propagates"
+    make_closure .<lambda($init_test_ns_regex_replace, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_string_replacement_infers_no_effect"
+    make_closure .<lambda($init_test_ns_regex_replace, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.regex"
+    load_const "replace_dynamic_vocabulary"
+    make_closure .<lambda($init_test_ns_regex_replace, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function regex.<(user.regex.Shouty as user.regex.Matcher)>.match(self: regex.Shouty, haystack: string) -> string {
+    load_var haystack
+    call baml.String.to_upper_case
+    return
+}
+
+function regex.apply_terms(text: string, terms: regex.Term[]) -> string {
+    load_var ?6
+    make_cell
+    store_var ?6
+    load_var text
+    store_var out
+    load_var terms
+    load_type baml.iter.Iterable<Error = never, Item = regex.Term>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = regex.Term>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    make_cell
+    store_var t
+    load_var _5
+    store_deref ?6
+    load_deref ?6
+    load_field .from
+    load_const true
+    call baml.regex.word
+    store_var _9
+    load_type never
+    load_var2 3 7
+    load_var t
+    make_closure .<lambda(apply_terms, 0)>, 1
+    call baml.String.replace_all
+    store_var out
+    jump L0
+
+  L2:
+    load_var out
+    return
+}
+
+function regex.compile_dynamic(pattern: string, backtracking: bool) -> baml.regex.Regex {
+    load_var2 1 2
+    call baml.regex.compile
+    return
+}
+
+function regex.reject(m: baml.regex.Match) -> string {
+    load_var m
+    load_field .text
+    init_instance user.regex.Unknown .term
+    throw
+}
+
+function regex.rewrite_without_effects(text: string, spaces: baml.regex.Regex) -> string {
+    load_type unknown
+    load_var2 1 2
+    load_const " "
+    call baml.String.replace_all
+    return
+}
+
+function regex.upper(m: baml.regex.Match) -> string {
+    load_var m
+    load_field .text
+    call baml.String.to_upper_case
+    return
+}

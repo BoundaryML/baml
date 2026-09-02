@@ -150,6 +150,19 @@ pub enum TirTypeError {
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
+    /// A constant pattern argument to `baml.regex.compile` does not compile.
+    /// Checked here so a typo in a literal pattern is a source error rather
+    /// than a throw the program has to reach to discover.
+    InvalidRegexPattern {
+        /// The same classification `baml.regex.Error.kind` carries at runtime.
+        kind: sys_regex::ErrorKind,
+        /// The engine's own one-line diagnostic.
+        message: String,
+        /// Codepoint offset into the pattern where the problem starts, when
+        /// the engine reports one. The pattern is a decoded string literal, so
+        /// this indexes the pattern, not the source line.
+        offset: Option<usize>,
+    },
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
     /// renders them as explicit `name: suggestion` mappings.
@@ -1138,6 +1151,23 @@ impl fmt::Display for TirTypeError {
                         path.as_str(),
                     );
                 f.write_str(diagnostic.message.as_str())
+            }
+            TirTypeError::InvalidRegexPattern {
+                kind,
+                message,
+                offset,
+            } => {
+                let headline = match kind {
+                    sys_regex::ErrorKind::Syntax => "invalid regex pattern",
+                    sys_regex::ErrorKind::Unsupported => "unsupported regex construct",
+                    sys_regex::ErrorKind::TooLarge => "regex pattern is too large",
+                };
+                match offset {
+                    Some(offset) => {
+                        write!(f, "{headline} at character {offset}: {message}")
+                    }
+                    None => write!(f, "{headline}: {message}"),
+                }
             }
             TirTypeError::DeadCode {
                 unreachable_count, ..

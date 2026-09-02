@@ -41,8 +41,8 @@ methods:
   function lines(self) -> string[] throws never
   /// Returns the substring between two **character** offsets `[start, end)`.
   function slice(self, start: int, end: int) -> string throws never
-  /// Replaces the first occurrence of `search` with `replacement`.
-  function replace(self, search: string, replacement: string) -> string throws never
+  /// Replaces the first occurrence of `search`.
+  function replace<E>(self, search: string | baml.regex.Regex, replacement: string | ((baml.regex.Match) -> string throws E)) -> string throws E
   /// Returns the **character index** of the first occurrence of `search`, or
   function index_of(self, search: string) -> int | null throws never
   /// Returns the **character index** of the start of the last occurrence of `search`, or
@@ -53,8 +53,14 @@ methods:
   function code_point_at(self, index: int) -> int | null throws never
   /// Returns a new string that repeats `self` the given number of times.
   function repeat(self, count: int) -> string throws never
-  /// Replaces all occurrences of `search` with `replacement`.
-  function replace_all(self, search: string, replacement: string) -> string throws never
+  /// Replaces every occurrence of `search`.
+  function replace_all<E>(self, search: string | baml.regex.Regex, replacement: string | ((baml.regex.Match) -> string throws E)) -> string throws E
+  /// `self` as the `string` primitive.
+  function _as_string(self) -> string throws never
+  /// `replace` restricted to a literal search and a literal replacement.
+  function _replace_literal(self, search: string, replacement: string) -> string throws never
+  /// `replace_all` restricted to a literal search and a literal replacement.
+  function _replace_all_literal(self, search: string, replacement: string) -> string throws never
   /// Returns true if every character is numeric per Unicode (general categories
   function is_numeric(self) -> bool throws never
   /// Returns true if every character is a Unicode letter (general category `L`).

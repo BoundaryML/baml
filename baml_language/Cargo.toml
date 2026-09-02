@@ -108,6 +108,7 @@ bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_auth = { path = "crates/sys_auth" }
 sys_glob = { path = "crates/sys_glob" }
+sys_regex = { path = "crates/sys_regex" }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native", default-features = false }
@@ -221,6 +222,11 @@ protoc-bin-vendored = "3"
 quote = { version = "1" }
 rayon = { version = "1.10" }
 regex = { version = "1.10.2" }
+# Pattern AST/HIR parser, used to report precise spans for a bad pattern.
+regex-syntax = { version = "0.8" }
+# Backtracking regex engine backing `baml.regex.compile(..., backtracking = true)`
+# (lookaround, backreferences, bounded recursive subroutines).
+fancy-regex = { version = "0.19" }
 # gitignore-aware directory walking (workspace project discovery in the LSP)
 ignore = { version = "0.4" }
 base64 = "0.22"

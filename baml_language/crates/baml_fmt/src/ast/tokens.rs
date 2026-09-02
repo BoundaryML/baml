@@ -616,6 +616,10 @@ pub fn is_word_like(kind: SyntaxKind) -> bool {
             | SyntaxKind::KW_INTERFACE
             | SyntaxKind::KW_SPAWN
             | SyntaxKind::KW_AWAIT
+            // Member and function-name position only (`re.match(...)`,
+            // `function match(...)`); `match` is never a path segment or a
+            // parameter name.
+            | SyntaxKind::KW_MATCH
     )
 }
 

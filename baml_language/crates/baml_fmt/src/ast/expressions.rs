@@ -506,6 +506,8 @@ pub struct PathExpr {
     pub generic_args: Option<GenericArgs>,
 }
 
+/// Mirrors the `segment` allowlist in `parse_path_or_ident`; a kind the parser
+/// admits into a `PATH_EXPR` but this rejects would fail to format.
 fn is_path_segment_kind(kind: SyntaxKind) -> bool {
     matches!(
         kind,
@@ -517,6 +519,7 @@ fn is_path_segment_kind(kind: SyntaxKind) -> bool {
             | SyntaxKind::KW_ENUM
             | SyntaxKind::KW_INTERFACE
             | SyntaxKind::KW_FUNCTION
+            | SyntaxKind::KW_MATCH
     )
 }
 

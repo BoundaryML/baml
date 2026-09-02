@@ -1066,7 +1066,8 @@ fn func_node_has_name(func_node: &SyntaxNode, method_name: &str) -> bool {
             // BEP-044 introduced `implements`, `extends`, and `interface` as
             // top-level keywords; the parser still accepts them as method
             // names so reflection methods like `TypeValue.implements(...)`
-            // can keep their natural spelling.
+            // can keep their natural spelling. `match` is accepted for the
+            // same reason, for `baml.regex.Regex.match(...)`.
             let kind = tok.kind();
             let is_name_token = matches!(
                 kind,
@@ -1076,6 +1077,7 @@ fn func_node_has_name(func_node: &SyntaxNode, method_name: &str) -> bool {
                     | SyntaxKind::KW_EXTENDS
                     | SyntaxKind::KW_REQUIRES
                     | SyntaxKind::KW_INTERFACE
+                    | SyntaxKind::KW_MATCH
             );
             return is_name_token && tok.text() == method_name;
         }

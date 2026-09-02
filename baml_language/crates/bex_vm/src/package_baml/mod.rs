@@ -12,6 +12,8 @@
 //! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
 //! - `ops_math` — `BamlClassOps*` (`Add`/`Subtract`/`Multiply`/`Divide`/
 //!   `Remainder`/`Negate` for the numeric primitives)
+//! - `regex` — `BamlClassRegexRegex` + `BamlNamespaceRegex` (pattern
+//!   compilation, matching, splitting, template replacement)
 //! - `root` — `BamlPackageBaml` (`deep_copy`, the numeric-array
 //!   reductions `_sum_int` / `_sum_float` / `_mean_float` / `_median_float`,
 //!   the saturating `_trunc_to_int`, and the `Sortable.sort` shims
@@ -39,6 +41,7 @@ mod ops_bitwise;
 mod ops_math;
 mod prompt;
 mod random;
+mod regex;
 pub(crate) mod resolve;
 pub(crate) use resolve::ImplResolver;
 pub(crate) mod root;
