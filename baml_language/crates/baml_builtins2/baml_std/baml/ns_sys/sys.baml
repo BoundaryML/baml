@@ -225,16 +225,24 @@ function collect_garbage() -> null throws never {
     $rust_io_function
 }
 
-/// Panics with `message`, raising a `baml.panics.UserPanic`. Never returns.
+/// Panics with `message`.
+///
+/// # Panics
+///
+/// - Always panics with `baml.panics.UserPanic`.
 //baml:fallible
 function panic(message: string) -> never throws never {
-    $rust_function
+    throw root.panics.UserPanic { message };
 }
 
-/// Terminates the process with the given exit `code`. Throws `baml.panics.Exit` which, if unhandled, exits the process.
+/// Terminates the process with the given exit `code`.
+///
+/// # Panics
+///
+/// - Always panics with `baml.panics.Exit` which, if unhandled, exits the process.
 //baml:fallible
 function exit(code: int) -> never throws never {
-    $rust_function
+    throw root.panics.Exit { code };
 }
 
 //baml:mut_vm

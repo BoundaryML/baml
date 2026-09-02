@@ -9357,9 +9357,29 @@ fn baml.sys.sleep = builtin(io)
 
 fn baml.sys.collect_garbage = builtin(io)
 
-fn baml.sys.panic = builtin(vm)
+fn baml.sys.panic(message: string) -> never {
+    // Locals:
+    let _0: never // _0 // return
+    let _1: string // message // param
+    let _2: baml.panics.UserPanic
 
-fn baml.sys.exit = builtin(vm)
+    bb0: {
+        _2 = baml.panics.UserPanic { copy _1 };
+        throw copy _2;
+    }
+}
+
+fn baml.sys.exit(code: int) -> never {
+    // Locals:
+    let _0: never // _0 // return
+    let _1: int // code // param
+    let _2: baml.panics.Exit
+
+    bb0: {
+        _2 = baml.panics.Exit { copy _1 };
+        throw copy _2;
+    }
+}
 
 fn baml.sys.argv = builtin(vm)
 

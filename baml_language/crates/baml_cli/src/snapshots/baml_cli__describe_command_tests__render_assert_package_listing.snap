@@ -2,10 +2,9 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-function         assert.is_true                   <builtin>/assert/assert.baml:10
-function         assert.not_null                  <builtin>/assert/assert.baml:23
-function         assert.format_operand            <builtin>/assert/assert.baml:45
-function         assert.equal                     <builtin>/assert/assert.baml:66
-function         assert.approx_equal              <builtin>/assert/assert.baml:88
-function         assert.contains                  <builtin>/assert/assert.baml:101
-function         assert.is_type                   <builtin>/assert/assert.baml:108
+function         assert.is_true                   <builtin>/assert/assert.baml:15
+function         assert.not_null                  <builtin>/assert/assert.baml:33
+function         assert.equal                     <builtin>/assert/assert.baml:53
+function         assert.approx_equal              <builtin>/assert/assert.baml:83
+function         assert.contains                  <builtin>/assert/assert.baml:107
+function         assert.is_type                   <builtin>/assert/assert.baml:124

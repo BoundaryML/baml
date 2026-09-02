@@ -1959,7 +1959,9 @@ function baml.sys.close(self: ?) -> void  [builtin]
 function baml.sys.close(self: ?) -> void  [builtin]
 function baml.sys.collect_garbage() -> null  [builtin]
 function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
-function baml.sys.exit(code: int) -> never  [builtin]
+function baml.sys.exit(code: int) -> never  [expr] {
+  { throw root.panics.Exit { code: code } }
+}
 function baml.sys.flush(self: ?) -> void  [builtin]
 function baml.sys.iter(self: ?) -> root.iter.Iterator<Item = string, Error = root.errors.Io>  [expr] {
   {  } self
@@ -1977,7 +1979,9 @@ function baml.sys.ok(self: ?) -> bool  [expr] {
 function baml.sys.ok(self: ?) -> bool  [expr] {
   {  } self.exit_code Eq 0
 }
-function baml.sys.panic(message: string) -> never  [builtin]
+function baml.sys.panic(message: string) -> never  [expr] {
+  { throw root.panics.UserPanic { message: message } }
+}
 function baml.sys.pid() -> int  [builtin]
 function baml.sys.read(self: ?, limit: int) -> uint8array?  [builtin]
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]

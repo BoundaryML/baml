@@ -6376,9 +6376,15 @@ function baml.sys.exec(program: string, args: string[] | null, options: baml.sys
 }
 
 function baml.sys.exit(code: int) -> never {
+    load_var code
+    init_instance baml.panics.Exit .code
+    throw
 }
 
 function baml.sys.panic(message: string) -> never {
+    load_var message
+    init_instance baml.panics.UserPanic .message
+    throw
 }
 
 function baml.sys.pid() -> int {

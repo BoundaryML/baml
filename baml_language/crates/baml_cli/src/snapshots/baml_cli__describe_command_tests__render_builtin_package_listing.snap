@@ -271,10 +271,10 @@ function         baml.sys.start_process           <builtin>/baml/ns_sys/sys.baml
 function         baml.sys.shell                   <builtin>/baml/ns_sys/sys.baml:209
 function         baml.sys.sleep                   <builtin>/baml/ns_sys/sys.baml:217
 function         baml.sys.collect_garbage         <builtin>/baml/ns_sys/sys.baml:224
-function         baml.sys.panic                   <builtin>/baml/ns_sys/sys.baml:230
-function         baml.sys.exit                    <builtin>/baml/ns_sys/sys.baml:236
-function         baml.sys.argv                    <builtin>/baml/ns_sys/sys.baml:242
-function         baml.sys.pid                     <builtin>/baml/ns_sys/sys.baml:251
+function         baml.sys.panic                   <builtin>/baml/ns_sys/sys.baml:234
+function         baml.sys.exit                    <builtin>/baml/ns_sys/sys.baml:244
+function         baml.sys.argv                    <builtin>/baml/ns_sys/sys.baml:250
+function         baml.sys.pid                     <builtin>/baml/ns_sys/sys.baml:259
 class            baml.time.Duration               <builtin>/baml/ns_time/duration.baml:4
 class            baml.time.Instant                <builtin>/baml/ns_time/instant.baml:2
 class            baml.time.PlainDate              <builtin>/baml/ns_time/plaindate.baml:5
