@@ -141,6 +141,11 @@ function verdict_from_check(
     stdout: string,
     stderr: string,
 ) -> Verdict {
+    // 126 / 127: the CLI did not run at all (run_with could not start it,
+    // or caffeinate could not exec it). That says nothing about the bug.
+    if (exit_code == 126 || exit_code == 127) {
+        return Verdict.Inconclusive;
+    };
     let crashed = exit_code >= 128
         || exit_code == 124
         || stderr.includes("panicked at")
@@ -345,9 +350,14 @@ class CmdResult {
 }
 
 /// The environment every child gets. It REPLACES the environment, so this
-/// is an allowlist: nothing from this process leaks unless named here.
-/// The agent runs with `with_gh = false` and never sees GH_TOKEN,
-/// FEEDBACK_SUPABASE_KEY, ANTHROPIC_API_KEY or anything else.
+/// is an allowlist of environment variables: none from this process leaks
+/// unless named here. The agent runs with `with_gh = false` and never sees
+/// GH_TOKEN, FEEDBACK_SUPABASE_KEY, ANTHROPIC_API_KEY or anything else.
+///
+/// This guards the environment only. HOME is the host's, because the
+/// Claude Code CLI reads its login from there, so files under it
+/// (~/.ssh, ~/.config/gh, ~/.aws) stay readable to the agent's Bash. The
+/// git credential paths are cut off below; the rest is a known gap.
 function sandbox_env(with_gh: bool) -> map<string, string> {
     let env: map<string, string> = {
         "PATH": baml.env.get("PATH") ?? "/usr/local/bin:/usr/bin:/bin",
@@ -802,6 +812,12 @@ testset "handle_issue" {
             Verdict.Inconclusive,
         );
         assert.equal(verdict_from_check(snc, 0, "", ""), Verdict.StillBroken);
+        // the CLI never ran: not a verdict on the bug either way
+        assert.equal(
+            verdict_from_check(snc, 127, "", "could not start: baml check"),
+            Verdict.Inconclusive,
+        );
+        assert.equal(verdict_from_check(sc, 126, "", ""), Verdict.Inconclusive);
         let ev = ShouldEvaluateTo { check: "should_evaluate_to", expected: 2 };
         assert.equal(verdict_from_check(ev, 0, "2\n", ""), Verdict.Fixed);
         assert.equal(verdict_from_check(ev, 0, "3\n", ""), Verdict.StillBroken);

@@ -68,6 +68,6 @@ case "${1:-}" in
     # out of the default run (it would fail `baml test`); run it on its own with
     #   tools/atb2/setup_database.sh -- baml test -i "root::difficulty_estimate::*"
     # and add it back here once it clears the bar.
-    "")      exec baml test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::organize_issue::*" ;;
+    "")      exec baml test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::organize_issue::*" -i "root::handle_issue::*" ;;
     *)       die "unknown argument: $1 (use --check, or -- <cmd>)" ;;
 esac
