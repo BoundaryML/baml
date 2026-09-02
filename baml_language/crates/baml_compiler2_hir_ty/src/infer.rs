@@ -2256,14 +2256,16 @@ impl<'db> InferenceContext<'db> {
                 let actual = Ty::void();
                 if let Some(expected) = &expected
                     && !expected.has_error()
-                    && !self.sub(&actual, expected)
                 {
-                    self.pending_diags.push(PendingDiag::ReturnTypeMismatch {
-                        stmt,
-                        expr,
-                        expected: expected.clone(),
-                        actual: actual.clone(),
-                    });
+                    let fits = self.sub(&actual, expected);
+                    if expected.has_infer() || !fits {
+                        self.pending_diags.push(PendingDiag::ReturnTypeMismatch {
+                            stmt,
+                            expr,
+                            expected: expected.clone(),
+                            actual: actual.clone(),
+                        });
+                    }
                 }
                 actual
             }
@@ -12022,6 +12024,14 @@ impl<'db> InferenceContext<'db> {
                         expected,
                         actual,
                     } => {
+                        let expected = self.finalize_ty(&expected);
+                        let actual = self.finalize_ty(&actual);
+                        if expected.has_error()
+                            || actual.has_error()
+                            || self.cached_subtype(&actual, &expected)
+                        {
+                            continue;
+                        }
                         let primary = match (stmt, expr) {
                             (Some(stmt), _) => DiagnosticLocation::Stmt(stmt),
                             (None, Some(expr)) => DiagnosticLocation::Expr(expr),
@@ -12029,8 +12039,8 @@ impl<'db> InferenceContext<'db> {
                         };
                         diags.push(TirDiagnostic {
                             error: TirTypeError::TypeMismatch {
-                                expected: self.finalize_ty(&expected).to_plain(),
-                                got: self.finalize_ty(&actual).to_plain(),
+                                expected: expected.to_plain(),
+                                got: actual.to_plain(),
                             },
                             severity: DiagnosticSeverity::Error,
                             primary,
