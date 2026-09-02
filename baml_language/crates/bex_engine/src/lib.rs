@@ -91,6 +91,8 @@ use ::bex_heap::{HeapPermit as _, Tlab};
 use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
+#[cfg(target_arch = "wasm32")]
+pub use bex_events::ids::configure_workerd_runtime;
 use bex_events::prof::backend::{ExecutionEndStatus, ProfilerSession, RootProfiler};
 #[cfg(not(target_arch = "wasm32"))]
 use bex_events::prof::backend::{ExecutionHandle, RootAdmission, ValueLossReason, ValueRole};
@@ -1891,9 +1893,8 @@ impl BexEngine {
             semantic_lanes: None,
         });
 
-        // Program identity is temporarily a Date.now()-backed UUIDv7 with zero
-        // counter/random bytes. Preserve a supplied source hash as snapshot
-        // metadata without allowing that path to mint ProgramId differently.
+        // Preserve a supplied source hash as snapshot metadata without allowing
+        // that path to mint ProgramId differently from other constructions.
         let program_id = ProgramId::new_random();
         let source_snapshot_id = program
             .source_content_hash

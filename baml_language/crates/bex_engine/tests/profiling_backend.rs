@@ -524,11 +524,10 @@ async fn one_unwind_fans_out_and_rethrow_gets_a_new_error_id() {
     assert_eq!(fanout.summary.stream, rethrow.summary.stream);
 }
 
-/// The temporary `Date.now()`-backed `ProgramId` ignores source content and
-/// splits only by millisecond. Matching call paths collide when their program
-/// timestamps collide and split when their timestamps differ.
+/// Standard `UUIDv7` program identities keep matching call paths from different
+/// engine constructions in separate profiling contexts.
 #[tokio::test]
-async fn temporary_program_timestamp_drives_context_keys() {
+async fn program_identity_separates_context_keys() {
     async fn run_once(
         store_root: &std::path::Path,
         source: &str,
@@ -568,9 +567,9 @@ async fn temporary_program_timestamp_drives_context_keys() {
     }
 
     let _guard = PROFILER_TEST_LOCK.lock().await;
-    let assert_zero_random_uuid_v7 = |id: bex_events::ids::ProgramId| {
-        assert_eq!(id.0[6..], [0x70, 0, 0x80, 0, 0, 0, 0, 0, 0, 0]);
+    let assert_uuid_v7 = |id: bex_events::ids::ProgramId| {
         assert_eq!(id.0[6] >> 4, 7);
+        assert_eq!(id.0[8] >> 6, 2);
     };
     let source = r#"
         function main() -> int { 41 + 1 }
@@ -582,13 +581,10 @@ async fn temporary_program_timestamp_drives_context_keys() {
     let (id_a, keys_a) = run_once(&temp_a.path().join(".baml/profiles-v1"), source, 0xD1).await;
     let temp_b = tempfile::TempDir::new().unwrap();
     let (id_b, keys_b) = run_once(&temp_b.path().join(".baml/profiles-v1"), source, 0xD2).await;
-    assert_zero_random_uuid_v7(id_a);
-    assert_zero_random_uuid_v7(id_b);
-    assert_eq!(
-        id_a == id_b,
-        keys_a == keys_b,
-        "ContextKey equality must follow the temporary ProgramId"
-    );
+    assert_uuid_v7(id_a);
+    assert_uuid_v7(id_b);
+    assert_ne!(id_a, id_b);
+    assert_ne!(keys_a, keys_b);
 
     let temp_c = tempfile::TempDir::new().unwrap();
     let (id_c, keys_c) = run_once(
@@ -597,10 +593,7 @@ async fn temporary_program_timestamp_drives_context_keys() {
         0xD3,
     )
     .await;
-    assert_zero_random_uuid_v7(id_c);
-    assert_eq!(
-        id_a == id_c,
-        keys_a == keys_c,
-        "source bytes must not independently affect ContextKeys"
-    );
+    assert_uuid_v7(id_c);
+    assert_ne!(id_a, id_c);
+    assert_ne!(keys_a, keys_c);
 }

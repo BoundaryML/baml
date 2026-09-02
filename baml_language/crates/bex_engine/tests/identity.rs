@@ -355,10 +355,10 @@ fn function_metadata_derives_owner_type_for_class_methods() {
 }
 
 #[test]
-fn program_identity_is_date_now_uuid_v7_with_or_without_a_source_hash() {
-    fn assert_date_now_uuid_v7(program_id: bex_events::ids::ProgramId) {
-        assert_eq!(program_id.0[6..], [0x70, 0, 0x80, 0, 0, 0, 0, 0, 0, 0]);
+fn program_identity_is_uuid_v7_with_or_without_a_source_hash() {
+    fn assert_uuid_v7(program_id: bex_events::ids::ProgramId) {
         assert_eq!(program_id.0[6] >> 4, 7);
+        assert_eq!(program_id.0[8] >> 6, 2);
     }
 
     let with_hash = compile_for_engine("function main() -> null { null }");
@@ -371,7 +371,7 @@ fn program_identity_is_date_now_uuid_v7_with_or_without_a_source_hash() {
         Vec::new(),
     )
     .unwrap();
-    assert_date_now_uuid_v7(with_hash_engine.program_metadata().program_id);
+    assert_uuid_v7(with_hash_engine.program_metadata().program_id);
     assert_eq!(
         with_hash_engine.program_metadata().source_snapshot_id,
         Some(bex_events::ids::SourceSnapshotId(source_hash))
@@ -385,7 +385,11 @@ fn program_identity_is_date_now_uuid_v7_with_or_without_a_source_hash() {
         Vec::new(),
     )
     .unwrap();
-    assert_date_now_uuid_v7(without_hash_engine.program_metadata().program_id);
+    assert_uuid_v7(without_hash_engine.program_metadata().program_id);
+    assert_ne!(
+        with_hash_engine.program_metadata().program_id,
+        without_hash_engine.program_metadata().program_id
+    );
     assert_eq!(
         without_hash_engine.program_metadata().source_snapshot_id,
         None
