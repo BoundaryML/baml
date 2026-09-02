@@ -107,7 +107,7 @@ jobs:
             baml_language/sdks/csharp/bridge_csharp/tools/Baml.NuGetNormalizer/Baml.NuGetNormalizer.csproj \
             -- --self-test
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: csharp-neutral-preparation
           path: ${{ runner.temp }}/csharp-neutral

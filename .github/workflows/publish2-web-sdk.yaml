@@ -42,7 +42,7 @@ jobs:
           persist-credentials: false
 
       - name: Download Web SDK dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: web-sdk-dist
           path: baml_language/sdks/typescript/bridge_typescript_web/dist

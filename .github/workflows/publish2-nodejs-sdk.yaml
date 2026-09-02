@@ -44,7 +44,7 @@ jobs:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
       - name: Download per-platform npm packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           # Each build matrix job uploaded a single npm/<platform>/ sub-package
           # (stamped package.json + baml_node.<platform>.node); merge-multiple
@@ -53,7 +53,7 @@ jobs:
           path: baml_language/sdks/typescript/bridge_typescript/npm
           merge-multiple: true
       - name: Download umbrella dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           # The umbrella ships `files: ["dist"]`; the build job assembled this
           # platform-agnostic dist/ once (on the linux-gnu target). Restore it here
