@@ -1823,12 +1823,6 @@ pub enum UnionMemberLookup<'db> {
         interface: InferInterface,
         position: crate::diagnostics::SelfCallPosition,
     },
-    /// Every arm is a concrete class carrying an OWN field of this name
-    /// at the SAME type - the spec's TS-style member-wise read (one
-    /// agreed declaration, no interface view to record). Methods never
-    /// take this road, and disagreeing field types fall through to
-    /// `NoCommonInterface`.
-    ClassFieldJoin(Ty),
     /// No interface shared by every arm declares the member.
     NoCommonInterface,
 }
@@ -1863,10 +1857,7 @@ pub fn lookup_union_member<'db>(
         }
     }
     match declarers.len() {
-        0 => match union_class_field_join(db, facts, members, name) {
-            Some(ty) => UnionMemberLookup::ClassFieldJoin(ty),
-            None => UnionMemberLookup::NoCommonInterface,
-        },
+        0 => UnionMemberLookup::NoCommonInterface,
         1 => {
             let (iface, _) = declarers.pop().expect("len checked");
             // The virtual dispatch goes through the shared interface, but
@@ -1970,48 +1961,4 @@ fn interface_declares_member(
         InterfaceMemberKind::Value(ValueMemberKind::Method) => Some(false),
         InterfaceMemberKind::AssociatedType => None,
     }
-}
-
-/// The spec's TS-style union field read: every arm is a concrete class
-/// whose OWN declared field `name` (realized at the arm's args) exists,
-/// and the access types as the JOIN of the per-arm field types - the
-/// discriminant-narrowing shape (`x.type == "foo"` over a tagged class
-/// union) reads the union of the tags. `None` whenever an arm is
-/// symbolic (interface/var arms only reach members through a shared
-/// interface) or lacks the field.
-fn union_class_field_join<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    facts: &Facts<'db>,
-    members: &[Ty],
-    name: &Name,
-) -> Option<Ty> {
-    let mut parts: Vec<Ty> = Vec::new();
-    for arm in members {
-        if matches!(
-            arm.kind(),
-            InferTy::Interface(..)
-                | InferTy::TypeVar(..)
-                | InferTy::AssociatedTypeProjection { .. }
-        ) {
-            return None;
-        }
-        let field_ty = if let Some((class, class_args)) = receiver_class(facts, arm, 8) {
-            crate::lower::class_field_types(db, class)
-                .iter()
-                .find(|(field, _)| field == name)
-                .map(|(_, ty)| {
-                    crate::lower::substitute_params(&crate::impls::interned_ty(ty), &class_args)
-                })?
-        } else if let InferTy::Class(qtn, class_args, _) = arm.kind()
-            && let Some(crate::package_interface::ExportedType::Class { fields, .. }) =
-                crate::package_interface::mounted_type_row(db, qtn)
-        {
-            let (_, ty, _) = fields.iter().find(|(field, ..)| field == name)?;
-            crate::lower::substitute_params(&Ty::from_plain(ty), class_args)
-        } else {
-            return None;
-        };
-        parts.push(field_ty);
-    }
-    (!parts.is_empty()).then(|| Ty::union(parts))
 }

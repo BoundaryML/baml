@@ -1725,7 +1725,7 @@ fn match_catch_all() {
 // ── 3A-12. Union member field access ─────────────────────────────────────
 
 #[test]
-fn union_field_access_shared() {
+fn union_field_access_without_interface_is_rejected() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -1746,8 +1746,9 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
     }
     function user.f(x: user.Cat | user.Dog) -> string throws never {
       { : never
-        return x.name : string
+        return x.name : !error
       }
+      !! 114..120: type `Cat | Dog` has no member `name`: its members implement no common interface that declares `name`
     }
     class user.Cat$stream {
       name: string | null
@@ -1884,7 +1885,6 @@ fn union_field_access_different_types() {
 class B { value string }
 function f(x: A | B) -> string { return x.value; }"#,
     );
-    // Both have `value` but different types → union of field types
     insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       value: int
@@ -1894,9 +1894,9 @@ function f(x: A | B) -> string { return x.value; }"#,
     }
     function user.f(x: user.A | user.B) -> string throws never {
       { : never
-        return x.value : int | string
+        return x.value : !error
       }
-      !! 87..94: type mismatch: expected string, got int | string
+      !! 87..94: type `A | B` has no member `value`: its members implement no common interface that declares `value`
     }
     class user.A$stream {
       value: int | null
@@ -1905,6 +1905,27 @@ function f(x: A | B) -> string { return x.value; }"#,
       value: string | null
     }
     ");
+}
+
+#[test]
+fn union_field_assignment_without_interface_is_rejected() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"class A { value int }
+class B { value string }
+function f(x: A | B) -> int {
+  x.value = 1;
+  return 0;
+}"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "type `A | B` has no member `value`: its members implement no common interface that declares `value`"
+        ),
+        "{tir}"
+    );
 }
 
 #[test]

@@ -6134,19 +6134,7 @@ impl<'db> InferenceContext<'db> {
                     }
                     return (Ty::error(), false, None, false);
                 }
-                crate::method_resolution::UnionMemberLookup::ClassFieldJoin(field_ty) => {
-                    // The agreed class field types the callee; boundness
-                    // is a plain value read (no receiver binding).
-                    return (field_ty, false, None, false);
-                }
-                crate::method_resolution::UnionMemberLookup::NoCommonInterface => {
-                    // RULING: a union-typed receiver exposes ONLY the
-                    // interface methods of interfaces every member
-                    // implements — inherent methods never participate, so
-                    // there is no per-arm fallback. Fall through to the
-                    // total operator-style sugars; a full miss reports
-                    // "no common interface".
-                }
+                crate::method_resolution::UnionMemberLookup::NoCommonInterface => {}
             }
         }
         let candidate =
@@ -9792,9 +9780,6 @@ impl<'db> InferenceContext<'db> {
                     });
                 }
                 (Ty::error(), None)
-            }
-            crate::method_resolution::UnionMemberLookup::ClassFieldJoin(field_ty) => {
-                (field_ty, None)
             }
             crate::method_resolution::UnionMemberLookup::NoCommonInterface => {
                 if self.member_probe_depth == 0 && !union_ty.has_error() && !union_ty.has_infer() {
