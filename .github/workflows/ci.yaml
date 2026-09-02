@@ -27,10 +27,9 @@ env:
 
 jobs:
   r2-credential-diagnostic:
-    name: "R2 credential diagnostic"
+    name: "R2 repository credential diagnostic"
     if: ${{ (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
-    environment: infisical-github-ci
     env:
       BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
