@@ -631,6 +631,12 @@ enum InferVarOrigin {
     },
 }
 
+#[derive(Debug, Clone)]
+struct ReturnFrame {
+    expected: Option<Ty>,
+    candidates: Vec<Ty>,
+}
+
 /// S17 pending diagnostic (engine-internal): arena-anchored, payload
 /// types interned (still var-carrying until finish); finalized into the
 /// shared vocabulary with PLAIN types at writeback. Short-lived and
@@ -904,6 +910,12 @@ enum PendingDiag<'db> {
         stmt: Option<StmtId>,
         expr: Option<ExprId>,
         keyword: &'static str,
+    },
+    ReturnTypeMismatch {
+        stmt: Option<StmtId>,
+        expr: Option<ExprId>,
+        expected: Ty,
+        actual: Ty,
     },
     /// An untyped-object property shorthand naming no in-scope value -
     /// the specialized spelling of unresolved-name, with near-matches.
@@ -1660,8 +1672,9 @@ struct InferenceContext<'db> {
     /// Every type annotation written in this body, pre-lowered to span-free
     /// `TypeRef`s (the rust-analyzer bodies-own-their-type-refs shape).
     type_refs: Arc<BodyTypeRefs>,
-    /// The owner's declared return type, the body root's expectation.
-    return_ty: Option<Ty>,
+    /// One return context per callable, with the current callable last.
+    /// The bottom frame belongs to the body owner; lambdas push their own.
+    return_frames: Vec<ReturnFrame>,
     /// The owner's DECLARED throws clause's NAMED part, when written: the
     /// contract every throw site and callee effect is checked against.
     /// `None` means the effect is inferred instead (from the channel
@@ -1835,7 +1848,13 @@ impl<'db> InferenceContext<'db> {
             body_owner_id: None,
             param_tys,
             type_refs,
-            return_ty,
+            return_frames: return_ty
+                .into_iter()
+                .map(|expected| ReturnFrame {
+                    expected: Some(expected),
+                    candidates: Vec::new(),
+                })
+                .collect(),
             declared_throws: None,
             declared_throws_open: false,
             throws_channels: vec![Vec::new()],
@@ -1894,7 +1913,11 @@ impl<'db> InferenceContext<'db> {
         self.register_property_shorthands(body);
         self.body_root = body.root_expr;
         if let Some(root) = body.root_expr {
-            match self.return_ty.clone() {
+            match self
+                .return_frames
+                .last()
+                .and_then(|frame| frame.expected.clone())
+            {
                 // A void function DISCARDS its body's tail value (TIR's
                 // statement semantics; `defer { .. }; log.push(..)` as
                 // the last line of a `-> void` fn is fine) - the body
@@ -2211,6 +2234,43 @@ impl<'db> InferenceContext<'db> {
             self.record_checked_function_adapter(expr, &ty, expected);
         }
         ty
+    }
+
+    fn infer_return(
+        &mut self,
+        body: &ExprBody,
+        value: Option<ExprId>,
+        stmt: Option<StmtId>,
+        expr: Option<ExprId>,
+    ) {
+        let expected = self
+            .return_frames
+            .last()
+            .and_then(|frame| frame.expected.clone());
+        let actual = match value {
+            Some(value) => match &expected {
+                Some(expected) if !expected.has_error() => self.check_expr(body, value, expected),
+                _ => self.infer_expr(body, value, &Expectation::None),
+            },
+            None => {
+                let actual = Ty::void();
+                if let Some(expected) = &expected
+                    && !expected.has_error()
+                    && !self.sub(&actual, expected)
+                {
+                    self.pending_diags.push(PendingDiag::ReturnTypeMismatch {
+                        stmt,
+                        expr,
+                        expected: expected.clone(),
+                        actual: actual.clone(),
+                    });
+                }
+                actual
+            }
+        };
+        if let Some(frame) = self.return_frames.last_mut() {
+            frame.candidates.push(actual);
+        }
     }
 
     /// Infer an expression whose outer type relation is checked at runtime.
@@ -2890,16 +2950,7 @@ impl<'db> InferenceContext<'db> {
                         keyword: "return",
                     });
                 }
-                if let Some(value) = value {
-                    match self.return_ty.clone() {
-                        Some(return_ty) if !return_ty.has_error() => {
-                            self.check_expr(body, *value, &return_ty);
-                        }
-                        _ => {
-                            self.infer_expr(body, *value, &Expectation::None);
-                        }
-                    }
-                }
+                self.infer_return(body, *value, None, Some(expr));
                 self.diverges = Diverges::Always;
                 Ty::never()
             }
@@ -3063,16 +3114,7 @@ impl<'db> InferenceContext<'db> {
                         keyword: "return",
                     });
                 }
-                if let Some(value) = value {
-                    match self.return_ty.clone() {
-                        Some(return_ty) if !return_ty.has_error() => {
-                            self.check_expr(body, *value, &return_ty);
-                        }
-                        _ => {
-                            self.infer_expr(body, *value, &Expectation::None);
-                        }
-                    }
-                }
+                self.infer_return(body, *value, Some(stmt), None);
                 self.diverges = Diverges::Always;
             }
             Stmt::Throw { value } => {
@@ -3340,6 +3382,16 @@ impl<'db> InferenceContext<'db> {
                     );
                 }
             }
+            for frame in &mut self.return_frames {
+                if let Some(expected) = &mut frame.expected {
+                    *expected =
+                        replace_rigid_param(expected, &binding.parameter, &binding.occurrence_ty);
+                }
+                for candidate in &mut frame.candidates {
+                    *candidate =
+                        replace_rigid_param(candidate, &binding.parameter, &binding.occurrence_ty);
+                }
+            }
             // A contract violation stashed inside the block quotes the effect
             // it saw. `extra` is a COPY of a contribution — compiler-derived,
             // and quoted in a report about what the enclosing function may
@@ -3353,8 +3405,23 @@ impl<'db> InferenceContext<'db> {
             // `a_lambda_clause_inside_the_block_is_quoted_as_written` pins
             // both halves of that asymmetry.
             for pending in &mut self.pending_diags {
-                if let PendingDiag::ThrowsViolation { extra, .. } = pending {
-                    *extra = replace_rigid_param(extra, &binding.parameter, &binding.occurrence_ty);
+                match pending {
+                    PendingDiag::ThrowsViolation { extra, .. } => {
+                        *extra =
+                            replace_rigid_param(extra, &binding.parameter, &binding.occurrence_ty);
+                    }
+                    PendingDiag::ReturnTypeMismatch {
+                        expected, actual, ..
+                    } => {
+                        *expected = replace_rigid_param(
+                            expected,
+                            &binding.parameter,
+                            &binding.occurrence_ty,
+                        );
+                        *actual =
+                            replace_rigid_param(actual, &binding.parameter, &binding.occurrence_ty);
+                    }
+                    _ => {}
                 }
             }
         }
@@ -4240,6 +4307,23 @@ impl<'db> InferenceContext<'db> {
             )),
             _ => remark(&joined),
         }
+    }
+
+    fn join_return_candidates(&mut self, candidates: &[Ty]) -> Ty {
+        let mut candidates = candidates
+            .iter()
+            .filter(|candidate| !matches!(candidate.kind(), TyKind::Never { .. }));
+        let Some(first) = candidates.next() else {
+            return Ty::never();
+        };
+        let rest: Vec<_> = candidates.collect();
+        if rest.iter().all(|candidate| *candidate == first) {
+            return first.clone();
+        }
+        let mut members = Vec::with_capacity(rest.len() + 1);
+        members.push(first.clone());
+        members.extend(rest.into_iter().cloned());
+        self.join(&members)
     }
 
     /// Fresh literals widen to their base primitive at binding sites and
@@ -8222,23 +8306,38 @@ impl<'db> InferenceContext<'db> {
                     self.current_scope = lambda_scope;
                 }
                 let saved_diverges = std::mem::replace(&mut self.diverges, Diverges::Maybe);
-                let ret_ty = match &ret_expectation {
+                let saved_defer_loop_floors = std::mem::take(&mut self.defer_loop_floors);
+                let saved_loop_depth = std::mem::replace(&mut self.loop_depth, 0);
+                self.return_frames.push(ReturnFrame {
+                    expected: ret_expectation.clone(),
+                    candidates: Vec::new(),
+                });
+                let body_ty = match &ret_expectation {
                     // A void lambda DISCARDS its body's tail value, the
                     // same statement semantics void functions get (test
                     // bodies are synthesized `() -> void` lambdas).
                     Some(ret) if is_unit(ret) => {
-                        self.infer_expr(body, lambda_body, &Expectation::None);
-                        ret.clone()
+                        self.infer_expr(body, lambda_body, &Expectation::None)
                     }
-                    Some(ret) if !ret.has_error() => {
-                        self.check_expr(body, lambda_body, ret);
-                        ret.clone()
-                    }
-                    _ => {
-                        let body_ty = self.infer_expr(body, lambda_body, &Expectation::None);
-                        self.widen_fresh(&body_ty)
-                    }
+                    Some(ret) if !ret.has_error() => self.check_expr(body, lambda_body, ret),
+                    _ => self.infer_expr(body, lambda_body, &Expectation::None),
                 };
+                let mut return_frame = self.return_frames.pop().expect("pushed above");
+                return_frame.candidates.push(body_ty);
+                let joined = self.join_return_candidates(&return_frame.candidates);
+                let inferred_ret = self.widen_fresh(&joined);
+                let ret_ty = match ret_expectation {
+                    Some(ret) if is_unit(&ret) => ret,
+                    Some(ret) if !ret.has_error() => {
+                        if ret.has_infer() {
+                            self.sub(&inferred_ret, &ret);
+                        }
+                        ret
+                    }
+                    _ => inferred_ret,
+                };
+                self.loop_depth = saved_loop_depth;
+                self.defer_loop_floors = saved_defer_loop_floors;
                 self.diverges = saved_diverges;
                 self.current_scope = saved_scope;
                 ret_ty
@@ -11911,6 +12010,28 @@ impl<'db> InferenceContext<'db> {
                         };
                         diags.push(TirDiagnostic {
                             error: TirTypeError::DeferControlFlowEscape { keyword },
+                            severity: DiagnosticSeverity::Error,
+                            primary,
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::ReturnTypeMismatch {
+                        stmt,
+                        expr,
+                        expected,
+                        actual,
+                    } => {
+                        let primary = match (stmt, expr) {
+                            (Some(stmt), _) => DiagnosticLocation::Stmt(stmt),
+                            (None, Some(expr)) => DiagnosticLocation::Expr(expr),
+                            (None, None) => unreachable!("one anchor is always set"),
+                        };
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::TypeMismatch {
+                                expected: self.finalize_ty(&expected).to_plain(),
+                                got: self.finalize_ty(&actual).to_plain(),
+                            },
                             severity: DiagnosticSeverity::Error,
                             primary,
                             related: Vec::new(),

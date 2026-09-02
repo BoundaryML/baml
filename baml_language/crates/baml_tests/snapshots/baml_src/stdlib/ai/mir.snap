@@ -6963,7 +6963,7 @@ fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, par
     let _8: unknown // e
     let _9: baml.time.Duration
     let _10: int
-    let _11: () -> never throws ai.errors.InvalidRequest | ai.errors.NetworkFailure
+    let _11: () -> baml.json.json throws ai.errors.InvalidRequest | ai.errors.NetworkFailure
     let _12: reflect.Type
     let _13: reflect.Type
     let _14: bool
@@ -6996,7 +6996,7 @@ fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, par
 
     bb3: {
         _11 = make_closure lambda[0](copy _1, copy _4, copy _2);
-        _12 = load_type(never);
+        _12 = load_type(baml.json.json);
         _13 = load_type(ai.errors.InvalidRequest | ai.errors.NetworkFailure);
         _0 = call const fn baml.future.with_timeout<copy _12, copy _13>(copy _9, copy _11) -> [bb4, unwind: bb5];
     }
@@ -7036,9 +7036,9 @@ fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, par
 }
 
 // lambda[0]
-fn .<lambda(McpConnection._request, 0)>() -> never {
+fn .<lambda(McpConnection._request, 0)>() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
     // Locals:
-    let _0: never // _0 // return
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: string | baml.iter.Done // next
     let _2: unknown // e
     let _3: (baml.sys.ReadPipeLines) -> string | baml.iter.Done throws baml.errors.Io

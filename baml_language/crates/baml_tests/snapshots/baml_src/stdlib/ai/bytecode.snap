@@ -6706,7 +6706,7 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
     load_field .timeout_ms
     call baml.time.Duration.from_milliseconds
     store_var _9
-    load_type never
+    load_type baml.json.json
     load_type ai.errors.InvalidRequest | ai.errors.NetworkFailure
     load_var2 7 1
     load_var2 4 2

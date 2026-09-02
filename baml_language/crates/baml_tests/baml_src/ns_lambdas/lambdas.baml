@@ -460,3 +460,93 @@ function lambdas_inferred_throwing_signature() -> string {
 test "inferred_throwing_signature_is_reconstructed" {
     assert.equal(lambdas_inferred_throwing_signature(), "int/\"negative\"")
 }
+
+function lambdas_annotated_return_uses_closure_contract() -> int[] {
+    let choose = (early: bool) -> int {
+        if (early) { return 11 }
+        21
+    };
+    [choose(true), choose(false)]
+}
+
+test "annotated_return_uses_closure_contract" {
+    assert.equal(lambdas_annotated_return_uses_closure_contract(), [11, 21])
+}
+
+function lambdas_inferred_return_uses_closure_frame() -> int[] {
+    let choose = (early: bool) -> {
+        if (early) { return 12 }
+        22
+    };
+    [choose(true), choose(false)]
+}
+
+test "inferred_return_uses_closure_frame" {
+    assert.equal(lambdas_inferred_return_uses_closure_frame(), [12, 22])
+}
+
+function lambdas_inferred_returns_join_with_tail() -> string {
+    let choose = (early: bool) -> {
+        if (early) { return 13 }
+        "tail"
+    }
+    reflect.signature(choose).returns.to_string()
+}
+
+test "inferred_returns_join_with_tail" {
+    assert.equal(lambdas_inferred_returns_join_with_tail(), "int | string")
+}
+
+function lambdas_callback_return_name<T>(callback: (bool) -> T) -> string {
+    reflect.signature(callback).returns.to_string()
+}
+
+function lambdas_contextual_returns_join_before_binding() -> string {
+    lambdas_callback_return_name((early: bool) -> {
+        if (early) { return 16 }
+        "tail"
+    })
+}
+
+test "contextual_returns_join_before_binding" {
+    assert.equal(lambdas_contextual_returns_join_before_binding(), "int | string")
+}
+
+function lambdas_nested_returns_use_innermost_frame() -> int[] {
+    let outer = (early: bool) -> int {
+        let inner = () -> string { return "inner" }
+        if (early) { return inner().length() }
+        23
+    };
+    [outer(true), outer(false)]
+}
+
+test "nested_returns_use_innermost_frame" {
+    assert.equal(lambdas_nested_returns_use_innermost_frame(), [5, 23])
+}
+
+function lambdas_match_arm_return_uses_closure_frame() -> int[] {
+    let choose = (x: int) -> int {
+        match (x) {
+            0 => return 14,
+            _ => x + 20,
+        }
+    };
+    [choose(0), choose(4)]
+}
+
+test "match_arm_return_uses_closure_frame" {
+    assert.equal(lambdas_match_arm_return_uses_closure_frame(), [14, 24])
+}
+
+function lambdas_return_inside_deferred_closure() -> int {
+    defer {
+        let get = () -> int { return 15 }
+        get()
+    }
+    25
+}
+
+test "return_inside_deferred_closure" {
+    assert.equal(lambdas_return_inside_deferred_closure(), 25)
+}
