@@ -55,7 +55,11 @@ fn run_as_detected_agent(args: &[&str], cwd: &Path) -> Output {
     ] {
         command.env_remove(variable);
     }
-    command.env("AGENT", "1").output().unwrap()
+    command
+        .env("AGENT", "1")
+        .env("BAML_AGENT_SKILL_CHECK", "auto")
+        .output()
+        .unwrap()
 }
 
 fn stderr_of(output: &Output) -> String {
@@ -104,6 +108,48 @@ fn matching_skill_allows_detected_agent() {
 
     assert!(output.status.success(), "{}", stderr_of(&output));
     assert!(project.path().join("baml.toml").is_file());
+}
+
+#[test]
+fn selected_project_uses_its_skill() {
+    let cwd = tempfile::tempdir().unwrap();
+    let project = project_with_skill(&common::installed_skill_content());
+    let source_dir = project.path().join("baml_src");
+    fs::create_dir_all(&source_dir).unwrap();
+    fs::write(
+        source_dir.join("main.baml"),
+        "function main() -> string { \"hello\" }\n",
+    )
+    .unwrap();
+
+    let output = run_as_detected_agent(
+        &["check", "--project", project.path().to_str().unwrap()],
+        cwd.path(),
+    );
+
+    assert!(output.status.success(), "{}", stderr_of(&output));
+}
+
+#[test]
+fn selected_project_does_not_use_cwd_skill() {
+    let cwd = project_with_skill(&common::installed_skill_content());
+    let project = tempfile::tempdir().unwrap();
+    let source_dir = project.path().join("baml_src");
+    fs::create_dir_all(&source_dir).unwrap();
+    fs::write(
+        source_dir.join("main.baml"),
+        "function main() -> string { \"hello\" }\n",
+    )
+    .unwrap();
+
+    let output = run_as_detected_agent(
+        &["check", "--project", project.path().to_str().unwrap()],
+        cwd.path(),
+    );
+    let stderr = stderr_of(&output);
+
+    assert_eq!(output.status.code(), Some(4), "{stderr}");
+    assert!(stderr.contains(SKILL_MISSING_ERROR), "{stderr}");
 }
 
 #[test]

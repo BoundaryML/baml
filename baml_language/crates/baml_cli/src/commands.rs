@@ -354,7 +354,7 @@ impl RuntimeCli {
         crate::output::init(self.output);
 
         if self.command.requires_agent_skill() {
-            crate::skill_check::check()?;
+            crate::skill_check::check(self.command.agent_skill_project_path())?;
         }
 
         // Fire anonymous, best-effort telemetry for this invocation. The
@@ -400,6 +400,24 @@ impl RuntimeCli {
 }
 
 impl Commands {
+    fn agent_skill_project_path(&self) -> Option<&Path> {
+        match self {
+            Self::Check(args) => args.from.as_deref(),
+            Self::Describe(args) => args.from.as_deref(),
+            Self::Query(args) => args.from.as_deref(),
+            Self::Format(args) => args.from.as_deref(),
+            Self::Generate(args) => match &args.command {
+                Some(crate::generate::GenerateCommand::Add(args)) => args.from.as_deref(),
+                None => args.from.as_deref(),
+            },
+            Self::Test(args) => args.from.as_deref(),
+            Self::Run(args) => args.from.as_deref(),
+            Self::Pack(args) => args.from.as_deref(),
+            Self::Playground(args) => args.from.as_deref(),
+            _ => None,
+        }
+    }
+
     fn requires_agent_skill(&self) -> bool {
         matches!(
             self,

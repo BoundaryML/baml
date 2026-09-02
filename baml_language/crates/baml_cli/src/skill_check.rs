@@ -39,13 +39,13 @@ struct SkillMetadata {
     toolchain_version: String,
 }
 
-pub(crate) fn check() -> anyhow::Result<()> {
+pub(crate) fn check(project: Option<&Path>) -> anyhow::Result<()> {
     let policy = crate::output::policy().agent_skill_check;
     if policy == AgentSkillCheckPolicy::Off {
         return Ok(());
     }
 
-    let status = project_skill_status();
+    let status = project_skill_status(project)?;
     match (policy, status) {
         (_, SkillStatus::Current) => Ok(()),
         (AgentSkillCheckPolicy::Warn, status) => {
@@ -72,9 +72,16 @@ fn skill_warning_message(status: SkillStatus) -> Option<&'static str> {
     }
 }
 
-fn project_skill_status() -> SkillStatus {
-    let Ok(mut dir) = std::env::current_dir() else {
-        return SkillStatus::Missing;
+fn project_skill_status(project: Option<&Path>) -> anyhow::Result<SkillStatus> {
+    let mut dir = match project {
+        Some(project) => match crate::project_load::find_project_root_from(Some(project))? {
+            Some(root) => root,
+            None => return Ok(SkillStatus::Missing),
+        },
+        None => match std::env::current_dir() {
+            Ok(dir) => dir,
+            Err(_) => return Ok(SkillStatus::Missing),
+        },
     };
     let home = std::env::var_os("HOME").map(PathBuf::from);
 
@@ -82,17 +89,17 @@ fn project_skill_status() -> SkillStatus {
         let statuses = [".agents/skills", ".claude/skills"]
             .map(|relative| installed_skill_status(&dir.join(relative)));
         if statuses.contains(&SkillStatus::Outdated) {
-            return SkillStatus::Outdated;
+            return Ok(SkillStatus::Outdated);
         }
         if statuses.contains(&SkillStatus::Current) {
-            return SkillStatus::Current;
+            return Ok(SkillStatus::Current);
         }
         if home.as_ref().is_some_and(|home| dir == *home) || !dir.pop() {
             break;
         }
     }
 
-    SkillStatus::Missing
+    Ok(SkillStatus::Missing)
 }
 
 fn installed_skill_status(skills_dir: &Path) -> SkillStatus {
