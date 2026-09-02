@@ -137,6 +137,7 @@ baml_query_profiles = { path = "crates/baml_query_profiles" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"
+hostname = "0.4.2"
 
 #  External dependencies
 anyhow = { version = "1" }

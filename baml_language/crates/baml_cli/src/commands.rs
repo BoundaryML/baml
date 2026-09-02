@@ -357,7 +357,7 @@ impl RuntimeCli {
             crate::skill_check::check(self.command.agent_skill_project_path())?;
         }
 
-        // Fire anonymous, best-effort telemetry for this invocation. The
+        // Fire best-effort telemetry for this invocation. The
         // event is appended to an on-disk queue (one atomic write); on drop
         // of the guard (after the match below returns) the queue file is
         // sealed and a detached child process delivers it after this

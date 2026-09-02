@@ -1,4 +1,4 @@
-//! Anonymous CLI telemetry — privacy story documented at repo-root
+//! CLI telemetry — privacy story documented at repo-root
 //! `TELEMETRY.md`; the rendered version the CLI links users at is
 //! [`TELEMETRY_URL`].
 //!
@@ -31,14 +31,14 @@
 //!   appends the full request body to a `live_*.jsonl` file (one atomic
 //!   write; survives panics and SIGKILL). On drop or rotation the file is
 //!   sealed and a detached `baml __flush-telemetry` child POSTs it after
-//!   the parent has already exited — zero added latency, automatic retry
-//!   of any backlog, orphan recovery, and a 24h staleness purge.
+//!   the parent has already exited — automatic retry of any backlog,
+//!   orphan recovery, and a 24h staleness purge.
 //! - [`events`] — typed `TelemetryEvent` constructors. The only file most
 //!   changes touch.
 //! - [`post`] — builds PostHog request bodies at record time; POSTs only
 //!   inside the flush child.
-//! - [`anonymous_meta`] / [`project_id`] — coarse machine snapshot and the
-//!   salted, irreversible project-root hash.
+//! - [`environment_meta`] / [`git_meta`] / [`project_id`] — environment and
+//!   Git snapshots plus the salted, irreversible project-root hash.
 //!
 //! Invariants:
 //!
@@ -48,8 +48,9 @@
 //!     persistent `enabled = false` in `telemetry.toml` (a flush child
 //!     that finds opt-out deletes the backlog instead of sending it).
 
-pub(crate) mod anonymous_meta;
+pub(crate) mod environment_meta;
 pub(crate) mod events;
+mod git_meta;
 pub(crate) mod post;
 pub(crate) mod project_id;
 pub(crate) mod queue;
@@ -65,8 +66,8 @@ pub(crate) use storage::{InvocationGuard, Telemetry};
 pub(crate) const TELEMETRY_URL: &str = "https://boundaryml.com/telemetry";
 
 /// Record a telemetry event from anywhere in the crate. Fire-and-forget:
-/// one atomic file append (~10µs), no HTTP, no guard to hold. See the
-/// module docs for how to add a new event type.
+/// a small local metadata snapshot and one atomic file append, no HTTP,
+/// no guard to hold. See the module docs for how to add a new event type.
 pub(crate) fn record(event: TelemetryEvent) {
     Telemetry::global().record(event);
 }

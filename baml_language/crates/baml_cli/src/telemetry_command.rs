@@ -126,10 +126,12 @@ fn print_status(t: &telemetry::Telemetry) {
     println!("Config: {}", style(t.config_path().display()).dim());
 
     if is_enabled {
-        println!("\nBAML telemetry is completely anonymous. Thank you for participating!");
+        println!(
+            "\nBAML CLI usage and environment telemetry is enabled. Thank you for participating!"
+        );
     } else {
         println!(
-            "\nYou have opted out of BAML's anonymous telemetry program.\n\
+            "\nYou have opted out of BAML's CLI telemetry program.\n\
              No data will be collected from your machine."
         );
     }

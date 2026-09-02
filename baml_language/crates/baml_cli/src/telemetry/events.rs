@@ -4,9 +4,8 @@
 //!
 //! ## Adding a new event
 //!
-//! 1. Add a constructor below (name + `json!` payload of coarse,
-//!    non-identifying fields — never paths, file contents, or argument
-//!    values).
+//! 1. Add a constructor below (name + `json!` payload; never file contents
+//!    or argument values, and document every new field in `TELEMETRY.md`).
 //! 2. Add its name to the `event_names_snapshot` test at the bottom and a
 //!    bullet to `TELEMETRY.md`'s "What is being collected?" section, in
 //!    the same commit.

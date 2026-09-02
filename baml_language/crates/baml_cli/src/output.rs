@@ -324,7 +324,7 @@ fn resolve_hyperlinks(choice: HyperlinkChoice, is_terminal: bool) -> bool {
 
 fn output_signals() -> OutputSignals {
     OutputSignals {
-        running_in_agent: running_in_agent(),
+        running_in_agent: crate::agent_harness::detect().is_some(),
         color_forced: env_truthy("CLICOLOR_FORCE"),
         stdout_auto_color: auto_color(&console::Term::stdout()),
         stderr_auto_color: auto_color(&console::Term::stderr()),
@@ -344,22 +344,6 @@ fn env_equals(var: &str, expected: &str) -> bool {
 
 fn env_truthy(var: &str) -> bool {
     std::env::var(var).is_ok_and(|value| !value.is_empty() && value != "0")
-}
-
-/// Environment variables that identify a known coding-agent process.
-const AGENT_ENV_VARS: &[&str] = &[
-    "CLAUDECODE",
-    "CODEX_SANDBOX",
-    "PI_CODING_AGENT",
-    "OPENCODE_CLIENT",
-    "AI_AGENT",
-    "CURSOR_TRACE_ID",
-    "REPL_ID",
-    "AGENT",
-];
-
-fn running_in_agent() -> bool {
-    AGENT_ENV_VARS.iter().any(|var| env_truthy(var))
 }
 
 #[cfg(test)]

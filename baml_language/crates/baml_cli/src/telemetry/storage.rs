@@ -11,6 +11,7 @@
 //! |-----------------------------|--------------------------|------------------------------------------|
 //! | `telemetry.enabled`         | `enabled: bool`          | Persistent opt-in flag                   |
 //! | `telemetry.notifiedAt`      | `notified_at: u64`       | Unix ms of first-run notice (0 = never)  |
+//! | —                           | `notice_version: u32`    | Last data-collection notice shown        |
 //! | `telemetry.anonymousId`     | `anonymous_id: String`   | 32-byte hex; sent with every event       |
 //! | `telemetry.salt`            | `salt: String`           | 16-byte hex; NEVER SENT (see `one_way_hash`) |
 //!
@@ -39,6 +40,10 @@ use super::{TELEMETRY_URL, events::TelemetryEvent, post, queue};
 /// Config schema version. Bumped on any breaking change to [`Config`].
 const SCHEMA_VERSION: u32 = 1;
 
+/// Increment when the disclosed categories of collected data materially
+/// change so existing enabled users see the updated notice once.
+const NOTICE_VERSION: u32 = 1;
+
 /// File name of the persistent config file under `<baml_home>`.
 const CONFIG_FILE_NAME: &str = "telemetry.toml";
 
@@ -65,9 +70,15 @@ pub(crate) struct Config {
     #[serde(default)]
     pub notified_at: u64,
 
+    /// Version of the data-collection notice most recently shown. Older
+    /// configs deserialize as 0 and are shown the expanded disclosure once.
+    #[serde(default)]
+    pub notice_version: u32,
+
     /// Random 32-byte hex string identifying this machine's CLI installs.
     /// Generated on first run; stable across invocations. Sent with every
-    /// event. Not tied to identity in any way.
+    /// event. Generated independently from the identifying metadata attached
+    /// to events.
     pub anonymous_id: String,
 
     /// Random 16-byte hex string. **Never leaves the machine.** Used only
@@ -208,7 +219,7 @@ impl Telemetry {
         hex::encode(hasher.finalize())
     }
 
-    /// Print the one-time "Attention: BAML collects anonymous telemetry"
+    /// Print the one-time "Attention: BAML collects CLI usage telemetry"
     /// notice if we haven't already, then stamp `notified_at`. Suppressed
     /// on non-TTY stderr and in CI so scripts and log-parsers never see it.
     ///
@@ -229,7 +240,7 @@ impl Telemetry {
             .inner
             .config
             .lock()
-            .map(|c| c.notified_at != 0)
+            .map(|c| has_current_notice(&c))
             .unwrap_or(true);
         if already_notified {
             return;
@@ -239,15 +250,17 @@ impl Telemetry {
 
         if let Ok(mut cfg) = self.inner.config.lock() {
             cfg.notified_at = now_ms();
+            cfg.notice_version = NOTICE_VERSION;
             let _ = write_config(&self.inner.config_path, &cfg);
         }
     }
 
     /// Record an event. Serializes the complete request body and appends
-    /// it to this process's live queue file — one atomic write syscall,
-    /// ~10µs. No HTTP happens on the caller's thread, ever; delivery is
-    /// the detached flush child's job (see [`queue`]). Because the event
-    /// hits disk immediately, it survives panics, Ctrl-C, and SIGKILL.
+    /// it to this process's live queue file after taking a small local
+    /// metadata snapshot. No HTTP happens on the caller's thread, ever;
+    /// delivery is the detached flush child's job (see [`queue`]). Because
+    /// the event hits disk immediately, it survives panics, Ctrl-C, and
+    /// SIGKILL.
     ///
     /// In debug mode (`BAML_TELEMETRY_DEBUG=1`) the payload is printed to
     /// stderr instead and nothing is written or sent — even when opted
@@ -349,6 +362,10 @@ impl Telemetry {
     }
 }
 
+fn has_current_notice(config: &Config) -> bool {
+    config.notified_at != 0 && config.notice_version >= NOTICE_VERSION
+}
+
 /// RAII guard: on drop, seals the live queue file and spawns the detached
 /// flush child (see [`Telemetry::flush`] — non-blocking, ~1–2ms). Keep the
 /// guard alive for the duration of the command.
@@ -381,7 +398,7 @@ impl Drop for InvocationGuard {
 
 // ── First-run notice ─────────────────────────────────────────────────────────
 
-/// The one-time "we collect anonymous telemetry" notice.
+/// The one-time "we collect CLI usage telemetry" notice.
 ///
 /// Directly modeled on Next.js's four-line notice: magenta bold "Attention:"
 /// header, plain factual body, cyan URL. We deliberately keep the notice
@@ -393,7 +410,7 @@ impl Drop for InvocationGuard {
 fn print_first_run_notice() {
     let attention = style("Attention:").magenta().bold();
     let url = style(TELEMETRY_URL).cyan();
-    eprintln!("\n{attention} BAML now collects completely anonymous CLI usage telemetry.");
+    eprintln!("\n{attention} BAML collects CLI usage, Git identity, and environment telemetry.");
     eprintln!("This is how a small team like ours decides what to build next.");
     eprintln!("Learn more, including how to opt out, at:");
     eprintln!("{url}\n");
@@ -439,6 +456,7 @@ fn load_or_init_config(path: &Path, legacy_path: &Path) -> Config {
         // should still see the notice on their next invocation. This is
         // exactly the transparency gap #4018 flagged.
         notified_at: 0,
+        notice_version: 0,
         anonymous_id,
         salt: random_hex_16(),
     };
@@ -549,6 +567,7 @@ mod tests {
         assert_eq!(cfg.schema_version, SCHEMA_VERSION);
         assert!(cfg.enabled);
         assert_eq!(cfg.notified_at, 0);
+        assert_eq!(cfg.notice_version, 0);
         assert_eq!(cfg.anonymous_id.len(), 64, "32-byte hex id");
         assert_eq!(cfg.salt.len(), 32, "16-byte hex salt");
         assert!(path.exists(), "config should be persisted on first load");
@@ -565,6 +584,22 @@ mod tests {
         let second = load_or_init_config(&path, &legacy);
         assert_eq!(first.anonymous_id, second.anonymous_id);
         assert_eq!(first.salt, second.salt);
+    }
+
+    #[test]
+    fn old_config_deserializes_as_needing_the_current_notice() {
+        let cfg = toml::from_str::<Config>(
+            r#"
+schema_version = 1
+enabled = true
+notified_at = 123
+anonymous_id = "abc"
+salt = "def"
+"#,
+        )
+        .unwrap();
+        assert_eq!(cfg.notice_version, 0);
+        assert!(!has_current_notice(&cfg));
     }
 
     /// A legacy plain-UUID `telemetry_id` file must be adopted as

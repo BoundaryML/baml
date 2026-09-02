@@ -1,9 +1,7 @@
-//! Memoized system-level metadata attached to every telemetry event. Direct
-//! port of Next.js's `packages/next/src/telemetry/anonymous-meta.ts`.
+//! Memoized system and environment metadata attached to every telemetry event.
+//! Originally ported from Next.js's `packages/next/src/telemetry/anonymous-meta.ts`.
 //!
-//! Everything here is coarse and non-identifying: OS name, CPU arch, CPU
-//! count, whether we're in CI/Docker/WSL, CLI version and channel. See
-//! `TELEMETRY.md` for the full field-by-field list.
+//! See `TELEMETRY.md` for the full field-by-field list and data-use policy.
 
 use std::sync::OnceLock;
 
@@ -13,7 +11,7 @@ use super::storage::env_is_truthy;
 
 /// The set of system-scoped fields we attach to every telemetry event.
 #[derive(Debug, Clone, Serialize)]
-pub(crate) struct AnonymousMeta {
+pub(crate) struct EnvironmentMeta {
     /// `macos`, `linux`, `windows`, … (Rust's `std::env::consts::OS`).
     pub system_platform: &'static str,
     /// Build-target architecture: `aarch64`, `x86_64`, … (`std::env::consts::ARCH`).
@@ -31,6 +29,12 @@ pub(crate) struct AnonymousMeta {
     /// Raw value of `$CI` when set (usually `true` or a provider name like
     /// `GitHub Actions`). Left as-is; not interpreted.
     pub ci_name: Option<String>,
+    /// Detected coding-agent harness, or `None` for an apparently human run.
+    pub agent_harness: Option<String>,
+    /// Machine hostname, when the operating system exposes one.
+    pub machine_hostname: Option<String>,
+    /// Raw value of `$HOME`, when set.
+    pub home: Option<String>,
     /// Compile-time CLI version constant, e.g. `0.14.1`.
     pub cli_version: &'static str,
     /// Compile-time release channel: `stable`, `canary`, `dev`.
@@ -39,19 +43,19 @@ pub(crate) struct AnonymousMeta {
 
 /// Memoized accessor. Computed once per process; the returned reference
 /// is `'static`. Matches Next's module-level `traits` cache.
-pub(crate) fn get() -> &'static AnonymousMeta {
-    static META: OnceLock<AnonymousMeta> = OnceLock::new();
+pub(crate) fn get() -> &'static EnvironmentMeta {
+    static META: OnceLock<EnvironmentMeta> = OnceLock::new();
     META.get_or_init(compute)
 }
 
-fn compute() -> AnonymousMeta {
+fn compute() -> EnvironmentMeta {
     let cpu_count = std::thread::available_parallelism()
         .map(std::num::NonZeroUsize::get)
         .unwrap_or(0);
 
     let ci_name = std::env::var("CI").ok().filter(|v| !v.is_empty());
 
-    AnonymousMeta {
+    EnvironmentMeta {
         system_platform: std::env::consts::OS,
         system_architecture: std::env::consts::ARCH,
         cpu_count,
@@ -59,6 +63,12 @@ fn compute() -> AnonymousMeta {
         is_wsl: detect_wsl(),
         is_ci: env_is_truthy("CI"),
         ci_name,
+        agent_harness: crate::agent_harness::detect(),
+        machine_hostname: hostname::get()
+            .ok()
+            .and_then(|hostname| hostname.into_string().ok())
+            .filter(|hostname| !hostname.is_empty()),
+        home: std::env::var("HOME").ok().filter(|home| !home.is_empty()),
         cli_version: baml_version::CANONICAL_VERSION,
         channel: baml_version::CHANNEL,
     }
@@ -95,7 +105,7 @@ fn detect_wsl() -> bool {
 mod tests {
     use super::*;
 
-    /// The memoized `AnonymousMeta` reports something plausible for the
+    /// The memoized `EnvironmentMeta` reports something plausible for the
     /// current platform. We can't assert exact values (CI runs on
     /// arbitrary hardware), but we can assert basic invariants.
     #[test]

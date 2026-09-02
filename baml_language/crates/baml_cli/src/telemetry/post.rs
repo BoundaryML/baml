@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use super::{anonymous_meta, events::TelemetryEvent, project_id, storage::Telemetry};
+use super::{environment_meta, events::TelemetryEvent, git_meta, project_id, storage::Telemetry};
 
 /// PostHog project API key (the public, write-only `phc_...` ingestion key).
 /// Safe to embed in the client binary. Leave empty to disable telemetry at
@@ -72,7 +72,8 @@ pub(super) fn build_body(telemetry: &Telemetry, event: &TelemetryEvent) -> Optio
         return None;
     }
 
-    let meta = anonymous_meta::get();
+    let meta = environment_meta::get();
+    let git = git_meta::get();
     let project = project_id::compute(telemetry);
 
     // Base properties = meta + context. Event-specific fields overlay on top.
@@ -93,8 +94,21 @@ pub(super) fn build_body(telemetry: &Telemetry, event: &TelemetryEvent) -> Optio
         "is_wsl":              meta.is_wsl,
         "is_ci":               meta.is_ci,
         "ci_name":             meta.ci_name,
+        "agent_harness":       meta.agent_harness,
+        "machine_hostname":    meta.machine_hostname,
+        "home":                meta.home,
         "cli_version":         meta.cli_version,
         "channel":             meta.channel,
+
+        // Git context (per-invocation, memoized). The raw origin URL is never
+        // included because it may contain credentials.
+        "git.origin_host":     git.origin_host,
+        "git.origin_org":      git.origin_org,
+        "git.origin_repo":     git.origin_repo,
+        "git.author_name":     git.author_name,
+        "git.author_email":    git.author_email,
+        "git.committer_name":  git.committer_name,
+        "git.committer_email": git.committer_email,
     });
 
     // Merge the event's payload into `properties`. `serde_json::Value`
@@ -159,6 +173,16 @@ mod tests {
         // Meta.
         assert!(props.contains_key("cli_version"));
         assert!(props.contains_key("system_platform"));
+        assert!(props.contains_key("agent_harness"));
+        assert!(props.contains_key("machine_hostname"));
+        assert!(props.contains_key("home"));
+        assert!(props.contains_key("git.origin_host"));
+        assert!(props.contains_key("git.origin_org"));
+        assert!(props.contains_key("git.origin_repo"));
+        assert!(props.contains_key("git.author_name"));
+        assert!(props.contains_key("git.author_email"));
+        assert!(props.contains_key("git.committer_name"));
+        assert!(props.contains_key("git.committer_email"));
         // Context.
         assert!(props.contains_key("project_id"));
         assert!(props.contains_key("$session_id"));

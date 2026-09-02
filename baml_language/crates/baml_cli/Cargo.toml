@@ -52,6 +52,7 @@ console = { workspace = true }
 ctrlc = { workspace = true }
 datafusion = { workspace = true }
 hex = { workspace = true }
+hostname = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
 libsui = { workspace = true }
