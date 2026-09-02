@@ -31,6 +31,11 @@ name: Cargo Tests (Reusable)
 
 on:
   workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
 
 # Read-only by design: these jobs run PR-controlled cargo build/test code, so
 # they should not need elevated repository permissions.
