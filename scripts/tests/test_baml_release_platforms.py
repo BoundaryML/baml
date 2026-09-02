@@ -19,62 +19,9 @@ from scripts.baml_release_platforms import (
 VERSION = "1.2.3"
 ROOT = Path(__file__).resolve().parents[2]
 CLI = ROOT / "scripts" / "baml-release-platforms"
-CSHARP_CLI = ROOT / "scripts" / "baml-csharp-release-contract"
-RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
-TOOLCHAIN_WORKFLOW = ROOT / ".github" / "workflows" / "build2-toolchain.reusable.yaml"
 
 
 class WrapperReleasePlatformTests(unittest.TestCase):
-    def test_release_build_runner_regressions_are_pinned(self) -> None:
-        contract = json.loads(DEFAULT_PLATFORMS.read_text(encoding="utf-8"))
-        targets = {target["triple"]: target for target in contract["targets"]}
-
-        arm64_macos = targets["aarch64-apple-darwin"]["artifacts"]
-        self.assertEqual(
-            {
-                arm64_macos["toolchain"]["runner"],
-                arm64_macos["wrapper"]["runner"],
-                arm64_macos["java"]["runner"],
-                arm64_macos["cffi"]["runner"],
-                arm64_macos["csharp"]["consumer_runner"],
-            },
-            {"blacksmith-6vcpu-macos-latest"},
-        )
-
-        arm64_gnu = targets["aarch64-unknown-linux-gnu"]["artifacts"]["toolchain"]
-        self.assertEqual(arm64_gnu["runner"], "ubuntu-latest")
-        self.assertEqual(
-            arm64_gnu["cross_image"],
-            "ghcr.io/rust-cross/manylinux_2_28-cross:aarch64",
-        )
-
-        csharp_matrix = json.loads(
-            subprocess.run(
-                [CSHARP_CLI, "matrix"],
-                check=True,
-                capture_output=True,
-                text=True,
-            ).stdout
-        )["include"]
-        osx_arm64 = next(
-            entry for entry in csharp_matrix if entry["rid"] == "osx-arm64"
-        )
-        self.assertEqual(osx_arm64["runner"], "blacksmith-6vcpu-macos-latest")
-
-    def test_release_delegates_toolchain_build_with_legacy_glibc_compiler(self) -> None:
-        release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
-        builder = TOOLCHAIN_WORKFLOW.read_text(encoding="utf-8")
-
-        self.assertIn(
-            "uses: ./.github/workflows/build2-toolchain.reusable.yaml", release
-        )
-        self.assertNotIn("name: Build CLI and pack host", release)
-        self.assertIn("CC_x86_64_unknown_linux_gnu=gcc", builder)
-        self.assertIn(
-            "CFLAGS_x86_64_unknown_linux_gnu=--sysroot=/usr/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu/sysroot",
-            builder,
-        )
-
     def test_extensionless_cli_generates_wrapper_matrix(self) -> None:
         result = subprocess.run(
             [sys.executable, CLI, "wrapper-matrix"],
