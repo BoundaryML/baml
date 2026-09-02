@@ -407,7 +407,7 @@ jobs:
     steps:
       - name: "Build matrix"
         id: matrix
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             // Fork PRs stay on the hosted runners; untrusted code never
@@ -765,7 +765,7 @@ jobs:
           persist-credentials: false
 
       - name: "Assert every SDK directory has a matrix entry"
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           MATRIX_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.sdk-dirs }}
           TEMPORARILY_DISABLED_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.temporarily-disabled-sdk-dirs }}

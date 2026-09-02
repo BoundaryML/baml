@@ -485,7 +485,7 @@ jobs:
           name: release-plan
       - name: Stamp version
         run: scripts/baml-language-version stamp --plan release-plan.json
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: baml_language/sdks/go/baml_go/go.mod
           cache-dependency-path: baml_language/sdks/go/baml_go/go.sum
@@ -1823,10 +1823,10 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: baml_language/sdks/go/baml_go/go.mod
           cache: false
