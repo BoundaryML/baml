@@ -789,6 +789,7 @@ fn render_callable_pair(
         None
     };
     let ident = java_method_identifier(function.name.as_str());
+    let is_stream_companion = function.name.as_str().ends_with("@stream");
     // The `_async` sibling name, escaped past a user callable that already
     // claims `{ident}_async` (see [`async_sibling_ident`]).
     let async_ident = async_sibling_ident(&ident, sibling_idents);
@@ -1000,7 +1001,7 @@ fn render_callable_pair(
     // trailing `Consumer<<Ident>$Opts>` (so `f(required…, opts?, types?, ctx?)`),
     // plus the nested opts class. The required-only base above stays untouched,
     // so omitting the configurator still lets the engine evaluate BAML defaults.
-    if !optionals.is_empty() {
+    if !optionals.is_empty() || is_stream_companion {
         out.push_str(&render_optional_configurator(
             &ident,
             &async_ident,
@@ -1023,6 +1024,7 @@ fn render_callable_pair(
             sink,
             pool,
             returned_callable.as_ref(),
+            is_stream_companion,
         ));
     }
 
@@ -1296,6 +1298,7 @@ fn render_optional_configurator(
     sink: &mut UnionSink,
     pool: &mut DescriptorPool,
     returned_callable: Option<&ReturnedCallable>,
+    include_stream_client: bool,
 ) -> String {
     // A generic callable's optional arg may reference class/method type
     // vars; the (static) opts class must then re-declare exactly those, so
@@ -1359,6 +1362,11 @@ fn render_optional_configurator(
     // method name is the Java-escaped identifier (they differ only when the
     // arg name is a Java keyword).
     let mut setters = String::new();
+    if include_stream_client {
+        setters.push_str(&format!(
+            "\n        public {opts_ty} client(java.lang.Object v) {{\n            this.$values.put(\"client\", v);\n            this.$touched.add(\"client\");\n            return this;\n        }}\n"
+        ));
+    }
     for a in optionals {
         let mut boxed = translate_ty(&a.ty, TyPosition::Boxed, ctx, sink);
         // A nullable optional (`y?: T?`) accepts `null` as its VALUE (distinct
@@ -1417,6 +1425,16 @@ fn typed_callable_expr(
                 Some((inner, false)) => resolved = inner,
                 _ => return None,
             },
+            Ty::Union(members, _) => {
+                let mut non_null = members
+                    .iter()
+                    .filter(|member| !matches!(member, Ty::Null { .. }));
+                let inner = non_null.next()?;
+                if non_null.next().is_some() {
+                    return None;
+                }
+                resolved = inner;
+            }
             Ty::Function { .. } => break,
             _ => return None,
         }

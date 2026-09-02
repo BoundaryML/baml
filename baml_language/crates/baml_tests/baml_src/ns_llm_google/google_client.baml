@@ -445,7 +445,7 @@ function GoogleWatch(clip: video) -> string {
 function vertex_media_url_passthrough() -> string {
     let img = baml.media.Image.from_url("https://example.test/cat.png", null);
     let input = ai.ModelTurnInput {
-        prompt: GoogleVision$spec(img).prompt_template,
+        prompt: GoogleVision@spec(img).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
         output_type: reflect.Type.of<string>(),
@@ -480,7 +480,7 @@ function google_media_url_inlined() -> string {
         (mock: root.llm_mock.MockJsonServer) -> {
             let img = baml.media.Image.from_url(`${mock.base_url()}/cat.png`, null);
             let input = ai.ModelTurnInput {
-        prompt: GoogleVision$spec(img).prompt_template,
+        prompt: GoogleVision@spec(img).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
         output_type: reflect.Type.of<string>(),
@@ -510,7 +510,7 @@ test "google_media_url_inlined" {
 function google_media_youtube_passthrough() -> string {
     let clip = baml.media.Video.from_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ", null);
     let input = ai.ModelTurnInput {
-        prompt: GoogleWatch$spec(clip).prompt_template,
+        prompt: GoogleWatch@spec(clip).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
         output_type: reflect.Type.of<string>(),
@@ -785,7 +785,7 @@ test "vertex_request_timeout_ms" {
 // `anthropic_version` field — and WITHOUT `model`, which on this platform is
 // named by the endpoint URL and not passed in the body.
 function vertex_claude_raw_predict() -> string {
-    let spec = GoogleEcho$spec("Say pong.");
+    let spec = GoogleEcho@spec("Say pong.");
     let input = ai.ModelTurnInput {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
@@ -821,7 +821,7 @@ test "vertex_claude_raw_predict" {
 // …and a caller who wants it back puts it in `request_body`, which merges
 // after the Vertex constants.
 function vertex_claude_model_override() -> string {
-    let spec = GoogleEcho$spec("Say pong.");
+    let spec = GoogleEcho@spec("Say pong.");
     let input = ai.ModelTurnInput {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
@@ -1047,7 +1047,7 @@ test "google_missing_key_resolve" {
 function google_missing_key_invoke() -> string {
     let cl = _google_missing_key_client();
     let input = ai.ModelTurnInput {
-        prompt: GoogleEcho$spec("Say pong.").prompt_template,
+        prompt: GoogleEcho@spec("Say pong.").prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
         output_type: reflect.Type.of<string>(),

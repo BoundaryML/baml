@@ -917,7 +917,7 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
                 testset sentiments {
                     let req = baml.http.fetch("http://localhost:8000/" + sentiments);
                     let data = req.text();
-                    let tests = GenerateTests$parse(data);
+                    let tests = GenerateTests@spec(0, "").parse(data);
                     for (let ex in tests) {
                         test ex {
                             let result = ClassifySentiment("hi");

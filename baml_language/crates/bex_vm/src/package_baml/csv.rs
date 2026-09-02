@@ -5,7 +5,7 @@
 //! in-memory byte buffer held in the handle's `RustData` state. File IO is
 //! *not* done here: the BAML-level method bodies in `ns_csv/csv.baml` pump
 //! chunks from a `baml.fs.File` into `_feed` / `_feed_eof` whenever a native
-//! poll returns the `CsvNeedData` marker. That keeps every heap `Value` (the
+//! poll returns the `_NeedData` marker. That keeps every heap `Value` (the
 //! `File` handle, the `on_skip` closure) in regular GC-traced instance
 //! fields — the `RustData` state holds plain Rust data only.
 //!

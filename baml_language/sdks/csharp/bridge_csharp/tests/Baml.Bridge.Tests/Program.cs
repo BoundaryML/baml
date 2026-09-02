@@ -54,7 +54,6 @@ internal static unsafe class Program
         VerifyCallbackIdentifiersAndCopy();
         VerifySafeHandleOwnership();
         VerifyStreamProtocolOwnership();
-        VerifyDeferredStreamArgumentOwnership();
         VerifyMediaAndHandleProtocol();
         Console.WriteLine("managed_foundation=ok");
         return 0;
@@ -62,6 +61,13 @@ internal static unsafe class Program
 
     private static int RunNativeChild(string[] args)
     {
+        if (args.Length == 1 && args[0] == "spec-prompt")
+        {
+            VerifyFunctionSpecAndPromptMethods();
+            Console.WriteLine("managed_spec_prompt=ok");
+            return 0;
+        }
+
         if (args.Length == 2 && args[0] == "native-success")
         {
             NativeApi api = NativeApi.Instance;
@@ -2240,65 +2246,284 @@ internal static unsafe class Program
         };
     }
 
-    private static void VerifyDeferredStreamArgumentOwnership()
+    private static void VerifyFunctionSpecAndPromptMethods()
     {
-        byte[] textMetadata =
-            PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString).ToByteArray();
-        byte[] handleMetadata = new BamlTy
-        {
-            ClassTy = new BamlTyClass { Name = "test.Handle" },
-        }.ToByteArray();
-        BamlGeneratedRegistryBuilder builder =
-            BamlGeneratedContract.CreateRegistryBuilder(BamlGeneratedContract.Version);
-        BamlGeneratedType<string> text =
-            builder.DeclareType<string>("string", textMetadata);
-        BamlGeneratedType<Baml.BamlHandle> handleType =
-            builder.DeclareType<Baml.BamlHandle>("test.Handle", handleMetadata);
-        builder.RegisterCodec(text, new StringCodec());
-        builder.RegisterCodec(handleType, new HandleCodec());
-        BamlGeneratedFunction<string> function =
-            builder.DeclareFunction("test.echo$stream", "stream", text);
-        BamlGeneratedArgument<string, Baml.BamlHandle> handleArgument =
-            builder.DeclareArgument(function, "resource", handleType);
-        BamlGeneratedRegistry registry = builder.Build();
+        ResetFakeCalls();
+        BamlApiV1 table = CreateValidTable();
+        var api = new NativeApi(&table, "test");
+        (BamlGeneratedRegistry registry, BamlGeneratedFunction<string> function, _, _) =
+            CreateGeneratedRegistry();
+        var program = new BamlGeneratedProgram(
+            registry,
+            new Baml.Runtime.ProgramNativeState(api, "test"));
+        registry.AttachProgram(program);
 
         clonedHandles = 0;
         releasedHandles = 0;
         using var original = new Baml.BamlHandle(
-            new BamlSafeHandle(60, &CloneHandle, &ReleaseHandle),
-            BamlTypeDescriptor.CreateHandle("test.Handle"),
-            wireTypeMetadata: handleMetadata);
-        BamlGeneratedArgumentsBuilder<string> arguments =
-            registry.CreateArgumentsBuilder(function);
-        arguments.Add(handleArgument, original);
-        int programFactoryCalls = 0;
-        var deferredProgram = new Lazy<BamlGeneratedProgram>(() =>
-        {
-            Interlocked.Increment(ref programFactoryCalls);
-            throw new InvalidOperationException("the native program must remain cold");
-        });
+            new BamlSafeHandle(70, &CloneHandle, &ReleaseHandle),
+            BamlTypeDescriptor.CreateHandle("ai.FunctionSpec"),
+            BamlHandleType.AdtFunctionSpec);
+        using var spec = new BamlFunctionSpec<string>(
+            original.Clone(),
+            registry,
+            function.Result);
 
-        BamlStream<string, string> stream = BamlGeneratedContract.CreateStream(
-            deferredProgram,
-            function,
-            text,
-            arguments.Build(),
-            "string");
+        SetFakeResult(new BamlOutboundValue { StringValue = "user.test.Echo" });
         Require(
-            clonedHandles == 1
-                && releasedHandles == 0
-                && programFactoryCalls == 0
-                && !original.IsClosed,
-            "stream creation did not clone arguments before a cold native factory");
-        stream.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            spec.Name() == "user.test.Echo"
+                && lastFakeFunction == "ai.FunctionSpec.name",
+            "FunctionSpec.name did not use its authored stdlib method");
+
+        SetFakeResult(new BamlOutboundValue { StringValue = "parsed" });
         Require(
-            clonedHandles == 1
-                && releasedHandles == 1
-                && programFactoryCalls == 0
-                && !original.IsClosed,
-            "disposing an unstarted stream did not release only its deferred argument clone");
+            spec.Parse("\"parsed\"") == "parsed"
+                && lastFakeFunction == "ai.FunctionSpec.parse",
+            "FunctionSpec.parse did not use its authored stdlib method");
+        CallFunctionArgs parseCall = CallFunctionArgs.Parser.ParseFrom(lastFakeArguments!);
+        Require(
+            parseCall.Kwargs.Count == 2
+                && parseCall.Kwargs[0].StringKey == "self"
+                && parseCall.Kwargs[0].Value.Handle.HandleType
+                    == BamlHandleType.AdtFunctionSpec
+                && parseCall.Kwargs[1].StringKey == "json"
+                && parseCall.Kwargs[1].Value.StringValue == "\"parsed\"",
+            "FunctionSpec.parse did not encode its live receiver and json argument");
+
+        SetFakeResult(new BamlOutboundValue
+        {
+            PromptAstValue = PromptAstWithMedia(),
+        });
+        BamlPrompt prompt = spec.Prompt();
+        Require(
+            lastFakeFunction == "ai.FunctionSpec.prompt",
+            "FunctionSpec.prompt did not use its authored stdlib method");
+
+        BamlValue promptValue = BamlValue.From(prompt);
+        BamlPrompt roundTrippedPrompt = promptValue.As<BamlPrompt>();
+
+        var promptEntries = new[]
+        {
+            new KeyValuePair<string, BamlGeneratedValue>(
+                "prompt",
+                promptValue.GeneratedValue),
+        };
+        var nestedPromptList = new BamlValue(
+            BamlGeneratedValue.CreateList([promptValue.GeneratedValue]),
+            registry);
+        var nestedPromptMap = new BamlValue(
+            BamlGeneratedValue.CreateMap(promptEntries),
+            registry);
+        var nestedPromptClass = new BamlValue(
+            BamlGeneratedValue.CreateClass(
+                "test.PromptHolder",
+                promptEntries,
+                []),
+            registry);
+        BamlTy promptType = new() { PromptAst = new BamlTyPromptAst() };
+        BamlTy promptUnionType = new() { Union = new BamlTyUnion() };
+        promptUnionType.Union.Options.Add(promptType.Clone());
+        promptUnionType.Union.Options.Add(PrimitiveType(
+            BamlTyPrimitiveKind.BamlTyPrimitiveString));
+        var nestedPromptUnion = new BamlValue(
+            BamlGeneratedValue.CreateUnion(
+                promptUnionType.ToByteArray(),
+                promptType.ToByteArray(),
+                "ai.Prompt",
+                promptValue.GeneratedValue),
+            registry);
+        Require(
+            nestedPromptList.ReadListValues()[0].TryGet(out BamlPrompt? listPrompt)
+                && nestedPromptMap.ReadMapValues()[0].Value.TryGet(out BamlPrompt? mapPrompt)
+                && nestedPromptClass.ReadClassValues()[0].Value.TryGet(out BamlPrompt? classPrompt)
+                && nestedPromptClass.TryGetClassFields(out var promptFields)
+                && promptFields[0].Value.TryGet(out BamlPrompt? publicClassPrompt)
+                && nestedPromptUnion.ReadUnionValue().TryGet(out BamlPrompt? unionPrompt)
+                && nestedPromptUnion.TryGetUnion(out int promptCase, out BamlValue? selectedPrompt)
+                && promptCase == 0
+                && selectedPrompt.TryGet(out BamlPrompt? publicUnionPrompt)
+                && listPrompt is not null
+                && mapPrompt is not null
+                && classPrompt is not null
+                && publicClassPrompt is not null
+                && unionPrompt is not null
+                && publicUnionPrompt is not null,
+            "nested portable Prompt values lost their generated registry");
+
+        SetFakeResult(new BamlOutboundValue { StringValue = "user: Describe image" });
+        Require(
+            roundTrippedPrompt.Text() == "user: Describe image"
+                && prompt.Text() == "user: Describe image"
+                && lastFakeFunction == "ai.Prompt.text",
+            "portable Prompt did not round-trip through BamlValue");
+        CallFunctionArgs promptCall = CallFunctionArgs.Parser.ParseFrom(lastFakeArguments!);
+        Require(
+            promptCall.Kwargs.Count == 1
+                && promptCall.Kwargs[0].StringKey == "self"
+                && promptCall.Kwargs[0].Value.ValueCase
+                    == InboundValue.ValueOneofCase.PromptAstValue
+                && promptCall.Kwargs[0].Value.PromptAstValue.Message.Content.Multiple.Items[1]
+                    .ValueCase == BamlValuePromptAstSimple.ValueOneofCase.Media,
+            "portable Prompt re-entry dropped its inline media tree");
+
+        SetFakeResult(PromptMessagesResult());
+        IReadOnlyList<BamlPromptMessage> first = prompt.Messages();
+        IReadOnlyList<BamlPromptMessage> second = prompt.Messages();
+        Require(
+            first.Count == 1
+                && second.Count == 1
+                && first[0].Role == "user"
+                && first[0].Parts.Count == 2
+                && first[0].Parts[0].As<string>() == "Describe image"
+                && first[0].Parts[1].As<BamlImage>().TryGetBytes(
+                    out ReadOnlyMemory<byte> bytes,
+                    out string? mediaType)
+                && bytes.Span.SequenceEqual(new byte[] { 1, 2, 3 })
+                && mediaType == "image/png",
+            "portable Prompt.messages was not repeatable or lost media");
+
+        SetFakeResult(new BamlOutboundValue
+        {
+            ClassValue = new BamlValueClass { Name = "baml.http.Request" },
+        });
+        Require(
+            spec.BuildRequest().Kind == BamlValueKind.Class
+                && lastFakeFunction == "ai.FunctionSpec.build_request",
+            "FunctionSpec.build_request did not use its authored stdlib method");
+
+        SetFakeResult(new BamlOutboundValue
+        {
+            TyDefValue = new BamlTyDef
+            {
+                Root = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString),
+            },
+        });
+        Require(
+            spec.OutputType().Descriptor.Kind == BamlTypeDescriptorKind.String
+                && lastFakeFunction == "ai.FunctionSpec.output_type",
+            "FunctionSpec.output_type did not preserve its portable reflected type");
+
+        var boundArguments = new BamlValueMap
+        {
+            KeyType = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString),
+            ValueType = new BamlTy { Unknown = new BamlTyUnknown() },
+        };
+        boundArguments.Entries.Add(new BamlOutboundMapEntry
+        {
+            Key = "text",
+            Value = new BamlOutboundValue { StringValue = "bound" },
+        });
+        SetFakeResult(new BamlOutboundValue { MapValue = boundArguments });
+        Require(
+            spec.Arguments()["text"].As<string>() == "bound"
+                && lastFakeFunction == "ai.FunctionSpec.arguments",
+            "FunctionSpec.arguments did not preserve its bound values");
+
+        SetFakeResult(new BamlOutboundValue
+        {
+            ClassValue = new BamlValueClass { Name = "ai.tools.Toolbox" },
+        });
+        Require(
+            spec.Tools().Kind == BamlValueKind.Class
+                && lastFakeFunction == "ai.FunctionSpec.tools",
+            "FunctionSpec.tools did not use its authored stdlib method");
+
+        SetFakeResult(new BamlOutboundValue { StringValue = "client-id" });
+        Require(
+            spec.ClientIdAsync().GetAwaiter().GetResult() == "client-id"
+                && lastFakeFunction == "ai.FunctionSpec.client_id",
+            "FunctionSpec.client_id async projection changed");
+
+        SetFakeResult(new BamlOutboundValue { StringValue = "called" });
+        Require(
+            spec.CallAsync().GetAwaiter().GetResult() == "called"
+                && lastFakeFunction == "ai.FunctionSpec.call",
+            "FunctionSpec.call async projection changed");
+
+        spec.Dispose();
         original.Dispose();
-        Require(releasedHandles == 2, "original stream argument handle ownership changed");
+        Require(releasedHandles == 2, "FunctionSpec test leaked its live handle");
+        fakeResult = null;
+    }
+
+    private static BamlValuePromptAst PromptAstWithMedia()
+    {
+        var multiple = new BamlValuePromptAstSimpleMultiple();
+        multiple.Items.Add(new BamlValuePromptAstSimple { String = "Describe image" });
+        multiple.Items.Add(new BamlValuePromptAstSimple
+        {
+            Media = new BamlValueMedia
+            {
+                Media = MediaTypeEnum.Image,
+                MimeType = "image/png",
+                Base64 = Convert.ToBase64String([1, 2, 3]),
+            },
+        });
+        return new BamlValuePromptAst
+        {
+            Message = new BamlValuePromptAstMessage
+            {
+                Role = "user",
+                Content = new BamlValuePromptAstSimple { Multiple = multiple },
+                MetadataAsJson = "{}",
+            },
+        };
+    }
+
+    private static BamlOutboundValue PromptMessagesResult()
+    {
+        BamlTy stringType = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString);
+        var parts = new BamlValueList { ItemType = new BamlTy { Unknown = new BamlTyUnknown() } };
+        parts.Items.Add(new BamlOutboundValue { StringValue = "Describe image" });
+        parts.Items.Add(new BamlOutboundValue
+        {
+            MediaValue = new BamlValueMedia
+            {
+                Media = MediaTypeEnum.Image,
+                MimeType = "image/png",
+                Base64 = Convert.ToBase64String([1, 2, 3]),
+            },
+        });
+        var metadata = new BamlValueMap
+        {
+            KeyType = stringType.Clone(),
+            ValueType = new BamlTy { Unknown = new BamlTyUnknown() },
+        };
+        var message = new BamlValueClass { Name = "ai.PromptMessage" };
+        message.Fields.Add(new BamlOutboundMapEntry
+        {
+            Key = "role",
+            Value = new BamlOutboundValue { StringValue = "user" },
+        });
+        message.Fields.Add(new BamlOutboundMapEntry
+        {
+            Key = "content",
+            Value = new BamlOutboundValue { StringValue = "Describe image" },
+        });
+        message.Fields.Add(new BamlOutboundMapEntry
+        {
+            Key = "parts",
+            Value = new BamlOutboundValue { ListValue = parts },
+        });
+        message.Fields.Add(new BamlOutboundMapEntry
+        {
+            Key = "metadata",
+            Value = new BamlOutboundValue { MapValue = metadata },
+        });
+        var messages = new BamlValueList
+        {
+            ItemType = new BamlTy
+            {
+                ClassTy = new BamlTyClass { Name = "ai.PromptMessage" },
+            },
+        };
+        messages.Items.Add(new BamlOutboundValue { ClassValue = message });
+        return new BamlOutboundValue { ListValue = messages };
+    }
+
+    private static void SetFakeResult(BamlOutboundValue value)
+    {
+        fakeResult = new BamlOutboundResult { Ok = value }.ToByteArray();
     }
 
     private static void VerifyMediaAndHandleProtocol()

@@ -1833,7 +1833,7 @@ function baml.sap._new_parse_cache() -> baml.sap._ParseCache<TStream, TFinal>  [
 function baml.sap._parse_final(self: ?, json: string) -> TFinal  [builtin]
 function baml.sap._parse_partial(self: ?, json: string) -> TStream | baml.sap._NoYield  [builtin]
 function baml.sap.parse(text: string) -> T  [expr] {
-  { let cache = _new_parse_cache() } cache._parse_final(text)
+  { let cache = _new_parse_cache() } cache._parse_final(text) catch (_) { root.errors.LlmClient { message: message } => { throw root.errors.ParseError { message: message } } }
 }
 function baml.sap.parse_type(t: reflect.Type, text: string) -> unknown  [expr] {
   { type T = unreflect(t) } parse(text)
@@ -2111,7 +2111,7 @@ function baml.time.sub(self: ?, other: baml.time.Instant) -> Duration  [expr] {
   {  } Duration { _nanoseconds: self._nanoseconds Sub other._nanoseconds }
 }
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.SerializationError { message: message, path: "" } } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.SerializationError { message: message, path: "", reason: "unserializable" } } }
 }
 function baml.time.to_string(self: ?) -> string  [expr] {
   {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => {  } root.sys.panic("Instant.to_string: " Add message) }
@@ -2146,7 +2146,7 @@ function baml.time.from_json(j: baml.json.json) -> Self  [expr] {
 function baml.time.month(self: ?) -> int  [builtin]
 function baml.time.parse(s: string) -> baml.time.PlainDate  [builtin]
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.SerializationError { message: message, path: "" } } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.SerializationError { message: message, path: "", reason: "unserializable" } } }
 }
 function baml.time.to_plain_datetime(self: ?, time: PlainTime = ...) -> PlainDateTime  [expr] {
   {  } self._to_plain_datetime(time._nanoseconds)
@@ -2194,7 +2194,7 @@ function baml.time.sub(self: ?, other: baml.time.PlainDateTime) -> Duration  [ex
   {  } Duration { _nanoseconds: self._nanoseconds Sub other._nanoseconds }
 }
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.SerializationError { message: message, path: "" } } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.SerializationError { message: message, path: "", reason: "unserializable" } } }
 }
 function baml.time.to_plain_date(self: ?) -> PlainDate  [builtin]
 function baml.time.to_plain_time(self: ?) -> PlainTime  [builtin]
@@ -2374,7 +2374,7 @@ function baml.time.to_instant(self: ?) -> Instant  [expr] {
   {  } Instant { _nanoseconds: self._nanoseconds }
 }
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  {  } _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.SerializationError { message: message, path: "" } }, UnknownTimezoneError { timezone: timezone } => { throw baml.json.SerializationError { message: "unknown timezone: " Add timezone, path: "" } } }
+  {  } _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) catch (_) { root.errors.InvalidArgument { message: message } => { throw baml.json.SerializationError { message: message, path: "", reason: "unserializable" } }, UnknownTimezoneError { timezone: timezone } => { throw baml.json.SerializationError { message: "unknown timezone: " Add timezone, path: "", reason: "unserializable" } } }
 }
 function baml.time.to_plain(self: ?) -> PlainDateTime  [expr] {
   {  } PlainDateTime { _nanoseconds: self._nanoseconds Add self.timezone_offset()._nanoseconds }

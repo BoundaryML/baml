@@ -37,17 +37,21 @@ function _new_parse_cache<TStream, TFinal>() -> _ParseCache<TStream, TFinal> thr
 /// Parse an LLM's raw text output into `T` with Schema-Aligned Parsing.
 ///
 /// # Throws
-/// - `baml.errors.LlmClient` if parsing fails.
-function parse<T>(text: string) -> T throws root.errors.LlmClient {
+/// - `baml.errors.ParseError` if parsing fails.
+function parse<T>(text: string) -> T throws root.errors.ParseError {
     let cache = _new_parse_cache<T, T>();
-    cache._parse_final(text)
+    cache._parse_final(text) catch (_) {
+        root.errors.LlmClient { message } => {
+            throw root.errors.ParseError { message: message }
+        },
+    }
 }
 
 /// Parse against a runtime `type` value when the schema is data rather than a
 /// lexical type parameter. Narrow the returned `unknown` at the call site.
 ///
 /// It is generally recommended to use `baml.sap.parse` instead.
-function parse_type(t: reflect.Type, text: string) -> unknown throws root.errors.LlmClient {
+function parse_type(t: reflect.Type, text: string) -> unknown throws root.errors.ParseError {
     type T = unreflect(t);
     parse<T>(text)
 }

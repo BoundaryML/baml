@@ -392,10 +392,18 @@ class ZonedDateTime {
         function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) catch (_) {
                 root.errors.InvalidArgument { message } => {
-                    throw baml.json.SerializationError { message: message, path: "" }
+                    throw baml.json.SerializationError {
+                        message: message,
+                        path: "",
+                        reason: "unserializable",
+                    }
                 },
                 UnknownTimezoneError { timezone } => {
-                    throw baml.json.SerializationError { message: "unknown timezone: " + timezone, path: "" }
+                    throw baml.json.SerializationError {
+                        message: "unknown timezone: " + timezone,
+                        path: "",
+                        reason: "unserializable",
+                    }
                 },
             }
         }

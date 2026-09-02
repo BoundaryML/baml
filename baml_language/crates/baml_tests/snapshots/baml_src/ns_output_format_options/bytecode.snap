@@ -52,7 +52,7 @@ function output_format_options.OfAllLegacyOptions(client: ai.Client | null, on_e
     load_var on_event
     call ai.Agent.new
     store_var _6
-    call user.output_format_options.OfAllLegacyOptions$spec
+    call user.output_format_options.OfAllLegacyOptions@spec
     store_var _8
     load_type output_format_options.OfOptionResult
     load_var2 4 5
@@ -65,7 +65,7 @@ function output_format_options.OfAllLegacyOptions(client: ai.Client | null, on_e
     return
 }
 
-function output_format_options.OfAllLegacyOptions$build_request(client: ai.Client | null) -> baml.http.Request {
+function output_format_options.OfAllLegacyOptions@build_request(client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -74,7 +74,7 @@ function output_format_options.OfAllLegacyOptions$build_request(client: ai.Clien
     store_var client
 
   L0:
-    call user.output_format_options.OfAllLegacyOptions$spec
+    call user.output_format_options.OfAllLegacyOptions@spec
     store_var _3
     load_type output_format_options.OfOptionResult
     load_var2 2 1
@@ -82,15 +82,15 @@ function output_format_options.OfAllLegacyOptions$build_request(client: ai.Clien
     return
 }
 
-function output_format_options.OfAllLegacyOptions$parse(json: string) -> output_format_options.OfOptionResult {
+function output_format_options.OfAllLegacyOptions@parse(json: string) -> output_format_options.OfOptionResult {
     load_type output_format_options.OfOptionResult
     load_var json
     call baml.sap.parse
     return
 }
 
-function output_format_options.OfAllLegacyOptions$render_prompt() -> ai.Prompt {
-    call user.output_format_options.OfAllLegacyOptions$spec
+function output_format_options.OfAllLegacyOptions@render_prompt() -> ai.Prompt {
+    call user.output_format_options.OfAllLegacyOptions@spec
     store_var _1
     load_type output_format_options.OfOptionResult
     load_var _1
@@ -98,7 +98,7 @@ function output_format_options.OfAllLegacyOptions$render_prompt() -> ai.Prompt {
     return
 }
 
-function output_format_options.OfAllLegacyOptions$spec() -> ai.FunctionSpec<output_format_options.OfOptionResult> {
+function output_format_options.OfAllLegacyOptions@spec() -> ai.FunctionSpec<output_format_options.OfOptionResult> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -126,14 +126,14 @@ function output_format_options.OfAllLegacyOptions$spec() -> ai.FunctionSpec<outp
     load_type string
     load_type unknown
     alloc_map 0
-    make_closure .<lambda(OfAllLegacyOptions$spec, 0)>, 0
+    make_closure .<lambda(OfAllLegacyOptions@spec, 0)>, 0
     load_var2 1 2
     load_type output_format_options.OfOptionResult
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function output_format_options.OfAllLegacyOptions$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<output_format_options.OfOptionResult$stream | null, output_format_options.OfOptionResult> {
+function output_format_options.OfAllLegacyOptions@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<output_format_options.OfOptionResult$stream | null, output_format_options.OfOptionResult> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -150,7 +150,7 @@ function output_format_options.OfAllLegacyOptions$stream(client: ai.stream.Strea
     store_var on_event
 
   L1:
-    call user.output_format_options.OfAllLegacyOptions$spec
+    call user.output_format_options.OfAllLegacyOptions@spec
     store_var _5
     load_type output_format_options.OfOptionResult$stream | null
     load_type output_format_options.OfOptionResult

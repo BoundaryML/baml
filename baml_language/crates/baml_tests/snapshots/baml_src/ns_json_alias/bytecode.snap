@@ -62,7 +62,7 @@ function json_alias.$init_test_ns_json_alias_json_alias(registry: testing.TestCo
     return
 }
 
-function json_alias.JsonTagged$for$JsonWrap<baml.json.json>.tag(self: json_alias.JsonWrap<baml.json.json>) -> string {
+function json_alias.<(user.json_alias.JsonWrap<baml.json.json> as user.json_alias.JsonTagged)>.tag(self: json_alias.JsonWrap<baml.json.json>) -> string {
     load_const "json-wrap"
     return
 }

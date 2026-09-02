@@ -6,6 +6,7 @@ import (
 
 	"baml.local/sdk/baml_sdk"
 	"baml.local/sdk/baml_sdk/packages/models"
+	baml_go "github.com/boundaryml/baml-go"
 )
 
 var (
@@ -24,4 +25,25 @@ var (
 
 func Test_compile_cross_package_types_compile(t *testing.T) {
 	t.Log("cross-package imports and collision-safe aliases compiled")
+}
+
+// SDK_PARITY_LINT(skip): pins Go generator options for authored Spec and Stream defaults.
+func Test_compile_llm_projection_default_overrides(t *testing.T) {
+	// The synthetic fixture has tone: string = "neutral". Keep these calls
+	// unreachable: this fixture has no bytecode, but Go must type-check the
+	// non-null authored override independently for Spec and Stream.
+	if false {
+		_, _ = baml_sdk.DefaultedExtractSpec(
+			context.Background(),
+			"input",
+			baml_sdk.WithDefaultedExtractSpecTone("spec override"),
+		)
+		_, _ = baml_sdk.DefaultedExtractStream(
+			context.Background(),
+			"input",
+			baml_sdk.WithDefaultedExtractStreamTone("stream override"),
+			baml_sdk.DefaultedExtractStreamClient("client override"),
+			baml_sdk.DefaultedExtractStreamOnEvent(func(baml_go.Value) {}),
+		)
+	}
 }

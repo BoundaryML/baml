@@ -6845,6 +6845,148 @@ fn union_fuzz_class_only_union_method_is_rejected() {
     );
 }
 
+/// The MIXED shape is rejected the same way (ruling): one arm provides
+/// `speak` through an interface, the other only as an inherent method. The
+/// methods available on a union-typed receiver are the interface methods of
+/// interfaces implemented by ALL members, nothing else — inherent methods
+/// never participate, so no per-arm join rescues this.
+#[test]
+fn union_ruling_mixed_inherent_and_impl_arm_is_rejected() {
+    assert_compile_error_contains(
+        r#"
+        interface HudSpeaker {
+            function speak(self) -> string throws never
+        }
+        class HudA {
+            implements HudSpeaker {
+                function speak(self) -> string { return "interface" }
+            }
+        }
+        class HudB {
+            function speak(self) -> string { return "inherent" }
+        }
+        function hud_speak(x: HudA | HudB) -> string {
+            return x.speak()
+        }
+        function main() -> string {
+            return hud_speak(HudB {})
+        }
+        "#,
+        "no common interface that declares",
+    );
+}
+
+/// A bounded blanket impl must not resolve a member on a receiver whose
+/// class args are still UNSOLVED by discharging its bound against an
+/// unrelated caller env param that happens to share the `(index, name)`
+/// `ParamTy` identity — the rigid-probe road probes at probe-unique
+/// `$probe$` vars, so the env can never discharge them and the bounded
+/// candidate declines (fail closed) like an argument-pinning impl.
+/// `int` does not implement the marker, so the call must be rejected on
+/// every road; the env-coincidence over-match would have ACCEPTED it with
+/// nothing re-checking after the arg solved.
+#[test]
+fn bounded_blanket_impl_does_not_discharge_against_unrelated_env_param() {
+    let errors = collect_compile_errors(
+        r#"
+        interface ProbeMarker {
+            function probe_tag(self) -> int throws never
+        }
+        class ProbeBin<T> {
+            value: T[]
+        }
+        implements<T extends ProbeMarker> ProbeMarker for ProbeBin<T> {
+            function probe_tag(self) -> int { return 1 }
+        }
+        function probe_caller<T extends ProbeMarker>(x: T) -> int {
+            let items = [];
+            let b = ProbeBin { value: items };
+            let n = b.probe_tag();
+            items.push(3);
+            return n
+        }
+        function main() -> int {
+            return 0
+        }
+        "#,
+    );
+    assert!(
+        !errors.is_empty(),
+        "a bounded blanket impl must not resolve on an unsolved receiver via \
+         env-identity coincidence"
+    );
+}
+
+/// An impl declaring a PHANTOM generic param — one bound by neither the
+/// `for` type nor the interface (`U` here; E0135 diagnoses the header
+/// without rejecting the block) — must fail CLOSED at method resolution:
+/// the candidate cannot realize its impl frame, so it is skipped and a call
+/// through it surfaces next to the header diagnostic. Previously the
+/// candidate was admitted and the unbound frame slot ICE'd inference
+/// ("matched impl left generic unbound").
+#[test]
+fn phantom_impl_param_call_is_diagnosed_not_ice() {
+    let errors = collect_compile_errors(
+        r#"
+        interface PhantomMarker {
+            function tag(self) -> int throws never
+        }
+        class PhantomBin<T> {
+            value: T
+        }
+        implements<T, U> PhantomMarker for PhantomBin<T> {
+            function tag(self) -> int { return 1 }
+        }
+        function use_marker(b: PhantomBin<int>) -> int {
+            return b.tag()
+        }
+        function main() -> int {
+            return use_marker(PhantomBin { value: 3 })
+        }
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.starts_with("[E0135]")),
+        "phantom impl param must be diagnosed at the impl header; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// The bare type-qualified impl tier cannot tell a method turbofish from
+/// hoisted receiver args (`PickBin.pick<int>()` vs `PickBin<int>.pick()` —
+/// one written channel), so it hands the written args to the CLASS frame and
+/// leaves the method's own generics to inference. When nothing solves them
+/// that must be a hard "cannot infer" diagnostic — previously the fresh var
+/// silently finalized to Error and ICE'd runtime lowering ("'Error' is not
+/// a valid 'RuntimeTy'"). The `(C<..> as I).m<..>()` qualified spelling
+/// remains the way to write the own args explicitly.
+#[test]
+fn stolen_turbofish_on_generic_class_impl_static_is_diagnosed_not_ice() {
+    let errors = collect_compile_errors(
+        r#"
+        interface Picker {
+            function pick<X>() -> int throws never
+        }
+        class PickBin<T> {
+            value: T
+            implements Picker {
+                function pick<X>() -> int { return 7 }
+            }
+        }
+        function main() -> int {
+            return PickBin.pick<int>()
+        }
+        "#,
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("cannot infer type parameter")),
+        "unsolved own generic behind a consumed type-arg channel must be diagnosed; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PR #3638 review follow-ups: extra union cases surfaced by CodeRabbit/Cursor on
 // the F1–F17 fix branch. Each reproduced a real bug before the follow-up fix.

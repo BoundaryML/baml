@@ -1,6 +1,6 @@
 // Provider request builders consume the structural `ai.Prompt` produced by an
 // LLM spec. These tests stay offline and inspect only the serialized request:
-// every assertion runs against `$build_request` / `render` previews, never an
+// every assertion runs against `@build_request` / `render` previews, never an
 // invocation. Ported from the Rust `structured_prompt_requests.rs` suite; the
 // one env-isolation test (Vertex late-bound project id) remains in Rust.
 
@@ -81,7 +81,7 @@ function RequestShape(input: string) -> string {
 
 test "generated build_request companion is network-free and overridable" {
     assert.equal(
-        RequestShape$build_request("hello", client = PreviewResponses).url,
+        RequestShape@build_request("hello", client = PreviewResponses).url,
         "http://localhost:1234/v1/responses",
     )
 }
@@ -92,9 +92,9 @@ function Greet(name: string, suffix: string = "!") -> string {
 }
 
 test "generated companions apply defaulted llm arguments" {
-    let prompt = Greet$render_prompt("Ada").text();
+    let prompt = Greet@render_prompt("Ada").text();
     assert.is_true(prompt.starts_with("[system]\nHello Ada!"));
-    assert.is_true(Greet$build_request("Ada").body.includes("Hello Ada!"))
+    assert.is_true(Greet@build_request("Ada").body.includes("Hello Ada!"))
 }
 
 test "generated build_request companion is reflection-visible" {
@@ -108,7 +108,7 @@ test "generated build_request companion is reflection-visible" {
             | baml.errors.UnknownError
             | baml.panics.Cancelled
             | reflect.errors.CompilationError
-    > = RequestShape$build_request;
+    > = RequestShape@build_request;
     let request = reflect.call_any(f, { "input": "hello", "client": PreviewResponses });
     assert.equal(request.url, "http://localhost:1234/v1/responses")
 }
@@ -140,7 +140,7 @@ function GenericShape<T>() -> Outer<T> {
 }
 
 test "generic build_request specializes nested output format" {
-    let body = GenericShape$build_request<Choice>().body;
+    let body = GenericShape@build_request<Choice>().body;
     assert.is_true(body.includes("'Empty'"));
     assert.is_true(!body.includes("TypeVar"));
     assert.is_true(!body.includes("T[]"))
@@ -154,7 +154,7 @@ function FirstShape() -> string {
 }
 
 test "client wrapper rendering is pure and deterministic" {
-    let input = _input_for(FirstShape$spec());
+    let input = _input_for(FirstShape@spec());
     let retry = ai.clients.Retry.new(PreviewResponses);
     let fallback = ai.clients.Fallback { members: [PreviewResponses, SecondResponses] };
     let round_robin = ai.clients.RoundRobin.new([PreviewResponses, SecondResponses]);
@@ -166,7 +166,7 @@ test "client wrapper rendering is pure and deterministic" {
 }
 
 test "client render smoke covers non-responses providers" {
-    let input = _input_for(FirstShape$spec());
+    let input = _input_for(FirstShape@spec());
     let a: ai.Client = PreviewAnthropic;
     let g: ai.Client = PreviewGemini;
     let b: ai.Client = PreviewBedrock;
@@ -187,16 +187,23 @@ function MediaShape(photo: image) -> string {
 }
 
 test "preview media never reads files or fetches urls" {
-    let file_result = MediaShape$build_request(image.from_file("/definitely/not-a-real-preview-file.png", "image/png")).body catch_all (e) {
-        ai.errors.PreviewUnsupported => "preview",
-        _ => `wrong:${e.to_string()}`,
-    };
-    assert.equal(file_result, "preview");
-    let url_result = MediaShape$build_request(image.from_url("http://127.0.0.1:9/image.png", "image/png")).body catch_all (e) {
-        _ => `wrong:${e.to_string()}`,
-    };
-    assert.is_true(url_result.includes("http://127.0.0.1:9/image.png"));
-    assert.is_true(!url_result.includes("wrong:"))
+    assert.equal(
+        MediaShape@build_request(image.from_file("/definitely/not-a-real-preview-file.png", "image/png")).body catch_all (e) {
+            ai.errors.PreviewUnsupported => "preview",
+            _ => `wrong:${e.to_string()}`,
+        },
+        "preview",
+    );
+    assert.is_true(
+        (MediaShape@build_request(image.from_url("http://127.0.0.1:9/image.png", "image/png")).body catch_all (e) {
+            _ => `wrong:${e.to_string()}`,
+        }).includes("http://127.0.0.1:9/image.png"),
+    );
+    assert.is_true(
+        !(MediaShape@build_request(image.from_url("http://127.0.0.1:9/image.png", "image/png")).body catch_all (e) {
+            _ => `wrong:${e.to_string()}`,
+        }).includes("wrong:"),
+    )
 }
 
 function ChatMediaShape(photo: image) -> string {
@@ -206,15 +213,17 @@ function ChatMediaShape(photo: image) -> string {
 
 test "chat preview preserves urls unless invoke would inline them" {
     let photo = image.from_url("http://127.0.0.1:9/image.png", "image/png");
-    let chat = ChatMediaShape$build_request(photo).body;
+    let chat = ChatMediaShape@build_request(photo).body;
     assert.is_true(chat.includes("http://127.0.0.1:9/image.png"));
     // Ollama inlines image URLs at invoke time, so its preview must refuse the
     // URL rather than silently building a request invoke would not send.
-    let ollama = ChatMediaShape$build_request(photo, client = UnroutableOllama).body catch_all (e) {
-        ai.errors.PreviewUnsupported => "unsupported",
-        _ => `wrong:${e.to_string()}`,
-    };
-    assert.equal(ollama, "unsupported")
+    assert.equal(
+        ChatMediaShape@build_request(photo, client = UnroutableOllama).body catch_all (e) {
+            ai.errors.PreviewUnsupported => "unsupported",
+            _ => `wrong:${e.to_string()}`,
+        },
+        "unsupported",
+    )
 }
 
 // ── provider prompt lowering: roles ──────────────────────────────────────────
@@ -229,7 +238,7 @@ function _roled_body(request: baml.http.Request) -> baml.json.json {
 }
 
 test "openai preserves prompt message roles" {
-    let input = _input_for(RoledShape$spec());
+    let input = _input_for(RoledShape@spec());
     let body = _roled_body(
         openai.internal.render(
             openai.ResponsesClient.new(model = "gpt-test", api_key = "test-key"),
@@ -247,7 +256,7 @@ test "openai preserves prompt message roles" {
 }
 
 test "anthropic splits system from prompt messages" {
-    let input = _input_for(RoledShape$spec());
+    let input = _input_for(RoledShape@spec());
     let body = _roled_body(
         anthropic.internal._request(
             anthropic.Client.new(model = "claude-test", api_key = "test-key"),
@@ -264,7 +273,7 @@ test "anthropic splits system from prompt messages" {
 }
 
 test "google splits system and maps user prompt" {
-    let input = _input_for(RoledShape$spec());
+    let input = _input_for(RoledShape@spec());
     let body = _roled_body(
         google.internal.render(
             google.GeminiClient.new(model = "gemini-test", api_key = "test-key"),
@@ -289,7 +298,7 @@ function RolelessShape() -> string {
 }
 
 test "openai build_request defaults roleless llm prompt to system" {
-    let body = baml.json.parse(RolelessShape$build_request().body);
+    let body = baml.json.parse(RolelessShape@build_request().body);
     assert.equal(baml.json.path<string>(body, ".input[0].role"), "system");
     assert.equal(baml.json.path<string>(body, ".input[0].content[0].text"), "Answer briefly.")
 }
@@ -301,7 +310,7 @@ function RolelessImageShape(photo: image) -> string {
 
 test "openai build_request allows image in roleless system prompt" {
     let body = baml.json.parse(
-        RolelessImageShape$build_request(image.from_base64("image-data", "image/png")).body,
+        RolelessImageShape@build_request(image.from_base64("image-data", "image/png")).body,
     );
     assert.equal(baml.json.path<string>(body, ".input[0].role"), "system");
     assert.equal(baml.json.path<string>(body, ".input[0].content[0].type"), "input_text");
@@ -318,7 +327,7 @@ function ExplicitRolesShape() -> string {
 }
 
 test "openai build_request preserves explicit llm prompt roles" {
-    let body = baml.json.parse(ExplicitRolesShape$build_request().body);
+    let body = baml.json.parse(ExplicitRolesShape@build_request().body);
     assert.equal(baml.json.path<string>(body, ".input[0].role"), "user");
     assert.equal(baml.json.path<string>(body, ".input[0].content[0].text"), "Answer this.");
     assert.equal(baml.json.path<string>(body, ".input[1].role"), "system");
@@ -331,7 +340,7 @@ function PreludeShape() -> string {
 }
 
 test "openai build_request defaults leading llm prelude to system" {
-    let body = baml.json.parse(PreludeShape$build_request().body);
+    let body = baml.json.parse(PreludeShape@build_request().body);
     assert.equal(baml.json.path<string>(body, ".input[0].role"), "system");
     assert.equal(
         baml.json.path<string>(body, ".input[0].content[0].text"),
@@ -349,7 +358,7 @@ function WhitespaceShape() -> string {
 }
 
 test "openai build_request ignores formatting whitespace before first role" {
-    let body = baml.json.parse(WhitespaceShape$build_request().body);
+    let body = baml.json.parse(WhitespaceShape@build_request().body);
     assert.equal(baml.json.path<baml.json.json[]>(body, ".input").length(), 1);
     assert.equal(baml.json.path<string>(body, ".input[0].role"), "user")
 }
@@ -375,7 +384,7 @@ function MediaImagePdf(photo: image, document: pdf) -> string {
 }
 
 test "openai lowers image audio and pdf parts" {
-    let spec = MediaImageAudioPdf$spec(
+    let spec = MediaImageAudioPdf@spec(
         image.from_base64("image-data", "image/png"),
         audio.from_base64("audio-data", "audio/mpeg"),
         pdf.from_base64("pdf-data", "application/pdf"),
@@ -410,7 +419,7 @@ test "openai lowers image audio and pdf parts" {
 }
 
 test "anthropic lowers image and pdf parts" {
-    let spec = MediaImagePdf$spec(image.from_base64("image-data", "image/png"), pdf.from_base64("pdf-data", "application/pdf"));
+    let spec = MediaImagePdf@spec(image.from_base64("image-data", "image/png"), pdf.from_base64("pdf-data", "application/pdf"));
     let body = baml.json.parse(
         anthropic.internal
             ._request(
@@ -443,7 +452,7 @@ function AudioShape(sound: audio) -> string {
 }
 
 test "anthropic rejects audio parts" {
-    let spec = AudioShape$spec(audio.from_base64("audio-data", "audio/mpeg"));
+    let spec = AudioShape@spec(audio.from_base64("audio-data", "audio/mpeg"));
     let message = anthropic.internal
         ._request(
             anthropic.Client.new(model = "claude-test", api_key = "test-key"),
@@ -457,7 +466,7 @@ test "anthropic rejects audio parts" {
 }
 
 test "google lowers every supported media part" {
-    let spec = MediaAll$spec(
+    let spec = MediaAll@spec(
         image.from_base64("image-data", "image/png"),
         audio.from_base64("audio-data", "audio/mpeg"),
         pdf.from_base64("pdf-data", "application/pdf"),

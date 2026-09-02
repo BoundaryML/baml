@@ -7,10 +7,10 @@ package baml_bridge;
  * class composes a single {@link BamlHandle} (the engine-side {@code Adt(Media)}
  * row) and knows its BAML stdlib FQN.
  *
- * <p>Inbound encode uses an exact media {@code value_type} plus a class-shaped
- * payload containing {@code { _data: handle }} with a freshly cloned wire key
- * (see {@code ProtoWriter}); outbound decode reconstructs the wrapper from the
- * decoded handle (see {@code ProtoReader}).
+ * <p>The Java objects remain native-handle-backed, but bridge traffic uses the
+ * canonical portable media representation ({@code kind}, optional MIME type,
+ * and a URL/file/base64 payload). This keeps runtime-local handles out of the
+ * wire format; outbound decode reconstructs a fresh wrapper in this runtime.
  */
 public interface BamlMedia {
     /** The engine handle backing this media value. */

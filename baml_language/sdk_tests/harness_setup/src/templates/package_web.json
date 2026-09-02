@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test:web": "vitest run --config vitest.web.config.ts",
-    "test:workers": "vitest run --config vitest.workers.config.ts"
+    "test:workers": "vitest run --config vitest.workers.config.ts",
+    "test:workers:startup": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@boundaryml/baml-bridge-web": "file:../../../../../sdks/typescript/bridge_typescript_web"

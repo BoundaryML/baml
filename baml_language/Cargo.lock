@@ -616,7 +616,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "hex",
  "indexmap",
@@ -687,7 +687,6 @@ dependencies = [
  "console",
  "ctrlc",
  "datafusion",
- "flate2",
  "hex",
  "indexmap",
  "indicatif",
@@ -711,7 +710,6 @@ dependencies = [
  "sha2",
  "strsim",
  "sys_native",
- "tar",
  "tempfile",
  "text-size",
  "tokio",
@@ -719,6 +717,7 @@ dependencies = [
  "toml_edit 0.22.27",
  "uuid",
  "webbrowser",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -1637,6 +1636,7 @@ dependencies = [
  "prost",
  "prost-build",
  "protoc-bin-vendored",
+ "serde_json",
  "thiserror 2.0.18",
  "web-time",
 ]
@@ -7046,6 +7046,7 @@ dependencies = [
  "sys_ops",
  "sys_types",
  "wasm-bindgen",
+ "web-time",
 ]
 
 [[package]]

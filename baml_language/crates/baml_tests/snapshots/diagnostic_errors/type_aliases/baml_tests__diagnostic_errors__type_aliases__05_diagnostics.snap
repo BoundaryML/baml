@@ -15,14 +15,6 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0002
 
   × unresolved type: name
-   ╭─[type_aliases_json.baml:1:1]
- 1 │ type JSON = int | float | string | bool | JSON[] | map<string,json>
-   · ▲
-   ╰────
-
-  [type] E0002
-
-  × unresolved type: name
    ╭─[type_aliases_json.baml:4:9]
  4 │   inner name
    ·         ────

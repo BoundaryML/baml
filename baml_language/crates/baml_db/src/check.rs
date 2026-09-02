@@ -765,7 +765,7 @@ fn check_interfaces(
     // editable source side and retaining a structural description of its
     // mounted partner in the message.
     for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, file) {
-        let Some(source) = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc) else {
+        let Some(source) = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc).resolved() else {
             continue;
         };
         for mounted_package in baml_compiler2_hir::package::mounted_package_names(db) {
@@ -820,7 +820,7 @@ dependency's `{partner}`)"
         // interface declaration. Replay its name-level conformance from the
         // exported row so mounted and source dependency modes retain the same
         // required/default/override surface.
-        if let Some(source) = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc)
+        if let Some(source) = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc).resolved()
             && let Some(baml_compiler2_hir_ty::package_interface::ExportedType::Interface {
                 fields,
                 required_methods,
@@ -1825,6 +1825,7 @@ fn tir_type_error_to_diagnostic_id(
             DiagnosticId::NoSuchField
         }
         TirTypeError::UnknownClassPropertyShorthand { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::MissingRequiredClassFields { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnresolvedName { .. } | TirTypeError::UnresolvedPropertyShorthand { .. } => {
             DiagnosticId::UnknownVariable
         }
@@ -1891,7 +1892,8 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::CallbackThrowsContractViolation { .. } => {
             DiagnosticId::ThrowsContractViolation
         }
-        TirTypeError::ExtraneousThrowsDeclaration { .. } => DiagnosticId::ThrowsContractExtraneous,
+        TirTypeError::ExtraneousThrowsDeclaration { .. }
+        | TirTypeError::ImpreciseUnknownThrows { .. } => DiagnosticId::ThrowsContractExtraneous,
         TirTypeError::CannotInferTypeParameter { .. } => DiagnosticId::UnknownType,
         TirTypeError::TypeParamShadowed { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
@@ -2276,6 +2278,155 @@ function demo() -> int throws never {
         assert_eq!(unresolved.len(), 1, "{unresolved:?}");
         let span = unresolved[0].annotations[0].span.range;
         assert_eq!(&source[span], "MissingDefault");
+    }
+
+    #[test]
+    fn an_unresolved_type_in_a_required_interface_method_is_reported() {
+        // A required (bodyless) interface method's signature is still a
+        // signature: an unresolved reference in it is E0002 like anywhere
+        // else. The signature pass used to skip these items outright, so
+        // nothing reported them and the `Error` sentinel travelled all the
+        // way to emit, which converts interface declarations under an
+        // `unreachable!` — a three-line file aborted `baml check`.
+        let source =
+            "interface Store {\n    function get(self, key: string) -> Missing throws never\n}\n";
+        let (db, file) = single_file(source);
+        let unresolved: Vec<_> = check_file(&db, file)
+            .into_iter()
+            .filter(|diag| diag.id == DiagnosticId::UnknownType)
+            .collect();
+        assert_eq!(unresolved.len(), 1, "{unresolved:?}");
+        let span = unresolved[0].annotations[0].span.range;
+        assert_eq!(&source[span], "Missing", "the report underlines the type");
+    }
+
+    #[test]
+    fn required_interface_signatures_resolve_self_and_method_generics() {
+        // Why the pass skipped required methods: the exclusion assumed a
+        // re-lowering would false-fire E0002 on every `Self.*`. It does not.
+        // `function_generic_frame` binds `Self`, the interface's generics,
+        // and the method's own; an associated type is not a frame slot at
+        // all — `Self.X` is a projection over the `Self` slot, reduced by
+        // the resolver at use. Either way these must check clean, and that
+        // is what makes reporting the genuinely-unresolved case above safe.
+        let (db, file) = single_file(
+            r#"interface Iter {
+    type Item
+    type Error
+    function next(self) -> Self.Item throws Self.Error
+    function map_to<Out>(self, seed: Out) -> Out throws Self.Error
+    function clone_me(self) -> Self throws never
+}
+
+interface Pair<A, B> {
+    type Joined
+    function join<Extra>(self, a: A, b: B, e: Extra) -> Self.Joined throws never
+}
+"#,
+        );
+        let unresolved: Vec<_> = check_file(&db, file)
+            .into_iter()
+            .filter(|diag| diag.id == DiagnosticId::UnknownType)
+            .collect();
+        assert!(unresolved.is_empty(), "{unresolved:?}");
+    }
+
+    #[test]
+    fn unknown_is_not_operator_permissive_but_error_cascades_stay_quiet() {
+        // `unknown` is the user-visible top type, and it implements no
+        // operator and is not callable — so using it as one is a real
+        // diagnostic, not silence.
+        //
+        // Inference used to screen the top type as if it were the error
+        // sentinel, so every use of `unknown` type-checked vacuously.
+        let (db, file) = single_file(
+            "function op(a: unknown) -> int throws never { return a + 1 }\nfunction call(g: unknown) -> int throws never { return g(1) }\n",
+        );
+        let ids: Vec<_> = check_file(&db, file).into_iter().map(|d| d.id).collect();
+        assert!(ids.contains(&DiagnosticId::InvalidOperator), "{ids:?}");
+        assert!(ids.contains(&DiagnosticId::NotCallable), "{ids:?}");
+
+        // Ordering is a third operator road with its own screen, so it needs
+        // its own case: against another type it is a different-types report,
+        // and against itself it fails the `baml.ops.Compare` requirement.
+        for source in [
+            "function ord(a: unknown) -> bool throws never { return a < 1 }\n",
+            "function ord(a: unknown, b: unknown) -> bool throws never { return a < b }\n",
+        ] {
+            let (db, file) = single_file(source);
+            let ids: Vec<_> = check_file(&db, file).into_iter().map(|d| d.id).collect();
+            assert!(
+                ids.contains(&DiagnosticId::InvalidOperator),
+                "ordering on `unknown` must report: {source} gave {ids:?}"
+            );
+        }
+
+        // The other half of the rule: a GENUINE cascade still stays quiet.
+        // The operand here is the error sentinel (its annotation did not
+        // resolve), so the unresolved type is reported once and no operator
+        // complaint piles on top of it.
+        let (db, file) = single_file(
+            "function f() -> int throws never {\n  let a: NoSuchType = 1\n  return a + 1\n}\n",
+        );
+        let ids: Vec<_> = check_file(&db, file).into_iter().map(|d| d.id).collect();
+        assert!(ids.contains(&DiagnosticId::UnknownType), "{ids:?}");
+        assert!(
+            !ids.contains(&DiagnosticId::InvalidOperator),
+            "an errored operand must not cascade an operator report: {ids:?}"
+        );
+    }
+
+    #[test]
+    fn every_interface_bound_position_reports_an_unresolved_head() {
+        // The three constraint positions an interface declares. Each used to
+        // leave the unresolved head as a silent `Ty::Error`: the generic
+        // parameter had no diagnostic walk at all, the associated-type bound
+        // lowered through a sink-less context, and the default's diagnostics
+        // were computed and dropped by every caller. Each is fail-open (a
+        // typo'd bound constrains nothing) and each reaches emit, where a
+        // non-runtime type is `unreachable!`.
+        let cases = [
+            (
+                "generic parameter",
+                "interface Named<T> { function n(self) -> T throws never }\ninterface Box<T extends Named<NoSuchType>> {\n    function get(self) -> int throws never\n}\n",
+            ),
+            (
+                "associated-type bound",
+                "interface Named<T> { function n(self) -> T throws never }\ninterface Box {\n    type A extends Named<NoSuchType>\n    function get(self) -> int throws never\n}\n",
+            ),
+            (
+                "associated-type default",
+                "interface Box {\n    type Item = NoSuchType\n    function get(self) -> int throws never\n}\n",
+            ),
+        ];
+        for (position, source) in cases {
+            let (db, file) = single_file(source);
+            let unresolved: Vec<_> = check_file(&db, file)
+                .into_iter()
+                .filter(|diag| diag.id == DiagnosticId::UnknownType)
+                .collect();
+            assert_eq!(unresolved.len(), 1, "{position}: {unresolved:?}");
+            let span = unresolved[0].annotations[0].span.range;
+            assert_eq!(
+                &source[span], "NoSuchType",
+                "{position}: the report underlines the unresolved head"
+            );
+        }
+    }
+
+    #[test]
+    fn an_interface_generic_bound_obeys_the_rules_a_class_bound_does() {
+        // Bound shape is judged by one helper for every position, so these
+        // must match what the byte-identical `class` form reports — they
+        // previously produced nothing at all on an interface.
+        let (db, file) = single_file(
+            "class Plain { f: int }\ninterface I<T extends Plain> { function g(self) -> T throws never }\n",
+        );
+        let ids: Vec<_> = check_file(&db, file).into_iter().map(|d| d.id).collect();
+        assert!(
+            ids.contains(&DiagnosticId::GenericBoundNotInterface),
+            "{ids:?}"
+        );
     }
 
     #[test]

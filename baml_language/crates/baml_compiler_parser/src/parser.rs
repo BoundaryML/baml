@@ -6277,15 +6277,18 @@ impl<'a> Parser<'a> {
                 }
             } else if op == TokenKind::At
                 && !self.has_newline_ahead()
-                && self
-                    .peek(1)
-                    .is_some_and(|t| t.kind == TokenKind::Word && t.text == "spec")
+                && self.peek(1).is_some_and(|t| {
+                    t.kind == TokenKind::Word
+                        && matches!(
+                            t.text.as_str(),
+                            "spec" | "stream" | "render_prompt" | "build_request" | "parse"
+                        )
+                })
             {
-                // Postfix `@spec` on an LLM function reference: `MyFunc@spec(...)`.
-                // Wraps the base expression in a SPEC_EXPR; AST lowering renames
-                // the path's last segment to the `<name>$spec` companion. The
-                // no-newline guard mirrors the tagged-template rule so an
-                // attribute at the start of the next line is never absorbed.
+                // Postfix companion reference, such as `MyFunc@spec(...)` or
+                // `MyFunc@parse(...)`. AST lowering turns it into the ordinary
+                // internal callable FQN. The no-newline guard mirrors the tagged
+                // template rule so a next-line attribute is never absorbed.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::SPEC_EXPR);
                 self.bump(); // @

@@ -133,7 +133,7 @@ async fn runtime_constructed_openai_client_defaults_api_key_from_env() {
             }
 
             function main() -> map<string, string> {
-                let spec = EnvPrompt$spec();
+                let spec = EnvPrompt@spec();
                 let input = ai.ModelTurnInput {
                     prompt: spec.prompt_template,
                     journal: ai.Journal { log: [] },
@@ -167,7 +167,7 @@ async fn anthropic_clients_default_api_key_from_env_at_runtime() {
             }
 
             function main() -> map<string, string> {
-                let spec = EnvPrompt$spec();
+                let spec = EnvPrompt@spec();
                 let input = ai.ModelTurnInput {
                     prompt: spec.prompt_template,
                     journal: ai.Journal { log: [] },

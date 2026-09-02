@@ -18,13 +18,13 @@ function         baml._sum_int                    <builtin>/baml/containers.baml
 function         baml._sum_float                  <builtin>/baml/containers.baml:983
 function         baml._median_float               <builtin>/baml/containers.baml:995
 interface        baml.ToString                    <builtin>/baml/conversions.baml:25
-function         baml._to_string_default          <builtin>/baml/conversions.baml:52
-function         baml._cleanup_begin              <builtin>/baml/conversions.baml:69
-interface        baml.ToJson                      <builtin>/baml/conversions.baml:98
-function         baml._to_json_default            <builtin>/baml/conversions.baml:115
-function         baml._to_json_shim               <builtin>/baml/conversions.baml:135
-interface        baml.FromJson                    <builtin>/baml/conversions.baml:162
-function         baml._from_json_shim             <builtin>/baml/conversions.baml:183
+function         baml._to_string_default          <builtin>/baml/conversions.baml:54
+function         baml._cleanup_begin              <builtin>/baml/conversions.baml:71
+interface        baml.ToJson                      <builtin>/baml/conversions.baml:100
+function         baml._to_json_default            <builtin>/baml/conversions.baml:117
+function         baml._to_json_shim               <builtin>/baml/conversions.baml:137
+interface        baml.FromJson                    <builtin>/baml/conversions.baml:164
+function         baml._from_json_shim             <builtin>/baml/conversions.baml:185
 function         baml.deep_copy                   <builtin>/baml/core.baml:10
 interface        baml.Concrete                    <builtin>/baml/core.baml:18
 class            baml.TaggedString                <builtin>/baml/core.baml:34
@@ -88,7 +88,7 @@ function         baml.env.get                     <builtin>/baml/ns_env/env.baml
 function         baml.env.get_or_panic            <builtin>/baml/ns_env/env.baml:12
 class            baml.env.Ref                     <builtin>/baml/ns_env/env.baml:31
 function         baml.env.ref                     <builtin>/baml/ns_env/env.baml:55
-function         baml.env.get_or_panic_lenient    <builtin>/baml/ns_env/env.baml:67
+function         baml.env.get_or_panic_lenient    <builtin>/baml/ns_env/env.baml:66
 class            baml.errors.Context              <builtin>/baml/ns_errors/error_context.baml:9
 class            baml.errors.InvalidArgument      <builtin>/baml/ns_errors/errors.baml:2
 class            baml.errors.ParseError           <builtin>/baml/ns_errors/errors.baml:8
@@ -252,7 +252,7 @@ class            baml.sap._ParseCache             <builtin>/baml/ns_sap/sap.baml
 class            baml.sap._NoYield                <builtin>/baml/ns_sap/sap.baml:23
 function         baml.sap._new_parse_cache        <builtin>/baml/ns_sap/sap.baml:33
 function         baml.sap.parse                   <builtin>/baml/ns_sap/sap.baml:41
-function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:50
+function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:54
 class            baml.spawn.Params                <builtin>/baml/ns_spawn/spawn.baml:17
 class            baml.spawn.TaskGroup             <builtin>/baml/ns_spawn/spawn.baml:36
 class            baml.spawn.CancelToken           <builtin>/baml/ns_spawn/spawn.baml:101
@@ -289,7 +289,7 @@ function         baml.time.system_timezone        <builtin>/baml/ns_time/timezon
 function         baml.time._tz_offset_at          <builtin>/baml/ns_time/timezone.baml:226
 function         baml.time._tz_to_instant         <builtin>/baml/ns_time/timezone.baml:258
 class            baml.time.ZonedDateTime          <builtin>/baml/ns_time/zoneddatetime.baml:19
-function         baml.time._format_zoned          <builtin>/baml/ns_time/zoneddatetime.baml:427
+function         baml.time._format_zoned          <builtin>/baml/ns_time/zoneddatetime.baml:435
 type             baml.toml.Item                   <builtin>/baml/ns_toml/toml.baml:12
 class            baml.toml.Table                  <builtin>/baml/ns_toml/toml.baml:28
 function         baml.toml.table_from_json        <builtin>/baml/ns_toml/toml.baml:88

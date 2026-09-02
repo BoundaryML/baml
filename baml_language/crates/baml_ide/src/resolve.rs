@@ -927,7 +927,7 @@ pub(crate) fn template_position_at(
     }
     // No `Expr::Template` at the cursor: check the SPEC-LOWERED prompt form.
     // An llm function's `prompt:` never becomes a template expression — the
-    // backtick flattens straight into the `$spec` companion ("both lower
+    // backtick flattens straight into the `@spec` companion ("both lower
     // through the same prompt`…` tagged template", lower_cst) — but the
     // synthesized prompt lambda opens a scope MARKED `is_template_body`
     // whose range is exactly the literal. Inside it, code regions are the
@@ -1034,7 +1034,7 @@ pub(crate) fn template_driver_at(
 
 /// The spec-lowered llm-prompt arm of [`template_position_at`]: an llm
 /// function's `prompt:` never becomes a template expression (the backtick
-/// flattens straight into the `$spec` companion, whose spans alias the
+/// flattens straight into the `@spec` companion, whose spans alias the
 /// literal), so prose-vs-code comes from the RECORDED prompt geometry
 /// (`llm_prompt_spans`, captured at CST lowering). Prose addresses the
 /// `ai.prompt` driver — the documented lowering contract ("both lower
@@ -1257,7 +1257,7 @@ fn declaration_name_at(
             .position(|binding| hit(binding.name_span))?;
         let data = item_data::impl_block_data(db, *block);
         let bound_name = &data.associated_type_bindings.get(binding_index)?.name;
-        let facts = baml_compiler2_hir_ty::impls::impl_facts(db, *block).as_ref()?;
+        let facts = baml_compiler2_hir_ty::impls::impl_facts(db, *block).resolved()?;
         let interface = &facts.interface.name;
         let package = baml_compiler2_hir::package::PackageId::new(db, interface.package().clone());
         let Some(Definition::Interface(iface)) = baml_compiler2_ppir::package_items(db, package)

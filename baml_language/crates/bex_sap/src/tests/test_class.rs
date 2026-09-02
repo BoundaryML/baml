@@ -161,6 +161,95 @@ test_deserializer!(
     { "one": "a", "two": "b" }
 );
 
+// Regression for #4589: a valid optional class must not lose to its null arm
+// merely because the class contains omitted optional fields. This keeps the
+// reported required/present/explicit-null comparison in one coercion.
+test_deserializer!(
+    test_optional_class_with_omitted_nested_optional_class,
+    r#"{
+        "optional_omitted": {
+            "value": "optional-omitted",
+            "source": {"doc_id": "d", "page": 0},
+            "abstained": false
+        },
+        "required_omitted": {
+            "value": "required-omitted",
+            "source": {"doc_id": "d", "page": 0},
+            "abstained": false
+        },
+        "optional_present": {
+            "value": "optional-present",
+            "source": {
+                "doc_id": "d",
+                "page": 0,
+                "bbox": {"x": 0.1, "y": 0.1, "w": 0.1, "h": 0.1}
+            },
+            "abstained": false
+        },
+        "optional_explicit_null": {
+            "value": "optional-explicit-null",
+            "source": {"doc_id": "d", "page": 0, "bbox": null},
+            "abstained": false
+        }
+    }"#,
+    baml_tyannotated!(Issue4589Outer),
+    baml_db! {
+        class Issue4589Bbox {
+            x: float,
+            y: float,
+            w: float,
+            h: float,
+        }
+        class Issue4589Source {
+            doc_id: string,
+            page: int,
+            bbox: (Issue4589Bbox | null) @class_completed_field_missing(null),
+        }
+        class Issue4589Envelope {
+            value: (string | null) @class_completed_field_missing(null),
+            source: (Issue4589Source | null) @class_completed_field_missing(null),
+            abstained: bool,
+            note: (string | null) @class_completed_field_missing(null),
+        }
+        class Issue4589Outer {
+            optional_omitted: (Issue4589Envelope | null) @class_completed_field_missing(null),
+            required_omitted: Issue4589Envelope,
+            optional_present: (Issue4589Envelope | null) @class_completed_field_missing(null),
+            optional_explicit_null: (Issue4589Envelope | null) @class_completed_field_missing(null),
+        }
+    },
+    {
+        "optional_omitted": {
+            "value": "optional-omitted",
+            "source": {"doc_id": "d", "page": 0, "bbox": null},
+            "abstained": false,
+            "note": null
+        },
+        "required_omitted": {
+            "value": "required-omitted",
+            "source": {"doc_id": "d", "page": 0, "bbox": null},
+            "abstained": false,
+            "note": null
+        },
+        "optional_present": {
+            "value": "optional-present",
+            "source": {
+                "doc_id": "d",
+                "page": 0,
+                "bbox": {"x": 0.1, "y": 0.1, "w": 0.1, "h": 0.1}
+            },
+            "abstained": false,
+            "note": null
+        },
+        "optional_explicit_null": {
+            "value": "optional-explicit-null",
+            "source": {"doc_id": "d", "page": 0, "bbox": null},
+            "abstained": false,
+            "note": null
+        }
+    }
+);
+
 test_deserializer!(
     test_multi_fielded_foo_with_optional_and_extra_text,
     r#"Here is how you can build the API call:

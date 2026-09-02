@@ -10,7 +10,7 @@ function PreviewShape() -> string {
 }
 
 function _preview_input() -> ai.ModelTurnInput {
-    let spec = PreviewShape$spec();
+    let spec = PreviewShape@spec();
     ai.ModelTurnInput {
         prompt: spec.prompt_template,
         journal: ai.Journal.new(spec),

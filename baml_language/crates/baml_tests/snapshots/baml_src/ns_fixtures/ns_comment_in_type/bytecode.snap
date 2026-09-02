@@ -26,7 +26,7 @@ function fixtures.comment_in_type.CommentAfterArrow(client: ai.Client | null, on
     load_var on_event
     call ai.Agent.new
     store_var _6
-    call user.fixtures.comment_in_type.CommentAfterArrow$spec
+    call user.fixtures.comment_in_type.CommentAfterArrow@spec
     store_var _8
     load_type string
     load_var2 4 5
@@ -39,7 +39,7 @@ function fixtures.comment_in_type.CommentAfterArrow(client: ai.Client | null, on
     return
 }
 
-function fixtures.comment_in_type.CommentAfterArrow$build_request(client: ai.Client | null) -> baml.http.Request {
+function fixtures.comment_in_type.CommentAfterArrow@build_request(client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -48,7 +48,7 @@ function fixtures.comment_in_type.CommentAfterArrow$build_request(client: ai.Cli
     store_var client
 
   L0:
-    call user.fixtures.comment_in_type.CommentAfterArrow$spec
+    call user.fixtures.comment_in_type.CommentAfterArrow@spec
     store_var _3
     load_type string
     load_var2 2 1
@@ -56,15 +56,15 @@ function fixtures.comment_in_type.CommentAfterArrow$build_request(client: ai.Cli
     return
 }
 
-function fixtures.comment_in_type.CommentAfterArrow$parse(json: string) -> string {
+function fixtures.comment_in_type.CommentAfterArrow@parse(json: string) -> string {
     load_type string
     load_var json
     call baml.sap.parse
     return
 }
 
-function fixtures.comment_in_type.CommentAfterArrow$render_prompt() -> ai.Prompt {
-    call user.fixtures.comment_in_type.CommentAfterArrow$spec
+function fixtures.comment_in_type.CommentAfterArrow@render_prompt() -> ai.Prompt {
+    call user.fixtures.comment_in_type.CommentAfterArrow@spec
     store_var _1
     load_type string
     load_var _1
@@ -72,7 +72,7 @@ function fixtures.comment_in_type.CommentAfterArrow$render_prompt() -> ai.Prompt
     return
 }
 
-function fixtures.comment_in_type.CommentAfterArrow$spec() -> ai.FunctionSpec<string> {
+function fixtures.comment_in_type.CommentAfterArrow@spec() -> ai.FunctionSpec<string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -84,14 +84,14 @@ function fixtures.comment_in_type.CommentAfterArrow$spec() -> ai.FunctionSpec<st
     load_type string
     load_type unknown
     alloc_map 0
-    make_closure .<lambda(CommentAfterArrow$spec, 0)>, 0
+    make_closure .<lambda(CommentAfterArrow@spec, 0)>, 0
     load_var2 1 2
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function fixtures.comment_in_type.CommentAfterArrow$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function fixtures.comment_in_type.CommentAfterArrow@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -108,7 +108,7 @@ function fixtures.comment_in_type.CommentAfterArrow$stream(client: ai.stream.Str
     store_var on_event
 
   L1:
-    call user.fixtures.comment_in_type.CommentAfterArrow$spec
+    call user.fixtures.comment_in_type.CommentAfterArrow@spec
     store_var _5
     load_type string | null
     load_type string
@@ -144,7 +144,7 @@ function fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client
     call ai.Agent.new
     store_var _8
     load_var2 1 2
-    call user.fixtures.comment_in_type.FunctionWithComments$spec
+    call user.fixtures.comment_in_type.FunctionWithComments@spec
     store_var _10
     load_type string
     load_var2 6 7
@@ -157,7 +157,7 @@ function fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client
     return
 }
 
-function fixtures.comment_in_type.FunctionWithComments$build_request(a: string, b: int, client: ai.Client | null) -> baml.http.Request {
+function fixtures.comment_in_type.FunctionWithComments@build_request(a: string, b: int, client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -167,7 +167,7 @@ function fixtures.comment_in_type.FunctionWithComments$build_request(a: string, 
 
   L0:
     load_var2 1 2
-    call user.fixtures.comment_in_type.FunctionWithComments$spec
+    call user.fixtures.comment_in_type.FunctionWithComments@spec
     store_var _5
     load_type string
     load_var2 4 3
@@ -175,16 +175,16 @@ function fixtures.comment_in_type.FunctionWithComments$build_request(a: string, 
     return
 }
 
-function fixtures.comment_in_type.FunctionWithComments$parse(json: string) -> string {
+function fixtures.comment_in_type.FunctionWithComments@parse(json: string) -> string {
     load_type string
     load_var json
     call baml.sap.parse
     return
 }
 
-function fixtures.comment_in_type.FunctionWithComments$render_prompt(a: string, b: int) -> ai.Prompt {
+function fixtures.comment_in_type.FunctionWithComments@render_prompt(a: string, b: int) -> ai.Prompt {
     load_var2 1 2
-    call user.fixtures.comment_in_type.FunctionWithComments$spec
+    call user.fixtures.comment_in_type.FunctionWithComments@spec
     store_var _3
     load_type string
     load_var _3
@@ -192,7 +192,7 @@ function fixtures.comment_in_type.FunctionWithComments$render_prompt(a: string, 
     return
 }
 
-function fixtures.comment_in_type.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string> {
+function fixtures.comment_in_type.FunctionWithComments@spec(a: string, b: int) -> ai.FunctionSpec<string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -207,14 +207,14 @@ function fixtures.comment_in_type.FunctionWithComments$spec(a: string, b: int) -
     load_type string
     load_type unknown
     alloc_map 2
-    make_closure .<lambda(FunctionWithComments$spec, 0)>, 0
+    make_closure .<lambda(FunctionWithComments@spec, 0)>, 0
     load_var2 3 4
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function fixtures.comment_in_type.FunctionWithComments$stream(a: string, b: int, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function fixtures.comment_in_type.FunctionWithComments@stream(a: string, b: int, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -232,7 +232,7 @@ function fixtures.comment_in_type.FunctionWithComments$stream(a: string, b: int,
 
   L1:
     load_var2 1 2
-    call user.fixtures.comment_in_type.FunctionWithComments$spec
+    call user.fixtures.comment_in_type.FunctionWithComments@spec
     store_var _7
     load_type string | null
     load_type string

@@ -22,7 +22,7 @@ fn user.fixtures.generic_intersection_bounds.Tagged.tag(_1: void) -> void {
     }
 }
 
-fn user.fixtures.generic_intersection_bounds.Both.Sized.size(self: fixtures.generic_intersection_bounds.Both) -> int {
+fn user.fixtures.generic_intersection_bounds.<(user.fixtures.generic_intersection_bounds.Both as user.fixtures.generic_intersection_bounds.Sized)>.size(self: fixtures.generic_intersection_bounds.Both) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: fixtures.generic_intersection_bounds.Both // self // param
@@ -37,7 +37,7 @@ fn user.fixtures.generic_intersection_bounds.Both.Sized.size(self: fixtures.gene
     }
 }
 
-fn user.fixtures.generic_intersection_bounds.Both.Tagged.tag(self: fixtures.generic_intersection_bounds.Both) -> string {
+fn user.fixtures.generic_intersection_bounds.<(user.fixtures.generic_intersection_bounds.Both as user.fixtures.generic_intersection_bounds.Tagged)>.tag(self: fixtures.generic_intersection_bounds.Both) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: fixtures.generic_intersection_bounds.Both // self // param
@@ -194,7 +194,7 @@ fn user.fixtures.generic_intersection_bounds.Printable.display(_1: void) -> void
     }
 }
 
-fn user.fixtures.generic_intersection_bounds.Printable$for$T.display(self: T) -> string {
+fn user.fixtures.generic_intersection_bounds.<(#0 as user.fixtures.generic_intersection_bounds.Printable)>.display(self: T) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: T // self // param
@@ -210,7 +210,7 @@ fn user.fixtures.generic_intersection_bounds.Printable$for$T.display(self: T) ->
     }
 }
 
-fn user.fixtures.generic_intersection_bounds.Registered.Registry<Both>.put(self: fixtures.generic_intersection_bounds.Registered, item: fixtures.generic_intersection_bounds.Both) -> void {
+fn user.fixtures.generic_intersection_bounds.<(user.fixtures.generic_intersection_bounds.Registered as user.fixtures.generic_intersection_bounds.Registry<user.fixtures.generic_intersection_bounds.Both>)>.put(self: fixtures.generic_intersection_bounds.Registered, item: fixtures.generic_intersection_bounds.Both) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: fixtures.generic_intersection_bounds.Registered // self // param
@@ -226,7 +226,7 @@ fn user.fixtures.generic_intersection_bounds.Registered.Registry<Both>.put(self:
     }
 }
 
-fn user.fixtures.generic_intersection_bounds.Registered.Registry<Both>.summarize(self: fixtures.generic_intersection_bounds.Registered, other: U) -> string {
+fn user.fixtures.generic_intersection_bounds.<(user.fixtures.generic_intersection_bounds.Registered as user.fixtures.generic_intersection_bounds.Registry<user.fixtures.generic_intersection_bounds.Both>)>.summarize(self: fixtures.generic_intersection_bounds.Registered, other: U) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: fixtures.generic_intersection_bounds.Registered // self // param

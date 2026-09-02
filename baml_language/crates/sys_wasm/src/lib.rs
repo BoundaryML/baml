@@ -19,7 +19,7 @@ pub use host_value::{
 };
 #[doc(hidden)]
 pub use send_wrapper::{SendFuture, SendWrapper};
-use web_sysops::{WebFs, WebHttp};
+use web_sysops::{WebFs, WebHttp, WebTime};
 
 #[derive(Clone)]
 struct WebSysopConfig {
@@ -43,16 +43,8 @@ pub fn configure_web_sysops(fetch_key: u64, read_file_sync_key: u64) -> Result<(
     Ok(())
 }
 
-/// Build the exact Web capability surface: fetch, readFileSync, and user host callables.
-///
-// BUG: the base is `SysOpsBuilder::new()`, so every operation not named here
-// throws `Unsupported` — including `baml.time.Instant.now` and
-// `baml.random.SystemRandom`, which are ambient in a browser rather than
-// capabilities to withhold. `testing.run_test` times every test, so no BAML
-// test can run under this table. The deleted `bridge_wasm` table wired both
-// (`wasm_time` over `Date.now`/`performance.now` + `Temporal`, `wasm_random`
-// over `crypto.getRandomValues` via getrandom's `wasm_js` backend); the same
-// implementations belong here unless withholding them is deliberate.
+/// Build the Web capability surface: fetch, readFileSync, user host callables,
+/// and the wall clock used by `baml.time.Instant.now`.
 pub fn build() -> Result<sys_ops::SysOps, String> {
     let config = WEB_SYSOP_CONFIG
         .with(|slot| slot.borrow().clone())
@@ -67,5 +59,6 @@ pub fn build() -> Result<sys_ops::SysOps, String> {
         .with_http_fetch_instance(http)
         .with_fs_read_instance(fs)
         .with_host_instance(host)
+        .with_time_instance(Arc::new(WebTime))
         .build())
 }

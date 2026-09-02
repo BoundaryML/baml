@@ -257,15 +257,21 @@ impl BamlPackageBaml for PackageBamlImpl {
     }
 }
 
-/// Whether `value`'s runtime class carries an in-body `baml.ToString` override.
-/// Shares `make_to_string_callee`'s resolution (so the two agree on every value
-/// kind, including the non-instance `type` / `uint8array` implementors) but
-/// allocates nothing on the VM heap, so it is safe to call during the
-/// allocation-free pre-order collection pass.
-fn has_to_string_override(vm: &BexVm, value: Value) -> bool {
-    super::to_string_override_fn_name(vm, value)
-        .and_then(|name| vm.find_function_by_name(&name))
-        .is_some()
+/// Whether `value`'s runtime type carries a `baml.ToString` override.
+/// Shares `make_to_string_callee`'s rule resolution (so the two agree on every
+/// value kind) but allocates nothing on the VM heap, so it is safe to call
+/// during the allocation-free pre-order collection pass. A resolver error
+/// PROPAGATES (`shim_rule_method`'s own contract: never a silent structural
+/// fallback) — swallowing it here would let the collection pass disagree
+/// with the dispatch pass.
+fn has_to_string_override(
+    vm: &BexVm,
+    value: Value,
+) -> Result<bool, crate::errors::VmInternalError> {
+    Ok(matches!(
+        super::shim_rule_method(vm, value, "ToString", "to_string")?,
+        Some(resolved) if !resolved.is_default
+    ))
 }
 
 /// Pre-order DFS collecting, by heap pointer and in render order, every
@@ -276,13 +282,17 @@ fn has_to_string_override(vm: &BexVm, value: Value) -> bool {
 /// the two stay index-aligned. (Like the structural renderer, this does not
 /// guard against reference cycles — recursive *data* would already loop in the
 /// pre-existing walker; recursive *types* such as trees are acyclic.)
-pub(super) fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>) {
+pub(super) fn collect_to_string_overrides(
+    vm: &BexVm,
+    value: Value,
+    out: &mut Vec<HeapPtr>,
+) -> Result<(), crate::errors::VmInternalError> {
     let ValueKind::Object(ptr) = value.kind() else {
-        return;
+        return Ok(());
     };
-    if has_to_string_override(vm, value) {
+    if has_to_string_override(vm, value)? {
         out.push(ptr);
-        return;
+        return Ok(());
     }
     // Snapshot children (owned), dropping the heap borrow / container lock before
     // recursing - same discipline as `render_to_sink`'s `DisplaySnap`. The
@@ -295,8 +305,9 @@ pub(super) fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Ve
         _ => Vec::new(),
     };
     for v in children {
-        collect_to_string_overrides(vm, v, out);
+        collect_to_string_overrides(vm, v, out)?;
     }
+    Ok(())
 }
 
 /// Entry point for `_to_string_default`. Collects the
@@ -309,13 +320,16 @@ pub(crate) fn render_to_string_honoring_overrides(
     value: Value,
 ) -> NativeCallResult {
     let mut pending: Vec<HeapPtr> = Vec::new();
-    collect_to_string_overrides(vm, value, &mut pending);
+    if let Err(e) = collect_to_string_overrides(vm, value, &mut pending) {
+        return NativeCallResult::Error(e.into());
+    }
 
     let Some(&first_ptr) = pending.first() else {
         return render_done(vm, value, &pending, &[]);
     };
     match make_to_string_callee(vm, Value::object(first_ptr)) {
-        Some(callee) => NativeCallResult::YieldToCall {
+        Err(e) => NativeCallResult::Error(e.into()),
+        Ok(Some(callee)) => NativeCallResult::YieldToCall {
             callee,
             args: vec![],
             type_args: vec![],
@@ -325,7 +339,7 @@ pub(crate) fn render_to_string_honoring_overrides(
                 results: Vec::new(),
             }),
         },
-        None => render_done(vm, value, &pending, &[]),
+        Ok(None) => render_done(vm, value, &pending, &[]),
     }
 }
 
@@ -365,15 +379,19 @@ impl Continuation for ToStringWalkContinuation {
         );
 
         // Dispatch the next override, if any (and resolvable); otherwise render.
-        if let Some(&next_ptr) = self.pending.get(self.results.len())
-            && let Some(callee) = make_to_string_callee(vm, Value::object(next_ptr))
-        {
-            return NativeCallResult::YieldToCall {
-                callee,
-                args: vec![],
-                type_args: vec![],
-                continuation: self,
-            };
+        if let Some(&next_ptr) = self.pending.get(self.results.len()) {
+            match make_to_string_callee(vm, Value::object(next_ptr)) {
+                Err(e) => return NativeCallResult::Error(e.into()),
+                Ok(Some(callee)) => {
+                    return NativeCallResult::YieldToCall {
+                        callee,
+                        args: vec![],
+                        type_args: vec![],
+                        continuation: self,
+                    };
+                }
+                Ok(None) => {}
+            }
         }
         render_done(vm, self.root, &self.pending, &self.results)
     }

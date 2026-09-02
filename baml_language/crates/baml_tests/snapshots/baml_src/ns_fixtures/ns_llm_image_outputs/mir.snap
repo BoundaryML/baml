@@ -42,7 +42,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage(prompt: string, client: null | 
     }
 
     bb5: {
-        _9 = call const fn user.fixtures.llm_image_outputs.GenerateImage$spec(copy _1) -> [bb6];
+        _9 = call const fn user.fixtures.llm_image_outputs.GenerateImage@spec(copy _1) -> [bb6];
     }
 
     bb6: {
@@ -60,7 +60,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage(prompt: string, client: null | 
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateImage$build_request(prompt: string, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.llm_image_outputs.GenerateImage@build_request(prompt: string, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
@@ -80,7 +80,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage$build_request(prompt: string, c
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.llm_image_outputs.GenerateImage$spec(copy _1) -> [bb3];
+        _4 = call const fn user.fixtures.llm_image_outputs.GenerateImage@spec(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -93,7 +93,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage$build_request(prompt: string, c
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateImage$parse(json: string) -> image {
+fn user.fixtures.llm_image_outputs.GenerateImage@parse(json: string) -> image {
     // Locals:
     let _0: image // _0 // return
     let _1: string // json // param
@@ -109,7 +109,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage$parse(json: string) -> image {
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateImage$render_prompt(prompt: string) -> ai.Prompt {
+fn user.fixtures.llm_image_outputs.GenerateImage@render_prompt(prompt: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // prompt // param
@@ -117,7 +117,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage$render_prompt(prompt: string) -
     let _3: reflect.Type
 
     bb0: {
-        _2 = call const fn user.fixtures.llm_image_outputs.GenerateImage$spec(copy _1) -> [bb1];
+        _2 = call const fn user.fixtures.llm_image_outputs.GenerateImage@spec(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -130,7 +130,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage$render_prompt(prompt: string) -
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> {
+fn user.fixtures.llm_image_outputs.GenerateImage@spec(prompt: string) -> ai.FunctionSpec<image> {
     // Locals:
     let _0: ai.FunctionSpec<image> // _0 // return
     let _1: string // prompt // param [captured]
@@ -162,7 +162,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage$spec(prompt: string) -> ai.Func
 }
 
 // lambda[0]
-fn .<lambda(GenerateImage$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(GenerateImage@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -246,7 +246,7 @@ fn .<lambda(GenerateImage$spec, 0)>( __spec_output_format: ai.OutputFormat) -> a
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<image, image> {
+fn user.fixtures.llm_image_outputs.GenerateImage@stream(prompt: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<image, image> {
     // Locals:
     let _0: ai.stream.Stream<image, image> // _0 // return
     let _1: string // prompt // param
@@ -279,7 +279,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client: 
     }
 
     bb4: {
-        _6 = call const fn user.fixtures.llm_image_outputs.GenerateImage$spec(copy _1) -> [bb5];
+        _6 = call const fn user.fixtures.llm_image_outputs.GenerateImage@spec(copy _1) -> [bb5];
     }
 
     bb5: {
@@ -333,7 +333,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: null
     }
 
     bb5: {
-        _9 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet$spec(copy _1) -> [bb6];
+        _9 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet@spec(copy _1) -> [bb6];
     }
 
     bb6: {
@@ -351,7 +351,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: null
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateImageSet$build_request(prompt: string, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.llm_image_outputs.GenerateImageSet@build_request(prompt: string, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
@@ -371,7 +371,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet$build_request(prompt: string
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet$spec(copy _1) -> [bb3];
+        _4 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet@spec(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -384,7 +384,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet$build_request(prompt: string
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateImageSet$parse(json: string) -> image[] {
+fn user.fixtures.llm_image_outputs.GenerateImageSet@parse(json: string) -> image[] {
     // Locals:
     let _0: image[] // _0 // return
     let _1: string // json // param
@@ -400,7 +400,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet$parse(json: string) -> image
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateImageSet$render_prompt(prompt: string) -> ai.Prompt {
+fn user.fixtures.llm_image_outputs.GenerateImageSet@render_prompt(prompt: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // prompt // param
@@ -408,7 +408,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet$render_prompt(prompt: string
     let _3: reflect.Type
 
     bb0: {
-        _2 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet$spec(copy _1) -> [bb1];
+        _2 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet@spec(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -421,7 +421,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet$render_prompt(prompt: string
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> {
+fn user.fixtures.llm_image_outputs.GenerateImageSet@spec(prompt: string) -> ai.FunctionSpec<image[]> {
     // Locals:
     let _0: ai.FunctionSpec<image[]> // _0 // return
     let _1: string // prompt // param [captured]
@@ -453,7 +453,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet$spec(prompt: string) -> ai.F
 }
 
 // lambda[0]
-fn .<lambda(GenerateImageSet$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(GenerateImageSet@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -537,7 +537,7 @@ fn .<lambda(GenerateImageSet$spec, 0)>( __spec_output_format: ai.OutputFormat) -
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<image[], image[]> {
+fn user.fixtures.llm_image_outputs.GenerateImageSet@stream(prompt: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<image[], image[]> {
     // Locals:
     let _0: ai.stream.Stream<image[], image[]> // _0 // return
     let _1: string // prompt // param
@@ -570,7 +570,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, clien
     }
 
     bb4: {
-        _6 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet$spec(copy _1) -> [bb5];
+        _6 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet@spec(copy _1) -> [bb5];
     }
 
     bb5: {
@@ -624,7 +624,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, c
     }
 
     bb5: {
-        _9 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(copy _1) -> [bb6];
+        _9 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(copy _1) -> [bb6];
     }
 
     bb6: {
@@ -642,7 +642,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, c
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$build_request(prompt: string, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@build_request(prompt: string, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
@@ -662,7 +662,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$build_request(pro
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(copy _1) -> [bb3];
+        _4 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -675,7 +675,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$build_request(pro
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$parse(json: string) -> (string | image)[] {
+fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@parse(json: string) -> (string | image)[] {
     // Locals:
     let _0: (string | image)[] // _0 // return
     let _1: string // json // param
@@ -691,7 +691,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$parse(json: strin
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$render_prompt(prompt: string) -> ai.Prompt {
+fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@render_prompt(prompt: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // prompt // param
@@ -699,7 +699,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$render_prompt(pro
     let _3: reflect.Type
 
     bb0: {
-        _2 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(copy _1) -> [bb1];
+        _2 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -712,7 +712,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$render_prompt(pro
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpec<(string | image)[]> {
+fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(prompt: string) -> ai.FunctionSpec<(string | image)[]> {
     // Locals:
     let _0: ai.FunctionSpec<(string | image)[]> // _0 // return
     let _1: string // prompt // param [captured]
@@ -744,7 +744,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(prompt: stri
 }
 
 // lambda[0]
-fn .<lambda(GenerateMixedImageNarrative$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(GenerateMixedImageNarrative@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -857,7 +857,7 @@ fn .<lambda(GenerateMixedImageNarrative$spec, 0)>( __spec_output_format: ai.Outp
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$stream(prompt: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<(string | image)[], (string | image)[]> {
+fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@stream(prompt: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<(string | image)[], (string | image)[]> {
     // Locals:
     let _0: ai.stream.Stream<(string | image)[], (string | image)[]> // _0 // return
     let _1: string // prompt // param
@@ -890,7 +890,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$stream(prompt: st
     }
 
     bb4: {
-        _6 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(copy _1) -> [bb5];
+        _6 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(copy _1) -> [bb5];
     }
 
     bb5: {

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n%baml_bridge/cffi/v1/baml_handle.proto\x12\x13\x62\x61ml_bridge.cffi.v1\"S\n\nBamlHandle\x12\x0b\n\x03key\x18\x01 \x01(\x04\x12\x38\n\x0bhandle_type\x18\x02 \x01(\x0e\x32#.baml_bridge.cffi.v1.BamlHandleType*\xdf\x02\n\x0e\x42\x61mlHandleType\x12\x16\n\x12HANDLE_UNSPECIFIED\x10\x00\x12\x16\n\x12UNTAGGED_RUST_DATA\x10\x01\x12\x15\n\x11UNTAGGED_BEX_HEAP\x10\x02\x12\x10\n\x0c\x46UNCTION_REF\x10\x05\x12\x13\n\x0f\x41\x44T_MEDIA_IMAGE\x10\x06\x12\x13\n\x0f\x41\x44T_MEDIA_AUDIO\x10\x07\x12\x13\n\x0f\x41\x44T_MEDIA_VIDEO\x10\x08\x12\x11\n\rADT_MEDIA_PDF\x10\t\x12\x15\n\x11\x41\x44T_MEDIA_GENERIC\x10\n\x12\x12\n\x0e\x41\x44T_PROMPT_AST\x10\x0b\x12\x11\n\rADT_COLLECTOR\x10\x0c\x12\x0c\n\x08\x41\x44T_TYPE\x10\r\x12\x1a\n\x16\x41\x44T_TAGGED_HEAP_HANDLE\x10\x0e\x12\x17\n\x13HOST_VALUE_CALLABLE\x10\x0f\x12\x15\n\x11HOST_VALUE_OPAQUE\x10\x10\"\x04\x08\x03\x10\x03\"\x04\x08\x04\x10\x04\x42\nH\x03Z\x06./cffib\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n%baml_bridge/cffi/v1/baml_handle.proto\x12\x13\x62\x61ml_bridge.cffi.v1\"S\n\nBamlHandle\x12\x0b\n\x03key\x18\x01 \x01(\x04\x12\x38\n\x0bhandle_type\x18\x02 \x01(\x0e\x32#.baml_bridge.cffi.v1.BamlHandleType*\x8d\x03\n\x0e\x42\x61mlHandleType\x12\x16\n\x12HANDLE_UNSPECIFIED\x10\x00\x12\x16\n\x12UNTAGGED_RUST_DATA\x10\x01\x12\x15\n\x11UNTAGGED_BEX_HEAP\x10\x02\x12\x10\n\x0c\x46UNCTION_REF\x10\x05\x12\x13\n\x0f\x41\x44T_MEDIA_IMAGE\x10\x06\x12\x13\n\x0f\x41\x44T_MEDIA_AUDIO\x10\x07\x12\x13\n\x0f\x41\x44T_MEDIA_VIDEO\x10\x08\x12\x11\n\rADT_MEDIA_PDF\x10\t\x12\x15\n\x11\x41\x44T_MEDIA_GENERIC\x10\n\x12\x12\n\x0e\x41\x44T_PROMPT_AST\x10\x0b\x12\x11\n\rADT_COLLECTOR\x10\x0c\x12\x0c\n\x08\x41\x44T_TYPE\x10\r\x12\x1a\n\x16\x41\x44T_TAGGED_HEAP_HANDLE\x10\x0e\x12\x17\n\x13HOST_VALUE_CALLABLE\x10\x0f\x12\x15\n\x11HOST_VALUE_OPAQUE\x10\x10\x12\x15\n\x11\x41\x44T_FUNCTION_SPEC\x10\x11\x12\x15\n\x11\x41\x44T_RUNTIME_VALUE\x10\x12\"\x04\x08\x03\x10\x03\"\x04\x08\x04\x10\x04\x42\nH\x03Z\x06./cffib\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'H\003Z\006./cffi'
   _globals['_BAMLHANDLETYPE']._serialized_start=148
-  _globals['_BAMLHANDLETYPE']._serialized_end=499
+  _globals['_BAMLHANDLETYPE']._serialized_end=545
   _globals['_BAMLHANDLE']._serialized_start=62
   _globals['_BAMLHANDLE']._serialized_end=145
 # @@protoc_insertion_point(module_scope)

@@ -1037,8 +1037,14 @@ type ai.Selector$stream = root.clients.Selector$stream
 function ai.arguments(self: ?) -> map<string, unknown>  [expr] {
   {  } self.args
 }
-function ai.build_request(self: ?, override_client: Client? = null) -> baml.http.Request  [expr] {
-  { let selected = override_client NullCoalesce self.default_client } selected.render(ModelTurnInput { prompt: self.prompt_template, journal: Journal.new(self), toolbox: self.tools(), output_type: self.output_type() })
+function ai.build_request(self: ?, client: Client? = null) -> baml.http.Request  [expr] {
+  { let selected = client NullCoalesce self.default_client } selected.render(ModelTurnInput { prompt: self.prompt_template, journal: Journal.new(self), toolbox: self.tools(), output_type: self.output_type() })
+}
+function ai.call(self: ?, client: Client? = null, on_event: (root.events.Event) -> void? = null) -> Out  [expr] {
+  {  } Agent.new(client = client, on_event = on_event).run(self).value
+}
+function ai.client_id(self: ?) -> string  [expr] {
+  {  } self.default_client.id()
 }
 function ai.messages(self: ?) -> ai.PromptMessage[]  [builtin]
 function ai.name(self: ?) -> string  [expr] {
@@ -1046,6 +1052,9 @@ function ai.name(self: ?) -> string  [expr] {
 }
 function ai.output_type(self: ?) -> reflect.Type  [expr] {
   { let output_type = reflect.Type.of(); root.internal.validate_output_type(output_type) } output_type
+}
+function ai.parse(self: ?, json: string) -> Out  [expr] {
+  {  } baml.sap.parse(json)
 }
 function ai.prompt(body: (role: (string) -> root.Role throws never, ctx: root.Context) -> baml.TaggedString) -> (root.Context) -> ai.Prompt throws root.errors.PromptRenderError  [expr] {
   { let render = (ctx: root.Context) -> { { let tagged = body(root.internal.make_role, ctx) catch_all (e) { _ => { throw root.errors.PromptRenderError { message: "prompt template r...", cause: e } } } } root.internal.assemble_prompt(tagged.parts, tagged.values) } } render

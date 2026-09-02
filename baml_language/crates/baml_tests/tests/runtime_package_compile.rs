@@ -20,7 +20,7 @@ function Extract<T>(document: string) -> T {
   prompt: `Extract the document using this schema:\n${ctx.output_format()}`
 }
 
-function main() -> string throws unknown {
+function main() -> string {
   let source = `
 class ExtractedRecord {
   account string
@@ -30,19 +30,19 @@ class ExtractedRecord {
   let pkg = reflect.Package.compile({ "schema.baml": source })
   let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
   let document_text = `{"account":"AC-1","amount":42}`
-  let record = Extract$parse<unreflect(record_t.as_type())>(document_text)
+  let record = Extract@parse<unreflect(record_t.as_type())>(document_text)
   json.to_string(record)
 }
 
-function rendered_schema() -> string throws unknown {
+function rendered_schema() -> string {
   let pkg = reflect.Package.compile({
     "schema.baml": "class ExtractedRecord { account string amount int }"
   })
   let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
-  Extract$render_prompt<unreflect(record_t.as_type())>("sample document").text()
+  Extract@render_prompt<unreflect(record_t.as_type())>("sample document").text()
 }
 
-function declaration_identity_properties() -> bool throws unknown {
+function declaration_identity_properties() -> bool {
   let files = { "schema.baml": "class ExtractedRecord { account string amount int }" }
   let first = reflect.Package.compile(files)
   let second = reflect.Package.compile(files)
@@ -52,7 +52,7 @@ function declaration_identity_properties() -> bool throws unknown {
   a.as_type() == a_again.as_type() && a.as_type() != b.as_type()
 }
 
-function package_survives_gc() -> bool throws unknown {
+function package_survives_gc() -> bool {
   let pkg = reflect.Package.compile({
     "schema.baml": "class ExtractedRecord { account string amount int }"
   })
@@ -62,7 +62,7 @@ function package_survives_gc() -> bool throws unknown {
   before.as_type() == after.as_type()
 }
 
-function namespace_and_dependency_mounts() -> bool throws unknown {
+function namespace_and_dependency_mounts() -> bool {
   let base = reflect.Package.compile({
     "ns_models/base.baml": "class Base { id string }"
   })
@@ -75,7 +75,7 @@ function namespace_and_dependency_mounts() -> bool throws unknown {
     child.diagnostics().length() == 0
 }
 
-function mounted_runtime_interface_and_return_types_stay_hidden() -> bool throws unknown {
+function mounted_runtime_interface_and_return_types_stay_hidden() -> bool {
   let runtime_minted = reflect.class.new("RuntimeMinted", {
     "value": reflect.Type.of<string>(),
   })
@@ -102,7 +102,7 @@ function make_runtime_minted() -> app.RuntimeMinted {
 "####;
 
 const SUCCESSFUL_INIT_SOURCE: &str = r####"
-function main() -> bool throws unknown {
+function main() -> bool {
   let pkg = reflect.Package.compile({ "schema.baml": `
 client InitClient = openai.ResponsesClient.new(
     model = "unused-network-free-init-check",
@@ -120,7 +120,7 @@ class Ready { value string }
 "####;
 
 const REJECTED_INIT_SOURCE: &str = r####"
-function main() -> null throws unknown {
+function main() -> null {
   reflect.Package.compile({ "schema.baml": `
 client InitClient = openai.ResponsesClient.new(
     model = "unused-network-free-init-check",
@@ -132,11 +132,149 @@ class Broken { value MissingType }
 }
 "####;
 
+/// A host contract crossing a `Package.compile` mount in every method shape:
+/// a method-bearing interface the runtime-compiled source implements, and
+/// the host's inherent, static, `implements`-block, out-of-body, and default
+/// methods called from the runtime-compiled source.
+const MOUNTED_METHODS_SOURCE: &str = r####"
+interface Describable {
+  function describe(self) -> string throws never
+  function shout(self) -> string throws never { self.describe().to_upper_case() }
+}
+
+class Host {
+  name string
+  function greet(self, punct: string) -> string throws never { "hi " + self.name + punct }
+  function make(name: string) -> Host throws never { Host { name: name } }
+  implements Describable {
+    function describe(self) -> string throws never { "host<" + self.name + ">" }
+  }
+}
+
+class Other { id int }
+implement Describable for Other {
+  function describe(self) -> string throws never { "other#" + self.id.to_string() }
+}
+
+function describe_all(items: Describable[]) -> string throws never {
+  let out = ""
+  for (let item in items) { out = out + item.describe() + ";" }
+  out
+}
+
+function compile_plugin() -> reflect.Package {
+  reflect.Package.compile(
+    { "plugin.baml": `
+class Widget { name string }
+
+implement app.Describable for Widget {
+  function describe(self) -> string throws never { "widget<" + self.name + ">" }
+}
+
+function make_widget(name: string) -> Widget throws never { Widget { name: name } }
+function call_host_inherent(h: app.Host) -> string throws never { h.greet("!") }
+function call_host_static(name: string) -> string throws never { app.Host.make(name).greet("?") }
+function call_host_impl_block(h: app.Host) -> string throws never { h.describe() }
+function call_host_default(h: app.Host) -> string throws never { h.shout() }
+function call_other_out_of_body(o: app.Other) -> string throws never { o.describe() }
+function existential(d: app.Describable) -> string throws never { d.describe() }
+function pass_through(items: app.Describable[]) -> string throws never { app.describe_all(items) }
+` },
+    packages = { "app": reflect.Package.current() },
+  )
+}
+
+function mount_is_clean() -> bool {
+  compile_plugin().diagnostics().length() == 0
+}
+
+function main() -> string {
+  let pkg = compile_plugin()
+  let make_widget = pkg.get_function<(string) -> Describable>("root.make_widget")
+    ?? throw "missing make_widget"
+  let inherent = pkg.get_function<(Host) -> string>("root.call_host_inherent")
+    ?? throw "missing call_host_inherent"
+  let static_ = pkg.get_function<(string) -> string>("root.call_host_static")
+    ?? throw "missing call_host_static"
+  let impl_block = pkg.get_function<(Host) -> string>("root.call_host_impl_block")
+    ?? throw "missing call_host_impl_block"
+  let dflt = pkg.get_function<(Host) -> string>("root.call_host_default")
+    ?? throw "missing call_host_default"
+  let out_of_body = pkg.get_function<(Other) -> string>("root.call_other_out_of_body")
+    ?? throw "missing call_other_out_of_body"
+  let existential = pkg.get_function<(Describable) -> string>("root.existential")
+    ?? throw "missing existential"
+  let pass_through = pkg.get_function<(Describable[]) -> string>("root.pass_through")
+    ?? throw "missing pass_through"
+  let w = make_widget("w1")
+  let h = Host { name: "h" }
+  let parts = [
+    w.describe(),
+    w.shout(),
+    describe_all([w, h, Other { id: 7 }]),
+    inherent(h),
+    static_("s"),
+    impl_block(h),
+    dflt(h),
+    out_of_body(Other { id: 3 }),
+    existential(w),
+    pass_through([w, h]),
+  ]
+  let out = ""
+  for (let part in parts) { out = out + part + "|" }
+  out
+}
+"####;
+
+/// A method-bearing host interface is implementable across a mount, and
+/// every host method shape is callable from the runtime-compiled source.
+#[tokio::test]
+async fn method_bearing_interface_crosses_a_mount() {
+    let output = baml_test!(baml: MOUNTED_METHODS_SOURCE);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "widget<w1>|WIDGET<W1>|widget<w1>;host<h>;other#7;|hi h!|hi s?|host<h>|HOST<H>|\
+             other#3|widget<w1>|widget<w1>;host<h>;|"
+                .into()
+        ))
+    );
+}
+
+/// The mount's link stubs spell methods inside their owner's body, so no
+/// `ns_<Type>/` stub namespace shadows the type it belongs to (E0099).
+#[tokio::test]
+async fn mounted_method_stubs_do_not_shadow_their_owner() {
+    let output = baml_test!(baml: MOUNTED_METHODS_SOURCE, entry: "mount_is_clean");
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// `baml.ToString` is implemented for `reflect.Type` out-of-body in the
+/// stdlib. A runtime compile has no stdlib source to devirtualize that call
+/// against, so it must dispatch — it used to reach the emitter as a static
+/// call to an interface body it could not name and panic the compiler.
+#[tokio::test]
+async fn runtime_compiled_to_string_on_a_reflected_type_dispatches() {
+    let output = baml_test!(
+        r####"
+function main() -> string {
+  let pkg = reflect.Package.compile({ "u.baml": `
+class C {}
+function render() -> string { reflect.Type.of_value(C {}).to_string() }
+` })
+  let render = pkg.get_function<() -> string>("root.render") ?? throw "missing render"
+  render()
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("C".into())));
+}
+
 #[tokio::test]
 async fn package_finish_refuses_session_compile_artifact() {
     let output = baml_test!(
         r####"
-function main() -> bool throws unknown {
+function main() -> bool {
   let session = reflect.Session.new()
   let artifact = session._compile<int>(`1`)
   let rejected = false
@@ -165,7 +303,7 @@ function Plan(state: AgentState) -> string {
   "planned " + state.goal
 }
 
-function main() -> string throws unknown {
+function main() -> string {
   let skill_source = `
 class PlanThenAct {
   summary string
@@ -192,14 +330,14 @@ function Run(state: app.AgentState) -> PlanThenAct {
   action.summary
 }
 
-function absent_function_is_null() -> bool throws unknown {
+function absent_function_is_null() -> bool {
   let pkg = reflect.Package.compile({
     "main.baml": "function Present(value: string) -> string { value }"
   })
   pkg.get_function<(string) -> string>("root.Missing") == null
 }
 
-function mismatched_function_contract() -> null throws unknown {
+function mismatched_function_contract() -> null {
   let pkg = reflect.Package.compile({
     "main.baml": "function Present(value: string) -> string { value }"
   })
@@ -207,7 +345,7 @@ function mismatched_function_contract() -> null throws unknown {
   null
 }
 
-function unspecialized_generic_function_cannot_be_extracted() -> null throws unknown {
+function unspecialized_generic_function_cannot_be_extracted() -> null {
   let pkg = reflect.Package.compile({
     "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
@@ -223,7 +361,7 @@ function Extract<T>(document: string) -> T {
   null
 }
 
-function function_listing_omits_unspecialized_generics() -> bool throws unknown {
+function function_listing_omits_unspecialized_generics() -> bool {
   let pkg = reflect.Package.compile({
     "main.baml": `
 function identity<T>(value: T) -> T { value }
@@ -234,7 +372,7 @@ function Present(value: string) -> string { value }
   functions.get("root.identity") == null && functions.get("root.Present") != null
 }
 
-function generic_function_companion_extraction_is_refused() -> string throws unknown {
+function generic_function_companion_extraction_is_refused() -> string {
   let pkg = reflect.Package.compile({
     "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
@@ -246,7 +384,7 @@ function Extract<T>(document: string) -> T {
   prompt: "Extract document"
 }`
   })
-  let extracted = pkg.get_function<(string) -> ai.Prompt>("root.Extract$render_prompt") catch (e) {
+  let extracted = pkg.get_function<(string) -> ai.Prompt>("root.Extract@render_prompt") catch (e) {
     reflect.errors.CompilationError => {
       return e.diagnostics[0].code
     },
@@ -258,7 +396,7 @@ function Extract<T>(document: string) -> T {
   "did not throw"
 }
 
-function generic_function_companion_is_listed() -> bool throws unknown {
+function generic_function_companion_is_listed() -> bool {
   let pkg = reflect.Package.compile({
     "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
@@ -270,10 +408,10 @@ function Extract<T>(document: string) -> T {
   prompt: "Extract document"
 }`
   })
-  pkg.functions().get("root.Extract$render_prompt") != null
+  pkg.functions().get("root.Extract@render_prompt") != null
 }
 
-function alias_order_and_reserved_names() -> bool throws unknown {
+function alias_order_and_reserved_names() -> bool {
   let root_package = reflect.Package.current()
   let generated = reflect.Package.compile(
     { "main.baml": `
@@ -302,7 +440,7 @@ test "enumerated package test" {
   assert.equal(1, 1)
 }
 
-function enumerated_test_runs() -> bool throws unknown {
+function enumerated_test_runs() -> bool {
   let tests = reflect.Package.current().tests()
   let run = tests.get("root::enumerated package test") ?? throw "test not enumerated"
   run()
@@ -363,7 +501,7 @@ function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws
   count
 }
 
-function main() -> bool throws unknown {
+function main() -> bool {
   let package = reflect.Package.compile({ "dispatch.baml": `
 function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws never {
   let count = 0
@@ -393,7 +531,7 @@ class User {
   age int
 }
 
-function main() -> string throws unknown {
+function main() -> string {
   let original = User { name: "Ada", age: 30 }
   let encoded = original.to_json()
   let decoded = User.from_json(encoded)

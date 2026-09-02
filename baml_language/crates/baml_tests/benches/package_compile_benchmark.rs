@@ -15,7 +15,7 @@ use divan::{Bencher, black_box};
 use sys_native::{CallId, SysOpsExt};
 
 const OUTER_SOURCE: &str = r####"
-function package_compile_cold() -> int throws unknown {
+function package_compile_cold() -> int {
   let package = reflect.Package.compile({
     "schema.baml": "class ColdSchema { name string count int }"
   })
@@ -34,7 +34,7 @@ function static_stdlib_dispatch(n: int) -> int throws never {
   compare_hot<int>(7, n)
 }
 
-function runtime_stdlib_dispatch(n: int) -> int throws unknown {
+function runtime_stdlib_dispatch(n: int) -> int {
   let package = reflect.Package.compile({ "dispatch.baml": `
 function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws never {
   let count = 0

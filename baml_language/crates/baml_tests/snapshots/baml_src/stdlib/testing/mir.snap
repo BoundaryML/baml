@@ -49,7 +49,7 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     let _23: bool
     let _24: string
     let _25: string
-    let _26: (baml.String, string) -> bool throws never
+    let _26: (string, string) -> bool throws never
     let _27: string
     let _28: string // final_name
     let _29: bool
@@ -211,7 +211,7 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     let _23: bool
     let _24: string
     let _25: string
-    let _26: (baml.String, string) -> bool throws never
+    let _26: (string, string) -> bool throws never
     let _27: string
     let _28: string // final_name
     let _29: bool
@@ -4286,18 +4286,21 @@ fn testing._flatten_with_tolerated(report: testing.TestSetReport, selected_names
     let _53: string[]
     let _54: string[]
     let _55: string[]
-    let _56: "error" | "fail" | "pass"
-    let _57: int
-    let _58: int
-    let _59: int
+    let _56: int[]
+    let _57: int[]
+    let _58: int[]
+    let _59: "error" | "fail" | "pass"
     let _60: int
-    let _61: string[]
-    let _62: string[]
-    let _63: string[]
-    let _64: int[]
-    let _65: int[]
-    let _66: int[]
-    let _67: string[]
+    let _61: int
+    let _62: int
+    let _63: int
+    let _64: string[]
+    let _65: string[]
+    let _66: string[]
+    let _67: int[]
+    let _68: int[]
+    let _69: int[]
+    let _70: string[]
 
     bb0: {
         _4 = copy _1.0;
@@ -4427,7 +4430,10 @@ fn testing._flatten_with_tolerated(report: testing.TestSetReport, selected_names
         _53 = []: string[];
         _54 = []: string[];
         _55 = []: string[];
-        _35 = testing._LeafIdentities { copy _53, copy _54, copy _55, const null, const null, const null };
+        _56 = []: int[];
+        _57 = []: int[];
+        _58 = []: int[];
+        _35 = testing._LeafIdentities { copy _53, copy _54, copy _55, copy _56, copy _57, copy _58 };
         goto -> bb23;
     }
 
@@ -4443,19 +4449,19 @@ fn testing._flatten_with_tolerated(report: testing.TestSetReport, selected_names
     }
 
     bb23: {
-        _56 = copy _1.0;
-        _57 = copy _5.0;
-        _58 = copy _5.1;
-        _59 = copy _5.2;
-        _60 = copy _5.3;
-        _61 = copy _35.0;
-        _62 = copy _35.1;
-        _63 = copy _35.2;
-        _64 = copy _35.3;
-        _65 = copy _35.4;
-        _66 = copy _35.5;
-        _67 = copy _18;
-        _0 = testing.FlatTestReport { copy _56, copy _57, copy _58, copy _59, copy _60, copy _61, copy _62, copy _63, copy _64, copy _65, copy _66, copy _67 };
+        _59 = copy _1.0;
+        _60 = copy _5.0;
+        _61 = copy _5.1;
+        _62 = copy _5.2;
+        _63 = copy _5.3;
+        _64 = copy _35.0;
+        _65 = copy _35.1;
+        _66 = copy _35.2;
+        _67 = copy _35.3;
+        _68 = copy _35.4;
+        _69 = copy _35.5;
+        _70 = copy _18;
+        _0 = testing.FlatTestReport { copy _59, copy _60, copy _61, copy _62, copy _63, copy _64, copy _65, copy _66, copy _67, copy _68, copy _69, copy _70 };
         goto -> bb24;
     }
 

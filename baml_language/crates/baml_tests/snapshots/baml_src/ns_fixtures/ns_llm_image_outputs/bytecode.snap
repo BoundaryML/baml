@@ -27,7 +27,7 @@ function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Cli
     call ai.Agent.new
     store_var _7
     load_var prompt
-    call user.fixtures.llm_image_outputs.GenerateImage$spec
+    call user.fixtures.llm_image_outputs.GenerateImage@spec
     store_var _9
     load_type image
     load_var2 5 6
@@ -40,7 +40,7 @@ function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Cli
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImage$build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.llm_image_outputs.GenerateImage@build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -50,7 +50,7 @@ function fixtures.llm_image_outputs.GenerateImage$build_request(prompt: string, 
 
   L0:
     load_var prompt
-    call user.fixtures.llm_image_outputs.GenerateImage$spec
+    call user.fixtures.llm_image_outputs.GenerateImage@spec
     store_var _4
     load_type image
     load_var2 3 2
@@ -58,16 +58,16 @@ function fixtures.llm_image_outputs.GenerateImage$build_request(prompt: string, 
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImage$parse(json: string) -> image {
+function fixtures.llm_image_outputs.GenerateImage@parse(json: string) -> image {
     load_type image
     load_var json
     call baml.sap.parse
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImage$render_prompt(prompt: string) -> ai.Prompt {
+function fixtures.llm_image_outputs.GenerateImage@render_prompt(prompt: string) -> ai.Prompt {
     load_var prompt
-    call user.fixtures.llm_image_outputs.GenerateImage$spec
+    call user.fixtures.llm_image_outputs.GenerateImage@spec
     store_var _2
     load_type image
     load_var _2
@@ -75,7 +75,7 @@ function fixtures.llm_image_outputs.GenerateImage$render_prompt(prompt: string) 
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> {
+function fixtures.llm_image_outputs.GenerateImage@spec(prompt: string) -> ai.FunctionSpec<image> {
     load_var ?1
     make_cell
     store_var ?1
@@ -109,14 +109,14 @@ function fixtures.llm_image_outputs.GenerateImage$spec(prompt: string) -> ai.Fun
     load_type unknown
     alloc_map 1
     load_var prompt
-    make_closure .<lambda(GenerateImage$spec, 0)>, 1
+    make_closure .<lambda(GenerateImage@spec, 0)>, 1
     load_var2 2 3
     load_type image
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<image, image> {
+function fixtures.llm_image_outputs.GenerateImage@stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<image, image> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -134,7 +134,7 @@ function fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client:
 
   L1:
     load_var prompt
-    call user.fixtures.llm_image_outputs.GenerateImage$spec
+    call user.fixtures.llm_image_outputs.GenerateImage@spec
     store_var _6
     load_type image
     load_type image
@@ -170,7 +170,7 @@ function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.
     call ai.Agent.new
     store_var _7
     load_var prompt
-    call user.fixtures.llm_image_outputs.GenerateImageSet$spec
+    call user.fixtures.llm_image_outputs.GenerateImageSet@spec
     store_var _9
     load_type image[]
     load_var2 5 6
@@ -183,7 +183,7 @@ function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet$build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.llm_image_outputs.GenerateImageSet@build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -193,7 +193,7 @@ function fixtures.llm_image_outputs.GenerateImageSet$build_request(prompt: strin
 
   L0:
     load_var prompt
-    call user.fixtures.llm_image_outputs.GenerateImageSet$spec
+    call user.fixtures.llm_image_outputs.GenerateImageSet@spec
     store_var _4
     load_type image[]
     load_var2 3 2
@@ -201,16 +201,16 @@ function fixtures.llm_image_outputs.GenerateImageSet$build_request(prompt: strin
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet$parse(json: string) -> image[] {
+function fixtures.llm_image_outputs.GenerateImageSet@parse(json: string) -> image[] {
     load_type image[]
     load_var json
     call baml.sap.parse
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet$render_prompt(prompt: string) -> ai.Prompt {
+function fixtures.llm_image_outputs.GenerateImageSet@render_prompt(prompt: string) -> ai.Prompt {
     load_var prompt
-    call user.fixtures.llm_image_outputs.GenerateImageSet$spec
+    call user.fixtures.llm_image_outputs.GenerateImageSet@spec
     store_var _2
     load_type image[]
     load_var _2
@@ -218,7 +218,7 @@ function fixtures.llm_image_outputs.GenerateImageSet$render_prompt(prompt: strin
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> {
+function fixtures.llm_image_outputs.GenerateImageSet@spec(prompt: string) -> ai.FunctionSpec<image[]> {
     load_var ?1
     make_cell
     store_var ?1
@@ -252,14 +252,14 @@ function fixtures.llm_image_outputs.GenerateImageSet$spec(prompt: string) -> ai.
     load_type unknown
     alloc_map 1
     load_var prompt
-    make_closure .<lambda(GenerateImageSet$spec, 0)>, 1
+    make_closure .<lambda(GenerateImageSet@spec, 0)>, 1
     load_var2 2 3
     load_type image[]
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<image[], image[]> {
+function fixtures.llm_image_outputs.GenerateImageSet@stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<image[], image[]> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -277,7 +277,7 @@ function fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, clie
 
   L1:
     load_var prompt
-    call user.fixtures.llm_image_outputs.GenerateImageSet$spec
+    call user.fixtures.llm_image_outputs.GenerateImageSet@spec
     store_var _6
     load_type image[]
     load_type image[]
@@ -313,7 +313,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, 
     call ai.Agent.new
     store_var _7
     load_var prompt
-    call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
+    call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec
     store_var _9
     load_type (string | image)[]
     load_var2 5 6
@@ -326,7 +326,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, 
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative$build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative@build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -336,7 +336,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$build_request(pr
 
   L0:
     load_var prompt
-    call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
+    call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec
     store_var _4
     load_type (string | image)[]
     load_var2 3 2
@@ -344,16 +344,16 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$build_request(pr
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative$parse(json: string) -> (image | string)[] {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative@parse(json: string) -> (image | string)[] {
     load_type (image | string)[]
     load_var json
     call baml.sap.parse
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative$render_prompt(prompt: string) -> ai.Prompt {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative@render_prompt(prompt: string) -> ai.Prompt {
     load_var prompt
-    call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
+    call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec
     store_var _2
     load_type (string | image)[]
     load_var _2
@@ -361,7 +361,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$render_prompt(pr
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpec<(image | string)[]> {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(prompt: string) -> ai.FunctionSpec<(image | string)[]> {
     load_var ?1
     make_cell
     store_var ?1
@@ -395,14 +395,14 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(prompt: str
     load_type unknown
     alloc_map 1
     load_var prompt
-    make_closure .<lambda(GenerateMixedImageNarrative$spec, 0)>, 1
+    make_closure .<lambda(GenerateMixedImageNarrative@spec, 0)>, 1
     load_var2 2 3
     load_type (image | string)[]
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative$stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<(image | string)[], (image | string)[]> {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative@stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<(image | string)[], (image | string)[]> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -420,7 +420,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$stream(prompt: s
 
   L1:
     load_var prompt
-    call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
+    call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec
     store_var _6
     load_type (image | string)[]
     load_type (image | string)[]

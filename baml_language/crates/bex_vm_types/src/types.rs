@@ -77,10 +77,25 @@ pub struct Program {
     pub globals: Vec<ConstValue>,
 
     /// Maps function names to their object indices.
+    ///
+    /// Interface-machinery bodies — impl-block methods (in-class or free) and
+    /// interface default-method bodies — are excluded: such a body is pooled
+    /// and
+    /// slotted like any function but is not a table-addressable item (each
+    /// body's [`Function::is_interface_body`](crate::Function::is_interface_body)
+    /// marks it). Where a compile boundary needs a body's coordinates, it
+    /// reads them structurally: the declaration-keyed placement registry
+    /// (unit decomposition — same process, same emit), the Pass-1 slot
+    /// replay over the artifact's globals (the stdlib splice, the one
+    /// genuine cross-process boundary), or the impl-rule tables / the
+    /// interface's `default` operand (rule baking, dispatch).
     pub function_indices: HashMap<String, usize>,
 
     /// Maps function names to their global indices.
     /// Used for dynamic function lookup at runtime.
+    ///
+    /// Interface-machinery bodies are excluded (see
+    /// [`Self::function_indices`]).
     pub function_global_indices: HashMap<String, usize>,
 
     /// Maps let-binding fully-qualified names to their global slot indices.

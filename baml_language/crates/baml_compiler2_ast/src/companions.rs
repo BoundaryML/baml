@@ -9,11 +9,11 @@
 //! and appending it to `COMPANIONS`.
 //!
 //! Every LLM function lives in the single-path ai world and gets four
-//! companions: `$spec` (the bound, unrun `ai.FunctionSpec<Out>`), `$render_prompt`
+//! companions: `@spec` (the bound, unrun `ai.FunctionSpec<Out>`), `@render_prompt`
 //! (the spec's prompt rendered with the return type's output-format text),
-//! `$build_request` (a network-free provider request preview), and `$parse`
+//! `@build_request` (a network-free provider request preview), and `@parse`
 //! (a network-free `baml.sap.parse<Out>` of an existing reply).
-//! `$stream` is synthesized at PPIR level — its body needs the stream-expanded
+//! `@stream` is synthesized at PPIR level — its body needs the stream-expanded
 //! return type, which only PPIR can compute.
 
 use baml_base::Name;
@@ -24,18 +24,22 @@ use crate::{
     lower_expr_body,
 };
 
-type CompanionExpander = fn(&FunctionDef) -> Option<FunctionDef>;
-
-const COMPANIONS: &[CompanionExpander] =
-    &[llm_spec, llm_render_prompt, llm_build_request, llm_parse];
-
 /// Run all companion expanders on the given function.
 /// Works identically for top-level functions and class methods.
-pub(crate) fn expand_companions(func: &FunctionDef) -> Vec<FunctionDef> {
-    COMPANIONS
-        .iter()
-        .filter_map(|expand| expand(func))
-        .collect()
+pub(crate) fn expand_companions(
+    func: &FunctionDef,
+    owner_class_name: Option<&Name>,
+    owner_generic_param_names: &[Name],
+) -> Vec<FunctionDef> {
+    [
+        llm_spec(func),
+        llm_render_prompt(func, owner_class_name, owner_generic_param_names),
+        llm_build_request(func, owner_class_name, owner_generic_param_names),
+        llm_parse(func),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 /// The parent's LLM metadata when its spec desugar succeeded — the gate for
@@ -89,7 +93,7 @@ fn companion_def(
     }
 }
 
-/// Build the `<Fn>$spec` companion: the function's parameters in, an
+/// Build the `<Fn>@spec` companion: the function's parameters in, an
 /// `ai.FunctionSpec<Out>` out. The body was pre-lowered in `lower_cst` (the
 /// CST backtick is unreachable here) and stashed under the `"spec"` key.
 fn llm_spec(parent: &FunctionDef) -> Option<FunctionDef> {
@@ -111,16 +115,20 @@ fn llm_spec(parent: &FunctionDef) -> Option<FunctionDef> {
 
     Some(companion_def(
         parent,
-        Name::new(format!("{}$spec", parent.name)),
+        Name::new(format!("{}@spec", parent.name)),
         own_params(parent),
         Some(return_type),
         (body, source_map),
     ))
 }
 
-/// Build the `<Fn>$render_prompt` companion: the spec's prompt rendered with
+/// Build the `<Fn>@render_prompt` companion: the spec's prompt rendered with
 /// the return type's output-format text as a structural `ai.Prompt`.
-fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
+fn llm_render_prompt(
+    parent: &FunctionDef,
+    owner_class_name: Option<&Name>,
+    owner_generic_param_names: &[Name],
+) -> Option<FunctionDef> {
     spec_llm_meta(parent)?;
     parent.return_type.as_ref()?;
     let params = own_params(parent);
@@ -133,6 +141,8 @@ fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
         parent.name.as_str(),
         &params,
         &generic_param_names,
+        owner_class_name,
+        owner_generic_param_names,
         parent.span,
     );
     let return_type = (TypeExprKind::Path {
@@ -144,18 +154,22 @@ fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
     .at(parent.span);
     Some(companion_def(
         parent,
-        Name::new(format!("{}$render_prompt", parent.name)),
+        Name::new(format!("{}@render_prompt", parent.name)),
         params,
         Some(return_type),
         body,
     ))
 }
 
-/// Build the `<Fn>$build_request` companion. It accepts the same parameters as
+/// Build the `<Fn>@build_request` companion. It accepts the same parameters as
 /// the parent plus its injected `client` override and delegates to the spec's
 /// pure `FunctionSpec.build_request` method. This keeps request construction
 /// provider-neutral while preserving the parent's default-client semantics.
-fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
+fn llm_build_request(
+    parent: &FunctionDef,
+    owner_class_name: Option<&Name>,
+    owner_generic_param_names: &[Name],
+) -> Option<FunctionDef> {
     spec_llm_meta(parent)?;
     // Keep the injected `client` (default-client semantics) but not
     // `on_event`: a network-free request preview never runs the agent, so
@@ -174,11 +188,13 @@ fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
             .iter()
             .map(|p| p.name.clone())
             .collect::<Vec<_>>(),
+        owner_class_name,
+        owner_generic_param_names,
         parent.span,
     );
     Some(companion_def(
         parent,
-        Name::new(format!("{}$build_request", parent.name)),
+        Name::new(format!("{}@build_request", parent.name)),
         params,
         Some(
             (TypeExprKind::Path {
@@ -193,7 +209,7 @@ fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
     ))
 }
 
-/// Build the `<Fn>$parse` companion: a network-free parse of an existing
+/// Build the `<Fn>@parse` companion: a network-free parse of an existing
 /// reply string into the function's return type.
 fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
     spec_llm_meta(parent)?;
@@ -208,7 +224,7 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
     let body = lower_expr_body::synthesize_spec_parse_body(Some(return_type.clone()), parent.span);
     Some(companion_def(
         parent,
-        Name::new(format!("{}$parse", parent.name)),
+        Name::new(format!("{}@parse", parent.name)),
         vec![json_param],
         Some(return_type),
         body,

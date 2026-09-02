@@ -485,6 +485,55 @@ class IntDecoder {
         output.contains("type Output = int"),
         "expected class describe to include associated type bindings, got:\n{output}"
     );
+    assert!(
+        output.contains("function decode"),
+        "expected class describe to list implements-block methods, got:\n{output}"
+    );
+    insta::assert_snapshot!(output);
+}
+
+/// Drill-in reaches an implements-block method: post-erasure such methods
+/// are not class members (`MethodOwner::Impl`), but `describe C.m` must
+/// still find them through the enumeration's impl tier, with the RESOLVED
+/// signature (`Self.Output` reads as `int`).
+#[test]
+fn render_describe_class_impl_method_drill_in() {
+    let db = make_db(&[(
+        "interfaces.baml",
+        r#"
+interface Decoder<Input> {
+    type Output
+    function decode(self, raw: Input) -> Self.Output
+}
+
+class IntDecoder {
+    implements Decoder<string> {
+        type Output = int
+        function decode(self, raw: string) -> Self.Output {
+            return 1
+        }
+    }
+}
+"#,
+    )]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    // The dotted `describe IntDecoder.decode` road: the CLI resolves the
+    // parent and hands the member to `describe_item_member`.
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
+    let pkg = baml_compiler2_hir::package::package_items(&db, pkg_id);
+    let parent = pkg
+        .lookup_type(&[], &baml_db::Name::new("IntDecoder"))
+        .expect("IntDecoder resolves");
+    let desc = baml_ide::describe_item_member(&db, &files, parent, "decode")
+        .expect("describe must find the implements-block method");
+    // The drill-in renders the SOURCE body (written `Self.Output` and all);
+    // the resolved signature (`-> int`) is the class listing's, pinned by
+    // `render_describe_class_shows_associated_type_bindings`.
+    let output = capture_description(&db, &desc, 30);
+    assert!(
+        output.contains("function decode"),
+        "expected the method body, got:\n{output}"
+    );
     insta::assert_snapshot!(output);
 }
 

@@ -220,8 +220,8 @@ pub struct PackageBamlImpl;
 /// For a value `v` whose type implements `baml.Comparable`, look up the
 /// matching `compare` function and return a `BoundMethod { compare, receiver: v }`.
 ///
-/// Builtin impls are out-of-body (`baml.Comparable$for$int.compare`, …); user
-/// classes carry the in-body impl method `{class_fqn}.baml.Comparable.compare`.
+/// Resolution reads the impl-rule tables (`shim_rule_method`) — the block's
+/// spelling (in-body or out-of-body) is display-only and never consulted.
 /// The bound method has `receiver = v` baked in, so the VM inserts it as `self`
 /// and the comparison call only passes the `other` argument
 /// (`YieldToCall { args: [other] }`).
@@ -232,165 +232,125 @@ pub struct PackageBamlImpl;
 /// so the per-pair comparison is resolved here on the receiver's runtime class
 /// (the homogeneous `T[]` guarantees the other element shares that class).
 pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, VmRustFnError> {
-    use bex_vm_types::ValueKind;
-    let fn_name: String = match v.kind() {
-        ValueKind::Int(_) => "baml.Comparable$for$int.compare".to_string(),
-        ValueKind::Object(ptr) => match vm.get_object(ptr) {
-            Object::Float(_) => "baml.Comparable$for$float.compare".to_string(),
-            Object::String(_) => "baml.Comparable$for$string.compare".to_string(),
-            Object::Bigint(_) => "baml.Comparable$for$bigint.compare".to_string(),
-            Object::Instance(inst) => {
-                let class_ptr = inst.class;
-                let qtn = match vm.get_object(class_ptr) {
-                    // `compare` methods register as globals under the class's
-                    // declared FQN at emit time. An anonymous class has no
-                    // declared FQN and no emitted methods, so it cannot
-                    // implement `Comparable` — same as the non-instance arm.
-                    Object::Class(c) => c.name.declared().cloned(),
-                    _ => {
-                        return Err(VmRustFnError::InternalError(
-                            VmInternalError::MissingNativeFunction {
-                                name: "compare dispatch: instance.class is not a Class".to_string(),
-                            },
-                        ));
-                    }
-                };
-                let Some(qtn) = qtn else {
-                    return Err(VmRustFnError::InternalError(
-                        VmInternalError::MissingNativeFunction {
-                            name: "_compare_shim: element type does not implement Comparable"
-                                .to_string(),
-                        },
-                    ));
-                };
-                format!("{}.baml.Comparable.compare", qtn.render_dotted(false))
-            }
-            _ => {
-                return Err(VmRustFnError::InternalError(
-                    VmInternalError::MissingNativeFunction {
-                        name: "_compare_shim: element type does not implement Comparable"
-                            .to_string(),
-                    },
-                ));
-            }
-        },
-        _ => {
-            return Err(VmRustFnError::InternalError(
-                VmInternalError::MissingNativeFunction {
-                    name: "_compare_shim: element type does not implement Comparable".to_string(),
-                },
-            ));
-        }
-    };
-
-    let fn_ptr = vm.find_function_by_name(&fn_name).ok_or_else(|| {
-        VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
-            name: format!("compare dispatch: function '{fn_name}' not found in globals"),
-        })
-    })?;
-
-    let type_args = vm.bound_method_curried_type_args(v);
-    Ok(vm.alloc_bound_method(bex_vm_types::BoundMethod {
-        function: fn_ptr,
-        receiver: v,
-        // A stdlib-dispatched `compare` on `v`'s concrete class; curry its class
-        // type args (→ `Self`) from the receiver, matching a `MakeBoundMethod`.
-        type_args,
-    }))
-}
-
-/// For a value `v` whose runtime class implements `baml.ToString` with an
-/// in-body override, resolve that `to_string` and return a
-/// `BoundMethod { to_string, receiver: v }`. Returns `Ok(None)` when the
-/// runtime class has no in-body override (e.g. an `implements baml.ToString {}`
-/// block inheriting the structural default body, or a non-instance value) — the
-/// caller then renders `v` with the structural default.
-///
-/// User in-body impls register as `{class_fqn}.baml.ToString.to_string`,
-/// matching `make_compare_callee`'s `{class_fqn}.baml.Comparable.compare`. Used
-/// by the native `baml._to_string_shim` (`root.rs`) backing `string.from`.
-pub(super) fn make_to_string_callee(vm: &mut BexVm, v: Value) -> Option<HeapPtr> {
-    let fn_name = to_string_override_fn_name(vm, v)?;
-    let fn_ptr = vm.find_function_by_name(&fn_name)?;
-
-    let type_args = vm.bound_method_curried_type_args(v);
-    Some(vm.alloc_bound_method(bex_vm_types::BoundMethod {
-        function: fn_ptr,
-        receiver: v,
-        // A stdlib-dispatched `to_string` override on `v`'s concrete class; curry
-        // its class type args (→ `Self`) from the receiver.
-        type_args,
-    }))
-}
-
-/// The `{class_fqn}.baml.ToString.to_string` function name for `v`'s runtime
-/// class, for the value kinds that can carry an in-body `baml.ToString` override.
-/// Returns `None` for kinds that never implement `baml.ToString` (primitives,
-/// arrays, maps) — `string.from` renders those structurally.
-///
-/// Covers `Object::Instance` (user/builtin classes) plus the two builtin
-/// non-instance implementors, `type` (`reflect.Type`) and `uint8array`
-/// (`baml.Uint8Array`); without them `string.from(v)` would diverge from
-/// `v.to_string()` (e.g. a `type` rendering structurally instead of as its type
-/// name, or bytes as `[1, 2]` instead of their UTF-8 text). Allocation-free
-/// w.r.t. the VM heap (only builds a Rust `String`), so it is safe to call during
-/// the GC-sensitive override-collection pass.
-pub(super) fn to_string_override_fn_name(vm: &BexVm, v: Value) -> Option<String> {
-    use bex_vm_types::ValueKind;
-    let fqn = match v.kind() {
-        ValueKind::Object(ptr) => match vm.get_object(ptr) {
-            Object::Instance(inst) => match vm.get_object(inst.class) {
-                Object::Class(c) => c.name.declared()?.render_dotted(false),
-                _ => return None,
+    let resolved =
+        shim_rule_method(vm, v, "Comparable", "compare").map_err(VmRustFnError::InternalError)?;
+    let Some(resolved) = resolved else {
+        // `T extends Comparable` is checked at compile time, so no applicable
+        // rule means the bound and the impl-rule tables disagree - an invariant
+        // violation, not a condition the caller could have avoided. It also
+        // could not be reported on the declared `throws T.CompareError`
+        // channel.
+        return Err(VmRustFnError::InternalError(
+            VmInternalError::MissingNativeFunction {
+                name: "_compare_shim: element type does not implement Comparable".to_string(),
             },
-            Object::Type(_) => "reflect.Type".to_string(),
-            Object::Uint8Array(_) => "baml.Uint8Array".to_string(),
-            _ => return None,
-        },
-        _ => return None,
+        ));
     };
-    Some(format!("{fqn}.baml.ToString.to_string"))
+    Ok(rule_bound_method(vm, v, resolved))
 }
 
-/// For a value `v` whose runtime class implements `baml.ToJson` with an in-body
-/// override, resolve that `to_json` and return a `BoundMethod { to_json,
-/// receiver: v }`. Returns `None` when the runtime class has no in-body override
-/// (an `implements baml.ToJson {}` block inheriting the structural default body,
-/// or a non-implementing / non-instance value) — the caller then renders `v`
-/// with the structural default. The json analog of [`make_to_string_callee`].
-pub(super) fn make_to_json_override_callee(vm: &mut BexVm, v: Value) -> Option<HeapPtr> {
-    let fn_name = to_json_override_fn_name(vm, v)?;
-    let fn_ptr = vm.find_function_by_name(&fn_name)?;
-    let type_args = vm.bound_method_curried_type_args(v);
-    Some(vm.alloc_bound_method(bex_vm_types::BoundMethod {
-        function: fn_ptr,
-        receiver: v,
-        // A stdlib-dispatched `to_json` override on `v`'s concrete class; curry
-        // its class type args (→ `Self`) from the receiver.
+/// A rule-resolved shim callee: one method entry of the receiver's impl rule,
+/// with its realized frame.
+pub(super) struct ShimRuleMethod {
+    /// The resolved body: the impl's provided method, or the interface's
+    /// default.
+    callee: HeapPtr,
+    /// The callee's realized owner frame (`[impl bindings..]` for a
+    /// provided method, `[Self, iface args..]` for an adopted default).
+    type_args: Vec<bex_vm_types::RealizedTy>,
+    /// `true` when `callee` IS the interface's default body — the shims'
+    /// no-provided-method case (their structural fallback renders exactly
+    /// what the default body delegates to).
+    is_default: bool,
+}
+
+/// The rule-resolved `method` entry behind a value-position stdlib shim: `v`'s
+/// impl of the root-package interface `iface_name`, read off the impl-rule
+/// tables exactly as `dispatch_op` (ops.rs) reads operators — never by
+/// constructing a mangled global name, so blanket and out-of-body impls and
+/// runtime-declared classes all resolve. Pure resolution over `&BexVm` with no
+/// VM-heap allocation, so it is safe in GC-sensitive collection passes.
+///
+/// `Ok(None)` = no concrete receiver type or no applicable rule — the shims'
+/// structural-fallback case. A frame that fails to realize is an internal
+/// error, never a silent fallback.
+pub(super) fn shim_rule_method(
+    vm: &BexVm,
+    v: Value,
+    iface_name: &str,
+    method: &str,
+) -> Result<Option<ShimRuleMethod>, VmInternalError> {
+    let qtn = baml_type::TypeName::new(
+        baml_type::Name::new("baml"),
+        Vec::new(),
+        baml_type::Name::new(iface_name),
+    );
+    // A stdlib FQN constant is one of the places a name legitimately becomes
+    // a head; it resolves once, off the declaration.
+    let Some(iface_head) = vm.declaration_head(&qtn) else {
+        return Ok(None);
+    };
+    let Some(self_ty) = vm.value_concrete_ty(v) else {
+        return Ok(None);
+    };
+    let resolver = resolve::ImplResolver::for_value(vm, v);
+    let Some((rule, bound_args)) =
+        resolver.resolve_implements_rule(&self_ty.into(), iface_head, &[])
+    else {
+        return Ok(None);
+    };
+    let Some(resolved) = resolver.rule_method_impl(&rule, method) else {
+        return Ok(None);
+    };
+    let type_args = resolver.realize_frame(&resolved.method.frame, &bound_args)?;
+    Ok(Some(ShimRuleMethod {
+        callee: resolved.method.fqn,
         type_args,
+        is_default: resolved.is_default,
     }))
 }
 
-/// The `{class_fqn}.baml.ToJson.to_json` function name for `v`'s runtime class,
-/// for the value kinds that can carry an in-body `baml.ToJson` override. Returns
-/// `None` for kinds that never implement `baml.ToJson` (primitives, arrays, maps,
-/// enums) — `baml.json.from` renders those structurally. Allocation-free w.r.t.
-/// the VM heap (only builds a Rust `String`), so it is safe to call during the
-/// GC-sensitive override-collection pass. The json analog of
-/// [`to_string_override_fn_name`].
-pub(super) fn to_json_override_fn_name(vm: &BexVm, v: Value) -> Option<String> {
-    use bex_vm_types::ValueKind;
-    let fqn = match v.kind() {
-        ValueKind::Object(ptr) => match vm.get_object(ptr) {
-            Object::Instance(inst) => match vm.get_object(inst.class) {
-                Object::Class(c) => c.name.declared()?.render_dotted(false),
-                _ => return None,
-            },
-            _ => return None,
-        },
-        _ => return None,
-    };
-    Some(format!("{fqn}.baml.ToJson.to_json"))
+/// Bind a [`shim_rule_method`] resolution to its receiver: the curried frame
+/// is the rule's realized method frame — exact, not the receiver-derived
+/// approximation `bound_method_curried_type_args` gives a `MakeBoundMethod`.
+fn rule_bound_method(vm: &mut BexVm, v: Value, resolved: ShimRuleMethod) -> HeapPtr {
+    vm.alloc_bound_method(bex_vm_types::BoundMethod {
+        function: resolved.callee,
+        receiver: v,
+        type_args: resolved.type_args.into_boxed_slice(),
+    })
+}
+
+/// For a value `v` whose impl of `baml.ToString` provides its own
+/// `to_string`, resolve it through the impl rules and return a
+/// `BoundMethod { to_string, receiver: v }`. `Ok(None)` when `v`'s type has no
+/// rule or its rule adopts the structural default body — the caller then
+/// renders `v` with the structural default. Used by the native
+/// `baml._to_string_shim` (`root.rs`) backing `string.from`.
+pub(super) fn make_to_string_callee(
+    vm: &mut BexVm,
+    v: Value,
+) -> Result<Option<HeapPtr>, VmInternalError> {
+    match shim_rule_method(vm, v, "ToString", "to_string")? {
+        Some(resolved) if !resolved.is_default => Ok(Some(rule_bound_method(vm, v, resolved))),
+        _ => Ok(None),
+    }
+}
+
+/// For a value `v` whose impl of `baml.ToJson` provides its own `to_json`,
+/// resolve it through the impl rules and return a
+/// `BoundMethod { to_json, receiver: v }`. `Ok(None)` when `v`'s type has no
+/// rule or its rule adopts the structural default body — the caller then
+/// renders `v` with the structural default. The json analog of
+/// [`make_to_string_callee`].
+pub(super) fn make_to_json_callee(
+    vm: &mut BexVm,
+    v: Value,
+) -> Result<Option<HeapPtr>, VmInternalError> {
+    match shim_rule_method(vm, v, "ToJson", "to_json")? {
+        Some(resolved) if !resolved.is_default => Ok(Some(rule_bound_method(vm, v, resolved))),
+        _ => Ok(None),
+    }
 }
 
 // =============================================================================
@@ -437,24 +397,40 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 bex_vm_types::FunctionKind::Bytecode => bex_vm_types::FunctionKind::Bytecode,
                 bex_vm_types::FunctionKind::SysOp(op) => bex_vm_types::FunctionKind::SysOp(op),
                 bex_vm_types::FunctionKind::NativeUnresolved => {
-                    // Only VM-owned packages resolve here; functions from other
-                    // stdlib packages (assert, testing, …) stay unresolved for a
-                    // future implementation to wire up.
+                    // Dispatch through the dedicated `native_key` (minted by
+                    // emit for `$rust_function` bodies), never the display
+                    // name. Every `NativeUnresolved` function IS such a body,
+                    // and emit keys every one — an UNKEYED body can never
+                    // resolve, so it fails here at load instead of crashing
+                    // `NativeUnresolved` at first call.
+                    let Some(key) = function.native_key.as_deref() else {
+                        return Err(VmInternalError::MissingNativeFunction {
+                            name: function.name.clone(),
+                        });
+                    };
+                    // Only VM-owned packages resolve here; keyed functions
+                    // from other stdlib packages (assert, testing, …) stay
+                    // unresolved for a future implementation to wire up.
                     let owner = VM_NATIVE_PACKAGES
                         .iter()
-                        .find(|(prefix, _)| function.name.starts_with(prefix));
-                    match owner.and_then(|(_, resolve)| resolve(function.name.as_str())) {
-                        Some(native_function) => {
-                            bex_vm_types::FunctionKind::Native(native_function as *const ())
-                        }
-                        // A VM-owned name with no native is a build error, not a
-                        // deferral: the package's generated trait requires an
-                        // implementation for every `$rust_function` it declares.
-                        None if owner.is_some() => {
-                            return Err(VmInternalError::MissingNativeFunction {
-                                name: function.name.clone(),
-                            });
-                        }
+                        .find(|(prefix, _)| key.starts_with(prefix))
+                        .map(|(_, resolve)| resolve);
+                    match owner {
+                        Some(resolve) => match resolve(key) {
+                            Some(native_function) => {
+                                bex_vm_types::FunctionKind::Native(native_function as *const ())
+                            }
+                            // A VM-owned key with no native is a build error,
+                            // not a deferral: the package's generated trait
+                            // requires an implementation for every
+                            // `$rust_function` it declares. Report the KEY —
+                            // it is what the generated dispatch matched on.
+                            None => {
+                                return Err(VmInternalError::MissingNativeFunction {
+                                    name: key.to_string(),
+                                });
+                            }
+                        },
                         None => bex_vm_types::FunctionKind::NativeUnresolved,
                     }
                 }
@@ -482,6 +458,8 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 display_return_type: function.display_return_type,
                 throws_type: function.throws_type,
                 origin: function.origin,
+                is_interface_body: function.is_interface_body,
+                native_key: function.native_key,
                 body_meta: function.body_meta,
                 capture: function.capture,
                 function_id: 0, // synthetic; not in the profiling function table

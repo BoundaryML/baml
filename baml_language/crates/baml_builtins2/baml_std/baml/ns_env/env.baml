@@ -59,11 +59,10 @@ function ref(name: string) -> Ref throws never {
 /// Like `get_or_panic`, but tolerant of a missing variable when `lenient` is
 /// true: a missing variable yields the empty string instead of panicking.
 ///
-/// Used by generated client constructors so that offline prompt rendering
-/// (`<Fn>$render_prompt`) can build a client for its provider/role metadata
-/// without requiring credentials. The network path (`<Fn>$call`) constructs
-/// with `lenient = false`, so a missing `api_key` env var still panics for it,
-/// exactly as before.
+/// Used by generated client constructors so that offline spec prompt rendering
+/// can build a client for its provider/role metadata without requiring
+/// credentials. The direct network call constructs with `lenient = false`, so a
+/// missing `api_key` env var still panics for it, exactly as before.
 function get_or_panic_lenient(key: string, lenient: bool) -> string {
     if (lenient) {
         get(key) ?? ""

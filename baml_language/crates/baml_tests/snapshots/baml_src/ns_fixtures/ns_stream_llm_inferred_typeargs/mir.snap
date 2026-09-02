@@ -42,7 +42,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc(input: string, client: nu
     }
 
     bb5: {
-        _9 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(copy _1) -> [bb6];
+        _9 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc@spec(copy _1) -> [bb6];
     }
 
     bb6: {
@@ -60,7 +60,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc(input: string, client: nu
     }
 }
 
-fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$build_request(input: string, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.stream_llm_inferred_typeargs.TestFunc@build_request(input: string, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // input // param
@@ -80,7 +80,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$build_request(input: stri
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(copy _1) -> [bb3];
+        _4 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc@spec(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -93,7 +93,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$build_request(input: stri
     }
 }
 
-fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$parse(json: string) -> string {
+fn user.fixtures.stream_llm_inferred_typeargs.TestFunc@parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
@@ -109,7 +109,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$parse(json: string) -> st
     }
 }
 
-fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$render_prompt(input: string) -> ai.Prompt {
+fn user.fixtures.stream_llm_inferred_typeargs.TestFunc@render_prompt(input: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // input // param
@@ -117,7 +117,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$render_prompt(input: stri
     let _3: reflect.Type
 
     bb0: {
-        _2 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(copy _1) -> [bb1];
+        _2 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc@spec(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -130,7 +130,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$render_prompt(input: stri
     }
 }
 
-fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(input: string) -> ai.FunctionSpec<string> {
+fn user.fixtures.stream_llm_inferred_typeargs.TestFunc@spec(input: string) -> ai.FunctionSpec<string> {
     // Locals:
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // input // param [captured]
@@ -162,7 +162,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(input: string) -> ai
 }
 
 // lambda[0]
-fn .<lambda(TestFunc$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(TestFunc@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -246,7 +246,7 @@ fn .<lambda(TestFunc$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Pro
     }
 }
 
-fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.stream_llm_inferred_typeargs.TestFunc@stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: string // input // param
@@ -279,7 +279,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$stream(input: string, cli
     }
 
     bb4: {
-        _6 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(copy _1) -> [bb5];
+        _6 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc@spec(copy _1) -> [bb5];
     }
 
     bb5: {
@@ -302,7 +302,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.call_stream_inferred() -> ai.strea
     let _4: reflect.Type
 
     bb0: {
-        _1 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(const "world") -> [bb1];
+        _1 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc@spec(const "world") -> [bb1];
     }
 
     bb1: {

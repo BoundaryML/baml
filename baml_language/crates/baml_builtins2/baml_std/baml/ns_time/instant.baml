@@ -172,7 +172,11 @@ class Instant {
         function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             self._to_string_impl() catch (_) {
                 root.errors.InvalidArgument { message } => {
-                    throw baml.json.SerializationError { message: message, path: "" }
+                    throw baml.json.SerializationError {
+                        message: message,
+                        path: "",
+                        reason: "unserializable",
+                    }
                 },
             }
         }

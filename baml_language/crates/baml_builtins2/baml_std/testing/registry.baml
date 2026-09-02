@@ -1096,7 +1096,14 @@ function _flatten_with_tolerated(
         // An older custom runner may execute only part of the selection without
         // returning result_names. In that case the aggregate counts remain valid,
         // but assigning the unexecuted names would fabricate PASS identities.
-        _LeafIdentities { passed: [], failed: [], tolerated: [] }
+        _LeafIdentities {
+            passed: [],
+            failed: [],
+            tolerated: [],
+            passed_ms: [],
+            failed_ms: [],
+            tolerated_ms: [],
+        }
     };
     FlatTestReport {
         outcome: report.outcome,

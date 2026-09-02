@@ -34,7 +34,7 @@ function interfaces_class_generics.$init_test_ns_interfaces_class_generics_inter
     return
 }
 
-function interfaces_class_generics.AemEchoer.AemEcho<int>.echo(self: interfaces_class_generics.AemEchoer, value: #1) -> #0 {
+function interfaces_class_generics.<(user.interfaces_class_generics.AemEchoer as user.interfaces_class_generics.AemEcho<int>)>.echo(self: interfaces_class_generics.AemEchoer, value: #1) -> #0 {
     load_var value
     load_type interfaces_class_generics.AemEq<#0>
     load_const "get"
@@ -44,21 +44,13 @@ function interfaces_class_generics.AemEchoer.AemEcho<int>.echo(self: interfaces_
     return
 }
 
-function interfaces_class_generics.AemValue.AemEq<T>.get(self: interfaces_class_generics.AemValue<#0>) -> #0 {
+function interfaces_class_generics.<(user.interfaces_class_generics.AemValue<#0> as user.interfaces_class_generics.AemEq<#0>)>.get(self: interfaces_class_generics.AemValue<#0>) -> #0 {
     load_var self
     load_field .value
     return
 }
 
-function interfaces_class_generics.Box.label(self: interfaces_class_generics.Box<#0>) -> string {
-    load_var self
-    load_field .value
-    load_type interfaces_class_generics.Named
-    virtual_load_field .name
-    return
-}
-
-function interfaces_class_generics.McapIntDriver.McapDriver<McapTask<int>>.drive(self: interfaces_class_generics.McapIntDriver, input: interfaces_class_generics.McapTask<int>) -> string {
+function interfaces_class_generics.<(user.interfaces_class_generics.McapIntDriver as user.interfaces_class_generics.McapDriver<user.interfaces_class_generics.McapTask<int>>)>.drive(self: interfaces_class_generics.McapIntDriver, input: interfaces_class_generics.McapTask<int>) -> string {
     load_var input
     load_field .value
     load_const 42
@@ -74,6 +66,14 @@ function interfaces_class_generics.McapIntDriver.McapDriver<McapTask<int>>.drive
     load_const "ok"
 
   L2:
+    return
+}
+
+function interfaces_class_generics.Box.label(self: interfaces_class_generics.Box<#0>) -> string {
+    load_var self
+    load_field .value
+    load_type interfaces_class_generics.Named
+    virtual_load_field .name
     return
 }
 

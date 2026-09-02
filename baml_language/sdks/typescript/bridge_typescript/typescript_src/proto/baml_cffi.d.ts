@@ -60,6 +60,12 @@ export namespace baml_bridge {
 
                 /** InboundValue tyDefValue */
                 tyDefValue?: (baml_bridge.cffi.v1.IBamlTyDef|null);
+
+                /** InboundValue mediaValue */
+                mediaValue?: (baml_bridge.cffi.v1.IBamlValueMedia|null);
+
+                /** InboundValue promptAstValue */
+                promptAstValue?: (baml_bridge.cffi.v1.IBamlValuePromptAst|null);
             }
 
             /** Represents an InboundValue. */
@@ -113,8 +119,14 @@ export namespace baml_bridge {
                 /** InboundValue tyDefValue. */
                 public tyDefValue?: (baml_bridge.cffi.v1.IBamlTyDef|null);
 
+                /** InboundValue mediaValue. */
+                public mediaValue?: (baml_bridge.cffi.v1.IBamlValueMedia|null);
+
+                /** InboundValue promptAstValue. */
+                public promptAstValue?: (baml_bridge.cffi.v1.IBamlValuePromptAst|null);
+
                 /** InboundValue value. */
-                public value?: ("stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue"|"tyDefValue");
+                public value?: ("stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue"|"tyDefValue"|"mediaValue"|"promptAstValue");
 
                 /**
                  * Creates a new InboundValue instance using the specified properties.
@@ -1061,7 +1073,9 @@ export namespace baml_bridge {
                 ADT_TYPE = 13,
                 ADT_TAGGED_HEAP_HANDLE = 14,
                 HOST_VALUE_CALLABLE = 15,
-                HOST_VALUE_OPAQUE = 16
+                HOST_VALUE_OPAQUE = 16,
+                ADT_FUNCTION_SPEC = 17,
+                ADT_RUNTIME_VALUE = 18
             }
 
             /** Properties of a BamlHandle. */

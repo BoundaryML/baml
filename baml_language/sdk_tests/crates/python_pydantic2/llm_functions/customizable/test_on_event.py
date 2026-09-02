@@ -15,6 +15,7 @@ during the host's own call/pull. Two call paths are exercised here:
 A raising listener must never fail or alter the run — its error is swallowed
 engine-side by `ai.events.guard`.
 """
+
 from replay_harness import replay_server
 
 
@@ -78,15 +79,14 @@ def test_on_event_plain_call_delivers_llm_call_model():
 def test_on_event_plain_call_raising_listener_does_not_fail():
     from baml_sdk.lorem import Resume, on_event_probe
 
-    result = on_event_probe(
-        "ignored-by-scripted-client", on_event=_raising_listener
-    )
+    result = on_event_probe("ignored-by-scripted-client", on_event=_raising_listener)
     assert isinstance(result, Resume)
     assert result.name == "Ada"
 
 
 # ---------------------------------------------------------------------------
-# Stream ($stream companion) against the replay fixture.
+# Flat stream shortcut selecting the compiler-private `Fn@stream` entry against
+# the replay fixture.
 # ---------------------------------------------------------------------------
 
 

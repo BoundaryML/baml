@@ -26,9 +26,13 @@ from baml_sdk.media import (
     round_trip_video,
     round_trip_pdf,
     round_trip_media,
+    round_trip_optional_image_list,
+    image_mime_type,
 )
+from baml_sdk.baml.media import Image
 
 URL = "https://example.com/asset"
+PNG_B64 = "iVBORw0KGgo="
 
 
 # --- decode path (return_*) works -----------------------------------------
@@ -81,3 +85,21 @@ def test_media_round_trip_media():
         pdf_field=return_pdf(url=URL, mime=None),
     )
     assert round_trip_media(m=m) is not None
+
+
+# SDK_PARITY_LINT(skip): validates Python host-created media wrapper encoding
+def test_host_created_media_round_trips_through_optional_list():
+    image = Image.from_base64(PNG_B64, "image/png")
+
+    # The engine must reconstruct the stdlib Image wrapper, not expose its
+    # private rust-data payload directly, before BAML dispatches this method.
+    assert image_mime_type(x=image) == "image/png"
+
+    nonempty = round_trip_optional_image_list(x=[image])
+    assert nonempty is not None
+    assert len(nonempty) == 1
+    assert nonempty[0].base64() == PNG_B64
+    assert nonempty[0].mime_type() == "image/png"
+
+    assert round_trip_optional_image_list(x=[]) == []
+    assert round_trip_optional_image_list(x=None) is None

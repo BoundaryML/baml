@@ -111,7 +111,7 @@ function yaml.$init_test_ns_yaml_yaml(registry: testing.TestCollector) -> null {
     return
 }
 
-function yaml.YamlWrappedName.baml.FromJson.from_json(j: baml.json.json) -> yaml.YamlWrappedName {
+function yaml.<(user.yaml.YamlWrappedName as baml.FromJson)>.from_json(j: baml.json.json) -> yaml.YamlWrappedName {
     load_var j
     load_const "name"
     call baml.json.field

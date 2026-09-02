@@ -28,7 +28,7 @@ hex = { workspace = true }
 rustc-hash = { workspace = true }
 sha2 = { workspace = true }
 smallvec = { workspace = true }
-uuid = { workspace = true }
+uuid = { workspace = true, features = [ "v7" ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 fs2 = { workspace = true }
