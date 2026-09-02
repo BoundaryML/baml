@@ -68,7 +68,9 @@ function handle_issue(
     //# open a worktree: a fresh branch, or the PR's branch under review
     let sb = match (review) {
         null => open_sandbox(issue, update),
-        let r: Review => open_branch_sandbox(r.branch, true),
+        // always from origin: a local branch kept after a failed round would
+        // be stale against what a human may have pushed since
+        let r: Review => open_branch_sandbox(r.branch, false),
     };
     let keep_branch = false;
     defer {

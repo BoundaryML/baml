@@ -10,8 +10,9 @@
 //   ATB2_POLL_S=120  ATB2_MAX_WAIT_S=14400
 //
 // Works on any PR of the repo, not only the ones handle_issue opened.
-// Audit trail: ~/.atb2/runs/<branch>/merge_state.json (what has been
-// addressed) plus handle_issue's review.md / fix.jsonl / outcome.json.
+// Audit trail: ~/.atb2/merge/<branch>/state.json (what has been addressed)
+// and round-<n>.outcome.json (how each round ended), plus handle_issue's
+// review.md / fix.jsonl / outcome.json for the latest round.
 
 // ==================== Pipeline ====================
 
@@ -21,6 +22,8 @@ class MergeResult {
     /// on humans. closed: closed without merging. waiting_on_checks: gave
     /// up waiting for checks (ATB2_MAX_WAIT_S). out_of_rounds: `max_rounds`
     /// spent with feedback still pending. dry_run: one round, nothing pushed.
+    /// round_failed: a round ended without a push (gate failed, agent
+    /// stopped); nothing on the PR changed, so a human takes it from here.
     /// fork_refused: the PR's branch lives in another repository; its code
     /// would run on this host (build scripts, tests, the agent), so it is
     /// not touched unless ATB2_ALLOW_FORKS=1.
@@ -30,6 +33,7 @@ class MergeResult {
         | "waiting_on_checks"
         | "out_of_rounds"
         | "dry_run"
+        | "round_failed"
         | "fork_refused",
     pr: string,
     rounds: int,
@@ -51,6 +55,7 @@ function merge_issue(
             | "waiting_on_checks"
             | "out_of_rounds"
             | "dry_run"
+            | "round_failed"
             | "fork_refused",
     ) -> MergeResult {
         log.info({ "pr": pr, "result": kind, "rounds": state.rounds });
@@ -71,21 +76,21 @@ function merge_issue(
             //## closed without merging: a human decided
             return done("closed");
         };
+        //# checks still running: wait before judging anything
+        // one round addresses CI failures and comments together; starting on
+        // comments while CI runs would push over the run and cancel it
+        if (snap.pending_checks > 0) {
+            if (elapsed_s(started) >= max_wait_s()) {
+                //## checks still running past the wait limit
+                return done("waiting_on_checks");
+            };
+            log.info({ "pr": pr, "waiting_on_checks": snap.pending_checks });
+            wait_poll();
+            continue;
+        };
         //# 1. failing checks, 2. reviewer comments, not yet addressed
         let fb = pending_feedback(snap, state);
         if (fb.checks.length() == 0 && fb.comments.length() == 0) {
-            if (snap.pending_checks > 0) {
-                if (elapsed_s(started) >= max_wait_s()) {
-                    //## checks still running past the wait limit
-                    return done("waiting_on_checks");
-                };
-                //## checks still running: wait
-                log.info({ "pr": pr, "waiting_on_checks": snap.pending_checks });
-                baml.sys.sleep(baml.time.Duration.from_seconds(poll_s())) catch (_) {
-                    _ => null,
-                };
-                continue;
-            };
             //## green and nothing new: waiting on humans
             return done("green");
         };
@@ -96,10 +101,24 @@ function merge_issue(
         //# hand the branch and the brief to handle_issue (fix pass, gate, push)
         let brief = render_feedback(fb, failed_logs(fb));
         handle_issue(issue_from_pr(snap), mode = mode, review = Review { branch: snap.branch, feedback: brief });
-        //# remember what was put to the agent
+        //# how the round ended: handle_issue says so in outcome.json, not in its return
+        let round = state.rounds + 1;
+        let kind = round_outcome(snap.branch, round);
+        state = MergeState { rounds: round, handled_ids: state.handled_ids };
+        if (kind != "fixed") {
+            //## the round ended without a push: nothing on the PR changed
+            write_merge_state(snap.branch, state);
+            return done("round_failed");
+        };
+        if (mode == HandleMode.DryRun) {
+            //## dry run: one round, nothing pushed
+            write_merge_state(snap.branch, state);
+            return done("dry_run");
+        };
+        //# the fix is on the PR: the comments it answered are handled
         state
             = MergeState {
-                rounds: state.rounds + 1,
+                rounds: round,
                 handled_ids: state.handled_ids.concat(
                     fb.comments.map((c: ReviewComment) -> int {
                         c.id
@@ -107,10 +126,10 @@ function merge_issue(
                 ),
             };
         write_merge_state(snap.branch, state);
-        if (mode == HandleMode.DryRun) {
-            //## dry run: one round, nothing pushed
-            return done("dry_run");
-        };
+        //# wait for the push to land and its checks to register
+        // right after a push GitHub lists no checks on the new head for a
+        // moment; an empty list would read as green
+        wait_for_new_head(pr, snap.head, started);
     }
     done("green")
 }
@@ -137,6 +156,47 @@ function issue_from_pr(snap: PrSnapshot) -> Issue {
 
 function pr_url(number: int) -> string {
     "https://github.com/" + repo_slug() + "/pull/" + number.to_string()
+}
+
+/// How a review round ended, from the outcome.json handle_issue wrote for
+/// the branch. A copy is kept per round, since the next round's sandbox
+/// wipes the run dir.
+function round_outcome(branch: string, round: int) -> string {
+    let path = run_dir_for(branch) + "/outcome.json";
+    if (!baml.fs.exists(path)) {
+        return "agent_stopped";
+    };
+    let raw = baml.fs.read(path);
+    baml.fs.mkdir(merge_dir(branch), baml.fs.MkdirOptions { recursive: true });
+    baml.fs.write(merge_dir(branch) + "/round-" + round.to_string() + ".outcome.json", raw);
+    let o = baml.json.parse(raw) catch (_) {
+        _ => baml.json.parse("{}"),
+    };
+    baml.json.path_or<string>(o, ".kind", "agent_stopped")
+}
+
+function wait_poll() -> null {
+    baml.sys.sleep(baml.time.Duration.from_seconds(poll_s())) catch (_) {
+        _ => null,
+    };
+    null
+}
+
+/// After a push: waits until the PR's head moved off `old_head`, then one
+/// more poll so the new head's check runs are registered.
+function wait_for_new_head(pr: string, old_head: string, started: baml.time.Instant) -> null {
+    while (true) {
+        wait_poll();
+        let head = pr_snapshot(pr).head;
+        if (head != old_head) {
+            return wait_poll();
+        };
+        if (elapsed_s(started) >= max_wait_s()) {
+            log.warn({ "pr": pr, "warning": "head did not move after the push" });
+            return null;
+        };
+    }
+    null
 }
 
 // ==================== Config ====================
@@ -199,6 +259,8 @@ class PrSnapshot {
     branch: string,
     /// The branch lives in another repository (a fork).
     cross_repo: bool,
+    /// The head commit: how a push is seen to have landed.
+    head: string,
     /// OPEN | CLOSED | MERGED
     state: string,
     merged: bool,
@@ -211,17 +273,35 @@ function gh(args: string[]) -> CmdResult {
     run_with(Cmd { program: "gh", args: args, cwd: atb2_home(), timeout_ms: 120000 }, sandbox_env(true))
 }
 
+/// `gh pr view`, retried: a run polls for hours and one dropped request
+/// must not end it.
+function gh_view(url: string) -> CmdResult {
+    let attempt = 0;
+    while (true) {
+        let view = gh(
+            [
+                "pr",
+                "view",
+                url,
+                "--json",
+                "number,title,body,headRefName,headRefOid,isCrossRepository,state,mergedAt",
+            ],
+        );
+        attempt = attempt + 1;
+        if (view.ok || attempt >= 3) {
+            return view;
+        };
+        log.warn({ "pr": url, "gh_pr_view_retry": attempt, "stderr": tail(view.stderr, 2) });
+        baml.sys.sleep(baml.time.Duration.from_seconds(10)) catch (_) {
+            _ => null,
+        };
+    }
+    baml.sys.panic("unreachable")
+}
+
 function pr_snapshot(url: string) -> PrSnapshot {
-    //# title, body, branch, state
-    let view = gh(
-        [
-            "pr",
-            "view",
-            url,
-            "--json",
-            "number,title,body,headRefName,isCrossRepository,state,mergedAt",
-        ],
-    );
+    //# title, body, branch, head, state
+    let view = gh_view(url);
     if (!view.ok) {
         baml.sys.panic("gh pr view failed: " + tail(view.stderr, 3));
     };
@@ -229,7 +309,9 @@ function pr_snapshot(url: string) -> PrSnapshot {
     let number = baml.json.path_or<int>(v, ".number", 0);
     //# checks (gh exits non-zero when any fail; the JSON is still there)
     let checks = parse_checks(gh(["pr", "checks", url, "--json", "name,bucket,link"]).stdout);
-    //# reviewer comments: inline review comments + review bodies
+    //# reviewer comments: inline review comments + reviews that request changes
+    // a review that merely comments (CodeRabbit's walkthrough after every
+    // push) is not feedback; counting it would keep the loop going forever
     let pulls = "repos/" + repo_slug() + "/pulls/" + number.to_string();
     let comments = parse_comments(
         gh(
@@ -248,7 +330,7 @@ function pr_snapshot(url: string) -> PrSnapshot {
                         "api",
                         pulls + "/reviews?per_page=100",
                         "--jq",
-                        "[.[] | select(.body != \"\") | {id, login: .user.login, path: null, line: null, body}]",
+                        "[.[] | select(.state == \"CHANGES_REQUESTED\" and .body != \"\") | {id, login: .user.login, path: null, line: null, body}]",
                     ],
                 ).stdout,
             ),
@@ -258,6 +340,7 @@ function pr_snapshot(url: string) -> PrSnapshot {
         title: baml.json.path_or<string>(v, ".title", ""),
         body: baml.json.path_or<string>(v, ".body", ""),
         branch: baml.json.path_or<string>(v, ".headRefName", ""),
+        head: baml.json.path_or<string>(v, ".headRefOid", ""),
         cross_repo: baml.json.path_or<bool>(v, ".isCrossRepository", true),
         state: baml.json.path_or<string>(v, ".state", "OPEN"),
         merged: baml.json.path_or<string>(v, ".mergedAt", "").length() > 0,
@@ -312,8 +395,9 @@ function run_id_of(link: string?) -> string? {
     }
 }
 
-/// The failed steps' log tail of every failing check, by check name, via
-/// `gh run view --log-failed`.
+/// The log of every failing check, by check name, via `gh run view
+/// --log-failed`: the tail of each failed step, so the failing test names
+/// are not lost under a long final step.
 function failed_logs(fb: PrFeedback) -> map<string, string> {
     let logs: map<string, string> = {};
     for (let c in fb.checks) {
@@ -321,12 +405,42 @@ function failed_logs(fb: PrFeedback) -> map<string, string> {
         let log = match (id) {
             null => "(no actions run linked)",
             let i: string => {
-                tail(gh(["run", "view", i, "--repo", repo_slug(), "--log-failed"]).stdout, 120)
+                failed_steps_tail(gh(["run", "view", i, "--repo", repo_slug(), "--log-failed"]).stdout, 80)
             },
         };
         logs.set(c.name, log);
     }
     logs
+}
+
+/// `--log-failed` prints lines as `<job>\t<step>\t<text>`; the last `n`
+/// lines of each step, in order.
+function failed_steps_tail(log: string, n: int) -> string {
+    let steps: string[] = [];
+    let lines: map<string, string[]> = {};
+    for (let l in log.split("\n")) {
+        let cols = l.split("\t");
+        let step = if (cols.length() >= 3) {
+            (cols.at(0) ?? "") + " / " + (cols.at(1) ?? "")
+        } else {
+            ""
+        };
+        if (!steps.includes(step)) {
+            steps.push(step);
+        };
+        lines.set(step, (lines.get(step) ?? []).concat([l]));
+    }
+    steps
+        .map((st: string) -> string {
+            let ls = lines.get(st) ?? [];
+            let keep = if (ls.length() > n) {
+                ls.slice(ls.length() - n, ls.length())
+            } else {
+                ls
+            };
+            keep.join("\n")
+        })
+        .join("\n")
 }
 
 // ==================== What is new since the last round ====================
@@ -338,8 +452,13 @@ class MergeState {
     handled_ids: int[],
 }
 
+/// Outside the run dir, which each round's sandbox wipes.
+function merge_dir(branch: string) -> string {
+    atb2_home() + "/merge/" + branch_dir_name(branch)
+}
+
 function merge_state_path(branch: string) -> string {
-    run_dir_for(branch) + "/merge_state.json"
+    merge_dir(branch) + "/state.json"
 }
 
 function read_merge_state(branch: string) -> MergeState {
@@ -353,7 +472,7 @@ function read_merge_state(branch: string) -> MergeState {
 }
 
 function write_merge_state(branch: string, s: MergeState) -> null {
-    baml.fs.mkdir(run_dir_for(branch), baml.fs.MkdirOptions { recursive: true });
+    baml.fs.mkdir(merge_dir(branch), baml.fs.MkdirOptions { recursive: true });
     baml.fs.write(merge_state_path(branch), baml.json.stringify_pretty(s.to_json()));
     null
 }
@@ -364,7 +483,8 @@ class PrFeedback {
 }
 
 /// Failing checks (only once checks have settled) and reviewer comments
-/// not yet handled. Pure, unit-tested.
+/// not yet handled. Pure, unit-tested. merge_issue only calls it once
+/// checks have settled; the guard here keeps it honest on its own.
 function pending_feedback(snap: PrSnapshot, state: MergeState) -> PrFeedback {
     let who = reviewers();
     //# failing checks, once every check has settled
@@ -428,6 +548,7 @@ function snap(checks: CheckRow[], comments: ReviewComment[]) -> PrSnapshot {
         title: "fix(compiler): x",
         body: "Fixes #1",
         branch: "agent/gh-1-x",
+        head: "abc123",
         cross_repo: false,
         state: "OPEN",
         merged: false,
@@ -545,14 +666,36 @@ testset "merge_issue" {
         assert.contains(p, "fix(compiler): x");
     }
 
-    test "merge state round-trips through the run dir" {
+    test "merge state round-trips outside the run dir" {
         let branch = "agent/test-merge-state-" + baml.id.new();
         assert.equal(read_merge_state(branch).rounds, 0);
         write_merge_state(branch, MergeState { rounds: 2, handled_ids: [5, 6] });
         let s = read_merge_state(branch);
         assert.equal(s.rounds, 2);
         assert.equal(s.handled_ids, [5, 6]);
+        assert.is_true(!merge_state_path(branch).starts_with(run_dir_for(branch)));
+        baml.fs.remove_dir_all(merge_dir(branch));
+    }
+
+    test "a round's outcome is read back and kept per round" {
+        let branch = "agent/test-round-outcome-" + baml.id.new();
+        // no outcome.json: the agent never got as far as writing one
+        assert.equal(round_outcome(branch, 1), "agent_stopped");
+        baml.fs.mkdir(run_dir_for(branch), baml.fs.MkdirOptions { recursive: true });
+        baml.fs.write(run_dir_for(branch) + "/outcome.json", `{"kind":"gate_failed"}`);
+        assert.equal(round_outcome(branch, 2), "gate_failed");
+        assert.is_true(baml.fs.exists(merge_dir(branch) + "/round-2.outcome.json"));
         baml.fs.remove_dir_all(run_dir_for(branch));
+        baml.fs.remove_dir_all(merge_dir(branch));
+    }
+
+    test "the failed log keeps the tail of every failed step" {
+        let log = "build\tcompile\terror A\nbuild\tcompile\terror B\nbuild\ttest\tFAIL x\nbuild\ttest\tline 2\nbuild\ttest\tline 3";
+        let t = failed_steps_tail(log, 2);
+        assert.contains(t, "error A");
+        assert.contains(t, "error B");
+        assert.contains(t, "line 3");
+        assert.is_true(!t.includes("FAIL x"));
     }
 
     test "the review comment says what was addressed and asks CodeRabbit to resolve" {
