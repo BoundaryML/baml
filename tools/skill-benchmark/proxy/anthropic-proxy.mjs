@@ -149,6 +149,8 @@ export function createAnthropicProxy({
       return;
     }
     if (typeof parsed.model !== "string" || !allowedModels.has(parsed.model)) {
+      const model = typeof parsed.model === "string" ? parsed.model : "missing";
+      console.warn(`method=POST path=${url.pathname} model=${model} status=rejected_model`);
       sendJson(response, 400, {
         error: { type: "invalid_request_error", message: "model not allowed" },
       });

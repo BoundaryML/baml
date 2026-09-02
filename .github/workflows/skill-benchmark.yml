@@ -132,7 +132,7 @@ jobs:
         shell: bash
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          SKILL_BENCH_PROXY_ALLOWED_MODELS: claude-opus-5,claude-sonnet-5
+          SKILL_BENCH_PROXY_ALLOWED_MODELS: claude-opus-4-7,claude-sonnet-4-6
           SKILL_BENCH_PROXY_LIFETIME_MS: "2700000"
           SKILL_BENCH_PROXY_MAX_REQUESTS: "200"
         run: |
