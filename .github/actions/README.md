@@ -77,7 +77,7 @@ Sets up the BAML Language Rust toolchain with caching and optional WASM support.
 - name: Setup Rust
   uses: ./.github/actions/setup-rust
   with:
-    toolchain: '1.93.0'                          # Optional, default: '1.93.0'
+    toolchain: '1.98.0'                          # Optional, default: '1.98.0'
     enable-wasm: 'false'                         # Optional, default: 'false'
     targets: 'x86_64-pc-windows-msvc'           # Optional, space-separated targets
     workspace: 'baml_language'                   # Optional, default: 'baml_language'

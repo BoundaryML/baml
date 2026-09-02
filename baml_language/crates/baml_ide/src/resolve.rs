@@ -1172,10 +1172,8 @@ fn operator_target_at(
                     narrower(span, dispatch, *operand, None);
                 }
             }
-            Expr::Index { base, index } => {
-                if !inside(*base) && !inside(*index) {
-                    narrower(span, ops::INDEX_DISPATCH, *base, Some(*index));
-                }
+            Expr::Index { base, index } if !inside(*base) && !inside(*index) => {
+                narrower(span, ops::INDEX_DISPATCH, *base, Some(*index));
             }
             _ => {}
         }
