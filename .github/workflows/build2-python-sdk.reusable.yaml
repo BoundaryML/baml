@@ -100,7 +100,7 @@ jobs:
       # so we want a specific Python (3.10, matching the abi3-py310 target)
       # rather than whatever mise.toml's `python` is pinned to today.
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           # abi3-py310 produces one interpreter-agnostic wheel per platform,
           # so a single Python is enough for the whole 3.10..3.13+ range.

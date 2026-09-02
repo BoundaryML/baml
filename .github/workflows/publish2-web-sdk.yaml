@@ -51,7 +51,7 @@ jobs:
         # This publisher only uses npm. Enabling the repository composite's pnpm
         # cache without installing dependencies makes its post-job cache save fail
         # after a successful publish.
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: latest
           registry-url: "https://registry.npmjs.org"
