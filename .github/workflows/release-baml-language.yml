@@ -108,7 +108,7 @@ jobs:
       wrapper_version: ${{ steps.wrapper.outputs.wrapper_version }}
       wrapper_changed: ${{ steps.wrapper.outputs.wrapper_changed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           fetch-depth: 2
@@ -301,7 +301,7 @@ jobs:
       toolchain: ${{ steps.gen.outputs.toolchain }}
       csharp: ${{ steps.gen.outputs.csharp }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -343,7 +343,7 @@ jobs:
     needs: [plan]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -476,7 +476,7 @@ jobs:
     needs: [plan]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -514,7 +514,7 @@ jobs:
     needs: [plan]
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -808,7 +808,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -1032,7 +1032,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -1139,7 +1139,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -1468,7 +1468,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -1658,7 +1658,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -1819,7 +1819,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-14, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -1949,7 +1949,7 @@ jobs:
     runs-on: macos-14
     environment: infisical-github-baml-language-release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
@@ -2005,7 +2005,7 @@ jobs:
   #   if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v7
   #       with:
   #         ref: ${{ needs.plan.outputs.source_sha }}
   #         persist-credentials: false
@@ -2063,7 +2063,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false

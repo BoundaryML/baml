@@ -86,7 +86,7 @@ jobs:
     outputs:
       include: ${{ steps.gen.outputs.include }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -137,7 +137,7 @@ jobs:
               Add-Content -Path "$env:GITHUB_PATH" -Value "$env:USERPROFILE\.cargo\bin" -Encoding utf8
           }
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false

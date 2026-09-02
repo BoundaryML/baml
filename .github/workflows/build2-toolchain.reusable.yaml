@@ -42,7 +42,7 @@ jobs:
       matrix:
         include: ${{ fromJson(inputs.toolchain_matrix_json) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
