@@ -134,7 +134,7 @@ jobs:
         id: login
         uses: NuGet/login@v1.2.0
         with:
-          user: ${{ vars.NUGET_USER }}
+          user: rossir.paulo
 
       - name: Publish the already-verified package
         if: ${{ steps.existing.outputs.publish == 'true' }}
