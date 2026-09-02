@@ -1,0 +1,401 @@
+name: BAML skill benchmark
+
+on:
+  pull_request:
+    paths:
+      - skills/baml-core/**
+      - tools/skill-benchmark/**
+      - .github/workflows/skill-benchmark.yml
+  push:
+    branches: [canary]
+    paths:
+      - skills/baml-core/**
+      - tools/skill-benchmark/**
+      - .github/workflows/skill-benchmark.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  pull-requests: write
+
+concurrency:
+  group: skill-benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  BENCHMARK_MODEL: opus
+  ATTEMPTS_PER_PROJECT: "3"
+  CLAUDE_CODE_VERSION: 2.1.139
+
+jobs:
+  prepare:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    outputs:
+      skill_revision: ${{ steps.revisions.outputs.skill_revision }}
+      suite_revision: ${{ steps.revisions.outputs.suite_revision }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            baml_language
+            tools/skill-benchmark/shim
+
+      - name: Build BAML CLI and audit shim
+        run: |
+          cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
+          cargo build --manifest-path tools/skill-benchmark/shim/Cargo.toml --release
+          mkdir -p dist/bin dist/shim
+          cp baml_language/target/debug/baml-cli dist/bin/baml-cli
+          cp tools/skill-benchmark/shim/target/release/baml dist/shim/baml
+          cp tools/skill-benchmark/shim/target/release/claude dist/shim/claude
+
+      - id: revisions
+        name: Compute revisions
+        run: |
+          echo "skill_revision=$(git hash-object skills/baml-core/SKILL.md)" >> "$GITHUB_OUTPUT"
+          echo "suite_revision=$(git rev-parse HEAD:tools/skill-benchmark)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: skill-benchmark-tools
+          path: dist
+          retention-days: 1
+
+  attempt:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: prepare
+    name: skill benchmark / ${{ matrix.project.name }} / attempt ${{ matrix.attempt }}
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - id: chess-perft
+            name: Chess perft
+          - id: ere
+            name: POSIX ERE
+          - id: jmespath
+            name: JMESPath
+        attempt: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: infisical/secrets-action@v1.0.9
+        with:
+          method: oidc
+          identity-id: 5b66a909-d5b3-4835-b518-27abf4c9b97d
+          env-slug: test
+          project-slug: gloo-infra-9-fkp
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install Claude Code
+        run: npm install --global "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: skill-benchmark-tools
+          path: dist
+
+      - id: paths
+        name: Prepare isolated workspace
+        shell: bash
+        run: |
+          chmod +x dist/bin/baml-cli dist/shim/baml dist/shim/claude
+          workspace="$RUNNER_TEMP/${{ matrix.project.id }}-${{ matrix.attempt }}"
+          run_dir="$RUNNER_TEMP/run-${{ matrix.project.id }}-${{ matrix.attempt }}"
+          mkdir -p "$workspace" "$workspace/.claude/skills/baml-core" "$run_dir/audit"
+          cp -R "tools/skill-benchmark/benchmarks/${{ matrix.project.id }}/." "$workspace/"
+          cp skills/baml-core/SKILL.md "$workspace/.claude/skills/baml-core/SKILL.md"
+          echo "workspace=$workspace" >> "$GITHUB_OUTPUT"
+          echo "run_dir=$run_dir" >> "$GITHUB_OUTPUT"
+          echo "real_baml=$GITHUB_WORKSPACE/dist/bin/baml-cli" >> "$GITHUB_OUTPUT"
+          echo "real_claude=$(command -v claude)" >> "$GITHUB_OUTPUT"
+          echo "$GITHUB_WORKSPACE/dist/shim" >> "$GITHUB_PATH"
+
+      - id: agent
+        name: Run implementation agent
+        continue-on-error: true
+        env:
+          SKILL_BENCH_REAL_BAML: ${{ steps.paths.outputs.real_baml }}
+          SKILL_BENCH_BAML_AUDIT_DIR: ${{ steps.paths.outputs.run_dir }}/audit
+          SKILL_BENCH_RUN_ID: ${{ matrix.project.id }}-head-${{ matrix.attempt }}
+          SKILL_BENCH_REAL_CLAUDE: ${{ steps.paths.outputs.real_claude }}
+          SKILL_BENCH_CLAUDE_LOG: ${{ steps.paths.outputs.run_dir }}/agent-events.jsonl
+          SKILL_BENCH_CLAUDE_STDERR_LOG: ${{ steps.paths.outputs.run_dir }}/claude.stderr.log
+        shell: bash
+        run: |
+          set +e
+          "${{ steps.paths.outputs.real_baml }}" run run_agent \
+            --project tools/skill-benchmark \
+            --output-format json \
+            --log off \
+            -- \
+            --workspace "${{ steps.paths.outputs.workspace }}" \
+            --claude_executable "$GITHUB_WORKSPACE/dist/shim/claude" \
+            --model "$BENCHMARK_MODEL" \
+            --timeout_ms 1800000 \
+            > "${{ steps.paths.outputs.run_dir }}/agent-completion.json" \
+            2> >(tee "${{ steps.paths.outputs.run_dir }}/harness.stderr.log" >&2)
+          exit_code=$?
+          set -e
+          echo "$exit_code" > "${{ steps.paths.outputs.run_dir }}/agent-exit-code.txt"
+          if grep -qi "timed out\|timeout" "${{ steps.paths.outputs.run_dir }}/harness.stderr.log"; then
+            echo "timed_out=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "timed_out=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit "$exit_code"
+
+      - name: Restore protected benchmark inputs
+        shell: bash
+        run: |
+          source_dir="tools/skill-benchmark/benchmarks/${{ matrix.project.id }}"
+          workspace="${{ steps.paths.outputs.workspace }}"
+          for path in baml.toml AGENTS.md README.md SPEC.md THIRD_PARTY_NOTICES.md testdata third_party; do
+            if [ -e "$source_dir/$path" ]; then
+              rm -rf "$workspace/$path"
+              cp -R "$source_dir/$path" "$workspace/$path"
+            fi
+          done
+          for test_file in public_tests.baml corpus_tests.baml; do
+            if [ -e "$source_dir/baml_src/$test_file" ]; then
+              mkdir -p "$workspace/baml_src"
+              cp "$source_dir/baml_src/$test_file" "$workspace/baml_src/$test_file"
+            fi
+          done
+
+      - id: verify
+        name: Run final verification
+        shell: bash
+        run: |
+          set +e
+          "${{ steps.paths.outputs.real_baml }}" test \
+            --project "${{ steps.paths.outputs.workspace }}" \
+            > "${{ steps.paths.outputs.run_dir }}/verification.log" 2>&1
+          exit_code=$?
+          set -e
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          cat "${{ steps.paths.outputs.run_dir }}/verification.log"
+
+      - id: loc
+        name: Count implementation LOC
+        shell: bash
+        run: |
+          loc=$(find "${{ steps.paths.outputs.workspace }}/baml_src" -type f -name '*.baml' \
+            ! -name public_tests.baml ! -name corpus_tests.baml -print0 \
+            | xargs -0 awk 'END { print NR + 0 }')
+          echo "value=$loc" >> "$GITHUB_OUTPUT"
+
+      - name: Build attempt report
+        shell: bash
+        run: |
+          report_path="${{ steps.paths.outputs.run_dir }}/${{ matrix.project.id }}-head-${{ matrix.attempt }}.json"
+          "${{ steps.paths.outputs.real_baml }}" run build_attempt_report \
+            --project tools/skill-benchmark \
+            --output-format json \
+            --log off \
+            -- \
+            --attempt_id "${{ matrix.project.id }}-head-${{ matrix.attempt }}" \
+            --project_id "${{ matrix.project.id }}" \
+            --project_name "${{ matrix.project.name }}" \
+            --attempt "${{ matrix.attempt }}" \
+            --revision Head \
+            --model "$BENCHMARK_MODEL" \
+            --skill_revision "${{ needs.prepare.outputs.skill_revision }}" \
+            --audit_root "${{ steps.paths.outputs.run_dir }}/audit" \
+            --claude_events_path "${{ steps.paths.outputs.run_dir }}/agent-events.jsonl" \
+            --workspace "${{ steps.paths.outputs.workspace }}" \
+            --claude_executable "${{ steps.paths.outputs.real_claude }}" \
+            --implementation_loc "${{ steps.loc.outputs.value }}" \
+            --agent_timed_out "${{ steps.agent.outputs.timed_out || 'false' }}" \
+            --verification_exit_code "${{ steps.verify.outputs.exit_code }}" \
+            --output_path "$report_path"
+
+      - id: raw
+        name: Upload raw run data
+        uses: actions/upload-artifact@v7
+        with:
+          name: skill-benchmark-raw-${{ matrix.project.id }}-${{ matrix.attempt }}
+          path: |
+            ${{ steps.paths.outputs.run_dir }}
+            ${{ steps.paths.outputs.workspace }}
+          retention-days: 90
+
+      - name: Attach artifact links
+        shell: bash
+        run: |
+          "${{ steps.paths.outputs.real_baml }}" run attach_attempt_artifact \
+            --project tools/skill-benchmark \
+            --output-format json \
+            --log off \
+            -- \
+            --report_path "${{ steps.paths.outputs.run_dir }}/${{ matrix.project.id }}-head-${{ matrix.attempt }}.json" \
+            --artifact_url "${{ steps.raw.outputs.artifact-url }}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: skill-benchmark-attempt-${{ matrix.project.id }}-${{ matrix.attempt }}
+          path: ${{ steps.paths.outputs.run_dir }}/${{ matrix.project.id }}-head-${{ matrix.attempt }}.json
+          retention-days: 90
+
+      - name: Publish indexed agent log
+        if: always()
+        shell: bash
+        run: |
+          echo "SKILL_BENCH_INDEX_BEGIN"
+          if [ -f "${{ steps.paths.outputs.run_dir }}/agent-events.jsonl" ]; then
+            awk '{ printf "SKILL_BENCH_EVENT_%06d %s\n", NR, $0 }' \
+              "${{ steps.paths.outputs.run_dir }}/agent-events.jsonl"
+          fi
+          echo "SKILL_BENCH_INDEX_END"
+
+  report:
+    if: always() && needs.prepare.result == 'success'
+    needs: [prepare, attempt]
+    name: skill benchmark report
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: skill-benchmark-tools
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: skill-benchmark-attempt-*
+          path: attempt-reports
+          merge-multiple: true
+
+      - name: Prepare report tools
+        run: chmod +x dist/bin/baml-cli
+
+      - id: baseline
+        name: Download latest canary baseline
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BASELINE_ARCHIVE: ${{ runner.temp }}/baseline.zip
+        run: node tools/skill-benchmark/scripts/download-baseline.mjs
+
+      - name: Extract canary baseline
+        if: steps.baseline.outputs.found == 'true'
+        run: |
+          mkdir -p baseline
+          unzip -q "${{ runner.temp }}/baseline.zip" -d baseline
+
+      - name: Build head manifest
+        run: |
+          generated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          dist/bin/baml-cli run build_manifest \
+            --project tools/skill-benchmark \
+            --output-format json \
+            --log off \
+            -- \
+            --reports_directory attempt-reports \
+            --generated_at "$generated_at" \
+            --skill_revision "${{ needs.prepare.outputs.skill_revision }}" \
+            --suite_revision "${{ needs.prepare.outputs.suite_revision }}" \
+            --model "$BENCHMARK_MODEL" \
+            --attempts_per_project "$ATTEMPTS_PER_PROJECT" \
+            --output_path "$RUNNER_TEMP/head-manifest.json"
+
+      - name: Compare with baseline
+        shell: bash
+        run: |
+          args=(
+            --project tools/skill-benchmark
+            --output-format json
+            --log off
+            --
+            --head_manifest_path "$RUNNER_TEMP/head-manifest.json"
+            --output_path "$RUNNER_TEMP/benchmark-report.json"
+          )
+          if [ -f baseline/head-manifest.json ]; then
+            args+=(--baseline_manifest_path "$GITHUB_WORKSPACE/baseline/head-manifest.json")
+          fi
+          dist/bin/baml-cli run generate_benchmark_report "${args[@]}"
+
+      - name: Build agent log links
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ATTEMPT_REPORTS_DIRECTORY: ${{ github.workspace }}/attempt-reports
+          REPORT_LINKS_PATH: ${{ runner.temp }}/report-links.json
+        run: node tools/skill-benchmark/scripts/build-links.mjs
+
+      - name: Render PR report
+        run: |
+          dist/bin/baml-cli run render_report_file \
+            --project tools/skill-benchmark \
+            --output-format json \
+            --log off \
+            -- \
+            --report_path "$RUNNER_TEMP/benchmark-report.json" \
+            --links_path "$RUNNER_TEMP/report-links.json" \
+            --output_path "$RUNNER_TEMP/report.md"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: skill-benchmark-report
+          path: |
+            ${{ runner.temp }}/head-manifest.json
+            ${{ runner.temp }}/benchmark-report.json
+            ${{ runner.temp }}/report-links.json
+            ${{ runner.temp }}/report.md
+          retention-days: 90
+
+      - name: Publish canary baseline
+        if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
+        uses: actions/upload-artifact@v7
+        with:
+          name: skill-benchmark-baseline
+          path: ${{ runner.temp }}/head-manifest.json
+          retention-days: 90
+
+      - name: Update PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          REPORT_PATH: ${{ runner.temp }}/report.md
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- baml-skill-benchmark -->';
+            const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const previous = comments.find(
+              comment => comment.user.type === 'Bot' && comment.body.includes(marker),
+            );
+            if (previous) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: previous.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
