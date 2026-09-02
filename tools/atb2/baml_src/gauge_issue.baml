@@ -67,9 +67,11 @@ function format_repros(repros: Repro[]) -> string {
 /// Record the difficulty on an issue. Idempotent: an issue that already
 /// has one keeps it.
 function gauge_issue(issue: Issue) -> Issue {
+    //# keep an existing difficulty
     if (issue.difficulty != null) {
         return issue;
     };
+    //# estimate from the ticket (LLM, Opus)
     let estimate = estimate_difficulty(issue);
     log.info(
         {
@@ -79,6 +81,7 @@ function gauge_issue(issue: Issue) -> Issue {
             "unknowns": estimate.unknowns,
         },
     );
+    //# record it on the issue
     with_difficulty(issue, estimate.difficulty)
 }
 

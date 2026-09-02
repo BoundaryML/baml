@@ -8,13 +8,18 @@ client Triage = claude_code.ClaudeCodeClient.new(model = "sonnet", timeout_ms = 
 // ==================== Pipeline ====================
 
 function create_issue(fb: Feedback) -> Issue? {
+    //# 1. distill the feedback into a minimal repro (LLM)
     let repro = create_repro(fb);
+    //# 2. run the repro in-process against this toolchain
     let run = run_repro(repro);
     log.info({ "feedback": fb.id, "verdict": run.verdict.to_string(), "observed": run.observed });
+    //# already fixed on this toolchain: stop, no ticket
     if (run.verdict == Verdict.Fixed) {
         return null;
     };
+    //# 3. write the ticket + more repros (LLM)
     let draft = write_issue(fb, repro, run);
+    //# assemble the issue
     Issue {
         id: "ISSUE-" + baml.id.new(),
         title: draft.title,
@@ -224,10 +229,13 @@ function repro_main_output(pkg: reflect.Package) -> string {
 
 /// Run a repro against the toolchain executing this program.
 function run_repro(repro: Repro) -> ReproRun {
+    //# compile the repro, unless something rules the check out
     let attempt = attempt_repro(repro);
+    //# blocked: inspection needed / uncovered command / no compiler
     if (attempt.blocked != null) {
         return ReproRun { verdict: Verdict.Inconclusive, observed: attempt.blocked ?? "" };
     };
+    //# compare the outcome with the expectation
     match (repro.expectation) {
         let e: ShouldCompile => match (attempt.error) {
             null => ReproRun { verdict: Verdict.Fixed, observed: "compiles cleanly" },
@@ -397,6 +405,11 @@ class ReferenceIssue {
     repros: Repro[],
     /// How much work the fix is, as a maintainer would gauge it.
     difficulty: Difficulty,
+    /// handle_issue eval: seconds the agent gets to land a fix (Easy 1800,
+    /// Medium 3600); null for Hard issues.
+    time_budget_s: int?,
+    /// Hard only: the reference suggested fix + design doc.
+    design_doc: string?,
 }
 
 /// A row of triage_issues.
@@ -487,7 +500,9 @@ function load_feedback() -> FeedbackRow[] {
 /// Fraction of `keywords` present in `ours` (case-insensitive; "baml-cli"
 /// and "baml" name the same binary). 0.0 when there are no keywords.
 function keyword_recall(ours: string, keywords: string[]) -> float {
+    //# normalise: lowercase, one spelling of the cli
     let hay = ours.to_lower_case().replace("baml-cli ", "baml ");
+    //# count the keywords present
     let hit = keywords.filter((k: string) -> bool {
         hay.includes(k.to_lower_case().replace("baml-cli ", "baml "))
     });
