@@ -286,7 +286,7 @@ jobs:
   #   runs-on: blacksmith-6vcpu-macos-latest
   #   timeout-minutes: 35
   #   steps:
-  #     - uses: actions/checkout@v6
+  #     - uses: actions/checkout@v7
   #       with:
   #         persist-credentials: false
 
@@ -387,7 +387,7 @@ jobs:
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -507,7 +507,7 @@ jobs:
     steps:
       - name: "Build matrix"
         id: matrix
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const baseMatrix = [
@@ -843,12 +843,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: sdk-test-matrix
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: "Assert every SDK directory has a matrix entry"
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           MATRIX_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.sdk-dirs }}
           TEMPORARILY_DISABLED_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.temporarily-disabled-sdk-dirs }}
@@ -921,7 +921,7 @@ jobs:
       EnableSourceLink: "false"
       IncludeSourceRevisionInInformationalVersion: "false"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -987,7 +987,7 @@ jobs:
       # under `if: always()`.
       - name: "Restore C# build cache"
         if: matrix.sdk-label == 'csharp'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.nuget/packages
@@ -1166,7 +1166,7 @@ jobs:
       # collides with an existing entry.
       - name: "Save C# build cache"
         if: always() && matrix.sdk-label == 'csharp'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: |
             ~/.nuget/packages
@@ -1615,7 +1615,7 @@ jobs:
       - snapshot-tests
     steps:
       - name: "Merge cargo timings artifacts"
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v7
         with:
           name: cargo-timings
           pattern: cargo-timings-*
@@ -1634,7 +1634,7 @@ jobs:
       - snapshot-tests
     steps:
       - name: "Merge sccache stats artifacts"
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v7
         with:
           name: sccache-stats
           pattern: sccache-stats-*
