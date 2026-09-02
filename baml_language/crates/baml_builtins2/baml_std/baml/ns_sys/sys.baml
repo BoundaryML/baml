@@ -12,6 +12,21 @@ class ProcessOptions {
     /// Where the child's stderr goes. `null` means `StderrMode.Inherit`, and
     /// only `StderrMode.Pipe` populates `Process.stderr`.
     stderr: StderrMode?,
+    /// Start the child in its own session/process group so it can survive
+    /// parent exit and terminal close.
+    ///
+    /// Unix calls `setsid()` in the child before exec; Windows spawns with
+    /// `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`.
+    ///
+    /// Only `start_process` accepts this option. `exec` and `shell` reject
+    /// `detached: true` with `baml.errors.InvalidArgument` because they buffer
+    /// output until the child exits. Combining it with `timeout_ms` is also
+    /// invalid because timeout enforcement is owned by the parent runtime.
+    ///
+    /// `start_process` still returns caller-owned stdin/stdout pipes (and an
+    /// optional stderr pipe). Those pipes disappear with the parent, so close
+    /// them when the child must be fully independent.
+    detached: bool?,
 }
 
 /// Where a child process's standard error goes.
@@ -183,11 +198,13 @@ class WritePipe {
 }
 
 /// Runs `program` with the given `args` and returns its output. Throws on I/O failure or timeout.
+///
+/// Throws `baml.errors.InvalidArgument` when `options.detached` is `true`.
 function exec(
     program: string,
     args: string[]?,
     options: ProcessOptions?,
-) -> ShellOutput throws root.errors.Io | root.errors.Timeout {
+) -> ShellOutput throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
     $rust_io_function
 }
 
@@ -197,19 +214,27 @@ function exec(
 /// `process.stdout` suspends only the current BAML green thread. If
 /// `ProcessOptions.stdin` is set, this call writes that input and waits for the
 /// child to consume it, bounded by `ProcessOptions.timeout_ms`.
+///
+/// Throws `baml.errors.InvalidArgument` when `options.detached` is combined
+/// with `timeout_ms`.
+///
+/// Throws `baml.errors.Unsupported` when `options.detached` is requested on a
+/// platform that cannot create detached processes.
 function start_process(
     program: string,
     args: string[]?,
     options: ProcessOptions?,
-) -> Process throws root.errors.Io {
+) -> Process throws root.errors.Io | root.errors.InvalidArgument | root.errors.Unsupported {
     $rust_io_function
 }
 
 /// Runs a shell `command` string (passed to `/bin/sh -c`) and returns its output.
+///
+/// Throws `baml.errors.InvalidArgument` when `options.detached` is `true`.
 function shell(
     command: string,
     options: ProcessOptions?,
-) -> ShellOutput throws root.errors.Io | root.errors.Timeout {
+) -> ShellOutput throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
     $rust_io_function
 }
 

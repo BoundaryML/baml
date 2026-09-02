@@ -6920,7 +6920,8 @@ function ai.mcp.McpConnection.connect(name: string, command: string, args: strin
     load_var timeout_ms
     load_const null
     load_const null
-    init_instance baml.sys.ProcessOptions .cwd, .env, .timeout_ms, .stdin, .stderr
+    load_const null
+    init_instance baml.sys.ProcessOptions .cwd, .env, .timeout_ms, .stdin, .stderr, .detached
     sys_op baml.sys.start_process
     store_var p
     jump L1
@@ -6930,7 +6931,7 @@ function ai.mcp.McpConnection.connect(name: string, command: string, args: strin
     load_var name
     call baml.String.from
     store_var _11
-    load_type baml.errors.Io
+    load_type baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Unsupported
     load_var e
     call baml.String.from
     store_var _15

@@ -260,7 +260,7 @@ async fn exec_with_timeout() {
 async fn start_process_yields_stdout_before_exit() {
     let output = baml_test!(
         r#"
-            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument | baml.errors.Unsupported {
                 let process = baml.sys.start_process(
                     "sh",
                     ["-c", "printf 'first\n'; while :; do :; done"],
@@ -287,7 +287,7 @@ async fn start_process_yields_stdout_before_exit() {
 async fn start_process_iterates_lines_and_final_unterminated_line() {
     let output = baml_test!(
         r#"
-            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument | baml.errors.Unsupported {
                 let process = baml.sys.start_process(
                     "sh",
                     ["-c", "printf 'one\ntwo'"],
@@ -316,7 +316,7 @@ async fn start_process_iterates_lines_and_final_unterminated_line() {
 async fn start_process_reads_complete_stdout_as_text() {
     let output = baml_test!(
         r#"
-            function main() -> string throws baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout {
+            function main() -> string throws baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.InvalidArgument | baml.errors.Unsupported {
                 let process = baml.sys.start_process(
                     "sh",
                     ["-c", "printf 'hello'"],
@@ -345,7 +345,7 @@ async fn start_process_reads_complete_stdout_as_text() {
 async fn start_process_supports_incremental_stdin() {
     let output = baml_test!(
         r#"
-            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument | baml.errors.Unsupported {
                 let process = baml.sys.start_process("cat", [], null);
                 defer { process.close() }
 
@@ -631,6 +631,126 @@ async fn start_process_stderr_modes_without_pipe() {
                     discarded.stderr == null &&
                     inherited.wait().ok() &&
                     discarded.wait().ok()
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+// === ProcessOptions.detached tests ===
+
+#[tokio::test]
+#[cfg(target_os = "linux")]
+async fn start_process_detached_new_session() {
+    let output = baml_test!(
+        r#"
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument | baml.errors.Unsupported {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "echo \"$$ $(cut -d' ' -f6 /proc/$$/stat)\"; exec sleep 30"],
+                    baml.sys.ProcessOptions { detached: true },
+                );
+                defer { process.close() }
+
+                match (process.stdout.lines().next()) {
+                    let line: string => line,
+                    baml.iter.Done => "",
+                }
+            }
+        "#
+    );
+
+    let Ok(BexExternalValue::String(line)) = &output.result else {
+        panic!(
+            "expected detached child pid/session line, got {:?}",
+            output.result
+        );
+    };
+    let mut fields = line.split_whitespace();
+    let pid: i64 = fields
+        .next()
+        .expect("child pid")
+        .parse()
+        .expect("pid is int");
+    let sid: i64 = fields
+        .next()
+        .expect("child session id")
+        .parse()
+        .expect("session is int");
+    assert_eq!(pid, sid, "detached child should lead its own session");
+
+    let self_stat = std::fs::read_to_string("/proc/self/stat").expect("read /proc/self/stat");
+    let after_comm = self_stat.rsplit_once(')').expect("comm close paren").1;
+    let self_sid: i64 = after_comm
+        .split_whitespace()
+        .nth(3)
+        .expect("session field")
+        .parse()
+        .expect("session is int");
+    assert_ne!(
+        sid, self_sid,
+        "detached child should not share the parent's session"
+    );
+}
+
+#[tokio::test]
+#[cfg(target_os = "windows")]
+async fn start_process_detached_handle_is_usable() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument | baml.errors.Unsupported {
+                let process = baml.sys.start_process(
+                    "ping",
+                    ["-n", "31", "127.0.0.1"],
+                    baml.sys.ProcessOptions { detached: true },
+                );
+                defer { process.close() }
+
+                process.kill();
+                !process.wait().ok()
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn start_process_detached_with_timeout_throws_invalid_argument() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool {
+                baml.sys.start_process(
+                    "sleep",
+                    ["30"],
+                    baml.sys.ProcessOptions { detached: true, timeout_ms: 1000 },
+                ) catch (e) {
+                    let err: baml.errors.InvalidArgument => { return true; },
+                    _ => { return false; },
+                };
+                false
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn exec_and_shell_reject_detached() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool {
+                baml.sys.exec("sleep", ["30"], baml.sys.ProcessOptions { detached: true }) catch (e) {
+                    let err: baml.errors.InvalidArgument => { },
+                    _ => { return false; },
+                };
+                baml.sys.shell("sleep 30", baml.sys.ProcessOptions { detached: true }) catch (e) {
+                    let err: baml.errors.InvalidArgument => { return true; },
+                    _ => { return false; },
+                };
+                false
             }
         "#
     );

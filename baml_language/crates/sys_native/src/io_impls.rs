@@ -1577,6 +1577,40 @@ impl io::IoClassSysProcess for NativeSysOps {
     }
 }
 
+#[cfg(unix)]
+#[allow(unsafe_code, clippy::unnecessary_wraps)]
+fn apply_detached_spawn_options(cmd: &mut tokio::process::Command) -> Result<(), VmRustFnError> {
+    // SAFETY: `setsid` takes no pointers and is async-signal-safe, so it may
+    // run in the forked child before exec.
+    unsafe {
+        cmd.pre_exec(|| {
+            if libc::setsid() == -1 {
+                Err(std::io::Error::last_os_error())
+            } else {
+                Ok(())
+            }
+        });
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+#[allow(clippy::unnecessary_wraps)]
+fn apply_detached_spawn_options(cmd: &mut tokio::process::Command) -> Result<(), VmRustFnError> {
+    use windows_sys::Win32::System::Threading::{CREATE_NEW_PROCESS_GROUP, DETACHED_PROCESS};
+
+    cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+    Ok(())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn apply_detached_spawn_options(_cmd: &mut tokio::process::Command) -> Result<(), VmRustFnError> {
+    Err(VmBamlError::Unsupported {
+        message: "ProcessOptions.detached is not supported on this platform".to_string(),
+    }
+    .into())
+}
+
 /// Shared helper: apply `ProcessOptions` to a `tokio::process::Command`, run
 /// it, and collect its output. Both `exec()` and `shell()` use this.
 async fn run_process(
@@ -1589,6 +1623,14 @@ async fn run_process(
     use tokio::io::AsyncWriteExt as _;
 
     if let Some(ref opts) = options {
+        if opts.detached == Some(true) {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!(
+                    "ProcessOptions.detached is not supported by exec/shell ('{label}'); use start_process"
+                ),
+            }
+            .into());
+        }
         if let Some(ref cwd) = opts.cwd {
             cmd.current_dir(cwd);
         }
@@ -1710,6 +1752,23 @@ impl io::IoNamespaceSys for NativeSysOps {
             if let Some(ref args) = args {
                 cmd.args(args);
             }
+            let detached = options
+                .as_ref()
+                .and_then(|options| options.detached)
+                .unwrap_or(false);
+            if detached
+                && options
+                    .as_ref()
+                    .and_then(|options| options.timeout_ms)
+                    .is_some()
+            {
+                return Err(VmBamlError::InvalidArgument {
+                    message: format!(
+                        "ProcessOptions.detached cannot be combined with timeout_ms ('{program}')"
+                    ),
+                }
+                .into());
+            }
             if let Some(ref options) = options {
                 if let Some(ref cwd) = options.cwd {
                     cmd.current_dir(cwd);
@@ -1722,13 +1781,16 @@ impl io::IoNamespaceSys for NativeSysOps {
                     );
                 }
             }
+            if detached {
+                apply_detached_spawn_options(&mut cmd)?;
+            }
 
             let (stderr_stdio, stderr_piped) =
                 stderr_stdio(options.as_ref().and_then(|options| options.stderr.as_ref()))?;
             cmd.stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(stderr_stdio)
-                .kill_on_drop(true);
+                .kill_on_drop(!detached);
 
             let mut child = cmd.spawn().map_err(|error| VmBamlError::Io {
                 message: format!("Failed to spawn '{program}': {error}"),
@@ -1762,9 +1824,19 @@ impl io::IoNamespaceSys for NativeSysOps {
             let (exit_tx, exit_rx) = tokio::sync::watch::channel(None);
             let monitor_label = program.clone();
             tokio::spawn(async move {
+                let kill_requested = async {
+                    loop {
+                        match kill_rx.changed().await {
+                            Ok(()) if *kill_rx.borrow() => return,
+                            Ok(()) => {}
+                            Err(_) if detached => std::future::pending::<()>().await,
+                            Err(_) => return,
+                        }
+                    }
+                };
                 let exit = tokio::select! {
                     biased;
-                    _ = kill_rx.changed() => {
+                    _ = kill_requested => {
                         let _ = child.start_kill();
                         child.wait().await
                     }

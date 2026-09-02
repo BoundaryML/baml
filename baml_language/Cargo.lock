@@ -6973,6 +6973,7 @@ dependencies = [
  "hyper-util",
  "indexmap",
  "jiff",
+ "libc",
  "num-bigint",
  "once_cell",
  "prost",
@@ -6989,6 +6990,7 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "walkdir",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
