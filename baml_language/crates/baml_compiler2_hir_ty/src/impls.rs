@@ -92,8 +92,7 @@ fn subject_head_is_implementor(db: &dyn baml_compiler2_ppir::Db, ty: &baml_type:
 /// One impl's resolution-relevant facts, normalized to the free shape.
 ///
 /// Declaration-side data in the CLOSED interned vocabulary
-/// ([`ClosedTy`](baml_type::interned::ClosedTy) /
-/// [`ClosedInterface`](baml_type::interned::ClosedInterface)): lowering
+/// ([`ClosedTy`] / [`ClosedInterface`]): lowering
 /// rejects holes and never sees inference, so these values provably carry
 /// no inference variables — and saying so in the type serves both sides.
 /// The MATCHER, which is the hot consumer and speaks interned, reads them
@@ -161,9 +160,9 @@ pub enum ImplHeaderResolution<'db> {
     },
     /// The header resolves, but its written for-target is not an implementor
     /// (E0138): a union — `T?` included — a literal, a function type, or a
-    /// path naming an alias or an interface. Decided SYNTACTICALLY at
-    /// lowering ([`crate::lower::LowerCtx::written_subject_is_implementor`]),
-    /// so no fact context is consulted and this query cannot re-enter the
+    /// path naming an alias or an interface. Decided on the LOWERED
+    /// subject's alias-expanded head (`subject_head_is_implementor`); no
+    /// fact context is consulted, so this query cannot re-enter the
     /// resolver.
     ///
     /// The facts are deliberately NOT constructed, for the same reason
@@ -1052,7 +1051,7 @@ pub fn direct_requires_closure_plain(
 
 /// Takes the goal PLAIN: enumeration is keyed and memoized on the plain
 /// form, so that is what this actually operates on. Engine callers holding
-/// an interned goal close it themselves ([`ClosedTy`](baml_type::interned::ClosedTy)),
+/// an interned goal close it themselves ([`ClosedTy`]),
 /// which is the point - an open goal has no impls, and the disposition for
 /// one belongs to the caller that knows why its type is still open. Callers
 /// already holding a plain type (the MIR/IDE surfaces) pay nothing.

@@ -133,6 +133,7 @@ def format_failure(failure: Failure) -> str:
 
 
 def main() -> int:
+    """Notify Slack of the current release result."""
     try:
         repository = required_env("GITHUB_REPOSITORY")
         run_id = required_env("GITHUB_RUN_ID")
@@ -146,9 +147,6 @@ def main() -> int:
         release_succeeded = os.environ.get("RELEASE_SUCCEEDED") == "true"
         started_at = get_run_started_at(repository, run_id, run_attempt, github_token)
         failures = find_failures(repository, run_id, run_attempt, github_token)
-        if release_succeeded and not failures and channel != "canary":
-            print(f"Successful {channel} release; skipping Slack notification.")
-            return 0
 
         run_url = (
             f"https://github.com/{repository}/actions/runs/{run_id}"

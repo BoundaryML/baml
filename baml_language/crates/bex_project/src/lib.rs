@@ -16,6 +16,8 @@ pub use bex::{Bex, BexCallTraceResult};
 // playground runtimes): the blessed seam stays this crate rather than a
 // direct `bex_engine`/`bex_vm_types` dependency.
 pub use bex_engine::BexCallResult;
+#[cfg(target_arch = "wasm32")]
+pub use bex_engine::configure_workerd_runtime;
 pub use bex_engine::{
     BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
     InboundUnionAmbiguityPolicy, UnhandledSpawnError, UnhandledSpawnErrorHandler,

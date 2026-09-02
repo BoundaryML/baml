@@ -72,32 +72,6 @@ fn type_admits_null(ty: &Ty) -> bool {
     }
 }
 
-/// The function type at a callback root: `ty` itself, or the sole non-null
-/// member of an optional callback — `((v: int) -> int)?` lowers to
-/// `(...) | null`.
-///
-/// This mirrors the elaboration road in `baml_compiler2_hir::signature`,
-/// which opens exactly those two shapes to a synthetic effect param. It is
-/// also the shape a lambda argument can inhabit: a lambda literal is never
-/// `null`, so the function arm is the only expectation it can satisfy.
-fn callback_root_fn(ty: &Ty) -> Option<&Ty> {
-    match ty.kind() {
-        InferTy::Function { .. } => Some(ty),
-        InferTy::Union(members, _) => {
-            let mut callback = None;
-            for member in members {
-                match member.kind() {
-                    InferTy::Null { .. } => {}
-                    InferTy::Function { .. } if callback.is_none() => callback = Some(member),
-                    _ => return None,
-                }
-            }
-            callback
-        }
-        _ => None,
-    }
-}
-
 /// The implicit `baml.spawn.SpawnParams<V, E>` a spawn's `with` chain
 /// threads (BEP-034).
 fn spawn_params_ty(value: Ty, error: Ty) -> Ty {
@@ -2229,7 +2203,7 @@ impl<'db> InferenceContext<'db> {
                     arg: expr,
                     expected: expected.clone(),
                 });
-                self.record_function_adapter(expr, &ty, expected);
+                self.record_checked_function_adapter(expr, &ty, expected);
             } else {
                 self.result
                     .type_mismatches
@@ -2255,7 +2229,7 @@ impl<'db> InferenceContext<'db> {
                 self.provisional_checks
                     .push((expr, expected.clone(), ty.clone()));
             }
-            self.record_function_adapter(expr, &ty, expected);
+            self.record_checked_function_adapter(expr, &ty, expected);
         }
         ty
     }
@@ -2278,8 +2252,141 @@ impl<'db> InferenceContext<'db> {
     /// recording sites. Fires only on an ACCEPTED check whose value and
     /// expectation are both function-shaped but runtime-incompatible
     /// (TIR's `function_coercion_for`): lowering must synthesize an
-    /// adapter closure. Read-only on inference state (no var forcing -
-    /// alias expansion only), so recording cannot perturb typing.
+    /// adapter closure. Target selection runs only after the subtype check
+    /// succeeds and uses the actual function to disambiguate union arms.
+    fn record_checked_function_adapter(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
+        let Some(adapter_expected) = self.function_adapter_target(got, expected) else {
+            return;
+        };
+        self.record_function_adapter(expr, got, &adapter_expected);
+    }
+
+    /// The concrete target an accepted function value must implement at
+    /// runtime. Direct function expectations are already unambiguous. For a
+    /// union, select only a single concrete function arm that the actual
+    /// function semantically satisfies; erased or competing arms must not make
+    /// adapter lowering guess.
+    fn function_adapter_target(&mut self, actual: &Ty, expected: &Ty) -> Option<Ty> {
+        let actual = self.table.resolve_completely(actual);
+        let actual = self.expand_alias_ty(&actual);
+        if !matches!(actual.kind(), InferTy::Function { .. }) {
+            return None;
+        }
+
+        let expected = self.table.resolve_completely(expected);
+        let expected = self.expand_alias_ty(&expected);
+        match expected.kind() {
+            InferTy::Function { .. } => Some(expected),
+            InferTy::Union(..) => {
+                fn collect(
+                    this: &mut InferenceContext<'_>,
+                    actual: &Ty,
+                    ty: &Ty,
+                    compatible: &mut Vec<Ty>,
+                    fuel: u8,
+                ) -> bool {
+                    if fuel == 0 {
+                        return false;
+                    }
+                    let candidate = this.expand_alias_ty(ty);
+                    match candidate.kind() {
+                        InferTy::Function { .. } => {
+                            if this.function_adapter_candidate_compatible(actual, &candidate) {
+                                compatible.push(candidate);
+                            }
+                            true
+                        }
+                        InferTy::Union(members, _) => {
+                            let members = members.to_vec();
+                            members.iter().all(|member| {
+                                collect(this, actual, member, compatible, fuel.saturating_sub(1))
+                            })
+                        }
+                        InferTy::TypeAlias(..) => false,
+                        _ => true,
+                    }
+                }
+
+                let mut compatible = Vec::new();
+                if !collect(self, &actual, &expected, &mut compatible, 16) {
+                    return None;
+                }
+                let [target] = compatible.as_slice() else {
+                    return None;
+                };
+                Some(target.clone())
+            }
+            _ => None,
+        }
+    }
+
+    /// Tests a union's function arm without committing any additional
+    /// inference. Ground pairs can use the semantic oracle directly. An
+    /// accepted generic function may still carry inference variables here,
+    /// so probe the ordinary subtype relation under a table snapshot and
+    /// discard any deferred work or obligations created by the probe.
+    fn function_adapter_candidate_compatible(&mut self, actual: &Ty, candidate: &Ty) -> bool {
+        if !actual.has_infer() && !candidate.has_infer() {
+            return self.cached_subtype(actual, candidate);
+        }
+
+        let (
+            InferTy::Function {
+                params: actual_params,
+                ret: actual_ret,
+                throws: actual_throws,
+                ..
+            },
+            InferTy::Function {
+                params: candidate_params,
+                ret: candidate_ret,
+                throws: candidate_throws,
+                ..
+            },
+        ) = (actual.kind(), candidate.kind())
+        else {
+            return false;
+        };
+        let actual_required: Vec<_> = actual_params
+            .iter()
+            .filter(|param| param.mode == baml_type::FunctionParamMode::Required)
+            .collect();
+        let candidate_required: Vec<_> = candidate_params
+            .iter()
+            .filter(|param| param.mode == baml_type::FunctionParamMode::Required)
+            .collect();
+        if actual_required.len() != candidate_required.len() {
+            return false;
+        }
+
+        let snapshot = self.table.snapshot();
+        let deferred_len = self.deferred_subs.len();
+        let obligations_len = self.obligations.len();
+        let mut compatible = true;
+        for (actual, candidate) in actual_required.iter().zip(candidate_required.iter()) {
+            compatible &= self.sub(&candidate.ty, &actual.ty);
+        }
+        for candidate in candidate_params
+            .iter()
+            .filter(|param| param.mode == baml_type::FunctionParamMode::Optional)
+        {
+            let Some(actual) = actual_params.iter().find(|actual| {
+                actual.mode == baml_type::FunctionParamMode::Optional
+                    && actual.name == candidate.name
+            }) else {
+                compatible = false;
+                break;
+            };
+            compatible &= self.sub(&candidate.ty, &actual.ty);
+        }
+        compatible &= self.sub(actual_ret, candidate_ret);
+        compatible &= self.sub(actual_throws, candidate_throws);
+        self.table.rollback_to(snapshot);
+        self.deferred_subs.truncate(deferred_len);
+        self.obligations.truncate(obligations_len);
+        compatible
+    }
+
     fn record_function_adapter(&mut self, expr: ExprId, got: &Ty, expected: &Ty) {
         let got = self.table.resolve_completely(got);
         let got = self.expand_alias_ty(&got);
@@ -4288,13 +4395,14 @@ impl<'db> InferenceContext<'db> {
                 // (literal -> base, variant -> enum) and must be the SAME
                 // type - subtyping is not enough - and that type must
                 // implement `baml.ops.Compare`. Open/error operands skip
-                // (cascades; a var may still solve either way).
+                // (cascades; a var may still solve either way) - but the
+                // `unknown` top type does NOT skip: it is a type the reader
+                // wrote, not a cascade, and it orders against nothing, so it
+                // reports here like any other non-comparable operand.
                 if !lhs_ty.has_infer()
                     && !rhs_ty.has_infer()
                     && !lhs_ty.has_error()
                     && !rhs_ty.has_error()
-                    && !matches!(lhs_ty.kind(), InferTy::Unknown { .. })
-                    && !matches!(rhs_ty.kind(), InferTy::Unknown { .. })
                 {
                     let widen = |this: &mut Self, ty: &Ty| -> baml_type::Ty {
                         use baml_base::Literal as Lit;
@@ -4780,7 +4888,7 @@ impl<'db> InferenceContext<'db> {
     }
 
     /// A ground operator dispatch found NO impl for clean operands - the
-    /// committed E0004 (an error/unknown/var operand is a cascade and
+    /// committed E0004 (an error or inference-var operand is a cascade and
     /// stays silent, the same `tainted_by_errors` rule everywhere).
     pub(super) fn report_operator_failure(
         &mut self,
@@ -5433,10 +5541,11 @@ impl<'db> InferenceContext<'db> {
                 }
                 _ => None,
             };
-            if !callee_fn_ty.has_error()
-                && !callee_fn_ty.has_infer()
-                && !matches!(callee_fn_ty.kind(), InferTy::Unknown { .. })
-            {
+            // A value typed `unknown` is not callable, and saying so is
+            // this diagnostic's whole job - the top type is not a cascade.
+            // Only a genuine one (an errored callee, or one still carrying
+            // inference vars) stays quiet.
+            if !callee_fn_ty.has_error() && !callee_fn_ty.has_infer() {
                 self.pending_diags.push(PendingDiag::NotCallable {
                     expr: callee,
                     ty: callee_fn_ty.clone(),
@@ -8063,13 +8172,13 @@ impl<'db> InferenceContext<'db> {
             .only_has_type()
             .cloned()
             .map(|ty| self.structurally_resolve(&ty))
-            .map(|ty| self.expand_alias_ty(&ty))
-            // An OPTIONAL callback slot expects a function here just as much
-            // as an immediate one does: a lambda literal is never `null`, so
-            // the function arm is the only expectation it can satisfy. Without
-            // this the lambda's params would fall back to `Ty::error` and the
-            // slot's synthetic effect would never see the lambda's throws.
-            .and_then(|ty| match callback_root_fn(&ty)?.kind() {
+            .and_then(|ty| self.callback_root_fn(&ty))
+            // A union with one concrete callback arm expects that function
+            // here just as much as an immediate callback does: the other arms
+            // provide no lambda signature. Without this the lambda's params
+            // remain unconstrained and its throws cannot flow through the
+            // callback slot's synthetic effect.
+            .and_then(|ty| match ty.kind() {
                 InferTy::Function {
                     params,
                     ret,
@@ -10101,6 +10210,50 @@ impl<'db> InferenceContext<'db> {
             }
         }
         resolved
+    }
+
+    /// The sole concrete function type at a callback root: `ty` itself, or
+    /// the unique function member nested through unions and type aliases.
+    ///
+    /// A lambda literal can use that signature even when the other union arms
+    /// are non-callable values (`string | Callback`, for example). Multiple
+    /// function arms remain ambiguous and provide no context. The traversal is
+    /// fuel-bounded because recursive aliases are valid types but cannot offer
+    /// a finite unique callback shape.
+    fn callback_root_fn(&mut self, ty: &Ty) -> Option<Ty> {
+        fn collect(
+            this: &mut InferenceContext<'_>,
+            ty: &Ty,
+            callback: &mut Option<Ty>,
+            fuel: u8,
+        ) -> bool {
+            if fuel == 0 {
+                return false;
+            }
+            let expanded = this.expand_alias_ty(ty);
+            match expanded.kind() {
+                InferTy::Function { .. } => {
+                    if callback.is_some() {
+                        return false;
+                    }
+                    *callback = Some(expanded);
+                    true
+                }
+                InferTy::Union(members, _) => {
+                    let members = members.to_vec();
+                    members
+                        .iter()
+                        .all(|member| collect(this, member, callback, fuel.saturating_sub(1)))
+                }
+                InferTy::TypeAlias(..) => false,
+                _ => true,
+            }
+        }
+
+        let mut callback = None;
+        collect(self, ty, &mut callback, 16)
+            .then_some(callback)
+            .flatten()
     }
 
     /// The element an ARRAY literal adopts from its expectation: the
@@ -12860,11 +13013,14 @@ impl<'db> InferenceContext<'db> {
     ) -> Option<baml_type::Name> {
         let function = self.body_owner?;
         let data = baml_compiler2_ppir::item_data::function_data(self.db, function);
-        for (index, param_ty) in self.param_tys.iter().enumerate() {
+        let param_tys = self.param_tys.clone();
+        for (index, param_ty) in param_tys.iter().enumerate() {
             let resolved = self.table.resolve_completely(param_ty);
-            let Some(InferTy::Function { throws, .. }) = callback_root_fn(&resolved).map(Ty::kind)
-            else {
+            let Some(callback) = self.callback_root_fn(&resolved) else {
                 continue;
+            };
+            let InferTy::Function { throws, .. } = callback.kind() else {
+                unreachable!("callback_root_fn returns a function type")
             };
             if matches!(throws.kind(), InferTy::TypeVar(p, _) if p == effect) {
                 return data.params.get(index).map(|param| param.name.clone());

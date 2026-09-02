@@ -1901,9 +1901,8 @@ impl BamlRuntime {
                 #[cfg(not(target_arch = "wasm32"))]
                 let clients = &self.clients;
 
-                if clients.contains_key(client_name) {
-                    #[allow(clippy::map_clone)]
-                    let client = clients.get(client_name).map(|c| c.clone()).unwrap();
+                #[allow(clippy::map_clone)]
+                if let Some(client) = clients.get(client_name).map(|c| c.clone()) {
                     if !client.has_env_vars_changed(ctx.env_vars()) {
                         return Ok(client.provider.clone());
                     } else {

@@ -3788,7 +3788,11 @@ impl<'db> LoweringContext<'db> {
         method: &Name,
     ) -> Option<InterfaceTypeView> {
         // Only concrete receivers — interfaces/type-vars dispatch via the
-        // arms above. Containers are concrete too (`implements<T> I for T[]`).
+        // arms above. Containers are concrete too (`implements<T> I for T[]`),
+        // and so is a reflected type value (`reflect.Type` is its canonical
+        // class: `implement baml.ToString for reflect.Type` provides its
+        // `to_string`, and a runtime compile — with no stdlib source to
+        // devirtualize against — can reach that body only by dispatching).
         if !matches!(
             recv_ty,
             Tir2Ty::Class(..)
@@ -3800,6 +3804,7 @@ impl<'db> LoweringContext<'db> {
                 | Tir2Ty::Null { .. }
                 | Tir2Ty::Uint8Array { .. }
                 | Tir2Ty::Media(..)
+                | Tir2Ty::Type { .. }
                 | Tir2Ty::List(..)
                 | Tir2Ty::Map { .. }
                 | Tir2Ty::Future(..)

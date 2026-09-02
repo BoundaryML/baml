@@ -1153,7 +1153,7 @@ fn impl_sort_key(db: &dyn baml_compiler2_ppir::Db, loc: ImplLoc<'_>) -> (String,
 ///
 /// There is deliberately NO concreteness gate here: an impl whose
 /// for-target is not an implementor never produces
-/// [`ImplFacts`](crate::impls::ImplFacts) at all
+/// [`ImplFacts`] at all
 /// ([`ImplHeaderResolution::NotImplementor`](crate::impls::ImplHeaderResolution)),
 /// so it cannot reach this function. Re-deriving that judgment locally is
 /// what opened the E0132 hole: this gate judged the RAW head while E0138

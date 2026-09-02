@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import sharp from 'sharp';
-import { postToSlack } from '../clients/slack.js';
+import { postToSlack, type SlackBlock } from '../clients/slack.js';
 
 export interface SlackDashboardReportConfig {
   botToken: string;
@@ -42,12 +42,41 @@ const nativePanelTitles = [
 ];
 
 const dashboardSettleTimeMs = 20_000;
+const productMetricsReadmeUrl =
+  'https://github.com/BoundaryML/baml/blob/canary/typescript2/app-product-metrics/README.md';
+
+function dashboardReportHeading(dashboardUrl: string, date: string): string {
+  return `<${new URL(dashboardUrl).href}|Product metrics dashboard> · ${date}`;
+}
+
+function dashboardReportGuidance(): string {
+  return `This report is sent every Friday at 8am PT. To update it, see <${productMetricsReadmeUrl}|docs>.`;
+}
 
 export function dashboardReportText(
   dashboardUrl: string,
   date: string,
 ): string {
-  return `<${new URL(dashboardUrl).href}|Product metrics dashboard> · ${date}`;
+  return `${dashboardReportHeading(dashboardUrl, date)}\n${dashboardReportGuidance()}`;
+}
+
+export function dashboardReportBlocks(
+  dashboardUrl: string,
+  date: string,
+): SlackBlock[] {
+  return [
+    {
+      text: {
+        text: dashboardReportHeading(dashboardUrl, date),
+        type: 'mrkdwn',
+      },
+      type: 'section',
+    },
+    {
+      elements: [{ text: dashboardReportGuidance(), type: 'mrkdwn' }],
+      type: 'context',
+    },
+  ];
 }
 
 export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
@@ -210,6 +239,7 @@ export async function sendSlackDashboardReport(
   }
   const date = now.toISOString().slice(0, 10);
   await postToSlack(config.botToken, {
+    blocks: dashboardReportBlocks(config.dashboardUrl, date),
     channel: config.channel,
     file: {
       altText: 'Screenshot of the live product metrics dashboard',

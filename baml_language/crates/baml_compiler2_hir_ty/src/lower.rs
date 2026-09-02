@@ -1768,7 +1768,7 @@ fn builtin_structural(qtn: &TypeName, arity: usize) -> Option<BuiltinStructural>
 }
 
 /// The type a class reference denotes in the lowering vocabulary, builtin
-/// bridges ([`builtin_structural`]) applied. The single constructor for class
+/// bridges (`builtin_structural`) applied. The single constructor for class
 /// types in the lowering chain, shared by annotation lowering and
 /// `class_self_ty`.
 pub fn class_lowering_ty(qtn: TypeName, mut args: Vec<LoweringTy>) -> LoweringTy {
@@ -2603,13 +2603,6 @@ pub fn signature_lowering_diagnostics<'db>(
     function: FunctionLoc<'db>,
 ) -> Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> {
     use crate::diagnostics::TirTypeError;
-    // Required interface methods are signature-only items checked by the
-    // interface-scope driver with `Self` in scope; this pass would
-    // misreport their `Self.*` references (the same exclusion the
-    // pre-S17 signature pass carried).
-    if baml_compiler2_ppir::item_data::is_required_interface_method(db, function) {
-        return Vec::new();
-    }
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
     let bounds = function_generic_bounds(db, function);
@@ -2768,11 +2761,62 @@ fn bound_binding_violations(
 /// The check layer's CLASS-declaration diagnostic walk: generic-param
 /// bounds re-lowered with the sink under the class frame (unresolved,
 /// arity, non-interface and builtin-not-a-bound rules).
+/// Judge one constraint head (`T extends B`, `type A extends B`): lower it
+/// with the sink so unresolved names and wrong type-argument counts are
+/// reported, then apply the shape rules a bound must satisfy.
+///
+/// Every bound position in the language routes here — class and interface
+/// generic parameters, and associated-type bounds — so a rule added for one
+/// cannot silently miss the others. Each had drifted: interface generic
+/// parameters had no diagnostic walk at all, and associated-type bounds
+/// lowered through a sink-less context. Both left an unresolved bound as a
+/// silent `Ty::Error`, which is fail-open where the bound should have been
+/// enforced (a typo'd bound constrains nothing) and an `unreachable!` in
+/// emit once it reaches runtime lowering.
+fn judge_constraint_head(
+    db: &dyn baml_compiler2_ppir::Db,
+    ctx: &LowerCtx<'_>,
+    store: &TypeRefStore,
+    source_map: &baml_compiler2_hir::type_ref::TypeRefSourceMap,
+    bound: TypeRefId,
+    out: &mut Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)>,
+) {
+    use crate::diagnostics::TirTypeError;
+    let (lowered, diagnostics) =
+        ctx.lower_type_ref_at_with_diagnostics(store, bound, TypePosition::ConstraintHead);
+    extend_lowering_diagnostics(out, source_map, diagnostics);
+    match &lowered {
+        LoweringTy::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
+            out.push((
+                source_map.span(bound),
+                TirTypeError::BuiltinInterfaceNotABound {
+                    interface: qtn.clone(),
+                },
+            ));
+        }
+        LoweringTy::Interface(..) => {
+            for error in bound_binding_violations(db, store, bound, &reject_holes(&lowered)) {
+                out.push((source_map.span(bound), error));
+            }
+        }
+        // The lowering above already reported why the head is an error;
+        // a shape complaint on top would name the same mistake twice.
+        _ if lowered.contains_error() => {}
+        _ => {
+            out.push((
+                source_map.span(bound),
+                TirTypeError::GenericBoundNotInterface {
+                    bound: reject_holes(&lowered),
+                },
+            ));
+        }
+    }
+}
+
 pub fn class_lowering_diagnostics<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     class: ClassLoc<'db>,
 ) -> Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> {
-    use crate::diagnostics::TirTypeError;
     let data = baml_compiler2_ppir::item_data::class_data(db, class);
     let source_map = baml_compiler2_ppir::item_data::class_source_map(db, class);
     // PPIR synthesizes `$stream` companions with an empty declaration span.
@@ -2800,38 +2844,14 @@ pub fn class_lowering_diagnostics<'db>(
         }
     }
     for bound in data.generic_params.iter().flat_map(|g| g.bounds.iter()) {
-        let (lowered, diagnostics) = ctx.lower_type_ref_at_with_diagnostics(
+        judge_constraint_head(
+            db,
+            &ctx,
             &data.type_refs,
+            &source_map.type_refs,
             *bound,
-            TypePosition::ConstraintHead,
+            &mut out,
         );
-        extend_lowering_diagnostics(&mut out, &source_map.type_refs, diagnostics);
-        match &lowered {
-            LoweringTy::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
-                out.push((
-                    source_map.type_refs.span(*bound),
-                    TirTypeError::BuiltinInterfaceNotABound {
-                        interface: qtn.clone(),
-                    },
-                ));
-            }
-            LoweringTy::Interface(..) => {
-                for error in
-                    bound_binding_violations(db, &data.type_refs, *bound, &reject_holes(&lowered))
-                {
-                    out.push((source_map.type_refs.span(*bound), error));
-                }
-            }
-            _ if lowered.contains_error() => {}
-            _ => {
-                out.push((
-                    source_map.type_refs.span(*bound),
-                    TirTypeError::GenericBoundNotInterface {
-                        bound: reject_holes(&lowered),
-                    },
-                ));
-            }
-        }
     }
     out
 }
@@ -2891,30 +2911,50 @@ pub fn interface_lowering_diagnostics<'db>(
             }
         }
     }
+    // The interface's own generic parameters carry the same bound rules a
+    // class's do.
+    for bound in data.generic_params.iter().flat_map(|g| g.bounds.iter()) {
+        judge_constraint_head(
+            db,
+            &ctx,
+            &data.type_refs,
+            &source_map.type_refs,
+            *bound,
+            &mut out,
+        );
+    }
     // Associated-type bounds (`type X extends B`): the same bound rules
     // generic params carry.
     for assoc in &data.associated_types {
         let Some(bound) = assoc.bound else { continue };
-        let lowered = ctx.lower_type_ref_at(&data.type_refs, bound, TypePosition::ConstraintHead);
-        match &lowered {
-            LoweringTy::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
-                out.push((
-                    source_map.type_refs.span(bound),
-                    TirTypeError::BuiltinInterfaceNotABound {
-                        interface: qtn.clone(),
-                    },
-                ));
-            }
-            LoweringTy::Interface(..) => {}
-            _ if lowered.contains_error() => {}
-            _ => {
-                out.push((
-                    source_map.type_refs.span(bound),
-                    TirTypeError::GenericBoundNotInterface {
-                        bound: reject_holes(&lowered),
-                    },
-                ));
-            }
+        judge_constraint_head(
+            db,
+            &ctx,
+            &data.type_refs,
+            &source_map.type_refs,
+            bound,
+            &mut out,
+        );
+    }
+    // An associated type's DEFAULT is a written type reference like any
+    // other. `interface_associated_type_default` lowers it and hands back
+    // its diagnostics precisely so this walk — the declaration checker —
+    // surfaces them once; every other caller consumes the type and drops
+    // them by design. Defaults with no declared bound are drained here too:
+    // the bound-satisfaction pass below only visits bounded ones, so
+    // skipping them here left an unresolved default silently poisoning the
+    // interface until it reached runtime lowering.
+    for assoc in &data.associated_types {
+        let Some(default_ref) = assoc.default else {
+            continue;
+        };
+        let Some((_, diagnostics)) =
+            crate::interfaces::interface_associated_type_default(db, interface, assoc.name.clone())
+        else {
+            continue;
+        };
+        for error in diagnostics {
+            out.push((source_map.type_refs.span(default_ref), error));
         }
     }
     // An associated type's default must implement its declared bound

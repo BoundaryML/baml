@@ -20,7 +20,7 @@ ninja = "1.13.2"
 
 # Rust tools
 "cargo:bacon" = "latest"
-"cargo:cross" = "latest"
+"cargo:cross" = "0.2.5"
 "cargo:cargo-watch" = "latest"
 "github:rustwasm/wasm-pack" = "0.14.0"
 "cargo:ripgrep" = "latest"

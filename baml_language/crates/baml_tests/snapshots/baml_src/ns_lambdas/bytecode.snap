@@ -484,11 +484,15 @@ function lambdas.lambdas_inferred_signature() -> string {
     store_var sig
     load_var sig
     load_field .returns
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _5
     load_var sig
     load_field .errors
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _7
     load_var _5
     load_const "/"
@@ -504,11 +508,15 @@ function lambdas.lambdas_inferred_throwing_signature() -> string {
     store_var sig
     load_var sig
     load_field .returns
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _5
     load_var sig
     load_field .errors
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _7
     load_var _5
     load_const "/"

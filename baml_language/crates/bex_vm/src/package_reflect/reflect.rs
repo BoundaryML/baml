@@ -506,8 +506,8 @@ fn check_function_contract(
     ))
 }
 
-fn dependency_object(vm: &BexVm, package: HeapPtr, local: &str) -> Option<HeapPtr> {
-    let Object::Package(package) = vm.get_object(package) else {
+fn dependency_object(vm: &BexVm, package_ptr: HeapPtr, local: &str) -> Option<HeapPtr> {
+    let Object::Package(package) = vm.get_object(package_ptr) else {
         return None;
     };
     let local_name = local_name(local)?;
@@ -519,6 +519,32 @@ fn dependency_object(vm: &BexVm, package: HeapPtr, local: &str) -> Option<HeapPt
         .or_else(|| package.functions.get(&local_name))
         .copied()
         .or_else(|| mounted_declaration(vm, package, local))
+        .or_else(|| dependency_named_object(vm, package_ptr, package, local))
+}
+
+/// Resolve `local` against a package's canonical object names: the lane for a
+/// declaration the package's item tables do not row under its own name. A
+/// class-inherent method is the case today — a consumer's static call imports
+/// it as `<alias>.<Class>.<method>`, the class-qualified spelling the emitter
+/// registered the function under — so it resolves exactly as the global lane
+/// resolves an alias-qualified global: `user.<local>` for a runtime image,
+/// `<canonical package>.<local>` for a static one.
+fn dependency_named_object(
+    vm: &BexVm,
+    package_ptr: HeapPtr,
+    package: &bex_vm_types::types::Package,
+    local: &str,
+) -> Option<HeapPtr> {
+    if let Some(runtime) = package.runtime() {
+        runtime
+            .object_names
+            .get(&format!("user.{local}"))
+            .or_else(|| runtime.object_names.get(local))
+            .copied()
+    } else {
+        let canonical = vm.packages.package_name(package_ptr)?;
+        vm.packages.object_by_name(&format!("{canonical}.{local}"))
+    }
 }
 
 /// Resolve `local` against a package's mount surface: the export name of a
@@ -1047,6 +1073,18 @@ impl BamlClassPackage for PackageReflectImpl {
             .filter(|(name, _)| name.starts_with("user."))
             .map(|(name, index)| (name.clone(), *index))
             .collect::<IndexMap<_, _>>();
+        // The object-lane twin of `global_names`: every named function this
+        // package compiled, under its canonical spelling. A consumer's static
+        // call to a class-inherent method imports the function object by that
+        // class-qualified name, which no item table rows (see
+        // `dependency_named_object`).
+        let object_names = plan
+            .program
+            .function_indices
+            .iter()
+            .filter(|(name, _)| name.starts_with("user."))
+            .map(|(name, index)| (name.clone(), objects[*index]))
+            .collect::<IndexMap<_, _>>();
         let init = plan
             .program
             .package_init_order
@@ -1070,6 +1108,7 @@ impl BamlClassPackage for PackageReflectImpl {
         package.test_init = test_init;
         let runtime = package.runtime_mut().expect("runtime package image");
         runtime.objects = objects.into_boxed_slice();
+        runtime.object_names = object_names;
         runtime.globals = globals.into_boxed_slice();
         runtime.global_names = global_names;
         runtime.type_values = type_values;

@@ -6,7 +6,7 @@
 //! S5 scope: equality only. The settled `VarData` bounds
 //! (lowers/uppers/obligations for `Sub` constraints and the obligation
 //! worklist) join with the first `Sub` constraints; until then a variable's
-//! class carries its solver state and its policy ([`VarValue`]). Policy
+//! class carries its solver state and its policy (`VarValue`). Policy
 //! lives INSIDE the ena value - the undo log must govern it, or a rollback
 //! frees an index whose stale policy then misclassifies the variable that
 //! reuses it.

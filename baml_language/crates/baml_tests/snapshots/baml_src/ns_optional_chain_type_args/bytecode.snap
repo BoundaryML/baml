@@ -106,7 +106,9 @@ function optional_chain_type_args.$init_test_ns_optional_chain_type_args_optiona
 
 function optional_chain_type_args.<(user.optional_chain_type_args.Cat as user.optional_chain_type_args.Speaker)>.speak(self: optional_chain_type_args.Cat) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _2
     load_const "cat:"
     load_var _2
@@ -116,16 +118,24 @@ function optional_chain_type_args.<(user.optional_chain_type_args.Cat as user.op
 
 function optional_chain_type_args.<(user.optional_chain_type_args.Dog as user.optional_chain_type_args.Speaker)>.speak(self: optional_chain_type_args.Dog) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function optional_chain_type_args.<(user.optional_chain_type_args.Pair<#0> as user.optional_chain_type_args.Tagged)>.tag(self: optional_chain_type_args.Pair<#0>) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _3
     load_type #1
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _5
     load_var _3
     load_const "/"
@@ -137,10 +147,14 @@ function optional_chain_type_args.<(user.optional_chain_type_args.Pair<#0> as us
 
 function optional_chain_type_args.Boxed.both(self: optional_chain_type_args.Boxed<#0>) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _3
     load_type #1
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _5
     load_var _3
     load_const "/"
@@ -152,7 +166,11 @@ function optional_chain_type_args.Boxed.both(self: optional_chain_type_args.Boxe
 
 function optional_chain_type_args.Boxed.describe(self: optional_chain_type_args.Boxed<#0>) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -169,7 +187,11 @@ function optional_chain_type_args.Callables.method(self: optional_chain_type_arg
 
 function optional_chain_type_args.Holder.ident(self: optional_chain_type_args.Holder, v: #0) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -193,7 +215,11 @@ function optional_chain_type_args.Holder.plain(self: optional_chain_type_args.Ho
 
 function optional_chain_type_args.Holder.value(self: optional_chain_type_args.Holder) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 

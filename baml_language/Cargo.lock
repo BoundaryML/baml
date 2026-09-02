@@ -7046,6 +7046,7 @@ dependencies = [
  "sys_ops",
  "sys_types",
  "wasm-bindgen",
+ "web-time",
 ]
 
 [[package]]

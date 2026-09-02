@@ -871,8 +871,39 @@ function ea_flex(a: int, b: int = 2) -> int throws never {
 function ea_take(f: (x: int, y: int = 9) -> int throws never) -> int throws never {
     f(1)
 }
+function ea_wide(x: int, a: int = 10, b: int = 100) -> int throws never {
+    x + a + b
+}
+type EaTarget = (x: int, b?: int) -> int throws never
+function ea_take_union(f: string | EaTarget) -> int throws never {
+    0
+}
+function ea_string(value: string) -> string throws never {
+    value
+}
+type EaIncompatible = (value: int, extra?: int) -> int throws never
+function ea_take_erased(f: reflect.AnyFunction | EaIncompatible) -> int throws never {
+    0
+}
+function ea_ambiguous(x: int, b: int = 10, c: int = 100) -> int throws never {
+    x + b + c
+}
+type EaWithB = (x: int, b?: int) -> int throws never
+type EaWithC = (x: int, c?: int) -> int throws never
+function ea_take_ambiguous(f: EaWithB | EaWithC) -> int throws never {
+    0
+}
 function ea_use() -> int throws never {
     ea_take(ea_flex)
+}
+function ea_use_union() -> int throws never {
+    ea_take_union(ea_wide)
+}
+function ea_use_erased() -> int throws never {
+    ea_take_erased(ea_string)
+}
+function ea_use_ambiguous() -> int throws never {
+    ea_take_ambiguous(ea_ambiguous)
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
@@ -891,8 +922,8 @@ function ea_use() -> int throws never {
     adjustments.sort();
     assert_eq!(
         adjustments,
-        vec![("ea_flex".to_string(), 1)],
-        "optional-param name drift records a FunctionAdapter at the checked expr"
+        vec![("ea_flex".to_string(), 1), ("ea_wide".to_string(), 1)],
+        "runtime-incompatible functions record a FunctionAdapter for direct and union callback slots"
     );
 }
 
