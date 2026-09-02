@@ -9,14 +9,17 @@
       "libc": null,
       "archive_suffix": ".tar.gz",
       "artifacts": {
-        "toolchain": { "runner": "macos-14" },
+        "toolchain": { "runner": "blacksmith-6vcpu-macos-latest" },
         "wrapper": {
-          "runner": "macos-14",
+          "runner": "blacksmith-6vcpu-macos-latest",
           "variants": ["self-update", "no-self-update"]
         },
         "python": { "runner": "macos-latest" },
         "nodejs": {},
-        "java": { "platform": "macos-aarch64", "runner": "macos-14" },
+        "java": {
+          "platform": "macos-aarch64",
+          "runner": "blacksmith-6vcpu-macos-latest"
+        },
         "cffi": {
           "asset": "libbaml_cffi-aarch64-apple-darwin.dylib",
           "runner": "blacksmith-6vcpu-macos-latest",

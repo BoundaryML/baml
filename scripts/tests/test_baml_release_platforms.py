@@ -29,6 +29,18 @@ class WrapperReleasePlatformTests(unittest.TestCase):
         contract = json.loads(DEFAULT_PLATFORMS.read_text(encoding="utf-8"))
         targets = {target["triple"]: target for target in contract["targets"]}
 
+        arm64_macos = targets["aarch64-apple-darwin"]["artifacts"]
+        self.assertEqual(
+            {
+                arm64_macos["toolchain"]["runner"],
+                arm64_macos["wrapper"]["runner"],
+                arm64_macos["java"]["runner"],
+                arm64_macos["cffi"]["runner"],
+                arm64_macos["csharp"]["consumer_runner"],
+            },
+            {"blacksmith-6vcpu-macos-latest"},
+        )
+
         arm64_gnu = targets["aarch64-unknown-linux-gnu"]["artifacts"]["toolchain"]
         self.assertEqual(arm64_gnu["runner"], "ubuntu-latest")
         self.assertEqual(
