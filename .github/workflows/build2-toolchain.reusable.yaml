@@ -117,7 +117,7 @@ jobs:
             passthrough+=', "CFLAGS_x86_64_unknown_linux_gnu=--sysroot=/usr/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu/sysroot"'
             passthrough+=', "CXXFLAGS_x86_64_unknown_linux_gnu=--sysroot=/usr/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu/sysroot"'
           fi
-          printf '[build.env]\npassthrough = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "RUSTC_WRAPPER=/target/sccache-host", "SCCACHE_BUCKET", "SCCACHE_ENDPOINT", "SCCACHE_ERROR_LOG", "SCCACHE_IDLE_TIMEOUT", "SCCACHE_REGION", "SCCACHE_S3_KEY_PREFIX"]\n[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = [%s]\n' \
+          printf '[build.env]\npassthrough = ["BAML_SCCACHE_BIN=/target/sccache-host", "BAML_SCCACHE_R2_ACCESS_KEY_ID", "BAML_SCCACHE_R2_SECRET_ACCESS_KEY", "RUSTC_WRAPPER=/target/baml-sccache", "SCCACHE_BUCKET", "SCCACHE_ENDPOINT", "SCCACHE_ERROR_LOG", "SCCACHE_IDLE_TIMEOUT", "SCCACHE_REGION", "SCCACHE_S3_KEY_PREFIX"]\n[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = [%s]\n' \
             "$TARGET" "$CROSS_IMAGE" "$TARGET" "$passthrough" > "$cross_config"
           {
             echo 'CARGO=cross'

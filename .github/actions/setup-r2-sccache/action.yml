@@ -7,7 +7,7 @@ inputs:
     required: false
     default: ""
   prepare-cross:
-    description: "Copy the host sccache binary into the workspace for cross containers"
+    description: "Copy the BAML wrapper and host sccache binary into the workspace for cross containers"
     required: false
     default: "false"
 
@@ -58,6 +58,7 @@ runs:
         set -euo pipefail
 
         mkdir -p baml_language/target
+        cp tools/baml-sccache baml_language/target/baml-sccache
         cp "$(command -v sccache)" baml_language/target/sccache-host
-        chmod +x baml_language/target/sccache-host
+        chmod +x baml_language/target/baml-sccache baml_language/target/sccache-host
         echo 'SCCACHE_ERROR_LOG=/tmp/sccache-baml.log' >> "$GITHUB_ENV"
