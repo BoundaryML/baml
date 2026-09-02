@@ -47,7 +47,4 @@ runs:
         mkdir -p baml_language/target
         cp "$(command -v sccache)" baml_language/target/sccache-host
         chmod +x baml_language/target/sccache-host
-        {
-          echo 'RUSTC_WRAPPER=/project/target/sccache-host'
-          echo 'SCCACHE_ERROR_LOG=/tmp/sccache-baml.log'
-        } >> "$GITHUB_ENV"
+        echo 'SCCACHE_ERROR_LOG=/tmp/sccache-baml.log' >> "$GITHUB_ENV"

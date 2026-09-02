@@ -103,7 +103,7 @@ jobs:
           # CROSS_CONFIG makes the plan's image control linking; the image's
           # host ldd does not determine the wrapper's compatibility floor.
           cross_config="$RUNNER_TEMP/baml-wrapper-cross.toml"
-          printf '[build.env]\npassthrough = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "RUSTC_WRAPPER", "SCCACHE_BUCKET", "SCCACHE_ENDPOINT", "SCCACHE_ERROR_LOG", "SCCACHE_IDLE_TIMEOUT", "SCCACHE_REGION", "SCCACHE_S3_KEY_PREFIX"]\n[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = ["BAML_GIT_SHA", "BAML_WORKOS_CLIENT_ID"]\n' \
+          printf '[build.env]\npassthrough = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "RUSTC_WRAPPER=/project/target/sccache-host", "SCCACHE_BUCKET", "SCCACHE_ENDPOINT", "SCCACHE_ERROR_LOG", "SCCACHE_IDLE_TIMEOUT", "SCCACHE_REGION", "SCCACHE_S3_KEY_PREFIX"]\n[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = ["BAML_GIT_SHA", "BAML_WORKOS_CLIENT_ID"]\n' \
             "$TARGET" "$CROSS_IMAGE" "$TARGET" > "$cross_config"
           {
             echo 'CARGO=cross'
