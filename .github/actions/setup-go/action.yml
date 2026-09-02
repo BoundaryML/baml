@@ -5,7 +5,7 @@ inputs:
   go-version:
     description: "Go version to install"
     required: false
-    default: "1.23.11"
+    default: "1.24"
   cache:
     description: "Enable Go module caching"
     required: false
@@ -31,7 +31,7 @@ runs:
   using: "composite"
   steps:
     - name: Setup Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
         go-version: ${{ inputs.go-version }}
         cache: ${{ inputs.cache }}
