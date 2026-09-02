@@ -1515,6 +1515,54 @@ type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, RuntimeTy>>;
 type EnumVariantIndices = IndexMap<QualifiedTypeName, IndexMap<String, usize>>;
 type InterfaceTypeView = (TypeName, Box<[Tir2Ty]>, Box<[(Name, Tir2Ty)]>);
 
+/// What ONE interface declaration says a member name is — the leaf of
+/// interface member resolution, read from that interface alone (source or
+/// mounted), never its `requires` closure.
+///
+/// A declaration cannot say two things about one name (a duplicate member is
+/// rejected upstream), so this is a total answer for the interface it was
+/// asked of.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DeclaredMember {
+    /// A method — required (signature-only) or default-bodied. Dispatchable.
+    Method,
+    /// A field, at `index` in this interface's OWN declared field list — the
+    /// index space every implementation's `RuntimeImplRule::field_links` is
+    /// baked against.
+    Field { index: u32 },
+}
+
+/// What a member name means in an interface view: the single answer every
+/// interface-member road asks for, resolved by one walk of the view and its
+/// `requires` closure.
+///
+/// This is the whole state space, so the three cases a road must distinguish
+/// cannot drift apart into separate probes that disagree:
+///
+/// - [`Self::Method`] — dispatchable. The virtual call keys on `declaring`,
+///   which may be a `requires` ancestor rather than the receiver's own
+///   interface (the impl registry has no entry under the child).
+/// - [`Self::Field`] — NOT dispatchable, whatever the field's type. A
+///   function-typed field is READ through the virtual-field view and the
+///   value called indirectly; keying dispatch on a field name yields a
+///   `virtual_call` that runtime resolution (`rule_method_impl`: provided
+///   rows, then the interface's `default_fn`) can never resolve.
+/// - [`Self::Undeclared`] — nothing in the closure declares the name. This is
+///   NOT proof it is absent: an interface this compilation cannot enumerate
+///   (an unreadable dependency) lands here too, so roads treat it as
+///   "unknown" and keep their permissive behavior rather than declining.
+#[derive(Clone, Debug)]
+enum InterfaceMember {
+    Method {
+        declaring: InterfaceTypeView,
+    },
+    Field {
+        declaring: InterfaceTypeView,
+        index: u32,
+    },
+    Undeclared,
+}
+
 /// How a source interface method's frame divides — see
 /// [`MirLower::interface_method_shape`].
 struct InterfaceMethodShape {
@@ -3270,31 +3318,21 @@ impl<'db> LoweringContext<'db> {
             .iter()
             .find_map(|bound| {
                 let view = self.interface_dispatch_target_for_member(bound, member)?;
-                self.interface_closure_declares_member(&view.0, member)
-                    .then_some(view)
+                // Asked of the realized VIEW the conjunct dispatches through —
+                // never a view rebuilt from its bare name at arity zero, which
+                // a generic interface's declaration rejects (lowering pins
+                // every reference to declared arity; `interface_instantiation`
+                // asserts it).
+                (!matches!(
+                    self.resolve_interface_member(&view, member),
+                    InterfaceMember::Undeclared
+                ))
+                .then_some(view)
             })
             .or_else(|| {
                 bounds
                     .iter()
                     .find_map(|bound| self.interface_dispatch_target_for_member(bound, member))
-            })
-    }
-
-    /// Whether `iface_tn`'s `requires` closure declares `member`, as either a method
-    /// or a field. Selects which conjunct of a bound list a member access dispatches
-    /// through.
-    fn interface_closure_declares_member(&self, iface_tn: &TypeName, member: &Name) -> bool {
-        if self
-            .decl(iface_tn)
-            .is_some_and(|decl| self.mir_interface_declares_method(&decl, member))
-        {
-            return true;
-        }
-        self.interface_closure_type_name_views(iface_tn, &[], &[])
-            .is_some_and(|views| {
-                views
-                    .iter()
-                    .any(|(tn, _, _)| self.interface_field_index_directly(tn, member).is_some())
             })
     }
 
@@ -3952,53 +3990,59 @@ impl<'db> LoweringContext<'db> {
         None
     }
 
+    /// The interface views a union arm's member access can resolve `member`
+    /// through: every impl view of the receiver plus its interface-typed
+    /// dispatch target, deduplicated. Shared root set of the field/method
+    /// candidate helpers below.
+    fn member_root_views(&self, recv_ty: &Tir2Ty, member: &Name) -> Vec<InterfaceTypeView> {
+        let mut roots = self.l1_impl_views_for_recv(recv_ty);
+        if let Some(view) = self.interface_dispatch_target_for_member(recv_ty, member)
+            && !roots.contains(&view)
+        {
+            roots.push(view);
+        }
+        roots
+    }
+
+    /// The DECLARING views under which `recv_ty` reaches `field` as an
+    /// interface field — one [`Self::resolve_interface_member`] per root view,
+    /// keeping the `Field` arm. A union member access is only admitted when
+    /// every arm shares exactly one such view.
     fn interface_field_views_for_member(
         &self,
         recv_ty: &Tir2Ty,
         field: &Name,
     ) -> Vec<InterfaceTypeView> {
-        let mut roots = self.l1_impl_views_for_recv(recv_ty);
-        if let Some(view) = self.interface_dispatch_target_for_member(recv_ty, field)
-            && !roots.contains(&view)
-        {
-            roots.push(view);
-        }
-
         let mut declarers = Vec::new();
-        for view in roots.into_iter().filter_map(|view| {
-            self.interface_view_declaring_field(&view, field)
-                .map(|(view, _)| view)
-        }) {
-            if !declarers.contains(&view) {
-                declarers.push(view);
+        for view in self.member_root_views(recv_ty, field) {
+            let InterfaceMember::Field { declaring, .. } =
+                self.resolve_interface_member(&view, field)
+            else {
+                continue;
+            };
+            if !declarers.contains(&declaring) {
+                declarers.push(declaring);
             }
         }
         declarers
     }
 
+    /// The field twin's `Method` arm: the DECLARING views under which
+    /// `recv_ty` reaches `method` as an interface method.
     fn interface_method_views_for_member(
         &self,
         recv_ty: &Tir2Ty,
         method: &Name,
     ) -> Vec<InterfaceTypeView> {
-        let mut roots = self.l1_impl_views_for_recv(recv_ty);
-        if let Some(view) = self.interface_dispatch_target_for_member(recv_ty, method)
-            && !roots.contains(&view)
-        {
-            roots.push(view);
-        }
-
         let mut declarers = Vec::new();
-        for view in roots
-            .into_iter()
-            .filter(|view| {
-                self.decl(&view.0)
-                    .is_some_and(|decl| self.mir_interface_declares_method(&decl, method))
-            })
-            .map(|view| self.interface_view_declaring_method(&view, method))
-        {
-            if !declarers.contains(&view) {
-                declarers.push(view);
+        for view in self.member_root_views(recv_ty, method) {
+            let InterfaceMember::Method { declaring } =
+                self.resolve_interface_member(&view, method)
+            else {
+                continue;
+            };
+            if !declarers.contains(&declaring) {
+                declarers.push(declaring);
             }
         }
         declarers
@@ -4012,34 +4056,24 @@ impl<'db> LoweringContext<'db> {
         let Some(baml_compiler2_hir::contributions::Definition::Interface(root_loc)) =
             pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
         else {
+            if self.decl_interface_declares(iface_qtn, method) == Some(DeclaredMember::Method) {
+                return true;
+            }
             if let Some(baml_compiler2_hir_ty::package_interface::ExportedType::Interface {
-                required_methods,
-                default_methods,
                 requires,
                 ..
             }) = baml_compiler2_hir_ty::package_interface::mounted_type_row(self.db, iface_qtn)
             {
-                return required_methods.iter().any(|m| m.name == *method)
-                    || default_methods.iter().any(|m| m.name == *method)
-                    || requires
-                        .iter()
-                        .any(|req| self.mir_interface_declares_method(&req.name, method));
+                return requires
+                    .iter()
+                    .any(|req| self.mir_interface_declares_method(&req.name, method));
             }
             return false;
         };
         interface_requires_closure_locs(self.db, root_loc)
             .into_iter()
             .any(|iface_loc| {
-                use baml_compiler2_ppir::item_data::{function_data, interface_data};
-                let iface_data = interface_data(self.db, iface_loc);
-                iface_data
-                    .required_methods
-                    .iter()
-                    .any(|s| s.name == *method)
-                    || iface_data
-                        .default_methods
-                        .iter()
-                        .any(|&fn_loc| function_data(self.db, fn_loc).name == *method)
+                self.source_interface_declares(iface_loc, method) == Some(DeclaredMember::Method)
             })
     }
 
@@ -4064,104 +4098,140 @@ impl<'db> LoweringContext<'db> {
         )
     }
 
-    fn interface_declares_method_directly(&self, iface_tn: &TypeName, method: &Name) -> bool {
+    /// What `iface_loc`'s own declaration says `member` is — the leaf every
+    /// interface member question funnels through, so "is it a method" and
+    /// "is it a field, at which index" can never be answered by two probes
+    /// that disagree.
+    ///
+    /// Methods are checked before fields: a declaration carrying both names
+    /// is rejected upstream, and preferring the dispatchable reading keeps a
+    /// malformed interface from silently losing dispatch.
+    ///
+    /// Reads the same `interface_data` query, in the same order, that the
+    /// impl-rule bake and TIR's `MemberResolution::InterfaceVirtualField`
+    /// read, so the three cannot disagree about a field's index.
+    fn source_interface_declares(
+        &self,
+        iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        member: &Name,
+    ) -> Option<DeclaredMember> {
         use baml_compiler2_ppir::item_data::{function_data, interface_data};
-        let Some(pkg_id) = self.decl(iface_tn).map(|decl| decl.root()) else {
-            return false;
-        };
-        let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
-        let Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) =
-            pkg_items.lookup_type(iface_tn.namespace(), iface_tn.name())
-        else {
-            if let Some(baml_compiler2_hir_ty::package_interface::ExportedType::Interface {
-                required_methods,
-                default_methods,
-                ..
-            }) = self.mounted_row(iface_tn)
-            {
-                return required_methods.iter().any(|m| m.name == *method)
-                    || default_methods.iter().any(|m| m.name == *method);
-            }
-            return false;
-        };
-        let iface_data = interface_data(self.db, loc);
-        iface_data
-            .required_methods
-            .iter()
-            .any(|s| s.name == *method)
-            || iface_data
+        let data = interface_data(self.db, iface_loc);
+        let declares_method = data.required_methods.iter().any(|s| s.name == *member)
+            || data
                 .default_methods
                 .iter()
-                .any(|&fn_loc| function_data(self.db, fn_loc).name == *method)
+                .any(|&fn_loc| function_data(self.db, fn_loc).name == *member);
+        if declares_method {
+            return Some(DeclaredMember::Method);
+        }
+        let index = data.fields.iter().position(|f| f.name == *member)?;
+        Some(DeclaredMember::Field {
+            index: u32::try_from(index).expect("interface field count fits u32"),
+        })
     }
 
-    /// Resolve the interface view that actually *declares* `method`, starting
-    /// from `view`'s interface and walking its `requires` closure.
-    ///
-    /// A method may be declared by a super-interface: `interface B requires A {}`
-    /// with `tag` declared in `A`. A `B` value must implement `A` (the `requires`
-    /// rule), so calling `tag` on a `B` receiver dispatches `<Self as A>::tag` —
-    /// the open-world virtual call must be keyed on the *declaring* interface
-    /// `A`, not the receiver's static interface `B` (the impl registry has no
-    /// `tag` under `(Self, B)`). Coherence makes the concrete `(Self, A)`
-    /// implementation unique.
-    ///
-    /// Prefers `view`'s own interface when it declares the method directly
-    /// (BEP-044 method disambiguation: the receiver's interface picks its own
-    /// version), then the nearest required ancestor. Falls back to `view`
-    /// unchanged when nothing in the closure declares it.
-    /// `field`'s position in `iface_tn`'s own declared field list — the index space
-    /// every implementation's `RuntimeImplRule::field_links` is baked against.
-    /// `None` when this interface does not itself declare the field.
-    ///
-    /// Reads the same `interface_data` query, in the same order, that the bake and
-    /// TIR's `MemberResolution::InterfaceVirtualField` read, so the three cannot
-    /// disagree about what index a field has.
-    fn interface_field_index_directly(&self, iface_tn: &TypeName, field: &Name) -> Option<u32> {
-        use baml_compiler2_ppir::item_data::interface_data;
-        let pkg_id = self.decl(iface_tn)?.root();
-        let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
-        let Some(def) = pkg_items.lookup_type(iface_tn.namespace(), iface_tn.name()) else {
-            if let Some(baml_compiler2_hir_ty::package_interface::ExportedType::Interface {
-                fields,
-                ..
-            }) = self.mounted_row(iface_tn)
-            {
-                let index = fields.iter().position(|(name, _, _)| name == field)?;
-                return Some(u32::try_from(index).expect("interface field count fits u32"));
-            }
-            return None;
-        };
-        let baml_compiler2_hir::contributions::Definition::Interface(loc) = def else {
-            return None;
-        };
-        let index = interface_data(self.db, loc)
-            .fields
-            .iter()
-            .position(|f| f.name == *field)?;
-        Some(u32::try_from(index).expect("interface field count fits u32"))
+    /// [`Self::source_interface_declares`] for an interface named by type name,
+    /// covering both lanes a declaration can arrive on: a source interface in
+    /// this compilation, or a MOUNTED dependency's exported row. `None` means
+    /// the name is not an interface this compilation can read at all — which
+    /// is not the same as "the member is absent" (see
+    /// [`InterfaceMember::Undeclared`]).
+    fn interface_declares(&self, iface_tn: &TypeName, member: &Name) -> Option<DeclaredMember> {
+        self.decl_interface_declares(&self.decl(iface_tn)?, member)
     }
 
-    /// Narrow an interface view to the interface that *declares* `field`, paired with
-    /// that field's index there. `requires` is a bound rather than inheritance, so a
-    /// parent-declared field is served by the implementor's separate impl of the
-    /// parent, at the parent's own index — never the child's numbering.
+    /// [`Self::interface_declares`] keyed on a resolved declaration name — the
+    /// form the mounted lane and the `requires` walk already hold, so they ask
+    /// the one question instead of re-deriving the answer inline.
+    fn decl_interface_declares(
+        &self,
+        iface_decl: &DeclName,
+        member: &Name,
+    ) -> Option<DeclaredMember> {
+        let pkg_items = baml_compiler2_hir::package::package_items(self.db, iface_decl.root());
+        if let Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) =
+            pkg_items.lookup_type(iface_decl.namespace(), iface_decl.name())
+        {
+            return self.source_interface_declares(loc, member);
+        }
+        let baml_compiler2_hir_ty::package_interface::ExportedType::Interface {
+            required_methods,
+            default_methods,
+            fields,
+            ..
+        } = baml_compiler2_hir_ty::package_interface::mounted_type_row(self.db, iface_decl)?
+        else {
+            return None;
+        };
+        if required_methods.iter().any(|m| m.name == *member)
+            || default_methods.iter().any(|m| m.name == *member)
+        {
+            return Some(DeclaredMember::Method);
+        }
+        let index = fields.iter().position(|(name, _, _)| name == member)?;
+        Some(DeclaredMember::Field {
+            index: u32::try_from(index).expect("interface field count fits u32"),
+        })
+    }
+
+    /// THE interface member resolution: what `member` means in `view`, and
+    /// which interface of `view`'s `requires` closure says so.
     ///
-    /// The field counterpart of [`Self::interface_view_declaring_method`].
-    fn interface_view_declaring_field(
+    /// One walk answers every road's question ([`InterfaceMember`] is the full
+    /// state space), so the call roads, the field roads, and the bound-method
+    /// road cannot disagree about what a name is.
+    ///
+    /// `view`'s own interface is consulted first (BEP-044 member
+    /// disambiguation: the receiver's interface picks its own version), then
+    /// the nearest required ancestor. `requires` is a bound, not inheritance,
+    /// so an ancestor-declared member is served by the implementor's separate
+    /// impl of that ancestor — at the ancestor's own field index, and keyed on
+    /// the ancestor for dispatch — which is why the answer carries the
+    /// DECLARING view rather than the one asked about.
+    fn resolve_interface_member(&self, view: &InterfaceTypeView, member: &Name) -> InterfaceMember {
+        let found = |declaring: InterfaceTypeView, declared| match declared {
+            DeclaredMember::Method => InterfaceMember::Method { declaring },
+            DeclaredMember::Field { index } => InterfaceMember::Field { declaring, index },
+        };
+        if let Some(declared) = self.interface_declares(&view.0, member) {
+            return found(view.clone(), declared);
+        }
+        // The closure walk repeats the root view at index 0; it was just
+        // checked, and re-checking it is harmless (same answer, one extra
+        // lookup) — so the walk is consumed whole rather than sliced.
+        self.interface_closure_type_name_views(&view.0, &view.1, &view.2)
+            .and_then(|views| {
+                views.into_iter().find_map(|v| {
+                    let declared = self.interface_declares(&v.0, member)?;
+                    Some(found(v, declared))
+                })
+            })
+            .unwrap_or(InterfaceMember::Undeclared)
+    }
+
+    /// The interface view an interface-mediated CALL of `member` keys on, or
+    /// `None` when the call must not dispatch at all.
+    ///
+    /// The call-road reading of [`Self::resolve_interface_member`], stated
+    /// once for every road that lowers a call: a METHOD dispatches on its
+    /// declaring interface (a `requires` ancestor's impl is where the method
+    /// lives, so keying on the receiver's own interface would miss it); a
+    /// FIELD is not dispatchable, whatever its type, and the caller must fall
+    /// through to the value road (read through the virtual-field view, then
+    /// call the value indirectly); an UNDECLARED name keeps dispatching on
+    /// the view as given, since absence of a readable declaration is not
+    /// proof of absence.
+    fn dispatch_view_for_call(
         &self,
         view: &InterfaceTypeView,
-        field: &Name,
-    ) -> Option<(InterfaceTypeView, u32)> {
-        if let Some(index) = self.interface_field_index_directly(&view.0, field) {
-            return Some((view.clone(), index));
+        member: &Name,
+    ) -> Option<InterfaceTypeView> {
+        match self.resolve_interface_member(view, member) {
+            InterfaceMember::Method { declaring } => Some(declaring),
+            InterfaceMember::Field { .. } => None,
+            InterfaceMember::Undeclared => Some(view.clone()),
         }
-        self.interface_closure_type_name_views(&view.0, &view.1, &view.2)?
-            .into_iter()
-            .find_map(|v| {
-                let index = self.interface_field_index_directly(&v.0, field)?;
-                Some((v, index))
-            })
     }
 
     fn interface_view_declaring_method(
@@ -4169,16 +4239,17 @@ impl<'db> LoweringContext<'db> {
         view: &InterfaceTypeView,
         method: &Name,
     ) -> InterfaceTypeView {
-        if self.interface_declares_method_directly(&view.0, method) {
-            return view.clone();
+        match self.resolve_interface_member(view, method) {
+            InterfaceMember::Method { declaring } => declaring,
+            // A FIELD is not dispatchable and the caller should not have asked
+            // — the call roads decline before reaching here. UNDECLARED is the
+            // unreadable-interface case. Neither can name a better view than
+            // the one asked about, so dispatch stays keyed on it: this is a
+            // fallback for a program that will not run (field) or one whose
+            // interface this compilation cannot see (undeclared), never a
+            // silent re-targeting.
+            InterfaceMember::Field { .. } | InterfaceMember::Undeclared => view.clone(),
         }
-        self.interface_closure_type_name_views(&view.0, &view.1, &view.2)
-            .and_then(|views| {
-                views
-                    .into_iter()
-                    .find(|(tn, _, _)| self.interface_declares_method_directly(tn, method))
-            })
-            .unwrap_or_else(|| view.clone())
     }
 
     fn expr_ty(&self, expr_id: AstExprId) -> RuntimeTy {
@@ -8840,17 +8911,23 @@ impl<'db> LoweringContext<'db> {
                         .as_ref()
                         .and_then(|ty| self.dispatch_target_for_concrete(ty, &method_name))
                 });
-                if let Some((iface_tn, iface_type_args, iface_assoc)) = iface_dispatch_opt
+                if let Some(view) = iface_dispatch_opt
                     // A `self`-less method has no receiver to dispatch on —
                     // fall through to the static roads.
                     && self
-                        .interface_method_shape(&iface_tn, &method_name)
+                        .interface_method_shape(&view.0, &method_name)
                         .is_none_or(|shape| shape.takes_self)
+                    // The interface to key on, or a decline — a declared FIELD
+                    // is not dispatchable, and `self.<field>(..)` inside a
+                    // default body spells a PATH, so it lands here rather than
+                    // on the member-access road.
+                    && let Some((decl_tn, decl_args, decl_assoc)) =
+                        self.dispatch_view_for_call(&view, &method_name)
                 {
                     // Decide how many leading segments form the receiver
                     // value (the rest are type qualifiers).
                     let prefix_is_qualifier = segments.len() >= 3
-                        && segments[prefix_idx].as_str() == iface_tn.name().as_str();
+                        && segments[prefix_idx].as_str() == view.0.name().as_str();
                     let receiver_segments_end = if prefix_is_qualifier {
                         prefix_idx
                     } else {
@@ -8863,13 +8940,7 @@ impl<'db> LoweringContext<'db> {
                     // virtual call — same routing as the member-access dispatch
                     // site (`try_lower_interface_dispatch`); the VM resolves the
                     // impl from the receiver's runtime concrete type (containers
-                    // included). Key the call on the interface that *declares* the
-                    // method (which may be a `requires` super-interface of the
-                    // receiver's static interface).
-                    let (decl_tn, decl_args, decl_assoc) = self.interface_view_declaring_method(
-                        &(iface_tn, iface_type_args, iface_assoc),
-                        &method_name,
-                    );
+                    // included). The declaring view came from the gate above.
                     if self.emit_virtual_call(
                         recv_local,
                         &decl_tn,
@@ -11254,32 +11325,35 @@ impl<'db> LoweringContext<'db> {
         // Same view the field form uses, so `x?.m()` dispatches on the non-null
         // receiver instead of declining on the `T | null` union and falling
         // through to a bound-method value.
-        let dispatch_target = self.dispatch_target_for_member_access(callee, base, method);
-        let Some((iface_tn, iface_type_args, iface_assoc)) = dispatch_target else {
+        let Some(view) = self.dispatch_target_for_member_access(callee, base, method) else {
             return false;
         };
         // A `self`-less interface method cannot dispatch on a receiver — the
         // callee has no slot for it. An in-body impl's static resolves through
         // the class road instead (receiver evaluated and discarded, matching
-        // inherent statics); TIR rejects the shapes with no static road.
+        // inherent statics); TIR rejects the shapes with no static road. Asked
+        // of the RECEIVER's interface, before the closure walk below narrows to
+        // the declaring one.
         if self
-            .interface_method_shape(&iface_tn, method)
+            .interface_method_shape(&view.0, method)
             .is_some_and(|shape| !shape.takes_self)
         {
             return false;
         }
+        // Every interface-mediated call dispatches open-world via a virtual
+        // call: the VM resolves the impl from the receiver's runtime concrete
+        // type (containers included — array/map values carry their element
+        // types), so a statically-undetermined receiver (a bounded type-var,
+        // an existential, `Self` in a default body) and a concrete one route
+        // identically. `dispatch_view_for_call` supplies the interface to key
+        // on, or declines the road entirely for a field.
+        let Some((decl_tn, decl_args, decl_assoc)) = self.dispatch_view_for_call(&view, method)
+        else {
+            return false;
+        };
         let receiver_op = self.lower_to_operand(base);
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
-        // Every interface-mediated call dispatches open-world via a virtual call:
-        // the VM resolves the impl from the receiver's runtime concrete type
-        // (containers included — array/map values carry their element types), so a
-        // statically-undetermined receiver (a bounded type-var, an existential,
-        // `Self` in a default body) and a concrete one route identically. Key the
-        // call on the interface that *declares* `method` (which may be a `requires`
-        // super-interface of the receiver's static interface).
-        let (decl_tn, decl_args, decl_assoc) =
-            self.interface_view_declaring_method(&(iface_tn, iface_type_args, iface_assoc), method);
         self.emit_virtual_call(
             recv_local,
             &decl_tn,
@@ -11753,8 +11827,13 @@ impl<'db> LoweringContext<'db> {
         view: &InterfaceTypeView,
         field: &Name,
     ) -> Option<(TyTemplateInterface, u32)> {
-        let ((decl_tn, decl_args, decl_assoc), field_index) =
-            self.interface_view_declaring_field(view, field)?;
+        let InterfaceMember::Field {
+            declaring: (decl_tn, decl_args, decl_assoc),
+            index: field_index,
+        } = self.resolve_interface_member(view, field)
+        else {
+            return None;
+        };
         let generic_params = self.enclosing_generic_params();
         Some((
             tir2_interface_to_template(
