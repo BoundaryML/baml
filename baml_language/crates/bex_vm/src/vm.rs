@@ -5131,6 +5131,21 @@ impl BexVm {
             .collect()
     }
 
+    /// The stack trace a caller sees on a thrown value or an escaping panic:
+    /// [`Self::capture_stack_trace`] with the standard-library frames removed.
+    ///
+    /// A `<builtin>/…` frame is nothing user code can act on, and a native
+    /// builtin never produced one - it pushes no frame at all. Filtering here
+    /// keeps a builtin whose body is written in BAML (`baml.sys.panic`,
+    /// `baml.sys.exit`) indistinguishable from one written in Rust. Internal
+    /// errors keep the full trace, where those frames are the point.
+    fn capture_user_stack_trace(&self) -> Vec<StackFrame> {
+        self.capture_stack_trace()
+            .into_iter()
+            .filter(|frame| !frame.is_builtin())
+            .collect()
+    }
+
     /// Walk the call stack outward from the current frame looking for an
     /// exception handler.
     ///
@@ -5373,7 +5388,7 @@ impl BexVm {
         let (trace, cause_context) = if let Some(context) = preserved {
             (context.trace, context.cause)
         } else {
-            let trace = Arc::from(self.capture_stack_trace());
+            let trace = Arc::from(self.capture_user_stack_trace());
             let cause = if is_rethrow {
                 self.recorded_throw_cause(exception_value)
             } else {
@@ -7406,7 +7421,7 @@ impl BexVm {
     pub fn try_handle_external_thrown(&mut self, thrown: VmThrown) -> Result<(), VmError> {
         let exception_value = thrown.value;
         if self.frames.is_empty() {
-            let trace = self.capture_stack_trace();
+            let trace = self.capture_user_stack_trace();
             return Err(VmError::ThrownUnhandled {
                 value: exception_value,
                 trace,
@@ -7420,7 +7435,7 @@ impl BexVm {
         let mut seed_idx = self.frames.len() - 1;
         while !matches!(&self.frames[seed_idx], Frame::Bytecode(_)) {
             if seed_idx == 0 {
-                let trace = self.capture_stack_trace();
+                let trace = self.capture_user_stack_trace();
                 return Err(VmError::ThrownUnhandled {
                     value: exception_value,
                     trace,

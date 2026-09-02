@@ -447,14 +447,33 @@ impl VmRustFnError {
     }
 }
 
+/// Project-relative path prefix carried by every standard-library source
+/// file. User files never start with it, so it is the one test for "is this
+/// frame / unit part of the stdlib".
+pub const BUILTIN_SOURCE_PREFIX: &str = "<builtin>/";
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct StackFrame {
     pub function_name: String,
-    /// Filesystem path of the source file containing this function.
-    /// Empty string for builtins and synthesized functions.
+    /// Project-relative path of the source file containing this function:
+    /// `<builtin>/…` for standard-library functions, empty for synthesized
+    /// functions with no source at all.
     pub file_path: String,
     pub function_span: baml_type::Span,
     pub error_line: usize,
+}
+
+impl StackFrame {
+    /// Whether this frame executes standard-library code.
+    ///
+    /// A user-facing traceback omits these frames: a `<builtin>/…` line is
+    /// nothing the caller can act on, and it is exactly what a native builtin
+    /// (which pushes no frame at all) never showed. A builtin whose body is
+    /// written in BAML rather than Rust therefore presents identically.
+    #[must_use]
+    pub fn is_builtin(&self) -> bool {
+        self.file_path.starts_with(BUILTIN_SOURCE_PREFIX)
+    }
 }
 
 fn format_internal_error(err: &VmInternalError, trace: &[StackFrame]) -> String {

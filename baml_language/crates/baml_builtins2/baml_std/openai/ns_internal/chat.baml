@@ -858,6 +858,7 @@ function chat_lower_journal(j: ai.Journal) -> ChatMessage[] {
 ///   * `parameters` — a tool's JSON Schema, where `{"default": null}` and
 ///     `{"type": ["string", "null"]}` sibling nulls are meaningful, and where a
 ///     strict-schema server validates what it was given.
+///
 /// The `request_body` passthrough needs no entry here: it is merged AFTER the
 /// prune (`chat_render_body`), so it is never walked.
 function _chat_is_opaque_key(key: string) -> bool {
