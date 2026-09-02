@@ -1448,8 +1448,10 @@ jobs:
     needs: [plan, build-swift-sdk, all-builds, publish-toolchain-release]
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
     env:
       GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
     permissions:
       contents: write
     steps:
@@ -1482,17 +1484,11 @@ jobs:
             echo "uploaded: $name"
           fi
       - name: Clone BoundaryML/baml-swift
-        env:
-          DEPLOY_KEY: ${{ secrets.BAML_SWIFT_DEPLOY_KEY }}
         run: |
           set -euo pipefail
-          test -n "$DEPLOY_KEY"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/baml_swift_mirror_key
-          chmod 600 ~/.ssh/baml_swift_mirror_key
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_swift_mirror_key -o IdentitiesOnly=yes"
-          git clone git@github.com:BoundaryML/baml-swift.git /tmp/baml-swift
+          test -n "$GH_TOKEN"
+          gh auth setup-git
+          git clone https://github.com/BoundaryML/baml-swift.git /tmp/baml-swift
           if ! git -C /tmp/baml-swift rev-parse --verify HEAD >/dev/null 2>&1; then
             git -C /tmp/baml-swift switch --orphan main
           fi
@@ -1502,7 +1498,6 @@ jobs:
           VERSION: ${{ needs.plan.outputs.swiftpm_version }}
         run: |
           set -euo pipefail
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_swift_mirror_key -o IdentitiesOnly=yes"
           tag="v$VERSION"
           rsync -a --delete --exclude .git /tmp/swift-sdk-mirror/ /tmp/baml-swift/
           cd /tmp/baml-swift
