@@ -1,5 +1,5 @@
-name: "Setup baml_language Rust"
-description: "Setup the baml_language Rust toolchain with caching and optional WASM support"
+name: "Setup Rust for engine"
+description: "Setup Rust toolchain with caching and optional WASM support for engine workflows"
 
 inputs:
   toolchain:
@@ -25,7 +25,7 @@ inputs:
   workspace:
     description: "Workspace path for Rust cache"
     required: false
-    default: "baml_language"
+    default: "engine"
   prefix-key:
     description: "Cache key prefix for Rust cache"
     required: false
