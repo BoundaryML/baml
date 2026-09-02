@@ -1069,7 +1069,9 @@ jobs:
       # index + git checkouts, not the unpacked sources, so this keeps the
       # artifact (and the run job's download/untar) small.
       - name: "Pack cargo home for benchmarks-run"
-        run: tar -C "$HOME" --exclude='.cargo/registry/src' -cf cargo-home.tar .cargo/registry .cargo/git
+        run: |
+          mkdir -p "$HOME/.cargo/git"
+          tar -C "$HOME" --exclude='.cargo/registry/src' -cf cargo-home.tar .cargo/registry .cargo/git
       - name: "Upload cargo home"
         uses: actions/upload-artifact@v7
         with:
