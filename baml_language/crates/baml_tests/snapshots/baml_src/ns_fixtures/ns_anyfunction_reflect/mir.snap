@@ -83,9 +83,9 @@ fn user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Ret
     let _3: string // parts
     let _4: string
     let _5: string
-    let _6: (reflect.Type) -> string throws never
+    let _6: reflect.Type
     let _7: string
-    let _8: (reflect.Type) -> string throws never
+    let _8: reflect.Type
     let _9: string
     let _10: int
     let _11: (reflect.Arg[]) -> int throws never
@@ -100,7 +100,7 @@ fn user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Ret
     let _20: string
     let _21: string
     let _22: string
-    let _23: (reflect.Type) -> string throws never
+    let _23: reflect.Type
     let _24: string[]
     let _25: (map<string, reflect.Arg>) -> string[] throws never
     let _26: reflect.Type
@@ -122,7 +122,7 @@ fn user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Ret
     let _42: string
     let _43: string
     let _44: string
-    let _45: (reflect.Type) -> string throws never
+    let _45: reflect.Type
 
     bb0: {
         _2 = call const fn reflect.signature(copy _1) -> [bb1];
@@ -130,12 +130,12 @@ fn user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Ret
 
     bb1: {
         _6 = copy _2.3;
-        _5 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _6) -> [bb2];
+        _5 = virtual_call to_string as baml.ToString(copy _6) -> [bb2];
     }
 
     bb2: {
         _8 = copy _2.4;
-        _7 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _8) -> [bb3];
+        _7 = virtual_call to_string as baml.ToString(copy _8) -> [bb3];
     }
 
     bb3: {
@@ -173,7 +173,7 @@ fn user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Ret
         _21 = copy _18.0;
         _19 = copy _20 + copy _21;
         _23 = copy _18.1;
-        _22 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _23) -> [bb9];
+        _22 = virtual_call to_string as baml.ToString(copy _23) -> [bb9];
     }
 
     bb9: {
@@ -227,7 +227,7 @@ fn user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Ret
         _43 = copy _32;
         _41 = copy _42 + copy _43;
         _45 = copy _33.1;
-        _44 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _45) -> [bb18];
+        _44 = virtual_call to_string as baml.ToString(copy _45) -> [bb18];
     }
 
     bb18: {

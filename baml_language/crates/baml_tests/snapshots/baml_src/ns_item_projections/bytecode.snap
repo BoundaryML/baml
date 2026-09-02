@@ -219,7 +219,9 @@ function item_projections.<(user.item_projections.Loud as user.item_projections.
 
 function item_projections.<(user.item_projections.Plate<#0> as user.item_projections.Embosser)>.emboss(u: #1) -> string {
     load_type #1
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _2
     load_const "emboss "
     load_var _2
@@ -260,7 +262,9 @@ function item_projections.<(user.item_projections.Poly as user.item_projections.
 
 function item_projections.<(user.item_projections.Press as user.item_projections.Stamper)>.emboss(u: #0) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _2
     load_const "emboss "
     load_var _2
@@ -270,7 +274,9 @@ function item_projections.<(user.item_projections.Press as user.item_projections
 
 function item_projections.<(user.item_projections.Press as user.item_projections.Stamper)>.stamp(self: item_projections.Press, u: #0) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _3
     load_const "stamp "
     load_var _3

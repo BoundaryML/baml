@@ -6086,7 +6086,7 @@ fn ai.internal.validate_output_type(return_type: reflect.Type) -> void {
     }
 
     bb9: {
-        _11 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _1) -> [bb10];
+        _11 = virtual_call to_string as baml.ToString(copy _1) -> [bb10];
     }
 
     bb10: {
@@ -11977,7 +11977,7 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
     bb24: {
         _82 = const "Expected zero or one " + copy _83;
         _81 = copy _82 + const " output for ";
-        _87 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _4) -> [bb25];
+        _87 = virtual_call to_string as baml.ToString(copy _4) -> [bb25];
     }
 
     bb25: {
@@ -12087,7 +12087,7 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
     }
 
     bb44: {
-        _42 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _4) -> [bb45];
+        _42 = virtual_call to_string as baml.ToString(copy _4) -> [bb45];
     }
 
     bb45: {
@@ -12179,7 +12179,7 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
     bb61: {
         _110 = const "the " + copy _111;
         _109 = copy _110 + const " output did not fit ";
-        _115 = call const fn baml.<(reflect.Type as baml.ToString)>.to_string(copy _4) -> [bb62];
+        _115 = virtual_call to_string as baml.ToString(copy _4) -> [bb62];
     }
 
     bb62: {

@@ -207,7 +207,11 @@ function projection_patterns.Labeled.is_label(self: projection_patterns.Labeled,
 
 function projection_patterns.Labeled.label_name(self: projection_patterns.Labeled) -> string {
     load_type (#0 as projection_patterns.Labeled).Label
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
