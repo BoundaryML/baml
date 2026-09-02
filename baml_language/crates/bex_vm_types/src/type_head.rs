@@ -576,7 +576,8 @@ mod tests {
         }));
 
         let mut head = TypeHead::of_name(&name);
-        let unresolved: RealizedTy<TypeHead> = RealizedTy::Class(head, vec![], TyAttr::default());
+        let unresolved: RealizedTy<TypeHead> =
+            RealizedTy::Class(head, Box::new([]), TyAttr::default());
         assert_eq!(
             unresolved.to_string(),
             format!("<unresolved type #{}>", head.tag().as_i64()),
@@ -584,7 +585,7 @@ mod tests {
 
         head.resolve(ptr_to(&mut declaration));
         let ty: RealizedTy<TypeHead> = RealizedTy::List(
-            Box::new(RealizedTy::Class(head, vec![], TyAttr::default())),
+            Box::new(RealizedTy::Class(head, Box::new([]), TyAttr::default())),
             TyAttr::default(),
         );
         assert_eq!(ty.to_string(), "demo.Person[]");
@@ -626,7 +627,7 @@ mod tests {
         assert!(overlay.namespace().is_empty());
         assert_eq!(overlay.name().as_str(), "Widget");
 
-        let ty: RealizedTy<TypeHead> = RealizedTy::Class(head, vec![], TyAttr::default());
+        let ty: RealizedTy<TypeHead> = RealizedTy::Class(head, Box::new([]), TyAttr::default());
         assert_eq!(ty.to_string(), "Widget");
     }
 
@@ -667,7 +668,7 @@ mod tests {
         let head = TypeHead::new(ptr_to(&mut definition), TypeTag::of_head("demo.Person"));
 
         let ty: RealizedTy<TypeHead> = RealizedTy::List(
-            Box::new(RealizedTy::Class(head, vec![], TyAttr::default())),
+            Box::new(RealizedTy::Class(head, Box::new([]), TyAttr::default())),
             TyAttr::default(),
         );
 

@@ -35,10 +35,22 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use crate::{Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, TyAttr, TypeName};
 
 ty_family! {
-    axes { concrete, abstract, literal, never, typevar, projection, tir, special, frame }
+    axes { concrete, abstract, literal, never, typevar, projection, lower, infer, error, special, frame }
 
-    type Ty                 { includes: [concrete, abstract, literal, never, typevar, projection, tir, special], child: Self }
-    type RuntimeTy          { includes: [concrete, abstract, literal, never, typevar, projection, special],      child: Self }
+    // The FINALIZED compiler type: what type checking hands downstream (TIR
+    // facts, throw-facts persistence, the normalize oracle, MIR input). It can
+    // carry the `Error` sentinel — a diagnosed failure is a legitimate final
+    // answer — but not an inference hole: a `_` is a question, and finalized
+    // types are answers. Holes live in `LoweringTy` only.
+    type Ty                 { includes: [concrete, abstract, literal, never, typevar, projection, error, special],        child: Self }
+    // The pre-inference lowering type: `Ty` plus the `_` hole (`Infer`). The
+    // output vocabulary of pure type-expression lowering, consumed by the two
+    // policy folds — signatures reject holes (`reject_holes`), inference
+    // instantiates them as fresh table variables (`instantiate_holes`). The
+    // widest plain member, so the hand-written renderer lives here and every
+    // narrower member renders through its upcast.
+    type LoweringTy         { includes: [concrete, abstract, literal, never, typevar, projection, lower, error, special], child: Self }
+    type RuntimeTy          { includes: [concrete, abstract, literal, never, typevar, projection, special],               child: Self }
     // A deep, generator-independent public API type. Unlike `RuntimeTy`, this
     // excludes unresolved associated-type projections; unlike `RealizedTy`, it
     // retains named type variables for generic declarations. Type aliases are
@@ -56,6 +68,16 @@ ty_family! {
     // `RealizedTy` is a valid `TyTemplate`; narrowing back proves no template
     // leaf survives), giving the "is fully realized" check for free.
     type TyTemplate         { includes: [concrete, abstract, literal, never, projection, special, frame],        child: Self }
+    // The INTERNED member: the hash-cons pool's kind (see `crate::interned`).
+    // Children are pool handles, so this is the one-level-deep structural
+    // layer a handle dereferences to. It is the inference engine's working
+    // representation: the finalized axes plus `infer` — a live table variable
+    // is representable, the syntactic `_` hole is not (`lower` excluded), so
+    // the F1 ruling ("during inference there are never var-less holes") holds
+    // by construction. Excluded from the conversion matrix and walkers; its
+    // boundary conversions (total interning, fallible finalization) are
+    // hand-written in `interned.rs` alongside the pool.
+    type InferTy            { includes: [concrete, abstract, literal, never, typevar, projection, infer, error, special], child: interned(crate::interned::Ty) }
 
     satellite FunctionParamTy<N: Clone = TypeName> {
         pub name: Option<Name>,
@@ -98,12 +120,12 @@ ty_family! {
         /// The interface's generic *input* arguments, in declaration order.
         /// Resolved from context; never defaulted away — they are part of the
         /// interface's identity (`Converter<int>` ≠ `Converter<float>`).
-        pub generics: Vec<Ty<N>>,
+        pub generics: Box<[Ty<N>]>,
         /// Associated-type bindings that further constrain the implementor (the
         /// `Item = int` in `Iterator<Item = int>`). Real constraints carried as
         /// part of the interface, never stripped; sorted by name for a
         /// deterministic order.
-        pub associated_types: Vec<(Name, Ty<N>)>,
+        pub associated_types: Box<[(Name, Ty<N>)]>,
     } methods {
         /// Build an interface constraint, sorting `associated_types` by name so the
         /// invariant the field documents holds and the derived `Eq`/`Hash`/`Ord`
@@ -112,13 +134,35 @@ ty_family! {
         /// for every family member (`Interface`, `RuntimeInterface`, …), so every
         /// construction site — including the untrusted ctypes decode boundary —
         /// can route through it instead of sorting by hand.
-        pub fn new(name: N, generics: Vec<Ty<N>>, mut associated_types: Vec<(Name, Ty<N>)>) -> Self {
+        pub fn new(
+            name: N,
+            generics: Box<[Ty<N>]>,
+            mut associated_types: Box<[(Name, Ty<N>)]>,
+        ) -> Self {
             associated_types.sort_by(|(a, _), (b, _)| a.cmp(b));
             Self {
                 name,
                 generics,
                 associated_types,
             }
+        }
+
+        /// The interface *existential* type (`Ty::Interface`) denoted by this
+        /// constraint, with default attributes.
+        ///
+        /// A constraint may pin only some associated types whereas a
+        /// fully-specified existential pins all of them; this lifts the
+        /// constraint verbatim, so the result carries exactly the bindings the
+        /// constraint holds. Generated for every member, so each member's
+        /// renderer (and any other consumer of the existential view) reads it
+        /// from its own satellite.
+        pub fn to_ty(&self) -> Ty<N> {
+            Ty::Interface(
+                self.name.clone(),
+                self.generics.clone(),
+                self.associated_types.clone(),
+                TyAttr::default(),
+            )
         }
     }
 
@@ -171,11 +215,11 @@ ty_family! {
         #[axis(literal)]
         Literal(Literal, Freshness, TyAttr) = 8,
         #[axis(concrete)]
-        Class(N, Vec<Ty<N>>, TyAttr) = 9,
+        Class(N, Box<[Ty<N>]>, TyAttr) = 9,
         /// An interface existential type, equivalent to Rust `dyn Trait`.
         /// Must specify all generic type args and all associated types.
         #[axis(abstract)]
-        Interface(N, Vec<Ty<N>>, Vec<(Name, Ty<N>)>, TyAttr) = 10,
+        Interface(N, Box<[Ty<N>]>, Box<[(Name, Ty<N>)]>, TyAttr) = 10,
         #[axis(concrete)]
         Enum(N, TyAttr) = 11,
         /// A specific enum variant — `Status.HttpError`.
@@ -190,12 +234,12 @@ ty_family! {
             attr: TyAttr,
         } = 14,
         #[axis(abstract)]
-        Union(Vec<Ty<N>>, TyAttr) = 15,
+        Union(Box<[Ty<N>]>, TyAttr) = 15,
 
         /// Function/arrow type: `(T1, T2, ...) -> R throws E`.
         #[axis(concrete)]
         Function {
-            params: Vec<FunctionParamTy<N>>,
+            params: Box<[FunctionParamTy<N>]>,
             ret: Box<Ty<N>>,
             throws: Box<Ty<N>>,
             attr: TyAttr,
@@ -293,14 +337,18 @@ ty_family! {
             attr: TyAttr,
         } = 28,
 
-        // --- TIR-only: present during type checking, erased at the runtime
-        // boundary (`lower_to_runtime`). Carried only by `Ty` (the `tir` axis).
+        // --- Compiler-only sentinels: present during type checking, erased at
+        // the runtime boundary (`lower_to_runtime`). Each sits on its own axis
+        // because the pipeline's stages admit them differently: `error` is
+        // carried by every compiler-side member (a diagnosed failure is a
+        // legitimate final answer), while `lower` exists only in `LoweringTy`
+        // (a finalized type is an answer, never a question).
         // reserved: 29 was `Unknown`, the TIR-era second error-recovery
         // sentinel. The inference engine has exactly one (`Error`); TIR's other
         // uses of `Unknown` are an absent expectation and a fresh inference
         // variable, neither of which is a type.
         /// Error sentinel: a hard type error was emitted for this expression.
-        #[axis(tir)]
+        #[axis(error)]
         Error {
             attr: TyAttr,
         } = 30,
@@ -310,10 +358,11 @@ ty_family! {
         /// Inference hole — the wildcard `_` written in a type-argument or
         /// `throws`-clause position. A leaf placeholder that asks the checker to
         /// infer the type at this slot from surrounding context (the initializer
-        /// of a `let`, or the inferred effective throw set). Filled during TIR
-        /// checking; like the other `tir`-axis sentinels it must never survive to
-        /// the runtime boundary (`lower_to_runtime` rejects it).
-        #[axis(tir)]
+        /// of a `let`, or the inferred effective throw set). Lowering mints it;
+        /// the policy folds consume it — signatures reject survivors, inference
+        /// instantiates each hole as a fresh table variable. It must never
+        /// survive to a finalized `Ty` (the narrowing conversion rejects it).
+        #[axis(lower)]
         Infer {
             attr: TyAttr,
         } = 33,
@@ -331,6 +380,21 @@ ty_family! {
         TypeArgRef(u32) = 34,
         // reserved = 35 (the removed `TypeArgRefOrWildcard` dispatch-guard ref)
         // reserved = 36 (the removed `Wildcard` match-any hole)
+
+        /// A live inference-table variable. ALWAYS a variable: the syntactic
+        /// `_` hole is unrepresentable here (it lives on the `lower` axis,
+        /// which the interned member excludes) — lowering never interns, so by
+        /// the time a type is interned every hole has been instantiated
+        /// (`ingest_lowered`) or rejected (`reject_holes`). Present only in
+        /// [`InferTy`] (the `infer` axis): inference-engine-internal, must
+        /// never survive `resolve_all`. The discriminant is nominal — the
+        /// interned member is never transmuted or serialized — but stays
+        /// unique so declaration order keeps `Ord` parity meaningful.
+        #[axis(infer)]
+        InferVar {
+            var: crate::interned::InferVar,
+            attr: TyAttr,
+        } = 37,
     }
 }
 
@@ -339,8 +403,9 @@ mod tests {
     use borsh::BorshDeserialize;
 
     use crate::{
-        CodegenTy, ConcreteRealizedTy, ConcreteTy, FunctionParamTy, MediaKind, Name, NotCodegenTy,
-        NotRealizedTy, NotRuntimeTy, RealizedTy, RuntimeTy, Ty, TyAttr, TyTemplate, TypeName,
+        CodegenTy, ConcreteRealizedTy, ConcreteTy, FunctionParamTy, LoweringTy, MediaKind, Name,
+        NotCodegenTy, NotRealizedTy, NotRuntimeTy, NotTy, RealizedTy, RuntimeTy, Ty, TyAttr,
+        TyTemplate, TypeName,
     };
 
     fn a() -> TyAttr {
@@ -359,20 +424,20 @@ mod tests {
         Ty::Map {
             key: Box::new(Ty::String { attr: a() }),
             value: Box::new(Ty::Function {
-                params: vec![
+                params: Box::new([
                     FunctionParamTy::required(Some(Name::new("x")), Ty::Int { attr: a() }),
                     FunctionParamTy::optional(
                         Some(Name::new("y")),
                         Ty::List(Box::new(Ty::Bool { attr: a() }), a()),
                     ),
-                ],
+                ]),
                 ret: Box::new(Ty::Interface(
                     qtn("Iterator"),
-                    vec![Ty::Union(
-                        vec![Ty::Int { attr: a() }, Ty::Null { attr: a() }],
+                    Box::new([Ty::Union(
+                        Box::new([Ty::Int { attr: a() }, Ty::Null { attr: a() }]),
                         a(),
-                    )],
-                    vec![(Name::new("Item"), Ty::String { attr: a() })],
+                    )]),
+                    Box::new([(Name::new("Item"), Ty::String { attr: a() })]),
                     a(),
                 )),
                 throws: Box::new(Ty::Void { attr: a() }),
@@ -397,16 +462,16 @@ mod tests {
     #[test]
     fn conversions_hold_at_a_non_default_head() {
         let t: Interned = Ty::Map {
-            key: Box::new(Ty::Class(7, vec![Ty::Int { attr: a() }], a())),
+            key: Box::new(Ty::Class(7, Box::new([Ty::Int { attr: a() }]), a())),
             value: Box::new(Ty::Function {
-                params: vec![FunctionParamTy::required(
+                params: Box::new([FunctionParamTy::required(
                     Some(Name::new("x")),
                     Ty::Enum(9, a()),
-                )],
+                )]),
                 ret: Box::new(Ty::Interface(
                     11,
-                    vec![Ty::Bool { attr: a() }],
-                    vec![(Name::new("Item"), Ty::String { attr: a() })],
+                    Box::new([Ty::Bool { attr: a() }]),
+                    Box::new([(Name::new("Item"), Ty::String { attr: a() })]),
                     a(),
                 )),
                 throws: Box::new(Ty::Void { attr: a() }),
@@ -458,19 +523,19 @@ mod tests {
     fn visit_heads_reaches_every_head() {
         let t: Interned = Ty::Map {
             // Behind a `Box`, with a head nested inside its generic arguments.
-            key: Box::new(Ty::Class(1, vec![Ty::Enum(2, a())], a())),
+            key: Box::new(Ty::Class(1, Box::new([Ty::Enum(2, a())]), a())),
             value: Box::new(Ty::Function {
                 // Through a satellite's recursive field.
-                params: vec![FunctionParamTy::required(
+                params: Box::new([FunctionParamTy::required(
                     Some(Name::new("x")),
                     Ty::EnumVariant(3, Name::new("V"), a()),
-                )],
+                )]),
                 ret: Box::new(Ty::Interface(
                     4,
                     // Through a `Vec` of nested types...
-                    vec![Ty::TypeAlias(5, a())],
+                    Box::new([Ty::TypeAlias(5, a())]),
                     // ...and through the tuple element of a binding list.
-                    vec![(Name::new("Item"), Ty::Class(6, vec![], a()))],
+                    Box::new([(Name::new("Item"), Ty::Class(6, Box::new([]), a()))]),
                     a(),
                 )),
                 throws: Box::new(Ty::Void { attr: a() }),
@@ -513,18 +578,18 @@ mod tests {
         // nested types, and one in a `Vec<(Name, _)>` tuple element.
         let t: Interned = Ty::AssociatedTypeProjection {
             base: Box::new(Ty::Function {
-                params: vec![FunctionParamTy::required(
+                params: Box::new([FunctionParamTy::required(
                     Some(Name::new("x")),
-                    Ty::Class(1, vec![Ty::Enum(2, a())], a()),
-                )],
+                    Ty::Class(1, Box::new([Ty::Enum(2, a())]), a()),
+                )]),
                 ret: Box::new(Ty::Void { attr: a() }),
                 throws: Box::new(Ty::Never { attr: a() }),
                 attr: a(),
             }),
             interface: Box::new(crate::Interface::new(
                 3,
-                vec![Ty::TypeAlias(4, a())],
-                vec![(Name::new("Item"), Ty::EnumVariant(5, Name::new("V"), a()))],
+                Box::new([Ty::TypeAlias(4, a())]),
+                Box::new([(Name::new("Item"), Ty::EnumVariant(5, Name::new("V"), a()))]),
             )),
             member: Name::new("Out"),
             attr: a(),
@@ -595,6 +660,24 @@ mod tests {
         assert_eq!(ConcreteRealizedTy::try_from(&t).unwrap(), crz);
     }
 
+    /// The finalized `Ty` ⊂ `LoweringTy` pair: widening is the zero-cost
+    /// reinterpretation (every answer is a valid question-stage value), and
+    /// narrowing rejects a hole at any depth — the type-level form of "a
+    /// finalized type is an answer, never a question".
+    #[test]
+    fn finalized_ty_rejects_holes() {
+        let t = deep_concrete();
+        let lt = LoweringTy::from(&t);
+        assert_eq!(t.as_lowering_ty(), &lt);
+        assert_eq!(Ty::try_from(&lt).unwrap(), t);
+
+        let open: LoweringTy = LoweringTy::List(Box::new(LoweringTy::Infer { attr: a() }), a());
+        assert_eq!(Ty::try_from(&open), Err(NotTy { variant: "Infer" }));
+        // An `Error` is a finalized answer, so it narrows fine.
+        let errored: LoweringTy = LoweringTy::List(Box::new(LoweringTy::Error { attr: a() }), a());
+        assert!(Ty::try_from(&errored).is_ok());
+    }
+
     /// `RealizedTy` deeply rejects type variables (by name); `RuntimeTy` keeps
     /// them.
     #[test]
@@ -620,8 +703,8 @@ mod tests {
             base: Box::new(Ty::type_var("T")),
             interface: Box::new(crate::Interface::new(
                 qtn("Iterator"),
-                Vec::new(),
-                Vec::new(),
+                Box::new([]),
+                Box::new([]),
             )),
             member: Name::new("Item"),
             attr: a(),
@@ -686,7 +769,7 @@ mod tests {
             tag::<Ty>(Ty::List(Box::new(Ty::Bool { attr: a() }), a())),
             13
         );
-        assert_eq!(tag::<Ty>(Ty::Infer { attr: a() }), 33);
+        assert_eq!(tag::<LoweringTy>(LoweringTy::Infer { attr: a() }), 33);
         assert_eq!(
             tag::<RuntimeTy>(RuntimeTy::TypeAlias(qtn("Alias"), a())),
             24

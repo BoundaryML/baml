@@ -558,10 +558,15 @@ function drv_catch_int_div_zero() -> int {
 function drv_catch_int_rem_zero() -> int {
     drv_int_rem(1, 0) catch (e) { baml.panics.DivisionByZero => -1 }
 }
-// `float` division by zero is IEEE-754 on both paths — no panic to catch — so
-// this checks the driver produces the same `inf` the opcode does.
+// `float` division by zero is IEEE-754 on every path — no panic to catch — so
+// this checks all three produce the same `inf`: the interface-bound driver, the
+// specialized `DivFloat` opcode (`float / float`), and the generic opcode that
+// a mixed `int`/`float` pair lowers to.
 function drv_float_div_zero_is_infinite() -> bool {
-    drv_float_div(1.0, 0.0) > 1.0e308 && (1.0 / 0.0) > 1.0e308
+    drv_float_div(1.0, 0.0) > 1.0e308
+        && (1.0 / 0.0) > 1.0e308
+        && (1 / 0.0) > 1.0e308
+        && (1.0 / 0) > 1.0e308
 }
 function drv_catch_bigint_div_zero() -> bigint {
     drv_bigint_div(1n, 0n) catch (e) { baml.panics.DivisionByZero => -1n }

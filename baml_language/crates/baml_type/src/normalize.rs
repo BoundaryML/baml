@@ -1176,21 +1176,13 @@ impl<H: Head> NormalTy<H, Named> {
             Ty::PromptAst { .. } => NormalTy::PromptAst,
             Ty::Unknown { .. } => NormalTy::Unknown,
             Ty::Never { .. } => NormalTy::Never,
-            // INVARIANT: every `_` inference hole is filled — or replaced with
-            // `Ty::Error` — during inference, BEFORE any normalization /
-            // equivalence / subtype check. Normalizing a hole is unsound: a
-            // "matches-anything" sentinel makes both `Box<int>` and `Box<string>`
-            // equal to `Box<_>`, which transitively (and falsely) equates
-            // `Box<int>` with `Box<string>`. There is no sound sentinel here, so a
-            // hole reaching normalization is a compiler bug, not a case to
-            // tolerate. (See `compiler2_tir::builder`: the `let`-binding path
-            // infers, fills, and only then checks; un-fillable holes become
-            // `Ty::Error` at the pattern ascription before any check runs.)
-            Ty::Infer { .. } => unreachable!(
-                "inference hole `_` reached type normalization; it must be filled \
-                 (or replaced with `Ty::Error`) during inference before any \
-                 equivalence/subtype check"
-            ),
+            // No `Infer` arm: the finalized `Ty` this oracle ingests cannot
+            // represent a `_` hole (holes live in `LoweringTy` only), so the
+            // old "hole reached normalization" unreachable! is now enforced by
+            // the type system. Normalizing a hole would be unsound — a
+            // "matches-anything" sentinel falsely equates `Box<int>` with
+            // `Box<string>` through `Box<_>` — so the axis split is what makes
+            // that unsoundness unrepresentable rather than merely checked.
             Ty::Error { .. } => NormalTy::Error,
             // Freshness is a compiler-only widening flag, irrelevant to type identity.
             Ty::Literal(lit, _freshness, _) => NormalTy::Literal(lit.clone()),
@@ -2157,7 +2149,7 @@ impl<H: Head> NormalTy<H> {
 }
 
 impl<H: Head> NormalTy<H> {
-    fn into_tys(tys: Vec<NormalTy<H>>) -> Vec<Ty<H>> {
+    fn into_tys(tys: Vec<NormalTy<H>>) -> Box<[Ty<H>]> {
         tys.into_iter().map(NormalTy::into_ty).collect()
     }
 
@@ -2669,8 +2661,9 @@ mod tests;
 // with no intermediate materialization. Facts still exchange plain types at
 // the `TypeContext` boundary (alias definitions, projection reductions) -
 // those are small and rare, and reduction results continue through the plain
-// path. Output-producing entries materialize once via `into_ty` and
-// re-intern.
+// path. Output-producing entries intern directly via `into_interned`; only a
+// μ-rendering (the alias-named surface spelling of recursion) crosses
+// through the plain form.
 
 use crate::interned;
 
@@ -2682,12 +2675,11 @@ use crate::interned;
 /// their meaning is table-relative rather than a property of the handle alone.
 #[derive(Default)]
 pub struct InternedCanonicalCache {
-    canonical: RefCell<HashMap<interned::Ty, NormalTy>>,
+    canonical: RefCell<HashMap<interned::ClosedTy, NormalTy>>,
 }
 
 impl InternedCanonicalCache {
-    fn canonical<C: TypeContext>(&self, ty: &interned::Ty, ctx: &C) -> NormalTy {
-        debug_assert!(!ty.has_infer());
+    fn canonical<C: TypeContext>(&self, ty: &interned::ClosedTy, ctx: &C) -> NormalTy {
         if let Some(canonical) = self.canonical.borrow().get(ty) {
             return canonical.clone();
         }
@@ -2698,7 +2690,12 @@ impl InternedCanonicalCache {
         canonical
     }
 
-    pub fn equivalent<C: TypeContext>(&self, a: &interned::Ty, b: &interned::Ty, ctx: &C) -> bool {
+    pub fn equivalent<C: TypeContext>(
+        &self,
+        a: &interned::ClosedTy,
+        b: &interned::ClosedTy,
+        ctx: &C,
+    ) -> bool {
         if a == b {
             return true;
         }
@@ -2710,8 +2707,8 @@ impl InternedCanonicalCache {
 
     pub fn is_subtype<C: TypeContext>(
         &self,
-        sub: &interned::Ty,
-        sup: &interned::Ty,
+        sub: &interned::ClosedTy,
+        sup: &interned::ClosedTy,
         ctx: &C,
     ) -> bool {
         if sub == sup {
@@ -2720,8 +2717,8 @@ impl InternedCanonicalCache {
         if !matches!(
             (sub.kind(), sup.kind()),
             (
-                interned::TyKind::Interface(..),
-                interned::TyKind::Interface(..)
+                interned::InferTy::Interface(..),
+                interned::InferTy::Interface(..)
             )
         ) && interned_heads_definitely_differ(sub, sup)
         {
@@ -2737,11 +2734,15 @@ impl NormalTy {
     /// same named-intermediate -> binder-resolution -> bottom-up-algebra
     /// pipeline, entered from `interned::Ty`.
     fn canonical_bottom_up_interned<C: TypeContext>(
-        ty: &interned::Ty,
+        ty: &interned::ClosedTy,
         ctx: &C,
     ) -> (NormalTy, bool) {
-        let named =
-            NormalTy::from_interned(ty, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL);
+        let named = NormalTy::from_interned(
+            ty.as_ty(),
+            ctx,
+            &mut HashSet::new(),
+            PROJECTION_REDUCTION_FUEL,
+        );
         let mut saw_mu = false;
         let resolved = named.resolve_binders(&mut Vec::new(), &mut saw_mu);
         (
@@ -2751,7 +2752,7 @@ impl NormalTy {
     }
 
     /// [`NormalTy::canonical`] for the interned representation.
-    fn canonical_interned<C: TypeContext>(ty: &interned::Ty, ctx: &C) -> NormalTy {
+    fn canonical_interned<C: TypeContext>(ty: &interned::ClosedTy, ctx: &C) -> NormalTy {
         let (t, saw_mu) = Self::canonical_bottom_up_interned(ty, ctx);
         if saw_mu && t.contains_mu() {
             mu::canonicalize_mu(t, ctx)
@@ -2759,13 +2760,136 @@ impl NormalTy {
             t
         }
     }
+
+    /// [`NormalTy::into_ty`] for the interned representation: the same
+    /// closed-form walk, interning each node directly instead of
+    /// materializing a plain tree and re-interning it. The μ arm is the one
+    /// plain crossing left: a μ-subterm's only surface form is its
+    /// precomputed alias-named rendering, so it interns from that display.
+    fn into_interned(self) -> interned::Ty {
+        use interned::InferTy as K;
+        let attr = TyAttr::default();
+        interned::Ty::intern(match self {
+            NormalTy::Int => K::Int { attr },
+            NormalTy::Bigint => K::Bigint { attr },
+            NormalTy::Float => K::Float { attr },
+            NormalTy::String => K::String { attr },
+            NormalTy::Bool => K::Bool { attr },
+            NormalTy::Null => K::Null { attr },
+            NormalTy::Uint8Array => K::Uint8Array { attr },
+            NormalTy::Media(kind) => K::Media(kind, attr),
+            NormalTy::Void => K::Void { attr },
+            NormalTy::RustType => K::RustType { attr },
+            NormalTy::Type => K::Type { attr },
+            NormalTy::Resource => K::Resource { attr },
+            NormalTy::PromptAst => K::PromptAst { attr },
+            NormalTy::Unknown => K::Unknown { attr },
+            NormalTy::Never => K::Never { attr },
+            NormalTy::Error => K::Error { attr },
+            NormalTy::Literal(lit) => K::Literal(lit, crate::Freshness::Regular, attr),
+            NormalTy::Class(qn, args) => K::Class(qn, Self::into_interned_all(args), attr),
+            NormalTy::Interface(qn, args, bindings) => K::Interface(
+                qn,
+                Self::into_interned_all(args),
+                bindings
+                    .into_iter()
+                    .map(|(name, ty)| (name, ty.into_interned()))
+                    .collect(),
+                attr,
+            ),
+            NormalTy::Enum(qn) => K::Enum(qn, attr),
+            NormalTy::EnumVariant(qn, v) => K::EnumVariant(qn, v, attr),
+            NormalTy::List(inner) => K::List(inner.into_interned(), attr),
+            NormalTy::Map { key, value } => K::Map {
+                key: key.into_interned(),
+                value: value.into_interned(),
+                attr,
+            },
+            NormalTy::Union(members) => K::Union(Self::into_interned_all(members), attr),
+            NormalTy::Function {
+                params,
+                ret,
+                throws,
+            } => K::Function {
+                params: params
+                    .into_iter()
+                    .map(|p| interned::InferFunctionParamTy {
+                        name: p.name,
+                        ty: p.ty.into_interned(),
+                        mode: p.mode,
+                    })
+                    .collect(),
+                ret: ret.into_interned(),
+                throws: throws.into_interned(),
+                attr,
+            },
+            NormalTy::Future(value, error) => {
+                K::Future(value.into_interned(), error.into_interned(), attr)
+            }
+            NormalTy::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+            } => K::AssociatedTypeProjection {
+                base: base.into_interned(),
+                // Same contract as `into_ty`'s projection arm: a normalized
+                // projection's qualifier is interface-shaped.
+                interface: interface
+                    .into_infer_interface()
+                    .unwrap_or_else(|| unreachable!("projection qualifier is an interface")),
+                member,
+                attr,
+            },
+            NormalTy::TypeVar(name) => K::TypeVar(name, attr),
+            NormalTy::Mu { binder, .. } => return interned::Ty::from_plain(&binder.rendered),
+            NormalTy::RecVar(_) => unreachable!(
+                "into_interned on a free RecVar; canonical forms at public boundaries \
+                 are closed and render recursion via their binder's display"
+            ),
+            NormalTy::OpaqueAlias(qn) => K::TypeAlias(qn, attr),
+        })
+    }
+
+    fn into_interned_all(tys: Vec<NormalTy>) -> Box<[interned::Ty]> {
+        tys.into_iter().map(NormalTy::into_interned).collect()
+    }
+
+    /// [`NormalTy::into_interface`] for the interned representation: the
+    /// projection qualifier read back as an [`interned::InferInterface`],
+    /// with the same μ-display recovery and conservative `None` degradation.
+    fn into_infer_interface(self) -> Option<interned::InferInterface> {
+        match self {
+            NormalTy::Interface(name, generics, bindings) => Some(interned::InferInterface::new(
+                name,
+                Self::into_interned_all(generics),
+                bindings
+                    .into_iter()
+                    .map(|(name, ty)| (name, ty.into_interned()))
+                    .collect(),
+            )),
+            NormalTy::Mu { binder, .. } => match *binder.rendered {
+                Ty::Interface(name, generics, associated_types, _) => {
+                    Some(interned::InferInterface::new(
+                        name,
+                        generics.iter().map(interned::Ty::from_plain).collect(),
+                        associated_types
+                            .iter()
+                            .map(|(name, ty)| (name.clone(), interned::Ty::from_plain(ty)))
+                            .collect(),
+                    ))
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
 }
 
 /// The interned representation is name-headed by construction
-/// (`interned::TyKind::Class(TypeName, ..)`), so this whole ingestion path is
+/// (`interned::InferTy::Class(TypeName, ..)`), so this whole ingestion path is
 /// fixed at `H = QualifiedTypeName`; only the μ-phase varies.
 impl NormalTy<QualifiedTypeName, Named> {
-    /// [`NormalTy::from_ty`], mirrored over `interned::TyKind`. The one
+    /// [`NormalTy::from_ty`], mirrored over `interned::InferTy`. The one
     /// naming trap: the interned `Unknown` is the TOP type (the plain enum's
     /// `Unknown`); TIR's `Unknown` recovery sentinel is
     /// unrepresentable in the interned form by design.
@@ -2775,7 +2899,7 @@ impl NormalTy<QualifiedTypeName, Named> {
         expanding: &mut HashSet<QualifiedTypeName>,
         fuel: u32,
     ) -> NormalTy<QualifiedTypeName, Named> {
-        use interned::TyKind as K;
+        use interned::InferTy as K;
         match ty.kind() {
             K::Int { .. } => NormalTy::Int,
             K::Bigint { .. } => NormalTy::Bigint,
@@ -2793,14 +2917,13 @@ impl NormalTy<QualifiedTypeName, Named> {
             K::Unknown { .. } => NormalTy::Unknown,
             K::Never { .. } => NormalTy::Never,
             K::Error { .. } => NormalTy::Error,
-            // Same invariant as the plain arm: holes are filled (or made
-            // `Error`) and live variables are resolved or deferred BEFORE any
-            // oracle query; either reaching normalization is a compiler bug.
-            K::Infer { .. } => unreachable!(
-                "inference hole/variable reached type normalization; holes must \
-                 be instantiated and variables resolved (or the check deferred) \
-                 before any equivalence/subtype query"
-            ),
+            // Unreachable BY INVARIANT: every interned entry into the
+            // normalizer takes [`interned::ClosedTy`] (this recursion runs on
+            // its children, closed by the pool's subtree-union flags), so a
+            // live variable cannot reach the oracle.
+            K::InferVar { .. } => {
+                unreachable!("ClosedTy invariant: no live inference variables")
+            }
             K::Literal(lit, _freshness, _) => NormalTy::Literal(lit.clone()),
             K::Class(qn, args, _) => NormalTy::Class(
                 qn.clone(),
@@ -2860,19 +2983,27 @@ impl NormalTy<QualifiedTypeName, Named> {
             } => {
                 // The fact boundary exchanges plain types; a projection's
                 // pieces are small. A reduction continues through the plain
-                // path, exactly like the plain arm.
-                let plain_base = base.to_plain();
+                // path, exactly like the plain arm. This entry's contract is
+                // var-free (the `InferVar` arm above), so closing the pieces
+                // shares that contract; an open piece here is the same
+                // compiler bug.
+                let closed = |ty: &interned::Ty| {
+                    interned::ClosedTy::try_from(ty)
+                        .unwrap_or_else(|_| {
+                            unreachable!(
+                                "inference variable reached type normalization inside a projection"
+                            )
+                        })
+                        .to_plain()
+                };
+                let plain_base = closed(base);
                 let plain_interface = crate::Interface::new(
                     interface.name.clone(),
-                    interface
-                        .generics
-                        .iter()
-                        .map(interned::Ty::to_plain)
-                        .collect(),
+                    interface.generics.iter().map(&closed).collect(),
                     interface
                         .associated_types
                         .iter()
-                        .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                        .map(|(name, ty)| (name.clone(), closed(ty)))
                         .collect(),
                 );
                 if fuel > 0
@@ -2937,8 +3068,8 @@ impl NormalTy<QualifiedTypeName, Named> {
 /// entered without materializing plain trees. Pointer identity is the
 /// reflexivity fast path.
 pub fn is_subtype_interned<C: TypeContext>(
-    sub: &interned::Ty,
-    sup: &interned::Ty,
+    sub: &interned::ClosedTy,
+    sup: &interned::ClosedTy,
     ctx: &C,
 ) -> bool {
     if sub == sup {
@@ -2947,8 +3078,8 @@ pub fn is_subtype_interned<C: TypeContext>(
     if !matches!(
         (sub.kind(), sup.kind()),
         (
-            interned::TyKind::Interface(..),
-            interned::TyKind::Interface(..)
+            interned::InferTy::Interface(..),
+            interned::InferTy::Interface(..)
         )
     ) && interned_heads_definitely_differ(sub, sup)
     {
@@ -2960,7 +3091,11 @@ pub fn is_subtype_interned<C: TypeContext>(
 }
 
 /// [`TypeContext::equivalent`] for interned types.
-pub fn equivalent_interned<C: TypeContext>(a: &interned::Ty, b: &interned::Ty, ctx: &C) -> bool {
+pub fn equivalent_interned<C: TypeContext>(
+    a: &interned::ClosedTy,
+    b: &interned::ClosedTy,
+    ctx: &C,
+) -> bool {
     if a == b {
         return true;
     }
@@ -2974,7 +3109,7 @@ pub fn equivalent_interned<C: TypeContext>(a: &interned::Ty, b: &interned::Ty, c
 /// the identical-head fast path cheaper, but distinct nominal heads are still
 /// common during inference and cannot be changed by canonicalization.
 fn interned_heads_definitely_differ(a: &interned::Ty, b: &interned::Ty) -> bool {
-    use interned::TyKind as K;
+    use interned::InferTy as K;
     match (a.kind(), b.kind()) {
         (K::Class(q1, ..), K::Class(q2, ..))
         | (K::Interface(q1, ..), K::Interface(q2, ..))
@@ -2984,17 +3119,18 @@ fn interned_heads_definitely_differ(a: &interned::Ty, b: &interned::Ty) -> bool 
     }
 }
 
-/// [`TypeContext::normalize`] for interned types. Materializes once on the
-/// way out (attrs erased, like the plain form), with the mu root rendered
-/// exactly as `NormalTy::canonical_render` renders it (root-unfold-once).
-pub fn normalize_interned<C: TypeContext>(ty: &interned::Ty, ctx: &C) -> interned::Ty {
+/// [`TypeContext::normalize`] for interned types. Interns the canonical
+/// form directly on the way out (attrs erased, like the plain form), with
+/// the mu root rendered exactly as `NormalTy::canonical_render` renders it
+/// (root-unfold-once). Closed in, closed out: canonical forms are built
+/// from the closed input and the (variable-free) fact set.
+pub fn normalize_interned<C: TypeContext>(ty: &interned::ClosedTy, ctx: &C) -> interned::ClosedTy {
     let (t, saw_mu) = NormalTy::canonical_bottom_up_interned(ty, ctx);
-    let plain = if saw_mu && t.contains_mu() {
-        mu::canonicalize_mu_with_render(t, ctx).1
+    interned::ClosedTy::closed_by_construction(if saw_mu && t.contains_mu() {
+        interned::Ty::from_plain(&mu::canonicalize_mu_with_render(t, ctx).1)
     } else {
-        t.into_ty()
-    };
-    interned::Ty::from_plain(&plain)
+        t.into_interned()
+    })
 }
 
 /// The canonical union of `members` - the join operation for control-flow
@@ -3002,12 +3138,20 @@ pub fn normalize_interned<C: TypeContext>(ty: &interned::Ty, ctx: &C) -> interne
 /// members (`1 | int` collapses to `int`), and collapses complete sets
 /// (`true | false` to `bool`). An empty member list is `never` (the join
 /// identity).
-pub fn canonical_union_interned<C: TypeContext>(members: &[interned::Ty], ctx: &C) -> interned::Ty {
+pub fn canonical_union_interned<C: TypeContext>(
+    members: &[interned::ClosedTy],
+    ctx: &C,
+) -> interned::ClosedTy {
     let named = NormalTy::Union(
         members
             .iter()
             .map(|member| {
-                NormalTy::from_interned(member, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL)
+                NormalTy::from_interned(
+                    member.as_ty(),
+                    ctx,
+                    &mut HashSet::new(),
+                    PROJECTION_REDUCTION_FUEL,
+                )
             })
             .collect(),
     );
@@ -3019,5 +3163,5 @@ pub fn canonical_union_interned<C: TypeContext>(members: &[interned::Ty], ctx: &
     } else {
         t
     };
-    interned::Ty::from_plain(&t.into_ty())
+    interned::ClosedTy::closed_by_construction(t.into_interned())
 }

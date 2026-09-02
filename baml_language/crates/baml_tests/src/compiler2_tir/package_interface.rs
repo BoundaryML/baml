@@ -277,7 +277,6 @@ fn interface_export_carries_full_symbolic_surface() {
         matches!(&next.return_type, Ty::AssociatedTypeProjection { member, .. }
             if member.as_str() == "Item")
     );
-    assert!(matches!(&next.declared_throws, Some(Ty::Never { .. })));
     assert!(matches!(&next.callable_throws, Ty::Never { .. }));
     assert_eq!(next.callable_fqn, "user.Source.next");
     assert!(next.interface_target.is_none());
@@ -764,7 +763,6 @@ fn out_of_body_impl_realizes_self_to_the_for_type() {
         "-> Self: {:?}",
         merge.sig.return_type
     );
-    assert!(matches!(&merge.sig.declared_throws, Some(Ty::Never { .. })));
     assert!(matches!(&merge.sig.callable_throws, Ty::Never { .. }));
     assert!(merge.sig.generic_params.is_empty());
     // A free-impl method's fqn renders owner-less — identity is the structural

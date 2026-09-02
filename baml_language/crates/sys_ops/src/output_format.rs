@@ -1429,10 +1429,10 @@ mod tests {
         let first = dynamic_key("Choice");
         let second = dynamic_key("Choice_2");
         let target = RuntimeTy::Union(
-            vec![
+            Box::new([
                 RuntimeTy::Enum(first.clone(), TyAttr::default()),
                 RuntimeTy::Enum(second.clone(), TyAttr::default()),
-            ],
+            ]),
             TyAttr::default(),
         );
         let definition = |name: &str| sys_types::EnumDefinition {
@@ -1475,10 +1475,10 @@ mod tests {
         let class_key = dynamic_key("Choice");
         let enum_key = dynamic_key("Choice_2");
         let target = RuntimeTy::Union(
-            vec![
-                RuntimeTy::Class(class_key.clone(), Vec::new(), TyAttr::default()),
+            Box::new([
+                RuntimeTy::Class(class_key.clone(), Box::new([]), TyAttr::default()),
                 RuntimeTy::Enum(enum_key.clone(), TyAttr::default()),
-            ],
+            ]),
             TyAttr::default(),
         );
         let mut class = ctx_class_definition(
@@ -1556,10 +1556,10 @@ mod tests {
         let first = dynamic_key("SharedAlias");
         let second = dynamic_key("SharedAlias");
         let target = RuntimeTy::Union(
-            vec![
+            Box::new([
                 RuntimeTy::TypeAlias(first.clone(), TyAttr::default()),
                 RuntimeTy::TypeAlias(second.clone(), TyAttr::default()),
-            ],
+            ]),
             TyAttr::default(),
         );
         let mut aliases = indexmap::IndexMap::new();
@@ -1586,10 +1586,10 @@ mod tests {
         let first = dynamic_key("SharedAlias");
         let second = dynamic_key("SharedAlias");
         let target = RuntimeTy::Union(
-            vec![
+            Box::new([
                 RuntimeTy::TypeAlias(first.clone(), TyAttr::default()),
                 RuntimeTy::TypeAlias(second.clone(), TyAttr::default()),
-            ],
+            ]),
             TyAttr::default(),
         );
         let mut aliases = indexmap::IndexMap::new();
@@ -1756,12 +1756,12 @@ mod tests {
         );
 
         let text_or_image = RuntimeTy::Union(
-            vec![
+            Box::new([
                 RuntimeTy::String {
                     attr: TyAttr::default(),
                 },
                 image.clone(),
-            ],
+            ]),
             TyAttr::default(),
         );
 
@@ -1802,12 +1802,12 @@ mod tests {
         );
 
         let rendered = OutputFormatContent::new(RuntimeTy::Union(
-            vec![
+            Box::new([
                 image,
                 RuntimeTy::Null {
                     attr: TyAttr::default(),
                 },
-            ],
+            ]),
             TyAttr::default(),
         ))
         .render(&RenderOptions::default())
@@ -1945,7 +1945,7 @@ mod tests {
 
         let content = OutputFormatContent::new(RuntimeTy::Class(
             key(&baml_type::TypeName::local("Person".into())),
-            Vec::new(),
+            Box::new([]),
             TyAttr::default(),
         ))
         .with_class(cls);
@@ -1998,7 +1998,7 @@ mod tests {
 
         let content = OutputFormatContent::new(RuntimeTy::Class(
             key(&baml_type::TypeName::local("Point".into())),
-            Vec::new(),
+            Box::new([]),
             TyAttr::default(),
         ))
         .with_class(cls);
@@ -2124,7 +2124,7 @@ mod tests {
     #[test]
     fn test_render_union() {
         let content = OutputFormatContent::new(RuntimeTy::Union(
-            vec![
+            Box::new([
                 RuntimeTy::String {
                     attr: TyAttr::default(),
                 },
@@ -2134,7 +2134,7 @@ mod tests {
                 RuntimeTy::Bool {
                     attr: TyAttr::default(),
                 },
-            ],
+            ]),
             TyAttr::default(),
         ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -2147,14 +2147,14 @@ mod tests {
     #[test]
     fn test_render_with_custom_or_splitter() {
         let content = OutputFormatContent::new(RuntimeTy::Union(
-            vec![
+            Box::new([
                 RuntimeTy::String {
                     attr: TyAttr::default(),
                 },
                 RuntimeTy::Int {
                     attr: TyAttr::default(),
                 },
-            ],
+            ]),
             TyAttr::default(),
         ));
         let options = RenderOptions {
@@ -2253,14 +2253,14 @@ mod tests {
     fn ty_class(name: &str) -> RuntimeTy {
         RuntimeTy::Class(
             key(&baml_type::TypeName::local(name.into())),
-            Vec::new(),
+            Box::new([]),
             TyAttr::default(),
         )
     }
     fn ty_class_with_args(name: &str, args: Vec<RuntimeTy>) -> RuntimeTy {
         RuntimeTy::Class(
             key(&baml_type::TypeName::local(name.into())),
-            args,
+            args.into(),
             TyAttr::default(),
         )
     }
@@ -2278,7 +2278,7 @@ mod tests {
         }
     }
     fn ty_union(variants: Vec<RuntimeTy>) -> RuntimeTy {
-        RuntimeTy::Union(variants, TyAttr::default())
+        RuntimeTy::Union(variants.into(), TyAttr::default())
     }
 
     fn ty_enum(name: &str) -> RuntimeTy {
@@ -2353,11 +2353,11 @@ mod tests {
         let first = dynamic_key("Choice");
         let second = dynamic_key("Choice_2");
         let target = RuntimeTy::Union(
-            vec![
+            Box::new([
                 RuntimeTy::Enum(first.clone(), TyAttr::default()),
                 RuntimeTy::Enum(second.clone(), TyAttr::default()),
                 RuntimeTy::Enum(first.clone(), TyAttr::default()),
-            ],
+            ]),
             TyAttr::default(),
         );
         let definition = |name: &str| sys_types::EnumDefinition {
@@ -4193,9 +4193,11 @@ Answer in JSON using this type: A"#
     #[test]
     fn test_build_output_format_preserves_exact_recursive_generic() {
         let chain = key(&baml_type::TypeName::local("Chain".into()));
-        let target = RuntimeTy::Class(chain.clone(), vec![ty_int()], TyAttr::default());
-        let next_template =
-            baml_type::TyTemplate::class(chain.clone(), vec![baml_type::TyTemplate::TypeArgRef(0)]);
+        let target = RuntimeTy::Class(chain.clone(), Box::new([ty_int()]), TyAttr::default());
+        let next_template = baml_type::TyTemplate::class(
+            chain.clone(),
+            Box::new([baml_type::TyTemplate::TypeArgRef(0)]),
+        );
 
         let mut classes = indexmap::IndexMap::new();
         classes.insert(
@@ -4217,8 +4219,8 @@ Answer in JSON using this type: A"#
     #[test]
     fn test_build_output_format_preserves_finite_nested_generic() {
         let boxed = key(&baml_type::TypeName::local("Box".into()));
-        let box_int = RuntimeTy::Class(boxed.clone(), vec![ty_int()], TyAttr::default());
-        let target = RuntimeTy::Class(boxed.clone(), vec![box_int], TyAttr::default());
+        let box_int = RuntimeTy::Class(boxed.clone(), Box::new([ty_int()]), TyAttr::default());
+        let target = RuntimeTy::Class(boxed.clone(), Box::new([box_int]), TyAttr::default());
 
         let mut classes = indexmap::IndexMap::new();
         classes.insert(
@@ -4247,19 +4249,19 @@ Answer in JSON using this type: A"#
         let step = key(&baml_type::TypeName::local("Step".into()));
         let target = RuntimeTy::Class(
             step.clone(),
-            vec![ty_string(), ty_bool()],
+            Box::new([ty_string(), ty_bool()]),
             TyAttr::default(),
         );
         let next_template = baml_type::TyTemplate::class(
             step.clone(),
-            vec![
+            Box::new([
                 baml_type::TyTemplate::list(baml_type::TyTemplate::TypeArgRef(1)),
                 baml_type::TyTemplate::from(baml_type::RealizedTy::int()),
-            ],
+            ]),
         );
         let next_realized = RuntimeTy::Class(
             step.clone(),
-            vec![ty_list(ty_bool()), ty_int()],
+            Box::new([ty_list(ty_bool()), ty_int()]),
             TyAttr::default(),
         );
 
@@ -4285,21 +4287,21 @@ Answer in JSON using this type: A"#
     #[test]
     fn test_render_output_format_content_rejects_non_regular_recursive_generic() {
         let chain = key(&baml_type::TypeName::local("Chain".into()));
-        let target = RuntimeTy::Class(chain.clone(), vec![ty_int()], TyAttr::default());
+        let target = RuntimeTy::Class(chain.clone(), Box::new([ty_int()]), TyAttr::default());
         let next_template = baml_type::TyTemplate::class(
             chain.clone(),
-            vec![baml_type::TyTemplate::class(
+            Box::new([baml_type::TyTemplate::class(
                 chain.clone(),
-                vec![baml_type::TyTemplate::TypeArgRef(0)],
-            )],
+                Box::new([baml_type::TyTemplate::TypeArgRef(0)]),
+            )]),
         );
         let next_realized = RuntimeTy::Class(
             chain.clone(),
-            vec![RuntimeTy::Class(
+            Box::new([RuntimeTy::Class(
                 chain.clone(),
-                vec![ty_int()],
+                Box::new([ty_int()]),
                 TyAttr::default(),
-            )],
+            )]),
             TyAttr::default(),
         );
 
@@ -4333,15 +4335,15 @@ Answer in JSON using this type: A"#
     fn test_build_output_format_rejects_mutually_expansive_recursive_generic() {
         let a = key(&baml_type::TypeName::local("A".into()));
         let b = key(&baml_type::TypeName::local("B".into()));
-        let target = RuntimeTy::Class(a.clone(), vec![ty_int()], TyAttr::default());
-        let b_int = RuntimeTy::Class(b.clone(), vec![ty_int()], TyAttr::default());
+        let target = RuntimeTy::Class(a.clone(), Box::new([ty_int()]), TyAttr::default());
+        let b_int = RuntimeTy::Class(b.clone(), Box::new([ty_int()]), TyAttr::default());
         let a_a_int = RuntimeTy::Class(
             a.clone(),
-            vec![RuntimeTy::Class(
+            Box::new([RuntimeTy::Class(
                 a.clone(),
-                vec![ty_int()],
+                Box::new([ty_int()]),
                 TyAttr::default(),
-            )],
+            )]),
             TyAttr::default(),
         );
 
@@ -4355,7 +4357,7 @@ Answer in JSON using this type: A"#
                     b_int,
                     Some(baml_type::TyTemplate::class(
                         b.clone(),
-                        vec![baml_type::TyTemplate::TypeArgRef(0)],
+                        Box::new([baml_type::TyTemplate::TypeArgRef(0)]),
                     )),
                 )],
             ),
@@ -4369,10 +4371,10 @@ Answer in JSON using this type: A"#
                     a_a_int,
                     Some(baml_type::TyTemplate::class(
                         a.clone(),
-                        vec![baml_type::TyTemplate::class(
+                        Box::new([baml_type::TyTemplate::class(
                             a,
-                            vec![baml_type::TyTemplate::TypeArgRef(0)],
-                        )],
+                            Box::new([baml_type::TyTemplate::TypeArgRef(0)]),
+                        )]),
                     )),
                 )],
             ),

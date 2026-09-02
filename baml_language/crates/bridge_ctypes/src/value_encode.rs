@@ -691,20 +691,20 @@ mod tests {
         let interface_name = TypeName::from_dotted_path("user.Failure");
         let declared = RuntimeTy::Interface(
             interface_name.clone(),
-            vec![RuntimeTy::string()],
-            vec![
+            Box::new([RuntimeTy::string()]),
+            Box::new([
                 (Name::new("Cause"), RuntimeTy::string()),
                 (Name::new("Code"), RuntimeTy::int()),
-            ],
+            ]),
             TyAttr::default(),
         );
         let selected = RuntimeTy::Interface(
             interface_name,
-            vec![RuntimeTy::string()],
-            vec![
+            Box::new([RuntimeTy::string()]),
+            Box::new([
                 (Name::new("Code"), RuntimeTy::int()),
                 (Name::new("Cause"), RuntimeTy::string()),
-            ],
+            ]),
             TyAttr::default(),
         );
         let value = BexExternalValue::union(

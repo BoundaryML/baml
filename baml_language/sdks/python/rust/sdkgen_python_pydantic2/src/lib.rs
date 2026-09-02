@@ -587,7 +587,7 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
                     suffix.to_string()
                 };
                 let binding = names.callable(&companion_fqn, role);
-                let _ = writeln!(out, "        {}: {},", py_string(&key), py_string(&binding),);
+                let _ = writeln!(out, "        {}: {},", py_string(&key), py_string(&binding));
             }
         }
         out.push_str("    },\n");
@@ -927,7 +927,7 @@ mod tests {
     }
 
     fn class_ty(name: Name, args: Vec<Ty>) -> Ty {
-        Ty::Class(name, args, baml_base::TyAttr::EMPTY)
+        Ty::Class(name, args.into(), baml_base::TyAttr::EMPTY)
     }
 
     fn enum_ty(name: Name) -> Ty {
@@ -950,7 +950,7 @@ mod tests {
     }
 
     fn union(members: Vec<Ty>) -> Ty {
-        Ty::Union(members, baml_base::TyAttr::EMPTY)
+        Ty::Union(members.into(), baml_base::TyAttr::EMPTY)
     }
 
     fn origin(file: &str, span: u32) -> Origin {
@@ -4121,10 +4121,10 @@ mod tests {
                         name: BaseName::new("callback"),
                         docstring: None,
                         ty: Ty::Function {
-                            params: vec![baml_codegen_types::CallableParam::required(
+                            params: Box::new([baml_codegen_types::CallableParam::required(
                                 None,
                                 type_var(BaseName::new("T")),
-                            )],
+                            )]),
                             ret: Box::new(type_var(BaseName::new("R"))),
                             throws: Box::new(Ty::Never {
                                 attr: baml_base::TyAttr::EMPTY,
@@ -4425,8 +4425,12 @@ mod tests {
     fn public_interface_type_emits_erased_runtime_token() {
         let interface = cg_name("user", &[], "Named");
         let mut function = bare_func("read_name", "main.baml", 0);
-        function.arguments[0].ty =
-            Ty::Interface(interface, Vec::new(), Vec::new(), baml_base::TyAttr::EMPTY);
+        function.arguments[0].ty = Ty::Interface(
+            interface,
+            Box::new([]),
+            Box::new([]),
+            baml_base::TyAttr::EMPTY,
+        );
         let mut pool = SymbolPool::new();
         pool.insert(
             cg_name("user", &[], "read_name"),

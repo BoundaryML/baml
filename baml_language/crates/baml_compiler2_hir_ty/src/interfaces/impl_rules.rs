@@ -29,7 +29,7 @@ pub struct ImplData<'db> {
     /// The implemented interface's resolved head identity.
     pub interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     /// The interface's generic input args (`<int>` in `Container<int>`).
-    pub interface_args: Vec<Ty>,
+    pub interface_args: Box<[Ty]>,
     /// The resolved implementor pattern (may carry `Ty::TypeVar`s).
     pub for_ty_pattern: Ty,
     /// Generic params with their interface bounds (BEP-044).
@@ -362,7 +362,7 @@ pub fn impl_data<'db>(
     let interface_args = if let Ty::Interface(_, args, _, _) = &lowered_interface {
         args.clone()
     } else {
-        Vec::new()
+        Box::new([])
     };
 
     // Resolve the interface head to its loc *after* lowering, so a bad interface
@@ -1061,6 +1061,15 @@ pub fn validate_impl_signatures<'db>(
                 ImplDiagnosticLocation::ForTarget,
             )];
         }
+        // BUG: `ImplData::interface` is a SOURCE `InterfaceLoc`, so an impl of
+        // a MOUNTED interface always lands here and every header diagnostic
+        // below is skipped — E0138, E0135, the orphan rule and signature
+        // conformance alike. `implement dep.I for true | false` is therefore
+        // accepted in silence, while the identical block against a local
+        // interface reports E0138. Not a soundness hole today (the header's
+        // own validity decision still withholds the facts from selection, so
+        // nothing dispatches to it) but a real diagnostic gap; it needs the
+        // mounted-interface impl validation slice.
         Err(ImplDataError::InterfaceUnresolved { .. } | ImplDataError::Malformed) => return diags,
     };
     let Some(iface_qtn) = interface_loc_qtn(db, data.interface) else {
@@ -1100,7 +1109,7 @@ pub fn validate_impl_signatures<'db>(
         // A field type may name `Self.Item`; realize it symbolically and
         // substitute `Self -> for-type` last.
         let self_bound =
-            baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), vec![]);
+            baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), Box::new([]));
         for iface_field in &iface_data.fields {
             // The satisfying class field: explicit link, else same name. Absent → E0124.
             let class_field_name = block
@@ -1151,11 +1160,17 @@ pub fn validate_impl_signatures<'db>(
 
     // ── Impl-header gates (out-of-body only). ──
     if matches!(data.origin, InterfaceImplOrigin::OutOfBody) {
-        // E0138: the for-target must be a single concrete impl subject (alias-expanded).
-        if !baml_type::normalize::normalize(&data.for_ty_pattern, &ctx).is_valid_impl_subject() {
+        // E0138: the for-target must be a single concrete impl subject. The
+        // verdict comes from the header's ONE validity decision
+        // (`impl_facts`), which also withholds the facts — so an impl this
+        // diagnostic rejects is invisible to every consumer, and coherence
+        // cannot re-derive concreteness on a different spelling and disagree.
+        if let crate::impls::ImplHeaderResolution::NotImplementor { target, .. } =
+            crate::impls::impl_facts(db, impl_loc)
+        {
             diags.push((
                 TirTypeError::ImplTargetNotConcrete {
-                    target: data.for_ty_pattern.clone(),
+                    target: target.clone(),
                 },
                 ImplDiagnosticLocation::ForTarget,
             ));
@@ -1211,7 +1226,7 @@ pub fn validate_impl_signatures<'db>(
         baml_type::unify::bind_type_vars(&iface_generic_params, &data.interface_args);
     let iface_bounds = interface_declared_param_bounds(db, data.interface);
     let self_bound =
-        baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), vec![]);
+        baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), Box::new([]));
     let no_bindings = TypeBindings::default();
 
     for &method_loc in &data.methods {
@@ -1438,7 +1453,7 @@ pub fn validate_impl_signatures<'db>(
         let target_iface = baml_type::Interface {
             name: iface_qtn.clone(),
             generics: data.interface_args.clone(),
-            associated_types: data.associated_types.clone(),
+            associated_types: data.associated_types.clone().into(),
         };
         for binding in &block.associated_type_bindings {
             let Some((_, binding_ty)) = data
@@ -1641,8 +1656,7 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
         | Ty::Void { .. }
         | Ty::Unknown { .. }
         | Ty::Never { .. }
-        | Ty::Error { .. }
-        | Ty::Infer { .. } => {}
+        | Ty::Error { .. } => {}
     }
 }
 
@@ -2065,7 +2079,7 @@ mod tests {
     fn collect_ty_packages_covers_head_and_nested_covered_args() {
         let ty = Ty::Class(
             qtn("user", "Box"),
-            vec![Ty::Enum(qtn("dep", "Meters"), TyAttr::default())],
+            Box::new([Ty::Enum(qtn("dep", "Meters"), TyAttr::default())]),
             TyAttr::default(),
         );
         let mut out = Vec::new();
@@ -2084,15 +2098,15 @@ mod tests {
     fn collect_interface_packages_covers_head_args_and_pins() {
         let iface = baml_type::Interface::new(
             qtn("ifacepkg", "Conv"),
-            vec![Ty::Class(
+            Box::new([Ty::Class(
                 qtn("argpkg", "Meters"),
-                Vec::new(),
+                Box::new([]),
                 TyAttr::default(),
-            )],
-            vec![(
+            )]),
+            Box::new([(
                 Name::new("Out"),
                 Ty::Enum(qtn("pinpkg", "Unit"), TyAttr::default()),
-            )],
+            )]),
         );
         let mut out = Vec::new();
         collect_interface_packages(&iface, &mut out);

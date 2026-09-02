@@ -33,7 +33,7 @@ jobs:
     outputs:
       include: ${{ steps.gen.outputs.include }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
@@ -56,7 +56,7 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.matrix.outputs.include) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
@@ -89,7 +89,7 @@ jobs:
           # CROSS_CONFIG makes the plan's image control linking; the image's
           # host ldd does not determine the wrapper's compatibility floor.
           cross_config="$RUNNER_TEMP/baml-wrapper-cross.toml"
-          printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = ["BAML_WORKOS_CLIENT_ID"]\n' \
+          printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = ["BAML_GIT_SHA", "BAML_WORKOS_CLIENT_ID"]\n' \
             "$TARGET" "$CROSS_IMAGE" "$TARGET" > "$cross_config"
           {
             echo 'CARGO=cross'
@@ -146,7 +146,7 @@ jobs:
           if [[ "$NO_SELF_UPDATE" == "true" ]]; then
             archive staging-no-self-update baml-wrapper-no-self-update
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wrapper-${{ matrix.target }}
           path: |

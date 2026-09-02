@@ -226,7 +226,7 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
             let constraint = RuntimeInterface::new(
                 TypeName::from_dotted_path(&i.name),
                 decode_type_args(&i.type_args)?,
-                bindings,
+                bindings.into(),
             );
             RuntimeTy::Interface(
                 constraint.name,
@@ -245,7 +245,7 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
                 .params
                 .iter()
                 .map(function_param_to_runtime)
-                .collect::<Result<Vec<_>, _>>()?,
+                .collect::<Result<Box<[_]>, _>>()?,
             ret: Box::new(opt_to_runtime_ty(f.ret.as_deref())?),
             throws: Box::new(opt_to_runtime_ty(f.throws.as_deref())?),
             attr: TyAttr::default(),
@@ -338,11 +338,11 @@ pub fn proto_ty_def_to_external(ty: &BamlTyDef) -> Result<BexExternalValue, Ctyp
     )))
 }
 
-fn decode_type_args(type_args: &[BamlTy]) -> Result<Vec<RuntimeTy>, CtypesError> {
+fn decode_type_args(type_args: &[BamlTy]) -> Result<Box<[RuntimeTy]>, CtypesError> {
     type_args
         .iter()
         .map(proto_ty_to_runtime_ty)
-        .collect::<Result<Vec<_>, _>>()
+        .collect::<Result<Box<[_]>, _>>()
 }
 
 fn opt_to_runtime_ty(opt: Option<&BamlTy>) -> Result<RuntimeTy, CtypesError> {
@@ -470,7 +470,7 @@ mod tests {
             other: IndexMap::from([("x".into(), "y".into())]),
         };
         let definition = PortableTypeDef {
-            root: RuntimeTy::Class(name.clone(), Vec::new(), TyAttr::default()),
+            root: RuntimeTy::Class(name.clone(), Box::new([]), TyAttr::default()),
             classes: vec![PortableClassDef {
                 name,
                 fields: vec![PortableClassFieldDef {

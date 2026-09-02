@@ -204,21 +204,23 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
     let baml_type::Ty::Interface(qtn, args, pins, _) = ty else {
         unreachable!()
     };
-    let root = baml_type::interned::InterfaceRef::new(
+    let root = baml_type::Interface::new(
         qtn,
         if args.is_empty() {
-            vec![baml_type::interned::Ty::int()].into_boxed_slice()
+            Box::new([baml_type::Ty::Int {
+                attr: baml_type::TyAttr::default(),
+            }])
         } else {
-            args.iter()
-                .map(baml_type::interned::Ty::from_plain)
-                .collect()
+            args.clone()
         },
-        pins.iter()
-            .map(|(name, ty)| (name.clone(), baml_type::interned::Ty::from_plain(ty)))
-            .collect(),
+        pins.clone(),
     );
-    let inherited =
-        baml_compiler2_hir_ty::impls::direct_requires_closure(&db, &root, &root.existential(), 64);
+    let inherited = baml_compiler2_hir_ty::impls::direct_requires_closure_plain(
+        &db,
+        &root,
+        &root.to_ty(),
+        baml_compiler2_hir_ty::impls::REQUIRES_CLOSURE_FUEL,
+    );
     assert!(
         inherited
             .iter()
@@ -230,8 +232,8 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
         param.clone(),
         vec![baml_type::Interface {
             name: root.name.clone(),
-            generics: root.generics.iter().map(|ty| ty.to_plain()).collect(),
-            associated_types: Vec::new(),
+            generics: root.generics.clone(),
+            associated_types: Box::new([]),
         }],
     )]
     .into_iter()
@@ -389,9 +391,7 @@ fn reflect_resolves_as_an_ordinary_builtin_package() {
         baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, user_alias);
     assert!(user_errors.is_empty(), "{user_errors:?}");
     assert_eq!(
-        baml_compiler2_hir_ty::lower::type_alias_value(&db, user_alias)
-            .to_plain()
-            .render_canonical(),
+        baml_compiler2_hir_ty::lower::type_alias_value(&db, user_alias).render_canonical(),
         "reflect.Signature"
     );
 }
@@ -502,7 +502,7 @@ fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less(
             panic!("inspect has an expression body")
         };
         let root = body.root_expr.expect("inspect root expression");
-        let root_ty = inference.type_of_expr[&root].to_plain();
+        let root_ty = inference.type_of_expr[&root].clone();
         let targets = inference
             .member_resolutions
             .values()

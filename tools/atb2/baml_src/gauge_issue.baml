@@ -52,7 +52,7 @@ function estimate_difficulty(issue: Issue) -> DifficultyEstimate {
         Repros (${issue.repros.length().to_string()}):
         ${format_repros(issue.repros)}
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
@@ -67,9 +67,11 @@ function format_repros(repros: Repro[]) -> string {
 /// Record the difficulty on an issue. Idempotent: an issue that already
 /// has one keeps it.
 function gauge_issue(issue: Issue) -> Issue {
+    //# keep an existing difficulty
     if (issue.difficulty != null) {
         return issue;
     };
+    //# estimate from the ticket (LLM, Opus)
     let estimate = estimate_difficulty(issue);
     log.info(
         {
@@ -79,6 +81,7 @@ function gauge_issue(issue: Issue) -> Issue {
             "unknowns": estimate.unknowns,
         },
     );
+    //# record it on the issue
     with_difficulty(issue, estimate.difficulty)
 }
 
@@ -96,6 +99,7 @@ function with_difficulty(issue: Issue, difficulty: Difficulty) -> Issue {
         comments: issue.comments,
         resolution_plan: issue.resolution_plan,
         difficulty: difficulty,
+        design_doc: issue.design_doc,
     }
 }
 
@@ -103,9 +107,7 @@ function with_difficulty(issue: Issue, difficulty: Difficulty) -> Issue {
 // touches `difficulty`.
 testset "gauge_issue" {
     test "estimate reply parses" {
-        let e = estimate_difficulty$parse(
-            #"{ "difficulty": "Medium", "rationale": "known cause, three call sites", "unknowns": [] }"#,
-        );
+        let e = estimate_difficulty@parse(`{ "difficulty": "Medium", "rationale": "known cause, three call sites", "unknowns": [] }`);
         assert.equal(e.difficulty, Difficulty.Medium);
         assert.equal(e.unknowns.length(), 0);
     }

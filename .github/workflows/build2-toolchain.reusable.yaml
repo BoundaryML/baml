@@ -42,18 +42,18 @@ jobs:
       matrix:
         include: ${{ fromJson(inputs.toolchain_matrix_json) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-plan
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: baml-vscode-vsix
           path: vsix
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: baml-playground-dist
           path: playground-dist
@@ -89,7 +89,7 @@ jobs:
         run: |
           set -euo pipefail
           cross_config="$RUNNER_TEMP/baml-toolchain-cross.toml"
-          passthrough='"BAML_WORKOS_CLIENT_ID"'
+          passthrough='"BAML_GIT_SHA", "BAML_WORKOS_CLIENT_ID"'
           if [[ "$TARGET" == "x86_64-unknown-linux-gnu" ]]; then
             # The glibc-2.17 image's target GCC is 4.8 and cannot compile
             # mimalloc v3's warning flags. Its host GCC is current; point that
@@ -140,7 +140,7 @@ jobs:
           else
             tar -C staging -czf "baml-language-$VERSION-$TARGET.tar.gz" .
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: toolchain-${{ matrix.target }}
           path: baml-language-${{ inputs.version }}-${{ matrix.target }}.*

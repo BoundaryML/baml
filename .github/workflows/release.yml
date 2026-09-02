@@ -354,7 +354,7 @@ jobs:
         uses: ./.github/actions/setup-tools
 
       - name: Setup Node.js
-        uses: ./.github/actions/setup-node
+        uses: ./.github/actions/engine-setup-node
         with:
           node-action-version: "v6"
           node-version: latest
@@ -452,7 +452,7 @@ jobs:
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Node.js
-        uses: ./.github/actions/setup-node
+        uses: ./.github/actions/engine-setup-node
         with:
           node-action-version: "v6"
           install-dependencies: false
@@ -480,7 +480,7 @@ jobs:
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Node.js
-        uses: ./.github/actions/setup-node
+        uses: ./.github/actions/engine-setup-node
         with:
           node-action-version: "v6"
           install-dependencies: false

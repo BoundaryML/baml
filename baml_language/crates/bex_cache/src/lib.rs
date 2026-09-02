@@ -1280,7 +1280,7 @@ impl BytecodeCache {
 mod remote_tests {
     use std::{
         collections::HashMap,
-        io::{BufRead, BufReader, Read as _, Write as _},
+        io::{BufRead, BufReader},
         net::TcpListener,
         sync::{Arc, Mutex},
     };

@@ -136,7 +136,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
                     return None;
                 }
                 let final_ty = translate_ty(&args[0], ctx)?;
-                return Some(format!("BamlFunctionSpec<{final_ty}>",));
+                return Some(format!("BamlFunctionSpec<{final_ty}>"));
             }
             // `ai.Prompt` is the nominal stdlib facade around PromptAst. The
             // generated SDK aliases it to the same portable bridge wrapper.

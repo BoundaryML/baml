@@ -175,8 +175,8 @@ pub(super) struct WitnessField {
 
 pub(super) struct ValidatedClassWitness {
     interface_ptr: bex_vm_types::HeapPtr,
-    interface_args: Vec<bex_vm_types::RealizedTy>,
-    interface_assoc: Vec<(baml_type::Name, bex_vm_types::RealizedTy)>,
+    interface_args: Box<[bex_vm_types::RealizedTy]>,
+    interface_assoc: Box<[(baml_type::Name, bex_vm_types::RealizedTy)]>,
     field_links: Vec<u32>,
 }
 
@@ -471,7 +471,7 @@ impl BamlNamespaceClass for PackageReflectImpl {
         // to re-resolve.
         let ty = bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, type_tag),
-            Vec::new(),
+            Box::new([]),
             baml_type::TyAttr::default(),
         );
         register_class_witnesses(vm, class_ptr, &ty, witnesses);
@@ -950,7 +950,7 @@ fn substitute_witness_field_type(
             members
                 .iter()
                 .map(|member| substitute_witness_field_type(member, interface, args, assoc))
-                .collect::<Result<Vec<_>, _>>()?,
+                .collect::<Result<Box<[_]>, _>>()?,
             attr.clone(),
         )),
         RuntimeTy::Class(name, type_args, attr) => Ok(RuntimeTy::Class(
@@ -958,7 +958,7 @@ fn substitute_witness_field_type(
             type_args
                 .iter()
                 .map(|arg| substitute_witness_field_type(arg, interface, args, assoc))
-                .collect::<Result<Vec<_>, _>>()?,
+                .collect::<Result<Box<[_]>, _>>()?,
             attr.clone(),
         )),
         RuntimeTy::Interface(name, type_args, bindings, attr) => Ok(RuntimeTy::Interface(
@@ -966,7 +966,7 @@ fn substitute_witness_field_type(
             type_args
                 .iter()
                 .map(|arg| substitute_witness_field_type(arg, interface, args, assoc))
-                .collect::<Result<Vec<_>, _>>()?,
+                .collect::<Result<Box<[_]>, _>>()?,
             bindings
                 .iter()
                 .map(|(name, ty)| {
@@ -975,7 +975,7 @@ fn substitute_witness_field_type(
                         substitute_witness_field_type(ty, interface, args, assoc)?,
                     ))
                 })
-                .collect::<Result<Vec<_>, String>>()?,
+                .collect::<Result<Box<[_]>, String>>()?,
             attr.clone(),
         )),
         RuntimeTy::Function {
@@ -993,7 +993,7 @@ fn substitute_witness_field_type(
                         mode: param.mode,
                     })
                 })
-                .collect::<Result<Vec<_>, String>>()?,
+                .collect::<Result<Box<[_]>, String>>()?,
             ret: Box::new(substitute_witness_field_type(ret, interface, args, assoc)?),
             throws: Box::new(substitute_witness_field_type(
                 throws, interface, args, assoc,
@@ -1022,7 +1022,7 @@ fn substitute_witness_field_type(
                     .generics
                     .iter()
                     .map(|ty| substitute_witness_field_type(ty, interface, args, assoc))
-                    .collect::<Result<Vec<_>, _>>()?,
+                    .collect::<Result<Box<[_]>, _>>()?,
                 projection_interface
                     .associated_types
                     .iter()
@@ -1032,7 +1032,7 @@ fn substitute_witness_field_type(
                             substitute_witness_field_type(ty, interface, args, assoc)?,
                         ))
                     })
-                    .collect::<Result<Vec<_>, String>>()?,
+                    .collect::<Result<Box<[_]>, String>>()?,
             )),
             member: member.clone(),
             attr: attr.clone(),
@@ -1244,7 +1244,7 @@ pub(crate) fn view_type_value(
 fn reflected_class(
     vm: &BexVm,
     view: Value,
-) -> Result<(bex_vm_types::Class, Vec<bex_vm_types::RealizedTy>), crate::errors::VmRustFnError> {
+) -> Result<(bex_vm_types::Class, Box<[bex_vm_types::RealizedTy]>), crate::errors::VmRustFnError> {
     let ty_value = view_type_value(vm, view, baml_type::type_kind::TypeKind::Class)?;
     let ptr = ty_value
         .as_object_ptr()
@@ -1435,7 +1435,7 @@ fn alloc_compilation_error_with_span(
     let diagnostic_ty = bex_vm_types::RealizedTy::Class(
         vm.declaration_head(&diagnostic_qtn)
             .unwrap_or_else(|| unreachable!("`reflect.Diagnostic` is declared by the stdlib")),
-        vec![],
+        Box::new([]),
         baml_type::TyAttr::default(),
     );
     let diagnostics = Value::object(vm.alloc_array(diagnostic_ty, values));

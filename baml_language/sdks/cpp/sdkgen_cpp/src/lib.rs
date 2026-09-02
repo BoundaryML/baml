@@ -677,13 +677,13 @@ mod injected_argument_tests {
             BaseName::new("extract"),
         );
         let callback = Ty::Function {
-            params: vec![CallableParam {
+            params: Box::new([CallableParam {
                 name: None,
                 ty: Ty::String {
                     attr: TyAttr::default(),
                 },
                 mode: CodegenFunctionParamMode::Required,
-            }],
+            }]),
             ret: Box::new(Ty::Void {
                 attr: TyAttr::default(),
             }),
@@ -710,12 +710,12 @@ mod injected_argument_tests {
                     name: BaseName::new("on_event"),
                     docstring: None,
                     ty: Ty::Union(
-                        vec![
+                        Box::new([
                             callback,
                             Ty::Null {
                                 attr: TyAttr::default(),
                             },
-                        ],
+                        ]),
                         TyAttr::default(),
                     ),
                     default: Some(FunctionArgumentDefault::Null),
@@ -2543,7 +2543,7 @@ mod declaration_safety_tests {
     #[test]
     fn required_and_return_types_can_name_later_classes() {
         let later = qualified("Later");
-        let later_ty = Ty::Class(later, vec![], TyAttr::default());
+        let later_ty = Ty::Class(later, Box::new([]), TyAttr::default());
         let pool = SymbolPool::new();
         let complete = BTreeSet::new();
 
@@ -2556,7 +2556,7 @@ mod declaration_safety_tests {
     #[test]
     fn optional_arg_storage_rejects_later_classes_in_every_container() {
         let later = qualified("Later");
-        let class = Ty::Class(later.clone(), vec![], TyAttr::default());
+        let class = Ty::Class(later.clone(), Box::new([]), TyAttr::default());
         let types = [
             class.clone(),
             Ty::List(Box::new(class.clone()), attr()),
@@ -2565,8 +2565,11 @@ mod declaration_safety_tests {
                 value: Box::new(class.clone()),
                 attr: attr(),
             },
-            Ty::Union(vec![class.clone(), Ty::String { attr: attr() }], attr()),
-            Ty::Union(vec![class, Ty::Null { attr: attr() }], attr()),
+            Ty::Union(
+                Box::new([class.clone(), Ty::String { attr: attr() }]),
+                attr(),
+            ),
+            Ty::Union(Box::new([class, Ty::Null { attr: attr() }]), attr()),
         ];
         let pool = SymbolPool::new();
         let mut complete = BTreeSet::new();

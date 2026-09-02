@@ -7,16 +7,16 @@
 # rustc silently drops the `cdylib` crate type and only the `.rlib` is built.
 #
 # `cross` runs the build inside a container and forwards only a curated set of
-# environment variables, so the Rust and native C/C++ remapping flags must be
-# listed here explicitly or they never reach the compilers.
+# environment variables, so the source fingerprint and Rust/native remapping
+# flags must be listed here explicitly or they never reach the compilers.
 [target.x86_64-unknown-linux-gnu.env]
-passthrough = ["RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
+passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
 
 [target.aarch64-unknown-linux-gnu.env]
-passthrough = ["RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
+passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
 
 [target.x86_64-unknown-linux-musl.env]
-passthrough = ["RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
+passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
 
 [target.aarch64-unknown-linux-musl.env]
-passthrough = ["RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
+passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]

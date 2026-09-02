@@ -812,7 +812,7 @@ mod tests {
         }
     }
     fn union(members: Vec<Ty>) -> Ty {
-        Ty::Union(members, baml_base::TyAttr::EMPTY)
+        Ty::Union(members.into(), baml_base::TyAttr::EMPTY)
     }
     fn literal(value: baml_base::Literal) -> Ty {
         Ty::Literal(
@@ -856,7 +856,7 @@ mod tests {
         );
         let stream = Ty::Class(
             stream_name,
-            vec![string(), string()],
+            Box::new([string(), string()]),
             baml_base::TyAttr::EMPTY,
         );
         assert_eq!(
