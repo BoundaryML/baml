@@ -15,8 +15,14 @@ Actions artifacts for 90 days.
 
 The benchmark implementation and report renderer are in `baml_src`. The Rust
 shim records BAML and Claude Code invocations without changing their exit codes
-or terminal behavior. JavaScript under `scripts` only handles GitHub Actions API
-data and log links.
+or terminal behavior. JavaScript under `scripts` handles GitHub Actions API data
+and log links.
+
+In CI, the implementation agent runs as a dedicated unprivileged user. A
+root-owned loopback proxy is the only process that receives the Anthropic API
+key. Claude receives a per-attempt token that works only through that proxy. The
+proxy restricts requests by endpoint, model, request count, body size, output
+tokens, and lifetime, and it never logs credentials or request bodies.
 
 ## Baselines
 

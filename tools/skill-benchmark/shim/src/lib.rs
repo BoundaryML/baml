@@ -18,6 +18,17 @@ const RUN_ID_ENV: &str = "SKILL_BENCH_RUN_ID";
 const REAL_CLAUDE_ENV: &str = "SKILL_BENCH_REAL_CLAUDE";
 const CLAUDE_LOG_ENV: &str = "SKILL_BENCH_CLAUDE_LOG";
 const CLAUDE_STDERR_LOG_ENV: &str = "SKILL_BENCH_CLAUDE_STDERR_LOG";
+const CLAUDE_RUN_AS_USER_ENV: &str = "SKILL_BENCH_CLAUDE_RUN_AS_USER";
+const CLAUDE_RUN_AS_HOME_ENV: &str = "SKILL_BENCH_CLAUDE_RUN_AS_HOME";
+const CLAUDE_FORWARDED_ENV: &[&str] = &[
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+    "BAML_VERSION",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+    "SKILL_BENCH_BAML_AUDIT_DIR",
+    "SKILL_BENCH_REAL_BAML",
+    "SKILL_BENCH_RUN_ID",
+];
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -158,7 +169,10 @@ fn run_claude() -> Result<i32> {
     let real = required_executable(REAL_CLAUDE_ENV)?;
     let args = env::args_os().skip(1).collect::<Vec<_>>();
     let Some(stdout_log) = env::var_os(CLAUDE_LOG_ENV).filter(|value| !value.is_empty()) else {
-        return run_direct(&real, &args);
+        let status = claude_command(&real, &args)?
+            .status()
+            .context("failed to execute real claude")?;
+        return Ok(normalized_exit_code(status));
     };
 
     let stdout_log = absolute_path(PathBuf::from(stdout_log))?;
@@ -179,8 +193,7 @@ fn run_claude() -> Result<i32> {
         .create(true)
         .append(true)
         .open(stderr_log)?;
-    let mut child = Command::new(&real)
-        .args(&args)
+    let mut child = claude_command(&real, &args)?
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -199,6 +212,59 @@ fn run_claude() -> Result<i32> {
     join_tee(stdout_thread, "stdout")?;
     join_tee(stderr_thread, "stderr")?;
     Ok(normalized_exit_code(status))
+}
+
+fn claude_command(real: &Path, args: &[OsString]) -> Result<Command> {
+    let Some(user) = env::var_os(CLAUDE_RUN_AS_USER_ENV).filter(|value| !value.is_empty()) else {
+        let mut command = Command::new(real);
+        command.args(args);
+        return Ok(command);
+    };
+    let home = env::var_os(CLAUDE_RUN_AS_HOME_ENV)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow!("{CLAUDE_RUN_AS_HOME_ENV} is required when dropping privileges"))?;
+    let path = env::var_os("PATH").ok_or_else(|| anyhow!("PATH is required"))?;
+
+    let mut command = Command::new("sudo");
+    command
+        .args(["-n", "-H", "-u"])
+        .arg(&user)
+        .args(["--", "/usr/bin/env", "-i"])
+        .arg(environment_assignment("HOME", home))
+        .arg(environment_assignment("USER", user.clone()))
+        .arg(environment_assignment("LOGNAME", user))
+        .arg(environment_assignment("PATH", path))
+        .arg("CI=true")
+        .arg("LANG=C.UTF-8")
+        .arg("NO_PROXY=127.0.0.1,localhost")
+        .arg("SHELL=/bin/bash")
+        .args(forwarded_claude_environment(env::vars_os()))
+        .arg(real)
+        .args(args);
+    Ok(command)
+}
+
+fn forwarded_claude_environment(
+    values: impl IntoIterator<Item = (OsString, OsString)>,
+) -> Vec<OsString> {
+    values
+        .into_iter()
+        .filter_map(|(name, value)| {
+            CLAUDE_FORWARDED_ENV
+                .contains(&name.to_str()?)
+                .then(|| environment_assignment(name, value))
+        })
+        .collect()
+}
+
+fn environment_assignment(
+    name: impl Into<OsString>,
+    value: impl AsRef<std::ffi::OsStr>,
+) -> OsString {
+    let mut assignment = name.into();
+    assignment.push("=");
+    assignment.push(value);
+    assignment
 }
 
 fn required_executable(name: &str) -> Result<PathBuf> {
@@ -371,5 +437,30 @@ mod tests {
                 Some(command.to_owned())
             );
         }
+    }
+
+    #[test]
+    fn claude_environment_excludes_real_credentials() {
+        let forwarded = forwarded_claude_environment([
+            (
+                OsString::from("ANTHROPIC_API_KEY"),
+                OsString::from("real-secret"),
+            ),
+            (
+                OsString::from("ANTHROPIC_AUTH_TOKEN"),
+                OsString::from("temporary-token"),
+            ),
+            (
+                OsString::from("ANTHROPIC_BASE_URL"),
+                OsString::from("http://127.0.0.1:1234"),
+            ),
+        ]);
+        assert_eq!(
+            forwarded,
+            [
+                "ANTHROPIC_AUTH_TOKEN=temporary-token",
+                "ANTHROPIC_BASE_URL=http://127.0.0.1:1234",
+            ]
+        );
     }
 }
