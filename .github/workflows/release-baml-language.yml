@@ -126,8 +126,17 @@ jobs:
           WORKFLOW_REF_TYPE: ${{ github.ref_type }}
         run: |
           set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
           if [[ "$INPUT_DRY_RUN" != "false" ]]; then
-            echo "Dry run: a source CI attestation is not required."
+            requested_source_sha="${INPUT_SOURCE_SHA:-$WORKFLOW_SOURCE_SHA}"
+            if [[ "$requested_source_sha" != "$WORKFLOW_SOURCE_SHA" ||
+                  "$checked_out_sha" != "$WORKFLOW_SOURCE_SHA" ]]; then
+              echo "::error::dry-run source_sha must match the dispatched workflow revision"
+              echo "workflow_sha=$WORKFLOW_SOURCE_SHA checked_out_sha=$checked_out_sha"
+              exit 1
+            fi
+            echo "source_branch=$WORKFLOW_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "Dry run source matches the dispatched workflow revision."
             exit 0
           fi
           if [[ ! "$INPUT_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
@@ -151,7 +160,6 @@ jobs:
             exit 1
           fi
 
-          checked_out_sha="$(git rev-parse HEAD)"
           if [[ "$checked_out_sha" != "$INPUT_SOURCE_SHA" ]]; then
             echo "::error::checked-out SHA $checked_out_sha does not match source_sha $INPUT_SOURCE_SHA"
             exit 1
