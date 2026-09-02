@@ -314,6 +314,10 @@ jobs:
           toolchain="$(jq -c '[.targets[]
             | select(.artifacts.toolchain != null)
             | .artifacts.toolchain as $toolchain
+            | if $toolchain.container and $toolchain.cross_image
+              then error("\(.triple): toolchain container and cross_image are mutually exclusive")
+              else .
+              end
             | {target: .triple, os: $toolchain.runner, libc: .libc}
               + (if $toolchain.container then {container: $toolchain.container} else {} end)
               + (if $toolchain.cross_image then {cross_image: $toolchain.cross_image} else {} end)]' release/platforms.json)"
