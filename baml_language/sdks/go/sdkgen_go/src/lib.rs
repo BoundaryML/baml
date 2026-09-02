@@ -3432,7 +3432,7 @@ fn render_class_codecs(
         let class_fqn = BamlFqn::symbol(name);
         let class_name = names.project(&class_fqn, GoNameKind::Class, GoVisibility::Exported);
         let go_type = function_go_type(
-            &Ty::Class(name.clone(), vec![], TyAttr::default()),
+            &Ty::Class(name.clone(), Box::new([]), TyAttr::default()),
             name.package(),
             current_package,
             names,
@@ -5201,7 +5201,7 @@ mod tests {
     }
 
     fn ty_union(members: Vec<Ty>) -> Ty {
-        Ty::Union(members, TyAttr::default())
+        Ty::Union(members.into(), TyAttr::default())
     }
 
     fn ty_list_boxed(inner: Box<Ty>) -> Ty {
@@ -5213,7 +5213,7 @@ mod tests {
     }
 
     fn ty_class(name: Name, arguments: Vec<Ty>) -> Ty {
-        Ty::Class(name, arguments, TyAttr::default())
+        Ty::Class(name, arguments.into(), TyAttr::default())
     }
 
     fn ty_alias(name: Name) -> Ty {

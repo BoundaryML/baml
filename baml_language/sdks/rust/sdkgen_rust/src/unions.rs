@@ -181,7 +181,7 @@ pub(crate) fn filter_throws_type(ty: &Ty, analysis: &Analysis) -> Option<Ty> {
             if representable.is_empty() {
                 None
             } else {
-                Some(Ty::Union(representable, attr.clone()))
+                Some(Ty::Union(representable.into(), attr.clone()))
             }
         }
         Ty::List(inner, attr) => Some(Ty::List(
@@ -200,7 +200,7 @@ pub(crate) fn filter_throws_type(ty: &Ty, analysis: &Analysis) -> Option<Ty> {
             let args = args
                 .iter()
                 .map(|arg| filter_throws_type(arg, analysis))
-                .collect::<Option<Vec<_>>>()?;
+                .collect::<Option<Box<[_]>>>()?;
             Some(Ty::Class(name.clone(), args, attr.clone()))
         }
         Ty::TypeAlias(name, _) if !analysis.is_emitted(name) => None,

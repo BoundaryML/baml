@@ -209,9 +209,7 @@ fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Over
     match (pat, member) {
         // Error sentinels overlap nothing (mirrors `unify_into`): the type already
         // carries its own diagnostic, and callers suppress cascading reports.
-        (Ty::Error { .. } | Ty::Infer { .. }, _) | (_, Ty::Error { .. } | Ty::Infer { .. }) => {
-            Overlap::No
-        }
+        (Ty::Error { .. }, _) | (_, Ty::Error { .. }) => Overlap::No,
         // `unknown` is the top type: it shares values with every inhabited type
         // (`never` was rejected before unification).
         (Ty::Unknown { .. }, _) | (_, Ty::Unknown { .. }) => Overlap::Yes,
@@ -399,8 +397,8 @@ mod tests {
     fn interface(name: &str, args: Vec<Ty>) -> Ty {
         Ty::Interface(
             TypeName::local(Name::new(name)),
-            args,
-            vec![],
+            args.into(),
+            Box::new([]),
             TyAttr::default(),
         )
     }
@@ -448,7 +446,7 @@ mod tests {
     fn class1(name: &str, arg: Ty) -> Ty {
         Ty::Class(
             TypeName::local(Name::new(name)),
-            vec![arg],
+            Box::new([arg]),
             TyAttr::default(),
         )
     }
@@ -456,7 +454,7 @@ mod tests {
     fn class2(name: &str, a: Ty, b: Ty) -> Ty {
         Ty::Class(
             TypeName::local(Name::new(name)),
-            vec![a, b],
+            Box::new([a, b]),
             TyAttr::default(),
         )
     }
@@ -468,14 +466,14 @@ mod tests {
     /// A nullary interface constraint (the bound / registry-request form, as opposed
     /// to the [`interface`] helper's existential `Ty`).
     fn constraint(name: &str) -> Interface {
-        Interface::new(TypeName::local(Name::new(name)), vec![], vec![])
+        Interface::new(TypeName::local(Name::new(name)), Box::new([]), Box::new([]))
     }
 
     /// A zero-parameter function type with the given return type (`() -> ret`, never
     /// throwing) — enough to exercise the function-type meets without param plumbing.
     fn fn_returning(ret: Ty) -> Ty {
         Ty::Function {
-            params: vec![],
+            params: Box::new([]),
             ret: Box::new(ret),
             throws: Box::new(never()),
             attr: TyAttr::default(),

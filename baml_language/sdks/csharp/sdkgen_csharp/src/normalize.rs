@@ -155,7 +155,7 @@ fn normalize_canonical(ty: Ty) -> Ty {
             match members.len() {
                 0 => Ty::Never { attr },
                 1 => members.pop().expect("singleton union has one member"),
-                _ => Ty::Union(members, attr),
+                _ => Ty::Union(members.into(), attr),
             }
         }
         Ty::Function {
@@ -203,12 +203,12 @@ mod tests {
     fn union_normalization_is_repeatable_across_discovery_permutations() {
         let members = vec![
             Ty::String { attr: attr() },
-            Ty::Class(TypeName::local(Name::new("Person")), Vec::new(), attr()),
+            Ty::Class(TypeName::local(Name::new("Person")), Box::new([]), attr()),
             Ty::Int { attr: attr() },
             Ty::Null { attr: attr() },
             Ty::Bool { attr: attr() },
         ];
-        let expected = normalize_ty(&Ty::Union(members.clone(), attr()));
+        let expected = normalize_ty(&Ty::Union(members.clone().into(), attr()));
         let factorial = [1, 1, 2, 6, 24, 120];
 
         for rank in 0..100 {
@@ -221,7 +221,10 @@ mod tests {
                 remainder %= block;
                 permutation.push(remaining.remove(selected));
             }
-            assert_eq!(normalize_ty(&Ty::Union(permutation, attr())), expected);
+            assert_eq!(
+                normalize_ty(&Ty::Union(permutation.into(), attr())),
+                expected
+            );
         }
 
         let Ty::Union(ordered, _) = expected else {
@@ -233,8 +236,14 @@ mod tests {
     #[test]
     fn normalization_reaches_nested_union_positions() {
         let union = |members| Ty::Union(members, attr());
-        let left = union(vec![Ty::String { attr: attr() }, Ty::Int { attr: attr() }]);
-        let right = union(vec![Ty::Int { attr: attr() }, Ty::String { attr: attr() }]);
+        let left = union(Box::new([
+            Ty::String { attr: attr() },
+            Ty::Int { attr: attr() },
+        ]));
+        let right = union(Box::new([
+            Ty::Int { attr: attr() },
+            Ty::String { attr: attr() },
+        ]));
         let first = Ty::Map {
             key: Box::new(Ty::String { attr: attr() }),
             value: Box::new(Ty::List(Box::new(left), attr())),

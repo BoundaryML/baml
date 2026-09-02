@@ -6,9 +6,10 @@
 //! S5 scope: equality only. The settled `VarData` bounds
 //! (lowers/uppers/obligations for `Sub` constraints and the obligation
 //! worklist) join with the first `Sub` constraints; until then a variable's
-//! class is solved or not (`VarValue`). Kind/policy metadata for variables
-//! (effect vars, diverging vars) also lives here when it arrives - the
-//! representation carries identity only.
+//! class carries its solver state and its policy (`VarValue`). Policy
+//! lives INSIDE the ena value - the undo log must govern it, or a rollback
+//! frees an index whose stale policy then misclassifies the variable that
+//! reuses it.
 //!
 //! Unification discipline (rustc's `TypeVariableValue` model): both sides are
 //! shallow-resolved before relating, so two `Known` roots never merge inside
@@ -18,9 +19,9 @@
 //! ACI-equality cases (reordered/var-bearing unions in invariant positions)
 //! are the deferred-with-budget class that arrives with `Sub` constraints.
 
-use baml_type::interned::{InferVar, Ty, TyKind, for_each_child};
+use baml_type::interned::{InferTy, InferVar, Ty, for_each_child};
 use ena::unify as ut;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 
 /// Local ena key for [`InferVar`] (orphan rules keep `UnifyKey` out of
 /// `baml_type`).
@@ -43,24 +44,133 @@ impl ut::UnifyKey for VarKey {
     }
 }
 
+/// What a variable IS - one total axis, from which every behavior derives
+/// (the predicates below). Carried inside the ena value - never in a side
+/// table keyed by creation index - so the undo log governs it: a rollback
+/// that frees an index for reuse also reverts its policy. (The side-table
+/// version survived rollback, so a fresh VALUE variable reusing a freed
+/// index inherited the old kind and could silently default to `never` as
+/// an "effect".)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum VarPolicy {
+    /// An ordinary value variable (call instantiations, holes): demands
+    /// must agree, and an unconstrained class is an error (ruling 2).
+    #[default]
+    Value,
+    /// A throws-channel variable: unconstrained defaults to `never` at
+    /// finalize - BAML's only defaulting rule (S12).
+    Effect,
+    /// An unannotated lambda parameter: monomorphic source, initially
+    /// untyped, so its first ground demand commits and later incompatible
+    /// demands diagnose at their own use sites.
+    LambdaParam,
+    /// Element/key/value of an EMPTY container literal (the honest
+    /// replacement for TIR's Evolving sentinels): first-demand order on
+    /// disagreeing demands (ruling 1), and a ground `unknown` demand
+    /// commits the slot to top - TIR's frozen-Evolving behavior at
+    /// exactly the demanded case.
+    ContainerSlot,
+    /// A dynamic hole standing in for a runtime type binding's rigid
+    /// parameter (`type T = unreflect(value)`) in a static-skeleton check:
+    /// the outer constructors are judged statically, the leaf relation by
+    /// MIR's runtime gate, so the hole must absorb whatever the actual
+    /// provides. Same derived behaviors as [`VarPolicy::ContainerSlot`].
+    RuntimeHole,
+}
+
+impl VarPolicy {
+    /// Whether the first ground demand commits the class, with later
+    /// incompatible demands reporting at their own sites - where an
+    /// ordinary var (a call instantiation) fails resolution instead.
+    pub fn first_demand_commits(self) -> bool {
+        match self {
+            VarPolicy::LambdaParam | VarPolicy::ContainerSlot | VarPolicy::RuntimeHole => true,
+            VarPolicy::Value | VarPolicy::Effect => false,
+        }
+    }
+
+    /// Whether a ground `unknown` demand commits the class to the top type.
+    /// ONLY container-shaped slots absorb: committing an ordinary or
+    /// lambda-parameter variable to `unknown` would poison its real
+    /// solution (and launder "couldn't infer" into `unknown`).
+    pub fn absorbs_unknown(self) -> bool {
+        match self {
+            VarPolicy::ContainerSlot | VarPolicy::RuntimeHole => true,
+            VarPolicy::Value | VarPolicy::Effect | VarPolicy::LambdaParam => false,
+        }
+    }
+
+    /// Whether an unconstrained class defaults to `never` at finalize
+    /// (S12) instead of erroring.
+    pub fn defaults_to_never(self) -> bool {
+        match self {
+            VarPolicy::Effect => true,
+            VarPolicy::Value
+            | VarPolicy::LambdaParam
+            | VarPolicy::ContainerSlot
+            | VarPolicy::RuntimeHole => false,
+        }
+    }
+
+    /// The class policy after a var-var union. `Value` is the identity;
+    /// a lambda parameter absorbed into a container/hole class takes that
+    /// class's policy (its behavior set is a strict superset - real case:
+    /// `let xs = []; xs.push(x)` inside a lambda unions the element slot
+    /// with the parameter). `ContainerSlot` and `RuntimeHole` share one
+    /// behavior set; the container spelling wins deterministically. An
+    /// effect class joining any specialized class is not constructible
+    /// under the current minting discipline (effects only ever unify with
+    /// throws slots, which are ground, effect vars, or plain hole vars);
+    /// debug-assert and keep the effect policy - a throws channel cannot
+    /// afford to lose its `never` default.
+    fn join(self, other: VarPolicy) -> VarPolicy {
+        match (self, other) {
+            (VarPolicy::Effect, VarPolicy::Effect) => VarPolicy::Effect,
+            (VarPolicy::Effect, mixed) | (mixed, VarPolicy::Effect) => {
+                debug_assert!(
+                    matches!(mixed, VarPolicy::Value),
+                    "effect class unified with a {mixed:?} class"
+                );
+                VarPolicy::Effect
+            }
+            (VarPolicy::Value, other) | (other, VarPolicy::Value) => other,
+            (VarPolicy::LambdaParam, other) | (other, VarPolicy::LambdaParam) => other,
+            (VarPolicy::ContainerSlot, VarPolicy::ContainerSlot | VarPolicy::RuntimeHole)
+            | (VarPolicy::RuntimeHole, VarPolicy::ContainerSlot) => VarPolicy::ContainerSlot,
+            (VarPolicy::RuntimeHole, VarPolicy::RuntimeHole) => VarPolicy::RuntimeHole,
+        }
+    }
+}
+
 /// Solver state of a variable's equivalence class.
+///
+/// Policy is UNSOLVED-ONLY state, so it lives inside that variant: every
+/// behavior it drives (first-demand order, `unknown` absorption, the
+/// `never` default) is consulted only while the class is open, and a
+/// var-var union merges only open classes (`unify` shallow-resolves both
+/// sides first). Solving retires the policy - a solved class IS its
+/// solution, nothing more. A rollback of the solving step restores the
+/// `Unsolved` value, policy included, through the ena undo log.
 #[derive(Debug, Clone, PartialEq)]
 enum VarValue {
-    Unknown,
-    Known(Ty),
+    Unsolved(VarPolicy),
+    Solved(Ty),
 }
 
 impl ut::UnifyValue for VarValue {
     type Error = ut::NoError;
 
     fn unify_values(a: &VarValue, b: &VarValue) -> Result<VarValue, ut::NoError> {
-        match (a, b) {
-            (VarValue::Known(_), VarValue::Known(_)) => unreachable!(
-                "unify shallow-resolves before relating, so two known roots never merge"
+        Ok(match (a, b) {
+            (VarValue::Solved(_), VarValue::Solved(_)) => unreachable!(
+                "unify shallow-resolves before relating, so two solved roots never merge"
             ),
-            (VarValue::Known(ty), _) | (_, VarValue::Known(ty)) => Ok(VarValue::Known(ty.clone())),
-            (VarValue::Unknown, VarValue::Unknown) => Ok(VarValue::Unknown),
-        }
+            // The solving moment (`bind`/`solve` union a solution into an
+            // open class): the policy has done its job and retires.
+            (VarValue::Solved(ty), VarValue::Unsolved(_))
+            | (VarValue::Unsolved(_), VarValue::Solved(ty)) => VarValue::Solved(ty.clone()),
+            (VarValue::Unsolved(a), VarValue::Unsolved(b)) => VarValue::Unsolved(a.join(*b)),
+        })
     }
 }
 
@@ -84,7 +194,8 @@ pub struct VarBounds {
 /// A revertible point in the table's history; see
 /// [`InferenceTable::snapshot`]. The bounds map is snapshotted by clone
 /// (rust-analyzer snapshots its fulfillment context the same way); the ena
-/// undo log covers only the union-find.
+/// undo log covers the union-find AND every class's [`VarPolicy`] - the whole
+/// of the table's remaining state, so nothing survives a rollback.
 pub struct Snapshot {
     vars: ut::Snapshot<ut::InPlace<VarKey>>,
     bounds: FxHashMap<u32, VarBounds>,
@@ -96,22 +207,6 @@ pub struct InferenceTable {
     /// Bounds per CLASS, keyed by the root's index; var-var unions merge the
     /// two roots' entries.
     bounds: FxHashMap<u32, VarBounds>,
-    /// Creation indices of EFFECT variables (the throws channel). Their
-    /// finalize default differs: an unconstrained effect is `never` -
-    /// BAML's only defaulting rule (S12) - where an unconstrained value
-    /// variable is an error (ruling 2).
-    effect_vars: FxHashSet<u32>,
-    /// Element/key/value variables of EMPTY container literals (the
-    /// honest replacement for TIR's Evolving sentinels). These follow
-    /// TIR's establishment-order rule when demands disagree: the first
-    /// ground demand commits and later incompatible ones report at
-    /// their own sites, where an ordinary var (a call instantiation)
-    /// fails resolution instead (ruling 1).
-    establishment_vars: FxHashSet<u32>,
-    /// Variables whose source expression is monomorphic but initially has no
-    /// type. The first ground demand commits their type, so a later
-    /// incompatible demand is diagnosed at that later use.
-    first_demand_vars: FxHashSet<u32>,
 }
 
 impl InferenceTable {
@@ -119,9 +214,28 @@ impl InferenceTable {
         InferenceTable::default()
     }
 
-    /// Allocates a fresh, unconstrained inference variable.
+    /// Allocates a fresh, unconstrained VALUE variable.
     pub fn new_var(&mut self) -> InferVar {
-        self.vars.new_key(VarValue::Unknown).0
+        self.new_var_of(VarPolicy::Value)
+    }
+
+    fn new_var_of(&mut self, policy: VarPolicy) -> InferVar {
+        self.vars.new_key(VarValue::Unsolved(policy)).0
+    }
+
+    /// Allocates a fresh variable of `policy`, as a type.
+    pub fn new_var_ty_of(&mut self, policy: VarPolicy) -> Ty {
+        Ty::infer_var(self.new_var_of(policy))
+    }
+
+    /// What `var`'s still-open equivalence class IS; behaviors derive
+    /// from it ([`VarPolicy`]'s predicates). `None` once solved - policy
+    /// retires at solution, so a solved class has none to ask about.
+    pub fn unsolved_policy(&mut self, var: InferVar) -> Option<VarPolicy> {
+        match self.vars.probe_value(VarKey(var)) {
+            VarValue::Unsolved(policy) => Some(policy),
+            VarValue::Solved(_) => None,
+        }
     }
 
     /// [`InferenceTable::new_var`] wrapped as a type.
@@ -129,66 +243,24 @@ impl InferenceTable {
         Ty::infer_var(self.new_var())
     }
 
-    /// [`InferenceTable::new_var`] for an empty container literal's
-    /// element/key/value slot: solves establishment-order on
-    /// disagreeing demands (see `establishment_vars`).
-    pub fn new_establishment_var_ty(&mut self) -> Ty {
-        let var = self.new_var();
-        self.establishment_vars.insert(var.index());
-        self.first_demand_vars.insert(var.index());
-        Ty::infer_var(var)
-    }
-
-    /// [`InferenceTable::new_var`] for a monomorphic source expression whose
-    /// first ground demand determines its type.
-    pub fn new_first_demand_var_ty(&mut self) -> Ty {
-        let var = self.new_var();
-        self.first_demand_vars.insert(var.index());
-        Ty::infer_var(var)
-    }
-
     /// Returns the canonical representative when `var`'s equivalence class
     /// still lacks a solution.
     pub fn unsolved_root_var(&mut self, var: InferVar) -> Option<InferVar> {
         let root = self.vars.find(VarKey(var));
-        matches!(self.vars.probe_value(root), VarValue::Unknown).then_some(root.0)
-    }
-
-    /// Whether `var`'s equivalence class contains an establishment var.
-    pub fn is_establishment_var(&mut self, var: InferVar) -> bool {
-        let root = self.vars.find(VarKey(var));
-        let indices: Vec<u32> = self.establishment_vars.iter().copied().collect();
-        indices
-            .into_iter()
-            .any(|index| self.vars.find(VarKey(InferVar::new(index))) == root)
-    }
-
-    /// Whether `var`'s equivalence class is committed by its first ground
-    /// demand.
-    pub fn is_first_demand_var(&mut self, var: InferVar) -> bool {
-        let root = self.vars.find(VarKey(var));
-        let indices: Vec<u32> = self.first_demand_vars.iter().copied().collect();
-        indices
-            .into_iter()
-            .any(|index| self.vars.find(VarKey(InferVar::new(index))) == root)
-    }
-
-    /// An EFFECT variable: identical to a value variable except at
-    /// finalize, where unconstrained effects default to `never`.
-    pub fn new_effect_var_ty(&mut self) -> Ty {
-        let var = self.new_var();
-        self.effect_vars.insert(var.index());
-        Ty::infer_var(var)
+        matches!(self.vars.probe_value(root), VarValue::Unsolved(_)).then_some(root.0)
     }
 
     /// Defaults every still-unsolved effect variable's class to `never`.
     /// Run before the finalize erasure so effects never become errors.
     pub fn default_unsolved_effects_to_never(&mut self) {
-        let indices: Vec<u32> = self.effect_vars.iter().copied().collect();
-        for index in indices {
-            let root = self.vars.find(VarKey(InferVar::new(index)));
-            if matches!(self.vars.probe_value(root), VarValue::Unknown) {
-                self.vars.union_value(root, VarValue::Known(Ty::never()));
+        let len = u32::try_from(self.vars.len())
+            .unwrap_or_else(|_| unreachable!("ena keys are u32-indexed"));
+        for index in 0..len {
+            let key = VarKey(InferVar::new(index));
+            if let VarValue::Unsolved(policy) = self.vars.probe_value(key)
+                && policy.defaults_to_never()
+            {
+                self.vars.union_value(key, VarValue::Solved(Ty::never()));
             }
         }
     }
@@ -199,7 +271,6 @@ impl InferenceTable {
     /// bounded effect class still solves from its evidence once this
     /// default grounds it. Returns whether anything defaulted.
     pub fn default_unbounded_effects_to_never(&mut self) -> bool {
-        let indices: Vec<u32> = self.effect_vars.iter().copied().collect();
         // Bounds may be keyed under a non-root alias; compare by ROOT.
         let bound_keys: Vec<u32> = self
             .bounds
@@ -212,15 +283,21 @@ impl InferenceTable {
             .map(|key| self.vars.find(VarKey(InferVar::new(key))))
             .collect();
         let mut any = false;
-        for index in indices {
-            let root = self.vars.find(VarKey(InferVar::new(index)));
-            if !matches!(self.vars.probe_value(root), VarValue::Unknown) {
+        let len = u32::try_from(self.vars.len())
+            .unwrap_or_else(|_| unreachable!("ena keys are u32-indexed"));
+        for index in 0..len {
+            let key = VarKey(InferVar::new(index));
+            let VarValue::Unsolved(policy) = self.vars.probe_value(key) else {
+                continue;
+            };
+            if !policy.defaults_to_never() {
                 continue;
             }
+            let root = self.vars.find(key);
             if bound_roots.contains(&root) {
                 continue;
             }
-            self.vars.union_value(root, VarValue::Known(Ty::never()));
+            self.vars.union_value(root, VarValue::Solved(Ty::never()));
             any = true;
         }
         any
@@ -231,12 +308,12 @@ impl InferenceTable {
     pub fn shallow_resolve(&mut self, ty: &Ty) -> Ty {
         let mut ty = ty.clone();
         loop {
-            let TyKind::Infer { var: Some(var), .. } = ty.kind() else {
+            let InferTy::InferVar { var, .. } = ty.kind() else {
                 return ty;
             };
             match self.vars.probe_value(VarKey(*var)) {
-                VarValue::Known(solution) => ty = solution,
-                VarValue::Unknown => return ty,
+                VarValue::Solved(solution) => ty = solution,
+                VarValue::Unsolved(_) => return ty,
             }
         }
     }
@@ -268,13 +345,13 @@ impl InferenceTable {
             return Ok(());
         }
         // Error unifies with everything: a diagnostic was already emitted.
-        if matches!(left.kind(), TyKind::Error { .. })
-            || matches!(right.kind(), TyKind::Error { .. })
+        if matches!(left.kind(), InferTy::Error { .. })
+            || matches!(right.kind(), InferTy::Error { .. })
         {
             return Ok(());
         }
         match (left.kind(), right.kind()) {
-            (TyKind::Infer { var: Some(a), .. }, TyKind::Infer { var: Some(b), .. }) => {
+            (InferTy::InferVar { var: a, .. }, InferTy::InferVar { var: b, .. }) => {
                 let root_a = self.vars.find(VarKey(*a)).0.index();
                 let root_b = self.vars.find(VarKey(*b)).0.index();
                 self.vars.union(VarKey(*a), VarKey(*b));
@@ -290,8 +367,8 @@ impl InferenceTable {
                 }
                 Ok(())
             }
-            (TyKind::Infer { var: Some(var), .. }, _) => self.bind(*var, &right, &left),
-            (_, TyKind::Infer { var: Some(var), .. }) => self.bind(*var, &left, &right),
+            (InferTy::InferVar { var, .. }, _) => self.bind(*var, &right, &left),
+            (_, InferTy::InferVar { var, .. }) => self.bind(*var, &left, &right),
             _ => self.unify_kinds(&left, &right),
         }
     }
@@ -360,7 +437,7 @@ impl InferenceTable {
         let mut out = Vec::new();
         for root in roots {
             let key = VarKey(InferVar::new(root));
-            if let VarValue::Known(ty) = self.vars.probe_value(key) {
+            if let VarValue::Solved(ty) = self.vars.probe_value(key) {
                 let bounds = self.bounds.remove(&root).unwrap_or_default();
                 out.push((ty, bounds));
             }
@@ -375,7 +452,7 @@ impl InferenceTable {
         let mut out = Vec::new();
         for root in roots {
             let key = VarKey(InferVar::new(root));
-            if self.vars.probe_value(key) == VarValue::Unknown {
+            if matches!(self.vars.probe_value(key), VarValue::Unsolved(_)) {
                 let bounds = self.bounds.get(&root).cloned().unwrap_or_default();
                 out.push((InferVar::new(root), bounds));
             }
@@ -390,14 +467,14 @@ impl InferenceTable {
     /// later var must be re-checked before acting on it (rustc's
     /// shallow-resolve-before-relating discipline).
     pub fn is_solved(&mut self, var: InferVar) -> bool {
-        self.vars.probe_value(VarKey(var)) != VarValue::Unknown
+        matches!(self.vars.probe_value(VarKey(var)), VarValue::Solved(_))
     }
 
     /// Solves `var := ty` directly (resolution-time binding; unlike
     /// [`InferenceTable::unify`] this performs no occurs check because the
     /// solution was derived from resolved bounds).
     pub fn solve(&mut self, var: InferVar, ty: Ty) {
-        self.vars.union_value(VarKey(var), VarValue::Known(ty));
+        self.vars.union_value(VarKey(var), VarValue::Solved(ty));
     }
 
     /// Solves `var := ty` after the occurs check. `var_ty` is the variable as
@@ -410,7 +487,7 @@ impl InferenceTable {
             });
         }
         self.vars
-            .union_value(VarKey(var), VarValue::Known(ty.clone()));
+            .union_value(VarKey(var), VarValue::Solved(ty.clone()));
         Ok(())
     }
 
@@ -421,7 +498,7 @@ impl InferenceTable {
         if !ty.has_infer() {
             return false;
         }
-        if let TyKind::Infer { var: Some(var), .. } = ty.kind() {
+        if let InferTy::InferVar { var, .. } = ty.kind() {
             if self.vars.unioned(VarKey(*var), root) {
                 return true;
             }
@@ -453,21 +530,21 @@ impl InferenceTable {
             right: right.clone(),
         };
         let pairs: Vec<(Ty, Ty)> = match (left.kind(), right.kind()) {
-            (TyKind::Class(ln, la, lat), TyKind::Class(rn, ra, rat))
+            (InferTy::Class(ln, la, lat), InferTy::Class(rn, ra, rat))
                 if ln == rn && la.len() == ra.len() && lat == rat =>
             {
                 la.iter().cloned().zip(ra.iter().cloned()).collect()
             }
-            (TyKind::List(li, lat), TyKind::List(ri, rat)) if lat == rat => {
+            (InferTy::List(li, lat), InferTy::List(ri, rat)) if lat == rat => {
                 vec![(li.clone(), ri.clone())]
             }
             (
-                TyKind::Map {
+                InferTy::Map {
                     key: lk,
                     value: lv,
                     attr: lat,
                 },
-                TyKind::Map {
+                InferTy::Map {
                     key: rk,
                     value: rv,
                     attr: rat,
@@ -475,17 +552,17 @@ impl InferenceTable {
             ) if lat == rat => {
                 vec![(lk.clone(), rk.clone()), (lv.clone(), rv.clone())]
             }
-            (TyKind::Future(lv, le, lat), TyKind::Future(rv, re, rat)) if lat == rat => {
+            (InferTy::Future(lv, le, lat), InferTy::Future(rv, re, rat)) if lat == rat => {
                 vec![(lv.clone(), rv.clone()), (le.clone(), re.clone())]
             }
-            (TyKind::Union(lm, lat), TyKind::Union(rm, rat))
+            (InferTy::Union(lm, lat), InferTy::Union(rm, rat))
                 if lm.len() == rm.len() && lat == rat =>
             {
                 // Positional; the ACI (reorder/absorb) equality class defers
                 // to the budgeted machinery that lands with Sub constraints.
                 lm.iter().cloned().zip(rm.iter().cloned()).collect()
             }
-            (TyKind::Interface(ln, la, lassoc, lat), TyKind::Interface(rn, ra, rassoc, rat))
+            (InferTy::Interface(ln, la, lassoc, lat), InferTy::Interface(rn, ra, rassoc, rat))
                 if ln == rn
                     && la.len() == ra.len()
                     && lassoc.len() == rassoc.len()
@@ -507,13 +584,13 @@ impl InferenceTable {
                     .collect()
             }
             (
-                TyKind::Function {
+                InferTy::Function {
                     params: lp,
                     ret: lr,
                     throws: le,
                     attr: lat,
                 },
-                TyKind::Function {
+                InferTy::Function {
                     params: rp,
                     ret: rr,
                     throws: re,
@@ -656,7 +733,7 @@ mod tests {
 
     fn class(name: &str, args: impl IntoIterator<Item = Ty>) -> Ty {
         use baml_type::{Name, TypeName};
-        Ty::intern(TyKind::Class(
+        Ty::intern(InferTy::Class(
             TypeName::local(Name::new(name)),
             args.into_iter().collect(),
             TyAttr::default(),
@@ -664,7 +741,7 @@ mod tests {
     }
 
     fn map(key: Ty, value: Ty) -> Ty {
-        Ty::intern(TyKind::Map {
+        Ty::intern(InferTy::Map {
             key,
             value,
             attr: TyAttr::default(),
@@ -672,11 +749,11 @@ mod tests {
     }
 
     fn func(params: impl IntoIterator<Item = Ty>, ret: Ty, throws: Ty) -> Ty {
-        use baml_type::interned::FunctionParam;
-        Ty::intern(TyKind::Function {
+        use baml_type::interned::InferFunctionParamTy;
+        Ty::intern(InferTy::Function {
             params: params
                 .into_iter()
-                .map(|ty| FunctionParam::required(None, ty))
+                .map(|ty| InferFunctionParamTy::required(None, ty))
                 .collect(),
             ret,
             throws,
@@ -889,6 +966,81 @@ mod tests {
         // Var-free input returns the same interned handle, no rebuild.
         let ground = map(Ty::string(), Ty::list(Ty::bool()));
         assert_eq!(table.resolve_completely(&ground), ground);
+    }
+
+    #[test]
+    fn rollback_reverts_var_kinds_with_their_indices() {
+        // A rolled-back probe frees its variable indices for reuse. The
+        // kind must be freed WITH the index: when it lived in side tables,
+        // the fresh value variable below inherited the dead effect var's
+        // kind and was silently defaulted to `never`.
+        let mut table = InferenceTable::new();
+        let snapshot = table.snapshot();
+        let _effect = table.new_var_ty_of(VarPolicy::Effect);
+        table.rollback_to(snapshot);
+
+        let value = table.new_var_ty();
+        table.default_unsolved_effects_to_never();
+        assert_eq!(
+            table.shallow_resolve(&value),
+            value,
+            "a value variable reusing a rolled-back effect var's index must not default"
+        );
+
+        let snapshot = table.snapshot();
+        let _slot = table.new_var_ty_of(VarPolicy::ContainerSlot);
+        table.rollback_to(snapshot);
+        let plain = table.new_var();
+        assert_eq!(table.unsolved_policy(plain), Some(VarPolicy::Value));
+    }
+
+    #[test]
+    fn policy_joins_over_unions_and_retires_at_solution() {
+        let mut table = InferenceTable::new();
+        let slot = table.new_var_ty_of(VarPolicy::ContainerSlot);
+        let plain = table.new_var_ty();
+        // Unioning a plain var into a container-slot class adopts the
+        // class's policy (`Value` is the join identity).
+        table.unify(&slot, &plain).unwrap();
+        let InferTy::InferVar { var: plain_var, .. } = plain.kind().clone() else {
+            unreachable!("fresh var");
+        };
+        assert_eq!(
+            table.unsolved_policy(plain_var),
+            Some(VarPolicy::ContainerSlot)
+        );
+        // Solving retires the policy: a solved class IS its solution.
+        table.unify(&plain, &Ty::int()).unwrap();
+        assert_eq!(table.unsolved_policy(plain_var), None);
+        // A rollback of the solving step restores it, policy included.
+        let mut table = InferenceTable::new();
+        let slot = table.new_var_ty_of(VarPolicy::ContainerSlot);
+        let InferTy::InferVar { var, .. } = slot.kind().clone() else {
+            unreachable!("fresh var");
+        };
+        let snapshot = table.snapshot();
+        table.unify(&slot, &Ty::int()).unwrap();
+        assert_eq!(table.unsolved_policy(var), None);
+        table.rollback_to(snapshot);
+        assert_eq!(table.unsolved_policy(var), Some(VarPolicy::ContainerSlot));
+    }
+
+    #[test]
+    fn lambda_param_joining_container_slot_takes_the_stronger_policy() {
+        // `let xs = []; xs.push(x)` inside a lambda: the element slot and
+        // the parameter var union, and the class must keep BOTH behaviors
+        // (first-demand order AND unknown absorption).
+        let mut table = InferenceTable::new();
+        let param = table.new_var_ty_of(VarPolicy::LambdaParam);
+        let slot = table.new_var_ty_of(VarPolicy::ContainerSlot);
+        table.unify(&param, &slot).unwrap();
+        let InferTy::InferVar { var, .. } = param.kind().clone() else {
+            unreachable!("fresh var");
+        };
+        let policy = table.unsolved_policy(var).expect("still open");
+        assert_eq!(policy, VarPolicy::ContainerSlot);
+        assert!(policy.first_demand_commits());
+        assert!(policy.absorbs_unknown());
     }
 
     #[test]

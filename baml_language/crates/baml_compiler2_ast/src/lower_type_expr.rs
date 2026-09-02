@@ -658,7 +658,7 @@ pub(crate) fn check_void_type(
 /// (the TIR firewall fills it from the inferred throw set). But a `_` *nested*
 /// inside a thrown type (`throws Err<_>`) has nothing to infer from; it is
 /// reported and rewritten to an error sentinel (see [`check_wildcard_type`]) so
-/// it never reaches type checking as a `Ty::Infer`.
+/// it never reaches type checking as an inference hole.
 pub(crate) fn check_throws_wildcard(
     type_expr: &mut TypeExpr,
     span: TextRange,
@@ -687,11 +687,11 @@ pub(crate) fn check_throws_wildcard(
 /// is applied to (a signature parameter/return, a field, an alias, a generic
 /// bound): there is nothing local to infer a hole from there, so every
 /// occurrence is reported AND rewritten to [`TypeExprKind::Error`]. It then
-/// lowers to the error-recovery `Ty::Error` sentinel rather than a `Ty::Infer`
+/// lowers to the error-recovery `Ty::Error` sentinel rather than an inference hole
 /// — which would otherwise reach type normalization, where an inference hole has
 /// no sound form (see `baml_type::normalize`).
 ///
-/// A `Ty::Infer` therefore reaches type checking only from the positions this
+/// An inference hole therefore reaches type checking only from the positions this
 /// firewall does NOT cover, each of which fills-or-rejects the hole itself:
 ///   * a `let` binding annotation (filled from the initializer),
 ///   * a top-level `throws`-clause member (filled from the inferred throw set;

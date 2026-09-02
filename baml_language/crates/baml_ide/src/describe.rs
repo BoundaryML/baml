@@ -823,12 +823,7 @@ fn describe_locals(
                     let type_str = match def_site {
                         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
                             pattern_from_owner_body(db, func_loc, stmt_id)
-                                .and_then(|pattern| {
-                                    inference?
-                                        .type_of_pat
-                                        .get(&pattern)
-                                        .map(baml_type::interned::Ty::to_plain)
-                                })
+                                .and_then(|pattern| inference?.type_of_pat.get(&pattern).cloned())
                                 .map(|ty| render::display_ty(&ty))
                                 .unwrap_or_else(|| "unknown".to_string())
                         }
@@ -838,12 +833,7 @@ fn describe_locals(
                         | baml_compiler2_hir::semantic_index::DefinitionSite::CatchBinding(
                             pat_id,
                         ) => inference
-                            .and_then(|inference| {
-                                inference
-                                    .type_of_pat
-                                    .get(&pat_id)
-                                    .map(baml_type::interned::Ty::to_plain)
-                            })
+                            .and_then(|inference| inference.type_of_pat.get(&pat_id).cloned())
                             .map(|ty| render::display_ty(&ty))
                             .unwrap_or_else(|| "unknown".to_string()),
                         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => {
@@ -1231,20 +1221,18 @@ fn collect_interface_impls(
 /// repeating the full path would be noise; the variation a reader scans for
 /// is the instantiation and the implementor.
 fn render_impl_row(facts: &baml_compiler2_hir_ty::impls::ImplFacts<'_>) -> String {
-    let iface = &facts.interface;
+    let iface = facts.interface.to_plain();
     let mut head = iface.name.name().as_str().to_string();
     let mut args: Vec<String> = iface
         .generics
         .iter()
-        .map(|generic| render::display_addressable_ty(&generic.to_plain()))
+        .map(render::display_addressable_ty)
         .collect();
-    args.extend(iface.associated_types.iter().map(|(name, ty)| {
-        format!(
-            "{} = {}",
-            name.as_str(),
-            render::display_addressable_ty(&ty.to_plain())
-        )
-    }));
+    args.extend(
+        iface.associated_types.iter().map(|(name, ty)| {
+            format!("{} = {}", name.as_str(), render::display_addressable_ty(ty))
+        }),
+    );
     if !args.is_empty() {
         head.push('<');
         head.push_str(&args.join(", "));

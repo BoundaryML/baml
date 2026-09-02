@@ -158,7 +158,7 @@ fn ty_head(ty: &Ty) -> Option<TyHead> {
         | Ty::Resource { .. }
         | Ty::PromptAst { .. }
         | Ty::Void { .. } => None,
-        Ty::Unknown { .. } | Ty::Never { .. } | Ty::Error { .. } | Ty::Infer { .. } => None,
+        Ty::Unknown { .. } | Ty::Never { .. } | Ty::Error { .. } => None,
     }
 }
 
@@ -853,9 +853,9 @@ fn interface_generics(db: &Db, iface: InterfaceLoc<'_>) -> Vec<(ParamTy, Vec<Int
 
 /// An interned bounds map (the lowering layer's shape) as a plain list.
 fn plain_bounds(
-    interned: impl IntoIterator<Item = (ParamTy, Vec<baml_type::interned::InterfaceRef>)>,
+    bounds: impl IntoIterator<Item = (ParamTy, Vec<baml_type::Interface>)>,
 ) -> Vec<(ParamTy, Vec<InterfaceBound>)> {
-    interned
+    bounds
         .into_iter()
         .map(|(param, refs)| {
             (
@@ -863,16 +863,8 @@ fn plain_bounds(
                 refs.iter()
                     .map(|bound| InterfaceBound {
                         name: bound.name.clone(),
-                        generics: bound
-                            .generics
-                            .iter()
-                            .map(baml_type::interned::Ty::to_plain)
-                            .collect(),
-                        associated_types: bound
-                            .associated_types
-                            .iter()
-                            .map(|(name, t)| (name.clone(), t.to_plain()))
-                            .collect(),
+                        generics: bound.generics.iter().cloned().collect(),
+                        associated_types: bound.associated_types.iter().cloned().collect(),
                     })
                     .collect(),
             )
@@ -1105,7 +1097,7 @@ fn required_method_export(db: &Db, iface: InterfaceLoc<'_>, index: usize) -> Req
             ret,
             throws,
             ..
-        } => (params.as_slice(), ret.as_ref(), throws.as_ref()),
+        } => (&**params, ret.as_ref(), throws.as_ref()),
         // A malformed required signature still exports, as unresolved.
         other => (&[][..], other, other),
     };
@@ -1311,9 +1303,7 @@ fn export_item<'db>(
             }
         }
         Definition::TypeAlias(alias) => ItemDetail::TypeAlias {
-            resolved: TyRef::of(
-                &baml_compiler2_hir_ty::lower::type_alias_value(db, alias).to_plain(),
-            ),
+            resolved: TyRef::of(&baml_compiler2_hir_ty::lower::type_alias_value(db, alias)),
         },
         Definition::Function(function) => ItemDetail::Function {
             signature: function_export(db, function, false, None).signature,

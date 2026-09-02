@@ -318,8 +318,7 @@ pub fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
             | Ty::TypeAlias(..)
             | Ty::Unknown { .. }
             | Ty::Never { .. }
-            | Ty::Error { .. }
-            | Ty::Infer { .. } => false,
+            | Ty::Error { .. } => false,
         }
     }
     occurs(param, ty, false)
@@ -441,7 +440,7 @@ fn normalize_union(members: Vec<Ty>, attr: TyAttr, enum_variants: EnumVariants) 
         1 => flat
             .pop()
             .unwrap_or_else(|| unreachable!("a length-1 vec has an element")),
-        _ => Ty::Union(flat, attr),
+        _ => Ty::Union(flat.into(), attr),
     }
 }
 
@@ -746,8 +745,7 @@ fn unify_into_at(
             | Ty::TypeVar(..)
             | Ty::Unknown { .. }
             | Ty::Never { .. }
-            | Ty::Error { .. }
-            | Ty::Infer { .. },
+            | Ty::Error { .. },
             _,
         ) => Overlap::No,
     }
@@ -915,7 +913,7 @@ pub fn normalize_union_members(members: impl IntoIterator<Item = Ty>, attr: TyAt
             // single "original attr" to preserve. If inputs carry different attrs, which one
             // wins? May need a merge/lattice operation on TyAttr, or default may be correct if
             // attrs describe declaration sites rather than computed types.
-            Ty::Union(normalized, attr)
+            Ty::Union(normalized.into(), attr)
         }
     }
 }
@@ -1012,11 +1010,13 @@ pub fn rewrite_ty(ty: &Ty, rewrite: &mut dyn FnMut(&Ty) -> Option<Ty>) -> Ty {
             }
         }
         Ty::Class(name, type_args, attr) => {
-            let rebuilt_args: Vec<Ty> = type_args.iter().map(|t| rewrite_ty(t, rewrite)).collect();
+            let rebuilt_args: Box<[Ty]> =
+                type_args.iter().map(|t| rewrite_ty(t, rewrite)).collect();
             Ty::Class(name.clone(), rebuilt_args, attr.clone())
         }
         Ty::Interface(name, type_args, associated_bindings, attr) => {
-            let rebuilt_args: Vec<Ty> = type_args.iter().map(|t| rewrite_ty(t, rewrite)).collect();
+            let rebuilt_args: Box<[Ty]> =
+                type_args.iter().map(|t| rewrite_ty(t, rewrite)).collect();
             let rebuilt_bindings = associated_bindings
                 .iter()
                 .map(|(name, ty)| (name.clone(), rewrite_ty(ty, rewrite)))
@@ -1346,8 +1346,7 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
         | Ty::TypeAlias(..)
         | Ty::Unknown { .. }
         | Ty::Never { .. }
-        | Ty::Error { .. }
-        | Ty::Infer { .. } => false,
+        | Ty::Error { .. } => false,
     }
 }
 
@@ -1362,8 +1361,8 @@ mod tests {
     fn interface(name: &str, args: Vec<Ty>) -> Ty {
         Ty::Interface(
             TypeName::local(Name::new(name)),
-            args,
-            vec![],
+            args.into(),
+            Box::new([]),
             TyAttr::default(),
         )
     }
@@ -1371,7 +1370,7 @@ mod tests {
     fn interface_with_assoc(name: &str, assoc: Vec<(&str, Ty)>) -> Ty {
         Ty::Interface(
             TypeName::local(Name::new(name)),
-            vec![],
+            Box::new([]),
             assoc
                 .into_iter()
                 .map(|(name, ty)| (Name::new(name), ty))
@@ -1424,11 +1423,11 @@ mod tests {
     fn contains_bound_typevar_checks_interface_associated_bindings() {
         let ty = Ty::Interface(
             TypeName::local(Name::new("Source")),
-            vec![],
-            vec![(
+            Box::new([]),
+            Box::new([(
                 Name::new("Item"),
                 Ty::List(Box::new(Ty::type_var("T")), TyAttr::default()),
-            )],
+            )]),
             TyAttr::default(),
         );
 
@@ -1672,7 +1671,7 @@ mod tests {
             unify_into(
                 &Ty::bool(),
                 &Ty::Union(
-                    vec![bool_literal(true), bool_literal(false)],
+                    Box::new([bool_literal(true), bool_literal(false)]),
                     TyAttr::default(),
                 ),
                 &[],
@@ -1798,7 +1797,7 @@ mod tests {
         // dispatch would both match.
         fn func(param: Ty) -> Ty {
             Ty::Function {
-                params: vec![crate::FunctionParamTy::required(None, param)],
+                params: Box::new([crate::FunctionParamTy::required(None, param)]),
                 ret: Box::new(Ty::int()),
                 throws: Box::new(never()),
                 attr: TyAttr::default(),

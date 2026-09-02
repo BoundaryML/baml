@@ -149,7 +149,6 @@ pub struct ExportedFunction {
     pub name: Name,
     pub params: Vec<FunctionParamTy>,
     pub return_type: Ty,
-    pub declared_throws: Option<Ty>,
     pub callable_throws: Ty,
     /// Function-level generic parameters, including any synthetic callback
     /// effect parameters introduced by bounded signature elaboration.
@@ -200,7 +199,6 @@ pub struct ResolvedFunction {
     pub name: Name,
     pub params: Vec<FunctionParamTy>,
     pub return_type: Ty,
-    pub declared_throws: Option<Ty>,
     pub callable_throws: Ty,
     pub generic_params: Vec<ParamTy>,
     pub generic_param_bounds: Vec<Vec<baml_type::Interface>>,
@@ -248,7 +246,6 @@ pub(crate) fn resolved_exported_function(
         name: function.name.clone(),
         params: function.params.clone(),
         return_type: function.return_type.clone(),
-        declared_throws: function.declared_throws.clone(),
         callable_throws: function.callable_throws.clone(),
         generic_params: function.generic_params.clone(),
         generic_param_bounds: function.generic_param_bounds.clone(),
@@ -390,42 +387,19 @@ impl ExportedType {
             ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone(), TyAttr::default()),
             ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone(), TyAttr::default()),
             ExportedType::Interface { qtn, .. } => {
-                Ty::Interface(qtn.clone(), vec![], vec![], TyAttr::default())
+                Ty::Interface(qtn.clone(), Box::new([]), Box::new([]), TyAttr::default())
             }
         }
     }
 }
 
-fn plain_interface(reference: &baml_type::interned::InterfaceRef) -> baml_type::Interface {
-    baml_type::Interface::new(
-        reference.name.clone(),
-        reference
-            .generics
-            .iter()
-            .map(baml_type::interned::Ty::to_plain)
-            .collect(),
-        reference
-            .associated_types
-            .iter()
-            .map(|(name, ty)| (name.clone(), ty.to_plain()))
-            .collect(),
-    )
-}
-
 fn plain_bounds(
     params: &[ParamTy],
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::Interface>>,
 ) -> Vec<Vec<baml_type::Interface>> {
     params
         .iter()
-        .map(|param| {
-            bounds
-                .get(param)
-                .into_iter()
-                .flatten()
-                .map(plain_interface)
-                .collect()
-        })
+        .map(|param| bounds.get(param).into_iter().flatten().cloned().collect())
         .collect()
 }
 
@@ -611,23 +585,17 @@ fn exported_function<'db>(
         .map(|param| {
             exported_function_param(
                 param.name.clone(),
-                reduce_ground_projections(db, &param.ty.to_plain(), 8),
+                crate::impls::reduce_ground_projections_plain(db, &param.ty, 8),
                 param.has_default,
             )
         })
         .collect();
-    let declared_throws = sig
-        .throws_declared
-        .then(|| reduce_ground_projections(db, &sig.throws.to_plain(), 8));
     let callable_throws =
         if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
-            if sig.throws_declared {
-                sig.throws.to_plain()
-            } else {
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                }
-            }
+            // Total: an interface contract is written or REJECTED to the
+            // error sentinel (already diagnosed as E0170) - never inferred,
+            // so no body run and no Unknown stand-in.
+            sig.throws.clone()
         } else {
             crate::callable::callable_throws(db, func_loc).0
         };
@@ -641,8 +609,7 @@ fn exported_function<'db>(
     ExportedFunction {
         name: name.clone(),
         params,
-        return_type: reduce_ground_projections(db, &sig.ret.to_plain(), 8),
-        declared_throws,
+        return_type: crate::impls::reduce_ground_projections_plain(db, &sig.ret, 8),
         callable_throws,
         generic_param_bounds: plain_bounds(&own_generic_params, &all_bounds),
         generic_params: own_generic_params,
@@ -678,9 +645,9 @@ fn lower_class_export<'db>(
         .with_bounds(crate::lower::class_generic_bounds(db, class_loc));
     let mut fields = Vec::new();
     for field in &class_data.fields {
-        let field_ty = field_ctx
-            .lower_type_ref(&class_data.type_refs, field.type_ref)
-            .to_plain();
+        let field_ty = crate::lower::reject_holes(
+            &field_ctx.lower_type_ref(&class_data.type_refs, field.type_ref),
+        );
         fields.push((
             field.name.clone(),
             field_ty,
@@ -735,7 +702,7 @@ fn lower_alias_export<'db>(
     name: &Name,
 ) -> ExportedType {
     let _ = pkg_items;
-    let resolved = crate::lower::type_alias_value(db, ta_loc).to_plain();
+    let resolved = crate::lower::type_alias_value(db, ta_loc);
     let qtn = qualify_def(db, Definition::TypeAlias(ta_loc), name);
     ExportedType::TypeAlias { qtn, resolved }
 }
@@ -760,29 +727,31 @@ fn lower_interface_export<'db>(
         .with_frame(frame.clone())
         .with_bounds(bounds.clone());
 
-    let self_ty = baml_type::interned::Ty::intern(baml_type::interned::TyKind::TypeVar(
-        self_param.clone(),
-        TyAttr::default(),
-    ));
-    let mut requires_refs = Vec::new();
+    let self_ty = baml_type::Ty::TypeVar(self_param.clone(), TyAttr::default());
+    let mut requires: Vec<baml_type::Interface> = Vec::new();
     for &required in &data.requires {
-        let Some(root) = baml_type::interned::InterfaceRef::of_ty(&ctx.lower_type_ref_at(
+        let Some(root) = crate::lower::reject_holes(&ctx.lower_type_ref_at(
             &data.type_refs,
             required,
             crate::lower::TypePosition::ConstraintHead,
-        )) else {
+        ))
+        .as_interface() else {
             continue;
         };
-        if !requires_refs.contains(&root) {
-            requires_refs.push(root.clone());
+        if !requires.contains(&root) {
+            requires.push(root.clone());
         }
-        for inherited in crate::impls::direct_requires_closure(db, &root, &self_ty, 64) {
-            if !requires_refs.contains(&inherited) {
-                requires_refs.push(inherited);
+        for inherited in crate::impls::direct_requires_closure_plain(
+            db,
+            &root,
+            &self_ty,
+            crate::impls::REQUIRES_CLOSURE_FUEL,
+        ) {
+            if !requires.contains(&inherited) {
+                requires.push(inherited);
             }
         }
     }
-    let requires = requires_refs.iter().map(plain_interface).collect();
 
     let associated_types = data
         .associated_types
@@ -790,12 +759,12 @@ fn lower_interface_export<'db>(
         .map(|assoc| ExportedAssociatedType {
             name: assoc.name.clone(),
             bound: assoc.bound.and_then(|bound| {
-                baml_type::interned::InterfaceRef::of_ty(&ctx.lower_type_ref_at(
+                crate::lower::reject_holes(&ctx.lower_type_ref_at(
                     &data.type_refs,
                     bound,
                     crate::lower::TypePosition::ConstraintHead,
                 ))
-                .map(|bound| plain_interface(&bound))
+                .as_interface()
             }),
             default: crate::interfaces::interface_associated_type_default(
                 db,
@@ -1075,7 +1044,12 @@ fn exported_impls<'db>(
         let param_bounds = facts
             .generic_params
             .iter()
-            .map(|(_, bounds)| bounds.iter().map(plain_interface).collect())
+            .map(|(_, bounds)| {
+                bounds
+                    .iter()
+                    .map(baml_type::interned::ClosedInterface::to_plain)
+                    .collect()
+            })
             .collect();
         let methods = facts
             .methods
@@ -1100,7 +1074,7 @@ fn exported_impls<'db>(
             | ImplSubjectData::Free { .. } => ExportedImplOrigin::OutOfBody,
         };
         rows.push(ExportedImpl {
-            interface: plain_interface(&facts.interface),
+            interface: facts.interface.to_plain(),
             for_ty_pattern: facts.for_ty_pattern.to_plain(),
             generic_params,
             param_bounds,
@@ -1541,7 +1515,6 @@ impl<'db> PackageResolutionContext<'db> {
                     name: exported.name,
                     params: exported.params,
                     return_type: exported.return_type,
-                    declared_throws: exported.declared_throws,
                     callable_throws: exported.callable_throws,
                     generic_params: exported.generic_params,
                     generic_param_bounds: exported.generic_param_bounds,
@@ -1597,8 +1570,8 @@ fn def_to_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, def: Definition<'db>) ->
         }
         Definition::Interface(_) => Some(Ty::Interface(
             qualify_def(db, def, &name),
-            vec![],
-            vec![],
+            Box::new([]),
+            Box::new([]),
             TyAttr::default(),
         )),
         Definition::Enum(_) => Some(Ty::Enum(qualify_def(db, def, &name), TyAttr::default())),

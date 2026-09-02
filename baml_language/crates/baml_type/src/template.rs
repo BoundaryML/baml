@@ -424,12 +424,12 @@ impl<N: Clone> TyTemplate<N> {
     }
 
     /// `Class<A1, A2, ...>` (generic class instantiation) with default attributes.
-    pub fn class(head: N, args: Vec<Self>) -> Self {
+    pub fn class(head: N, args: Box<[Self]>) -> Self {
         TyTemplate::Class(head, args, TyAttr::default())
     }
 
     /// `Interface<A1, Assoc = A2, ...>` with default attributes.
-    pub fn interface(head: N, args: Vec<Self>, associated_bindings: Vec<(Name, Self)>) -> Self {
+    pub fn interface(head: N, args: Box<[Self]>, associated_bindings: Box<[(Name, Self)]>) -> Self {
         TyTemplate::Interface(head, args, associated_bindings, TyAttr::default())
     }
 }
@@ -936,10 +936,10 @@ mod tests {
         let step = TypeName::local(crate::Name::new("Step"));
         let step_field = TyTemplate::class(
             step.clone(),
-            vec![
+            Box::new([
                 TyTemplate::list(TyTemplate::TypeArgRef(1)),
                 TyTemplate::from(RealizedTy::int()),
-            ],
+            ]),
         );
         let step_origins = TyTemplateOrigins::root().through_field(&step, 2, &step_field);
         assert!(!step_origins.class_transform_expands(0, &step, 2));
@@ -947,10 +947,10 @@ mod tests {
         let chain = TypeName::local(crate::Name::new("Chain"));
         let chain_field = TyTemplate::class(
             chain.clone(),
-            vec![TyTemplate::class(
+            Box::new([TyTemplate::class(
                 chain.clone(),
-                vec![TyTemplate::TypeArgRef(0)],
-            )],
+                Box::new([TyTemplate::TypeArgRef(0)]),
+            )]),
         );
         let chain_origins = TyTemplateOrigins::root().through_field(&chain, 1, &chain_field);
         assert!(chain_origins.class_transform_expands(0, &chain, 1));
@@ -958,11 +958,11 @@ mod tests {
         let interface = TypeName::local(crate::Name::new("Wrapped"));
         let interface_field = TyTemplate::class(
             chain.clone(),
-            vec![TyTemplate::interface(
+            Box::new([TyTemplate::interface(
                 interface,
-                vec![TyTemplate::TypeArgRef(0)],
-                Vec::new(),
-            )],
+                Box::new([TyTemplate::TypeArgRef(0)]),
+                Box::new([]),
+            )]),
         );
         let interface_origins =
             TyTemplateOrigins::root().through_field(&chain, 1, &interface_field);
@@ -1031,8 +1031,8 @@ mod tests {
             base: Box::new(TyTemplate::TypeArgRef(0)),
             interface: Box::new(TyTemplateInterface {
                 name: crate::TypeName::local(crate::Name::new("Cyclic")),
-                generics: vec![],
-                associated_types: vec![],
+                generics: Box::new([]),
+                associated_types: Box::new([]),
             }),
             member,
             attr: TyAttr::default(),
@@ -1139,14 +1139,14 @@ mod tests {
     fn class_with_type_arg_ref_substitution() {
         let tmpl = TyTemplate::class(
             crate::TypeName::local(crate::Name::new("Container")),
-            vec![TyTemplate::TypeArgRef(0)],
+            Box::new([TyTemplate::TypeArgRef(0)]),
         );
         let user = RuntimeTy::user_class("User");
         assert_eq!(
             sub(&tmpl, &[r(user.clone())]),
             RuntimeTy::class_with_args(
                 crate::TypeName::local(crate::Name::new("Container")),
-                vec![user]
+                Box::new([user])
             )
         );
         assert!(!tmpl.is_fully_concrete());
@@ -1154,13 +1154,16 @@ mod tests {
 
     #[test]
     fn class_no_args_is_fully_concrete() {
-        let tmpl = TyTemplate::class(crate::TypeName::local(crate::Name::new("User")), vec![]);
+        let tmpl = TyTemplate::class(
+            crate::TypeName::local(crate::Name::new("User")),
+            Box::new([]),
+        );
         assert!(tmpl.is_fully_concrete());
         assert_eq!(
             sub(&tmpl, &[]),
             RuntimeTy::Class(
                 crate::TypeName::local(crate::Name::new("User")),
-                vec![],
+                Box::new([]),
                 crate::TyAttr::default()
             )
         );

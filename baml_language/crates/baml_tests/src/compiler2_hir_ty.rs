@@ -9,8 +9,8 @@ mod tests {
 
     use crate::engine::TestDbExt;
 
-    fn render(ty: &baml_type::interned::Ty) -> String {
-        ty.to_plain().render_canonical()
+    fn render(ty: &baml_type::Ty) -> String {
+        ty.render_canonical()
     }
 
     fn signature_of(

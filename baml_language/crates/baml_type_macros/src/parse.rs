@@ -2,7 +2,9 @@
 //!
 //! The DSL has four sections, in order:
 //! 1. `axes { a, b, c, ... }` — the membership categories.
-//! 2. one or more `type Name { includes: [..axes..], child: Self | Other }`.
+//! 2. one or more `type Name { includes: [..axes..], child: C }` where `C`
+//!    is `Self` (deep), another member's name (shallow), or
+//!    `interned(path::to::Handle)` (an interned member; see below).
 //! 3. zero or more `satellite Name<..> { fields } methods { ... }`.
 //! 4. the master `enum`, each variant tagged with exactly one `#[axis(..)]`.
 //!
@@ -10,7 +12,7 @@
 //! every generated member, so the family is parameterized as a whole — `Ty<N>`,
 //! `RuntimeTy<N>`, `RealizedTy<N>`, … A satellite declares its own generics so
 //! it can opt out. Nested positions are written out in full in the DSL
-//! (`Box<Ty<N>>`, `Vec<FunctionParamTy<N>>`): the per-member rewrite is
+//! (`Box<Ty<N>>`, `Box<[FunctionParamTy<N>]>`): the per-member rewrite is
 //! ident-for-ident, so the argument list rides along untouched and the master
 //! `enum` stays readable as ordinary Rust.
 //!
@@ -21,12 +23,14 @@ use proc_macro2::TokenStream;
 use syn::{
     Attribute, Field, Fields, Generics, Ident, ItemEnum, Token, braced, bracketed,
     ext::IdentExt,
+    parenthesized,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
 };
 
 mod kw {
     syn::custom_keyword!(axes);
+    syn::custom_keyword!(interned);
     syn::custom_keyword!(satellite);
     syn::custom_keyword!(includes);
     syn::custom_keyword!(child);
@@ -53,6 +57,9 @@ enum ChildRef {
     SelfRef,
     /// `child: Other` — a shallow member whose nested positions hold `Other`.
     Named(Ident),
+    /// `child: interned(path::to::Handle)` — an interned member whose nested
+    /// positions hold the named hash-cons handle type.
+    Interned(syn::Type),
 }
 
 struct SatelliteInput {
@@ -116,6 +123,11 @@ fn parse_member(input: ParseStream) -> syn::Result<MemberInput> {
     let child = if content.peek(Token![Self]) {
         content.parse::<Token![Self]>()?;
         ChildRef::SelfRef
+    } else if content.peek(kw::interned) && content.peek2(syn::token::Paren) {
+        content.parse::<kw::interned>()?;
+        let handle;
+        parenthesized!(handle in content);
+        ChildRef::Interned(handle.parse::<syn::Type>()?)
     } else {
         ChildRef::Named(content.parse::<Ident>()?)
     };
@@ -176,13 +188,38 @@ pub(crate) struct Member {
     pub(crate) name: Ident,
     /// Axis indices this member includes (a variant is present iff its axis is here).
     pub(crate) includes: Vec<usize>,
-    /// Index into [`Family::members`] for nested positions; equal to this
-    /// member's own index iff the member is deep (`child: Self`).
-    pub(crate) child: usize,
+    /// What this member's nested positions hold.
+    pub(crate) child: Child,
     /// `true` for the master member (its name equals [`Family::master_ident`]).
     pub(crate) is_master: bool,
     /// `true` iff `child` points at this member itself.
     pub(crate) deep: bool,
+}
+
+/// A member's resolved nested-position type.
+pub(crate) enum Child {
+    /// A plain tree: nested positions hold this [`Family::members`] index
+    /// (the member's own index iff the member is deep).
+    Member(usize),
+    /// An interned member: nested positions hold this hash-cons handle type
+    /// (boxed: a `syn::Type` outweighs the index variant considerably).
+    /// The member is the pool's *kind* — the one-level-deep structural layer a
+    /// handle dereferences to — so it takes no part in the plain world's
+    /// conversion matrix, visitors, or mappers (its layout is alien), and the
+    /// head parameter is fixed at its declared default (the pool is
+    /// monomorphic).
+    Interned(Box<syn::Type>),
+}
+
+impl Member {
+    /// The family-member index feeding nested positions; `None` for an
+    /// interned member (its children are handles, not a member type).
+    pub(crate) fn child_member(&self) -> Option<usize> {
+        match &self.child {
+            Child::Member(idx) => Some(*idx),
+            Child::Interned(_) => None,
+        }
+    }
 }
 
 pub(crate) struct Satellite {
@@ -241,15 +278,41 @@ impl Family {
                     .map(&axis_index)
                     .collect::<syn::Result<Vec<_>>>()?;
                 let child = match &m.child {
-                    ChildRef::SelfRef => i,
-                    ChildRef::Named(name) => member_index(name)?,
+                    ChildRef::SelfRef => Child::Member(i),
+                    ChildRef::Named(name) => {
+                        let idx = member_index(name)?;
+                        // A plain member cannot nest an interned member: the
+                        // structural conversion walkers would have to convert
+                        // through a handle, which only the hand-written
+                        // boundary conversions can do.
+                        if matches!(members[idx].child, ChildRef::Interned(_)) {
+                            return Err(syn::Error::new(
+                                name.span(),
+                                format!(
+                                    "interned member `{name}` cannot be another member's child"
+                                ),
+                            ));
+                        }
+                        Child::Member(idx)
+                    }
+                    ChildRef::Interned(handle) => {
+                        if m.name == master_ident {
+                            return Err(syn::Error::new(
+                                m.name.span(),
+                                "the master member cannot be interned: the master is the \
+                                 plain tree every other member converts through",
+                            ));
+                        }
+                        Child::Interned(Box::new(handle.clone()))
+                    }
                 };
+                let deep = matches!(child, Child::Member(idx) if idx == i);
                 Ok(Member {
                     name: m.name.clone(),
                     includes,
                     child,
                     is_master: m.name == master_ident,
-                    deep: child == i,
+                    deep,
                 })
             })
             .collect::<syn::Result<Vec<_>>>()?;

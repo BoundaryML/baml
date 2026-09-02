@@ -1646,11 +1646,7 @@ fn decode_record_to_instance(
     }
 
     Ok(Value::object(vm.tlab.alloc(Object::Instance(
-        Instance::new(
-            class_ptr,
-            type_args.clone().into_boxed_slice(),
-            field_values,
-        ),
+        Instance::new(class_ptr, type_args.clone(), field_values),
     ))))
 }
 

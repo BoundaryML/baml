@@ -367,10 +367,7 @@ pub fn receiver_at_dot<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     file: SourceFile,
     dot: TextSize,
-) -> Option<(
-    baml_compiler2_hir::body::BodyOwnerId<'db>,
-    baml_type::interned::Ty,
-)> {
+) -> Option<(baml_compiler2_hir::body::BodyOwnerId<'db>, baml_type::Ty)> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
     let text = file.text(db);
     // A receiver "reaches" the dot when only trivia separates them, so a
@@ -387,7 +384,7 @@ pub fn receiver_at_dot<'db>(
     // nested in an argument list claims over the call that encloses it.
     let mut best: Option<(
         baml_compiler2_hir::body::BodyOwnerId<'db>,
-        baml_type::interned::Ty,
+        baml_type::Ty,
         TextRange,
     )> = None;
     for scope_id in scope_candidates_at(db, file, index, dot) {
@@ -430,14 +427,10 @@ pub fn receiver_at_dot<'db>(
                 Expr::OptionalMemberAccess { base, .. } => {
                     reaches(source_map.expr_span(*base).end())
                         .then(|| {
-                            inference.type_of_expr.get(base).map(|ty| {
-                                (
-                                    baml_type::interned::Ty::from_plain(
-                                        &ty.to_plain().strip_null(),
-                                    ),
-                                    source_map.expr_span(*base),
-                                )
-                            })
+                            inference
+                                .type_of_expr
+                                .get(base)
+                                .map(|ty| (ty.strip_null(), source_map.expr_span(*base)))
                         })
                         .flatten()
                 }
@@ -466,7 +459,7 @@ pub fn receiver_at_dot<'db>(
     // package qualifier, and inference records the error sentinel for the
     // `baml` it could not read as a value. Reporting that as a receiver
     // would answer "no members" for a dot that has plenty.
-    best.filter(|(_, ty, _)| !matches!(ty.kind(), baml_type::interned::TyKind::Error { .. }))
+    best.filter(|(_, ty, _)| !matches!(ty, baml_type::Ty::Error { .. }))
         .map(|(owner, ty, _)| (owner, ty))
 }
 
@@ -511,7 +504,7 @@ pub fn type_qualifier_at<'db>(
 pub struct CallPosition {
     /// The callee's type, which carries the parameter names and which of
     /// them are optional (and therefore named-only).
-    pub callee: baml_type::interned::Ty,
+    pub callee: baml_type::Ty,
     /// Labels already written in this call — a name is offered once.
     pub written: Vec<Name>,
 }
@@ -587,11 +580,7 @@ pub fn object_literal_at<'db>(
             if !(span.contains(offset) || span.end() == offset) {
                 continue;
             }
-            let Some(baml_type::interned::TyKind::Class(qtn, ..)) = inference
-                .type_of_expr
-                .get(&expr_id)
-                .map(baml_type::interned::Ty::kind)
-            else {
+            let Some(baml_type::Ty::Class(qtn, ..)) = inference.type_of_expr.get(&expr_id) else {
                 continue;
             };
             let facts = baml_compiler2_hir_ty::facts::Facts::new(db);
@@ -1191,9 +1180,11 @@ fn operator_target_at(
 
     let (_, dispatch, lhs, rhs) = claim?;
     let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
-    let lhs_ty = inference.type_of_expr.get(&lhs)?;
-    let rhs_ty = rhs.and_then(|rhs| inference.type_of_expr.get(&rhs));
-    let func = ops::operator_method(db, dispatch, lhs_ty, rhs_ty)?;
+    let lhs_ty = baml_type::interned::Ty::from_plain(inference.type_of_expr.get(&lhs)?);
+    let rhs_ty = rhs
+        .and_then(|rhs| inference.type_of_expr.get(&rhs))
+        .map(baml_type::interned::Ty::from_plain);
+    let func = ops::operator_method(db, dispatch, &lhs_ty, rhs_ty.as_ref())?;
     Some(SymbolTarget::Method { func })
 }
 
@@ -1452,7 +1443,7 @@ fn constructor_field_at<'db>(
             name_span.contains(offset) || name_span.end() == offset
         })?;
 
-        let obj_ty = inference.type_of_expr.get(&expr_id)?.to_plain();
+        let obj_ty = inference.type_of_expr.get(&expr_id)?.clone();
         let Ty::Class(ref qtn, _, _) = obj_ty else {
             return None;
         };

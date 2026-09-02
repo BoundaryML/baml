@@ -90,7 +90,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
         Ty::Class(name, args, _) => {
             if ctx.type_stream_accessors
                 && is_ai_stream_type(name)
-                && let [stream, final_value] = args.as_slice()
+                && let [stream, final_value] = &**args
             {
                 let stream_type = translate_ty(stream, ctx);
                 let yield_type = translate_stream_yield_ty(stream, ctx);
@@ -394,7 +394,7 @@ mod tests {
         )
     }
     fn class_ty(name: Name, args: Vec<Ty>) -> Ty {
-        Ty::Class(name, args, baml_base::TyAttr::EMPTY)
+        Ty::Class(name, args.into(), baml_base::TyAttr::EMPTY)
     }
     fn enum_ty(name: Name) -> Ty {
         Ty::Enum(name, baml_base::TyAttr::EMPTY)
@@ -412,7 +412,7 @@ mod tests {
         Ty::List(inner, baml_base::TyAttr::EMPTY)
     }
     fn union(members: Vec<Ty>) -> Ty {
-        Ty::Union(members, baml_base::TyAttr::EMPTY)
+        Ty::Union(members.into(), baml_base::TyAttr::EMPTY)
     }
     fn media(kind: MediaKind) -> Ty {
         Ty::Media(kind, baml_base::TyAttr::EMPTY)
@@ -429,7 +429,7 @@ mod tests {
     }
     fn callable(params: Vec<baml_codegen_types::CallableParam>, ret: Box<Ty>) -> Ty {
         Ty::Function {
-            params,
+            params: params.into(),
             ret,
             throws: Box::new(Ty::Never {
                 attr: baml_base::TyAttr::EMPTY,

@@ -480,7 +480,7 @@ impl BexExternalValue {
     /// explicitly distinguishing it from an actual declared union.
     pub fn typed(value: BexExternalValue, value_type: RuntimeTy) -> Self {
         let mut metadata = UnionMetadata::new(
-            RuntimeTy::Union(vec![value_type.clone()], TyAttr::default()),
+            RuntimeTy::Union(Box::new([value_type.clone()]), TyAttr::default()),
             value_type,
         );
         metadata.is_inbound_type_annotation = true;
