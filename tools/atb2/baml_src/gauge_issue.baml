@@ -52,7 +52,7 @@ function estimate_difficulty(issue: Issue) -> DifficultyEstimate {
         Repros (${issue.repros.length().to_string()}):
         ${format_repros(issue.repros)}
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
@@ -104,9 +104,7 @@ function with_difficulty(issue: Issue, difficulty: Difficulty) -> Issue {
 // touches `difficulty`.
 testset "gauge_issue" {
     test "estimate reply parses" {
-        let e = estimate_difficulty$parse(
-            #"{ "difficulty": "Medium", "rationale": "known cause, three call sites", "unknowns": [] }"#,
-        );
+        let e = estimate_difficulty$parse(`{ "difficulty": "Medium", "rationale": "known cause, three call sites", "unknowns": [] }`);
         assert.equal(e.difficulty, Difficulty.Medium);
         assert.equal(e.unknowns.length(), 0);
     }

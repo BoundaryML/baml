@@ -417,13 +417,7 @@ function run_with(c: Cmd, env: map<string, string>) -> CmdResult {
     let out = baml.sys.exec(
         awake.program,
         awake.args,
-        baml.sys.ProcessOptions {
-            cwd: c.cwd,
-            env: env,
-            timeout_ms: c.timeout_ms,
-            stdin: null,
-            keep_stdin_open: null,
-        },
+        baml.sys.ProcessOptions { cwd: c.cwd, env: env, timeout_ms: c.timeout_ms, stdin: null },
     ) catch (e) {
         baml.errors.Timeout => {
             return CmdResult {
