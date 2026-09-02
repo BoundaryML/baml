@@ -1,0 +1,403 @@
+name: Repair nightly 0.18.1-nightly.20260901.a
+
+run-name: Repair nightly 0.18.1-nightly.20260901.a publication
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: repair-nightly-0.18.1-nightly.20260901.a
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ROLE_ARN: arn:aws:iam::277707123528:role/pkg-boundaryml-com-github-release
+  PKG_BUCKET: pkgboundarymlcomstack-pkgboundarymlcomsitebucket4f-ybhvygkqittp
+  SOURCE_RUN_ID: "33621956905"
+  SOURCE_SHA: 5a29ca428e3a964d262506ed90d889b3ab4d01a7
+  VERSION: 0.18.1-nightly.20260901.a
+  CHANNEL: nightly
+  RELEASED_AT: "2026-09-02T10:14:35Z"
+  CRATES_IO_VERSION: 0.18.1-nightly.20260901.a
+  GO_VERSION: v0.18.1-nightly.20260901.a
+  NUGET_VERSION: 0.18.1-nightly.20260901.a
+  PYPI_VERSION: 0.18.1.dev2026090100
+  SWIFTPM_VERSION: 0.18.1-nightly.20260901.a
+  WRAPPER_VERSION: 0.2.4
+
+jobs:
+  verify-source:
+    name: Verify failed release source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify source run and release identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
+          test "$(jq -r .head_sha <<<"$run")" = "$SOURCE_SHA"
+          test "$(jq -r .head_branch <<<"$run")" = "baml-language-source-$SOURCE_SHA"
+          test "$(jq -r .conclusion <<<"$run")" = failure
+
+          release="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/baml-language-$VERSION")"
+          test "$(jq -r .target_commitish <<<"$release")" = "$SOURCE_SHA"
+          echo "Repairing failed release run $SOURCE_RUN_ID from $SOURCE_SHA." >> "$GITHUB_STEP_SUMMARY"
+          echo "Java and C# publication success is intentionally assumed for this ad-hoc repair." >> "$GITHUB_STEP_SUMMARY"
+
+  publish-homebrew:
+    name: Publish Homebrew wrapper formula
+    needs: verify-source
+    runs-on: blacksmith-6vcpu-macos-latest
+    environment: infisical-github-baml-language-release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wrapper-*
+          path: dist/wrapper
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: BoundaryML/baml
+          run-id: 33621956905
+      - name: Generate Homebrew formula
+        run: |
+          set -euo pipefail
+          source_sha256="$(
+            curl --retry 5 --retry-all-errors -fsSL \
+              "https://github.com/BoundaryML/baml/archive/refs/tags/baml-wrapper-${WRAPPER_VERSION}.tar.gz" |
+              shasum -a 256 |
+              awk '{print $1}'
+          )"
+          scripts/baml-package-manager-artifacts \
+            --wrapper-dir dist/wrapper \
+            --version "$WRAPPER_VERSION" \
+            --source-sha256 "$source_sha256" \
+            --out package-manager
+      - name: Test Homebrew formula
+        run: |
+          set -euo pipefail
+          brew tap boundaryml/tap
+          tap="$(brew --repo boundaryml/tap)"
+          cp package-manager/homebrew/Formula/baml.rb "$tap/Formula/baml.rb"
+          brew audit --strict boundaryml/tap/baml
+          brew install --build-from-source boundaryml/tap/baml
+          brew test boundaryml/tap/baml
+          brew linkage --test boundaryml/tap/baml
+      - name: Push formula to BoundaryML/homebrew-tap
+        env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          gh auth setup-git
+          tap="$(brew --repo boundaryml/tap)"
+          cd "$tap"
+          git config user.name "boundaryml-release-bot"
+          git config user.email "boundaryml-release-bot@users.noreply.github.com"
+          git remote set-url origin "https://github.com/BoundaryML/homebrew-tap.git"
+          git add Formula/baml.rb
+          git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || exit 0
+          git push origin HEAD
+
+  publish-pkg-boundaryml-com:
+    name: Publish pkg.boundaryml.com manifests
+    needs: verify-source
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-plan
+          github-token: ${{ github.token }}
+          repository: BoundaryML/baml
+          run-id: 33621956905
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: toolchain-*
+          path: dist/toolchain
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: BoundaryML/baml
+          run-id: 33621956905
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bridge-cffi-*
+          path: dist/cffi
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: BoundaryML/baml
+          run-id: 33621956905
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wrapper-*
+          path: dist/wrapper
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: BoundaryML/baml
+          run-id: 33621956905
+      - uses: actions/download-artifact@v4
+        with:
+          name: baml-vscode-vsix
+          path: dist/vsix
+          github-token: ${{ github.token }}
+          repository: BoundaryML/baml
+          run-id: 33621956905
+      - uses: actions/download-artifact@v4
+        with:
+          name: csharp-product-package
+          path: dist/csharp
+          github-token: ${{ github.token }}
+          repository: BoundaryML/baml
+          run-id: 33621956905
+      - uses: actions/download-artifact@v4
+        with:
+          name: swift-xcframework
+          path: dist/swift
+          github-token: ${{ github.token }}
+          repository: BoundaryML/baml
+          run-id: 33621956905
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: baml-language-repair-${{ github.run_id }}
+      - name: Generate release manifests
+        run: |
+          set -euo pipefail
+          (
+            cd dist/csharp
+            sha256sum -c product-package.sha256
+          )
+          csharp_digest="$(cut -d ' ' -f 1 dist/csharp/product-package.sha256)"
+          mapfile -t swift_packages < <(
+            find dist/swift -maxdepth 1 -type f \
+              -name 'BamlBridgeFFI-*.xcframework.zip' -print
+          )
+          if [[ "${#swift_packages[@]}" -ne 1 ]]; then
+            echo "::error::expected exactly one verified Swift XCFramework zip"
+            exit 1
+          fi
+          swift_digest="$(sha256sum "${swift_packages[0]}" | cut -d ' ' -f 1)"
+          scripts/baml-release-manifests \
+            --toolchain-dir dist/toolchain \
+            --cffi-dir dist/cffi \
+            --wrapper-dir dist/wrapper \
+            --vsix-dir dist/vsix \
+            --out manifests \
+            --channel "$CHANNEL" \
+            --version "$VERSION" \
+            --released-at "$RELEASED_AT" \
+            --pypi-version "$PYPI_VERSION" \
+            --wrapper-version "$WRAPPER_VERSION" \
+            --crates-io-version "$CRATES_IO_VERSION" \
+            --nuget-version "$NUGET_VERSION" \
+            --nuget-package-sha256 "$csharp_digest" \
+            --swiftpm-version "$SWIFTPM_VERSION" \
+            --swift-package-sha256 "$swift_digest"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-manifests
+          path: manifests
+          if-no-files-found: error
+      - name: Upload immutable manifest, install scripts, and index
+        run: |
+          set -euo pipefail
+          upload_immutable() {
+            local source="$1"
+            local dest="$2"
+            local tmp
+            local err
+            tmp="$(mktemp)"
+            err="$(mktemp)"
+            if aws s3api head-object --bucket "$PKG_BUCKET" --key "$dest" >/dev/null 2>"$err"; then
+              if ! aws s3 cp "s3://$PKG_BUCKET/$dest" "$tmp" >/dev/null 2>>"$err"; then
+                echo "::error::immutable object exists but could not be read: $dest"
+                cat "$err"
+                exit 1
+              fi
+              if cmp -s "$source" "$tmp"; then
+                echo "immutable object already exists and matches: $dest"
+              else
+                echo "::error::immutable object exists with different content: $dest"
+                exit 1
+              fi
+            elif grep -Eq '(\(404\)|Not Found|NoSuchKey)' "$err"; then
+              aws s3 cp "$source" "s3://$PKG_BUCKET/$dest" \
+                --content-type application/json \
+                --cache-control "public, max-age=86400, immutable"
+            else
+              echo "::error::failed to inspect immutable object before upload: $dest"
+              cat "$err"
+              exit 1
+            fi
+          }
+
+          upload_immutable "manifests/version/$VERSION.json" "manifest/v1/version/$VERSION.json"
+          if [[ -f manifests/wrapper.json ]]; then
+            aws s3 cp manifests/wrapper.json "s3://$PKG_BUCKET/manifest/v1/wrapper.json" \
+              --content-type application/json \
+              --cache-control "public, max-age=60, must-revalidate"
+          fi
+          aws s3 cp scripts/install.sh "s3://$PKG_BUCKET/install.sh" \
+            --content-type text/x-shellscript \
+            --cache-control "public, max-age=60, must-revalidate"
+          aws s3 cp scripts/install.ps1 "s3://$PKG_BUCKET/install.ps1" \
+            --content-type text/plain \
+            --cache-control "public, max-age=60, must-revalidate"
+          aws s3 cp tools/pkg_boundaryml_com/data/index.html "s3://$PKG_BUCKET/index.html" \
+            --content-type text/html \
+            --cache-control "public, max-age=300"
+
+  publish-go-sdk:
+    name: Publish Go SDK mirror
+    needs: [verify-source, publish-pkg-boundaryml-com]
+    runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: go-sdk-mirror
+          path: /tmp/go-sdk-package
+          github-token: ${{ github.token }}
+          repository: BoundaryML/baml
+          run-id: 33621956905
+      - name: Clone BoundaryML/baml-go
+        env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          gh auth setup-git
+          git clone https://github.com/BoundaryML/baml-go.git /tmp/baml-go
+          if ! git -C /tmp/baml-go rev-parse --verify HEAD >/dev/null 2>&1; then
+            git -C /tmp/baml-go switch --orphan main
+          fi
+      - name: Publish immutable module tag
+        env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
+        run: |
+          set -euo pipefail
+          manifest_url="https://pkg.boundaryml.com/manifest/v1/version/$VERSION.json"
+          manifest="$(mktemp)"
+          for attempt in $(seq 1 10); do
+            if curl -fsSL "$manifest_url" -o "$manifest"; then
+              break
+            fi
+            if [[ "$attempt" == 10 ]]; then
+              echo "::error::release manifest is unavailable: $manifest_url"
+              exit 1
+            fi
+            sleep "$attempt"
+          done
+          jq -e \
+            --arg version "$VERSION" \
+            --arg go_version "$GO_VERSION" \
+            --arg module "github.com/boundaryml/baml-go" \
+            '
+              .version == $version
+              and .baml_bridge_go == {
+                "module": $module,
+                "version": $go_version
+              }
+              and (.cffi | type == "object" and length > 0)
+            ' "$manifest" >/dev/null
+
+          rsync -a --checksum --delete --exclude .git /tmp/go-sdk-package/ /tmp/baml-go/
+          drift="$(
+            rsync -rcni --delete --exclude .git \
+              /tmp/go-sdk-package/ /tmp/baml-go/
+          )"
+          if [[ -n "$drift" ]]; then
+            echo "::error::mirror tree differs from the verified build artifact"
+            printf '%s\n' "$drift"
+            exit 1
+          fi
+
+          cd /tmp/baml-go
+          test "$(sed -n '1p' go.mod)" = "module github.com/boundaryml/baml-go"
+          if ! grep -qxF "const ToolchainVersion = \"$VERSION\"" version.go ||
+             ! grep -qxF "const BridgeRuntimeVersion = \"$GO_VERSION\"" version.go; then
+            echo "::error::version.go is not stamped for $VERSION / $GO_VERSION"
+            grep -n "ToolchainVersion\\|BridgeRuntimeVersion" version.go || true
+            exit 1
+          fi
+          git add -A
+
+          if git rev-parse --verify "refs/tags/$GO_VERSION" >/dev/null 2>&1; then
+            if git diff --cached --quiet "$GO_VERSION" --; then
+              echo "$GO_VERSION already exists with identical module content"
+              exit 0
+            fi
+            echo "::error::$GO_VERSION already exists with different module content"
+            exit 1
+          fi
+
+          if ! git diff --cached --quiet; then
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "Sync BoundaryML/baml@$SOURCE_SHA for $GO_VERSION"
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              tag -a "$GO_VERSION" -m "$GO_VERSION"
+          git push --atomic origin main "$GO_VERSION"
+
+  publish-pkg-channel:
+    name: Promote verified release channel manifest
+    needs: [publish-homebrew, publish-pkg-boundaryml-com, publish-go-sdk]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-manifests
+          path: manifests
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: baml-language-channel-repair-${{ github.run_id }}
+      - name: Verify repaired release state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          manifest="$(mktemp)"
+          curl --retry 5 --retry-all-errors -fsSL \
+            "https://pkg.boundaryml.com/manifest/v1/version/$VERSION.json" \
+            -o "$manifest"
+          jq -e \
+            --arg version "$VERSION" \
+            --arg go_version "$GO_VERSION" \
+            '.version == $version and .baml_bridge_go.version == $go_version' \
+            "$manifest" >/dev/null
+          gh api "repos/BoundaryML/baml-go/git/ref/tags/$GO_VERSION" >/dev/null
+      - name: Promote mutable channel manifest
+        run: |
+          set -euo pipefail
+          aws s3 cp "manifests/$CHANNEL.json" \
+            "s3://$PKG_BUCKET/manifest/v1/$CHANNEL.json" \
+            --content-type application/json \
+            --cache-control "public, max-age=60, must-revalidate"
