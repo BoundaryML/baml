@@ -12269,7 +12269,10 @@ impl<'db> LoweringContext<'db> {
             vec![(iface_tn.clone(), iface_type_args.into(), iface_assoc.into())];
         views.extend(
             baml_compiler2_hir_ty::impls::direct_requires_closure_plain(
-                self.db, &root, &subject, 8,
+                self.db,
+                &root,
+                &subject,
+                baml_compiler2_hir_ty::impls::REQUIRES_CLOSURE_FUEL,
             )
             .into_iter()
             .map(|reference| {

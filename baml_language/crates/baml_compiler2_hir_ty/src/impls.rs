@@ -1030,6 +1030,13 @@ pub fn impl_views_for_type(
         .collect()
 }
 
+/// The `requires`-closure traversal budget every consumer shares - one
+/// unit per queued interface, so it bounds ancestor DEPTH, not fan-out.
+/// One constant: a consumer with a smaller budget silently sees fewer
+/// ancestors than the exporter did (MIR once used 8 against 64 here, and a
+/// deep chain could lose the declaring interface of a virtual member).
+pub const REQUIRES_CLOSURE_FUEL: u32 = 64;
+
 /// [`direct_requires_closure`]'s PLAIN entry, same boundary discipline as
 /// [`impl_views_for_type`].
 pub fn direct_requires_closure_plain(

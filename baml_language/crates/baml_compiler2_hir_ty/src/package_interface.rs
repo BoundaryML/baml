@@ -741,7 +741,12 @@ fn lower_interface_export<'db>(
         if !requires.contains(&root) {
             requires.push(root.clone());
         }
-        for inherited in crate::impls::direct_requires_closure_plain(db, &root, &self_ty, 64) {
+        for inherited in crate::impls::direct_requires_closure_plain(
+            db,
+            &root,
+            &self_ty,
+            crate::impls::REQUIRES_CLOSURE_FUEL,
+        ) {
             if !requires.contains(&inherited) {
                 requires.push(inherited);
             }

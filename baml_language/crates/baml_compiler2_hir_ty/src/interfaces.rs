@@ -2211,7 +2211,12 @@ fn resolve_through_roots(
         }
         let subject = root.to_ty();
         if crate::package_interface::mounted_type_row(db, &root.name).is_some() {
-            for inherited in crate::impls::direct_requires_closure_plain(db, &root, &subject, 64) {
+            for inherited in crate::impls::direct_requires_closure_plain(
+                db,
+                &root,
+                &subject,
+                crate::impls::REQUIRES_CLOSURE_FUEL,
+            ) {
                 if interface_declares_member(db, &inherited.name, member, ns) {
                     push(&mut declarers, inherited);
                 }

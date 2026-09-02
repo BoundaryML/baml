@@ -3885,7 +3885,7 @@ impl<'db> InferenceContext<'db> {
                 };
                 let (naked, targets): (Vec<Ty>, Vec<Ty>) = members
                     .into_iter()
-                    .partition(|member| matches!(member.kind(), InferTy::InferVar { var: _, .. }));
+                    .partition(|member| matches!(member.kind(), InferTy::InferVar { .. }));
                 let remainder: Vec<Ty> = actual_members
                     .into_iter()
                     .filter(|member| !targets.contains(member))

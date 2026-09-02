@@ -215,8 +215,12 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
         },
         pins.clone(),
     );
-    let inherited =
-        baml_compiler2_hir_ty::impls::direct_requires_closure_plain(&db, &root, &root.to_ty(), 64);
+    let inherited = baml_compiler2_hir_ty::impls::direct_requires_closure_plain(
+        &db,
+        &root,
+        &root.to_ty(),
+        baml_compiler2_hir_ty::impls::REQUIRES_CLOSURE_FUEL,
+    );
     assert!(
         inherited
             .iter()
