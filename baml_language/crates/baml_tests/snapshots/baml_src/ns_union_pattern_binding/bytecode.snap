@@ -69,27 +69,14 @@ function union_pattern_binding.upb_let_else_first_member() -> int {
 
   L1:
     load_const 0
-    jump L5
+    jump L3
 
   L2:
     load_var _3
-    store_var_load_var x
-    type_tag
-    load_const WlA
-    cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
+    load_type union_pattern_binding.WlHasV
+    virtual_load_field .v
 
   L3:
-    load_var x
-    load_field .0
-    jump L5
-
-  L4:
-    load_var x
-    load_field .0
-
-  L5:
     return
 }
 
@@ -113,27 +100,14 @@ function union_pattern_binding.upb_let_else_non_member() -> int {
 
   L1:
     load_const -1
-    jump L5
+    jump L3
 
   L2:
     load_var _3
-    store_var_load_var x
-    type_tag
-    load_const WlA
-    cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
+    load_type union_pattern_binding.WlHasV
+    virtual_load_field .v
 
   L3:
-    load_var x
-    load_field .0
-    jump L5
-
-  L4:
-    load_var x
-    load_field .0
-
-  L5:
     return
 }
 
@@ -158,27 +132,14 @@ function union_pattern_binding.upb_let_else_second_member() -> int {
 
   L1:
     load_const 0
-    jump L5
+    jump L3
 
   L2:
     load_var _3
-    store_var_load_var x
-    type_tag
-    load_const WlA
-    cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
+    load_type union_pattern_binding.WlHasV
+    virtual_load_field .v
 
   L3:
-    load_var x
-    load_field .0
-    jump L5
-
-  L4:
-    load_var x
-    load_field .0
-
-  L5:
     return
 }
 
@@ -203,27 +164,14 @@ function union_pattern_binding.upb_match_arm_first_member() -> int {
 
   L1:
     load_const 0
-    jump L5
+    jump L3
 
   L2:
     load_var _2
-    store_var_load_var x
-    type_tag
-    load_const WlA
-    cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
+    load_type union_pattern_binding.WlHasV
+    virtual_load_field .v
 
   L3:
-    load_var x
-    load_field .0
-    jump L5
-
-  L4:
-    load_var x
-    load_field .0
-
-  L5:
     return
 }
 
@@ -248,27 +196,14 @@ function union_pattern_binding.upb_match_arm_second_member() -> int {
 
   L1:
     load_const 0
-    jump L5
+    jump L3
 
   L2:
     load_var _2
-    store_var_load_var x
-    type_tag
-    load_const WlA
-    cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
+    load_type union_pattern_binding.WlHasV
+    virtual_load_field .v
 
   L3:
-    load_var x
-    load_field .0
-    jump L5
-
-  L4:
-    load_var x
-    load_field .0
-
-  L5:
     return
 }
 

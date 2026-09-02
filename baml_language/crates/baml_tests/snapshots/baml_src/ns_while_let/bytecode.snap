@@ -190,78 +190,30 @@ function while_let.alternate() -> int {
   L3:
     load_var _3
     store_var x
-    load_var total
-    store_var _7
+    load_var2 2 6
+    load_type while_let.WlHasV
+    virtual_load_field .v
+    add_int
+    store_var total
     load_var x
-    type_tag
-    load_const WlA
-    cmp_int_op ==
+    load_type while_let.WlHasV
+    virtual_load_field .v
+    load_const 1
+    cmp_int_op <=
     pop_jump_if_false L4
     jump L5
 
   L4:
     load_var x
-    load_field .0
-    jump L6
-
-  L5:
-    load_var x
-    load_field .0
-
-  L6:
-    load_var _7
-    add_int
-    store_var total
-    load_var x
-    type_tag
-    load_const WlA
-    cmp_int_op ==
-    pop_jump_if_false L7
-    jump L8
-
-  L7:
-    load_var x
-    load_field .0
-    jump L9
-
-  L8:
-    load_var x
-    load_field .0
-
-  L9:
-    load_const 1
-    cmp_int_op <=
-    pop_jump_if_false L10
-    jump L14
-
-  L10:
-    load_var x
-    type_tag
-    load_const WlA
-    cmp_int_op ==
-    pop_jump_if_false L11
-    jump L12
-
-  L11:
-    load_var x
-    load_field .0
-    store_var _14
-    jump L13
-
-  L12:
-    load_var x
-    load_field .0
-    store_var _14
-
-  L13:
-    load_var _14
+    load_type while_let.WlHasV
+    virtual_load_field .v
     load_const 1
     sub_int
     init_instance user.while_let.WlB .v
     store_var cur
     jump L0
 
-  L14:
+  L5:
     alloc_instance user.while_let.WlStop
     store_var cur
     jump L0

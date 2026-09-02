@@ -580,3 +580,26 @@ function vdc_dispatch_distinguishes_instantiations() -> string {
 test "virtual_dispatch_cache_distinguishes_generic_interface_instantiations" {
     assert.equal(vdc_dispatch_distinguishes_instantiations(), "animal|animal-or-dog")
 }
+
+interface UfwNamed {
+    name string
+}
+
+class UfwA {
+    name string
+    implements UfwNamed {}
+}
+
+class UfwB {
+    name string
+    implements UfwNamed {}
+}
+
+function ufw_rename(value: UfwA | UfwB) -> string {
+    value.name = "renamed";
+    value.name
+}
+
+test "union_field_write_uses_shared_interface" {
+    assert.equal(ufw_rename(UfwA { name: "original" }), "renamed")
+}
