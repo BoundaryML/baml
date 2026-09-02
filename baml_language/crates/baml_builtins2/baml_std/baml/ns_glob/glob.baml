@@ -15,6 +15,9 @@ class ScanOptions {
 }
 
 /// A compiled glob pattern. Create one with `baml.glob.new(pattern)`.
+/// Patterns and paths use `/` separators on every platform, including
+/// Windows drive paths (`C:/work/**`) and UNC paths (`//server/share/**`).
+/// Backslash is the glob escape character, not a native path separator.
 class Glob {
     _handle: $rust_type,
 
@@ -25,12 +28,14 @@ class Glob {
     }
 
     /// Returns `true` if `path` matches this glob pattern.
+    /// `path` must use the portable `/`-separated form described above.
     function matches(self, path: string) -> bool throws root.errors.Io {
         $rust_io_function
     }
 }
 
-/// Compiles a glob `pattern` and returns a `Glob` object for scanning or matching.
+/// Compiles a portable, `/`-separated glob `pattern` and returns a `Glob` object.
+/// `Glob.scan` accepts a native `cwd` but matches walker entries in portable form.
 function new(pattern: string) -> Glob throws root.errors.Io {
     $rust_io_function
 }

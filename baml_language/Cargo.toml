@@ -282,6 +282,7 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 ] }
 unicode-normalization = "0.1.25"
 ureq = { version = "3", default-features = false, features = [ "rustls", "gzip" ] }
+url = "2.5.2"
 uuid = { version = "1", features = [ "serde", "v4" ] }
 walkdir = { version = "2.4" }
 tsify = { version = "0.5", features = [ "js" ] }

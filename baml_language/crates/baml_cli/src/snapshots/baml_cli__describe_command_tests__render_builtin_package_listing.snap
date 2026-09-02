@@ -135,8 +135,8 @@ function         baml.future.race                 <builtin>/baml/ns_future/futur
 function         baml.future.any                  <builtin>/baml/ns_future/future.baml:169
 function         baml.future.with_timeout         <builtin>/baml/ns_future/future.baml:243
 class            baml.glob.ScanOptions            <builtin>/baml/ns_glob/glob.baml:2
-class            baml.glob.Glob                   <builtin>/baml/ns_glob/glob.baml:18
-function         baml.glob.new                    <builtin>/baml/ns_glob/glob.baml:34
+class            baml.glob.Glob                   <builtin>/baml/ns_glob/glob.baml:21
+function         baml.glob.new                    <builtin>/baml/ns_glob/glob.baml:39
 function         baml.host.call_host_value        <builtin>/baml/ns_host/host.baml:20
 class            baml.host.HostValue              <builtin>/baml/ns_host/host.baml:26
 class            baml.http.Request                <builtin>/baml/ns_http/http.baml:8

@@ -27,6 +27,7 @@ use baml_ide::{
 };
 use console::Style;
 use text_size::{TextRange, TextSize};
+use url::Url;
 
 fn style_for(token_type: SemanticTokenType, modifiers: ModifierSet) -> Style {
     let spec = semantic_highlight_style(token_type, modifiers);
@@ -310,20 +311,12 @@ fn osc8(uri: &str, text: &str) -> String {
     format!("\x1b]8;;{uri}\x1b\\{text}\x1b]8;;\x1b\\")
 }
 
-/// Minimal `file://` URI builder. Percent-encodes the few characters most likely
-/// to break a URI in a source path; not a full RFC 3986 encoder.
-fn file_uri(path: &Path) -> String {
-    let mut s = String::from("file://");
-    for ch in path.to_string_lossy().chars() {
-        match ch {
-            ' ' => s.push_str("%20"),
-            '%' => s.push_str("%25"),
-            '#' => s.push_str("%23"),
-            '?' => s.push_str("%3F"),
-            _ => s.push(ch),
-        }
-    }
-    s
+/// Convert an absolute native path into a standards-compliant file URI.
+///
+/// Conversion can fail for paths the URL model cannot represent (for example,
+/// non-UTF-8 paths on Unix), in which case callers should render plain text.
+fn file_uri(path: &Path) -> Option<String> {
+    Url::from_file_path(path).ok().map(Url::into)
 }
 
 // ── Painter ─────────────────────────────────────────────────────────────────────
@@ -427,7 +420,7 @@ impl Painter {
     pub fn location(&self, abs_path: &Path, display: &str, line_label: &str) -> String {
         let text = format!("{display}:{line_label}");
         if self.hyperlinks && abs_path.is_absolute() {
-            osc8(&file_uri(abs_path), &text)
+            file_uri(abs_path).map_or_else(|| text.clone(), |uri| osc8(&uri, &text))
         } else {
             text
         }
@@ -531,6 +524,7 @@ mod tests {
         },
     };
     use baml_ide::{ModifierSet, SemanticTokenType};
+    use url::Url;
 
     use super::{Highlighter, MessageHighlighter, highlight_str, style_for};
 
@@ -778,5 +772,30 @@ function make(v: int) -> Point {
             spans.is_err(),
             "a malformed prose fragment must request no-color diagnostic fallback"
         );
+    }
+
+    #[test]
+    fn file_uri_round_trips_native_paths_and_reserved_characters() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("space #% ü.baml");
+        let uri = super::file_uri(&path).unwrap();
+        let parsed = Url::parse(&uri).unwrap();
+
+        assert_eq!(parsed.to_file_path().unwrap(), path);
+        assert!(uri.contains("space%20%23%25%20%C3%BC.baml"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn file_uri_handles_drive_and_unc_paths() {
+        let drive = Path::new(r"C:\repo folder\main#.baml");
+        let drive_uri = Url::parse(&super::file_uri(drive).unwrap()).unwrap();
+        assert_eq!(drive_uri.scheme(), "file");
+        assert_eq!(drive_uri.to_file_path().unwrap(), drive);
+
+        let unc = Path::new(r"\\server\share\repo folder\main%.baml");
+        let unc_uri = Url::parse(&super::file_uri(unc).unwrap()).unwrap();
+        assert_eq!(unc_uri.host_str(), Some("server"));
+        assert_eq!(unc_uri.to_file_path().unwrap(), unc);
     }
 }
