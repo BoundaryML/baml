@@ -13,12 +13,18 @@
 #   tools/atb2/setup_database.sh            # check the link, then run the metrics
 #   tools/atb2/setup_database.sh --check    # only verify infisical + secrets
 #   tools/atb2/setup_database.sh -- <cmd>   # run <cmd> with the secrets, e.g.
-#   tools/atb2/setup_database.sh -- baml test -i "root::repro_match::*"
+#   tools/atb2/setup_database.sh -- "$BAML" test -i "root::repro_match::*"
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$here"
-export BAML_VERSION="${BAML_VERSION:-0.17.0}"
+# The package is written against canary's BAML (ahead of the released
+# toolchain): use canary's own baml-cli, which handle_issue builds into
+# ~/.atb2/target (ATB2_HOME) on every run; BAML_CLI overrides.
+atb2_home="${ATB2_HOME:-$HOME/.atb2}"
+BAML="${BAML_CLI:-$atb2_home/target/debug/baml-cli}"
+[ -x "$BAML" ] || BAML=baml
+export BAML
 
 die() { echo "setup_database: $*" >&2; exit 1; }
 
@@ -66,8 +72,8 @@ case "${1:-}" in
     --)      shift; exec "$@" ;;
     # difficulty_estimate is at 11/15 (73%) against its 0.8 bar, so it is left
     # out of the default run (it would fail `baml test`); run it on its own with
-    #   tools/atb2/setup_database.sh -- baml test -i "root::difficulty_estimate::*"
+    #   tools/atb2/setup_database.sh -- "$BAML" test -i "root::difficulty_estimate::*"
     # and add it back here once it clears the bar.
-    "")      exec baml test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::organize_issue::*" ;;
+    "")      exec "$BAML" test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::organize_issue::*" -i "root::handle_issue::*" ;;
     *)       die "unknown argument: $1 (use --check, or -- <cmd>)" ;;
 esac

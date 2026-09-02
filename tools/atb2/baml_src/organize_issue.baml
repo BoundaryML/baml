@@ -70,6 +70,7 @@ function organize_issue(issue: Issue) -> Issue {
         comments: issue.comments,
         resolution_plan: issue.resolution_plan,
         difficulty: issue.difficulty,
+        design_doc: issue.design_doc,
     }
 }
 
@@ -88,6 +89,7 @@ function issue_in(subsystem: Subsystem, shepherd: string?) -> Issue {
         comments: [],
         resolution_plan: null,
         difficulty: null,
+        design_doc: null,
     }
 }
 
