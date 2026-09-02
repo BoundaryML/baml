@@ -155,9 +155,6 @@ jobs:
             # container while preserving the R2 configuration from .envrc.
             uv tool install "sccache>=0.10.0"
             sccache --version
-            # This .envrc override is for host cross-compilation. The manylinux
-            # image supplies and selects its own target linker.
-            unset CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER
             if command -v yum &> /dev/null; then
                 yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
             else

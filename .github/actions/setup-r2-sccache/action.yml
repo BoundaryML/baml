@@ -25,7 +25,9 @@ runs:
         set -euo pipefail
 
         direnv allow .envrc
-        direnv export gha >> "$GITHUB_ENV"
+        # This linker override is for host cross-compilation. Containerized
+        # builds provide and select their own target linker.
+        direnv export gha | sed '/^CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=/d' >> "$GITHUB_ENV"
 
         # Release workflows invoke sccache directly on every host platform.
         # The repository wrapper performs this BAML_* -> AWS_* mapping for

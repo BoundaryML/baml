@@ -333,6 +333,9 @@ jobs:
     uses: ./.github/workflows/build2-toolchain.reusable.yaml
     permissions:
       contents: read
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     with:
       source_sha: ${{ needs.plan.outputs.source_sha }}
       version: ${{ needs.plan.outputs.version }}
