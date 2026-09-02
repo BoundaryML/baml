@@ -113,6 +113,7 @@ jobs:
         run: sccache --version
 
       - name: "Report R2 credential fingerprints"
+        if: ${{ (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository }}
         run: |
           set -euo pipefail
 
@@ -125,6 +126,11 @@ jobs:
 
           fingerprint BAML_SCCACHE_R2_ACCESS_KEY_ID "${BAML_SCCACHE_R2_ACCESS_KEY_ID:-}"
           fingerprint BAML_SCCACHE_R2_SECRET_ACCESS_KEY "${BAML_SCCACHE_R2_SECRET_ACCESS_KEY:-}"
+
+          if [[ -z "${BAML_SCCACHE_R2_ACCESS_KEY_ID:-}" || -z "${BAML_SCCACHE_R2_SECRET_ACCESS_KEY:-}" ]]; then
+            echo "::error::Trusted CI requires both R2 sccache credentials"
+            exit 1
+          fi
 
       - uses: Swatinem/rust-cache@v2
         with:
