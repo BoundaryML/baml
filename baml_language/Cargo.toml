@@ -142,6 +142,7 @@ darwin-kperf-events = "0.1.0"
 anyhow = { version = "1" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
+infisical = "=0.0.3"
 # Slim, reqwest/serde-based replacements for the AWS SDK + Google Cloud auth
 # crates, living in `forks/`. They cover only what BAML needs (Bedrock Converse,
 # AWS credential sources, and Google Cloud OAuth2 tokens for Vertex AI) without
@@ -229,6 +230,11 @@ bytecount = "0.6"
 reqwest = { version = "0.13.1", default-features = false, features = [
   "stream",
 ] }
+# Infisical 0.0.3 exposes its reqwest 0.12 client as part of the public Client
+# API. Keep this alias until the SDK provides a documented access-token setter.
+reqwest_0_12 = { package = "reqwest", version = "0.12", default-features = false, features = [
+  "rustls-tls",
+] }
 mimalloc = { version = "0.1.52" }
 rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
@@ -243,6 +249,7 @@ salsa = { version = "0.26", default-features = false, features = [
 serde = { version = "1.0.197", features = [ "derive" ] }
 serde-wasm-bindgen = "0.6"
 serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserve_order" ] }
+secrecy = "0.10"
 semver = { version = "1" }
 # The maintained fork of the archived serde_yaml, published by the YAML org;
 # package-renamed so `use serde_yaml::` imports stay unchanged.

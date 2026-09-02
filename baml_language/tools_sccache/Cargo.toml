@@ -4,6 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 publish = false
+readme = "README.md"
 
 # This is a CI/build helper, not part of the shipped product. It shells out to
 # spawn a child process, which has no meaning on wasm32-unknown-unknown, so keep
@@ -16,3 +17,13 @@ wasm_support = false
 [[bin]]
 name = "baml-sccache"
 path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+infisical = { workspace = true }
+reqwest_0_12 = { workspace = true }
+secrecy = { workspace = true }
+tokio = { workspace = true, features = [ "macros", "rt" ] }
