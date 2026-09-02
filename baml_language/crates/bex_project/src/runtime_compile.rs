@@ -2472,7 +2472,7 @@ mod tests {
     fn runtime_mount_stubs_spell_methods_inside_their_owner() {
         use baml_compiler2_hir_ty::{
             callable::{ExternalCallTarget, ExternalLinkability},
-            package_interface::{ExportedFunction, ExportedType},
+            package_interface::{ExportedFieldAttrs, ExportedFunction, ExportedType},
         };
         use baml_type::{FunctionParamTy, ParamTy, Ty, TyAttr};
 
@@ -2511,7 +2511,11 @@ mod tests {
             Name::new("Host"),
             ExportedType::Class {
                 qtn: class_qtn,
-                fields: vec![(Name::new("name"), Ty::string(), Default::default())],
+                fields: vec![(
+                    Name::new("name"),
+                    Ty::string(),
+                    ExportedFieldAttrs::default(),
+                )],
                 methods: vec![
                     function(
                         "greet",
@@ -2537,7 +2541,7 @@ mod tests {
                         )],
                         None,
                         ExternalCallTarget::Method {
-                            package: app.clone(),
+                            package: app,
                             namespace: Vec::new(),
                             class: Name::new("Host"),
                             name: Name::new("make"),
