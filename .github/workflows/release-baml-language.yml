@@ -1448,6 +1448,7 @@ jobs:
     needs: [plan, build-swift-sdk, all-builds, publish-toolchain-release]
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
     env:
       GH_REPO: ${{ github.repository }}
     permissions:
@@ -1483,26 +1484,22 @@ jobs:
           fi
       - name: Clone BoundaryML/baml-swift
         env:
-          DEPLOY_KEY: ${{ secrets.BAML_SWIFT_DEPLOY_KEY }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
         run: |
           set -euo pipefail
-          test -n "$DEPLOY_KEY"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/baml_swift_mirror_key
-          chmod 600 ~/.ssh/baml_swift_mirror_key
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_swift_mirror_key -o IdentitiesOnly=yes"
-          git clone git@github.com:BoundaryML/baml-swift.git /tmp/baml-swift
+          test -n "$GH_TOKEN"
+          gh auth setup-git
+          git clone https://github.com/BoundaryML/baml-swift.git /tmp/baml-swift
           if ! git -C /tmp/baml-swift rev-parse --verify HEAD >/dev/null 2>&1; then
             git -C /tmp/baml-swift switch --orphan main
           fi
       - name: Publish immutable package tag
         env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
           VERSION: ${{ needs.plan.outputs.swiftpm_version }}
         run: |
           set -euo pipefail
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_swift_mirror_key -o IdentitiesOnly=yes"
           tag="v$VERSION"
           rsync -a --delete --exclude .git /tmp/swift-sdk-mirror/ /tmp/baml-swift/
           cd /tmp/baml-swift
@@ -2021,6 +2018,7 @@ jobs:
     needs: [plan, all-builds, publish-wrapper-release]
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: macos-14
+    environment: infisical-github-baml-language-release
     steps:
       - uses: actions/checkout@v4
         with:
@@ -2054,16 +2052,17 @@ jobs:
           brew linkage --test boundaryml/tap/baml
       - name: Push formula to BoundaryML/homebrew-tap
         env:
-          TOKEN: ${{ secrets.HOMEBREW_BAML_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
-          test -n "$TOKEN"
+          test -n "$GH_TOKEN"
+          gh auth setup-git
           tap="$(brew --repo boundaryml/tap)"
           cd "$tap"
           git config user.name "boundaryml-release-bot"
           git config user.email "boundaryml-release-bot@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/BoundaryML/homebrew-tap.git"
+          git remote set-url origin "https://github.com/BoundaryML/homebrew-tap.git"
           git add Formula/baml.rb
           git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || exit 0
           git push origin HEAD
