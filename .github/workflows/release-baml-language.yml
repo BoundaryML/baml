@@ -310,11 +310,16 @@ jobs:
         run: |
           set -euo pipefail
           # target + toolchain runner (as `os`); `libc` rides along so Linux
-          # setup can select musl or the plan's GNU cross image.
+          # setup can select musl, a native job container, or a GNU cross image.
           toolchain="$(jq -c '[.targets[]
             | select(.artifacts.toolchain != null)
             | .artifacts.toolchain as $toolchain
+            | if $toolchain.container and $toolchain.cross_image
+              then error("\(.triple): toolchain container and cross_image are mutually exclusive")
+              else .
+              end
             | {target: .triple, os: $toolchain.runner, libc: .libc}
+              + (if $toolchain.container then {container: $toolchain.container} else {} end)
               + (if $toolchain.cross_image then {cross_image: $toolchain.cross_image} else {} end)]' release/platforms.json)"
           echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
           jq . <<<"$toolchain"
@@ -323,100 +328,15 @@ jobs:
           jq . <<<"$csharp"
 
   build-toolchain:
-    name: Build toolchain (${{ matrix.target }})
+    name: Build BAML toolchain
     needs: [plan, build-vsix, build-matrix]
-    runs-on: ${{ matrix.os }}
-    env:
-      CARGO: cargo
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.build-matrix.outputs.toolchain) }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.source_sha }}
-          persist-credentials: false
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-plan
-      - uses: actions/download-artifact@v4
-        with:
-          name: baml-vscode-vsix
-          path: vsix
-      - uses: actions/download-artifact@v4
-        with:
-          name: baml-playground-dist
-          path: playground-dist
-      - name: Stamp version
-        run: scripts/baml-language-version stamp --plan release-plan.json
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          targets: ${{ matrix.target }}
-          workspace: baml_language
-          prefix-key: v5-rust-baml-language-toolchain-${{ matrix.target }}
-          cache-on-failure: true
-          enable-cross: false
-          skip-protoc: true
-      - name: Setup musl cross toolchain
-        if: ${{ matrix.libc == 'musl' }}
-        uses: ./.github/actions/setup-musl-cross
-        with:
-          target: ${{ matrix.target }}
-      - name: Setup cross for backward-compatible GNU toolchain
-        if: ${{ matrix.libc == 'gnu' }}
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache cargo:cross"
-      - name: Configure cross for GNU toolchain
-        if: ${{ matrix.libc == 'gnu' }}
-        env:
-          CROSS_IMAGE: ${{ matrix.cross_image }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          set -euo pipefail
-          cross_config="$RUNNER_TEMP/baml-toolchain-cross.toml"
-          printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = ["BAML_WORKOS_CLIENT_ID"]\n' \
-            "$TARGET" "$CROSS_IMAGE" "$TARGET" > "$cross_config"
-          {
-            echo 'CARGO=cross'
-            echo "CROSS_CONFIG=$cross_config"
-          } >> "$GITHUB_ENV"
-      - name: Build CLI and pack host
-        run: ${CARGO} build --manifest-path baml_language/Cargo.toml --release --bin baml-cli --bin baml-pack-host --target "${{ matrix.target }}"
-      - name: Archive layout smoke
-        run: |
-          set -euo pipefail
-          version="${{ needs.plan.outputs.version }}"
-          target="${{ matrix.target }}"
-          mkdir -p "staging/bin" "staging/assets"
-          suffix=""
-          if [[ "$target" == *windows-msvc ]]; then suffix=".exe"; fi
-          cp "baml_language/target/$target/release/baml-cli$suffix" "staging/bin/baml-cli$suffix"
-          cp "baml_language/target/$target/release/baml-pack-host$suffix" "staging/bin/baml-pack-host$suffix"
-          vsix="$(find vsix -maxdepth 1 -name '*.vsix' -print -quit)"
-          test -n "$vsix"
-          cp "$vsix" "staging/assets/baml-vscode.vsix"
-          mkdir -p "staging/assets/playground"
-          cp -R playground-dist/. "staging/assets/playground/"
-          if test -f "staging/bin/baml$suffix"; then
-            exit 1
-          fi
-          test -f "staging/assets/baml-vscode.vsix"
-          test -f "staging/assets/playground/index.html"
-          test -f "staging/assets/playground/assets/index.js"
-          test -f "staging/assets/playground/assets/index.css"
-          echo "$version" > staging/VERSION
-          if [[ "$target" == *windows-msvc ]]; then
-            (cd staging && 7z a "../baml-language-$version-$target.zip" .)
-          else
-            tar -C staging -czf "baml-language-$version-$target.tar.gz" .
-          fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: toolchain-${{ matrix.target }}
-          path: baml-language-${{ needs.plan.outputs.version }}-${{ matrix.target }}.*
+    uses: ./.github/workflows/build2-toolchain.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+      version: ${{ needs.plan.outputs.version }}
+      toolchain_matrix_json: ${{ needs.build-matrix.outputs.toolchain }}
 
   build-vsix:
     name: Build platform-neutral VSIX
