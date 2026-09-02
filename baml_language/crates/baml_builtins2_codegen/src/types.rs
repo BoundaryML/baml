@@ -11,6 +11,17 @@ pub enum BuiltinPipeline {
 pub struct NativeBuiltin {
     /// Dotted path: e.g. `"baml.Array.length"`, `"baml.deep_copy"`, `"baml.sys.argv"`
     pub path: String,
+    /// The declaring namespace (no package, no class): `"fs"` for
+    /// `baml.fs.File.read`, `""` for a top-level class or item.
+    /// Carried STRUCTURALLY from extraction — the `path` alone cannot be
+    /// split, because an impl-block class segment embeds the WRITTEN
+    /// interface target, which may itself be dotted
+    /// (`root.io.Read$for$File`).
+    pub namespace: String,
+    /// The full class segment (`Class` or `{iface}$for${Class}`) for a
+    /// method; `None` for a free item. Same structural-carry rationale as
+    /// [`Self::namespace`].
+    pub class_segment: Option<String>,
     /// Rust function name derived from path (dots → underscores, lowercased):
     /// e.g. `"baml_array_length"`, `"baml_deep_copy"`, `"baml_sys_argv"`
     pub fn_name: String,
@@ -48,9 +59,11 @@ impl NativeBuiltin {
     /// Derive the `SysOp` enum variant name from the path.
     /// `"baml.fs.open"` → `"BamlFsOpen"`, `"baml.fs.File.read"` → `"BamlFsFileRead"`,
     /// `"baml.env.get"` → `"BamlEnvGet"`, `"ai.Prompt.text"` → `"AiPromptText"`.
+    /// An impl-block method path (`baml.random.Rng$for$SystemRandom.random`)
+    /// treats `$` as a word boundary → `"BamlRandomRngForSystemRandomRandom"`.
     pub fn sys_op_variant_name(&self) -> String {
         self.path
-            .split('.')
+            .split(['.', '$'])
             .flat_map(|segment| {
                 segment.split('_').map(|word| {
                     let mut chars = word.chars();
@@ -169,4 +182,43 @@ pub struct NativeClassDef {
     pub fields: Vec<NativeClassField>,
     /// Virtual path of the `.baml` source file (e.g. `"<builtin>/baml/ns_fs/fs.baml"`).
     pub source_file: String,
+}
+
+#[cfg(test)]
+mod tests {
+    /// The variant scheme treats `.` and `$` alike as word boundaries, so an
+    /// impl-block path camel-cases through its `$for$` segment — the enum
+    /// arms the generated dispatch tables and hand-written glue key on.
+    #[test]
+    fn sys_op_variant_name_splits_on_dots_and_dollars() {
+        let variant = |path: &str| {
+            super::NativeBuiltin {
+                path: path.to_string(),
+                namespace: String::new(),
+                class_segment: None,
+                fn_name: String::new(),
+                params: Vec::new(),
+                return_type: super::BamlType::Null,
+                generics: Vec::new(),
+                receiver: None,
+                vm_usage: super::VmUsage::None,
+                may_yield: false,
+                fallible: false,
+                pipeline: super::BuiltinPipeline::Vm,
+                throws: None,
+                source_file: String::new(),
+            }
+            .sys_op_variant_name()
+        };
+        assert_eq!(variant("baml.fs.open"), "BamlFsOpen");
+        assert_eq!(variant("baml.env.get"), "BamlEnvGet");
+        assert_eq!(
+            variant("baml.random.Rng$for$SystemRandom.random"),
+            "BamlRandomRngForSystemRandomRandom"
+        );
+        assert_eq!(
+            variant("baml.fs.root.io.Read$for$File.read"),
+            "BamlFsRootIoReadForFileRead"
+        );
+    }
 }

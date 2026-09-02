@@ -91,7 +91,7 @@ class PlainDate {
         function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
             self._to_string_impl() catch (_) {
                 root.errors.InvalidArgument { message } => {
-                    throw baml.json.JsonSerializationError { message: message, path: "" }
+                    throw baml.json.JsonSerializationError { message: message, path: "", reason: message }
                 },
             }
         }

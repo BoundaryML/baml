@@ -1,0 +1,178 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function compiler.generics.function_values.$init_test_ns_compiler_ns_generics_ns_function_values_callback_effects_and_methods(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "invoked generic callback effect propagates through wrapper"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_callback_effects_and_methods, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "invoked callback effect is rejected by a closed caller"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_callback_effects_and_methods, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "unused and caught callback effects do not escape"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_callback_effects_and_methods, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "explicit throws never callback rejects a throwing generic function"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_callback_effects_and_methods, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "generic method values follow the same realization rule"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_callback_effects_and_methods, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "generic method value can specialize from callback context"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_callback_effects_and_methods, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "qualified method value recommends its available annotation spelling"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_callback_effects_and_methods, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "qualified method value compiles with a concrete annotation"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_callback_effects_and_methods, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function compiler.generics.function_values.$init_test_ns_compiler_ns_generics_ns_function_values_contextual_specialization(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "explicit specialization and concrete annotation compile"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_contextual_specialization, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "direct calls may infer a fresh type on every call"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_contextual_specialization, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "concrete value contexts specialize a generic function"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_contextual_specialization, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "a later sibling call argument may provide context"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_contextual_specialization, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "a later use cannot retroactively specialize a stored value"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_contextual_specialization, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "a lambda receives context from the function arm of a union"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_contextual_specialization, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "union callback adapter selection is actual aware"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_contextual_specialization, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "a lambda does not guess between multiple function arms"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_contextual_specialization, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "ambiguous callback union does not guess a specialization"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_contextual_specialization, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function compiler.generics.function_values.$init_test_ns_compiler_ns_generics_ns_function_values_diagnostics(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "bare generic function binding reports both concrete fixes"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_diagnostics, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "multiple generic parameters produce an arity-correct diagnostic"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_diagnostics, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "bounded generic diagnostic does not invent invalid type arguments"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_diagnostics, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "phantom generic explains why callback context is insufficient"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_diagnostics, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "erased reflection function type does not specialize a generic value"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_diagnostics, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.generics.function_values"
+    load_const "multiple bare bindings report distinct ordered diagnostics"
+    make_closure .<lambda($init_test_ns_compiler_ns_generics_ns_function_values_diagnostics, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}

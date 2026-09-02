@@ -66,6 +66,13 @@ public final class BamlStream<Partial: BamlDecodable, Final: BamlDecodable>: @un
     }
 }
 
+extension BamlStream: Equatable {
+    /// Streams are live capabilities; equality is engine-resource identity.
+    public static func == (lhs: BamlStream, rhs: BamlStream) -> Bool {
+        lhs.handle == rhs.handle
+    }
+}
+
 extension BamlStream: BamlEncodable {
     /// A stream argument rides as its bare tagged handle (Python lifts
     /// `BamlStream` to the inner `BamlPyHandle` the same way) — never a

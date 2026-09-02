@@ -2,9 +2,10 @@
 //!
 //! These assert properties of the data the runtime resolver consumes for a case
 //! the resolver's only live caller (reflection) can't observe: that an impl
-//! rule's method table is *complete* — it carries the interface's inherited
-//! default methods, not just the methods the impl overrides, with an override
-//! winning over the default.
+//! rule's method table is PROVIDED-ONLY — exactly the methods the impl block
+//! declares, never a baked copy of an adopted interface default (the resolver
+//! adopts defaults at dispatch through the interface's `default_fn`), and a
+//! provided method for a defaulted name is the impl's own body.
 
 use baml_db::testing::compile_source;
 use bex_vm_types::{Object, TyTemplate, types::Program};
@@ -61,10 +62,12 @@ fn impl_methods(program: &Program, iface: &str, for_type: &str) -> Vec<(String, 
 }
 
 #[test]
-fn impl_rule_methods_include_inherited_interface_defaults() {
+fn impl_rule_methods_are_provided_only() {
     // `Greeter` has a required method (`greet`) and a default method
-    // (`greet_loud`). `Dog` overrides only `greet`, inheriting the default — both
-    // must appear in the baked method table so the resolver can dispatch either.
+    // (`greet_loud`). `Dog` provides only `greet` — the baked table carries
+    // exactly that row. The adopted default is NOT baked: the resolver adopts
+    // it at dispatch through the interface object's `default_fn`, so the rule
+    // stays a pure function of the impl block.
     let program = compile_source(
         r#"
         interface Greeter {
@@ -82,19 +85,37 @@ fn impl_rule_methods_include_inherited_interface_defaults() {
     let methods = impl_methods(&program, "Greeter", "Dog");
     assert!(
         methods.iter().any(|(m, _)| m == "greet"),
-        "overridden method missing: {methods:?}"
+        "provided method missing: {methods:?}"
     );
     assert!(
-        methods.iter().any(|(m, _)| m == "greet_loud"),
-        "inherited default method missing: {methods:?}"
+        !methods.iter().any(|(m, _)| m == "greet_loud"),
+        "adopted default must not be baked into the rule table: {methods:?}"
+    );
+    // The adoption channel: the interface object carries the default body.
+    let iface = program
+        .objects
+        .iter()
+        .find_map(|object| match object {
+            Object::Interface(def) if def.name.name().as_str() == "Greeter" => Some(def),
+            _ => None,
+        })
+        .expect("Greeter pooled");
+    let greet_loud = iface
+        .methods
+        .iter()
+        .find(|m| m.name.as_str() == "greet_loud")
+        .expect("greet_loud declared");
+    assert!(
+        greet_loud.default.is_some(),
+        "interface must carry its default body for resolution-time adoption"
     );
 }
 
 #[test]
-fn impl_rule_override_wins_over_inherited_default() {
-    // `Cat` overrides BOTH methods, including the defaulted one. The recorded
-    // `greet_loud` must be Cat's override (its FQN names `Cat`), not the
-    // interface default — the merge must not clobber an override.
+fn impl_rule_provided_method_shadows_interface_default() {
+    // `Cat` provides BOTH methods, including the defaulted one. The recorded
+    // `greet_loud` must be Cat's own body (its FQN names `Cat`), not the
+    // interface default — a provided row always wins over adoption.
     let program = compile_source(
         r#"
         interface Greeter {
@@ -117,6 +138,6 @@ fn impl_rule_override_wins_over_inherited_default() {
         .expect("greet_loud recorded");
     assert!(
         greet_loud_fqn.contains("Cat"),
-        "override should win: greet_loud FQN should be Cat's, got {greet_loud_fqn:?}"
+        "provided method should win: greet_loud FQN should be Cat's, got {greet_loud_fqn:?}"
     );
 }

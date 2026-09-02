@@ -133,10 +133,6 @@ class BamlError(Exception):
         return self._class_name
 
 
-class BamlCancelledError(BamlError):
-    """Structured BAML cancellation reason carried by host cancellation."""
-
-
 class BamlPanic(BaseException):
     """Raised for a BAML panic (incl. cancellation).
 
@@ -166,6 +162,11 @@ class BamlPanic(BaseException):
     @property
     def class_name(self) -> Optional[str]:
         return self._class_name
+
+
+class BamlCancelledError(BamlPanic):
+    """Structured BAML cancellation surfaced by sync calls and carried as the
+    ``reason`` on native ``asyncio.CancelledError`` for async calls."""
 
 
 def make_sdk_panic(message: str) -> BamlPanic:

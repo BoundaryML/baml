@@ -1,5 +1,7 @@
 name: BAML Language Release
 
+run-name: "${{ inputs.channel }} release${{ inputs.dry_run && ' (dry run)' || '' }}: ${{ inputs.version || 'auto-version' }}"
+
 # Channel-aware replacement for the legacy BAML language release workflow.
 # Release workflows run packaging smoke tests only; the full suite runs in CI.
 
@@ -10,6 +12,11 @@ name: BAML Language Release
 #     midnight America/Los_Angeles, when canary moved since the last nightly.
 # Both pin the run to the immutable `baml-language-source-<sha>` tag CI created
 # for the commit, which the attestation below re-checks.
+#
+# Dispatchers also compute the release plan before dispatch so the requested
+# canonical version can name the run. This workflow recomputes the plan from the
+# immutable source and refuses production unless both versions match; the input
+# is a request and display label, never the publishing source of truth.
 #
 # One dispatcher per channel is deliberate: a canary release used to chain a
 # nightly of its own, which meant two sites racing to name the same night with
@@ -36,6 +43,11 @@ on:
         type: boolean
         default: true
         required: true
+      version:
+        description: "Canonical release version requested by the dispatcher (required for production)"
+        type: string
+        default: ""
+        required: false
       source_sha:
         description: "Commit to release (defaults to the dispatched ref's head)"
         type: string
@@ -197,6 +209,7 @@ jobs:
         env:
           INPUT_CHANNEL: ${{ inputs.channel }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_VERSION: ${{ inputs.version }}
           INPUT_SOURCE_CI_RUN_ID: ${{ inputs.source_ci_run_id }}
           ATTESTED_SOURCE_BRANCH: ${{ steps.attest.outputs.source_branch }}
           GH_TOKEN: ${{ github.token }}
@@ -205,10 +218,21 @@ jobs:
           channel="${INPUT_CHANNEL:-nightly}"
           dry_run="${INPUT_DRY_RUN:-false}"
           source_branch="${ATTESTED_SOURCE_BRANCH:-${GITHUB_REF_NAME:-}}"
+          if [[ "$dry_run" == "false" && -z "$INPUT_VERSION" ]]; then
+            echo "::error::production releases require an explicit version"
+            exit 1
+          fi
           # `plan` rejects any channel other than canary/nightly.
           scripts/baml-language-version plan --channel "$channel" --out release-plan.json
           source_sha="$(git rev-parse HEAD)"
           version="$(jq -r .canonical_version release-plan.json)"
+          if [[ -n "$INPUT_VERSION" && "$version" != "$INPUT_VERSION" ]]; then
+            echo "::error::requested version $INPUT_VERSION does not match computed version $version"
+            exit 1
+          fi
+          if [[ -n "$INPUT_VERSION" ]]; then
+            echo "Verified requested release version: $version"
+          fi
           pypi_version="$(jq -r .registry_versions.pypi release-plan.json)"
           crates_io_version="$(jq -r .registry_versions.crates_io release-plan.json)"
           nuget_version="$(jq -r .registry_versions.nuget release-plan.json)"
@@ -265,16 +289,16 @@ jobs:
           name: release-plan
           path: release-plan.json
 
-  # The toolchain/wrapper build matrix (and, over time, the others) is generated
-  # from the repository's platform contract (`release/platforms.json`) so the
-  # target set + per-target runners live in one machine-readable place.
+  # The toolchain and C# build matrices are generated from the repository's
+  # platform contract (`release/platforms.json`) so the target set + per-target
+  # runners live in one machine-readable place. The reusable toolchain-selector
+  # workflow owns its wrapper matrix generation alongside its build.
   build-matrix:
     name: Compute build matrices
     needs: [plan]
     runs-on: ubuntu-latest
     outputs:
       toolchain: ${{ steps.gen.outputs.toolchain }}
-      wrapper: ${{ steps.gen.outputs.wrapper }}
       csharp: ${{ steps.gen.outputs.csharp }}
     steps:
       - uses: actions/checkout@v4
@@ -285,94 +309,34 @@ jobs:
         id: gen
         run: |
           set -euo pipefail
-          # target + toolchain runner (as `os`); `libc` rides along so the musl
-          # setup step can key on it.
+          # target + toolchain runner (as `os`); `libc` rides along so Linux
+          # setup can select musl, a native job container, or a GNU cross image.
           toolchain="$(jq -c '[.targets[]
             | select(.artifacts.toolchain != null)
-            | {target: .triple, os: .artifacts.toolchain.runner, libc: .libc}]' release/platforms.json)"
+            | .artifacts.toolchain as $toolchain
+            | if $toolchain.container and $toolchain.cross_image
+              then error("\(.triple): toolchain container and cross_image are mutually exclusive")
+              else .
+              end
+            | {target: .triple, os: $toolchain.runner, libc: .libc}
+              + (if $toolchain.container then {container: $toolchain.container} else {} end)
+              + (if $toolchain.cross_image then {cross_image: $toolchain.cross_image} else {} end)]' release/platforms.json)"
           echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
           jq . <<<"$toolchain"
-          wrapper="$(scripts/baml-release-platforms wrapper-matrix)"
-          echo "wrapper=$wrapper" >> "$GITHUB_OUTPUT"
-          jq . <<<"$wrapper"
           csharp="$(scripts/baml-csharp-release-contract matrix)"
           echo "csharp=$csharp" >> "$GITHUB_OUTPUT"
           jq . <<<"$csharp"
 
   build-toolchain:
-    name: Build toolchain (${{ matrix.target }})
+    name: Build BAML toolchain
     needs: [plan, build-vsix, build-matrix]
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.build-matrix.outputs.toolchain) }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.source_sha }}
-          persist-credentials: false
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-plan
-      - uses: actions/download-artifact@v4
-        with:
-          name: baml-vscode-vsix
-          path: vsix
-      - uses: actions/download-artifact@v4
-        with:
-          name: baml-playground-dist
-          path: playground-dist
-      - name: Stamp version
-        run: scripts/baml-language-version stamp --plan release-plan.json
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          targets: ${{ matrix.target }}
-          workspace: baml_language
-          prefix-key: v5-rust-baml-language-toolchain-${{ matrix.target }}
-          cache-on-failure: true
-          enable-cross: false
-          skip-protoc: true
-      - name: Setup musl cross toolchain
-        if: ${{ matrix.libc == 'musl' }}
-        uses: ./.github/actions/setup-musl-cross
-        with:
-          target: ${{ matrix.target }}
-      - name: Build CLI and pack host
-        run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml-cli --bin baml-pack-host --target "${{ matrix.target }}"
-      - name: Archive layout smoke
-        run: |
-          set -euo pipefail
-          version="${{ needs.plan.outputs.version }}"
-          target="${{ matrix.target }}"
-          mkdir -p "staging/bin" "staging/assets"
-          suffix=""
-          if [[ "$target" == *windows-msvc ]]; then suffix=".exe"; fi
-          cp "baml_language/target/$target/release/baml-cli$suffix" "staging/bin/baml-cli$suffix"
-          cp "baml_language/target/$target/release/baml-pack-host$suffix" "staging/bin/baml-pack-host$suffix"
-          vsix="$(find vsix -maxdepth 1 -name '*.vsix' -print -quit)"
-          test -n "$vsix"
-          cp "$vsix" "staging/assets/baml-vscode.vsix"
-          mkdir -p "staging/assets/playground"
-          cp -R playground-dist/. "staging/assets/playground/"
-          if test -f "staging/bin/baml$suffix"; then
-            exit 1
-          fi
-          test -f "staging/assets/baml-vscode.vsix"
-          test -f "staging/assets/playground/index.html"
-          test -f "staging/assets/playground/assets/index.js"
-          test -f "staging/assets/playground/assets/index.css"
-          echo "$version" > staging/VERSION
-          if [[ "$target" == *windows-msvc ]]; then
-            (cd staging && 7z a "../baml-language-$version-$target.zip" .)
-          else
-            tar -C staging -czf "baml-language-$version-$target.tar.gz" .
-          fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: toolchain-${{ matrix.target }}
-          path: baml-language-${{ needs.plan.outputs.version }}-${{ matrix.target }}.*
+    uses: ./.github/workflows/build2-toolchain.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+      version: ${{ needs.plan.outputs.version }}
+      toolchain_matrix_json: ${{ needs.build-matrix.outputs.toolchain }}
 
   build-vsix:
     name: Build platform-neutral VSIX
@@ -435,89 +399,14 @@ jobs:
           path: typescript2/app-vscode-webview/dist
 
   build-wrapper:
-    name: Build wrapper (${{ matrix.target }})
-    needs: [plan, build-matrix]
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.build-matrix.outputs.wrapper) }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.source_sha }}
-          persist-credentials: false
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          targets: ${{ matrix.target }}
-          workspace: baml_language
-          prefix-key: v5-rust-baml-wrapper-${{ matrix.target }}
-          cache-on-failure: true
-          enable-cross: false
-          skip-protoc: true
-      - name: Setup musl cross toolchain
-        if: ${{ matrix.libc == 'musl' }}
-        uses: ./.github/actions/setup-musl-cross
-        with:
-          target: ${{ matrix.target }}
-      - name: Build wrapper
-        env:
-          EXECUTABLE_SUFFIX: ${{ matrix.executable_suffix }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          set -euo pipefail
-          cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "$TARGET"
-          mkdir -p staging/bin
-          cp "baml_language/target/$TARGET/release/baml$EXECUTABLE_SUFFIX" \
-            "staging/bin/baml$EXECUTABLE_SUFFIX"
-          if test -f "staging/bin/baml-cli$EXECUTABLE_SUFFIX"; then
-            exit 1
-          fi
-      - name: Build no-self-update wrapper
-        if: ${{ matrix.no_self_update }}
-        env:
-          EXECUTABLE_SUFFIX: ${{ matrix.executable_suffix }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          set -euo pipefail
-          cargo build \
-            --manifest-path baml_language/Cargo.toml \
-            --release \
-            --bin baml \
-            --features no-self-update \
-            --target "$TARGET"
-          mkdir -p staging-no-self-update/bin
-          cp "baml_language/target/$TARGET/release/baml$EXECUTABLE_SUFFIX" \
-            "staging-no-self-update/bin/baml$EXECUTABLE_SUFFIX"
-      - name: Archive wrapper
-        env:
-          ARCHIVE_SUFFIX: ${{ matrix.archive_suffix }}
-          NO_SELF_UPDATE: ${{ matrix.no_self_update }}
-          TARGET: ${{ matrix.target }}
-          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
-        run: |
-          set -euo pipefail
-          archive() {
-            local staging="$1"
-            local product="$2"
-            local destination="$product-$WRAPPER_VERSION-$TARGET$ARCHIVE_SUFFIX"
-            case "$ARCHIVE_SUFFIX" in
-              .zip) (cd "$staging" && 7z a "../$destination" .) ;;
-              .tar.gz) tar -C "$staging" -czf "$destination" . ;;
-              *) echo "unsupported archive suffix: $ARCHIVE_SUFFIX" >&2; exit 1 ;;
-            esac
-          }
-          archive staging baml-wrapper
-          if [[ "$NO_SELF_UPDATE" == "true" ]]; then
-            archive staging-no-self-update baml-wrapper-no-self-update
-          fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wrapper-${{ matrix.target }}
-          path: |
-            baml-wrapper-${{ needs.plan.outputs.wrapper_version }}-${{ matrix.target }}.*
-            baml-wrapper-no-self-update-${{ needs.plan.outputs.wrapper_version }}-${{ matrix.target }}.*
+    name: Build toolchain selector
+    needs: [plan]
+    uses: ./.github/workflows/build2-wrapper.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+      wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
 
   build-python-sdk:
     name: Build Python SDK
@@ -909,7 +798,13 @@ jobs:
     # dedicated publish-gradle-plugin job additionally pushes canary/stable cuts
     # to the Portal. Per-coordinate idempotency lets either family be (re)published
     # independently when only one is missing from Central.
+    #
+    # The MAVEN_CENTRAL_* secrets (Central Portal user token + the CI signing
+    # key/passphrase) live in Infisical (boundary-tools →
+    # gh-baml-language-release) and are synced into this GitHub Environment —
+    # they are not repository secrets, so the job must bind to it to see them.
     runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
     permissions:
       contents: read
     steps:
@@ -983,12 +878,12 @@ jobs:
         env:
           VERSION: ${{ steps.ver.outputs.version }}
           # In-memory PGP signing path in build.gradle.kts keys on GPG_PRIVATE_KEY.
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_PRIVATE_KEY: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
           if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
-            echo "::error::GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
+            echo "::error::MAVEN_CENTRAL_GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
             exit 1
           fi
           # One staging run produces the full main+sources+javadoc+pom+module
@@ -1003,12 +898,12 @@ jobs:
         working-directory: baml_language/sdks/java/gradle-plugin
         env:
           VERSION: ${{ steps.ver.outputs.version }}
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_PRIVATE_KEY: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
           if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
-            echo "::error::GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
+            echo "::error::MAVEN_CENTRAL_GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
             exit 1
           fi
           # Stage the plugin jar+sources+javadoc AND the plugin-marker POM
@@ -1025,12 +920,12 @@ jobs:
         working-directory: baml_language/sdks/java/baml-bridge-kotlin
         env:
           VERSION: ${{ steps.ver.outputs.version }}
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_PRIVATE_KEY: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
           if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
-            echo "::error::GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
+            echo "::error::MAVEN_CENTRAL_GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
             exit 1
           fi
           # Stage the kotlin jar+sources+javadoc+POM into baml-bridge's
@@ -1050,8 +945,8 @@ jobs:
           BRIDGE_PUBLISH: ${{ steps.exists.outputs.bridge_publish }}
           PLUGIN_PUBLISH: ${{ steps.exists.outputs.plugin_publish }}
           KOTLIN_PUBLISH: ${{ steps.exists.outputs.kotlin_publish }}
-          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
-          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
         run: |
           set -euo pipefail
           staging="baml_language/sdks/java/baml_bridge/build/staging-deploy"
@@ -1079,7 +974,7 @@ jobs:
           unzip -l "$GITHUB_WORKSPACE/central-bundle.zip"
 
           if [[ -z "$CENTRAL_USERNAME" || -z "$CENTRAL_PASSWORD" ]]; then
-            echo "::error::CENTRAL_USERNAME / CENTRAL_PASSWORD secrets are not set — cannot publish to Maven Central"
+            echo "::error::MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD secrets are not set — cannot publish to Maven Central"
             exit 1
           fi
           # Portal auth: Bearer <base64(username:password)> (env → shell var, never
@@ -1131,6 +1026,9 @@ jobs:
     # mavenCentral() to pluginManagement to resolve the plugin from there).
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.plan.outputs.channel != 'nightly' }}
     runs-on: ubuntu-latest
+    # GRADLE_PUBLISH_KEY / GRADLE_PUBLISH_SECRET are Infisical-synced Environment
+    # secrets (see publish-maven), not repository secrets.
+    environment: infisical-github-baml-language-release
     permissions:
       contents: read
     steps:
@@ -1373,6 +1271,7 @@ jobs:
         needs.plan.outputs.source_branch == 'canary'
       }}
     runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -1380,16 +1279,12 @@ jobs:
           path: /tmp/go-sdk-package
       - name: Clone BoundaryML/baml-go
         env:
-          DEPLOY_KEY: ${{ secrets.BAML_GO_DEPLOY_KEY }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
         run: |
           set -euo pipefail
-          test -n "$DEPLOY_KEY"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/baml_go_mirror_key
-          chmod 600 ~/.ssh/baml_go_mirror_key
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_go_mirror_key -o IdentitiesOnly=yes"
-          git clone git@github.com:BoundaryML/baml-go.git /tmp/baml-go
+          test -n "$GH_TOKEN"
+          gh auth setup-git
+          git clone https://github.com/BoundaryML/baml-go.git /tmp/baml-go
           if ! git -C /tmp/baml-go rev-parse --verify HEAD >/dev/null 2>&1; then
             git -C /tmp/baml-go switch --orphan main
           fi
@@ -1397,10 +1292,10 @@ jobs:
         env:
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
           CANONICAL_VERSION: ${{ needs.plan.outputs.version }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           GO_VERSION: ${{ needs.plan.outputs.go_version }}
         run: |
           set -euo pipefail
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_go_mirror_key -o IdentitiesOnly=yes"
           tag="$GO_VERSION"
           manifest_url="https://pkg.boundaryml.com/manifest/v1/version/$CANONICAL_VERSION.json"
 
@@ -1482,6 +1377,7 @@ jobs:
     needs: [plan, build-swift-sdk, all-builds, publish-toolchain-release]
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
     env:
       GH_REPO: ${{ github.repository }}
     permissions:
@@ -1517,26 +1413,22 @@ jobs:
           fi
       - name: Clone BoundaryML/baml-swift
         env:
-          DEPLOY_KEY: ${{ secrets.BAML_SWIFT_DEPLOY_KEY }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
         run: |
           set -euo pipefail
-          test -n "$DEPLOY_KEY"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/baml_swift_mirror_key
-          chmod 600 ~/.ssh/baml_swift_mirror_key
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_swift_mirror_key -o IdentitiesOnly=yes"
-          git clone git@github.com:BoundaryML/baml-swift.git /tmp/baml-swift
+          test -n "$GH_TOKEN"
+          gh auth setup-git
+          git clone https://github.com/BoundaryML/baml-swift.git /tmp/baml-swift
           if ! git -C /tmp/baml-swift rev-parse --verify HEAD >/dev/null 2>&1; then
             git -C /tmp/baml-swift switch --orphan main
           fi
       - name: Publish immutable package tag
         env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
           VERSION: ${{ needs.plan.outputs.swiftpm_version }}
         run: |
           set -euo pipefail
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_swift_mirror_key -o IdentitiesOnly=yes"
           tag="v$VERSION"
           rsync -a --delete --exclude .git /tmp/swift-sdk-mirror/ /tmp/baml-swift/
           cd /tmp/baml-swift
@@ -2055,6 +1947,7 @@ jobs:
     needs: [plan, all-builds, publish-wrapper-release]
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: macos-14
+    environment: infisical-github-baml-language-release
     steps:
       - uses: actions/checkout@v4
         with:
@@ -2088,16 +1981,17 @@ jobs:
           brew linkage --test boundaryml/tap/baml
       - name: Push formula to BoundaryML/homebrew-tap
         env:
-          TOKEN: ${{ secrets.HOMEBREW_BAML_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
-          test -n "$TOKEN"
+          test -n "$GH_TOKEN"
+          gh auth setup-git
           tap="$(brew --repo boundaryml/tap)"
           cd "$tap"
           git config user.name "boundaryml-release-bot"
           git config user.email "boundaryml-release-bot@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/BoundaryML/homebrew-tap.git"
+          git remote set-url origin "https://github.com/BoundaryML/homebrew-tap.git"
           git add Formula/baml.rb
           git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || exit 0
           git push origin HEAD
@@ -2341,8 +2235,8 @@ jobs:
       - publish-pkg-channel
       - smoke-swift-release
     # Use the dispatch input so a failure in plan itself is still reportable.
-    # This job must run after failed dependencies. Failures and successful canary releases notify Slack; successful nightlies stay silent.
-    if: ${{ always() && inputs.dry_run == false && needs.plan.outputs.source_branch == 'canary' }}
+    # This job must run after failed dependencies. Every production release result notifies Slack, including successful nightlies.
+    if: ${{ always() && inputs.dry_run == false && (needs.plan.outputs.source_branch == 'canary' || (needs.plan.result == 'failure' && github.ref_type == 'tag' && github.ref_name == format('baml-language-source-{0}', inputs.source_sha))) }}
     runs-on: ubuntu-latest
     environment: boundary-tools-dev
     permissions:

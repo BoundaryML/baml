@@ -14,7 +14,7 @@ expression: outcome.dump
 527..565 'PgBox<...ring }': user.PgBox<string>
 550..563 'let s: string': string
 557..563 'string': string
-569..577 's.length': (self: baml.String) -> int throws never
+569..577 's.length': (self: string) -> int throws never
 569..579 's.length()': int
 592..593 'n': int
 606..613 'pg_unit': throws never

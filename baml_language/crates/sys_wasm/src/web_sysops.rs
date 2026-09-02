@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex};
 use bex_project::{BexExternalValue, Handle, HostValueArc};
 use indexmap::{IndexMap, indexmap};
 use num_traits::ToPrimitive as _;
-use sys_ops::io::{self, IoClassHttpResponse, IoNamespaceFs, IoNamespaceHttp};
+use sys_ops::io::{
+    self, IoClassHttpResponse, IoClassTimeInstant, IoNamespaceFs, IoNamespaceHttp, IoNamespaceTime,
+};
 use sys_types::{
     BexHeap, CallId, OpErrorBody, SysOp, SysOpContext, SysOpOutput, VmBamlError, VmInternalError,
     VmRustFnError,
@@ -12,6 +14,59 @@ use sys_types::{
 use crate::host_value::WasmHost;
 
 const UNSUPPORTED: &str = "Operation not supported by the Web runtime";
+
+pub(crate) struct WebTime;
+
+impl IoClassTimeInstant for WebTime {
+    fn now(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::time::Instant> {
+        let nanos = web_time::SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
+            .expect("system clock is set before the UNIX epoch")
+            .as_nanos();
+        SysOpOutput::ok(io::owned::time::Instant {
+            _nanoseconds: Arc::new(num_bigint::BigInt::from(nanos)),
+        })
+    }
+}
+
+impl IoNamespaceTime for WebTime {
+    fn system_timezone(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        unsupported()
+    }
+
+    fn _tz_offset_at(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _timezone: String,
+        _at_ns: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<i64>> {
+        unsupported()
+    }
+
+    fn _tz_to_instant(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _timezone: String,
+        _civil_ns: Arc<num_bigint::BigInt>,
+        _disambiguation: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<Arc<num_bigint::BigInt>>> {
+        unsupported()
+    }
+}
 
 pub(crate) struct WebHttp {
     host: Arc<WasmHost>,

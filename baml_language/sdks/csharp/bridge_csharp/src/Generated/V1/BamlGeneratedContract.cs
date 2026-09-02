@@ -57,7 +57,9 @@ public static partial class BamlGeneratedContract
 
         ProgramNativeState nativeState =
             ProgramRegistrar.Register(bytecode.Span, fingerprint, embeddedBamlToml);
-        return new BamlGeneratedProgram(registry, nativeState);
+        var program = new BamlGeneratedProgram(registry, nativeState);
+        registry.AttachProgram(program);
+        return program;
     }
 
     private static void RequireContractVersion(int requestedVersion)

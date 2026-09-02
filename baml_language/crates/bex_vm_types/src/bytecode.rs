@@ -615,8 +615,9 @@ pub enum Instruction {
     /// leaving the `nargs` value args (receiver first). It reads `Self` from the
     /// receiver's runtime concrete type, resolves `<Self as iface_type>::method_name`,
     /// and calls it like `Call`, seeding `frame.type_args` with the resolved impl's
-    /// type args (its own generics, or the interface's args + associated types for
-    /// an inherited default) followed by these method-level type args. `nargs` is
+    /// type args (its own generics for a provided
+    /// method, `[Self, interface args..]` for an adopted default — associated
+    /// types are not frame slots) followed by these method-level type args. `nargs` is
     /// the resolved method's arity.
     VirtualCall {
         /// Number of value arguments (including the receiver as the first).

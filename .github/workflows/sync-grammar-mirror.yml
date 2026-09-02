@@ -17,9 +17,10 @@
 #       consumed as a git repo (nvim-treesitter revisions, Zed grammar pins,
 #       Helix); ships the generated src/parser.c.
 #
-# Auth: each *_DEPLOY_KEY secret holds an SSH private key whose public half is
-# a write-access deploy key on the matching mirror repo. (A deploy key, not a
-# PAT, so pushes may update the mirror's workflow files.)
+# Auth: all mirror jobs use the shared GitHub token synced from Infisical's
+# gh-baml-language-release environment. The token needs Contents write access
+# to every mirror and Workflows write access because syncs can update each
+# mirror's publish workflow.
 #
 # Versioning: npm-published mirrors get a patch bump + a v<version> git tag on
 # every content change. The treesitter mirror is consumed by commit pin, so it
@@ -44,6 +45,9 @@ on:
       - ".github/workflows/sync-grammar-mirror.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: sync-grammar-mirror
   cancel-in-progress: false
@@ -56,6 +60,7 @@ jobs:
   sync-textmate:
     name: Sync to BoundaryML/textMate-baml
     runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
     steps:
       - uses: actions/checkout@v4
         with:
@@ -77,15 +82,12 @@ jobs:
 
       - name: Clone mirror
         env:
-          DEPLOY_KEY: ${{ secrets.TEXTMATE_BAML_DEPLOY_KEY }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
         run: |
           set -euo pipefail
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/mirror_key
-          chmod 600 ~/.ssh/mirror_key
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes"
-          git clone --depth 50 git@github.com:BoundaryML/textMate-baml.git /tmp/mirror-repo
+          test -n "$GH_TOKEN"
+          gh auth setup-git
+          git clone --depth 50 https://github.com/BoundaryML/textMate-baml.git /tmp/mirror-repo
 
       - name: Assemble and diff against mirror
         id: diff
@@ -113,6 +115,7 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         env:
           CURRENT: ${{ steps.diff.outputs.current }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           SOURCE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -130,7 +133,6 @@ jobs:
           jq --arg v "$next" '.version = $v' /tmp/mirror-repo/package.json > /tmp/pkg.json
           mv /tmp/pkg.json /tmp/mirror-repo/package.json
 
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes"
           cd /tmp/mirror-repo
           # -A, not commit -a: newly assembled files (dist/, package.json, the
           # publish workflow) are untracked in the mirror and -a would drop them.
@@ -173,6 +175,7 @@ jobs:
   sync-highlightjs:
     name: Sync to BoundaryML/baml-highlightjs
     runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
     steps:
       - uses: actions/checkout@v4
         with:
@@ -187,15 +190,12 @@ jobs:
 
       - name: Clone mirror
         env:
-          DEPLOY_KEY: ${{ secrets.BAML_HIGHLIGHTJS_DEPLOY_KEY }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
         run: |
           set -euo pipefail
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/mirror_key
-          chmod 600 ~/.ssh/mirror_key
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes"
-          git clone --depth 50 git@github.com:BoundaryML/baml-highlightjs.git /tmp/mirror-repo
+          test -n "$GH_TOKEN"
+          gh auth setup-git
+          git clone --depth 50 https://github.com/BoundaryML/baml-highlightjs.git /tmp/mirror-repo
 
       - name: Assemble and diff against mirror
         id: diff
@@ -220,6 +220,7 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         env:
           CURRENT: ${{ steps.diff.outputs.current }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           SOURCE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -234,7 +235,6 @@ jobs:
           jq --arg v "$next" '.version = $v' /tmp/mirror-repo/package.json > /tmp/pkg.json
           mv /tmp/pkg.json /tmp/mirror-repo/package.json
 
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes"
           cd /tmp/mirror-repo
           git add -A
           git -c user.name="github-actions[bot]" \
@@ -272,6 +272,7 @@ jobs:
   sync-treesitter:
     name: Sync to BoundaryML/baml-treesitter
     runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
     steps:
       - uses: actions/checkout@v4
         with:
@@ -286,15 +287,12 @@ jobs:
 
       - name: Clone mirror
         env:
-          DEPLOY_KEY: ${{ secrets.BAML_TREESITTER_DEPLOY_KEY }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
         run: |
           set -euo pipefail
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/mirror_key
-          chmod 600 ~/.ssh/mirror_key
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes"
-          git clone --depth 50 git@github.com:BoundaryML/baml-treesitter.git /tmp/mirror-repo
+          test -n "$GH_TOKEN"
+          gh auth setup-git
+          git clone --depth 50 https://github.com/BoundaryML/baml-treesitter.git /tmp/mirror-repo
 
       - name: Assemble and diff against mirror
         id: diff
@@ -314,10 +312,10 @@ jobs:
       - name: Push
         if: steps.diff.outputs.changed == 'true'
         env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           SOURCE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes"
           cd /tmp/mirror-repo
           git add -A
           git -c user.name="github-actions[bot]" \

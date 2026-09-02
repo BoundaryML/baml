@@ -62,7 +62,7 @@ function from_json_interface.$init_test_ns_from_json_interface_from_json_interfa
     return
 }
 
-function from_json_interface.Inner.baml.FromJson.from_json(j: baml.json.json) -> from_json_interface.Inner {
+function from_json_interface.<(user.from_json_interface.Inner as baml.FromJson)>.from_json(j: baml.json.json) -> from_json_interface.Inner {
     load_var j
     load_const "wrapped"
     call baml.json.field
@@ -74,7 +74,7 @@ function from_json_interface.Inner.baml.FromJson.from_json(j: baml.json.json) ->
     return
 }
 
-function from_json_interface.Temp.baml.FromJson.from_json(j: baml.json.json) -> from_json_interface.Temp {
+function from_json_interface.<(user.from_json_interface.Temp as baml.FromJson)>.from_json(j: baml.json.json) -> from_json_interface.Temp {
     load_var j
     load_const "c"
     call baml.json.field
@@ -86,7 +86,7 @@ function from_json_interface.Temp.baml.FromJson.from_json(j: baml.json.json) -> 
     return
 }
 
-function from_json_interface.TempCelsius.baml.FromJson.from_json(j: baml.json.json) -> from_json_interface.TempCelsius {
+function from_json_interface.<(user.from_json_interface.TempCelsius as baml.FromJson)>.from_json(j: baml.json.json) -> from_json_interface.TempCelsius {
     load_var j
     load_const "celsius"
     call baml.json.field
@@ -139,7 +139,13 @@ function from_json_interface.static_from_json_decodes_non_implementor_fn() -> st
 function from_json_interface.static_from_json_dispatches_override_fn() -> float {
     load_const "{\"c\": 20.5}"
     call baml.json.parse
-    call user.from_json_interface.Temp.baml.FromJson.from_json
+    store_var j
+    load_var j
+    load_type from_json_interface.Temp
+    load_type baml.FromJson
+    load_const "from_json"
+    make_virtual_function ntypeargs=0
+    call_indirect
     load_field .celsius
     return
 }

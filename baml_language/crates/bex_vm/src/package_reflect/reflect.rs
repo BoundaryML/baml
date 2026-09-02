@@ -506,8 +506,8 @@ fn check_function_contract(
     ))
 }
 
-fn dependency_object(vm: &BexVm, package: HeapPtr, local: &str) -> Option<HeapPtr> {
-    let Object::Package(package) = vm.get_object(package) else {
+fn dependency_object(vm: &BexVm, package_ptr: HeapPtr, local: &str) -> Option<HeapPtr> {
+    let Object::Package(package) = vm.get_object(package_ptr) else {
         return None;
     };
     let local_name = local_name(local)?;
@@ -519,6 +519,32 @@ fn dependency_object(vm: &BexVm, package: HeapPtr, local: &str) -> Option<HeapPt
         .or_else(|| package.functions.get(&local_name))
         .copied()
         .or_else(|| mounted_declaration(vm, package, local))
+        .or_else(|| dependency_named_object(vm, package_ptr, package, local))
+}
+
+/// Resolve `local` against a package's canonical object names: the lane for a
+/// declaration the package's item tables do not row under its own name. A
+/// class-inherent method is the case today — a consumer's static call imports
+/// it as `<alias>.<Class>.<method>`, the class-qualified spelling the emitter
+/// registered the function under — so it resolves exactly as the global lane
+/// resolves an alias-qualified global: `user.<local>` for a runtime image,
+/// `<canonical package>.<local>` for a static one.
+fn dependency_named_object(
+    vm: &BexVm,
+    package_ptr: HeapPtr,
+    package: &bex_vm_types::types::Package,
+    local: &str,
+) -> Option<HeapPtr> {
+    if let Some(runtime) = package.runtime() {
+        runtime
+            .object_names
+            .get(&format!("user.{local}"))
+            .or_else(|| runtime.object_names.get(local))
+            .copied()
+    } else {
+        let canonical = vm.packages.package_name(package_ptr)?;
+        vm.packages.object_by_name(&format!("{canonical}.{local}"))
+    }
 }
 
 /// Resolve `local` against a package's mount surface: the export name of a
@@ -804,18 +830,30 @@ impl BamlClassPackage for PackageReflectImpl {
             .collect();
         let mut objects = Vec::with_capacity(plan.program.objects.len());
         for (index, object) in plan.program.objects.iter().enumerate() {
-            let external = external_objects.get(&index).and_then(|symbol| {
-                if matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn) {
-                    return None;
-                }
-                vm.packages.object_by_name(&symbol.fq_name).or_else(|| {
+            // A plan-declared external MUST resolve (generic functions are
+            // the carve-out: their value objects re-intern locally). The
+            // import planner only mints a symbol for a name the compile
+            // could see, so a miss is link skew — grafting the linker's
+            // `"<runtime-import>"` placeholder as a live object would
+            // surface later as an inscrutable error at first use.
+            if let Some(symbol) = external_objects.get(&index)
+                && !matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn)
+            {
+                let resolved = vm.packages.object_by_name(&symbol.fq_name).or_else(|| {
                     // Alias-qualified names — a dependency's own exports and
                     // its mount surface — resolve through the dependency.
                     let (alias, local) = symbol.fq_name.split_once('.')?;
                     dependency_object(vm, *dependencies.get(alias)?, local)
-                })
-            });
-            if let Some(ptr) = external {
+                });
+                let Some(ptr) = resolved else {
+                    return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                        message: format!(
+                            "Package link could not resolve object `{}`",
+                            symbol.fq_name
+                        ),
+                    })
+                    .into();
+                };
                 objects.push(ptr);
                 continue;
             }
@@ -902,8 +940,12 @@ impl BamlClassPackage for PackageReflectImpl {
             .collect();
         let mut globals = Vec::with_capacity(plan.program.globals.len());
         for (index, value) in plan.program.globals.iter().enumerate() {
-            let external = external_globals.get(&index).and_then(|symbol| {
-                vm.packages
+            // Same law as the object lane: a plan-declared external global
+            // MUST resolve — falling through would materialize the plan's
+            // placeholder const as a silent `null` global.
+            if let Some(symbol) = external_globals.get(&index) {
+                let resolved = vm
+                    .packages
                     .global_by_name(&symbol.fq_name)
                     .map(|index| vm.globals.get(vm.proof(), index))
                     .or_else(|| {
@@ -925,15 +967,22 @@ impl BamlClassPackage for PackageReflectImpl {
                                 .global_by_name(&format!("{canonical}.{local}"))?;
                             Some(vm.globals.get(vm.proof(), index))
                         }
+                    });
+                let Some(value) = resolved else {
+                    return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                        message: format!(
+                            "Package link could not resolve global `{}`",
+                            symbol.fq_name
+                        ),
                     })
-            });
-            let value = if let Some(value) = external {
-                value
-            } else {
-                match value {
-                    bex_vm_types::ConstValue::Float(value) => Value::object(vm.alloc_float(*value)),
-                    other => other.to_value(|index| objects[index.raw()]),
-                }
+                    .into();
+                };
+                globals.push(AtomicValueSlot::new(value));
+                continue;
+            }
+            let value = match value {
+                bex_vm_types::ConstValue::Float(value) => Value::object(vm.alloc_float(*value)),
+                other => other.to_value(|index| objects[index.raw()]),
             };
             globals.push(AtomicValueSlot::new(value));
         }
@@ -1007,6 +1056,15 @@ impl BamlClassPackage for PackageReflectImpl {
             .iter()
             .map(|(name, index)| (name.clone(), objects[index.raw()]))
             .collect::<IndexMap<_, _>>();
+        // `global_names` is the runtime package's *link* table: a consumer
+        // mounting this package resolves its imports here. Interface bodies
+        // do not publish: a consumer reaches this package's impl methods
+        // through the virtual road (rule tables carry body pointers; adopted
+        // defaults resolve through the interface's `default_fn`) and checks
+        // their signatures through the package-interface blob — no current
+        // lowering emits a name-addressed body reference against a mounted
+        // surface. A future devirtualized direct call must reference the
+        // body rule-relatively, never by name.
         let global_names = plan
             .program
             .function_global_indices
@@ -1014,6 +1072,18 @@ impl BamlClassPackage for PackageReflectImpl {
             .chain(&plan.program.let_global_indices)
             .filter(|(name, _)| name.starts_with("user."))
             .map(|(name, index)| (name.clone(), *index))
+            .collect::<IndexMap<_, _>>();
+        // The object-lane twin of `global_names`: every named function this
+        // package compiled, under its canonical spelling. A consumer's static
+        // call to a class-inherent method imports the function object by that
+        // class-qualified name, which no item table rows (see
+        // `dependency_named_object`).
+        let object_names = plan
+            .program
+            .function_indices
+            .iter()
+            .filter(|(name, _)| name.starts_with("user."))
+            .map(|(name, index)| (name.clone(), objects[*index]))
             .collect::<IndexMap<_, _>>();
         let init = plan
             .program
@@ -1038,6 +1108,7 @@ impl BamlClassPackage for PackageReflectImpl {
         package.test_init = test_init;
         let runtime = package.runtime_mut().expect("runtime package image");
         runtime.objects = objects.into_boxed_slice();
+        runtime.object_names = object_names;
         runtime.globals = globals.into_boxed_slice();
         runtime.global_names = global_names;
         runtime.type_values = type_values;
@@ -1206,7 +1277,14 @@ impl BamlClassPackage for PackageReflectImpl {
             Object::Package(package) => package.functions.get(&local).copied(),
             _ => None,
         };
-        if function.is_none() {
+        let Some(function) = function else {
+            return Ok(None);
+        };
+        if matches!(
+            vm.get_object(function),
+            Object::Function(function)
+                if function.origin == bex_vm_types::FunctionOrigin::Internal
+        ) {
             return Ok(None);
         }
         let Some(function_value) = package_function_value(vm, package_ptr, &local) else {
@@ -1317,7 +1395,22 @@ impl BamlClassPackage for PackageReflectImpl {
         let Object::Package(package) = vm.get_object(ptr) else {
             return IndexMap::new();
         };
-        let functions = package.functions.keys().cloned().collect::<Vec<_>>();
+        let functions = package
+            .functions
+            .iter()
+            .map(|(name, &function)| (name.clone(), function))
+            .collect::<Vec<_>>();
+        let functions = functions
+            .into_iter()
+            .filter(|(_, function)| {
+                !matches!(
+                    vm.get_object(*function),
+                    Object::Function(function)
+                        if function.origin == bex_vm_types::FunctionOrigin::Internal
+                )
+            })
+            .map(|(name, _)| name)
+            .collect::<Vec<_>>();
         functions
             .into_iter()
             .filter_map(|name| {
@@ -1815,22 +1908,29 @@ fn graft_session_submission(
     let mut objects = Vec::with_capacity(plan.program.objects.len());
     let mut owned = Vec::new();
     for (index, object) in plan.program.objects.iter().enumerate() {
-        let external = external_objects.get(&index).and_then(|symbol| {
-            (!matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn))
-                .then(|| {
-                    existing_objects.get(&symbol.fq_name).copied().or_else(|| {
-                        session_external_object(vm, package_ptr, &dependencies, &symbol.fq_name)
-                    })
+        // A plan-declared external MUST resolve (generic functions are the
+        // carve-out: their value objects re-intern locally) — the same law
+        // the global loop above already enforces. Falling through would
+        // graft the linker's `"<runtime-import>"` placeholder as a live
+        // object.
+        if let Some(symbol) = external_objects.get(&index)
+            && !matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn)
+        {
+            let pointer = existing_objects
+                .get(&symbol.fq_name)
+                .copied()
+                .or_else(|| {
+                    session_external_object(vm, package_ptr, &dependencies, &symbol.fq_name)
                 })
-                .flatten()
-        });
-        if let Some(pointer) = external {
+                .ok_or_else(|| VmBamlError::InvalidArgument {
+                    message: format!("Session link could not resolve object `{}`", symbol.fq_name),
+                })?;
             objects.push(pointer);
-        } else {
-            let pointer = vm.alloc(object.clone());
-            objects.push(pointer);
-            owned.push(pointer);
+            continue;
         }
+        let pointer = vm.alloc(object.clone());
+        objects.push(pointer);
+        owned.push(pointer);
     }
     // Runtime identities are generative: remint before anything reads a
     // declaration's tag (`allocate_runtime_declaration_types` builds this
@@ -2042,6 +2142,10 @@ fn graft_session_submission(
             *pointer,
         );
     }
+    // Interface bodies do not publish (see the `Package.compile` twin): a
+    // later eval reaches this eval's impl methods only through the virtual
+    // road — earlier-eval declarations are mounted surfaces with no source
+    // lane, so no static body reference can even be lowered against them.
     let global_name_updates = plan
         .program
         .function_global_indices
@@ -2066,7 +2170,13 @@ fn graft_session_submission(
         .filter(|(index, _)| !named_slots.contains(index))
         .filter_map(|(_, value)| match value {
             bex_vm_types::ConstValue::Object(index) => match &plan.program.objects[*index] {
-                Object::Function(function) if function.source_file == metadata.submission_name => {
+                // An interface body owns an unnamed slot but is not an init
+                // helper — including it would shift every positional
+                // `helper_slot` ordinal the compile side assigned.
+                Object::Function(function)
+                    if function.source_file == metadata.submission_name
+                        && !function.is_interface_body =>
+                {
                     Some(objects[index.raw()])
                 }
                 _ => None,

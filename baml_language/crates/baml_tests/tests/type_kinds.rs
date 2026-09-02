@@ -245,7 +245,7 @@ async fn nested_type_walker_and_kind_specific_readback_work_end_to_end() {
                 && kind_identity(reflect.Type.of<Callback>())
         }
 
-        function main() -> bool throws unknown {
+        function main() -> bool {
             let union_view = reflect.Type.of<int | string>().as_union() ?? throw "union";
             let array_view = reflect.Type.of<Foo[]>().as_array() ?? throw "array";
             let map_view = reflect.Type.of<map<string, Foo>>().as_map() ?? throw "map";
@@ -271,7 +271,7 @@ async fn nested_type_walker_and_kind_specific_readback_work_end_to_end() {
 async fn nested_views_of_a_runtime_type_keep_its_definitions() {
     let output = baml_test!(
         r#"
-        function main() -> string throws unknown {
+        function main() -> string {
             let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type();
 
             // Through a class field's array element.
@@ -315,7 +315,7 @@ async fn nested_views_of_a_runtime_type_keep_its_definitions() {
 async fn map_key_type_view_keeps_runtime_definitions() {
     let output = baml_test!(
         r#"
-        function main() -> string throws unknown {
+        function main() -> string {
             let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type();
             let map_view = reflect.map.new(choice, reflect.Type.of<int>()).as_type().as_map()
                 ?? throw "expected map";
@@ -334,7 +334,7 @@ async fn map_key_type_view_keeps_runtime_definitions() {
 async fn nested_class_of_a_runtime_package_type_reads_back() {
     let output = baml_test!(
         r#"
-        function main() -> string throws unknown {
+        function main() -> string {
             let pkg = reflect.Package.compile({
                 "schema.baml": "class Leaf { name string } class Root { leaf Leaf }",
             })
@@ -361,7 +361,7 @@ async fn nested_class_of_a_runtime_package_type_reads_back() {
 async fn function_views_of_a_runtime_package_keep_its_definitions() {
     let output = baml_test!(
         r#"
-        function main() -> string throws unknown {
+        function main() -> string {
             let pkg = reflect.Package.compile({
                 "schema.baml": "enum Choice { FIRST SECOND } function pick(c: Choice) -> Choice { c }",
             })

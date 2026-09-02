@@ -26,7 +26,8 @@ import java.util.Map;
  * InboundValue oneof: string_value = 2, int_value = 3, float_value = 4,
  *                     bool_value = 5, list_value = 6, map_value = 7,
  *                     class_value = 8, enum_value = 9,
- *                     uint8array_value = 11, bigint_value = 12
+ *                     uint8array_value = 11, bigint_value = 12,
+ *                     prompt_ast_value = 16
  *                     (handle = 10 / ty_value = 13 are not implemented in this slice)
  * InboundListValue:  values = 1 (repeated InboundValue)
  * InboundMapValue:   entries = 1 (repeated InboundMapEntry)
@@ -66,6 +67,7 @@ public final class ProtoWriter {
     private static final int IV_HANDLE = 10;
     private static final int IV_UINT8ARRAY = 11;
     private static final int IV_BIGINT = 12;
+    private static final int IV_PROMPT_AST = 16;
 
     // BamlHandle (baml_handle.proto): key = 1 (uint64), handle_type = 2 (enum).
     private static final int HANDLE_KEY = 1;
@@ -312,6 +314,18 @@ public final class ProtoWriter {
             writeMediaType(w, media.bamlFqn());
             w.writeMessage(IV_CLASS, encodeMediaClass(media));
             alreadyTyped = true;
+        } else if (value instanceof baml_bridge.BamlPrompt prompt) {
+            // ai.Prompt is portable rather than handle-backed. Preserve the
+            // canonical prompt AST bytes copied from the outbound boundary so
+            // the same host value can be passed into another ordinary BAML
+            // call (or another runtime) without consulting the handle table.
+            w.writeMessage(IV_PROMPT_AST, prompt.bamlWireCopy());
+        } else if (value instanceof baml_bridge.BamlFunctionSpec<?> spec) {
+            // FunctionSpec is an engine-owned capability. Its host wrapper is
+            // transparent on the inbound boundary, just like BamlStream: clone
+            // the owned handle key so the engine may drain the wire copy while
+            // the Java object remains reusable.
+            return encodeInboundValue(spec.bamlHandle(), contextualType, selectedArm);
         } else if (value instanceof baml_bridge.BamlStream stream) {
             // BamlStream (ai.stream.Stream receiver): lifted to a bare
             // handle_value(ADT_TAGGED_HEAP_HANDLE) on the wire — the engine

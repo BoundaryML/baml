@@ -944,21 +944,34 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
     if bindings.is_empty() {
         return ty.clone();
     }
+    rewrite_ty(ty, &mut |node| match node {
+        Ty::TypeVar(name, _) => bindings.get(name).cloned(),
+        _ => None,
+    })
+}
+
+/// Pre-order rewrite of a plain `Ty`: `rewrite` is consulted at every node;
+/// returning `Some` replaces the node wholesale (its children are not
+/// visited), `None` recurses into children and rebuilds. The shared chassis
+/// of [`substitute_ty`] and the interface machinery's projection collapse.
+pub fn rewrite_ty(ty: &Ty, rewrite: &mut dyn FnMut(&Ty) -> Option<Ty>) -> Ty {
+    if let Some(replacement) = rewrite(ty) {
+        return replacement;
+    }
     match ty {
-        Ty::TypeVar(name, _) => bindings.get(name).cloned().unwrap_or_else(|| ty.clone()),
-        Ty::List(inner, attr) => Ty::List(Box::new(substitute_ty(inner, bindings)), attr.clone()),
+        Ty::List(inner, attr) => Ty::List(Box::new(rewrite_ty(inner, rewrite)), attr.clone()),
         Ty::Map {
             key: k,
             value: v,
             attr,
         } => Ty::Map {
-            key: Box::new(substitute_ty(k, bindings)),
-            value: Box::new(substitute_ty(v, bindings)),
+            key: Box::new(rewrite_ty(k, rewrite)),
+            value: Box::new(rewrite_ty(v, rewrite)),
             attr: attr.clone(),
         },
         Ty::Future(value, error, attr) => Ty::Future(
-            Box::new(substitute_ty(value, bindings)),
-            Box::new(substitute_ty(error, bindings)),
+            Box::new(rewrite_ty(value, rewrite)),
+            Box::new(rewrite_ty(error, rewrite)),
             attr.clone(),
         ),
         Ty::AssociatedTypeProjection {
@@ -967,15 +980,14 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
             member,
             attr,
         } => Ty::AssociatedTypeProjection {
-            base: Box::new(substitute_ty(base, bindings)),
-            interface: Box::new(interface.map_tys(|t| substitute_ty(t, bindings))),
+            base: Box::new(rewrite_ty(base, rewrite)),
+            interface: Box::new(interface.map_tys(|t| rewrite_ty(t, rewrite))),
             member: member.clone(),
             attr: attr.clone(),
         },
-        Ty::Union(members, attr) => normalize_union_members(
-            members.iter().map(|m| substitute_ty(m, bindings)),
-            attr.clone(),
-        ),
+        Ty::Union(members, attr) => {
+            normalize_union_members(members.iter().map(|m| rewrite_ty(m, rewrite)), attr.clone())
+        }
         Ty::Function {
             params,
             ret,
@@ -984,43 +996,32 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
         } => {
             // Function values are realized: a function type carries no generics of
             // its own, only free typevars from the enclosing context — so there is
-            // nothing to shadow and substitution recurses with the same bindings.
+            // nothing to shadow and the rewrite recurses uniformly.
             Ty::Function {
                 params: params
                     .iter()
                     .map(|param| FunctionParamTy {
                         name: param.name.clone(),
-                        ty: substitute_ty(&param.ty, bindings),
+                        ty: rewrite_ty(&param.ty, rewrite),
                         mode: param.mode,
                     })
                     .collect(),
-                ret: Box::new(substitute_ty(ret, bindings)),
-                throws: Box::new(substitute_ty(throws, bindings)),
+                ret: Box::new(rewrite_ty(ret, rewrite)),
+                throws: Box::new(rewrite_ty(throws, rewrite)),
                 attr: attr.clone(),
             }
         }
         Ty::Class(name, type_args, attr) => {
-            let substituted_args: Vec<Ty> = type_args
-                .iter()
-                .map(|t| substitute_ty(t, bindings))
-                .collect();
-            Ty::Class(name.clone(), substituted_args, attr.clone())
+            let rebuilt_args: Vec<Ty> = type_args.iter().map(|t| rewrite_ty(t, rewrite)).collect();
+            Ty::Class(name.clone(), rebuilt_args, attr.clone())
         }
         Ty::Interface(name, type_args, associated_bindings, attr) => {
-            let substituted_args: Vec<Ty> = type_args
+            let rebuilt_args: Vec<Ty> = type_args.iter().map(|t| rewrite_ty(t, rewrite)).collect();
+            let rebuilt_bindings = associated_bindings
                 .iter()
-                .map(|t| substitute_ty(t, bindings))
+                .map(|(name, ty)| (name.clone(), rewrite_ty(ty, rewrite)))
                 .collect();
-            let substituted_bindings = associated_bindings
-                .iter()
-                .map(|(name, ty)| (name.clone(), substitute_ty(ty, bindings)))
-                .collect();
-            Ty::Interface(
-                name.clone(),
-                substituted_args,
-                substituted_bindings,
-                attr.clone(),
-            )
+            Ty::Interface(name.clone(), rebuilt_args, rebuilt_bindings, attr.clone())
         }
         // All other types are leaves (primitives, enums, etc.) — pass through.
         _ => ty.clone(),

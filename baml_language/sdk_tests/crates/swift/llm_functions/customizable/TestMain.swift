@@ -24,8 +24,6 @@ final class TestMain: XCTestCase {
     }
 
 
-    // NOTE: the build_request api-key tests that lived here inspected the auth
-    // header on `*_build_request`'s Request. That companion went away with the
-    // legacy LLM path (credentials now resolve inside the provider's `invoke`,
-    // at request time). Coverage moved to `_planv2/baml_src/live/`.
+    // NOTE: the legacy `*_build_request` binding is gone. Request previews now
+    // start with `Fn_spec(...)` and call `buildRequest()` on that value.
 }

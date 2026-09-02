@@ -47,6 +47,13 @@ pub(crate) fn handle_clone(key: u64, context: &str) -> PyResult<u64> {
     }
 }
 
+pub(crate) fn release_wire_handle(key: u64, context: &str) -> PyResult<()> {
+    match unsafe { baml_handle_release(key) } {
+        BamlCffiStatus::Ok => Ok(()),
+        status => Err(status_to_pyerr(context, status)),
+    }
+}
+
 #[gen_stub_pyclass]
 #[pyclass]
 pub struct BamlPyHandle {
@@ -154,4 +161,19 @@ pub fn _seed_generic_media_handle() -> PyResult<(u64, u64)> {
         BamlCffiStatus::Ok => Ok((key, handle_type as u64)),
         status => Err(status_to_pyerr("_seed_generic_media_handle", status)),
     }
+}
+
+/// Release a handle cloned for wire ownership when encoding aborts before the
+/// engine can consume it.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _release_wire_handle(key: u64) -> PyResult<()> {
+    release_wire_handle(key, "BamlPyHandle wire-encode rollback")
+}
+
+/// Test-only: return the number of live ordinary HANDLE_TABLE keys.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _live_handle_count() -> usize {
+    bridge_cffi::handle::live_handle_count()
 }

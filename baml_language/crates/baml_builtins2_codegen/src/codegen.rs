@@ -151,11 +151,15 @@ fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin], package: &str) -> Nam
         let segments: Vec<&str> = rest.split('.').collect();
         let last_idx = segments.len() - 1;
 
-        // The class is the first uppercase segment before the final method
-        // segment (if any). Everything after the class is the dispatch key:
-        // a method declared inside an `implements I { ... }` block keeps the
-        // interface segment in its runtime path (`...{Class}.I.method`), so the
-        // class dispatch must match on `I.method`. The Rust method name comes
+        // The class is the first uppercase-initial segment before the final
+        // method segment (if any). An implements-block method's segment is
+        // `{Iface}$for${Class}` — for a DOTTED written interface
+        // (`root.io.Read$for$File`) the interface's path components parse
+        // as namespace segments here, which lands correctly only because
+        // namespace segments are lowercase and the `$for$` segment starts
+        // with the interface's uppercase name. Contingent, not designed —
+        // the structural `namespace`/`class_segment` fields are the honest
+        // route if this lane ever misparses. The Rust method name comes
         // from the final segment alone so it stays a valid identifier.
         let class_idx = segments[..last_idx]
             .iter()

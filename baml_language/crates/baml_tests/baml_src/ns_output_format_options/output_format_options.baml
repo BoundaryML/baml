@@ -31,7 +31,7 @@ function OfAllLegacyOptions() -> OfOptionResult {
 }
 
 test "declarative output format supports every legacy option" {
-    let rendered = OfAllLegacyOptions$render_prompt().text()
+    let rendered = OfAllLegacyOptions@render_prompt().text()
     assert.contains(rendered, "output_format_options.OfOptionChoice\n----\n* First\n* Second")
     assert.contains(rendered, "type output_format_options.OfOptionChild {")
     assert.contains(rendered, "type output_format_options.OfOptionResult {")

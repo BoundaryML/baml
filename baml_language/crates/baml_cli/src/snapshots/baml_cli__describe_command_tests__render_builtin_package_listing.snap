@@ -260,7 +260,7 @@ function         baml.sap.__new_parse_cache       <builtin>/baml/ns_sap/sap.baml
 function         baml.sap.__parse_final           <builtin>/baml/ns_sap/sap.baml:28
 function         baml.sap.__parse_partial         <builtin>/baml/ns_sap/sap.baml:36
 function         baml.sap.parse                   <builtin>/baml/ns_sap/sap.baml:44
-function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:51
+function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:55
 class            baml.spawn.SpawnParams           <builtin>/baml/ns_spawn/spawn.baml:19
 class            baml.spawn.TaskGroup             <builtin>/baml/ns_spawn/spawn.baml:31
 class            baml.spawn.CancelToken           <builtin>/baml/ns_spawn/spawn.baml:85
@@ -297,7 +297,7 @@ function         baml.time.system_timezone        <builtin>/baml/ns_time/timezon
 function         baml.time._tz_offset_at          <builtin>/baml/ns_time/timezone.baml:104
 function         baml.time._tz_to_instant         <builtin>/baml/ns_time/timezone.baml:116
 class            baml.time.ZonedDateTime          <builtin>/baml/ns_time/zoneddatetime.baml:11
-function         baml.time._format_zoned          <builtin>/baml/ns_time/zoneddatetime.baml:264
+function         baml.time._format_zoned          <builtin>/baml/ns_time/zoneddatetime.baml:268
 type             baml.toml.Item                   <builtin>/baml/ns_toml/toml.baml:5
 class            baml.toml.Table                  <builtin>/baml/ns_toml/toml.baml:18
 function         baml.toml.table_from_json        <builtin>/baml/ns_toml/toml.baml:52

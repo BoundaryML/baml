@@ -12,15 +12,20 @@ public final class BamlHandle: @unchecked Sendable {
     let handleType: BamlBridge_Cffi_V1_BamlHandleType
     /// Root class identity carried by an outbound tagged handle's `ty`.
     let classFQN: String?
+    /// Media handles cache their portable wire value when they are created or
+    /// decoded. Encoding never has to perform a fallible native read.
+    let portableMedia: BamlBridge_Cffi_V1_BamlValueMedia?
 
     init(
         key: UInt64,
         handleType: BamlBridge_Cffi_V1_BamlHandleType,
-        classFQN: String? = nil
+        classFQN: String? = nil,
+        portableMedia: BamlBridge_Cffi_V1_BamlValueMedia? = nil
     ) {
         self.key = key
         self.handleType = handleType
         self.classFQN = classFQN
+        self.portableMedia = portableMedia
     }
 
     deinit {
@@ -46,6 +51,9 @@ extension BamlHandle: Equatable {
 
 extension BamlHandle: BamlEncodable {
     public func _bamlEncode() -> BamlInboundValue {
+        if let portableMedia {
+            return BamlMedia.encodePortable(portableMedia)
+        }
         // Clone a fresh key for the wire; the engine drains it while
         // this instance keeps its own.
         var wireKey: UInt64 = 0
@@ -66,6 +74,9 @@ extension BamlHandle: BamlEncodable {
 extension BamlHandle: BamlDecodable {
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> BamlHandle {
         let raw = value.normalized
+        if case .mediaValue(let media) = raw.value {
+            return try BamlMedia.decodePortable(media)
+        }
         guard case .handleValue(let handle) = raw.value else {
             throw BamlDecodeError.typeMismatch(expected: "handle", got: wireArmName(raw))
         }
@@ -78,10 +89,20 @@ extension BamlHandle: BamlDecodable {
         } else {
             classFQN = nil
         }
+        let portableMedia: BamlBridge_Cffi_V1_BamlValueMedia?
+        if BamlMedia.isPortableHandle(handle.handleType) {
+            portableMedia = try BamlMedia.snapshotPortable(
+                key: handle.key,
+                handleType: handle.handleType
+            )
+        } else {
+            portableMedia = nil
+        }
         return BamlHandle(
             key: handle.key,
             handleType: handle.handleType,
-            classFQN: classFQN
+            classFQN: classFQN,
+            portableMedia: portableMedia
         )
     }
 }
@@ -129,7 +150,7 @@ public final class BamlFunctionHandle: @unchecked Sendable {
     }
 
     public func callRaw(
-        args: [(String, (any BamlEncodable)?)]
+        args: [(String, (any BamlEncodable)?)],
     ) async throws -> BamlOutboundValue {
         try await BamlRuntime.shared.callHandleRaw(handle.key, args: args)
     }

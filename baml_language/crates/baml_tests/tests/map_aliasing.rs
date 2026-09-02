@@ -58,7 +58,7 @@ const INT_LIST_SOURCE: &str = r#"
 async fn callee_map_mutations_persist_when_caller_does_not_read_map() {
     let output = baml_test!(
         r#"
-        function put(m: map<string, int>, k: string) -> int throws unknown {
+        function put(m: map<string, int>, k: string) -> int {
             m.set(k, 1)
             return m.length()
         }
@@ -89,7 +89,7 @@ async fn callee_map_mutations_persist_when_caller_does_not_read_map() {
 async fn callee_map_mutations_persist_when_caller_reads_map() {
     let output = baml_test!(
         r#"
-        function put(m: map<string, int>, k: string) -> int throws unknown {
+        function put(m: map<string, int>, k: string) -> int {
             m.set(k, 1)
             return m.length()
         }

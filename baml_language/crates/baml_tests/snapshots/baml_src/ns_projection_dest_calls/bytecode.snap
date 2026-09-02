@@ -27,8 +27,22 @@ function projection_dest_calls.$init_test_ns_projection_dest_calls_projection_de
     return
 }
 
-function projection_dest_calls.PdcNo.PdcFlag.flag(self: projection_dest_calls.PdcNo) -> bool {
+function projection_dest_calls.<(user.projection_dest_calls.PdcNo as user.projection_dest_calls.PdcFlag)>.flag(self: projection_dest_calls.PdcNo) -> bool {
     load_const false
+    return
+}
+
+function projection_dest_calls.<(user.projection_dest_calls.PdcTag as baml.ops.Equals)>.eq(self: projection_dest_calls.PdcTag, other: projection_dest_calls.PdcTag) -> bool {
+    load_var self
+    load_field .id
+    load_var other
+    load_field .id
+    cmp_int_op ==
+    return
+}
+
+function projection_dest_calls.<(user.projection_dest_calls.PdcYes as user.projection_dest_calls.PdcFlag)>.flag(self: projection_dest_calls.PdcYes) -> bool {
+    load_const true
     return
 }
 
@@ -41,20 +55,6 @@ function projection_dest_calls.PdcStore.require(self: projection_dest_calls.PdcS
     store_field .calls
     load_var self
     load_field .record
-    return
-}
-
-function projection_dest_calls.PdcTag.baml.ops.Equals.eq(self: projection_dest_calls.PdcTag, other: projection_dest_calls.PdcTag) -> bool {
-    load_var self
-    load_field .id
-    load_var other
-    load_field .id
-    cmp_int_op ==
-    return
-}
-
-function projection_dest_calls.PdcYes.PdcFlag.flag(self: projection_dest_calls.PdcYes) -> bool {
-    load_const true
     return
 }
 

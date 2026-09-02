@@ -5,6 +5,8 @@
 //! `pydantic.BaseModel` subclass with typed fields; they differ only in
 //! leaf routing.
 
+use std::collections::BTreeMap;
+
 use baml_codegen_types::{Name, Ty};
 
 use crate::emit::method::PyMethodBinding;
@@ -24,6 +26,10 @@ pub(crate) struct PyClass {
     /// `typing.Generic[T, …]` second base and the leaf-level `TypeVar`
     /// declarations include each name.
     pub(crate) generic_params: Vec<String>,
+    /// Raw BAML `TypeVar` names matching `generic_params`.
+    pub(crate) wire_generic_params: Vec<String>,
+    /// Raw `TypeVar` spelling -> projected Python spelling for annotations.
+    pub(crate) type_var_names: BTreeMap<String, String>,
     /// Joined `///` doc-comment lines from the BAML class declaration.
     /// Combined with `PyClassProperty.docstring` from each entry in
     /// `properties` to produce the `"""…"""` Python class docstring;
@@ -43,7 +49,10 @@ pub(crate) struct PyClass {
 }
 
 pub(crate) struct PyClassProperty {
+    /// Projected Python attribute name.
     pub(crate) name: String,
+    /// Raw BAML field name used for validation and wire serialization.
+    pub(crate) wire_name: String,
     pub(crate) ty: Ty,
     /// Whether the field's top-level BAML type admits `null`. This is kept
     /// separate from its rendered annotation so generator policy never relies

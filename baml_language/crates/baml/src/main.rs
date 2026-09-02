@@ -20,8 +20,8 @@ const CONFIG_FILE: &str = "config.toml";
 const STATE_FILE: &str = "state.toml";
 const CHANNEL_CACHE_TTL: Duration = Duration::from_hours(24);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
-/// Short timeout for the passive background freshness checks that run before
-/// normal commands, so an unreachable network can't stall the actual work.
+/// Short timeout for the passive channel freshness check that runs before
+/// normal commands, so an unreachable network cannot stall the actual work.
 const AUTO_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
 /// How long `baml --version` waits for a local toolchain to report its own
 /// version before giving up and printing just the path.
@@ -52,8 +52,7 @@ impl Default for DefaultConfig {
 struct UpdateConfig {
     /// Whether normal commands may refresh the channel-manifest freshness
     /// cache over the network once per TTL window. Defaults to on; set
-    /// `[update] auto_check = false` to opt out. The same setting governs the
-    /// toolchain binary's agent-skill freshness check.
+    /// `[update] auto_check = false` to opt out.
     auto_check: Option<bool>,
 }
 
@@ -67,8 +66,8 @@ impl UpdateConfig {
 struct State {
     #[serde(default)]
     channels: BTreeMap<String, ChannelState>,
-    /// Sections owned by other writers (e.g. `[skills]`, written by
-    /// `baml agent install`), preserved verbatim across wrapper writes.
+    /// Sections owned by legacy or future writers, preserved verbatim across
+    /// wrapper writes.
     #[serde(flatten)]
     rest: BTreeMap<String, toml::Value>,
 }
@@ -960,8 +959,7 @@ fn warning_prefix() -> impl std::fmt::Display {
 /// An in-flight background refresh of the channel-manifest freshness cache.
 /// Started before the main command runs and joined after it finishes, so the
 /// network latency hides behind the command's own runtime instead of stalling
-/// it up front. (The agent-skill freshness cache is refreshed by the
-/// toolchain binary, which runs its own equivalent of this.)
+/// it up front.
 struct LazyRefresh {
     done: std::sync::mpsc::Receiver<()>,
     deadline: std::time::Instant,

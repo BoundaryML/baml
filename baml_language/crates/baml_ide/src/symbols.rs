@@ -16,9 +16,7 @@ use crate::{
 /// Whether an enumeration of the language surface should skip this
 /// definition as synthesized.
 ///
-/// Two reasons, one rule. A `$`-companion (`Extract$parse`, `Agent$stream`)
-/// has no spelling in source — `$` cannot appear in a written name — so no
-/// position can name one. And companions and auto-derives carry the
+/// Companions and auto-derives carry the
 /// docstring of the declaration they shadow, so listing them makes every
 /// original into several near-duplicate rows. Search and completion both
 /// enumerate what a reader can write, so both ask here.
@@ -150,8 +148,8 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
                     .and_then(|meta| meta.client_name.as_ref())
                     .map(std::string::ToString::to_string);
 
-                // Sub-functions have names with '$' (e.g. MyFunc$render_prompt)
-                let is_sub_function = name.as_str().contains('$');
+                // Callable companions have names with `@` (e.g. `MyFunc@render_prompt`).
+                let is_sub_function = name.as_str().contains('@');
 
                 let function = function_data(db, *func_loc);
                 let origin: FunctionOrigin = function.metadata.origin.into();

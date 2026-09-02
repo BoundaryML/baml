@@ -43,7 +43,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client:
     }
 
     bb5: {
-        _10 = call const fn user.fixtures.comment_in_type.FunctionWithComments$spec(copy _1, copy _2) -> [bb6];
+        _10 = call const fn user.fixtures.comment_in_type.FunctionWithComments@spec(copy _1, copy _2) -> [bb6];
     }
 
     bb6: {
@@ -61,7 +61,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client:
     }
 }
 
-fn user.fixtures.comment_in_type.FunctionWithComments$build_request(a: string, b: int, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.comment_in_type.FunctionWithComments@build_request(a: string, b: int, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // a // param
@@ -82,7 +82,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments$build_request(a: string, b
     }
 
     bb2: {
-        _5 = call const fn user.fixtures.comment_in_type.FunctionWithComments$spec(copy _1, copy _2) -> [bb3];
+        _5 = call const fn user.fixtures.comment_in_type.FunctionWithComments@spec(copy _1, copy _2) -> [bb3];
     }
 
     bb3: {
@@ -95,7 +95,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments$build_request(a: string, b
     }
 }
 
-fn user.fixtures.comment_in_type.FunctionWithComments$parse(json: string) -> string {
+fn user.fixtures.comment_in_type.FunctionWithComments@parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
@@ -111,7 +111,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments$parse(json: string) -> str
     }
 }
 
-fn user.fixtures.comment_in_type.FunctionWithComments$render_prompt(a: string, b: int) -> ai.Prompt {
+fn user.fixtures.comment_in_type.FunctionWithComments@render_prompt(a: string, b: int) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // a // param
@@ -120,7 +120,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments$render_prompt(a: string, b
     let _4: reflect.Type
 
     bb0: {
-        _3 = call const fn user.fixtures.comment_in_type.FunctionWithComments$spec(copy _1, copy _2) -> [bb1];
+        _3 = call const fn user.fixtures.comment_in_type.FunctionWithComments@spec(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -133,7 +133,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments$render_prompt(a: string, b
     }
 }
 
-fn user.fixtures.comment_in_type.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string> {
+fn user.fixtures.comment_in_type.FunctionWithComments@spec(a: string, b: int) -> ai.FunctionSpec<string> {
     // Locals:
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // a // param
@@ -166,7 +166,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments$spec(a: string, b: int) ->
 }
 
 // lambda[0]
-fn .<lambda(FunctionWithComments$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(FunctionWithComments@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -227,7 +227,7 @@ fn .<lambda(FunctionWithComments$spec, 0)>( __spec_output_format: ai.OutputForma
     }
 }
 
-fn user.fixtures.comment_in_type.FunctionWithComments$stream(a: string, b: int, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.comment_in_type.FunctionWithComments@stream(a: string, b: int, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: string // a // param
@@ -261,7 +261,7 @@ fn user.fixtures.comment_in_type.FunctionWithComments$stream(a: string, b: int, 
     }
 
     bb4: {
-        _7 = call const fn user.fixtures.comment_in_type.FunctionWithComments$spec(copy _1, copy _2) -> [bb5];
+        _7 = call const fn user.fixtures.comment_in_type.FunctionWithComments@spec(copy _1, copy _2) -> [bb5];
     }
 
     bb5: {
@@ -314,7 +314,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow(client: null | ai.Client, on_
     }
 
     bb5: {
-        _8 = call const fn user.fixtures.comment_in_type.CommentAfterArrow$spec() -> [bb6];
+        _8 = call const fn user.fixtures.comment_in_type.CommentAfterArrow@spec() -> [bb6];
     }
 
     bb6: {
@@ -332,7 +332,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow(client: null | ai.Client, on_
     }
 }
 
-fn user.fixtures.comment_in_type.CommentAfterArrow$build_request(client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.comment_in_type.CommentAfterArrow@build_request(client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: null | ai.Client // client // param
@@ -351,7 +351,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow$build_request(client: null | 
     }
 
     bb2: {
-        _3 = call const fn user.fixtures.comment_in_type.CommentAfterArrow$spec() -> [bb3];
+        _3 = call const fn user.fixtures.comment_in_type.CommentAfterArrow@spec() -> [bb3];
     }
 
     bb3: {
@@ -364,7 +364,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow$build_request(client: null | 
     }
 }
 
-fn user.fixtures.comment_in_type.CommentAfterArrow$parse(json: string) -> string {
+fn user.fixtures.comment_in_type.CommentAfterArrow@parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
@@ -380,14 +380,14 @@ fn user.fixtures.comment_in_type.CommentAfterArrow$parse(json: string) -> string
     }
 }
 
-fn user.fixtures.comment_in_type.CommentAfterArrow$render_prompt() -> ai.Prompt {
+fn user.fixtures.comment_in_type.CommentAfterArrow@render_prompt() -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.FunctionSpec<string>
     let _2: reflect.Type
 
     bb0: {
-        _1 = call const fn user.fixtures.comment_in_type.CommentAfterArrow$spec() -> [bb1];
+        _1 = call const fn user.fixtures.comment_in_type.CommentAfterArrow@spec() -> [bb1];
     }
 
     bb1: {
@@ -400,7 +400,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow$render_prompt() -> ai.Prompt 
     }
 }
 
-fn user.fixtures.comment_in_type.CommentAfterArrow$spec() -> ai.FunctionSpec<string> {
+fn user.fixtures.comment_in_type.CommentAfterArrow@spec() -> ai.FunctionSpec<string> {
     // Locals:
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: map<string, unknown>
@@ -431,7 +431,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow$spec() -> ai.FunctionSpec<str
 }
 
 // lambda[0]
-fn .<lambda(CommentAfterArrow$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(CommentAfterArrow@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -492,7 +492,7 @@ fn .<lambda(CommentAfterArrow$spec, 0)>( __spec_output_format: ai.OutputFormat) 
     }
 }
 
-fn user.fixtures.comment_in_type.CommentAfterArrow$stream(client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.comment_in_type.CommentAfterArrow@stream(client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: null | ai.stream.StreamingClient // client // param
@@ -524,7 +524,7 @@ fn user.fixtures.comment_in_type.CommentAfterArrow$stream(client: null | ai.stre
     }
 
     bb4: {
-        _5 = call const fn user.fixtures.comment_in_type.CommentAfterArrow$spec() -> [bb5];
+        _5 = call const fn user.fixtures.comment_in_type.CommentAfterArrow@spec() -> [bb5];
     }
 
     bb5: {

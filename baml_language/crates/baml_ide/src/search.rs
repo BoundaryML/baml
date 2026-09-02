@@ -565,7 +565,7 @@ enum Mood {
             "variant name match leads, got: {hits:?}"
         );
 
-        // Companions synthesized from LoadFile ($parse etc.) must not
+        // Companions synthesized from LoadFile (`@parse`, etc.) must not
         // duplicate its docstring hits.
         let hits = search_ranked(&test.db, &packages, "read a file", 20);
         let load_hits = hits

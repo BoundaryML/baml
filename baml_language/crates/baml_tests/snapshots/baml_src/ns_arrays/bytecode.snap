@@ -1274,7 +1274,7 @@ function arrays.$init_test_ns_arrays_sum(registry: testing.TestCollector) -> nul
     return
 }
 
-function arrays.ComparableFlaky.baml.Comparable.compare(self: arrays.ComparableFlaky, other: arrays.ComparableFlaky) -> int {
+function arrays.<(user.arrays.ComparableFlaky as baml.Comparable)>.compare(self: arrays.ComparableFlaky, other: arrays.ComparableFlaky) -> int {
     load_var self
     load_field .value
     store_var _4
@@ -1306,7 +1306,7 @@ function arrays.ComparableFlaky.baml.Comparable.compare(self: arrays.ComparableF
     return
 }
 
-function arrays.ComparableScore.baml.Comparable.compare(self: arrays.ComparableScore, other: arrays.ComparableScore) -> int {
+function arrays.<(user.arrays.ComparableScore as baml.Comparable)>.compare(self: arrays.ComparableScore, other: arrays.ComparableScore) -> int {
     load_var self
     load_field .points
     load_var other
@@ -1319,7 +1319,7 @@ function arrays.ComparableScore.baml.Comparable.compare(self: arrays.ComparableS
     return
 }
 
-function arrays.OutOfBodyScore.baml.Comparable.compare(self: arrays.OutOfBodyScore, other: arrays.OutOfBodyScore) -> int {
+function arrays.<(user.arrays.OutOfBodyScore as baml.Comparable)>.compare(self: arrays.OutOfBodyScore, other: arrays.OutOfBodyScore) -> int {
     load_var self
     load_field .points
     load_var other
@@ -1332,7 +1332,7 @@ function arrays.OutOfBodyScore.baml.Comparable.compare(self: arrays.OutOfBodySco
     return
 }
 
-function arrays.SortableItem.baml.Comparable.compare(self: arrays.SortableItem, other: arrays.SortableItem) -> int {
+function arrays.<(user.arrays.SortableItem as baml.Comparable)>.compare(self: arrays.SortableItem, other: arrays.SortableItem) -> int {
     load_var self
     load_field .rank
     load_var other
