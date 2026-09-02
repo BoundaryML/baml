@@ -178,9 +178,12 @@ fn enrich_runtime_mount(
     aliases: &[Name],
     mut package: RuntimePackageMount,
 ) -> Result<EnrichedRuntimeMount, RuntimeCompileDiagnostic> {
-    use baml_compiler2_hir_ty::package_interface::{
-        ExportedFieldAttrs, ExportedFunction, ExportedImpl, ExportedImplOrigin, ExportedType,
-        PackageInterface,
+    use baml_compiler2_hir_ty::{
+        callable::ExternalCallTarget,
+        package_interface::{
+            ExportedFieldAttrs, ExportedFunction, ExportedImpl, ExportedImplOrigin, ExportedType,
+            PackageInterface,
+        },
     };
 
     fn source_identifier(name: &Name) -> bool {
@@ -229,14 +232,7 @@ fn enrich_runtime_mount(
         }
     }
 
-    fn relocate_function(
-        function: &mut ExportedFunction,
-        alias: &Name,
-        viewpoint: &StubViewpoint<'_>,
-        stubs: &mut Vec<(Vec<Name>, Name, String)>,
-    ) {
-        use baml_compiler2_hir_ty::callable::{ExternalCallTarget, ExternalLinkability};
-
+    fn relocate_function(function: &mut ExportedFunction, alias: &Name) {
         for param in &mut function.params {
             *param = param.map_heads(&mut |name| relocated_name(name, alias));
         }
@@ -247,59 +243,128 @@ fn enrich_runtime_mount(
         relocate_ty(&mut function.callable_throws, alias);
         relocate_bounds(&mut function.generic_param_bounds, alias);
 
-        if !matches!(function.linkability, ExternalLinkability::Linkable) {
-            return;
-        }
-        let (namespace, name) = match &mut function.target {
-            ExternalCallTarget::Free {
-                package,
-                namespace,
-                name,
-            } => {
+        match &mut function.target {
+            ExternalCallTarget::Free { package, .. }
+            | ExternalCallTarget::Method { package, .. } => {
                 *package = alias.clone();
-                (namespace.clone(), name.clone())
             }
-            ExternalCallTarget::Method {
-                package,
-                namespace,
-                class,
-                name,
-            } => {
-                *package = alias.clone();
-                let mut target_namespace = namespace.clone();
-                target_namespace.push(class.clone());
-                (target_namespace, name.clone())
-            }
-            ExternalCallTarget::Interface { interface, method } => {
-                let mut target_namespace = interface.namespace().clone();
-                target_namespace.push(interface.name().clone());
+            ExternalCallTarget::Interface { interface, .. } => {
                 *interface = baml_type::QualifiedTypeName::new(
                     alias.clone(),
                     interface.namespace().clone(),
                     interface.name().clone(),
                 );
-                (target_namespace, method.clone())
             }
-        };
-        // Compiler-generated init/test helpers and callable companions are not
-        // authored declarations. The mounted interface already exports their
-        // exact callable identities; emitting either spelling as a source stub
-        // is invalid (`$init`) or would redeclare the authored function
-        // (`Extract@spec` is postfix syntax, not a declaration identifier).
-        if name.as_str().starts_with('$') || name.as_str().contains('@') {
-            return;
         }
-        let generic_params = function
+    }
+
+    /// Whether `function` is an authored, linkable declaration a source stub
+    /// may spell. Compiler-generated init/test helpers and callable
+    /// companions are not authored declarations: the mounted interface
+    /// already exports their exact callable identities; emitting either
+    /// spelling as a source stub is invalid (`$init`) or would redeclare the
+    /// authored function (`Extract@spec` is postfix syntax, not a declaration
+    /// identifier).
+    fn stubbable(function: &ExportedFunction) -> bool {
+        use baml_compiler2_hir_ty::callable::ExternalLinkability;
+
+        matches!(function.linkability, ExternalLinkability::Linkable)
+            && source_identifier(&function.name)
+    }
+
+    fn stub_type(ty: &baml_type::Ty, viewpoint: &StubViewpoint<'_>) -> String {
+        // Hide a type only when its source spelling would name a package this
+        // compile world cannot resolve and so produce diagnostics in a
+        // phantom `runtime_mount_*` file.
+        if viewpoint.hides_type(ty) {
+            "unknown".to_string()
+        } else {
+            ty.to_string()
+        }
+    }
+
+    /// `<T extends A & B, U>` for the function's own generic parameters, or
+    /// the empty string. Bounds are spelled only when `spell_bounds` (a bound
+    /// this world cannot name is dropped rather than widened).
+    fn stub_generics(
+        function: &ExportedFunction,
+        viewpoint: &StubViewpoint<'_>,
+        spell_bounds: bool,
+    ) -> String {
+        let generics = function
             .generic_params
             .iter()
-            .filter(|param| !baml_type::is_synthetic_effect_param(param.name()))
-            .map(ToString::to_string)
+            .enumerate()
+            .filter(|(_, param)| !baml_type::is_synthetic_effect_param(param.name()))
+            .map(|(index, param)| {
+                let bounds = if spell_bounds {
+                    function
+                        .generic_param_bounds
+                        .get(index)
+                        .map(|bounds| {
+                            bounds
+                                .iter()
+                                .filter(|bound| !viewpoint.hides_interface(bound))
+                                .map(|bound| {
+                                    baml_type::Ty::Interface(
+                                        bound.name.clone(),
+                                        bound.generics.clone(),
+                                        bound.associated_types.clone(),
+                                        baml_type::TyAttr::default(),
+                                    )
+                                    .to_string()
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
+                if bounds.is_empty() {
+                    param.to_string()
+                } else {
+                    format!("{param} extends {}", bounds.join(" & "))
+                }
+            })
             .collect::<Vec<_>>();
-        let generic_suffix = if generic_params.is_empty() {
+        if generics.is_empty() {
             String::new()
         } else {
-            format!("<{}>", generic_params.join(", "))
+            format!("<{}>", generics.join(", "))
+        }
+    }
+
+    /// The link stub for a free function (or, when its owner has no source
+    /// stub, a method), spelled as a free `$rust_function` under the
+    /// namespace its call target names. The stub preserves only the callable
+    /// identity the emitter slots and the may-throw ABI bit: parameters are
+    /// `unknown`, and named error types retain the dependency package's
+    /// nominal identity in the mounted interface without necessarily being
+    /// source-spellable from this synthetic alias package.
+    fn free_function_stub(
+        function: &ExportedFunction,
+        viewpoint: &StubViewpoint<'_>,
+    ) -> Option<(Vec<Name>, Name, String)> {
+        if !stubbable(function) {
+            return None;
+        }
+        let name = function.name.clone();
+        let namespace = match &function.target {
+            ExternalCallTarget::Free { namespace, .. } => namespace.clone(),
+            ExternalCallTarget::Method {
+                namespace, class, ..
+            } => {
+                let mut namespace = namespace.clone();
+                namespace.push(class.clone());
+                namespace
+            }
+            ExternalCallTarget::Interface { interface, .. } => {
+                let mut namespace = interface.namespace().clone();
+                namespace.push(interface.name().clone());
+                namespace
+            }
         };
+        let generics = stub_generics(function, viewpoint, false);
         let params = function
             .params
             .iter()
@@ -321,25 +386,91 @@ fn enrich_runtime_mount(
         ) {
             String::new()
         } else {
-            // The link stub preserves only the may-throw ABI bit. Named error
-            // types retain the dependency package's nominal identity in the
-            // mounted interface and are not necessarily source-spellable from
-            // this synthetic alias package.
             " throws unknown".to_string()
         };
-        // Mounted inference owns the real return type. Hide it only when its
-        // source spelling would name a package this compile world cannot
-        // resolve and so produce diagnostics in a phantom `runtime_mount_*`
-        // file.
-        let return_type = if viewpoint.hides_type(&function.return_type) {
-            "unknown".to_string()
-        } else {
-            function.return_type.to_string()
-        };
+        // Mounted inference owns the real return type.
+        let return_type = stub_type(&function.return_type, viewpoint);
         let source = format!(
-            "function {name}{generic_suffix}({params}) -> {return_type}{throws} {{ $rust_function }}\n"
+            "function {name}{generics}({params}) -> {return_type}{throws} {{ $rust_function }}\n"
         );
-        stubs.push((namespace, name, source));
+        Some((namespace, name, source))
+    }
+
+    /// How a method stub is spelled inside its owner's stub body.
+    #[derive(Clone, Copy)]
+    enum MethodStubKind {
+        /// A class-inherent method: a `$rust_function` body the emitter slots
+        /// under the class-qualified name the runtime linker resolves.
+        ClassMethod,
+        /// An interface required method: signature only.
+        InterfaceRequired,
+        /// An interface default method: a `$rust_function` body, so a
+        /// consumer implementor that does not override it links to the
+        /// dependency's body.
+        InterfaceDefault,
+    }
+
+    /// The in-body stub line for a method of a mounted class or interface.
+    ///
+    /// Unlike a free link stub this spells the real signature (parameters,
+    /// bounds, declared throws) wherever this world can name it: source-backed
+    /// lookup wins before the mounted interface in HIR, so this stub is the
+    /// method the type checker sees — a consumer `implement` block is checked
+    /// for conformance against it, and a call on a mounted value is typed by
+    /// it.
+    fn method_stub(
+        function: &ExportedFunction,
+        viewpoint: &StubViewpoint<'_>,
+        kind: MethodStubKind,
+    ) -> Option<String> {
+        if !stubbable(function) {
+            return None;
+        }
+        let name = &function.name;
+        let generics = stub_generics(function, viewpoint, true);
+        let params = function
+            .params
+            .iter()
+            .enumerate()
+            .map(|(index, param)| {
+                if index == 0
+                    && param
+                        .name
+                        .as_ref()
+                        .is_some_and(|name| name.as_str() == "self")
+                {
+                    return "self".to_string();
+                }
+                let param_name = param
+                    .name
+                    .as_ref()
+                    .filter(|name| source_identifier(name))
+                    .map_or_else(|| format!("arg{index}"), ToString::to_string);
+                let ty = stub_type(&param.ty, viewpoint);
+                let default = if param.is_optional() { " = null" } else { "" };
+                format!("{param_name}: {ty}{default}")
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let return_type = stub_type(&function.return_type, viewpoint);
+        let throws = match &function.declared_throws {
+            Some(throws) => format!(" throws {}", stub_type(throws, viewpoint)),
+            None if matches!(
+                function.callable_throws,
+                baml_type::Ty::Never { .. } | baml_type::Ty::Void { .. }
+            ) =>
+            {
+                String::new()
+            }
+            None => " throws unknown".to_string(),
+        };
+        let body = match kind {
+            MethodStubKind::InterfaceRequired => "",
+            MethodStubKind::ClassMethod | MethodStubKind::InterfaceDefault => " { $rust_function }",
+        };
+        Some(format!(
+            "  function {name}{generics}({params}) -> {return_type}{throws}{body}\n"
+        ))
     }
 
     let mut interface = baml_artifact::decode::<PackageInterface>(
@@ -378,7 +509,8 @@ fn enrich_runtime_mount(
         .values_mut()
         .flat_map(|namespace| namespace.values_mut())
     {
-        relocate_function(function, &alias, &viewpoint, &mut stubs);
+        relocate_function(function, &alias);
+        stubs.extend(free_function_stub(function, &viewpoint));
     }
     for (export_namespace, exported_types) in &mut interface.types {
         for (export_name, exported) in exported_types {
@@ -395,16 +527,19 @@ fn enrich_runtime_mount(
                         relocate_ty(ty, &alias);
                     }
                     relocate_bounds(generic_param_bounds, &alias);
+                    for function in methods.iter_mut() {
+                        relocate_function(function, &alias);
+                    }
                     // The emitter needs a concrete class object in the mounted
                     // package's discarded source units so a consumer literal
                     // decomposes to an external object reference. At runtime
                     // that reference is resolved to the dependency's actual
                     // class object, preserving a mounted runtime mint instead
                     // of allocating a structurally-similar local class.
-                    if source_identifier(export_name)
+                    let class_stub = source_identifier(export_name)
                         && export_namespace.iter().all(source_identifier)
-                        && fields.iter().all(|(name, ..)| source_identifier(name))
-                    {
+                        && fields.iter().all(|(name, ..)| source_identifier(name));
+                    if class_stub {
                         let generics = generic_params
                             .iter()
                             .filter(|param| !baml_type::is_synthetic_effect_param(param.name()))
@@ -431,11 +566,28 @@ fn enrich_runtime_mount(
                             writeln!(&mut source, "  {field} {ty}")
                                 .expect("writing to String is infallible");
                         }
+                        // Inherent methods live in the class body: the stub is
+                        // the class the type checker sees, so this is where a
+                        // consumer's `value.method()` finds them, and the
+                        // emitter slots each under the same class-qualified
+                        // name a free stub in a `ns_<Class>/` namespace would
+                        // take — without that namespace shadowing the class.
+                        for method in methods.iter() {
+                            if let ExternalCallTarget::Method { .. } = method.target
+                                && let Some(stub) =
+                                    method_stub(method, &viewpoint, MethodStubKind::ClassMethod)
+                            {
+                                source.push_str(&stub);
+                            }
+                        }
                         source.push_str("}\n");
                         stubs.push((export_namespace.clone(), export_name.clone(), source));
-                    }
-                    for function in methods {
-                        relocate_function(function, &alias, &viewpoint, &mut stubs);
+                    } else {
+                        for method in methods.iter() {
+                            if let ExternalCallTarget::Method { .. } = method.target {
+                                stubs.extend(free_function_stub(method, &viewpoint));
+                            }
+                        }
                     }
                 }
                 ExportedType::Interface {
@@ -464,8 +616,11 @@ fn enrich_runtime_mount(
                     for (_, ty, _) in fields.iter_mut() {
                         relocate_ty(ty, &alias);
                     }
-                    for function in required_methods.iter_mut().chain(default_methods) {
-                        relocate_function(function, &alias, &viewpoint, &mut stubs);
+                    for function in required_methods
+                        .iter_mut()
+                        .chain(default_methods.iter_mut())
+                    {
+                        relocate_function(function, &alias);
                     }
                     let namespace = qtn.namespace().clone();
                     let name = qtn.name().clone();
@@ -500,6 +655,25 @@ fn enrich_runtime_mount(
                         write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
                         writeln!(&mut source, "  {field}: {ty}")
                             .expect("writing to String is infallible");
+                    }
+                    // Methods live in the interface body: a consumer
+                    // `implement` block is checked against this stub, so it
+                    // must declare every required method, and a default body
+                    // is slotted under the interface-qualified name the
+                    // runtime linker resolves to the dependency's body.
+                    for method in required_methods.iter() {
+                        if let Some(stub) =
+                            method_stub(method, &viewpoint, MethodStubKind::InterfaceRequired)
+                        {
+                            source.push_str(&stub);
+                        }
+                    }
+                    for method in default_methods.iter() {
+                        if let Some(stub) =
+                            method_stub(method, &viewpoint, MethodStubKind::InterfaceDefault)
+                        {
+                            source.push_str(&stub);
+                        }
                     }
                     source.push_str("}\n");
                     stubs.push((namespace, name, source));
@@ -536,8 +710,12 @@ fn enrich_runtime_mount(
         if let ExportedImplOrigin::InBodyClass { class_qtn } = &mut implementation.origin {
             *class_qtn = relocated_name(class_qtn, &alias);
         }
+        // Implementation methods are reached by interface dispatch, which the
+        // consumer lowers as a virtual call on the receiver's runtime class:
+        // no source stub is needed, and a free stub under `ns_<Interface>/`
+        // would shadow the interface's own stub.
         for function in &mut implementation.methods {
-            relocate_function(function, &alias, &viewpoint, &mut stubs);
+            relocate_function(function, &alias);
         }
     }
     // Mounted runtime declarations are spelled `alias.<item name>` in this
@@ -2282,6 +2460,166 @@ mod tests {
         assert_eq!(
             runtime_relative_virtual_path(Path::new(RUNTIME_VIRTUAL_ROOT)),
             ""
+        );
+    }
+
+    /// Methods of a mounted class or interface are stubbed inside their
+    /// owner's body — never as free functions under a `ns_<Owner>/` namespace,
+    /// which would shadow the owner's own stub (E0099) and leave the source
+    /// stub the type checker sees without the methods the mounted interface
+    /// exports.
+    #[test]
+    fn runtime_mount_stubs_spell_methods_inside_their_owner() {
+        use baml_compiler2_hir_ty::{
+            callable::{ExternalCallTarget, ExternalLinkability},
+            package_interface::{ExportedFunction, ExportedType},
+        };
+        use baml_type::{FunctionParamTy, ParamTy, Ty, TyAttr};
+
+        let app = Name::new("app");
+        let class_qtn =
+            baml_type::QualifiedTypeName::new(app.clone(), Vec::new(), Name::new("Host"));
+        let iface_qtn =
+            baml_type::QualifiedTypeName::new(app.clone(), Vec::new(), Name::new("Describable"));
+        let self_param = ParamTy::new(0, Name::new("Self"));
+        let self_ty = Ty::TypeVar(self_param.clone(), TyAttr::default());
+        let function = |name: &str,
+                        params: Vec<FunctionParamTy>,
+                        declared_throws: Option<Ty>,
+                        target: ExternalCallTarget| ExportedFunction {
+            name: Name::new(name),
+            params,
+            return_type: Ty::string(),
+            declared_throws,
+            callable_throws: Ty::Never {
+                attr: TyAttr::default(),
+            },
+            generic_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
+            builtin_kind: None,
+            target,
+            linkability: ExternalLinkability::Linkable,
+        };
+        let class_self = FunctionParamTy::required(
+            Some(Name::new("self")),
+            Ty::Class(class_qtn.clone(), Vec::new(), TyAttr::default()),
+        );
+        let interface_self = FunctionParamTy::required(Some(Name::new("self")), self_ty);
+        let mut types = IndexMap::new();
+        let mut root = IndexMap::new();
+        root.insert(
+            Name::new("Host"),
+            ExportedType::Class {
+                qtn: class_qtn,
+                fields: vec![(Name::new("name"), Ty::string(), Default::default())],
+                methods: vec![
+                    function(
+                        "greet",
+                        vec![
+                            class_self,
+                            FunctionParamTy::optional(Some(Name::new("punct")), Ty::string()),
+                        ],
+                        Some(Ty::Never {
+                            attr: TyAttr::default(),
+                        }),
+                        ExternalCallTarget::Method {
+                            package: app.clone(),
+                            namespace: Vec::new(),
+                            class: Name::new("Host"),
+                            name: Name::new("greet"),
+                        },
+                    ),
+                    function(
+                        "make",
+                        vec![FunctionParamTy::required(
+                            Some(Name::new("name")),
+                            Ty::string(),
+                        )],
+                        None,
+                        ExternalCallTarget::Method {
+                            package: app.clone(),
+                            namespace: Vec::new(),
+                            class: Name::new("Host"),
+                            name: Name::new("make"),
+                        },
+                    ),
+                ],
+                generic_params: Vec::new(),
+                generic_param_bounds: Vec::new(),
+            },
+        );
+        root.insert(
+            Name::new("Describable"),
+            ExportedType::Interface {
+                qtn: iface_qtn.clone(),
+                self_param,
+                generic_params: Vec::new(),
+                param_bounds: Vec::new(),
+                requires: Vec::new(),
+                associated_types: Vec::new(),
+                fields: Vec::new(),
+                required_methods: vec![function(
+                    "describe",
+                    vec![interface_self.clone()],
+                    Some(Ty::Never {
+                        attr: TyAttr::default(),
+                    }),
+                    ExternalCallTarget::Interface {
+                        interface: iface_qtn.clone(),
+                        method: Name::new("describe"),
+                    },
+                )],
+                default_methods: vec![function(
+                    "shout",
+                    vec![interface_self],
+                    None,
+                    ExternalCallTarget::Interface {
+                        interface: iface_qtn,
+                        method: Name::new("shout"),
+                    },
+                )],
+            },
+        );
+        types.insert(Vec::new(), root);
+        let interface = PackageInterface {
+            types,
+            functions: IndexMap::new(),
+            throw_sets: FunctionThrowSets::default(),
+            namespaces: std::collections::BTreeSet::default(),
+            impls: Vec::new(),
+        };
+        let interface_blob =
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+                .expect("package interface encodes");
+        let package = RuntimePackageMount {
+            interface_blob,
+            types: Vec::new(),
+        };
+
+        let (_, stubs) = enrich_runtime_mount("app", &[Name::new("app")], package)
+            .expect("runtime mount enriches");
+
+        assert!(
+            stubs.iter().all(|(namespace, ..)| namespace.is_empty()),
+            "no stub may open a namespace under the mount: {stubs:?}"
+        );
+        let source_of = |name: &str| {
+            &stubs
+                .iter()
+                .find(|(_, stub, _)| stub.as_str() == name)
+                .unwrap_or_else(|| panic!("missing stub for {name}: {stubs:?}"))
+                .2
+        };
+        assert_eq!(
+            source_of("Host"),
+            "class Host {\n  name string\n  function greet(self, punct: string = null) -> string \
+             throws never { $rust_function }\n  function make(name: string) -> string \
+             { $rust_function }\n}\n"
+        );
+        assert_eq!(
+            source_of("Describable"),
+            "interface Describable {\n  function describe(self) -> string throws never\n  \
+             function shout(self) -> string { $rust_function }\n}\n"
         );
     }
 
