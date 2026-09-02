@@ -23,6 +23,10 @@ name: Size Gate (Reusable)
 
 on:
   workflow_call:
+    # Callers intentionally map these names even though the values exist only
+    # in the GitHub Environment. The mapping establishes the reusable-workflow
+    # secret contract; each job's environment supplies the actual value.
+    # Keep them optional so fork PRs retain the secretless local-cache path.
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID:
         required: false

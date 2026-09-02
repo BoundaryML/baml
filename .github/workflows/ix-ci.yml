@@ -114,6 +114,8 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/ix-cargo-tests.reusable.yaml
+    # Structural mapping only: the called jobs get the values from their
+    # infisical-github-ci Environment, not from repository secrets.
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
@@ -123,6 +125,7 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/ix-size-gate.reusable.yaml
+    # Structural mapping only; see cargo-tests above.
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
