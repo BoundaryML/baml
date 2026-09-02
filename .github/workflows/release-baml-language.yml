@@ -2016,6 +2016,7 @@ jobs:
     needs: [plan, all-builds, publish-wrapper-release]
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: macos-14
+    environment: infisical-github-baml-language-release
     steps:
       - uses: actions/checkout@v4
         with:
@@ -2049,16 +2050,17 @@ jobs:
           brew linkage --test boundaryml/tap/baml
       - name: Push formula to BoundaryML/homebrew-tap
         env:
-          TOKEN: ${{ secrets.HOMEBREW_BAML_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
           WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
-          test -n "$TOKEN"
+          test -n "$GH_TOKEN"
+          gh auth setup-git
           tap="$(brew --repo boundaryml/tap)"
           cd "$tap"
           git config user.name "boundaryml-release-bot"
           git config user.email "boundaryml-release-bot@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/BoundaryML/homebrew-tap.git"
+          git remote set-url origin "https://github.com/BoundaryML/homebrew-tap.git"
           git add Formula/baml.rb
           git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || exit 0
           git push origin HEAD
