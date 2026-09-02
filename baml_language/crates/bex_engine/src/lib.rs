@@ -91,6 +91,8 @@ use ::bex_heap::{HeapPermit as _, Tlab};
 use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
+#[cfg(target_arch = "wasm32")]
+pub use bex_events::ids::configure_workerd_runtime;
 use bex_events::prof::backend::{ExecutionEndStatus, ProfilerSession, RootProfiler};
 #[cfg(not(target_arch = "wasm32"))]
 use bex_events::prof::backend::{ExecutionHandle, RootAdmission, ValueLossReason, ValueRole};
@@ -1891,17 +1893,12 @@ impl BexEngine {
             semantic_lanes: None,
         });
 
-        // Conservative content identity (streams spec §2.3): byte-identical
-        // builds share a program_id (so ContextKeys aggregate across
-        // executions of one build); a host that provides no hash falls back
-        // to random, which over-splits — the safe direction.
-        let (program_id, source_snapshot_id) = match program.source_content_hash {
-            Some(hash) => (
-                ProgramId(hash[..16].try_into().expect("fixed-width slice")),
-                Some(bex_events::ids::SourceSnapshotId(hash)),
-            ),
-            None => (ProgramId::new_random(), None),
-        };
+        // Preserve a supplied source hash as snapshot metadata without allowing
+        // that path to mint ProgramId differently from other constructions.
+        let program_id = ProgramId::new_random();
+        let source_snapshot_id = program
+            .source_content_hash
+            .map(bex_events::ids::SourceSnapshotId);
         ProgramMetadata {
             program_id,
             source_snapshot_id,

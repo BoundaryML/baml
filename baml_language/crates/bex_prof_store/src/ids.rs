@@ -20,6 +20,8 @@
 //! base64, payload length, and version, and never panics on malformed
 //! input. The typed decoders reject each other's prefixes.
 
+#[cfg(target_arch = "wasm32")]
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{fmt, sync::OnceLock};
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -32,21 +34,63 @@ const CALL_REF_LEN: usize = 1 + 16 + 8 + 8 + 8;
 const THREAD_REF_LEN: usize = 1 + 16 + 8 + 8;
 const BOUNDARY_ID_LEN: usize = 16;
 
-/// Effectively-unique process identifier, minted once per process
-/// ([`ProcessEuid::current`]) — the outermost scope of the identity quad.
+#[cfg(target_arch = "wasm32")]
+// Workerd forbids access to crypto/random while a Worker isolate is starting,
+// and it may reuse that isolate for an arbitrary number of requests. The
+// workerd-only loader sets this flag before WASM startup so every identity
+// minted by that isolate consistently uses the workerd-safe UUID source.
+static WORKERD_RUNTIME: AtomicBool = AtomicBool::new(false);
+
+/// Select the workerd-safe UUID source before any runtime identity is minted.
+#[cfg(target_arch = "wasm32")]
+pub fn configure_workerd_runtime() {
+    WORKERD_RUNTIME.store(true, Ordering::Relaxed);
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn zero_random_uuid_v7(millis: u64) -> uuid::Uuid {
+    let mut builder = uuid::Builder::from_unix_timestamp_millis(millis, &[0; 10]);
+    builder
+        .set_variant(uuid::Variant::RFC4122)
+        .set_version(uuid::Version::SortRand);
+    builder.into_uuid()
+}
+
+fn new_uuid_v7() -> uuid::Uuid {
+    let timestamp = uuid::Timestamp::now(uuid::NoContext);
+
+    #[cfg(target_arch = "wasm32")]
+    if WORKERD_RUNTIME.load(Ordering::Relaxed) {
+        let (seconds, nanos) = timestamp.to_unix();
+        let millis = seconds
+            .saturating_mul(1_000)
+            .saturating_add(u64::from(nanos) / 1_000_000);
+        // UUIDs minted in the same millisecond collide because their suffix is
+        // zero. This is a known, tolerated temporary compromise; distinctness
+        // is intentionally deferred while this path avoids workerd's
+        // startup-time restriction on crypto/random access.
+        return zero_random_uuid_v7(millis);
+    }
+
+    uuid::Uuid::new_v7(timestamp)
+}
+
+/// Effectively unique process identifier used as the outermost scope of the
+/// identity quad. Workerd uses a temporary zero-random `UUIDv7` implementation
+/// that may collide with another process initialized in the same millisecond.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ProcessEuid(pub [u8; 16]);
 
 impl ProcessEuid {
     #[must_use]
     pub fn new_random() -> Self {
-        Self(*uuid::Uuid::new_v4().as_bytes())
+        Self(*new_uuid_v7().as_bytes())
     }
 
     #[must_use]
     pub fn current() -> Self {
         static PROCESS_EUID: OnceLock<ProcessEuid> = OnceLock::new();
-        *PROCESS_EUID.get_or_init(ProcessEuid::new_random)
+        *PROCESS_EUID.get_or_init(Self::new_random)
     }
 }
 
@@ -56,16 +100,16 @@ impl ProcessEuid {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct EngineId(pub u64);
 
-/// Identity of a compiled program. Currently random per engine construction
-/// — good enough for event-file-local joins, NOT a durable content identity
-/// (identical programs in two engines get different ids).
+/// Identity of a compiled program. Workerd uses a temporary zero-random
+/// `UUIDv7` implementation that may collide with another program initialized in
+/// the same millisecond.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ProgramId(pub [u8; 16]);
 
 impl ProgramId {
     #[must_use]
     pub fn new_random() -> Self {
-        Self(*uuid::Uuid::new_v4().as_bytes())
+        Self(*new_uuid_v7().as_bytes())
     }
 }
 
@@ -316,6 +360,47 @@ fn decode_payload(s: &str, prefix: &str, expected_len: usize) -> Result<Vec<u8>,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const ZERO_RANDOM_UUID_V7_SUFFIX: [u8; 10] = [0x70, 0, 0x80, 0, 0, 0, 0, 0, 0, 0];
+
+    fn assert_uuid_v7(bytes: [u8; 16]) {
+        let uuid = uuid::Uuid::from_bytes(bytes);
+        assert_eq!(uuid.get_variant(), uuid::Variant::RFC4122);
+        assert_eq!(uuid.get_version(), Some(uuid::Version::SortRand));
+    }
+
+    #[test]
+    fn zero_random_uuid_v7_encodes_the_supplied_timestamp() {
+        let uuid = zero_random_uuid_v7(0x0123_4567_89ab);
+        assert_eq!(
+            uuid.as_bytes(),
+            &[
+                1, 0x23, 0x45, 0x67, 0x89, 0xab, 0x70, 0, 0x80, 0, 0, 0, 0, 0, 0, 0
+            ]
+        );
+        assert_eq!(uuid.get_variant(), uuid::Variant::RFC4122);
+        assert_eq!(uuid.get_version(), Some(uuid::Version::SortRand));
+    }
+
+    #[test]
+    fn current_process_euid_is_stable() {
+        assert_eq!(ProcessEuid::current(), ProcessEuid::current());
+    }
+
+    #[test]
+    fn process_euid_and_program_id_use_distinct_uuid_v7_values() {
+        let process_a = ProcessEuid::new_random();
+        let process_b = ProcessEuid::new_random();
+        let program_a = ProgramId::new_random();
+        let program_b = ProgramId::new_random();
+
+        for bytes in [process_a.0, process_b.0, program_a.0, program_b.0] {
+            assert_uuid_v7(bytes);
+            assert_ne!(bytes[6..], ZERO_RANDOM_UUID_V7_SUFFIX);
+        }
+        assert_ne!(process_a, process_b);
+        assert_ne!(program_a, program_b);
+    }
 
     fn sample_call_ref() -> CallRef {
         CallRef {
