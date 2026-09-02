@@ -2463,16 +2463,20 @@ mod tests {
         );
     }
 
-    /// Methods of a mounted class or interface are stubbed inside their
-    /// owner's body — never as free functions under a `ns_<Owner>/` namespace,
-    /// which would shadow the owner's own stub (E0099) and leave the source
-    /// stub the type checker sees without the methods the mounted interface
-    /// exports.
-    #[test]
-    fn runtime_mount_stubs_spell_methods_inside_their_owner() {
+    /// The link stubs a mount emits for a package exporting a class `Host`
+    /// with the given fields and the inherent methods `greet(self, punct?)`
+    /// and `make(name)`, plus an interface `Describable` with the required
+    /// method `describe(self)` and the default method `shout(self)`.
+    fn host_and_describable_stubs(
+        fields: Vec<(
+            Name,
+            baml_type::Ty,
+            baml_compiler2_hir_ty::package_interface::ExportedFieldAttrs,
+        )>,
+    ) -> Vec<(Vec<Name>, Name, String)> {
         use baml_compiler2_hir_ty::{
             callable::{ExternalCallTarget, ExternalLinkability},
-            package_interface::{ExportedFieldAttrs, ExportedFunction, ExportedType},
+            package_interface::{ExportedFunction, ExportedType},
         };
         use baml_type::{FunctionParamTy, ParamTy, Ty, TyAttr};
 
@@ -2511,11 +2515,7 @@ mod tests {
             Name::new("Host"),
             ExportedType::Class {
                 qtn: class_qtn,
-                fields: vec![(
-                    Name::new("name"),
-                    Ty::string(),
-                    ExportedFieldAttrs::default(),
-                )],
+                fields,
                 methods: vec![
                     function(
                         "greet",
@@ -2599,9 +2599,25 @@ mod tests {
             interface_blob,
             types: Vec::new(),
         };
-
         let (_, stubs) = enrich_runtime_mount("app", &[Name::new("app")], package)
             .expect("runtime mount enriches");
+        stubs
+    }
+
+    /// Methods of a mounted class or interface are stubbed inside their
+    /// owner's body — never as free functions under a `ns_<Owner>/` namespace,
+    /// which would shadow the owner's own stub (E0099) and leave the source
+    /// stub the type checker sees without the methods the mounted interface
+    /// exports.
+    #[test]
+    fn runtime_mount_stubs_spell_methods_inside_their_owner() {
+        use baml_compiler2_hir_ty::package_interface::ExportedFieldAttrs;
+
+        let stubs = host_and_describable_stubs(vec![(
+            Name::new("name"),
+            baml_type::Ty::string(),
+            ExportedFieldAttrs::default(),
+        )]);
 
         assert!(
             stubs.iter().all(|(namespace, ..)| namespace.is_empty()),
@@ -2624,6 +2640,43 @@ mod tests {
             source_of("Describable"),
             "interface Describable {\n  function describe(self) -> string throws never\n  \
              function shout(self) -> string { $rust_function }\n}\n"
+        );
+    }
+
+    /// A class whose stub cannot be spelled (here: a field name that is not a
+    /// source identifier) still keeps its inherent methods slottable for the
+    /// emitter — as free link stubs under the class-named namespace, the
+    /// pre-existing form, which shadows nothing because there is no class
+    /// stub to shadow.
+    #[test]
+    fn runtime_mount_falls_back_to_free_method_stubs_without_a_class_stub() {
+        use baml_compiler2_hir_ty::package_interface::ExportedFieldAttrs;
+
+        let stubs = host_and_describable_stubs(vec![(
+            Name::new("0"),
+            baml_type::Ty::string(),
+            ExportedFieldAttrs::default(),
+        )]);
+
+        assert!(
+            stubs.iter().all(|(_, name, _)| name.as_str() != "Host"),
+            "an unspellable class must not get a class stub: {stubs:?}"
+        );
+        let host = vec![Name::new("Host")];
+        let free_stub = |name: &str| {
+            &stubs
+                .iter()
+                .find(|(namespace, stub, _)| *namespace == host && stub.as_str() == name)
+                .unwrap_or_else(|| panic!("missing free stub for Host.{name}: {stubs:?}"))
+                .2
+        };
+        assert_eq!(
+            free_stub("greet"),
+            "function greet(arg0: unknown, punct: unknown = null) -> string { $rust_function }\n"
+        );
+        assert_eq!(
+            free_stub("make"),
+            "function make(name: unknown) -> string { $rust_function }\n"
         );
     }
 
