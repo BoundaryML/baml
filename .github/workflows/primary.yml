@@ -46,7 +46,7 @@ jobs:
       runtime: ${{ steps.check_runtime.outputs.changed }}
       skip_reason: ${{ steps.check_runtime.outputs.skip_reason }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -169,7 +169,9 @@ jobs:
           [rust-format, rust-lint, rust-lint-wasm, python-lint]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -221,7 +223,9 @@ jobs:
     if: needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -229,8 +233,6 @@ jobs:
       # Setup Node.js for TypeScript lint
       - name: Setup Node.js
         uses: ./.github/actions/engine-setup-node
-        with:
-          node-action-version: "v6"
 
       # Setup Rust for Rust checks
       - name: Setup Rust
@@ -251,7 +253,9 @@ jobs:
     if: needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -273,15 +277,15 @@ jobs:
     if: needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
 
       - name: Setup Node.js
         uses: ./.github/actions/engine-setup-node
-        with:
-          node-action-version: "v6"
 
       - name: Setup Rust
         uses: ./.github/actions/engine-setup-rust
@@ -333,7 +337,9 @@ jobs:
         test-suite: [rust-unit, python-integration]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -347,8 +353,6 @@ jobs:
       - name: Setup Node.js
         if: matrix.test-suite == 'python-integration'
         uses: ./.github/actions/engine-setup-node
-        with:
-          node-action-version: "v6"
 
       - name: Setup Python
         uses: ./.github/actions/setup-python
@@ -416,7 +420,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -484,12 +488,12 @@ jobs:
     if: github.ref == 'refs/heads/canary' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout main repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           path: main-repo
 
       - name: Checkout zed-baml repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: BoundaryML/zed-baml
           token: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
