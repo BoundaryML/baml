@@ -29,13 +29,21 @@ function dispatch_frames.$init_test_ns_dispatch_frames_dispatch_frames(registry:
 
 function dispatch_frames.<(user.dispatch_frames.Box<#0> as user.dispatch_frames.Tagged)>.tag(self: dispatch_frames.Box<#0>) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function dispatch_frames.Conv.describe(self: dispatch_frames.Conv<#1>) -> string {
     load_type #1
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 

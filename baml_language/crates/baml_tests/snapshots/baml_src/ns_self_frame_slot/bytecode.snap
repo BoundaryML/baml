@@ -198,7 +198,11 @@ function self_frame_slot.<(#0[] as user.self_frame_slot.Marked)>.mark(self: #0[]
 
 function self_frame_slot.<(#0[] as user.self_frame_slot.Marked)>.type_name(self: #0[]) -> string {
     load_type #0[]
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -226,7 +230,11 @@ function self_frame_slot.<(int as user.self_frame_slot.Marked)>.mark(self: int) 
 
 function self_frame_slot.<(int as user.self_frame_slot.Marked)>.type_name(self: int) -> string {
     load_type int
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -254,7 +262,11 @@ function self_frame_slot.<(user.self_frame_slot.Crate<#0> as user.self_frame_slo
 
 function self_frame_slot.<(user.self_frame_slot.Crate<#0> as user.self_frame_slot.Marked)>.type_name(self: self_frame_slot.Crate<#0>) -> string {
     load_type self_frame_slot.Crate<#0>
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -282,7 +294,11 @@ function self_frame_slot.<(user.self_frame_slot.Croc as user.self_frame_slot.Mar
 
 function self_frame_slot.<(user.self_frame_slot.Croc as user.self_frame_slot.Marked)>.type_name(self: self_frame_slot.Croc) -> string {
     load_type self_frame_slot.Croc
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -300,7 +316,11 @@ function self_frame_slot.<(user.self_frame_slot.IntShelf as user.self_frame_slot
 
 function self_frame_slot.Kinded.kind_name(self: self_frame_slot.Kinded) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -365,13 +385,19 @@ function self_frame_slot.Kinded.same_kind_of(self: self_frame_slot.Kinded, other
 
 function self_frame_slot.Store.describe(self: self_frame_slot.Store<#1>) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _5
     load_type #1
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _7
     load_type (#0 as self_frame_slot.Store<#1>).Key
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _9
     load_var _5
     load_const "/"

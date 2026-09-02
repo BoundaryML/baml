@@ -219,7 +219,11 @@ function inferred_generic_type_args.<(user.inferred_generic_type_args.PlainThing
 
 function inferred_generic_type_args.<(user.inferred_generic_type_args.ProbeA as user.inferred_generic_type_args.TypeProbe)>.seen(self: inferred_generic_type_args.ProbeA, value: #0) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -249,7 +253,11 @@ function inferred_generic_type_args.<(user.inferred_generic_type_args.StrCounter
 
 function inferred_generic_type_args.<(user.inferred_generic_type_args.TypedBox<#0> as user.inferred_generic_type_args.Describable)>.describe(self: inferred_generic_type_args.TypedBox<#0>) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -279,7 +287,11 @@ function inferred_generic_type_args.ArrayCursor.of(items: #0[]) -> inferred_gene
 
 function inferred_generic_type_args.Counter.element_type(self: inferred_generic_type_args.Counter<#1>) -> string {
     load_type #1
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -304,7 +316,11 @@ function inferred_generic_type_args.Dog.make(v: #0) -> inferred_generic_type_arg
 
 function inferred_generic_type_args.Named.tname(self: inferred_generic_type_args.Named<#1>) -> string {
     load_type #1
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -407,7 +423,11 @@ function inferred_generic_type_args.default_method_typevar_name() -> string {
 
 function inferred_generic_type_args.echo_type(a: #0) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -424,7 +444,11 @@ function inferred_generic_type_args.free_fn_inferred_t() -> string {
 
 function inferred_generic_type_args.free_fn_tname(a: #0[]) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 

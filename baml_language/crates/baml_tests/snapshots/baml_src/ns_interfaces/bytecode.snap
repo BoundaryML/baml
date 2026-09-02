@@ -1795,10 +1795,14 @@ function interfaces.<(user.interfaces.GimpEchoer as user.interfaces.GimpEcho<int
 
 function interfaces.<(user.interfaces.GoopBox<#0> as user.interfaces.GoopDescriber<#0>)>.describe(self: interfaces.GoopBox<#0>, value: #1) -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _4
     load_type #1
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _6
     load_var _4
     load_const ":"
@@ -4698,7 +4702,11 @@ function interfaces.ritv_main() -> bool {
 
 function interfaces.rtit_main() -> string {
     load_type interfaces.RtitAnimal
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -5436,10 +5444,14 @@ function interfaces.w306_main() -> string {
 
 function interfaces.w306_names() -> string {
     load_type #0
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var naked
     load_type interfaces.W306Box<#0>
-    call baml.<(reflect.Type as baml.ToString)>.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var wrapped
     load_const "naked="
     load_var naked
