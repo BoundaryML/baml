@@ -47,6 +47,8 @@ function merge_issue(
     max_rounds: int = 3,
     /// The store's issue the PR belongs to, for the merge_rounds rows.
     issue_id: string? = null,
+    /// A Slack thread that hears about every round (babysit.baml).
+    thread: SlackRef? = null,
 ) -> MergeResult {
     let started = baml.time.Instant.now();
     let first = pr_snapshot(pr);
@@ -109,6 +111,8 @@ function merge_issue(
         let round = state.rounds + 1;
         let kind = round_outcome(snap.branch, round);
         state = MergeState { rounds: round, handled_ids: state.handled_ids };
+        //# the thread hears how the round went
+        tell_thread(thread, round_text(round, kind, fb));
         //# the round goes to the store
         save_merge_round(
             issue_id,
@@ -147,6 +151,64 @@ function merge_issue(
         wait_for_new_head(pr, snap.head, started);
     }
     done("green")
+}
+
+/// One line per review round, for the babysit thread.
+function round_text(round: int, kind: string, fb: PrFeedback) -> string {
+    (
+        if (kind == "fixed") {
+            ":arrows_counterclockwise: "
+        } else {
+            ":warning: "
+        }
+    )
+        + "round "
+        + round.to_string()
+        + ": "
+        + fb.checks.length().to_string()
+        + " failing check"
+        + (
+            if (fb.checks.length() == 1) {
+                ""
+            } else {
+                "s"
+            }
+        )
+        + ", "
+        + fb.comments.length().to_string()
+        + " reviewer comment"
+        + (
+            if (fb.comments.length() == 1) {
+                ""
+            } else {
+                "s"
+            }
+        )
+        + " → "
+        + kind
+        + (
+            if (kind == "fixed") {
+                ", pushed"
+            } else {
+                ", nothing pushed"
+            }
+        )
+}
+
+/// Posts in the thread when there is one and Slack is configured; never
+/// fails the round over a Slack error.
+function tell_thread(thread: SlackRef?, text: string) -> null {
+    match (thread) {
+        null => null,
+        let t: SlackRef => {
+            if (slack_configured()) {
+                slack_post(text, t) catch (_) {
+                    _ => SlackRef { channel: "", ts: "" },
+                };
+            };
+            null
+        },
+    }
 }
 
 /// The PR as an Issue, so handle_issue can work on it: the PR's title and

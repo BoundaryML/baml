@@ -138,6 +138,9 @@ services:
       SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      # "@bammy babysit <PR url>" -> a babysit_requests row in the atb2 store (optional)
+      FEEDBACK_SUPABASE_URL: ${FEEDBACK_SUPABASE_URL:-}
+      FEEDBACK_SUPABASE_KEY: ${FEEDBACK_SUPABASE_KEY:-}
       NOTION_VERIFICATION_TOKEN: ${NOTION_VERIFICATION_TOKEN:-}
     ports:
       - "${INGRESS_PORT:-8081}:8081"

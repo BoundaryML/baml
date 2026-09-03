@@ -194,3 +194,40 @@ def test_slack_mention_strips_and_creates_task(fake_service):
     assert table == "tasks"
     assert doc["prompt"] == "solve fizzbuzz in baml"
     assert doc["source"] == "slack"
+
+
+# ---- babysit ----
+
+def test_parse_babysit_finds_the_pr_url():
+    """A babysit mention yields the canonical PR url; anything else yields None."""
+    assert ing.parse_babysit("babysit this PR https://github.com/BoundaryML/baml/pull/4715") == \
+        "https://github.com/BoundaryML/baml/pull/4715"
+    assert ing.parse_babysit("Babysit <https://github.com/BoundaryML/baml/pull/4715|pull/4715> pls") == \
+        "https://github.com/BoundaryML/baml/pull/4715"
+    assert ing.parse_babysit("babysit <https://github.com/BoundaryML/baml/pull/4715/files>") == \
+        "https://github.com/BoundaryML/baml/pull/4715"
+    assert ing.parse_babysit("babysit https://github.com/BoundaryML/baml/issues/4715") is None
+    assert ing.parse_babysit("fix the thing at https://github.com/BoundaryML/baml/pull/4715") is None
+
+
+def test_babysit_mention_is_queued_not_a_task(fake_service, monkeypatch):
+    """With the store configured, a babysit mention becomes a store row, not a task."""
+    monkeypatch.setattr(ing, "SLACK_SIGNING_SECRET", "s3cret")
+    monkeypatch.setattr(ing, "FEEDBACK_SUPABASE_URL", "https://store.example")
+    monkeypatch.setattr(ing, "FEEDBACK_SUPABASE_KEY", "k")
+    queued: list[tuple] = []
+
+    async def fake_enqueue(event, pr, eid):
+        queued.append((event.get("channel"), pr, eid))
+
+    monkeypatch.setattr(ing, "_enqueue_babysit", fake_enqueue)
+    body = json.dumps({
+        "type": "event_callback", "event_id": "Ev1",
+        "event": {"type": "app_mention", "channel": "C1", "ts": "1.0", "user": "U1",
+                  "text": "<@UBOT> babysit this PR https://github.com/BoundaryML/baml/pull/4715"},
+    }).encode()
+    client = TestClient(ing.app)
+    r = client.post("/slack/events", content=body, headers=_slack_headers(body))
+    assert r.status_code == 200
+    assert queued == [("C1", "https://github.com/BoundaryML/baml/pull/4715", "Ev1")]
+    assert fake_service.created == []

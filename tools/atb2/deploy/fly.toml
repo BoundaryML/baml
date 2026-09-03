@@ -1,4 +1,5 @@
-# The atb2 runner on Fly. One image; processes are BAML expressions:
+# The atb2 runner on Fly. Two processes on one image:
+#   babysit   serves "@bammy babysit <PR>" requests from the store
 #   pipeline  runs the feedback pipeline every five minutes
 #
 #   fly deploy --config tools/atb2/deploy/fly.toml   (from the repo root; CI does this
@@ -26,18 +27,19 @@ primary_region = "sjc"
   ATB2_POLL_S = "60"
 
 [processes]
+  babysit = "babysit_loop()"
   pipeline = "pipeline_loop(every_s = 300)"
 
 [[mounts]]
   source = "atb2_data"
   destination = "/data"
-  processes = ["pipeline"]
+  processes = ["babysit", "pipeline"]
 
 # the gate runs cargo builds and nextest: give it room
 [[vm]]
   size = "performance-8x"
   memory = "32gb"
-  processes = ["pipeline"]
+  processes = ["babysit", "pipeline"]
 
 [checks]
   # no http surface; liveness is the process itself

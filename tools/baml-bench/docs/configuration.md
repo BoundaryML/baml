@@ -29,6 +29,7 @@ ANTHROPIC_API_KEY=<your-anthropic-api-key>   # required for claude-proxy
 | `SLACK_SIGNING_SECRET` | ingress | Verify inbound Slack webhook signatures. |
 | `NOTION_VERIFICATION_TOKEN` | ingress | When set, verify the `X-Notion-Signature` on `/notion/webhook` (optional). |
 | `SLACK_BOT_TOKEN` | worker, notion-fixer, ingress | Post Slack acks / results / fix notices. |
+| `FEEDBACK_SUPABASE_URL`, `FEEDBACK_SUPABASE_KEY` | ingress | Optional. With both set, `@bammy babysit <PR url>` queues a row in the atb2 store (table `babysit_requests`) that a runner with the toolchain serves (`baml run -e 'babysit_loop()'`). |
 | `NOTION_TOKEN` | notion-fixer | Notion API (create/update issue pages). |
 | `NOTION_SKILL_DB_ID`, `NOTION_LANG_DB_ID` | notion-fixer | Target Notion databases. |
 | `CURSOR_API_KEY` | notion-fixer | Launch Cursor cloud-agent fixes; without it fix dispatch is a no-op. |

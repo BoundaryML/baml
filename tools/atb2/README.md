@@ -67,8 +67,9 @@ The DDL is applied in the Supabase dashboard and is not in the repo.
 
 ## Deploy
 
-`tools/atb2/deploy` is the runner: a Fly app (`atb2-runner`) whose
-`pipeline` process runs `run_pipeline` every five minutes. The image
+`tools/atb2/deploy` is the runner: a Fly app (`atb2-runner`) with two
+processes on one image, `babysit` (serves `@bammy babysit <PR>` requests from
+the store) and `pipeline` (runs `run_pipeline` every five minutes). The image
 carries cargo, gh, node and the Claude Code CLI; the volume at `/data` holds
 the cached canary clone, the cargo target and the run dirs, and the first
 boot builds canary's `baml-cli` there.

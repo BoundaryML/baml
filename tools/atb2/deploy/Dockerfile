@@ -1,7 +1,8 @@
-# The atb2 runner: the machine that runs the feedback pipeline on a timer.
-# Everything the pipeline shells out to is here: git + gh (PRs), cargo (the
-# gate, canary's own baml-cli), node + the Claude Code CLI (the agent).
-# canary's baml-cli itself is built on the volume at first boot (entrypoint).
+# The atb2 runner: one machine that serves "@bammy babysit" requests and runs
+# the feedback pipeline on a timer. Everything the pipeline shells out to is
+# here: git + gh (PRs), cargo (the gate, canary's own baml-cli), node + the
+# Claude Code CLI (the agent). canary's baml-cli itself is built on the
+# volume at first boot (entrypoint).
 #
 # State lives on the volume at /data (ATB2_HOME): the cached canary clone,
 # the shared cargo target, worktrees, run dirs. First boot builds canary's
@@ -48,5 +49,5 @@ RUN chmod +x /usr/local/bin/atb2-entrypoint && chown -R atb2:atb2 /app
 
 USER atb2
 ENTRYPOINT ["atb2-entrypoint"]
-# fly.toml picks the process (a BAML expression)
-CMD ["pipeline_loop()"]
+# fly.toml picks the process: babysit_loop() or pipeline_loop()
+CMD ["babysit_loop()"]

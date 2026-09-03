@@ -16,6 +16,7 @@ import re
 from collections import OrderedDict
 from typing import Any, Optional
 
+import httpx
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, Response
 
 from bench_core import slack_client
@@ -40,6 +41,32 @@ _seen: "OrderedDict[str, bool]" = OrderedDict()
 _SEEN_CAP = 1024
 
 _MENTION = re.compile(r"^\s*<@[^>]+>\s*")
+
+# "@bammy babysit this PR https://github.com/o/r/pull/12" -> atb2 watches the PR
+# until it merges (tools/atb2/baml_src/babysit.baml). The request is a row in
+# the atb2 store; a runner with the toolchain serves it. Both settings are
+# optional: without them a babysit mention is an ordinary task.
+FEEDBACK_SUPABASE_URL = os.environ.get("FEEDBACK_SUPABASE_URL", "").rstrip("/")
+FEEDBACK_SUPABASE_KEY = os.environ.get("FEEDBACK_SUPABASE_KEY", "")
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
+_BABYSIT = re.compile(r"^\s*babysit\b", re.IGNORECASE)
+# a GitHub PR url, bare or Slack-wrapped (<url> / <url|label>), trailing path or punctuation allowed
+_PR_URL = re.compile(r"<?(https://github\.com/[\w.-]+/[\w.-]+/pull/\d+)")
+
+
+def parse_babysit(text: str) -> Optional[str]:
+    """The PR url of a babysit request, or None when ``text`` is not one.
+
+    Args:
+        text: The mention text with the leading bot mention already stripped.
+
+    Returns:
+        The canonical PR url (no trailing path, no Slack wrapping), or None.
+    """
+    if not _BABYSIT.search(text):
+        return None
+    m = _PR_URL.search(text)
+    return m.group(1) if m else None
 
 
 def _is_duplicate(event_id: Optional[str]) -> bool:
@@ -100,6 +127,56 @@ async def _create_slack_task(event: dict[str, Any], text: str, eid: Optional[str
         log.exception("slack: failed to create task for event_id=%s", eid)
 
 
+async def _enqueue_babysit(event: dict[str, Any], pr: str, eid: Optional[str]) -> None:
+    """Queue a babysit request in the atb2 store and ack in the thread.
+
+    Off the request path, like ``_create_slack_task``. The row's ``event_id`` is
+    unique, so a redelivered mention is one request (the second insert is a
+    409 we ignore). Failures are logged, not raised.
+
+    Args:
+        event: The Slack event object (channel, ts, thread_ts, user).
+        pr: The PR url to watch.
+        eid: The Slack event id (dedup key in the store).
+    """
+    channel = event.get("channel") or ""
+    thread_ts = event.get("thread_ts") or event.get("ts") or ""
+    row = {
+        "pr": pr,
+        "channel": channel,
+        "thread_ts": thread_ts,
+        "requested_by": event.get("user"),
+        "event_id": eid,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            r = await c.post(
+                f"{FEEDBACK_SUPABASE_URL}/rest/v1/babysit_requests",
+                json=row,
+                headers={
+                    "apikey": FEEDBACK_SUPABASE_KEY,
+                    "Authorization": f"Bearer {FEEDBACK_SUPABASE_KEY}",
+                    "Prefer": "return=minimal",
+                },
+            )
+        if r.status_code == 409:
+            log.info("slack: babysit already queued event_id=%s", eid)
+            return
+        if r.status_code >= 300:
+            log.error("slack: babysit insert failed %s event_id=%s body=%r", r.status_code, eid, r.text[:200])
+            await slack_client.post_message(SLACK_BOT_TOKEN, channel,
+                                            f":x: could not queue {pr} (store said {r.status_code})",
+                                            thread_ts=thread_ts)
+            return
+        await slack_client.post_message(
+            SLACK_BOT_TOKEN, channel,
+            f":eyes: queued: a runner will watch {pr} until it merges and report here",
+            thread_ts=thread_ts)
+        log.info("slack: queued babysit event_id=%s pr=%s", eid, pr)
+    except Exception:  # noqa: BLE001
+        log.exception("slack: failed to queue babysit for event_id=%s", eid)
+
+
 @app.post("/slack/events")
 async def slack_events(request: Request,
                        background_tasks: BackgroundTasks,
@@ -149,7 +226,11 @@ async def slack_events(request: Request,
 
     if etype == "app_mention":
         text = _MENTION.sub("", event.get("text", "")).strip()
-        if text:
+        pr = parse_babysit(text) if FEEDBACK_SUPABASE_URL and FEEDBACK_SUPABASE_KEY else None
+        if pr:
+            background_tasks.add_task(_enqueue_babysit, dict(event), pr, eid)
+            log.info("slack: queued babysit event_id=%s pr=%s", eid, pr)
+        elif text:
             background_tasks.add_task(_create_slack_task, dict(event), text, eid)
             log.info("slack: queued task create event_id=%s text=%r", eid, text[:80])
         else:
