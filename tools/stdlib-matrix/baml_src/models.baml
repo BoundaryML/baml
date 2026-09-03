@@ -45,7 +45,7 @@ class ExportSignature {
     throws_spec: TyRef?,
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             ExportSignature {
                 generics: baml.json.to<ExportGeneric[]?>(baml.json.field(j, "generics")),
                 params: baml.json.to<ExportParam[]>(baml.json.field(j, "params")),

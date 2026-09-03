@@ -1,7 +1,7 @@
 // Model strings with dots, dashes, and colons (Bedrock-style ids) stay plain
 // strings in client constructor args.
 
-client MyAwsClient = anthropic.AnthropicClient.new(
+client MyAwsClient = anthropic.Client.new(
     model = "anthropic.claude-3-haiku-20240307-v1:0",
     api_key = "sk-1234",
     max_tokens = 100,

@@ -25,7 +25,7 @@ test "provider previews are keyless and preserve user headers" {
         api_key = env.BAML_PREVIEW_OPENAI_KEY_THAT_IS_NEVER_SET,
         headers = { "x-user": "responses" },
     );
-    let anthropic_client: ai.Client = anthropic.AnthropicClient.new(
+    let anthropic_client: ai.Client = anthropic.Client.new(
         model = "claude-preview",
         api_key = env.BAML_PREVIEW_ANTHROPIC_KEY_THAT_IS_NEVER_SET,
         headers = { "x-user": "anthropic" },
@@ -70,7 +70,7 @@ test "user auth headers survive preview while configured keys do not" {
         api_key = "responses-secret",
         headers = { "Authorization": "user-responses", "x-config": "kept" },
     );
-    let anthropic_configured: ai.Client = anthropic.AnthropicClient.new(
+    let anthropic_configured: ai.Client = anthropic.Client.new(
         model = "claude-preview",
         api_key = "anthropic-secret",
         headers = { "X-Api-Key": "user-anthropic", "x-config": "kept" },
@@ -122,7 +122,7 @@ test "user auth headers survive preview while configured keys do not" {
 }
 
 test "google previews use deterministic secret-free markers" {
-    let gemini: ai.Client = google.GoogleClient.new(
+    let gemini: ai.Client = google.GeminiClient.new(
         model = "gemini-preview",
         api_key = env.BAML_PREVIEW_GOOGLE_KEY_THAT_IS_NEVER_SET,
         headers = { "x-user": "gemini" },
@@ -135,7 +135,7 @@ test "google previews use deterministic secret-free markers" {
     assert.is_true(gemini_request.url.includes("trace=kept"));
     assert.is_true(gemini_request.body.includes("preview_config"));
 
-    let gemini_configured: ai.Client = google.GoogleClient.new(
+    let gemini_configured: ai.Client = google.GeminiClient.new(
         model = "gemini-preview",
         api_key = "gemini-config-secret",
         headers = { "X-Goog-Api-Key": "user-gemini-key" },
@@ -230,7 +230,7 @@ test "provider stream open preserves timeout and cancellation" {
     };
     assert.equal(chat_cancelled, "chat_cancelled:chat stop");
 
-    let responses_timeout = openai.internal._openai_stream_open_failure(
+    let responses_timeout = openai.internal._stream_open_failure(
         baml.errors.Timeout { message: "responses deadline", duration_ms: 41 },
     ) catch_all (e) {
         let timeout: baml.errors.Timeout => `responses_timeout:${timeout.duration_ms ?? -1}`,
@@ -238,13 +238,13 @@ test "provider stream open preserves timeout and cancellation" {
     };
     assert.equal(responses_timeout, "responses_timeout:41");
 
-    let responses_cancelled = openai.internal._openai_stream_open_failure(baml.panics.Cancelled { message: "responses stop" }) catch_all (e) {
+    let responses_cancelled = openai.internal._stream_open_failure(baml.panics.Cancelled { message: "responses stop" }) catch_all (e) {
         let cancelled: baml.panics.Cancelled => `responses_cancelled:${cancelled.message}`,
         _ => `wrong:${e.to_string()}`,
     };
     assert.equal(responses_cancelled, "responses_cancelled:responses stop");
 
-    let anthropic_timeout = anthropic.internal._anthropic_stream_open_failure(
+    let anthropic_timeout = anthropic.internal._stream_open_failure(
         baml.errors.Timeout { message: "anthropic deadline", duration_ms: 43 },
     ) catch_all (e) {
         let timeout: baml.errors.Timeout => `anthropic_timeout:${timeout.duration_ms ?? -1}`,

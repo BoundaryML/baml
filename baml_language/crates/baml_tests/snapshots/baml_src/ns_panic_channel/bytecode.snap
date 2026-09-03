@@ -1,0 +1,64 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function panic_channel.$init_test_ns_panic_channel_panic_channel(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.panic_channel"
+    load_const "a thrown panic is caught by an arm that names it"
+    make_closure .<lambda($init_test_ns_panic_channel_panic_channel, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.panic_channel"
+    load_const "a wildcard arm does not swallow a thrown panic"
+    make_closure .<lambda($init_test_ns_panic_channel_panic_channel, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.panic_channel"
+    load_const "catch_all does not swallow a thrown panic either"
+    make_closure .<lambda($init_test_ns_panic_channel_panic_channel, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.panic_channel"
+    load_const "the ordinary half of a mixed throw still reaches the clause"
+    make_closure .<lambda($init_test_ns_panic_channel_panic_channel, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.panic_channel"
+    load_const "the panic half of a mixed throw still raises"
+    make_closure .<lambda($init_test_ns_panic_channel_panic_channel, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function panic_channel.throws_a_mixture(fail: bool) -> int {
+    load_var fail
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "thrown"
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L1:
+    load_const "raised"
+    init_instance baml.panics.AssertionFailed .message
+    throw
+}
+
+function panic_channel.throws_a_panic() -> int {
+    load_const "raised, not thrown"
+    init_instance baml.panics.AssertionFailed .message
+    throw
+}

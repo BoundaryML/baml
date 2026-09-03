@@ -40,7 +40,7 @@ fn to_json_via_interface_is_allowed() {
         class Point {
             x int
             implements baml.ToJson {
-                function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError { 1 }
+                function to_json(self) -> baml.json.json throws baml.json.SerializationError { 1 }
             }
         }
     "#,

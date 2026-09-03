@@ -65,12 +65,12 @@ class ReportHeader {
 /// against a corrupt or stale-format artifact.
 function load_report(path: string) -> ReportHeader {
     let report = baml.json.to<ReportHeader>(baml.json.parse(baml.fs.read(path))) catch (_) {
-        baml.json.JsonParseError => {
+        baml.json.ParseError => {
             throw baml.errors.InvalidArgument {
             message: `${path} is not valid JSON; regenerate it with tools/stdlib-matrix/run`,
         }
         },
-        baml.json.JsonDecodeError => {
+        baml.json.DecodeError => {
             throw baml.errors.InvalidArgument {
             message: `${path} does not match the current report model, probably written by an older tool; regenerate it with tools/stdlib-matrix/run`,
         }

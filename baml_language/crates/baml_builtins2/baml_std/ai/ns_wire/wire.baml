@@ -2,7 +2,7 @@
 // output-format text, and tool schema lowering.
 // Mirrors _planv2/pages/02_guides/03_clients/03_writing_a_client.md.
 
-/// Collapse a client's `root.Credential?` option to the value to put on the
+/// Collapse a client's `ai.Credential?` option to the value to put on the
 /// wire, reading the environment at REQUEST time (never at construction).
 ///
 ///   * a literal string resolves to itself, unless it is blank — a
@@ -104,9 +104,9 @@ function credential_sources(cred: root.Credential?, canonical_env: string?) -> s
     }
 }
 
-// Send, classify non-2xx via root.errors.classify_http, decode the body as T.
-// T = json-shaped envelope class; unknown fields are ignored by the decoder.
-// A null or non-positive timeout preserves the transport's unbounded default.
+/// Send, classify non-2xx via `ai.errors.classify_http`, decode the body as T.
+/// T = json-shaped envelope class; unknown fields are ignored by the decoder.
+/// A null or non-positive timeout preserves the transport's unbounded default.
 function send_as<T>(
     req: baml.http.Request,
     provider: string,
@@ -234,8 +234,8 @@ function send_as_with_wire<T>(
     SentAs { value: value, call: call }
 }
 
-// The return type's schema as prompt text, in the standard dialect —
-// exactly what ${ctx.output_format()} renders in an LLM function block.
+/// The return type's schema as prompt text, in the standard dialect —
+/// exactly what ${ctx.output_format()} renders in an LLM function block.
 function render_output_format(t: reflect.Type) -> string throws reflect.errors.CompilationError {
     root.internal.validate_output_type(t);
     root.internal.render_output_format(t)
@@ -256,47 +256,43 @@ function resolve_media(media: ai.MediaPart, fetch_url: bool) -> ResolvedMedia {
     match (media) {
         let image: baml.media.Image => {
             let source = image.file() ?? image.url() ?? "";
-            root.internal
-                ._resolve_media_content(
-                    image.url(),
-                    image.file(),
-                    image.base64(),
-                    root.internal._media_mime_type(image.mime_type(), source, "image"),
-                    fetch_url,
-                )
+            root.internal._resolve_media_content(
+                image.url(),
+                image.file(),
+                image.base64(),
+                root.internal._media_mime_type(image.mime_type(), source, "image"),
+                fetch_url,
+            )
         },
         let audio: baml.media.Audio => {
             let source = audio.file() ?? audio.url() ?? "";
-            root.internal
-                ._resolve_media_content(
-                    audio.url(),
-                    audio.file(),
-                    audio.base64(),
-                    root.internal._media_mime_type(audio.mime_type(), source, "audio"),
-                    fetch_url,
-                )
+            root.internal._resolve_media_content(
+                audio.url(),
+                audio.file(),
+                audio.base64(),
+                root.internal._media_mime_type(audio.mime_type(), source, "audio"),
+                fetch_url,
+            )
         },
         let video: baml.media.Video => {
             let source = video.file() ?? video.url() ?? "";
-            root.internal
-                ._resolve_media_content(
-                    video.url(),
-                    video.file(),
-                    video.base64(),
-                    root.internal._media_mime_type(video.mime_type(), source, "video"),
-                    fetch_url,
-                )
+            root.internal._resolve_media_content(
+                video.url(),
+                video.file(),
+                video.base64(),
+                root.internal._media_mime_type(video.mime_type(), source, "video"),
+                fetch_url,
+            )
         },
         let pdf: baml.media.Pdf => {
             let source = pdf.file() ?? pdf.url() ?? "";
-            root.internal
-                ._resolve_media_content(
-                    pdf.url(),
-                    pdf.file(),
-                    pdf.base64(),
-                    root.internal._media_mime_type(pdf.mime_type(), source, "pdf"),
-                    fetch_url,
-                )
+            root.internal._resolve_media_content(
+                pdf.url(),
+                pdf.file(),
+                pdf.base64(),
+                root.internal._media_mime_type(pdf.mime_type(), source, "pdf"),
+                fetch_url,
+            )
         },
     }
 }
@@ -308,43 +304,39 @@ function resolve_media_preview(media: ai.MediaPart) -> ResolvedMedia {
     match (media) {
         let image: baml.media.Image => {
             let source = image.file() ?? image.url() ?? "";
-            root.internal
-                ._resolve_media_preview_content(
-                    image.url(),
-                    image.file(),
-                    image.base64(),
-                    root.internal._media_mime_type(image.mime_type(), source, "image"),
-                )
+            root.internal._resolve_media_preview_content(
+                image.url(),
+                image.file(),
+                image.base64(),
+                root.internal._media_mime_type(image.mime_type(), source, "image"),
+            )
         },
         let audio: baml.media.Audio => {
             let source = audio.file() ?? audio.url() ?? "";
-            root.internal
-                ._resolve_media_preview_content(
-                    audio.url(),
-                    audio.file(),
-                    audio.base64(),
-                    root.internal._media_mime_type(audio.mime_type(), source, "audio"),
-                )
+            root.internal._resolve_media_preview_content(
+                audio.url(),
+                audio.file(),
+                audio.base64(),
+                root.internal._media_mime_type(audio.mime_type(), source, "audio"),
+            )
         },
         let video: baml.media.Video => {
             let source = video.file() ?? video.url() ?? "";
-            root.internal
-                ._resolve_media_preview_content(
-                    video.url(),
-                    video.file(),
-                    video.base64(),
-                    root.internal._media_mime_type(video.mime_type(), source, "video"),
-                )
+            root.internal._resolve_media_preview_content(
+                video.url(),
+                video.file(),
+                video.base64(),
+                root.internal._media_mime_type(video.mime_type(), source, "video"),
+            )
         },
         let pdf: baml.media.Pdf => {
             let source = pdf.file() ?? pdf.url() ?? "";
-            root.internal
-                ._resolve_media_preview_content(
-                    pdf.url(),
-                    pdf.file(),
-                    pdf.base64(),
-                    root.internal._media_mime_type(pdf.mime_type(), source, "pdf"),
-                )
+            root.internal._resolve_media_preview_content(
+                pdf.url(),
+                pdf.file(),
+                pdf.base64(),
+                root.internal._media_mime_type(pdf.mime_type(), source, "pdf"),
+            )
         },
     }
 }

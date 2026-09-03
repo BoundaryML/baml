@@ -436,7 +436,8 @@ impl std::error::Error for LinkError {}
 /// Is this unit part of the builtin (stdlib) group? Builtin source files carry a
 /// `<builtin>/…` project-relative path; user files never do.
 fn is_builtin_unit(unit: &CompilationUnit) -> bool {
-    unit.source_file.starts_with("<builtin>/")
+    unit.source_file
+        .starts_with(crate::errors::BUILTIN_SOURCE_PREFIX)
 }
 
 /// Per-unit placement layout: the absolute base of each object bucket and the

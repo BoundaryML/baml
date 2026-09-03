@@ -198,7 +198,7 @@ pub enum TirTypeError {
     VoidFunctionResultUsed,
     /// A `spawn ... with` clause expression is not a middleware transformer
     /// (BEP-034: each `with` expression must be a function
-    /// `(baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<U, F>`).
+    /// `(baml.spawn.Params<T, E>) -> baml.spawn.Params<U, F>`).
     SpawnWithNotATransformer { expected_input: Ty, got: Ty },
     /// Expression is not callable (e.g. `42(1)` or `Foo(1)` where Foo is a class).
     NotCallable { ty: Ty },
@@ -1162,7 +1162,7 @@ impl fmt::Display for TirTypeError {
             } => {
                 write!(
                     f,
-                    "`spawn ... with` takes middleware transformer functions: this link receives `{}` and must return a `baml.spawn.SpawnParams`, got `{}`",
+                    "`spawn ... with` takes middleware transformer functions: this link receives `{}` and must return a `baml.spawn.Params`, got `{}`",
                     expected_input.render_user_facing(),
                     got.render_user_facing()
                 )

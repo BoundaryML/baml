@@ -235,9 +235,16 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
     let resolved =
         shim_rule_method(vm, v, "Comparable", "compare").map_err(VmRustFnError::InternalError)?;
     let Some(resolved) = resolved else {
-        return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-            message: "_compare_shim: element type does not implement Comparable".to_string(),
-        }));
+        // `T extends Comparable` is checked at compile time, so no applicable
+        // rule means the bound and the impl-rule tables disagree - an invariant
+        // violation, not a condition the caller could have avoided. It also
+        // could not be reported on the declared `throws T.CompareError`
+        // channel.
+        return Err(VmRustFnError::InternalError(
+            VmInternalError::MissingNativeFunction {
+                name: "_compare_shim: element type does not implement Comparable".to_string(),
+            },
+        ));
     };
     Ok(rule_bound_method(vm, v, resolved))
 }

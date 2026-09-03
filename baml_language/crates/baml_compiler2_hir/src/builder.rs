@@ -2374,8 +2374,8 @@ impl<'db> SemanticIndexBuilder<'db> {
             } => {
                 // Allow `baml.errors.*`, `root.errors.*`, `baml.json.*`, and
                 // BEP-066's `reflect.errors.*` (fully qualified).
-                // `baml.json.JsonParseError` / `baml.json.JsonDecodeError` /
-                // `baml.json.JsonSerializationError` are stdlib error types just like
+                // `baml.json.ParseError` / `baml.json.DecodeError` /
+                // `baml.json.SerializationError` are stdlib error types just like
                 // `baml.errors.*` ones; they need the same exemption.
                 let is_core_builtin_error = segments.len() >= 3
                     && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
@@ -2384,11 +2384,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                     && segments[0].as_str() == "reflect"
                     && segments[1].as_str() == "errors";
                 let is_builtin_error = is_core_builtin_error || is_reflection_error;
-                // Allow single-segment class names (e.g. `JsonParseError`) in
+                // Allow single-segment class names (e.g. `ParseError`) in
                 // builtin files — the class is resolvable in the current namespace
                 // and TIR will type-check it.  This allows builtin functions to
                 // declare `throws` for classes defined in the same stdlib namespace
-                // without requiring the full `baml.json.JsonParseError` path.
+                // without requiring the full `baml.json.ParseError` path.
                 let is_builtin_class_ref = segments.len() == 1
                     && generic_args.is_empty()
                     && segments[0]

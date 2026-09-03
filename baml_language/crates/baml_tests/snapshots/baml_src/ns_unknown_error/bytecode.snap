@@ -199,7 +199,7 @@ function unknown_error.ue_context_survives_gc() -> bool {
 
   L1:
     load_var _2
-    call baml.errors.ErrorContext.root_cause
+    call baml.errors.Context.root_cause
     load_field .error
     store_var _6
     load_var _6
@@ -456,7 +456,7 @@ function unknown_error.ue_preserves_cause_chain() -> bool {
 
   L1:
     load_var _2
-    call baml.errors.ErrorContext.root_cause
+    call baml.errors.Context.root_cause
     load_field .error
     store_var _6
     load_var _6

@@ -18,14 +18,14 @@ class RunResult<Out> {
     usage: root.events.Usage,
 }
 
-// The default runner. A spec-mode LLM function's direct call runs
-// `Agent.new(client = client).run(Fn@spec(...)).value`; construct it
-// yourself to set the other fields (`$` call-site parameters are a future
-// phase).
-//
-// The class itself is not generic: none of its configuration involves the
-// output type. `Out` lives on `run`, where it is inferred from the spec
-// argument, so no call site needs to name it.
+/// The default runner. A spec-mode LLM function's direct call runs
+/// `Agent.new(client = client).run(Fn@spec(...)).value`; construct it
+/// yourself to set the other fields (`$` call-site parameters are a future
+/// phase).
+///
+/// The class itself is not generic: none of its configuration involves the
+/// output type. `Out` lives on `run`, where it is inferred from the spec
+/// argument, so no call site needs to name it.
 class Agent {
     max_steps: int,
     // Total model invocations allowed for one schema candidate. The default
@@ -65,8 +65,8 @@ class Agent {
         self.schema_attempts
     }
 
-    // Execute one call: validate, dispatch, append the correlated result.
-    // A Raise-mode failure throws ToolFailedError after ToolFailed lands.
+    /// (internal) Execute one call: validate, dispatch, append the correlated result.
+    /// A Raise-mode failure throws ToolFailedError after ToolFailed lands.
     function _run_one_tool(
         self,
         tb: root.tools.Toolbox,
@@ -116,10 +116,10 @@ class Agent {
         }
     }
 
-    // Does this turn carry content a media-shaped `Out` can be built from?
-    // Mirrors the `Ok(None)` condition of sys_llm's
-    // `parse_llm_output_for_target`: nothing to build from means fall back to
-    // the ordinary text parse. Always false when `Out` holds no media.
+    /// (internal) Does this turn carry content a media-shaped `Out` can be built from?
+    /// Mirrors the `Ok(None)` condition of sys_llm's
+    /// `parse_llm_output_for_target`: nothing to build from means fall back to
+    /// the ordinary text parse. Always false when `Out` holds no media.
     function _has_media_output<Out>(self, turn: ModelTurn) -> bool {
         let shape = root.internal._media_shape(reflect.Type.of<Out>());
         let form = shape.split(":").at(0) ?? "";
@@ -132,9 +132,9 @@ class Agent {
         root.internal._media_of_kind(turn, shape.split(":").at(1) ?? "").length() > 0
     }
 
-    // Build a media-shaped `Out` from the turn's content blocks. Only called
-    // when `_has_media_output` holds; the shape-specific errors below are the
-    // ported sys_llm messages, thrown after the turn is already on the record.
+    /// (internal) Build a media-shaped `Out` from the turn's content blocks. Only called
+    /// when `_has_media_output` holds; the shape-specific errors below are the
+    /// ported sys_llm messages, thrown after the turn is already on the record.
     function _media_value<Out>(self, turn: ModelTurn, provider: string) -> Out {
         let t = reflect.Type.of<Out>();
         let shape = root.internal._media_shape(t);
@@ -218,12 +218,12 @@ class Agent {
         true
     }
 
-    // One accepted model turn, with the within-turn repair loop: when a
-    // Complete turn's candidate does not parse, commit the failed turn and a
-    // correction request as ordinary events and invoke again, under a fixed
-    // attempt budget. Everything that happened is on the record; a repair
-    // attempt does not consume a step. Token usage of every attempt is
-    // added to `total`.
+    /// (internal) One accepted model turn, with the within-turn repair loop: when a
+    /// Complete turn's candidate does not parse, commit the failed turn and a
+    /// correction request as ordinary events and invoke again, under a fixed
+    /// attempt budget. Everything that happened is on the record; a repair
+    /// attempt does not consume a step. Token usage of every attempt is
+    /// added to `total`.
     function _attempt_turn<Out>(
         self,
         c: Client,
@@ -298,7 +298,7 @@ class Agent {
         }
     }
 
-    // Emit any events appended since `seen` to on_event; returns the new count.
+    /// (internal) Emit any events appended since `seen` to on_event; returns the new count.
     function _emit_from(self, j: Journal, seen: int) -> int {
         let entries = j.entries();
         if let cb: (root.events.Event) -> void throws never = self.on_event {
@@ -314,10 +314,12 @@ class Agent {
     }
 
     implements Runner {
+        // Cancellation is absent for the same reason it is absent from
+        // `ai.errors.InvokeError`: a panic unwinds past the error channel
+        // rather than travelling in it.
         type Error = baml.errors.InvalidArgument
             | baml.errors.Timeout
             | baml.errors.UnknownError
-            | baml.panics.Cancelled
             | reflect.errors.CompilationError
             | root.errors.Failure
 

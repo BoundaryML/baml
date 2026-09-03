@@ -73,7 +73,7 @@ function middleware.body_wrapping_transformer() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _4
     call_indirect
     store_var _6
@@ -100,7 +100,7 @@ function middleware.chained_transformers_apply_left_to_right() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _4
     call_indirect
     store_var _6
@@ -142,7 +142,7 @@ function middleware.custom_with_retry() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _6
     call_indirect
     store_var _9
@@ -198,7 +198,7 @@ function middleware.flaky_then_42(calls: int[]) -> int {
     throw
 }
 
-function middleware.ident() -> (baml.spawn.SpawnParams<#0, #1>) -> baml.spawn.SpawnParams<#0, #1> throws never {
+function middleware.ident() -> (baml.spawn.Params<#0, #1>) -> baml.spawn.Params<#0, #1> throws never {
     load_type #0
     load_type #1
     make_closure .<lambda(ident, 0)>, captures=0, ntypeargs=2
@@ -217,7 +217,7 @@ function middleware.identity_transformer() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _4
     call_indirect
     store_var _7
@@ -248,7 +248,7 @@ function middleware.options_as_transformer() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _5
     call_indirect
     store_var _8
@@ -276,7 +276,7 @@ function middleware.throwing_transformer_throws_at_spawn_site() -> string {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _5
     call_indirect
     store_var _8
@@ -337,7 +337,7 @@ function middleware.type_changing_fallback_transformer() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _4
     call_indirect
     store_var _7
@@ -363,7 +363,7 @@ function middleware.variable_bound_transformer_still_applies() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var t
     call_indirect
     store_var _7
@@ -379,26 +379,26 @@ function middleware.variable_bound_transformer_still_applies() -> int {
     return
 }
 
-function middleware.withAddOne() -> (baml.spawn.SpawnParams<int, #0>) -> baml.spawn.SpawnParams<int, #0> throws never {
+function middleware.withAddOne() -> (baml.spawn.Params<int, #0>) -> baml.spawn.Params<int, #0> throws never {
     load_type #0
     make_closure .<lambda(withAddOne, 0)>, captures=0, ntypeargs=1
     return
 }
 
-function middleware.withBomb() -> (baml.spawn.SpawnParams<#0, #1>) -> baml.spawn.SpawnParams<#0, #1> throws string {
+function middleware.withBomb() -> (baml.spawn.Params<#0, #1>) -> baml.spawn.Params<#0, #1> throws string {
     load_type #0
     load_type #1
     make_closure .<lambda(withBomb, 0)>, captures=0, ntypeargs=2
     return
 }
 
-function middleware.withDouble() -> (baml.spawn.SpawnParams<int, #0>) -> baml.spawn.SpawnParams<int, #0> throws never {
+function middleware.withDouble() -> (baml.spawn.Params<int, #0>) -> baml.spawn.Params<int, #0> throws never {
     load_type #0
     make_closure .<lambda(withDouble, 0)>, captures=0, ntypeargs=1
     return
 }
 
-function middleware.withFallback(default_value: #0) -> (baml.spawn.SpawnParams<#0, #1>) -> baml.spawn.SpawnParams<#0, never> throws never {
+function middleware.withFallback(default_value: #0) -> (baml.spawn.Params<#0, #1>) -> baml.spawn.Params<#0, never> throws never {
     load_var ?1
     make_cell
     store_var ?1
@@ -409,7 +409,7 @@ function middleware.withFallback(default_value: #0) -> (baml.spawn.SpawnParams<#
     return
 }
 
-function middleware.withRetry(n: int) -> (baml.spawn.SpawnParams<#0, #1>) -> baml.spawn.SpawnParams<#0, #1> throws never {
+function middleware.withRetry(n: int) -> (baml.spawn.Params<#0, #1>) -> baml.spawn.Params<#0, #1> throws never {
     load_var ?1
     make_cell
     store_var ?1

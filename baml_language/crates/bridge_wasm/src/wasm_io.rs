@@ -14,7 +14,7 @@ use bex_events::run::{
 };
 use js_sys::{Function, Promise};
 use sys_ops::io::IoNamespaceIo;
-use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError};
+use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
@@ -28,6 +28,19 @@ pub(crate) struct WasmIo {
     run_store: Arc<InMemoryRunStore>,
     notification_callback: SendWrapper<Function>,
     next_request_id: AtomicU64,
+}
+
+/// The host's `input` callback resolved to something other than a string.
+///
+/// `baml.io.input` declares `throws never`, and a host callable returning the
+/// wrong type is exactly what `HostContractViolation` names, so this is a
+/// panic rather than an error value.
+fn input_callback_contract_violation() -> VmPanic {
+    VmPanic::HostContractViolation {
+        message: "the host `input` callback did not return a string".to_string(),
+        class_name: None,
+        language: None,
+    }
 }
 
 impl WasmIo {
@@ -116,9 +129,7 @@ impl IoNamespaceIo for WasmIo {
                 })?;
                 let value = result
                     .as_string()
-                    .ok_or_else(|| VmBamlError::DevOther {
-                        message: "Input callback did not return a string".into(),
-                    })
+                    .ok_or_else(input_callback_contract_violation)
                     .map_err(VmRustFnError::from)?;
                 publish_input_resolved(
                     &run_store,
@@ -140,9 +151,7 @@ impl IoNamespaceIo for WasmIo {
                 );
                 SysOpOutput::ok(s)
             }
-            None => SysOpOutput::err(VmBamlError::DevOther {
-                message: "Input callback did not return a string".into(),
-            }),
+            None => SysOpOutput::err(input_callback_contract_violation()),
         }
     }
 

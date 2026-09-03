@@ -1378,7 +1378,7 @@ pub(crate) fn op_error_to_throw_value(
     }
 }
 
-/// Decoded `baml.spawn.SpawnParams` fields (BEP-034 middleware) — see
+/// Decoded `baml.spawn.Params` fields (BEP-034 middleware) — see
 /// [`BexEngine::read_spawn_params`].
 struct SpawnParamsData {
     body: HeapPtr,
@@ -5582,12 +5582,12 @@ impl BexEngine {
         }
     }
 
-    /// Read the spawn parameters out of a `baml.spawn.SpawnParams` instance
+    /// Read the spawn parameters out of a `baml.spawn.Params` instance
     /// (BEP-034 middleware: the value a `spawn ... with` transformer pipeline
     /// produced). Fields are read BY INDEX in declaration order — body=0,
     /// name=1, group=2, cancel=3, detach=4 — keep in sync with
     /// `ns_spawn/spawn.baml`. Returns `None` when the value is not a
-    /// well-formed `SpawnParams` (caller falls back to the spawn operands).
+    /// well-formed `Params` (caller falls back to the spawn operands).
     ///
     /// Safe to deref the pointers because the caller holds the active heap
     /// permit and `params` is rooted by the `UnscheduledFuture` being handled.
@@ -6553,7 +6553,7 @@ impl BexEngine {
                             _ => None,
                         });
                     // BEP-034 middleware: a `spawn ... with` lowers its final
-                    // transformed `baml.spawn.SpawnParams` into the config
+                    // transformed `baml.spawn.Params` into the config
                     // operand. The params override the spawn operands — a
                     // transformer may have wrapped/replaced the body or set a
                     // name — and carry the options: `cancel` links into the
@@ -7495,9 +7495,13 @@ impl BexEngine {
         let compiler = self.runtime_compiler.clone();
         SysOpResult::Async(Box::pin(async move {
             let Some(compiler) = compiler else {
+                // `reflect.*._compile` declares only `CompilationError`
+                // (and `SessionBusy`), so an absent compiler is not an error
+                // value either can carry: it is a missing host facility.
                 return Err(OpError::new(
                     operation,
-                    bex_vm_types::errors::VmBamlError::Unsupported {
+                    bex_vm_types::errors::VmPanic::HostUnavailable {
+                        resource: "runtime-compiler".to_string(),
                         message: "runtime compiler was not installed by the host".to_string(),
                     },
                 ));

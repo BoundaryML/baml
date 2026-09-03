@@ -20,14 +20,14 @@
 //      an http(s)/gs:// URL rides through as `fileData.fileUri`
 //      (`gemini_build_body(.., fetch_url = false)`).
 
-// The OAuth2 scope every Vertex call is minted for.
+/// (internal) The OAuth2 scope every Vertex call is minted for.
 function _vertex_scope() -> string {
     "https://www.googleapis.com/auth/cloud-platform"
 }
 
-// `vercel env pull` and friends store a credential document as a JSON *string*
-// (`"{\"type\": …}"`). Unwrap that one level so both spellings work; anything
-// else is returned untouched.
+/// (internal) `vercel env pull` and friends store a credential document as a JSON *string*
+/// (`"{\"type\": …}"`). Unwrap that one level so both spellings work; anything
+/// else is returned untouched.
 function _vertex_unwrap_json(document: string) -> string {
     let trimmed = document.trim();
     if (trimmed.starts_with("\"")) {
@@ -39,12 +39,12 @@ function _vertex_unwrap_json(document: string) -> string {
     }
 }
 
-// The credential document to authenticate with, or null to run the Rust
-// Application Default Credentials chain (GOOGLE_APPLICATION_CREDENTIALS, the
-// well-known ADC file, the gcloud config file, the GCE metadata server).
-//
-// An explicitly configured source is used AS-IS: a broken value raises rather
-// than silently cascading to the next one.
+/// (internal) The credential document to authenticate with, or null to run the Rust
+/// Application Default Credentials chain (GOOGLE_APPLICATION_CREDENTIALS, the
+/// well-known ADC file, the gcloud config file, the GCE metadata server).
+///
+/// An explicitly configured source is used AS-IS: a broken value raises rather
+/// than silently cascading to the next one.
 function _vertex_credentials(c: root.VertexClient) -> string? {
     if let inline: string = c.credentials_json {
         return _vertex_unwrap_json(inline);
@@ -70,22 +70,22 @@ function _vertex_credentials(c: root.VertexClient) -> string? {
     null
 }
 
-// Express mode: a Vertex API key, which replaces the whole OAuth2 flow with a
-// `key` query parameter. Opt-in only — an ambient GOOGLE_API_KEY must never
-// silently downgrade a project-scoped client.
+/// (internal) Express mode: a Vertex API key, which replaces the whole OAuth2 flow with a
+/// `key` query parameter. Opt-in only — an ambient GOOGLE_API_KEY must never
+/// silently downgrade a project-scoped client.
 function _vertex_express_key(c: root.VertexClient) -> string? {
     c.resolved_api_key()
 }
 
-// A `key` the caller put in `query_params` directly is express mode too (the
-// spelling sys_llm and the old engine used).
+/// (internal) A `key` the caller put in `query_params` directly is express mode too (the
+/// spelling sys_llm and the old engine used).
 function _vertex_key_in_query(c: root.VertexClient) -> bool {
     c.query_params?.get("key") != null
 }
 
-// Preview only needs to know that a key was configured. Inspecting the
-// Credential union avoids reading an env.Ref whose value may be absent or
-// secret; the live request still resolves it normally.
+/// (internal) Preview only needs to know that a key was configured. Inspecting the
+/// Credential union avoids reading an env.Ref whose value may be absent or
+/// secret; the live request still resolves it normally.
 function _vertex_has_configured_express_key(c: root.VertexClient) -> bool {
     match (c.api_key) {
         let literal: string => true,
@@ -164,8 +164,8 @@ function vertex_project_id(c: root.VertexClient, preview: bool = false) -> strin
     }
 }
 
-// The publisher segment of the model path. Anthropic models are served by
-// their own publisher with the Anthropic Messages wire format.
+/// (internal) The publisher segment of the model path. Anthropic models are served by
+/// their own publisher with the Anthropic Messages wire format.
 function _vertex_publisher(c: root.VertexClient) -> string {
     if (c.model.starts_with("claude")) {
         "anthropic"
@@ -174,17 +174,17 @@ function _vertex_publisher(c: root.VertexClient) -> string {
     }
 }
 
-// The multi-region (data-residency) endpoints. `us` and `eu` are not regions
-// in the `{region}-aiplatform.googleapis.com` sense: they are served by
-// `aiplatform.{us|eu}.rep.googleapis.com`.
+/// (internal) The multi-region (data-residency) endpoints. `us` and `eu` are not regions
+/// in the `{region}-aiplatform.googleapis.com` sense: they are served by
+/// `aiplatform.{us|eu}.rep.googleapis.com`.
 function _vertex_is_multi_region(location: string) -> bool {
     location == "us" || location == "eu"
 }
 
-// The `.../publishers/<publisher>/models` prefix a model name is appended to.
-//
-// An explicit base_url replaces the whole prefix (the caller owns the path),
-// which is also how a test points the client at a mock server.
+/// (internal) The `.../publishers/<publisher>/models` prefix a model name is appended to.
+///
+/// An explicit base_url replaces the whole prefix (the caller owns the path),
+/// which is also how a test points the client at a mock server.
 function _vertex_models_base(c: root.VertexClient, preview: bool = false) -> string {
     if let explicit: string = c.resolved_base_url() {
         return explicit;
@@ -217,8 +217,8 @@ function _vertex_models_base(c: root.VertexClient, preview: bool = false) -> str
     }
 }
 
-// The method suffix: generateContent verbs for Gemini, rawPredict verbs for
-// the Anthropic publisher.
+/// (internal) The method suffix: generateContent verbs for Gemini, rawPredict verbs for
+/// the Anthropic publisher.
 function _vertex_method(c: root.VertexClient, stream: bool) -> string {
     if (_vertex_publisher(c) == "anthropic") {
         if (stream) {
@@ -248,15 +248,15 @@ function vertex_url(c: root.VertexClient, stream: bool, preview: bool = false) -
     }
 }
 
-// Claude on Vertex is served by `publishers/anthropic` through `:rawPredict`,
-// whose body is the Anthropic Messages format rather than generateContent.
-// The body is built by the anthropic package's lowering (kept factored from
-// URL/auth for exactly this reuse); Vertex additionally requires
-// `anthropic_version` in the body and does NOT take `model` there — the model
-// is named by the endpoint URL. `{"model": null}` is the deletion spelling of
-// `merge_request_body`, applied over the Anthropic body the shared lowering
-// built; a caller who needs it back can put it in `request_body`, which merges
-// after these fields.
+/// (internal) Claude on Vertex is served by `publishers/anthropic` through `:rawPredict`,
+/// whose body is the Anthropic Messages format rather than generateContent.
+/// The body is built by the anthropic package's lowering (kept factored from
+/// URL/auth for exactly this reuse); Vertex additionally requires
+/// `anthropic_version` in the body and does NOT take `model` there — the model
+/// is named by the endpoint URL. `{"model": null}` is the deletion spelling of
+/// `merge_request_body`, applied over the Anthropic body the shared lowering
+/// built; a caller who needs it back can put it in `request_body`, which merges
+/// after these fields.
 function _vertex_anthropic_body(
     c: root.VertexClient,
     input: ai.ModelTurnInput,
@@ -264,7 +264,7 @@ function _vertex_anthropic_body(
     preview: bool = false,
 ) -> string {
     let vertex_fields: baml.json.json = { "anthropic_version": "vertex-2023-10-16", "model": null };
-    let params = anthropic.internal.AnthropicBodyParams {
+    let params = anthropic.internal.BodyParams {
         model: c.model,
         max_tokens: c.max_output_tokens ?? 8192,
         temperature: c.temperature,
@@ -278,10 +278,10 @@ function _vertex_anthropic_body(
         request_body: ai.wire.merge_request_body(vertex_fields, c.request_body),
         client_id: c.id(),
     };
-    anthropic.internal.anthropic_messages_body(params, input, stream, preview = preview)
+    anthropic.internal.messages_body(params, input, stream, preview = preview)
 }
 
-// ai.ModelTurnInput -> one Vertex generateContent request.
+/// ai.ModelTurnInput -> one Vertex generateContent request.
 function vertex_render(c: root.VertexClient, input: ai.ModelTurnInput) -> baml.http.Request {
     _vertex_request(c, input, false, preview = false)
 }
@@ -292,8 +292,8 @@ function vertex_preview(c: root.VertexClient, input: ai.ModelTurnInput) -> baml.
     _vertex_request(c, input, false, preview = true)
 }
 
-// The shared request builder: the Gemini body, the Vertex URL, and either a
-// bearer token or an express key.
+/// (internal) The shared request builder: the Gemini body, the Vertex URL, and either a
+/// bearer token or an express key.
 function _vertex_request(
     c: root.VertexClient,
     input: ai.ModelTurnInput,
@@ -361,19 +361,19 @@ function _vertex_request(
     baml.http.Request { method: "POST", url: url, headers: with_user, body: body }
 }
 
-// The one internal entry point: render, send, normalize — one model turn.
-// Claude models round-trip the Anthropic Messages format instead.
+/// The one internal entry point: render, send, normalize — one model turn.
+/// Claude models round-trip the Anthropic Messages format instead.
 function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = vertex_render(c, input);
     if (_vertex_publisher(c) == "anthropic") {
-        let sent = ai.wire.send_as_with_wire<anthropic.internal.AnthropicResponse>(
+        let sent = ai.wire.send_as_with_wire<anthropic.internal.Response>(
             req,
             "vertex",
             c.id(),
             capture_wire = c.capture_wire,
             request_timeout_ms = c.request_timeout_ms,
         );
-        let turn = anthropic.internal.anthropic_parse(sent.value);
+        let turn = anthropic.internal.parse(sent.value);
         return ai.ModelTurn { ...turn, calls: [sent.call] };
     }
     let seq = input.journal.entries().length();
@@ -384,18 +384,18 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
         capture_wire = c.capture_wire,
         request_timeout_ms = c.request_timeout_ms,
     );
-    let turn = root.internal.google_parse(sent.value, seq, provider = "vertex");
+    let turn = root.internal.parse(sent.value, seq, provider = "vertex");
     ai.ModelTurn { ...turn, calls: [sent.call] }
 }
 
-function _vertex_decode_batch(batch: string) -> ai.stream.StreamEvent[] {
+function _vertex_decode_batch(batch: string) -> ai.stream.Event[] {
     root.internal._gm_decode_batch(batch, "vertex")
 }
 
-// The streaming entry point: the same request against
-// `:streamGenerateContent?alt=sse` (Gemini) or `:streamRawPredict` (Claude,
-// which streams Anthropic Messages SSE and reuses that decoder), wrapped in
-// an ai.TurnStream.
+/// The streaming entry point: the same request against
+/// `:streamGenerateContent?alt=sse` (Gemini) or `:streamRawPredict` (Claude,
+/// which streams Anthropic Messages SSE and reuses that decoder), wrapped in
+/// an ai.TurnStream.
 function vertex_invoke_stream(
     c: root.VertexClient,
     input: ai.ModelTurnInput,
@@ -417,7 +417,7 @@ function vertex_invoke_stream(
         ai.stream.TurnStream.from_sse(
             sse,
             (batch: string) -> {
-                anthropic.internal.anthropic_decode_batch(batch, state) catch_all (e) {
+                anthropic.internal.decode_batch(batch, state) catch_all (e) {
                     _ => throw ai.errors.normalize(e),
                 }
             },
@@ -453,11 +453,7 @@ function vertex_invoke_stream(
         } else {
             null
         },
-        http_response: ai.events.HttpResponse {
-            status: sse.status_code,
-            headers: sse.headers,
-            body: null,
-        },
+        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
         usage: null,
         selected: true,
         sse_responses: if (c.capture_wire) {

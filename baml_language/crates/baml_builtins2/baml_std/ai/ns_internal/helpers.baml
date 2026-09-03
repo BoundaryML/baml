@@ -1,7 +1,7 @@
 // Internal helpers. Nothing here is part of the public ai surface.
 
-// One JSON Schema object for a function's parameters, derived from the
-// signature: every parameter typed via baml.json.schema.
+/// (internal) One JSON Schema object for a function's parameters, derived from the
+/// signature: every parameter typed via baml.json.schema.
 function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unknown> {
     let sig = reflect.signature(handler);
     let props: map<string, unknown> = {};
@@ -13,8 +13,8 @@ function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unkn
     { "type": "object", "properties": props, "required": required, "additionalProperties": false }
 }
 
-// Bound as `ctx` inside a compiler-desugared `@spec` prompt template.
-// `output_format` is the one placeholder the BEP allows.
+/// Bound as `ctx` inside a compiler-desugared `@spec` prompt template.
+/// `output_format` is the one placeholder the BEP allows.
 class SpecCtx {
     _output_format: root.OutputFormat,
 
@@ -45,7 +45,7 @@ class SpecCtx {
 }
 
 /// Assemble a structural `ai.Prompt` from a tagged template's flattened
-/// `parts` and `values`. `root.Role` values start new messages; media
+/// `parts` and `values`. `ai.Role` values start new messages; media
 /// remains structural until a provider lowers the prompt.
 //baml:mut_vm
 //baml:may_yield
@@ -83,7 +83,7 @@ function assemble_llm_prompt(parts: string[], values: unknown[]) -> root.Prompt 
     if (needs_system) {
         // The reserved metadata key marks this role as assembler-inserted; the
         // VM strips it and skips legacy edge-trimming for the message.
-        let system = root.Role { name: "system", metadata: {"__baml_synthetic_role": "1"} };
+        let system = root.Role { name: "system", metadata: { "__baml_synthetic_role": "1" } };
         let llm_parts: string[] = [""];
         for (let part in parts) {
             llm_parts.push(part);

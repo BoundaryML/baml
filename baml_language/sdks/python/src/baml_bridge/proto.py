@@ -1313,7 +1313,7 @@ def _unwrap_union_variant(holder):
 
 def _outbound_class_fqn(holder) -> Optional[str]:
     """The BAML FQN of a `BamlOutboundValue` that is a class instance (e.g.
-    `baml.json.JsonParseError`), else `None`. Used only to build a readable
+    `baml.json.ParseError`), else `None`. Used only to build a readable
     `BamlError` / `BamlPanic` message."""
     holder = _unwrap_union_variant(holder)
     if holder.WhichOneof("value") == "class_value":

@@ -2,29 +2,29 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-137..146 'from_json': throws baml.json.JsonDecodeError
-207..246 '{\n   ...     }': user.AqBox
-221..236 'AqBox { y: 99 }': user.AqBox
-232..234 '99': 99
-308..320 'aq_from_json': throws baml.json.JsonParseError | baml.json.JsonDecodeError
-390..489 '{\n   ...b.y\n}': int
-396..401 'let j': baml.json.json
-404..419 'baml.json.parse': (s: string) -> baml.json.json throws baml.json.JsonParseError
-404..425 'baml.j...("{}")': baml.json.json
-420..424 '"{}"': "{}"
-430..435 'let b': user.AqBox
-438..455 'AqOute...m_json': (j: baml.json.json) -> user.AqBox throws baml.json.JsonDecodeError
-438..458 'AqOute...son(j)': user.AqBox
-456..457 'j': baml.json.json
-484..487 'b.y': int
-530..534 'make': throws never
-569..603 '{\n   ...n    }': user.AqMake
-579..597 'AqMake...seed }': user.AqMake
-591..595 'seed': int
-637..646 'aq_static': throws never
-669..730 '{\n   ...m.n\n}': int
-675..680 'let m': user.AqMake
-683..695 'AqMaker.make': (seed: int) -> user.AqMake throws never
-683..698 'AqMaker.make(7)': user.AqMake
-696..697 '7': 7
-725..728 'm.n': int
+137..146 'from_json': throws baml.json.DecodeError
+203..242 '{\n   ...     }': user.AqBox
+217..232 'AqBox { y: 99 }': user.AqBox
+228..230 '99': 99
+304..316 'aq_from_json': throws baml.json.ParseError | baml.json.DecodeError
+378..477 '{\n   ...b.y\n}': int
+384..389 'let j': baml.json.json
+392..407 'baml.json.parse': (s: string) -> baml.json.json throws baml.json.ParseError
+392..413 'baml.j...("{}")': baml.json.json
+408..412 '"{}"': "{}"
+418..423 'let b': user.AqBox
+426..443 'AqOute...m_json': (j: baml.json.json) -> user.AqBox throws baml.json.DecodeError
+426..446 'AqOute...son(j)': user.AqBox
+444..445 'j': baml.json.json
+472..475 'b.y': int
+518..522 'make': throws never
+557..591 '{\n   ...n    }': user.AqMake
+567..585 'AqMake...seed }': user.AqMake
+579..583 'seed': int
+625..634 'aq_static': throws never
+657..718 '{\n   ...m.n\n}': int
+663..668 'let m': user.AqMake
+671..683 'AqMaker.make': (seed: int) -> user.AqMake throws never
+671..686 'AqMaker.make(7)': user.AqMake
+684..685 '7': 7
+713..716 'm.n': int
