@@ -44,6 +44,8 @@ defaults:
     shell: bash
 
 env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   MACOSX_DEPLOYMENT_TARGET: "10.13"
 
 jobs:
@@ -107,10 +109,6 @@ jobs:
     name: ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
     container: ${{ matrix._.container }}
-    environment: infisical-github-ci
-    env:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:

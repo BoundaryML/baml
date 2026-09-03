@@ -25,6 +25,8 @@ defaults:
     shell: bash
 
 env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -54,10 +56,7 @@ jobs:
     name: Build wrapper (${{ matrix.target }})
     needs: matrix
     runs-on: ${{ matrix.os }}
-    environment: infisical-github-ci
     env:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       CARGO: cargo
     strategy:
       fail-fast: false

@@ -40,14 +40,14 @@ defaults:
   run:
     shell: bash
 
+env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+
 jobs:
   package-crate:
     name: package baml_bridge crate
     runs-on: ubuntu-22.04
-    environment: infisical-github-ci
-    env:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:

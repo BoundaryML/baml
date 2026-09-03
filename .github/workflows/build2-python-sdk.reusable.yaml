@@ -32,6 +32,10 @@ defaults:
   run:
     shell: bash
 
+env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+
 jobs:
   # Target set + per-target runner/manylinux/architecture come from the platform
   # contract (`release/platforms.json`), not a hand-copied matrix list.
@@ -70,10 +74,6 @@ jobs:
 
     name: ${{ matrix._.target }}
     runs-on: ${{ matrix._.runs_on }}
-    environment: infisical-github-ci
-    env:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - name: Setup build environment (ARM64 Windows)
         if: matrix._.target == 'aarch64-pc-windows-msvc'

@@ -66,6 +66,10 @@ defaults:
   run:
     shell: bash
 
+env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+
 jobs:
   # The java build matrix is generated from the platform contract
   # (`release/platforms.json`) so the target set + per-target runner live in one
@@ -109,12 +113,9 @@ jobs:
       matrix:
         _: ${{ fromJson(needs.matrix.outputs.include) }}
     runs-on: ${{ matrix._.os }}
-    environment: infisical-github-ci
     # Experimental targets are built when possible but never block the release.
     continue-on-error: ${{ matrix._.experimental || false }}
     env:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       # Let aws-lc-sys use its prebuilt NASM objects on Windows x86-64 if the
       # runner has no NASM installed (consulted only there; harmless elsewhere).
       AWS_LC_SYS_PREBUILT_NASM: "1"
