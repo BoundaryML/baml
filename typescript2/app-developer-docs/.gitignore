@@ -1,0 +1,31 @@
+# Dependencies and framework output
+node_modules/
+.next/
+.next-build/
+.next-dev/
+out/
+.source/
+.turbo/
+*.tsbuildinfo
+
+# Local tooling output and disposable caches
+.cache/
+.docs-generated/
+.generated-content/
+coverage/
+tmp/
+temp/
+*.log
+
+# Local deployment state
+.vercel/
+
+# Secrets and machine-local settings
+.env
+.env.*
+!.env.example
+*.local
+
+# Operating-system and editor state
+.DS_Store
+*.swp

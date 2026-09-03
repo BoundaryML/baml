@@ -1,0 +1,49 @@
+{
+  "dependencies": {
+    "@b/pkg-grammar": "workspace:*",
+    "fumadocs-core": "15.8.5",
+    "fumadocs-mdx": "12.0.3",
+    "fumadocs-ui": "15.8.5",
+    "geist": "1.4.2",
+    "js-yaml": "4.1.1",
+    "lucide-react": "0.532.0",
+    "next": "15.5.9",
+    "next-themes": "0.4.6",
+    "postgres": "3.4.9",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "shiki": "3.8.1",
+    "zod": "4.0.10"
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "1.81.0",
+    "@tailwindcss/postcss": "4.1.11",
+    "@types/js-yaml": "4.0.9",
+    "@types/mdx": "2.0.13",
+    "@types/node": "24.1.0",
+    "@types/react": "18.3.26",
+    "@types/react-dom": "18.3.7",
+    "oxlint": "1.81.0",
+    "tailwindcss": "4.1.11",
+    "tsx": "4.20.6",
+    "typescript": "5.8.3"
+  },
+  "name": "app-developer-docs",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "docs:contracts:sample": "tsx scripts/generate-contract-samples.ts",
+    "docs:db:inspect": "tsx scripts/inspect-generated-content.ts",
+    "docs:db:migrate": "tsx scripts/migrate-generated-content.ts",
+    "docs:db:populate": "tsx scripts/populate-generated-content.ts",
+    "docs:db:verify": "tsx scripts/verify-generated-content.ts",
+    "lint": "biome check . && tsx node_modules/oxlint/bin/oxlint --config .oxlintrc.json .",
+    "postinstall": "fumadocs-mdx",
+    "start": "next start",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "version": "0.1.0"
+}

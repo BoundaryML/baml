@@ -1,0 +1,307 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --breakpoint-3xl: 1600px;
+  --font-sans: var(--font-geist-sans);
+  --font-heading: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+}
+
+:root {
+  --header-height: 3.5rem;
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0 0 0);
+  --primary: oklch(0 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --surface: oklch(0.98 0 0);
+  --surface-foreground: var(--foreground);
+  --selection: oklch(0 0 0);
+  --selection-foreground: oklch(1 0 0);
+  --docs-purple: oklch(0.56 0.22 292);
+  --docs-purple-soft: oklch(0.96 0.025 292);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.371 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --surface: oklch(0.2 0 0);
+  --surface-foreground: oklch(0.708 0 0);
+  --selection: oklch(0.922 0 0);
+  --selection-foreground: oklch(0.205 0 0);
+  --docs-purple: oklch(0.72 0.18 292);
+  --docs-purple-soft: oklch(0.24 0.05 292);
+}
+
+@media (min-width: 64rem) {
+  :root {
+    --header-height: 4rem;
+  }
+}
+
+@layer base {
+  * {
+    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+    border-color: var(--border);
+  }
+
+  html {
+    scroll-padding-top: var(--header-height);
+  }
+
+  body {
+    position: relative;
+    background: var(--background);
+    color: var(--foreground);
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    color: var(--selection-foreground);
+    background: var(--selection);
+  }
+
+  a,
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  a:active,
+  button:active {
+    opacity: 0.6;
+  }
+
+  @media (min-width: 48rem) {
+    a:active,
+    button:active {
+      opacity: 1;
+    }
+  }
+}
+
+@utility container-wrapper {
+  @apply mx-auto w-full px-2 3xl:max-w-[calc(var(--breakpoint-2xl)+2rem)];
+}
+
+@utility container {
+  @apply mx-auto max-w-[1400px] px-4 lg:px-8 3xl:max-w-screen-2xl;
+}
+
+@utility border-grid {
+  @apply border-b border-border/70 dark:border-border;
+}
+
+.docs-focus-ring:focus-visible {
+  outline: 2px solid var(--docs-purple);
+  outline-offset: 3px;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility extend-touch-target {
+  @media (pointer: coarse) {
+    @apply relative touch-manipulation after:absolute after:-inset-2;
+  }
+}
+
+@property --scroll-fade-t {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --scroll-fade-b {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@keyframes scroll-fade-reveal-t {
+  from {
+    --scroll-fade-t: 0;
+  }
+
+  to {
+    --scroll-fade-t: var(--_scroll-fade-size-t);
+  }
+}
+
+@keyframes scroll-fade-reveal-b {
+  from {
+    --scroll-fade-b: var(--_scroll-fade-size-b);
+  }
+
+  to {
+    --scroll-fade-b: 0;
+  }
+}
+
+.scroll-fade {
+  --_scroll-fade-size-t: var(
+    --scroll-fade-t-size,
+    var(--scroll-fade-size, min(12%, 2.5rem))
+  );
+  --_scroll-fade-size-b: var(
+    --scroll-fade-b-size,
+    var(--scroll-fade-size, min(12%, 2.5rem))
+  );
+
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--scroll-fade-t, 0),
+    black calc(100% - var(--scroll-fade-b, 0)),
+    transparent 100%
+  );
+  mask-repeat: no-repeat;
+}
+
+@supports (animation-timeline: scroll()) {
+  .scroll-fade {
+    animation-name: scroll-fade-reveal-t, scroll-fade-reveal-b;
+    animation-duration: 1ms, 1ms;
+    animation-timing-function: ease-in-out, ease-in-out;
+    animation-timeline: scroll(self y), scroll(self y);
+    animation-range:
+      0 var(--scroll-fade-reveal, 6rem),
+      calc(100% - var(--scroll-fade-reveal, 6rem)) 100%;
+    animation-fill-mode: both;
+  }
+}
+
+@supports not (animation-timeline: scroll()) {
+  .scroll-fade {
+    --scroll-fade-t: var(--_scroll-fade-size-t);
+    --scroll-fade-b: var(--_scroll-fade-size-b);
+  }
+}
+
+body:has([data-slot="docs"]) footer {
+  display: none;
+}
+
+.docs-card-grid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+@media (min-width: 40rem) {
+  .docs-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.docs-card {
+  display: block;
+  padding: 1.25rem;
+  text-decoration: none !important;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.docs-card:hover {
+  background: var(--accent);
+  border-color: color-mix(in oklab, var(--foreground) 20%, var(--border));
+}
+
+.docs-card p {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.button-primary,
+.button-secondary {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  height: 2.25rem;
+  padding-inline: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.55rem;
+  transition:
+    opacity 120ms ease,
+    background-color 120ms ease;
+}
+
+.button-primary {
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.button-secondary {
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+}
+
+.button-primary:hover,
+.button-secondary:hover {
+  opacity: 0.82;
+}

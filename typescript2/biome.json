@@ -30,6 +30,7 @@
       "!pkg-editor/src/themes/**",
       "!bun.lock",
       "!**/.vscode-test/**",
+      "!**/tools/oxlint/anti-slop/**",
       "!**/build/**",
       "!**/.git/**",
       "!**/coverage/**",
