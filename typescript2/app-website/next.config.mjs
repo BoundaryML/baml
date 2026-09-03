@@ -15,8 +15,8 @@ const nextConfig = {
   // Trace root stays at __dirname (app-website/) — the only value that builds
   // on Vercel. NFT drops some lazily-required Next runtime files from this
   // monorepo, which 500s force-dynamic routes; rather than chase those files,
-  // pages that would be force-dynamic (e.g. /changelog) are kept STATIC and
-  // fetch their data client-side through an edge rewrite (see rewrites()).
+  // pages that would be force-dynamic are kept STATIC and fetch their data
+  // client-side through an edge rewrite (see rewrites()).
   reactStrictMode: true,
   typescript: { ignoreBuildErrors: true },
   // The CLI deploy uploads from the monorepo root (baml/), one level above
