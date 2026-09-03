@@ -88,7 +88,7 @@ class Unreachable {
 ///     baml.sys.sleep(baml.time.Duration.from_seconds(5)); // panics
 /// };
 /// fut.cancel();
-/// await fut; // panics (propogated)
+/// await fut; // panics (propagated)
 /// ```
 class Cancelled {
     message: string,

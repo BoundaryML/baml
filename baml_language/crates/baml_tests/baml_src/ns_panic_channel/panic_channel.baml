@@ -22,46 +22,56 @@ function throws_a_mixture(fail: bool) -> int throws baml.errors.InvalidArgument 
 }
 
 test "a thrown panic is caught by an arm that names it" {
-    let caught = throws_a_panic() catch (e) {
-        baml.panics.AssertionFailed => 1,
-    };
-    assert.equal(caught, 1);
+    assert.equal(
+        throws_a_panic() catch (e) {
+            baml.panics.AssertionFailed => 1,
+        },
+        1,
+    );
 }
 
 test "a wildcard arm does not swallow a thrown panic" {
     // `_` skips panics, so the inner catch re-raises and the named outer arm
     // is what actually traps it.
-    let caught = {
-        throws_a_panic() catch (inner) {
-            _ => 1,
-        }
-    } catch (e) {
-        baml.panics.AssertionFailed => 2,
-    };
-    assert.equal(caught, 2);
+    assert.equal(
+        {
+            throws_a_panic() catch (inner) {
+                _ => 1,
+            }
+        } catch (e) {
+            baml.panics.AssertionFailed => 2,
+        },
+        2,
+    );
 }
 
 test "catch_all does not swallow a thrown panic either" {
-    let caught = {
-        throws_a_panic() catch_all (inner) {
-            _ => 1,
-        }
-    } catch (e) {
-        baml.panics.AssertionFailed => 2,
-    };
-    assert.equal(caught, 2);
+    assert.equal(
+        {
+            throws_a_panic() catch_all (inner) {
+                _ => 1,
+            }
+        } catch (e) {
+            baml.panics.AssertionFailed => 2,
+        },
+        2,
+    );
 }
 
 test "the ordinary half of a mixed throw still reaches the clause" {
-    let caught = throws_a_mixture(false) catch (e) {
-        baml.errors.InvalidArgument => 3,
-    };
-    assert.equal(caught, 3);
+    assert.equal(
+        throws_a_mixture(false) catch (e) {
+            baml.errors.InvalidArgument => 3,
+        },
+        3,
+    );
 }
 
 test "the panic half of a mixed throw still raises" {
-    let caught = throws_a_mixture(true) catch (e) {
-        baml.panics.AssertionFailed => 4,
-    };
-    assert.equal(caught, 4);
+    assert.equal(
+        throws_a_mixture(true) catch (e) {
+            baml.panics.AssertionFailed => 4,
+        },
+        4,
+    );
 }

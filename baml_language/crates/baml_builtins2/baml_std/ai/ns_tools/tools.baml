@@ -18,9 +18,13 @@ class Tool {
     raw_handler: ((map<string, unknown>) -> string throws unknown)?,
     on_error: ErrorMode?, // null: inherit the run's tool_errors mode
 
-    /// The total boundary around one call: validate, dispatch through
-    /// reflection, serialize. A throw here is the tool's failure, not the
-    /// run's. The reflection boundary widens exactly representable integral
+    /// The total boundary around one call. A throw here is the tool's
+    /// failure, not the run's.
+    ///
+    /// A raw tool (`raw_tool`) hands the argument map straight to its
+    /// `raw_handler` and returns that string as-is. A schema-derived tool
+    /// validates, dispatches through reflection, and JSON-serializes the
+    /// result; that reflection boundary widens exactly representable integral
     /// arguments into float parameters (see reflect.call_any).
     function call(self, args: map<string, unknown>) -> string {
         if let rh: (map<string, unknown>) -> string throws unknown = self.raw_handler {

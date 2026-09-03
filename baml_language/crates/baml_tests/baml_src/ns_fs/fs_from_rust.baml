@@ -4,7 +4,7 @@
 // Error types (from crates/sys_native/src/io_impls.rs):
 //   open/read/write/remove/remove_dir/remove_dir_all/read_dir/mkdir failures
 //     -> baml.errors.Io
-//   file.read(negative n)          -> baml.errors.InvalidArgument
+//   file.read(n <= 0)              -> empty read (`null` is reserved for end-of-file)
 //   operations on a closed handle  -> baml.errors.InvalidArgument ("File is closed")
 //   seek_from("start", negative)   -> baml.errors.InvalidArgument
 //
@@ -196,7 +196,7 @@ test "fs_remove_dir_all_on_file_errors" {
 }
 
 // ============================================================================
-// file.read with a negative length errors (Io)
+// file.read with a non-positive length is an empty read
 // ============================================================================
 
 // A non-positive read limit asks for no bytes, which is an empty read rather

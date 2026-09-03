@@ -6,7 +6,7 @@ Name casing convention in idiomatic BAML essentially follows Rust:
 
 - Primitive types are lowercase: `int`, `float`, `string`, `uint8array`, etc.
 - Declared type positions are PascalCase: classes, enums, interfaces, type aliases, generics, associated types, enum variants, etc.
-  - There are a limited set of exceptions: `json` and the media types recieve lowercase aliases.
+  - There are a limited set of exceptions: `json` and the media types receive lowercase aliases.
 - Value-positions are snake_case: function names, variables, fields, parameters, etc.
 
 Since names are written fully qualified in BAML, types should avoid stutter when possible: `baml.json.DecodeError` instead of `baml.json.JsonDecodeError`.

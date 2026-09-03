@@ -4,8 +4,8 @@
 ///
 /// Implementors are expected to provide a `write_some` method that attempts to write up to `limit` bytes to the destination.
 ///
-/// Based on the Rust's [`Write`](https://doc.rust-lang.org/std/io/trait.Write.html) trait
-/// and javascript's [`WritableStream`](https://developer.mozilla.org/en-US/docs/Web/API/WritableStream).
+/// Based on Rust's [`Write`](https://doc.rust-lang.org/std/io/trait.Write.html) trait
+/// and JavaScript's [`WritableStream`](https://developer.mozilla.org/en-US/docs/Web/API/WritableStream).
 interface Write {
     /// Attempt one write of `data` and return the number of bytes accepted.
     /// A partial write is successful.

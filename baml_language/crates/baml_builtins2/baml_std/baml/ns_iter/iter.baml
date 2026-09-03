@@ -548,8 +548,8 @@ class ArrayIterator<T> {
 /// … while the value is still below `max`; the bound is a stopping condition,
 /// not a value that has to be landed on.
 ///
-/// The end test is always `i < max`, so a non-positive `step` never terminates
-/// — see `new` — and there is no descending range.
+/// The end test is always `i < max`, so with `min < max` a non-positive `step`
+/// never terminates — see `new` — and there is no descending range.
 ///
 /// Advancing past `int.max_value()` raises `baml.panics.IntegerOverflow`, as
 /// the underlying `+` would.
@@ -562,10 +562,12 @@ class Range {
     step: int,
 
     /// Creates a range that starts at `min` and adds `step` after each item,
-    /// stopping at the first value that reaches `max`.
+    /// stopping at the first value that reaches or passes `max`.
     ///
-    /// A non-positive `step` never reaches `max`, so the range is infinite;
-    /// pair it with `take` if that is what you want.
+    /// If `min >= max` the range is empty whatever `step` is. Otherwise a
+    /// non-positive `step` never reaches `max` — zero repeats `min`, negative
+    /// descends — so the range is infinite; pair it with `take` if that is
+    /// what you want.
     ///
     /// # Parameters
     ///

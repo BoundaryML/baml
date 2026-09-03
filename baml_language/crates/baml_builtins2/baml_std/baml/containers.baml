@@ -942,8 +942,9 @@ implements FloatStats for float[] {
     /// odd element count yields the single middle element; an even count yields
     /// the arithmetic mean of the two middle elements, computed so the
     /// intermediate sum cannot overflow. `totalOrder` gives `NaN` a defined
-    /// position at the extremes, so a `NaN` element shifts the middle rather
-    /// than poisoning the result.
+    /// position at the extremes, so a `NaN` element shifts the middle; the
+    /// result is `NaN` only when a `NaN` is itself one of the two middle
+    /// elements of an even-length array.
     ///
     /// # Throws
     /// - `baml.errors.InvalidArgument` when `self` is empty.

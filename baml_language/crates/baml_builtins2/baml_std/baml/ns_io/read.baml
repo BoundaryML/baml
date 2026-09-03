@@ -2,8 +2,8 @@
 ///
 /// Implementors are expected to provide a `read` method that attempts to read up to `limit` bytes from the source.
 ///
-/// Based on the Rust's [`Read`](https://doc.rust-lang.org/std/io/trait.Read.html) trait
-/// and javascript's [`ReadableStream`](https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream).
+/// Based on Rust's [`Read`](https://doc.rust-lang.org/std/io/trait.Read.html) trait
+/// and JavaScript's [`ReadableStream`](https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream).
 interface Read {
     /// Read up to `limit` bytes from the source.
     ///

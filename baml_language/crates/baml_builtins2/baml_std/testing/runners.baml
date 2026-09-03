@@ -81,7 +81,7 @@ function Retry(max_attempts: int) -> TestRunner {
     };
 }
 
-/// Creates a test runner that requires a pass rate above `threshold` to pass.
+/// Creates a test runner that requires a pass rate of at least `threshold` to pass.
 function PassRate(threshold: float) -> TestSetRunner {
     if (threshold < 0.0 || threshold > 1.0) {
         baml.sys.panic("testing.PassRate requires 0.0 <= threshold <= 1.0")

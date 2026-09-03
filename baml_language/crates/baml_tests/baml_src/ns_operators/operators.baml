@@ -563,10 +563,10 @@ function drv_catch_int_rem_zero() -> int {
 // specialized `DivFloat` opcode (`float / float`), and the generic opcode that
 // a mixed `int`/`float` pair lowers to.
 function drv_float_div_zero_is_infinite() -> bool {
-    drv_float_div(1.0, 0.0) > 1.0e308
-        && (1.0 / 0.0) > 1.0e308
-        && (1 / 0.0) > 1.0e308
-        && (1.0 / 0) > 1.0e308
+    drv_float_div(1.0, 0.0).is_infinite()
+        && (1.0 / 0.0).is_infinite()
+        && (1 / 0.0).is_infinite()
+        && (1.0 / 0).is_infinite()
 }
 function drv_catch_bigint_div_zero() -> bigint {
     drv_bigint_div(1n, 0n) catch (e) { baml.panics.DivisionByZero => -1n }
