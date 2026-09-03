@@ -674,7 +674,7 @@ function result_text(r: MergeResult) -> string {
         "fork_refused" => {
             ":no_entry: "
                 + r.pr
-                + " comes from a fork; not run on this host (ATB2_ALLOW_FORKS=1 overrides)"
+                + " comes from a fork; its branch is not built or pushed from this host"
         },
     }
 }
