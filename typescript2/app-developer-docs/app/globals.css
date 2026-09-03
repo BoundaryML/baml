@@ -305,3 +305,56 @@ body:has([data-slot="docs"]) footer {
 .button-secondary:hover {
   opacity: 0.82;
 }
+
+.baml-snippet,
+.baml-project {
+  margin-block: 1.25rem;
+}
+
+.baml-project {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.baml-code {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+}
+
+.baml-code figcaption {
+  padding: 0.5rem 0.85rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.baml-code pre {
+  padding: 1rem;
+  margin: 0;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.65;
+  background: var(--background) !important;
+  border: 0;
+  border-radius: 0;
+}
+
+.baml-code code {
+  font-family: var(--font-mono);
+}
+
+.baml-code-dark {
+  display: none;
+}
+
+.dark .baml-code-light {
+  display: none;
+}
+
+.dark .baml-code-dark {
+  display: block;
+}
