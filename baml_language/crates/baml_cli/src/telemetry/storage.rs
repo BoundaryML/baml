@@ -11,7 +11,6 @@
 //! |-----------------------------|--------------------------|------------------------------------------|
 //! | `telemetry.enabled`         | `enabled: bool`          | Persistent opt-in flag                   |
 //! | `telemetry.notifiedAt`      | `notified_at: u64`       | Unix ms of first-run notice (0 = never)  |
-//! | —                           | `notice_version: u32`    | Last data-collection notice shown        |
 //! | `telemetry.anonymousId`     | `anonymous_id: String`   | 32-byte hex; sent with every event       |
 //! | `telemetry.salt`            | `salt: String`           | 16-byte hex; NEVER SENT (see `one_way_hash`) |
 //!
@@ -40,10 +39,6 @@ use super::{TELEMETRY_URL, events::TelemetryEvent, post, queue};
 /// Config schema version. Bumped on any breaking change to [`Config`].
 const SCHEMA_VERSION: u32 = 1;
 
-/// Increment when the disclosed categories of collected data materially
-/// change so existing enabled users see the updated notice once.
-const NOTICE_VERSION: u32 = 1;
-
 /// File name of the persistent config file under `<baml_home>`.
 const CONFIG_FILE_NAME: &str = "telemetry.toml";
 
@@ -69,11 +64,6 @@ pub(crate) struct Config {
     /// notice has never been shown; the next invocation will print it.
     #[serde(default)]
     pub notified_at: u64,
-
-    /// Version of the data-collection notice most recently shown. Older
-    /// configs deserialize as 0 and are shown the expanded disclosure once.
-    #[serde(default)]
-    pub notice_version: u32,
 
     /// Random 32-byte hex string identifying this machine's CLI installs.
     /// Generated on first run; stable across invocations. Sent with every
@@ -240,7 +230,7 @@ impl Telemetry {
             .inner
             .config
             .lock()
-            .map(|c| has_current_notice(&c))
+            .map(|c| has_received_notice(&c))
             .unwrap_or(true);
         if already_notified {
             return;
@@ -250,7 +240,6 @@ impl Telemetry {
 
         if let Ok(mut cfg) = self.inner.config.lock() {
             cfg.notified_at = now_ms();
-            cfg.notice_version = NOTICE_VERSION;
             let _ = write_config(&self.inner.config_path, &cfg);
         }
     }
@@ -362,8 +351,8 @@ impl Telemetry {
     }
 }
 
-fn has_current_notice(config: &Config) -> bool {
-    config.notified_at != 0 && config.notice_version >= NOTICE_VERSION
+fn has_received_notice(config: &Config) -> bool {
+    config.notified_at != 0
 }
 
 /// RAII guard: on drop, seals the live queue file and spawns the detached
@@ -456,7 +445,6 @@ fn load_or_init_config(path: &Path, legacy_path: &Path) -> Config {
         // should still see the notice on their next invocation. This is
         // exactly the transparency gap #4018 flagged.
         notified_at: 0,
-        notice_version: 0,
         anonymous_id,
         salt: random_hex_16(),
     };
@@ -567,7 +555,6 @@ mod tests {
         assert_eq!(cfg.schema_version, SCHEMA_VERSION);
         assert!(cfg.enabled);
         assert_eq!(cfg.notified_at, 0);
-        assert_eq!(cfg.notice_version, 0);
         assert_eq!(cfg.anonymous_id.len(), 64, "32-byte hex id");
         assert_eq!(cfg.salt.len(), 32, "16-byte hex salt");
         assert!(path.exists(), "config should be persisted on first load");
@@ -587,7 +574,7 @@ mod tests {
     }
 
     #[test]
-    fn old_config_deserializes_as_needing_the_current_notice() {
+    fn existing_notice_timestamp_remains_sufficient() {
         let cfg = toml::from_str::<Config>(
             r#"
 schema_version = 1
@@ -598,8 +585,7 @@ salt = "def"
 "#,
         )
         .unwrap();
-        assert_eq!(cfg.notice_version, 0);
-        assert!(!has_current_notice(&cfg));
+        assert!(has_received_notice(&cfg));
     }
 
     /// A legacy plain-UUID `telemetry_id` file must be adopted as
