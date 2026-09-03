@@ -71,3 +71,6 @@ jobs:
 
       - name: Validate examples
         run: node typescript/apps/developer-docs/scripts/validate-examples.mjs
+
+      - name: Check generated reference data
+        run: node typescript/apps/developer-docs/scripts/generate-reference.mjs --check

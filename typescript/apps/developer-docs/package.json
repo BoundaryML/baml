@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "next dev --turbopack --port 4000",
     "build": "next build",
+    "generate:reference": "node scripts/generate-reference.mjs",
+    "check:reference": "node scripts/generate-reference.mjs --check",
     "start": "next start --port 4000",
     "test": "vitest run",
     "validate:fixtures": "node scripts/validate-examples.mjs",
