@@ -138,14 +138,16 @@
   "packageManager": "pnpm@9.12.0",
   "private": true,
   "scripts": {
-    "build": "next build",
-    "dev": "next dev",
+    "build": "pnpm sync:changelog && next build",
+    "dev": "pnpm sync:changelog && next dev",
     "format": "biome format",
     "format:fix": "pnpm format --write",
     "lint": "next lint",
     "postbuild": "next-sitemap --config next-sitemap.config.cjs",
     "start": "next start",
+    "sync:changelog": "node scripts/sync-language-changelog.mjs",
     "test": "node --test --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/baml-monarch.test.mjs",
+    "test:changelog": "pnpm sync:changelog && node --test --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/changelog.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "version": "0.1.0"
