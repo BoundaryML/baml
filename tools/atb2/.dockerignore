@@ -1,0 +1,5 @@
+# The runner image needs baml.toml, baml_src and deploy/entrypoint.sh; nothing else.
+*
+!baml.toml
+!baml_src
+!deploy/entrypoint.sh

@@ -1,5 +1,6 @@
 # Redeploys the atb2 runner (tools/atb2/deploy) on every push to canary that
-# touches tools/atb2. One secret: FLY_API_TOKEN, a deploy token scoped to the
+# touches tools/atb2; on a pull request touching the deploy files it only
+# checks that the image builds. One secret: FLY_API_TOKEN, a deploy token scoped to the
 # atb2-runner app. The runner's own secrets are set on Fly by hand (see
 # tools/atb2/deploy/fly.toml); CI never handles them. The job skips itself
 # until the token exists.
@@ -14,6 +15,10 @@ on:
     paths:
       - "tools/atb2/**"
       - ".github/workflows/atb2-deploy.yml"
+  pull_request:
+    paths:
+      - "tools/atb2/deploy/**"
+      - ".github/workflows/atb2-deploy.yml"
   workflow_dispatch:
 
 concurrency:
@@ -24,8 +29,22 @@ permissions:
   contents: read
 
 jobs:
+  # On a PR: the image must build. No deploy, no secrets.
+  image:
+    name: Runner image builds
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: docker build -f tools/atb2/deploy/Dockerfile -t atb2-runner:ci tools/atb2
+
+  # On canary: deploy.
   runner:
     name: Fly (atb2-runner)
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -44,4 +63,4 @@ jobs:
 
       - name: Deploy
         if: env.FLY_API_TOKEN != ''
-        run: flyctl deploy --config tools/atb2/deploy/fly.toml --remote-only --ha=false
+        run: flyctl deploy tools/atb2 --config tools/atb2/deploy/fly.toml --remote-only --ha=false

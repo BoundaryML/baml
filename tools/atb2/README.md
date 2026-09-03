@@ -79,17 +79,23 @@ that touches `tools/atb2`; it holds one secret, `FLY_API_TOKEN`, and skips
 itself until that exists. The site (`typescript2/app-feedback`) deploys
 through the Vercel GitHub app once its project is linked.
 
+The runner's secrets come from Infisical at start: the image carries the
+Infisical CLI and the entrypoint wraps the process in `infisical run` against
+boundary-tools `prod`, so the machine holds a single Fly secret,
+`INFISICAL_TOKEN`, and a rotation in Infisical takes effect on the next
+restart. Two more values must be in that project for the runner: `GH_TOKEN`
+(push branches, open PRs, comment) and `CLAUDE_CODE_OAUTH_TOKEN` (the agent,
+since no one can log the CLI in on a headless machine). None of it goes to
+CI.
+
 By hand, from the repo root:
 
 ```sh
-fly volumes create atb2_data --size 80 --region sjc -a atb2-runner   # once
-fly secrets import -a atb2-runner < <(infisical export ... )          # once, see deploy/fly.toml
-fly deploy --config tools/atb2/deploy/fly.toml
+fly apps create atb2-runner                                            # once
+fly volumes create atb2_data --size 80 --region sjc -a atb2-runner     # once
+fly secrets set -a atb2-runner INFISICAL_TOKEN=...                     # once
+fly deploy tools/atb2 --config tools/atb2/deploy/fly.toml
 ```
-
-The runner needs two secrets the pipeline does not: `GH_TOKEN` (push
-branches, open PRs, comment) and `CLAUDE_CODE_OAUTH_TOKEN` (the agent, since
-no one can log the CLI in on a headless machine). Neither goes to CI.
 
 ## Tests
 

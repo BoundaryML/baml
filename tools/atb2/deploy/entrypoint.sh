@@ -1,12 +1,28 @@
 #!/usr/bin/env bash
-# Runner entrypoint: make sure canary's baml-cli exists on the volume, then
-# run the BAML expression given as the command (babysit_loop(), pipeline_loop()).
+# Runner entrypoint: pull the pipeline's secrets from Infisical, make sure
+# canary's baml-cli exists on the volume, then run the BAML expression given
+# as the command (babysit_loop(), pipeline_loop()).
+#
+# Secrets: the machine holds ONE Fly secret, INFISICAL_TOKEN (a machine
+# identity or service token for the boundary-tools project). Everything the
+# pipeline reads (FEEDBACK_SUPABASE_*, ATB_SLACK_*, ATB_POSTHOG_*, GH_TOKEN,
+# CLAUDE_CODE_OAUTH_TOKEN) is injected by `infisical run` at start, so a
+# rotation in Infisical takes effect on the next restart and nothing is
+# copied into Fly. INFISICAL_PROJECT_ID and INFISICAL_ENV come from fly.toml.
 #
 # The package is written against canary's BAML, so the released wrapper cannot
 # run it; handle_issue builds canary's baml-cli into $ATB2_HOME/target on every
 # run, and this does the same once up front so the first request does not
 # pay for the build.
 set -euo pipefail
+
+if [ -n "${INFISICAL_TOKEN:-}" ] && [ -z "${ATB2_SECRETS_LOADED:-}" ]; then
+  echo "atb2: secrets from Infisical (${INFISICAL_PROJECT_ID:?set in fly.toml}, ${INFISICAL_ENV:-prod})"
+  export ATB2_SECRETS_LOADED=1
+  exec infisical run \
+    --projectId "$INFISICAL_PROJECT_ID" --env "${INFISICAL_ENV:-prod}" \
+    --silent -- "$0" "$@"
+fi
 
 home="${ATB2_HOME:-/data}"
 repo="$home/repo"
