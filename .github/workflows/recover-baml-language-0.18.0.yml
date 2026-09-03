@@ -7,7 +7,7 @@ run-name: Publish BAML toolchain 0.18.0 from verified release artifacts
 # unrelated C# bridge verification gate before any publisher could run.
 on:
   push:
-    branches: [canary]
+    branches: [sxlijin/publish-baml-toolchain-0.18.0]
     paths:
       - .github/workflows/recover-baml-language-0.18.0.yml
 
@@ -26,6 +26,7 @@ defaults:
 env:
   RELEASE_RUN_ID: "33224762615"
   RELEASE_RUN_ATTEMPT: "2"
+  RELEASE_TRIGGER_PARENT_SHA: a7f6af0ab7735a8312959ff7fba8ec6e23e1f420
   RELEASE_SOURCE_SHA: 7622555396a99db466afaea09dea2cad259d4033
   RELEASE_SOURCE_CI_RUN_ID: "33224009970"
   RELEASE_SOURCE_REF: baml-language-source-7622555396a99db466afaea09dea2cad259d4033
@@ -35,26 +36,17 @@ env:
 jobs:
   publish:
     name: Verify and publish main toolchain assets
-    if: ${{ github.repository == 'BoundaryML/baml' && github.ref == 'refs/heads/canary' }}
+    if: ${{ github.repository == 'BoundaryML/baml' && github.ref == 'refs/heads/sxlijin/publish-baml-toolchain-0.18.0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Require this workflow to be newly introduced
+      - name: Require the intended one-shot trigger
         env:
           BEFORE_SHA: ${{ github.event.before }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          error="$RUNNER_TEMP/previous-file-error.txt"
-          if gh api \
-            "repos/$GITHUB_REPOSITORY/contents/.github/workflows/recover-baml-language-0.18.0.yml?ref=$BEFORE_SHA" \
-            >/dev/null 2>"$error"; then
-            echo "::error::this one-shot recovery workflow already existed before the push"
-            exit 1
-          fi
-          if ! grep -qF "HTTP 404" "$error"; then
-            cat "$error"
-            echo "::error::could not prove this push introduced the recovery workflow"
+          if [[ "$BEFORE_SHA" != "$RELEASE_TRIGGER_PARENT_SHA" ]]; then
+            echo "::error::unexpected trigger parent $BEFORE_SHA; expected $RELEASE_TRIGGER_PARENT_SHA"
             exit 1
           fi
 
