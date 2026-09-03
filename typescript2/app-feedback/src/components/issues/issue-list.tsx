@@ -57,6 +57,7 @@ function IssueRow({ issue, now }: { issue: Issue; now: number }) {
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <SubsystemBadge subsystem={issue.subsystem} />
           <DifficultyBadge difficulty={issue.difficulty} />
+          {issue.dataset === "eval" && <EvalBadge />}
           <span>{issue.shepherd ? `@${issue.shepherd}` : "unassigned"}</span>
           <span>·</span>
           <span>v{issue.version}</span>
@@ -87,7 +88,10 @@ function BoardCard({ issue }: { issue: Issue }) {
       href={`/issues/${issue.id}`}
       className="block rounded-md border bg-card p-3 hover:bg-accent/50 transition-colors"
     >
-      <div className="font-mono text-[11px] text-muted-foreground">{issue.id}</div>
+      <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+        {issue.id}
+        {issue.dataset === "eval" && <EvalBadge />}
+      </div>
       <div className="mt-0.5 text-sm font-medium leading-snug line-clamp-2">{issue.title}</div>
       <div className="mt-2 flex items-center justify-between gap-2">
         <PipelineStrip stages={stageInfo(issue)} />
@@ -105,10 +109,13 @@ export function IssueList({ issues }: { issues: Issue[] }) {
   const [query, setQuery] = useState("");
   const [oldestFirst, setOldestFirst] = useState(false);
   const [view, setView] = useState<ViewMode>("list");
+  const [showEval, setShowEval] = useState(false);
+  const evalCount = useMemo(() => issues.filter((i) => i.dataset === "eval").length, [issues]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return issues
+      .filter((i) => showEval || i.dataset !== "eval")
       .filter((i) => view === "board" || status === "all" || i.status.state === status)
       .filter((i) => subsystem === "all" || i.subsystem === subsystem)
       .filter((i) => difficulty === "all" || i.difficulty === difficulty)
@@ -124,7 +131,7 @@ export function IssueList({ issues }: { issues: Issue[] }) {
           ? a.updated_at.localeCompare(b.updated_at)
           : b.updated_at.localeCompare(a.updated_at),
       );
-  }, [issues, status, subsystem, difficulty, query, oldestFirst, view]);
+  }, [issues, status, subsystem, difficulty, query, oldestFirst, view, showEval]);
 
   return (
     <div className="space-y-4">
@@ -213,6 +220,17 @@ export function IssueList({ issues }: { issues: Issue[] }) {
               ))}
             </select>
           </span>
+          {evalCount > 0 && (
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showEval}
+                onChange={(e) => setShowEval(e.target.checked)}
+                className="accent-foreground"
+              />
+              show {evalCount} eval {evalCount === 1 ? "row" : "rows"}
+            </label>
+          )}
           <span className="ml-auto flex items-center gap-3">
             <Legend color="bg-stage-done" label="done" />
             <Legend color="bg-stage-running" label="running" />
@@ -263,6 +281,15 @@ export function IssueList({ issues }: { issues: Issue[] }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** Rows the evals wrote (dataset = eval): never a real user's report. */
+function EvalBadge() {
+  return (
+    <Badge variant="outline" className="border-dashed text-[10px] uppercase tracking-wide" title="Written by the evals, not a real report">
+      eval
+    </Badge>
   );
 }
 

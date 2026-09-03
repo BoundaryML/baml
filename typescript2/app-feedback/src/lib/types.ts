@@ -84,6 +84,10 @@ export interface Issue {
   design_doc: string | null;
   /** Last handle_issue run for this issue, if any. */
   outcome: HandleOutcome | null;
+  /** live: a real report and what the pipeline did with it. eval: written by the evals. */
+  dataset?: Dataset;
   created_at: string;
   updated_at: string;
 }
+
+export type Dataset = "live" | "eval";

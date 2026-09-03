@@ -3,10 +3,23 @@
 A view over the atb2 feedback pipeline (`tools/atb2`): every issue triaged from
 user feedback, and how far the pipeline has taken each one.
 
-**Mock only, for now.** The data is `src/lib/mock-data.ts`; nothing talks to
-Supabase or reads `~/.atb2/runs`. The types in `src/lib/types.ts` mirror
-`models.baml` (`Issue`, `IssueStatus`) and `handle_issue.baml` (`HandleOutcome`)
-so wiring real data in later is a data-source change, not a UI change.
+## Data
+
+The pages read the atb2 store in Supabase (`tools/atb2/db/schema.sql`) through
+PostgREST with the anon key, which sees issues, runs and events but never a
+reporter's identity. `src/lib/db.ts` is the whole data layer; the view
+`issues_with_outcome` gives each issue its latest `handle_issue` run.
+
+```sh
+FEEDBACK_SUPABASE_URL=https://igraichzcidsylvzkjlc.supabase.co   # as in Infisical (boundary-tools)
+FEEDBACK_SUPABASE_ANON_KEY=...                                     # the anon key, never the service key
+```
+
+Without those two variables the pages render `src/lib/mock-data.ts` and say
+so under the title. Results are cached for 30 seconds.
+
+The types in `src/lib/types.ts` mirror `models.baml` (`Issue`, `IssueStatus`)
+and `handle_issue.baml` (`HandleOutcome`); the BAML side owns the shape.
 
 ## Pages
 
