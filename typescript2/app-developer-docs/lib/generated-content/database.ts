@@ -54,7 +54,7 @@ export function createGeneratedContentReader(
 ): GeneratedContentReader {
   const databaseUrl = requireGeneratedContentDatabaseUrl(environment);
   const sql = postgres(databaseUrl, {
-    max: 4,
+    max: 1,
     prepare: false,
   });
 
