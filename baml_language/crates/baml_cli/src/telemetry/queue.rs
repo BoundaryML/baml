@@ -227,10 +227,10 @@ fn drain_with_dir_permissions(
         // rotation (≤10 min) refreshes the config and stops it, and the
         // next flush child purges anything left — so lingering data is
         // bounded to a single rotation window.
-        // Opt-out deletion must not depend on chmod succeeding. Attempt to
-        // tighten the surviving directory only after all queue files are gone.
-        purge_all_in(dir);
+        // Make a read-only queue deletable, but attempt the purge even when
+        // chmod fails so opt-out cleanup never depends on normalization.
         let _ = set_dir_permissions(dir);
+        purge_all_in(dir);
         return;
     }
 
@@ -552,6 +552,27 @@ mod tests {
         });
 
         assert!(!queued.exists(), "opt-out purge must not depend on chmod");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn disabled_drain_tightens_read_only_directory_before_purge() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let root = tempfile::tempdir().unwrap();
+        let queue = root.path().join("telemetry");
+        fs::create_dir(&queue).unwrap();
+        let queued = queue.join("sealed_1_existing.jsonl");
+        fs::write(&queued, r#"{"event":"a"}"#).unwrap();
+        fs::set_permissions(&queue, fs::Permissions::from_mode(0o555)).unwrap();
+
+        drain(&queue, true);
+
+        assert!(!queued.exists(), "read-only queue should be made deletable");
+        assert_eq!(
+            fs::metadata(&queue).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
     }
 
     /// Fresh files survive both sweeps: too young to be orphans, too
