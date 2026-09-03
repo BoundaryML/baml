@@ -50,5 +50,5 @@ RUN chmod +x /usr/local/bin/atb2-entrypoint && chown -R atb2:atb2 /app
 
 USER atb2
 ENTRYPOINT ["atb2-entrypoint"]
-# fly.toml picks the process: babysit_loop() or pipeline_loop()
-CMD ["babysit_loop()"]
+# fly.toml picks the process: merge_issue_loop() or pipeline_loop()
+CMD ["merge_issue_loop()"]

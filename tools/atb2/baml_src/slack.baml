@@ -286,6 +286,56 @@ function minutes(seconds: int) -> string {
     }
 }
 
+/// Posts in the thread when there is one and Slack is configured; never
+/// fails the round over a Slack error.
+function tell_thread(thread: SlackRef?, text: string) -> null {
+    match (thread) {
+        null => null,
+        let t: SlackRef => {
+            if (slack_configured()) {
+                slack_post(text, t) catch (_) {
+                    _ => SlackRef { channel: "", ts: "" },
+                };
+            };
+            null
+        },
+    }
+}
+
+/// A PR url in a mention ("babysit this PR https://github.com/o/r/pull/12",
+/// "<https://github.com/o/r/pull/12|pull/12>"), or null. Pure; the ingress
+/// has the same rule in Python.
+function pr_url_in(text: string) -> string? {
+    for (
+        let raw in text.split(" ").flat_map((t: string) -> string[] {
+            t.split("\n")
+        })
+    ) {
+        let tok = raw.trim();
+        // Slack wraps links: <url> or <url|label>
+        let inner = if (tok.starts_with("<") && tok.includes(">")) {
+            tok.slice(1, tok.index_of(">") ?? tok.length())
+        } else {
+            tok
+        };
+        let url = inner.split("|").at(0) ?? "";
+        let core = trim_punct(url);
+        if (core.starts_with("https://github.com/") && core.includes("/pull/")) {
+            let n = core.split("/pull/").at(1) ?? "";
+            let digits = n.split("/").at(0) ?? "";
+            if (
+                digits.length() > 0
+                    && digits.chars().every((c: string) -> bool {
+                        c >= "0" && c <= "9"
+                    })
+            ) {
+                return (core.split("/pull/").at(0) ?? "") + "/pull/" + digits;
+            };
+        };
+    }
+    null
+}
+
 // ==================== Intake ====================
 
 function slack_intake_channel() -> string? {
@@ -541,5 +591,30 @@ testset "slack" {
         assert.equal(minutes(59), "59s");
         assert.equal(minutes(600), "10m");
         assert.equal(slack_configured(), false);
+    }
+
+    test "a PR url comes out of a mention, Slack-wrapped or not" {
+        assert.equal(
+            pr_url_in("babysit this PR https://github.com/BoundaryML/baml/pull/4715") ?? "",
+            "https://github.com/BoundaryML/baml/pull/4715",
+        );
+        assert.equal(
+            pr_url_in("babysit <https://github.com/BoundaryML/baml/pull/4715|pull/4715> please")
+                ?? "",
+            "https://github.com/BoundaryML/baml/pull/4715",
+        );
+        assert.equal(
+            pr_url_in("babysit <https://github.com/BoundaryML/baml/pull/4715/files>") ?? "",
+            "https://github.com/BoundaryML/baml/pull/4715",
+        );
+        assert.equal(
+            pr_url_in("babysit https://github.com/BoundaryML/baml/pull/4715.") ?? "",
+            "https://github.com/BoundaryML/baml/pull/4715",
+        );
+        assert.equal(
+            pr_url_in("babysit https://github.com/BoundaryML/baml/issues/4715") == null,
+            true,
+        );
+        assert.equal(pr_url_in("hello") == null, true);
     }
 }

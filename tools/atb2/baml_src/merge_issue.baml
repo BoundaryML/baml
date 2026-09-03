@@ -40,15 +40,17 @@ class MergeResult {
     rounds: int,
 }
 
-//#merge_issue(pr: string, mode: HandleMode = HandleMode.Live, max_rounds: int = 3, issue_id: string? = null) -> MergeResult
+//#merge_issue(pr: string, mode: HandleMode = HandleMode.Live, max_rounds: int = 3, issue_id: string? = null, thread: SlackRef? = null, mention: string? = null) -> MergeResult
 function merge_issue(
     pr: string,
     mode: HandleMode = HandleMode.Live,
     max_rounds: int = 3,
     /// The store's issue the PR belongs to, for the merge_rounds rows.
     issue_id: string? = null,
-    /// A Slack thread that hears about every round (babysit.baml).
+    /// A Slack thread that hears the start, every round and the result.
     thread: SlackRef? = null,
+    /// A Slack user id to @mention on the result line (the requester).
+    mention: string? = null,
 ) -> MergeResult {
     let started = baml.time.Instant.now();
     let first = pr_snapshot(pr);
@@ -64,8 +66,28 @@ function merge_issue(
             | "fork_refused",
     ) -> MergeResult {
         log.info({ "pr": pr, "result": kind, "rounds": state.rounds });
-        MergeResult { kind: kind, pr: pr, rounds: state.rounds }
+        let r = MergeResult { kind: kind, pr: pr, rounds: state.rounds };
+        //# the thread hears how it ended
+        tell_thread(
+            thread,
+            result_text(r)
+                + (
+                    match (mention) {
+                        null => "",
+                        let m: string => " <@" + m + ">",
+                    }
+                ),
+        );
+        r
     };
+    tell_thread(
+        thread,
+        ":eyes: watching "
+            + pr
+            + " until it merges: CI failures and review comments go back to the agent, up to "
+            + max_rounds.to_string()
+            + " rounds",
+    );
     //# refuse: a fork's code would run on this host, and the sandbox and
     //# the push resolve branches against origin only
     if (first.cross_repo) {
@@ -106,7 +128,12 @@ function merge_issue(
         };
         //# hand the branch and the brief to handle_issue (fix pass, gate, push)
         let brief = render_feedback(fb, failed_logs(fb));
-        handle_issue(issue_from_pr(snap), mode = mode, review = Review { branch: snap.branch, feedback: brief });
+        handle_issue(
+            issue_from_pr(snap),
+            mode = mode,
+            review = Review { branch: snap.branch, feedback: brief },
+            thread = thread,
+        );
         //# how the round ended: handle_issue says so in outcome.json, not in its return
         let round = state.rounds + 1;
         let kind = round_outcome(snap.branch, round);
@@ -193,22 +220,6 @@ function round_text(round: int, kind: string, fb: PrFeedback) -> string {
                 ", nothing pushed"
             }
         )
-}
-
-/// Posts in the thread when there is one and Slack is configured; never
-/// fails the round over a Slack error.
-function tell_thread(thread: SlackRef?, text: string) -> null {
-    match (thread) {
-        null => null,
-        let t: SlackRef => {
-            if (slack_configured()) {
-                slack_post(text, t) catch (_) {
-                    _ => SlackRef { channel: "", ts: "" },
-                };
-            };
-            null
-        },
-    }
 }
 
 /// The PR as an Issue, so handle_issue can work on it: the PR's title and
@@ -611,6 +622,228 @@ function render_feedback(fb: PrFeedback, logs: map<string, string>) -> string {
     parts.join("\n\n")
 }
 
+// ==================== The request queue ====================
+// "@bammy babysit <PR>": the ingress inserts a babysit_requests row; a
+// runner with the toolchain (`baml run -e 'merge_issue_loop()'`, the Fly
+// app's `requests` process) claims it and runs merge_issue with the Slack
+// thread attached. `request_merge(pr)` queues one by hand.
+
+/// One queued request, as the ingress wrote it.
+class MergeRequest {
+    id: int,
+    pr: string,
+    channel: string,
+    thread_ts: string,
+    requested_by: string?,
+    status: string,
+}
+
+/// The closing line of a merge_issue thread.
+function result_text(r: MergeResult) -> string {
+    let rounds = r.rounds.to_string()
+        + (
+            if (r.rounds == 1) {
+                " round"
+            } else {
+                " rounds"
+            }
+        );
+    match (r.kind) {
+        "merged" => ":white_check_mark: merged after " + rounds + ": " + r.pr,
+        "green" => {
+            ":large_green_circle: green after "
+                + rounds
+                + ", nothing left for the agent; waiting on a human to merge "
+                + r.pr
+        },
+        "closed" => ":no_entry_sign: closed without merging: " + r.pr,
+        "out_of_rounds" => {
+            ":hourglass: out of rounds ("
+                + rounds
+                + ") with feedback still pending on "
+                + r.pr
+                + "; a human takes it from here"
+        },
+        "round_failed" => {
+            ":x: a round ended without a push (gate failed or the agent stopped) on "
+                + r.pr
+                + "; see ~/.atb2/merge for the outcome"
+        },
+        "waiting_on_checks" => ":hourglass: gave up waiting for checks on " + r.pr,
+        "dry_run" => ":test_tube: dry run done on " + r.pr + ", nothing pushed",
+        "fork_refused" => {
+            ":no_entry: "
+                + r.pr
+                + " comes from a fork; not run on this host (ATB2_ALLOW_FORKS=1 overrides)"
+        },
+    }
+}
+
+// ==================== The queue ====================
+
+/// Queues a request by hand, the way the ingress does for a mention.
+/// `thread` is where to narrate; null = no Slack, the result is only stored.
+function request_merge(pr: string, thread: SlackRef? = null) -> int {
+    if (!db_configured()) {
+        baml.sys.panic("request_merge needs the store (FEEDBACK_SUPABASE_URL/KEY)");
+    };
+    let row = insert(
+        "babysit_requests",
+        {
+            "pr": pr,
+            "channel": match (thread) {
+                null => "",
+                let t: SlackRef => t.channel,
+            },
+            "thread_ts": match (thread) {
+                null => "",
+                let t: SlackRef => t.ts,
+            },
+            "requested_by": "baml run",
+            "dataset": dataset(),
+        }
+            .to_json(),
+    );
+    baml.json.path_or<int>(row, ".id", 0)
+}
+
+/// The oldest queued request, claimed for this runner; null when the queue
+/// is empty. The claim is a conditional PATCH (status still queued), so two
+/// runners cannot take the same row.
+function claim_merge_request(runner: string) -> MergeRequest? {
+    let rows = select(
+        "babysit_requests",
+        "select=id,pr,channel,thread_ts,requested_by,status&status=eq.queued&order=created_at&limit=1",
+    );
+    let r = match (rows.at(0)) {
+        null => {
+            return null;
+        },
+        let j: json => request_from_row(j),
+    };
+    let claimed = supabase_send(
+        "PATCH",
+        "babysit_requests?id=eq." + r.id.to_string() + "&status=eq.queued",
+        baml.json.stringify(
+            { "status": "running", "claimed_by": runner, "claimed_at": "now()" }.to_json(),
+        ),
+        "return=representation",
+    );
+    if (rows_of(claimed).length() == 0) {
+        // another runner got it first
+        return null;
+    };
+    r
+}
+
+function request_from_row(j: json) -> MergeRequest {
+    MergeRequest {
+        id: baml.json.path_or<int>(j, ".id", 0),
+        pr: baml.json.path_or<string>(j, ".pr", ""),
+        channel: baml.json.path_or<string>(j, ".channel", ""),
+        thread_ts: baml.json.path_or<string>(j, ".thread_ts", ""),
+        requested_by: baml.json.path_or<string?>(j, ".requested_by", null),
+        status: baml.json.path_or<string>(j, ".status", "queued"),
+    }
+}
+
+function finish_merge_request(id: int, status: string, result: json) -> null {
+    update(
+        "babysit_requests",
+        "id=eq." + id.to_string(),
+        { "status": status, "result": result, "finished_at": "now()" }.to_json(),
+    );
+    null
+}
+
+/// Requests left `running` longer than `after_s` (a runner died) go back to
+/// the queue.
+function reclaim_stale_requests(after_s: int) -> int {
+    let stale = select(
+        "babysit_requests",
+        "select=id&status=eq.running&claimed_at=lt." + url_encode(iso_seconds_ago(after_s)),
+    );
+    for (let r in stale) {
+        update(
+            "babysit_requests",
+            "id=eq." + baml.json.path_or<int>(r, ".id", 0).to_string(),
+            { "status": "queued", "claimed_by": null, "claimed_at": null }.to_json(),
+        );
+    }
+    stale.length()
+}
+
+/// `now - s` as an ISO instant, for a PostgREST timestamp filter.
+function iso_seconds_ago(s: int) -> string {
+    baml.time.Instant.now().as<baml.ops.Subtract<baml.time.Duration, Output = baml.time.Instant>>
+        .sub(baml.time.Duration.from_seconds(s))
+        .to_string()
+}
+
+/// The thread a request came from, or null when it was queued without Slack.
+function merge_request_thread(r: MergeRequest) -> SlackRef? {
+    if (r.channel.length() == 0 || r.thread_ts.length() == 0) {
+        null
+    } else {
+        SlackRef { channel: r.channel, ts: r.thread_ts }
+    }
+}
+
+// ==================== The runner ====================
+
+//#merge_issue_loop(once: bool = false, mode: HandleMode = HandleMode.Live, reclaim_after_s: int = 21600) -> int
+function merge_issue_loop(
+    once: bool = false,
+    mode: HandleMode = HandleMode.Live,
+    reclaim_after_s: int = 21600,
+) -> int {
+    if (!db_configured()) {
+        baml.sys.panic("merge_issue_loop needs the store (FEEDBACK_SUPABASE_URL/KEY)");
+    };
+    let runner = (baml.env.get("HOSTNAME") ?? baml.env.get("USER") ?? "runner") + "/" + baml.id.new().slice(0, 8);
+    let served = 0;
+    log.info({ "merge_request": runner, "polling_s": poll_s(), "once": once });
+    while (true) {
+        //# stale claims back to the queue
+        let back = reclaim_stale_requests(reclaim_after_s);
+        if (back > 0) {
+            log.warn({ "merge_request": runner, "reclaimed": back });
+        };
+        //# claim the oldest queued request
+        match (claim_merge_request(runner)) {
+            null => {
+                if (once && served > 0) {
+                    return served;
+                };
+                wait_poll();
+            },
+            let r: MergeRequest => {
+                log.info(
+                    { "merge_request": runner, "request": r.id, "pr": r.pr, "by": r.requested_by },
+                );
+                //# run it, narrating in the request's thread
+                let result = merge_issue(r.pr, mode = mode, thread = merge_request_thread(r), mention = r.requested_by);
+                finish_merge_request(
+                    r.id,
+                    if (result.kind == "round_failed") {
+                        "failed"
+                    } else {
+                        "done"
+                    },
+                    result.to_json(),
+                );
+                served += 1;
+                if (once) {
+                    return served;
+                };
+            },
+        };
+    }
+    served
+}
+
+// ==================== Unit tests (token-free) ====================
+
 // ==================== Unit tests (token-free) ====================
 
 function snap(checks: CheckRow[], comments: ReviewComment[]) -> PrSnapshot {
@@ -779,5 +1012,60 @@ testset "merge_issue" {
     test "config defaults" {
         assert.equal(reviewers(), ["coderabbitai[bot]"]);
         assert.is_true(poll_s() > 0 && max_wait_s() > poll_s());
+    }
+}
+
+testset "merge_requests" {
+    test "the closing line names the outcome" {
+        assert.contains(
+            result_text(MergeResult { kind: "merged", pr: "https://x/pull/1", rounds: 2 }),
+            "merged after 2 rounds",
+        );
+        assert.contains(
+            result_text(MergeResult { kind: "green", pr: "https://x/pull/1", rounds: 1 }),
+            "waiting on a human",
+        );
+        assert.contains(
+            result_text(MergeResult { kind: "out_of_rounds", pr: "https://x/pull/1", rounds: 3 }),
+            "out of rounds",
+        );
+        assert.contains(
+            result_text(MergeResult { kind: "fork_refused", pr: "https://x/pull/1", rounds: 0 }),
+            "fork",
+        );
+    }
+
+    test "a round line counts what went to the agent" {
+        let fb = PrFeedback {
+            checks: [CheckRow { name: "clippy", bucket: "fail", link: null }],
+            comments: [],
+        };
+        assert.equal(
+            round_text(1, "fixed", fb),
+            ":arrows_counterclockwise: round 1: 1 failing check, 0 reviewer comments → fixed, pushed",
+        );
+        assert.contains(round_text(2, "gate_failed", fb), "nothing pushed");
+    }
+
+    test "a request row reads back; a queued-by-hand request has no thread" {
+        let r = request_from_row(
+            baml.json.parse(
+                `{"id":7,"pr":"https://github.com/o/r/pull/1","channel":"","thread_ts":"","requested_by":null,"status":"queued"}`,
+            ),
+        );
+        assert.equal(r.id, 7);
+        assert.equal(merge_request_thread(r) == null, true);
+        let s = request_from_row(
+            baml.json.parse(
+                `{"id":8,"pr":"https://github.com/o/r/pull/2","channel":"C1","thread_ts":"1.2","requested_by":"U1","status":"queued"}`,
+            ),
+        );
+        assert.equal(merge_request_thread(s)?.ts ?? "", "1.2");
+    }
+
+    test "the stale cutoff is an instant in the past" {
+        let cutoff = iso_seconds_ago(60);
+        assert.is_true(cutoff.length() > 10);
+        assert.is_true(cutoff < baml.time.Instant.now().to_string());
     }
 }

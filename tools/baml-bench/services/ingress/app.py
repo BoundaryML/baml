@@ -43,7 +43,7 @@ _SEEN_CAP = 1024
 _MENTION = re.compile(r"^\s*<@[^>]+>\s*")
 
 # "@bammy babysit this PR https://github.com/o/r/pull/12" -> atb2 watches the PR
-# until it merges (tools/atb2/baml_src/babysit.baml). The request is a row in
+# until it merges (tools/atb2/baml_src/merge_issue.baml). The request is a row in
 # the atb2 store; a runner with the toolchain serves it. Both settings are
 # optional: without them a babysit mention is an ordinary task.
 FEEDBACK_SUPABASE_URL = os.environ.get("FEEDBACK_SUPABASE_URL", "").rstrip("/")

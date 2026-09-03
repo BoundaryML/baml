@@ -112,7 +112,7 @@ run_stage() {
             exec "$BAML" test -i "root::handle_issue::*" -i "root::merge_issue::*" -i "root::fix_in_budget::*" -i "root::design_doc::*" ;;
         wire|4|"wiring")
             echo "run_tests: testing WIRING (store, slack, intake, pipeline; token-free)"
-            exec "$BAML" test -i "root::store::*" -i "root::slack::*" -i "root::intake::*" -i "root::pipeline::*" ;;
+            exec "$BAML" test -i "root::store::*" -i "root::slack::*" -i "root::intake::*" -i "root::pipeline::*" -i "root::merge_requests::*" ;;
         *)  die "unknown stage: $1 (use create | organize | pr | wire)" ;;
     esac
 }

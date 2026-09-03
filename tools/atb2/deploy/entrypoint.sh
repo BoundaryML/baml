@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runner entrypoint: pull the pipeline's secrets from Infisical, make sure
 # canary's baml-cli exists on the volume, then run the BAML expression given
-# as the command (babysit_loop(), pipeline_loop()).
+# as the command (merge_issue_loop(), pipeline_loop()).
 #
 # Secrets: the machine holds ONE Fly secret, INFISICAL_TOKEN (a machine
 # identity or service token for the boundary-tools project). Everything the
@@ -45,7 +45,7 @@ if [ ! -x "$cli" ]; then
   (cd "$repo/baml_language" && CARGO_TARGET_DIR="$home/target" cargo build -p baml_cli --bin baml-cli)
 fi
 
-expr="${1:-babysit_loop()}"
+expr="${1:-merge_issue_loop()}"
 echo "atb2: $expr"
 cd /app
 exec "$cli" run -e "$expr"

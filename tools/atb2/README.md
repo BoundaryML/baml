@@ -14,7 +14,7 @@ draft PR, the PR gets to green. Written in BAML against canary's toolchain
 
 | stage   | file                | what it does |
 |---------|---------------------|--------------|
-| ingest  | `intake.baml`, `slack.baml` | new reports from PostHog `baml_feedback` events and the Slack intake channel become `feedback` rows |
+| ingest  | `pipeline.baml`, `slack.baml` | new reports from PostHog `baml_feedback` events and the Slack intake channel become `feedback` rows |
 | triage  | `create_issue.baml`, `organize_issue.baml`, `gauge_issue.baml` | repro, ticket, shepherd, difficulty; an `issues` row and a Slack thread |
 | handle  | `handle_issue.baml` | design pass, fix pass, the gate, a draft PR; a `runs` row and a thread reply |
 | merge   | `merge_issue.baml`  | CI failures and reviewer comments back to `handle_issue` until the PR merges; `merge_rounds` rows |
@@ -49,7 +49,7 @@ PostHog trio; `dev` does not). `run_tests.sh` and any live run go through
 | `ATB2_SLACK_INTAKE_CHANNEL` | Slack intake | `channels:history`; unset = no Slack intake |
 | `ATB2_POSTHOG_API_KEY`, `ATB2_POSTHOG_PROJECT_ID`, `ATB2_POSTHOG_HOST` | PostHog intake | fall back to `ATB_POSTHOG_*`; personal key with `events:read`; host defaults to `https://us.posthog.com` |
 | `ATB2_UI_URL` | notifications | links issues to `typescript2/app-feedback` |
-| `ATB2_REVIEWERS`, `ATB2_ALLOW_FORKS`, `ATB2_POLL_S`, `ATB2_MAX_WAIT_S` | merge_issue | see `merge_issue.baml` |
+| `ATB2_REVIEWERS`, `ATB2_POLL_S`, `ATB2_MAX_WAIT_S` | merge_issue | see `merge_issue.baml`; fork PRs are refused |
 | `ATB2_MODEL`, `ATB2_HOME`, `ATB2_KEEP_RUNS` | handle_issue | see `handle_issue.baml` |
 
 The UI (`typescript2/app-feedback`) reads the same project with the anon
@@ -68,7 +68,7 @@ The DDL is applied in the Supabase dashboard and is not in the repo.
 ## Deploy
 
 `tools/atb2/deploy` is the runner: a Fly app (`atb2-runner`) with two
-processes on one image, `babysit` (serves `@bammy babysit <PR>` requests from
+processes on one image, `requests` (serves `@bammy babysit <PR>` requests from
 the store) and `pipeline` (runs `run_pipeline` every five minutes). The image
 carries cargo, gh, node and the Claude Code CLI; the volume at `/data` holds
 the cached canary clone, the cargo target and the run dirs, and the first

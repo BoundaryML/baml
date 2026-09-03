@@ -36,12 +36,14 @@ class Review {
     feedback: string,
 }
 
-//#handle_issue(issue: Issue, mode: HandleMode = HandleMode.Live, update: bool = false, review: Review? = null) -> Issue
+//#handle_issue(issue: Issue, mode: HandleMode = HandleMode.Live, update: bool = false, review: Review? = null, thread: SlackRef? = null) -> Issue
 function handle_issue(
     issue: Issue,
     mode: HandleMode = HandleMode.Live,
     update: bool = false,
     review: Review? = null,
+    /// A Slack thread that hears each stage: design pass, fix pass, gate, push.
+    thread: SlackRef? = null,
 ) -> Issue {
     if (review == null) {
         //# skip: not ready (not gauged / not open / already handled)
@@ -85,6 +87,7 @@ function handle_issue(
         if (design == null) {
             //## stop: the design agent produced nothing
             write_outcome(sb, stopped_outcome(sb, started));
+            tell_thread(thread, ":x: the design pass produced nothing; a human takes it from here");
             return issue;
         };
         doc = render_design_doc(design ?? baml.sys.panic("unreachable"));
@@ -92,8 +95,13 @@ function handle_issue(
         if (difficulty == Difficulty.Hard) {
             //## hard: hand the design doc to the shepherd, no code change
             write_outcome(sb, outcome(sb, "hard", null, started, null, null, doc));
+            tell_thread(
+                thread,
+                ":memo: gauged Hard: the design doc is written for the shepherd, no code was changed",
+            );
             return with_design_doc(issue, doc);
         };
+        tell_thread(thread, ":memo: design pass done, starting the fix pass on `" + sb.branch + "`");
     } else {
         //# under review: the feedback is the plan
         doc = review.feedback;
@@ -113,6 +121,7 @@ function handle_issue(
         //## stop: the fix agent ran out of budget or reported nothing
         keep_branch = mode == HandleMode.Live;
         write_outcome(sb, stopped_outcome(sb, started));
+        tell_thread(thread, ":x: the fix agent stopped without a result on `" + sb.branch + "`");
         return out;
     };
     let fix = report ?? baml.sys.panic("unreachable");
@@ -123,6 +132,14 @@ function handle_issue(
         //## stop: gate failed — branch kept for a human in Live mode
         keep_branch = mode == HandleMode.Live;
         write_outcome(sb, outcome(sb, "gate_failed", null, started, gate, fix, doc));
+        tell_thread(
+            thread,
+            ":x: gate failed on `"
+                + sb.branch
+                + "`: "
+                + failed_steps(gate)
+                + "; the branch is kept for a human",
+        );
         return out;
     };
     if (review != null) {
@@ -138,6 +155,19 @@ function handle_issue(
             _ => "",
         };
         comment_on_pr(sb, pr, review_comment(fix));
+        //# the thread hears what was pushed
+        tell_thread(
+            thread,
+            ":arrows_counterclockwise: pushed "
+                + head_sha(sb)
+                + " to "
+                + pr
+                + "\n"
+                + fix.summary.trim()
+                + "\n_files: "
+                + fix.files_changed.join(", ")
+                + "_",
+        );
         write_outcome(sb, outcome(sb, "fixed", pr, started, gate, fix, null));
         return out;
     };
@@ -155,6 +185,7 @@ function handle_issue(
     //# push the branch and open the draft PR
     let pr = push_and_open_pr(sb, draft);
     write_outcome(sb, outcome(sb, "fixed", pr, started, gate, fix, doc));
+    tell_thread(thread, ":rocket: draft PR opened: " + pr + "\n" + fix.summary.trim());
     log.info(
         { "issue": issue.id, "pr": pr, "turns": read_turns(sb), "seconds": elapsed_s(started) },
     );
@@ -1627,6 +1658,11 @@ function passed_count(output: string) -> string? {
         };
     }
     found
+}
+
+/// The worktree's HEAD, short, for the thread.
+function head_sha(sb: Sandbox) -> string {
+    git(sb.worktree, ["rev-parse", "--short", "HEAD"]).stdout.trim()
 }
 
 /// Live only. Lifts the worktree's push guard for this one push. The

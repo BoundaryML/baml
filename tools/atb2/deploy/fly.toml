@@ -1,5 +1,5 @@
 # The atb2 runner on Fly. Two processes on one image:
-#   babysit   serves "@bammy babysit <PR>" requests from the store
+#   requests  serves "@bammy babysit <PR>" requests from the store (merge_issue_loop)
 #   pipeline  runs the feedback pipeline every five minutes
 #
 #   fly deploy tools/atb2 --config tools/atb2/deploy/fly.toml
@@ -31,19 +31,19 @@ primary_region = "sjc"
   INFISICAL_ENV = "prod"
 
 [processes]
-  babysit = "babysit_loop()"
+  requests = "merge_issue_loop()"
   pipeline = "pipeline_loop(every_s = 300)"
 
 [[mounts]]
   source = "atb2_data"
   destination = "/data"
-  processes = ["babysit", "pipeline"]
+  processes = ["requests", "pipeline"]
 
 # the gate runs cargo builds and nextest: give it room
 [[vm]]
   size = "performance-8x"
   memory = "32gb"
-  processes = ["babysit", "pipeline"]
+  processes = ["requests", "pipeline"]
 
 [checks]
   # no http surface; liveness is the process itself
