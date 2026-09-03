@@ -121,6 +121,13 @@ pub enum LoweringDiagnostic {
     /// annotation or a `throws`-clause member).
     WildcardTypeNotAllowed { context: String, span: TextRange },
 
+    /// `unreflect(…)` written anywhere other than as the whole right-hand
+    /// side of a body-level `type T = …;` binding: a type argument, an
+    /// annotation, a pattern, an item signature, a top-level alias, or nested
+    /// inside a binding's static type. The binding is the one spelling that
+    /// lifts a runtime type; every other position names the bound `T`.
+    UnreflectOutsideTypeBinding { span: TextRange },
+
     /// A `:` type ascription was applied to a pattern that doesn't accept
     /// one. Only `let x: T` and `[…]: T` are supported. Things like
     /// `_: T`, `int: T`, `Class { … }: T`, `(a | b): T`, and progressive
@@ -528,6 +535,20 @@ impl LoweringDiagnostic {
                 *span,
                 "`_` cannot be inferred here",
             ),
+            LoweringDiagnostic::UnreflectOutsideTypeBinding { span } => {
+                // One constructor owns E0168's headline (the diagnostics
+                // crate), so the lowering gate and any later reporter can
+                // never drift apart on the message.
+                return baml_compiler_diagnostics::runtime_type::runtime_type_must_be_named()
+                    .with_primary(
+                        Span {
+                            file_id,
+                            range: *span,
+                        },
+                        "bind it first with `type T = unreflect(…);`, then write `T` here",
+                    )
+                    .with_phase(DiagnosticPhase::Hir);
+            }
             LoweringDiagnostic::InvalidPatternAscription { reason, span } => (
                 DiagnosticId::TypeMismatch,
                 Severity::Error,

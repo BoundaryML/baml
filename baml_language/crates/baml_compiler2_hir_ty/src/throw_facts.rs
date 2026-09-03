@@ -598,8 +598,7 @@ fn collect_widened_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_ast::{Pattern, Stmt, TypeExprKind};
-    use text_size::TextRange;
+    use baml_compiler2_ast::{Stmt, TypeBindingValue};
 
     use super::*;
 
@@ -611,53 +610,27 @@ mod tests {
     }
 
     #[test]
-    fn hidden_runtime_operands_are_structural_throw_fact_nodes_once() {
+    fn a_type_binding_operand_is_a_structural_throw_fact_node_once() {
         let mut body = ExprBody::default();
-        let callee = body.exprs.alloc(Expr::Path(vec![Name::new("f")]));
-        let call_throw = throwing_expr(&mut body, "call");
-        let call = body.exprs.alloc(Expr::Call {
-            callee,
-            type_args: vec![
-                TypeExprKind::Unreflect {
-                    operand: Some(call_throw),
-                    attrs: Vec::new(),
-                }
-                .at(TextRange::default()),
-            ],
-            args: Vec::new(),
-        });
-        let call_stmt = body.stmts.alloc(Stmt::Expr(call));
-
         let binding_throw = throwing_expr(&mut body, "binding");
         let binding = body.stmts.alloc(Stmt::TypeBinding {
             name: Name::new("T"),
-            value: TypeExprKind::Unreflect {
-                operand: Some(binding_throw),
-                attrs: Vec::new(),
-            }
-            .at(TextRange::default()),
+            value: TypeBindingValue::Runtime(binding_throw),
         });
-
-        let scrutinee = body.exprs.alloc(Expr::Literal(Literal::Int(1)));
-        let pattern_throw = throwing_expr(&mut body, "pattern");
-        let pattern = body.patterns.alloc(Pattern::Unreflect(pattern_throw));
-        let pattern_test = body.exprs.alloc(Expr::Is { scrutinee, pattern });
         let root = body.exprs.alloc(Expr::Block {
-            stmts: vec![call_stmt, binding],
-            tail_expr: Some(pattern_test),
+            stmts: vec![binding],
+            tail_expr: None,
         });
         body.root_expr = Some(root);
 
         let nodes = body_nodes(&body);
-        for hidden in [call_throw, binding_throw, pattern_throw] {
-            assert_eq!(
-                nodes
-                    .iter()
-                    .filter(|node| **node == BodyNode::Expr(hidden))
-                    .count(),
-                1,
-                "hidden operand {hidden:?} must participate exactly once",
-            );
-        }
+        assert_eq!(
+            nodes
+                .iter()
+                .filter(|node| **node == BodyNode::Expr(binding_throw))
+                .count(),
+            1,
+            "the binding operand must participate exactly once",
+        );
     }
 }

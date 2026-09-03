@@ -1,0 +1,92 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.erase() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "ok";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.f(value: unknown) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: unknown // value // param
+    let _2: reflect.Type
+    let _3: null | Bound // annotated
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: string
+    let _8: reflect.Type
+    let _9: null | Bound
+    let _10: bool
+    let _11: bool
+
+    bb0: {
+        _2 = load_type(Wrapper<string>);
+        bind_type(0, [Copy(Local(Local(2)))]);
+        _3 = const null;
+        _8 = load_type(#0);
+        _7 = call const fn user.erase<copy _8>() -> [bb1];
+    }
+
+    bb1: {
+        _6 = copy _7 == const "ok";
+        _5 = short_circuit(&&) copy _6 -> [eval: bb2, join: bb3];
+    }
+
+    bb2: {
+        _9 = copy _3;
+        _5 = call const fn baml.ops.equals_equals(copy _9, const null) -> [bb3];
+    }
+
+    bb3: {
+        _4 = short_circuit(&&) copy _5 -> [eval: bb4, join: bb7];
+    }
+
+    bb4: {
+        _10 = is_type(copy _1, #0);
+        branch copy _10 -> [bb6, bb5];
+    }
+
+    bb5: {
+        _4 = const false;
+        goto -> bb7;
+    }
+
+    bb6: {
+        _4 = const true;
+        goto -> bb7;
+    }
+
+    bb7: {
+        _0 = short_circuit(&&) copy _4 -> [eval: bb8, join: bb11];
+    }
+
+    bb8: {
+        _11 = is_type(copy _1, #0);
+        branch copy _11 -> [bb10, bb9];
+    }
+
+    bb9: {
+        _0 = const false;
+        goto -> bb11;
+    }
+
+    bb10: {
+        _0 = const true;
+        goto -> bb11;
+    }
+
+    bb11: {
+        return;
+    }
+}

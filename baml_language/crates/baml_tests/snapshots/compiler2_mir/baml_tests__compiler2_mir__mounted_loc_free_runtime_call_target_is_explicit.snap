@@ -6,9 +6,12 @@ fn user.f(t: reflect.Type, value: unknown) -> unknown {
     let _0: unknown // _0 // return
     let _1: reflect.Type // t // param
     let _2: unknown // value // param
+    let _3: reflect.Type
 
     bb0: {
-        _0 = call const fn app.accept<copy _1>(copy _2; runtime_type_check) -> [bb1];
+        bind_type(0, [Copy(Local(Local(1)))]);
+        _3 = load_type(#0);
+        _0 = call const fn app.accept<copy _3>(copy _2; runtime_type_check) -> [bb1];
     }
 
     bb1: {

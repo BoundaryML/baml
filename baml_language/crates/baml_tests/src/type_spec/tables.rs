@@ -4,7 +4,7 @@
 //! corpus-scale check is the differential MIR gate; these pin the
 //! per-road recording semantics the gate builds on.
 
-use baml_compiler2_hir_ty::infer::{CallTypeArgPlan, MemberResolution, RuntimeCheck, infer_body};
+use baml_compiler2_hir_ty::infer::{CallTypeArgPlan, MemberResolution, infer_body};
 
 use crate::engine::TestDbExt;
 
@@ -343,7 +343,7 @@ function rt_owner_use() -> RtBox<int> throws never {
             assert_eq!(plan.own_offset, 0);
             assert!(matches!(
                 plan.slots.as_slice(),
-                [CallTypeArgPlan::Static { ty, .. }]
+                [CallTypeArgPlan { ty, .. }]
                     if ty.render_canonical() == "int"
             ));
             assert_eq!(
@@ -359,103 +359,16 @@ function rt_owner_use() -> RtBox<int> throws never {
 }
 
 #[test]
-fn runtime_call_plan_preserves_mixed_slots_and_precise_deferrals() {
-    let source = r#"
-interface RtAnchor {}
-interface RtStatic {}
-class RtGood { implements RtStatic {} }
-function rt_mix<A extends RtAnchor, B extends RtStatic>(a: A, b: B, plain: int) -> A throws never {
-    a
-}
-function rt_use(runtime_t: reflect.Type, good: RtGood) -> RtAnchor throws never {
-    rt_mix<unreflect(runtime_t), RtGood>(42, good, 7)
-}
-"#;
-    let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.file("test.baml", source);
-    let mut seen = false;
-    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
-        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
-            continue;
-        };
-        let result = infer_body(&db, owner);
-        assert!(
-            result
-                .type_of_expr
-                .values()
-                .chain(result.call_plans.values().flat_map(|plan| &plan.type_args))
-                // Groundness itself is type-enforced now (the plain artifact
-                // has no variable variant); what remains checkable is that
-                // finalize did not leak whole-table error residue.
-                .any(|ty| !matches!(ty, baml_type::Ty::Error { .. })),
-            "final inference tables must not be all-error"
-        );
-        for (&call, plan) in &result.call_plans {
-            if &source[source_map.expr_span(call)]
-                != "rt_mix<unreflect(runtime_t), RtGood>(42, good, 7)"
-            {
-                continue;
-            }
-            seen = true;
-            assert_eq!(plan.slots.len(), 2);
-            assert!(matches!(
-                &plan.slots[0],
-                CallTypeArgPlan::Runtime { occurrence_ty, parameter, .. }
-                    if occurrence_ty.render_canonical() == "user.RtAnchor"
-                        && parameter.name().as_str() == "A"
-            ));
-            assert!(matches!(
-                &plan.slots[1],
-                CallTypeArgPlan::Static { ty, .. }
-                    if ty.render_canonical() == "user.RtGood"
-            ));
-            assert_eq!(
-                plan.type_args
-                    .iter()
-                    .map(|ty| ty.render_canonical())
-                    .collect::<Vec<_>>(),
-                vec!["user.RtAnchor", "user.RtGood"]
-            );
-            assert_eq!(
-                plan.deferred_checks
-                    .iter()
-                    .filter(|check| matches!(check, RuntimeCheck::Argument { .. }))
-                    .count(),
-                1,
-                "only argument `a: A` depends on the runtime slot"
-            );
-            assert_eq!(
-                plan.deferred_checks
-                    .iter()
-                    .filter(|check| matches!(check, RuntimeCheck::Bound { .. }))
-                    .count(),
-                1,
-                "only A's bound is runtime-deferred; B's bound stays static"
-            );
-            assert_eq!(plan.bindings.len(), 3, "binding enrichment kept type slots");
-        }
-    }
-    assert!(seen, "runtime call plan was not recorded");
-}
-
-#[test]
 fn runtime_call_special_contracts_are_narrow_and_diagnostic() {
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
 
     let source = r#"
 function sc_id<T>(value: T) -> T throws never { value }
 function sc_contract<F>() -> null throws never { null }
-function __make_stream<T>(value: T) -> T throws never { value }
 
 function sc_bare() -> int throws never {
     let runtime_t = reflect.Type.of<int>();
     sc_id<runtime_t>(1)
-}
-function sc_bad_operand() -> int throws never {
-    sc_id<unreflect(42)>(42)
-}
-function sc_stream(runtime_t: reflect.Type) -> int throws never {
-    __make_stream<unreflect(runtime_t)>(1)
 }
 function sc_ordinary_contract() -> null throws never {
     sc_contract<(string) -> string>()
@@ -490,12 +403,9 @@ function sc_companion() -> baml.Map<string, int> throws never {
         for (&call, plan) in &result.call_plans {
             let snippet = &source[source_map.expr_span(call)];
             if snippet.starts_with("pkg.get_function") {
-                extraction_throws = plan.slots.first().and_then(|slot| match slot {
-                    CallTypeArgPlan::Static { ty, .. } => match ty {
-                        baml_type::Ty::Function { throws, .. } => Some(throws.render_canonical()),
-                        _ => None,
-                    },
-                    CallTypeArgPlan::Runtime { .. } => None,
+                extraction_throws = plan.slots.first().and_then(|slot| match &slot.ty {
+                    baml_type::Ty::Function { throws, .. } => Some(throws.render_canonical()),
+                    _ => None,
                 });
             }
             if snippet.starts_with("session.eval") {
@@ -524,11 +434,6 @@ function sc_companion() -> baml.Map<string, int> throws never {
     )));
     assert!(errors.iter().any(|error| matches!(
         error,
-        TirTypeError::RuntimeTypeArgumentOnStreamingCall { callee_name }
-            if callee_name.as_str() == "__make_stream"
-    )));
-    assert!(errors.iter().any(|error| matches!(
-        error,
         TirTypeError::CannotConstructReflectionKind { class_name }
             if class_name.render_user_facing() == "reflect.class.Type"
     )));
@@ -536,11 +441,6 @@ function sc_companion() -> baml.Map<string, int> throws never {
         error,
         TirTypeError::CannotConstructBuiltinCompanion { class_name, companion }
             if class_name.render_user_facing() == "baml.Map" && companion.builtin == "map"
-    )));
-    assert!(errors.iter().any(|error| matches!(
-        error,
-        TirTypeError::TypeMismatch { expected, got }
-            if expected.render_canonical() == "reflect.Type | reflect.TypeView" && got.render_canonical() == "42"
     )));
     assert_eq!(extraction_throws.as_deref(), Some("unknown"));
     assert_eq!(session_args, Some(vec!["unknown".to_string()]));
@@ -717,148 +617,6 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
         diagnostics.len(),
         2,
         "valid scoped bindings must not create static-only errors: {diagnostics:?}"
-    );
-}
-
-#[test]
-fn unreflect_patterns_are_distinct_non_covering_and_effect_scoped() {
-    use baml_compiler2_hir_ty::diagnostics::TirTypeError;
-
-    let source = r#"
-class ScopeEffect {}
-function scope_effect_type() -> reflect.Type throws ScopeEffect { throw ScopeEffect {} }
-function pat_open(t: reflect.Type, x: int) -> string {
-    match (x) {
-        unreflect(t) => "left",
-        unreflect(t) => "right",
-    }
-}
-function pat_closed(t: reflect.Type, x: int) -> string {
-    match (x) {
-        unreflect(t) => "left",
-        unreflect(t) => "right",
-        _ => "fallback",
-    }
-}
-function pat_bad(x: int) -> bool { x is unreflect(42) }
-function pat_effect(x: int) -> bool { x is unreflect(scope_effect_type()) }
-function pat_default(flag: bool = 1 is unreflect(scope_effect_type())) -> null { null }
-function pat_catch() -> bool {
-    { throw ScopeEffect {} } catch (e) {
-        ScopeEffect => 1 is unreflect(scope_effect_type())
-    }
-}
-function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
-    (x: int) -> { x is unreflect(scope_effect_type()) }
-}
-"#;
-    let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.file("test.baml", source);
-    let mut non_exhaustive = 0;
-    let mut unreachable = 0;
-    let mut pattern_types = 0;
-    let mut saw_bad_operand = false;
-    let mut saw_direct_effect = false;
-    let mut saw_catch_effect = false;
-    let mut saw_lambda_effect = false;
-    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
-        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
-            continue;
-        };
-        let result = infer_body(&db, owner);
-        let owner_name = match owner {
-            baml_compiler2_hir::body::BodyOwnerId::Function(function)
-            | baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(function) => {
-                baml_compiler2_ppir::item_data::function_data(&db, function)
-                    .name
-                    .as_str()
-            }
-            baml_compiler2_hir::body::BodyOwnerId::Let(_) => "<let>",
-        };
-        if owner_name == "pat_catch" {
-            saw_catch_effect = result.throws.render_canonical() == "user.ScopeEffect";
-        }
-        non_exhaustive += result
-            .diagnostics
-            .iter()
-            .filter(|diag| matches!(&diag.error, TirTypeError::NonExhaustiveMatch { .. }))
-            .count();
-        unreachable += result
-            .diagnostics
-            .iter()
-            .filter(|diag| matches!(&diag.error, TirTypeError::UnreachableArm))
-            .count();
-        saw_bad_operand |= result.diagnostics.iter().any(|diag| {
-            matches!(
-                &diag.error,
-                TirTypeError::TypeMismatch { expected, got }
-                    if expected.render_canonical() == "reflect.Type | reflect.TypeView" && got.render_canonical() == "42"
-            )
-        });
-        let inferred_body = baml_compiler2_ppir::body(&db, owner);
-        let inferred_body = inferred_body.expr_body().expect("expression body");
-        for (pat, ty) in &result.type_of_pat {
-            if matches!(
-                inferred_body.patterns[*pat],
-                baml_compiler2_ast::Pattern::Unreflect(_)
-            ) {
-                pattern_types += 1;
-                assert!(
-                    matches!(ty.render_canonical().as_str(), "int" | "1"),
-                    "runtime pattern did not preserve its scrutinee type: {ty:?}"
-                );
-            }
-        }
-        for (&expr, ty) in &result.type_of_expr {
-            let snippet = &source[source_map.expr_span(expr)];
-            if snippet == "x is unreflect(scope_effect_type())" {
-                saw_direct_effect |= result.throws.render_canonical() == "user.ScopeEffect";
-            }
-            if snippet.starts_with("(x: int) ->") {
-                saw_lambda_effect |= matches!(
-                    ty,
-                    baml_type::Ty::Function { throws, .. }
-                        if throws.render_canonical() == "user.ScopeEffect"
-                ) && result.throws.render_canonical() == "never";
-            }
-        }
-    }
-    let default_function = baml_compiler2_ppir::item_data::file_functions(&db, file)
-        .iter()
-        .copied()
-        .find(|function| {
-            baml_compiler2_ppir::item_data::function_data(&db, *function)
-                .name
-                .as_str()
-                == "pat_default"
-        })
-        .expect("pat_default function");
-    let default_owner = baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(default_function);
-    let default_result = infer_body(&db, default_owner);
-    let saw_default_effect = default_result.throws.render_canonical() == "user.ScopeEffect";
-    let default_body = baml_compiler2_ppir::body(&db, default_owner);
-    let default_body = default_body.expr_body().expect("default expression body");
-    for (pat, ty) in &default_result.type_of_pat {
-        if matches!(
-            default_body.patterns[*pat],
-            baml_compiler2_ast::Pattern::Unreflect(_)
-        ) {
-            pattern_types += 1;
-            assert_eq!(ty.render_canonical(), "1");
-        }
-    }
-    assert_eq!(non_exhaustive, 1, "runtime patterns do not prove coverage");
-    assert_eq!(unreachable, 0, "distinct runtime predicates stay reachable");
-    assert_eq!(
-        pattern_types, 9,
-        "every runtime pattern preserves scrutinee type"
-    );
-    assert!(
-        saw_bad_operand
-            && saw_direct_effect
-            && saw_default_effect
-            && saw_catch_effect
-            && saw_lambda_effect
     );
 }
 

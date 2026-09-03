@@ -98,7 +98,8 @@ function bounded<T extends Named>() -> int {
   baml.sys.panic("callee body entered")
 }
 function main() -> string {
-  let result = bounded<unreflect(reflect.Type.of<string>())>() catch (e) {
+  type T = unreflect(reflect.Type.of<string>())
+  let result = bounded<T>() catch (e) {
     reflect.errors.CompilationError => {
       e.diagnostics[0].code + "|" + e.diagnostics[0].message
     }

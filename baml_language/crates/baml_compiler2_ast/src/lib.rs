@@ -281,10 +281,6 @@ mod tests {
         }
 
         let __stripped = match &expr.kind {
-            TypeExprKind::Unreflect { operand, attrs } => TypeExprKind::Unreflect {
-                operand: *operand,
-                attrs: strip_attrs(attrs),
-            },
             TypeExprKind::Int { attrs } => TypeExprKind::Int {
                 attrs: strip_attrs(attrs),
             },
@@ -463,31 +459,24 @@ mod tests {
     }
 
     #[test]
-    fn call_unreflect_bare_path_keeps_its_operand() {
+    fn type_binding_lowers_the_whole_marker_as_its_runtime_operand() {
         let function = first_function(parse_and_lower(
-            "function main(t: reflect.Type) -> reflect.Type { return reflect.Type.of<unreflect(t)>() }",
+            "function main(t: reflect.Type) -> reflect.Type { type T = unreflect(t); return reflect.Type.of<T>() }",
         ));
         let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = function.body else {
             panic!("expected expression body")
         };
         let operand = body
-            .exprs
+            .stmts
             .iter()
-            .find_map(|(_, expr)| match expr {
-                Expr::Call { type_args, .. } => type_args.iter().find_map(|arg| {
-                    if let TypeExprKind::Unreflect {
-                        operand: Some(operand),
-                        ..
-                    } = &arg.kind
-                    {
-                        Some(*operand)
-                    } else {
-                        None
-                    }
-                }),
+            .find_map(|(_, stmt)| match stmt {
+                Stmt::TypeBinding {
+                    value: crate::ast::TypeBindingValue::Runtime(operand),
+                    ..
+                } => Some(*operand),
                 _ => None,
             })
-            .expect("expected unreflect type argument");
+            .expect("expected a runtime type binding");
         assert!(
             matches!(&body.exprs[operand], Expr::Path(path) if path.len() == 1 && path[0].as_str() == "t"),
             "unreflect operand lowered as {:?}",
@@ -496,18 +485,45 @@ mod tests {
     }
 
     #[test]
-    fn nested_unreflect_type_arguments_allocate_each_carrier_once() {
+    fn type_binding_with_a_static_type_keeps_the_type() {
         let function = first_function(parse_and_lower(
-            "function main(t: reflect.Type) -> reflect.Type { return reflect.Type.of<unreflect(make<unreflect(t)>())>() }",
+            "function main() -> int { type T = int[]; 0 }",
         ));
-        let Some(crate::ast::FunctionBodyDef::Expr(_, source_map)) = function.body else {
+        let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = function.body else {
             panic!("expected expression body")
         };
-        assert_eq!(
-            source_map.unreflect_arg_spans.len(),
-            2,
-            "the outer call operand and nested type operand must each be lowered exactly once"
-        );
+        assert!(body.stmts.iter().any(|(_, stmt)| matches!(
+            stmt,
+            Stmt::TypeBinding {
+                value: crate::ast::TypeBindingValue::Static(ty),
+                ..
+            } if matches!(ty.kind, TypeExprKind::List { .. })
+        )));
+    }
+
+    #[test]
+    fn unreflect_outside_a_type_binding_is_one_lowering_diagnostic_each() {
+        // Every inline position reports the same diagnostic and lowers to
+        // the error sentinel: a call slot, an annotation, a pattern, and a
+        // marker nested inside a binding's static type.
+        let source = "function main(t: reflect.Type, v: int) -> int {\n  \
+             let a = identity<unreflect(t)>(v)\n  \
+             let b: unreflect(t)? = null\n  \
+             let c = v is unreflect(t)\n  \
+             type T = Wrapper<unreflect(t)>\n  \
+             0\n\
+             }";
+        let (_, diags) = parse_and_lower_with_diagnostics(source);
+        let markers = diags
+            .iter()
+            .filter(|diag| {
+                matches!(
+                    diag,
+                    crate::LoweringDiagnostic::UnreflectOutsideTypeBinding { .. }
+                )
+            })
+            .count();
+        assert_eq!(markers, 4, "unexpected diagnostics: {diags:#?}");
     }
 
     #[test]
@@ -2646,15 +2662,15 @@ mod traverse_coverage_tests {
   let branched = `${if (n > 0)}pos${else}neg${endif}`
   return plain + looped + branched
 }"#,
-            // BEP-066 hides ordinary expression nodes inside type arguments,
-            // type bindings, and patterns. Canonical traversal must still see
-            // every one exactly once.
+            // A `type T = unreflect(t)` binding hides an ordinary expression
+            // node inside a statement. Canonical traversal must still see it
+            // exactly once.
             r#"function runtime_edges(t: reflect.Type, value: int) -> int throws never {
   type T = unreflect(t)
-  let called = identity<unreflect(t)>(value)
-  let tested = value is unreflect(t)
+  let called = identity<T>(value)
+  let tested = value is T
   match (value) {
-    unreflect(t) => called,
+    T => called,
     _ => if (tested) { value } else { 0 }
   }
 }"#,

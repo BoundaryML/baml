@@ -177,11 +177,14 @@ fn lower_base_terminal(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnost
         .children()
         .find(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
     {
-        return TypeExprKind::Unreflect {
-            operand: None,
-            attrs: vec![],
-        }
-        .at(unreflect.span_range());
+        // The parser admits `unreflect(expr)` as a type atom everywhere so
+        // the removed inline spelling still recovers cleanly; only a body
+        // `type T = unreflect(expr);` statement lowers it (and never through
+        // this road). Every other position is the one diagnostic.
+        diags.push(LoweringDiagnostic::UnreflectOutsideTypeBinding {
+            span: unreflect.span_range(),
+        });
+        return TypeExprKind::Error { attrs: vec![] }.at(unreflect.span_range());
     }
     // BUG: a qualified projection captures only a single member — `(base as I).A.B`
     // drops the trailing `.B` (`associated_type_projection` returns one member). A chained
@@ -369,11 +372,10 @@ fn lower_union_member_base(
         .iter()
         .find(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
     {
-        return TypeExprKind::Unreflect {
-            operand: None,
-            attrs: vec![],
-        }
-        .at(unreflect.span_range());
+        diags.push(LoweringDiagnostic::UnreflectOutsideTypeBinding {
+            span: unreflect.span_range(),
+        });
+        return TypeExprKind::Error { attrs: vec![] }.at(unreflect.span_range());
     }
     if let Some((base, interface, member)) = parts.associated_type_projection() {
         return TypeExprKind::AssociatedTypeProjection {

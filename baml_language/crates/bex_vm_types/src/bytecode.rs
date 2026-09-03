@@ -913,13 +913,6 @@ pub enum Instruction {
     /// (`CPython` `STORE_FAST_STORE_FAST`.)
     StoreVar2(usize, usize),
 
-    /// Test whether a value's declaration is the one an `Object::Type` names.
-    /// Stack: `[value, type_value] -> [bool]`.
-    ///
-    /// Appended to preserve the serialized discriminants of existing
-    /// instructions.
-    RuntimeIsType,
-
     /// Reify the package selected lexically by the compiler. The operand is a
     /// constant-pool string naming the static package; a dynamic function's
     /// runtime owner takes precedence.
@@ -1118,9 +1111,6 @@ pub enum OpCode {
     VirtualLoadField,
     VirtualStoreField,
 
-    // Runtime nominal identity test, appended to preserve discriminants.
-    RuntimeIsType,
-
     // Lexical Package.current(): u32 constant-pool string index.
     LoadCurrentPackage,
 
@@ -1159,7 +1149,6 @@ impl OpCode {
             | Self::CallIndirectWithRuntimeId
             | Self::Discriminant
             | Self::TypeTag
-            | Self::RuntimeIsType
             | Self::ThrowIfPanic
             | Self::Unreachable
             | Self::MakeCell
@@ -1316,7 +1305,6 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CallIndirectWithRuntimeId as u8 => Ok(Self::CallIndirectWithRuntimeId),
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
-            x if x == Self::RuntimeIsType as u8 => Ok(Self::RuntimeIsType),
             x if x == Self::LoadCurrentPackage as u8 => Ok(Self::LoadCurrentPackage),
             x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
             x if x == Self::Unreachable as u8 => Ok(Self::Unreachable),
@@ -1462,7 +1450,6 @@ impl std::fmt::Display for OpCode {
             Self::CallIndirectWithRuntimeId => "CALL_INDIRECT_WITH_RUNTIME_ID",
             Self::Discriminant => "DISCRIMINANT",
             Self::TypeTag => "TYPE_TAG",
-            Self::RuntimeIsType => "RUNTIME_IS_TYPE",
             Self::LoadCurrentPackage => "LOAD_CURRENT_PACKAGE",
             Self::Truthy => "TRUTHY",
             Self::ThrowIfPanic => "THROW_IF_PANIC",
@@ -1796,7 +1783,6 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
-            Instruction::RuntimeIsType => f.write_str("RUNTIME_IS_TYPE"),
             Instruction::LoadCurrentPackage(i) => write!(f, "LOAD_CURRENT_PACKAGE {i}"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
             Instruction::NarrowBind { ty, destination } => {
@@ -2248,7 +2234,6 @@ impl Bytecode {
                 | Instruction::CallIndirectWithRuntimeId
                 | Instruction::Discriminant
                 | Instruction::TypeTag
-                | Instruction::RuntimeIsType
                 | Instruction::ThrowIfPanic
                 | Instruction::Unreachable
                 | Instruction::MakeCell
@@ -2619,7 +2604,6 @@ impl Bytecode {
             Instruction::CallIndirectWithRuntimeId => OpCode::CallIndirectWithRuntimeId,
             Instruction::Discriminant => OpCode::Discriminant,
             Instruction::TypeTag => OpCode::TypeTag,
-            Instruction::RuntimeIsType => OpCode::RuntimeIsType,
             Instruction::ThrowIfPanic => OpCode::ThrowIfPanic,
             Instruction::Unreachable => OpCode::Unreachable,
             Instruction::MakeCell => OpCode::MakeCell,

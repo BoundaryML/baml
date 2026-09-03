@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.Boom {
+  payload: T
+}
+class user.Boom$stream {
+  payload: T | null
+}
+function user.lambda_clause_is_quoted_as_written(t: reflect.Type) -> unknown  [expr] {
+  { type Out = unreflect(t); let f = (v: int) -> int throws Boom<Out> { { throw "plain" } } } f(1)
+}
+function user.publishes_the_erased_effect() -> int  [expr] {
+  { let t = reflect.Type.of(); type Out = unreflect(t) } risky("x", false)
+}
+function user.risky(v: T, fail: bool) -> int  [expr] {
+  { if (fail) { throw user.Boom { payload: v } } } 0
+}

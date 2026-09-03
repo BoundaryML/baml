@@ -1738,48 +1738,6 @@ fn function_callable_signature<C: baml_type::normalize::TypeContext<bex_vm_types
 ///
 /// This is a free function to avoid borrow checker issues when called
 /// from within the instruction dispatch loop.
-/// The declaration a type names, together with its instantiation — `None` for
-/// types that name no declaration.
-///
-/// Nominal identity is the head: content-addressed from the qualified name
-/// for compiled declarations, a counter mint for runtime-created ones.
-fn nominal_identity(
-    ty: &bex_vm_types::RealizedTy,
-) -> Option<(bex_vm_types::TypeHead, &[bex_vm_types::RealizedTy])> {
-    use bex_vm_types::RealizedTy as T;
-    match ty {
-        T::Class(head, args, _) => Some((*head, &**args)),
-        T::Enum(head, _) => Some((*head, &[])),
-        // Structural, abstract, and literal types name no declaration. An
-        // enum *variant* names one but is a proper subset of it, so it is not
-        // that declaration's identity.
-        T::Unknown { .. }
-        | T::Never { .. }
-        | T::Null { .. }
-        | T::Bool { .. }
-        | T::Int { .. }
-        | T::Bigint { .. }
-        | T::Float { .. }
-        | T::String { .. }
-        | T::Uint8Array { .. }
-        | T::Media(..)
-        | T::Literal(..)
-        | T::Interface(..)
-        | T::EnumVariant(..)
-        | T::List(..)
-        | T::Map { .. }
-        | T::Union(..)
-        | T::Function { .. }
-        | T::Future(..)
-        | T::RustType { .. }
-        | T::Type { .. }
-        | T::Resource { .. }
-        | T::PromptAst { .. }
-        | T::Void { .. }
-        | T::TypeAlias(..) => None,
-    }
-}
-
 fn value_type_tag(value: Value) -> i64 {
     use bex_vm_types::{ValueKind, types::type_tags};
 
@@ -1972,6 +1930,36 @@ impl BexVm {
         &self.pending_call_type_args
     }
 
+    /// The `type` value a type-operand position received. Every such
+    /// position's contract is `reflect.Type | reflect.TypeView`: a kind view
+    /// converts to the `type` it wraps, and a pending builder reference
+    /// resolves to its built type (or throws naming the un-frozen builder).
+    /// Shared by the call type-argument lane and `BindType`, so the two
+    /// boundaries cannot drift on what a type operand may be.
+    fn type_operand_value(&mut self, value: Value) -> Result<TypeValue, VmError> {
+        let value =
+            crate::package_reflect::type_kinds::as_view_type_value(self, value).unwrap_or(value);
+        let direct = value.as_object_ptr().and_then(|ptr| {
+            let Object::Type(type_value) = self.get_object(ptr) else {
+                return None;
+            };
+            Some((**type_value).clone())
+        });
+        if let Some(type_value) = direct {
+            return Ok(type_value);
+        }
+        if let Some(result) =
+            crate::package_reflect::runtime_class_builder::coerce_pending_type_arg(self, value)
+        {
+            return result.map_err(VmError::thrown_fresh);
+        }
+        Err(VmInternalError::TypeError {
+            expected: Type::Object(ObjectType::Type),
+            got: self.type_of(&value),
+        }
+        .into())
+    }
+
     fn take_type_args(&mut self, start: usize, count: usize) -> Result<TakenTypeArgs, VmError> {
         let end = start
             .checked_add(count)
@@ -2031,25 +2019,7 @@ impl BexVm {
         };
         for slot in start..end {
             let value = self.stack[StackIndex::from_raw(slot)];
-            let direct = value.as_object_ptr().and_then(|ptr| {
-                let Object::Type(type_value) = self.get_object(ptr) else {
-                    return None;
-                };
-                Some((**type_value).clone())
-            });
-            let type_value = if let Some(type_value) = direct {
-                type_value
-            } else if let Some(result) =
-                crate::package_reflect::runtime_class_builder::coerce_pending_type_arg(self, value)
-            {
-                result.map_err(VmError::thrown_fresh)?
-            } else {
-                return Err(VmInternalError::TypeError {
-                    expected: Type::Object(ObjectType::Type),
-                    got: self.type_of(&value),
-                }
-                .into());
-            };
+            let type_value = self.type_operand_value(value)?;
             type_args.tys.push(type_value.ty.clone());
             type_args.values.push(Some(type_value));
         }
@@ -9169,39 +9139,6 @@ impl BexVm {
                     self.stack.push(Value::int(tag));
                 }
 
-                OpCode::RuntimeIsType => {
-                    let expected_value = self.stack.ensure_pop();
-                    // A kind view filters as the `type` value it wraps.
-                    let expected_value = crate::package_reflect::type_kinds::as_view_type_value(
-                        self,
-                        expected_value,
-                    )
-                    .unwrap_or(expected_value);
-                    let value = self.stack.ensure_pop();
-                    // `is unreflect(t)` filters on *nominal* identity: the
-                    // scrutinee's declaration must be the one `t` denotes, at
-                    // the same instantiation. Declaration identity is the
-                    // qualified name — program-unique for compiled
-                    // declarations, creation-unique for runtime ones.
-                    //
-                    // BUG: a `t` denoting a non-nominal type (`string`,
-                    // `int | null`, a list) can never match, so the pattern
-                    // silently fails instead of testing membership.
-                    let expected_nominal = expected_value
-                        .as_object_ptr()
-                        .and_then(|ptr| match self.get_object(ptr) {
-                            Object::Type(type_value) => Some(&type_value.ty),
-                            _ => None,
-                        })
-                        .and_then(nominal_identity);
-                    let actual_nominal = self
-                        .value_concrete_ty(value)
-                        .map(bex_vm_types::RealizedTy::from);
-                    let matched = expected_nominal.is_some()
-                        && expected_nominal == actual_nominal.as_ref().and_then(nominal_identity);
-                    self.stack.push(Value::bool(matched));
-                }
-
                 // ── IsType ────────────────────────────────────────────────────
                 OpCode::IsType => {
                     let const_idx = { read_u32_unchecked(code, pc) as usize };
@@ -9441,11 +9378,7 @@ impl BexVm {
                 OpCode::BindType => {
                     let slot = read_u32_unchecked(code, pc) as usize;
                     let value = self.stack.ensure_pop();
-                    let ptr = self.as_object_ptr(value, ObjectType::Type)?;
-                    let Object::Type(type_value) = self.get_object(ptr) else {
-                        unreachable!("ObjectType::Type was validated above")
-                    };
-                    let type_value = (**type_value).clone();
+                    let type_value = self.type_operand_value(value)?;
                     let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] else {
                         unreachable!("compact bytecode runs in a bytecode frame")
                     };

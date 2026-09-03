@@ -348,6 +348,24 @@ There are a few different positions where `Self` might be used, which have diffe
 3. In interface `implements` methods: refers to the `for`-target type, accepting its type args.
 4. In `interface` default method bodies: the implementor for which the current call occurred. Since we do not expect the compiler to be able to fully monomorphize, this is typically not known until dynamically at call-time. As such, it is emitted as its own type arg.
 
+### Scoped runtime type bindings
+
+Because type parameters are real run-time values, a body can introduce one of its own. Inside a function, lambda, or block body, the statement
+
+```baml
+type T = unreflect(e);   // `e: reflect.Type | reflect.TypeView`, evaluated once when the statement runs
+type S = Wrapper<int>;   // a static right-hand side fills the slot with its realized template
+```
+
+binds `T` as a **rigid, unbounded type parameter of the enclosing frame** for the remainder of the block. `unreflect(e)` is legal in exactly this position: it lifts the `type` value `e` evaluates to into the frame's type-argument slot for `T`. In both forms `T` is opaque to static checking. It is not an alias of its right-hand side, and it carries no bounds.
+
+- Within its block, `T` behaves exactly as a declared generic parameter does: `f<T>(x)`, `Wrapper<T>`, `T[]`, annotations, and `reflect.Type.of<T>()` (which returns the bound value) all type-check statically. No check is deferred to run time and no occurrence of `T` is widened.
+- Because `T` is rigid, a value has type `T` only if it came from a `T`-typed source. A literal or an `int` is not a `T`. The explicit downcast is `match (v) { let x: T => …, _ => … }` (or `v is T`), which tests membership against the bound type at run time, exactly as it would for any other generic parameter.
+- A bounded slot (`f<U extends I>`) instantiated with a scoped `T` is an ordinary static obligation, and an unbounded `T` does not satisfy it. A bounded binding form that carries static bound evidence is future work.
+- `T` is nameable only from its statement to the end of its block; a shadowed static name is restored at the closing brace.
+- Nothing typed by `T` may be observable outside the block. A block whose value type mentions `T` is a compile error unless the block's expected type does not mention `T` and the value fits it (so a `-> unknown` body or `let v: unknown = { … }` is fine). Flow narrowings that mention `T` end at the closing brace. A thrown type naming `T` that an inferred `throws` clause would publish is an error at the throw. The reason is invariance: the binding statement re-executes on every pass through its block (a loop, a re-entered lambda) and rebinds the same parameter to a possibly different type, so a `T`-typed value that outlived its block could enter a container whose element type it no longer satisfies.
+- `unreflect(…)` anywhere else, whether a type argument (`f<unreflect(t)>()`), an annotation, a pattern, an item signature, a top-level alias, or nested inside a binding's static right-hand side, is a compile error (E0168): name the type first, then use the name.
+
 ## Functions
 
 A function signature in BAML includes:

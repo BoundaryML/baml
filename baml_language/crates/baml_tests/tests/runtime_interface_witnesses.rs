@@ -89,10 +89,13 @@ async fn scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves() {
                 "favorite_editor": reflect.Type.of<string>(),
             }, implementations = [anchor_impl])
 
-            let prompt = ExtractPerson@render_prompt<unreflect(person_t.as_type())>("sample").text()
-            let person: PersonAnchor = ExtractPerson@parse<unreflect(person_t.as_type())>(
+            // `Person` is a rigid, unbounded scoped type: reading the result
+            // through the anchor contract is an explicit downcast.
+            type Person = unreflect(person_t.as_type())
+            let prompt = ExtractPerson@render_prompt<Person>("sample").text()
+            let person: PersonAnchor = ExtractPerson@parse<Person>(
                 `{"name":"Ada","contact_email":"ada@example.com","favorite_editor":"vim"}`
-            )
+            ) else { throw "the runtime class does not implement PersonAnchor" }
             let runtime_leaf = reflect.class.get_field<string>(person, "favorite_editor")
             return prompt
                 + "\n<RESULT>"
@@ -140,7 +143,8 @@ async fn bounded_unreflect_fails_before_rendering() {
         function main() -> string {
             // If rendering ran first this empty enum would produce E0159.
             let not_a_person = reflect.enum.new("NoPerson", [])
-            let result = ExtractPerson@render_prompt<unreflect(not_a_person)>() catch (e) {
+            type NoPerson = unreflect(not_a_person)
+            let result = ExtractPerson@render_prompt<NoPerson>() catch (e) {
                 reflect.errors.CompilationError => {
                     e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 }
@@ -186,7 +190,8 @@ async fn unreflect_argument_is_revalidated_against_the_runtime_type() {
                 "name": reflect.Type.of<string>(),
                 "email": reflect.Type.of<string>(),
             }, implementations = [witness])
-            let result = Echo<unreflect(person_t.as_type())>(42) catch (e) {
+            type Person = unreflect(person_t.as_type())
+            let result = Echo<Person>(42) catch (e) {
                 reflect.errors.CompilationError => {
                     e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 }
@@ -290,14 +295,16 @@ async fn equivalent_witnessed_definitions_render_and_parse_identically() {
                 "name": reflect.Type.of<string>(),
                 "email": reflect.Type.of<string>(),
             }, implementations = [witness])
-            let left_prompt = ExtractPerson@render_prompt<unreflect(left.as_type())>().text()
-            let right_prompt = ExtractPerson@render_prompt<unreflect(right.as_type())>().text()
-            let l: PersonAnchor = ExtractPerson@parse<unreflect(left.as_type())>(
+            type Left = unreflect(left.as_type())
+            type Right = unreflect(right.as_type())
+            let left_prompt = ExtractPerson@render_prompt<Left>().text()
+            let right_prompt = ExtractPerson@render_prompt<Right>().text()
+            let l: PersonAnchor = ExtractPerson@parse<Left>(
                 `{"name":"Ada","email":"ada@example.com"}`
-            )
-            let r: PersonAnchor = ExtractPerson@parse<unreflect(right.as_type())>(
+            ) else { throw "left does not implement PersonAnchor" }
+            let r: PersonAnchor = ExtractPerson@parse<Right>(
                 `{"name":"Ada","email":"ada@example.com"}`
-            )
+            ) else { throw "right does not implement PersonAnchor" }
             return left != right
                 && left_prompt == right_prompt
                 && l.name == r.name
@@ -389,9 +396,10 @@ async fn witness_inherits_interface_default_methods() {
                 "name": reflect.Type.of<string>(),
             }, implementations = [witness])
             let is_member = person_t.as_type().implements(reflect.Type.of<Greeter>())
-            let person: Greeter = ExtractGreeter@parse<unreflect(person_t.as_type())>(
+            type Person = unreflect(person_t.as_type())
+            let person: Greeter = ExtractGreeter@parse<Person>(
                 `{"name":"Ada"}`
-            )
+            ) else { throw "the runtime class does not implement Greeter" }
             // Virtual dispatch on the witnessed value reaches the interface's
             // default body, whose inner `self.name` reads the linked field.
             let prefix = "no|"

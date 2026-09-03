@@ -348,19 +348,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
-    fn walk_type_operands(
-        &mut self,
-        ty: &ast::TypeExpr,
-        body: &ast::ExprBody,
-        source_map: &ast::AstSourceMap,
-    ) {
-        let mut operands = Vec::new();
-        ty.unreflect_operands(&mut operands);
-        for operand in operands {
-            self.walk_expr(operand, body, source_map, true);
-        }
-    }
-
     /// Walk an `ExprBody` arena in source order, recording expression ownership
     /// and local bindings in the lexical scope that owns each expression.
     fn walk_expr_body(&mut self, body: &ast::ExprBody, source_map: &ast::AstSourceMap) {
@@ -446,9 +433,16 @@ impl<'db> SemanticIndexBuilder<'db> {
     ) {
         match &body.stmts[stmt_id] {
             ast::Stmt::Expr(expr) => self.walk_expr(*expr, body, source_map, true),
-            ast::Stmt::TypeBinding { value, .. } => {
-                self.walk_type_operands(value, body, source_map);
-            }
+            // The runtime operand is an ordinary expression in the enclosing
+            // scope (`T` is not yet in scope while its own operand runs).
+            ast::Stmt::TypeBinding {
+                value: ast::TypeBindingValue::Runtime(operand),
+                ..
+            } => self.walk_expr(*operand, body, source_map, true),
+            ast::Stmt::TypeBinding {
+                value: ast::TypeBindingValue::Static(_),
+                ..
+            } => {}
             ast::Stmt::Let {
                 pattern,
                 initializer,
@@ -623,26 +617,18 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Expr::Match {
-                scrutinee,
-                scrutinee_type,
-                arms,
+                scrutinee, arms, ..
             } => {
                 self.walk_expr(*scrutinee, body, source_map, true);
-                if let Some(type_id) = scrutinee_type {
-                    self.walk_type_operands(&body.type_annotations[*type_id], body, source_map);
-                }
                 for &arm_id in arms {
                     self.walk_match_arm(arm_id, body, source_map);
                 }
             }
-            ast::Expr::Is { scrutinee, pattern } => {
+            ast::Expr::Is { scrutinee, .. } => {
                 // `<expr> is <pattern>` is a one-shot pattern test that yields
                 // `bool`. Pattern bindings do NOT escape into the surrounding
-                // scope (use `match` / `let` if you need that). Runtime
-                // `unreflect(expr)` operands are ordinary expressions in the
-                // enclosing scope and therefore need the normal HIR path walk.
+                // scope (use `match` / `let` if you need that).
                 self.walk_expr(*scrutinee, body, source_map, true);
-                self.walk_pattern_expressions(*pattern, body, source_map);
             }
             ast::Expr::Catch { base, clauses } => {
                 self.walk_expr(*base, body, source_map, true);
@@ -708,34 +694,15 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Unary { expr, .. } | ast::Expr::OptionalChain { expr } => {
                 self.walk_expr(*expr, body, source_map, true);
             }
-            ast::Expr::Call {
-                callee,
-                type_args,
-                args,
-            } => {
-                self.walk_expr(*callee, body, source_map, true);
-                for type_arg in type_args {
-                    self.walk_type_operands(type_arg, body, source_map);
-                }
-                for arg in args {
-                    self.walk_expr(arg.expr, body, source_map, true);
-                }
-            }
-            ast::Expr::OptionalCall { callee, args } => {
+            ast::Expr::Call { callee, args, .. } | ast::Expr::OptionalCall { callee, args } => {
                 self.walk_expr(*callee, body, source_map, true);
                 for arg in args {
                     self.walk_expr(arg.expr, body, source_map, true);
                 }
             }
             ast::Expr::Object {
-                type_args,
-                fields,
-                spreads,
-                ..
+                fields, spreads, ..
             } => {
-                for type_arg in type_args {
-                    self.walk_type_operands(type_arg, body, source_map);
-                }
                 for field in fields {
                     self.walk_expr(field.value, body, source_map, true);
                 }
@@ -754,12 +721,10 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_expr(entry.value, body, source_map, true);
                 }
             }
-            ast::Expr::MemberAccess { base, .. } | ast::Expr::OptionalMemberAccess { base, .. } => {
+            ast::Expr::MemberAccess { base, .. }
+            | ast::Expr::OptionalMemberAccess { base, .. }
+            | ast::Expr::Upcast { base, .. } => {
                 self.walk_expr(*base, body, source_map, true);
-            }
-            ast::Expr::Upcast { base, target } => {
-                self.walk_expr(*base, body, source_map, true);
-                self.walk_type_operands(target, body, source_map);
             }
             ast::Expr::Index { base, index } | ast::Expr::OptionalIndex { base, index } => {
                 self.walk_expr(*base, body, source_map, true);
@@ -773,27 +738,19 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.resolve_path_expr(expr_id, root, use_scope, use_offset);
                 }
             }
-            ast::Expr::GenericApply { base, type_args } => {
+            ast::Expr::GenericApply { base, .. } => {
                 // `foo<int>` references the base callable; walk it so the path
                 // root is recorded for name resolution. Type args are types,
                 // not value references, so they need no walking here.
                 self.walk_expr(*base, body, source_map, true);
-                for type_arg in type_args {
-                    self.walk_type_operands(type_arg, body, source_map);
-                }
             }
             ast::Expr::Literal(_)
             | ast::Expr::ByteStringLiteral(_)
             | ast::Expr::Null
             | ast::Expr::Block { .. }
             | ast::Expr::Lambda(_)
+            | ast::Expr::QualifiedPath { .. }
             | ast::Expr::Missing => {}
-            ast::Expr::QualifiedPath {
-                qself, interface, ..
-            } => {
-                self.walk_type_operands(qself, body, source_map);
-                self.walk_type_operands(interface, body, source_map);
-            }
         }
     }
 
@@ -886,13 +843,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         source_map: &ast::AstSourceMap,
         visible_from: TextSize,
     ) {
-        // Evaluate expression-bearing pattern atoms (currently
-        // `unreflect(expr)`) in the scope surrounding the bindings. This runs
-        // before any names from this pattern are installed, so a pattern
-        // cannot accidentally refer to a binding it is in the act of
-        // declaring.
-        self.walk_pattern_expressions(pat_id, body, source_map);
-
         // Walk the pattern structurally. `collect_pattern_names` returns the
         // set of names introduced and emits diagnostics for duplicate names
         // and Or-alternative mismatches as it goes.
@@ -921,66 +871,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
-    fn walk_pattern_expressions(
-        &mut self,
-        pat_id: ast::PatId,
-        body: &ast::ExprBody,
-        source_map: &ast::AstSourceMap,
-    ) {
-        match &body.patterns[pat_id] {
-            ast::Pattern::Type(ty) => self.walk_type_operands(ty, body, source_map),
-            ast::Pattern::Unreflect(operand) => {
-                self.walk_expr(*operand, body, source_map, true);
-            }
-            ast::Pattern::Bind { subpat, .. } => {
-                if let Some(subpat) = subpat {
-                    self.walk_pattern_expressions(*subpat, body, source_map);
-                }
-            }
-            ast::Pattern::Class {
-                generic_args,
-                associated_type_bindings,
-                fields,
-                ..
-            } => {
-                for ty in generic_args {
-                    self.walk_type_operands(ty, body, source_map);
-                }
-                for binding in associated_type_bindings {
-                    self.walk_type_operands(&binding.ty, body, source_map);
-                }
-                for field in fields {
-                    self.walk_pattern_expressions(field.pat, body, source_map);
-                }
-            }
-            ast::Pattern::Array {
-                prefix,
-                rest,
-                suffix,
-                ascription,
-            } => {
-                if let Some(ty) = ascription {
-                    self.walk_type_operands(ty, body, source_map);
-                }
-                for pattern in prefix {
-                    self.walk_pattern_expressions(*pattern, body, source_map);
-                }
-                if let Some(pattern) = rest.as_ref().and_then(|rest| rest.pat) {
-                    self.walk_pattern_expressions(pattern, body, source_map);
-                }
-                for pattern in suffix {
-                    self.walk_pattern_expressions(*pattern, body, source_map);
-                }
-            }
-            ast::Pattern::Or(patterns) => {
-                for pattern in patterns {
-                    self.walk_pattern_expressions(*pattern, body, source_map);
-                }
-            }
-            ast::Pattern::Wildcard => {}
-        }
-    }
-
     /// Recursively walk a pattern and return the set of names it introduces
     /// into scope, paired with the source range of each binding's first
     /// occurrence. Emits diagnostics in two situations:
@@ -1000,9 +890,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         diagnostics: &mut Vec<Hir2Diagnostic>,
     ) -> PatternNames {
         match &patterns[pat_id] {
-            ast::Pattern::Wildcard | ast::Pattern::Type(_) | ast::Pattern::Unreflect(_) => {
-                PatternNames::default()
-            }
+            ast::Pattern::Wildcard | ast::Pattern::Type(_) => PatternNames::default(),
             ast::Pattern::Bind { name, subpat } => {
                 let mut result = PatternNames::default();
                 result
@@ -1269,17 +1157,6 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         let metadata_scope = ExprMetadataScope::Body(scope_id);
         self.expr_metadata_scope_stack.push(metadata_scope);
-        for param in &lambda.params {
-            if let Some(ty) = &param.type_expr {
-                self.walk_type_operands(ty, body, source_map);
-            }
-        }
-        if let Some(ty) = &lambda.return_type {
-            self.walk_type_operands(ty, body, source_map);
-        }
-        if let Some(ty) = &lambda.throws {
-            self.walk_type_operands(ty, body, source_map);
-        }
         if let Some(lambda_body) = lambda.body {
             // The body shares this arena, but it still gets its own metadata
             // namespace keyed by the lambda's scope. That keeps HIR agreeing
@@ -2453,7 +2330,6 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn render_type_expr(type_expr: &ast::TypeExpr) -> String {
         match &type_expr.kind {
-            ast::TypeExprKind::Unreflect { .. } => "unreflect(…)".to_string(),
             ast::TypeExprKind::Path { segments, .. } => segments
                 .iter()
                 .map(Name::as_str)

@@ -57,8 +57,6 @@ pub struct LoweringDiag {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LoweringDiagKind {
-    /// `unreflect(...)` appeared where no body scope can own its runtime slot.
-    RuntimeTypeHasNoScope,
     /// The written path resolved nowhere (E0002).
     Unresolved {
         name: Name,
@@ -164,9 +162,6 @@ pub struct LowerCtx<'db> {
     /// param's CONJUNCTION. Projections (`T.Output`) determine their
     /// interface through these.
     bounds: FxHashMap<ParamTy, Vec<baml_type::Interface>>,
-    /// Body-local runtime type atoms replaced by their synthesized rigid
-    /// parameters. Empty for declaration signatures.
-    runtime_type_params: FxHashMap<TypeRefId, ParamTy>,
     /// Whether `_` may appear in the types this context lowers. See
     /// [`HolePolicy`].
     holes: HolePolicy,
@@ -191,7 +186,6 @@ pub fn lower_ctx_for_file(
         self_ty: None,
         self_impl_target: None,
         bounds: FxHashMap::default(),
-        runtime_type_params: FxHashMap::default(),
         holes: HolePolicy::Allowed,
     }
 }
@@ -215,7 +209,6 @@ pub fn lower_ctx_for_package<'db>(
         self_ty: None,
         self_impl_target: None,
         bounds: FxHashMap::default(),
-        runtime_type_params: FxHashMap::default(),
         holes: HolePolicy::Allowed,
     }
 }
@@ -383,22 +376,6 @@ impl<'db> LowerCtx<'db> {
         (ty, fork.take_diagnostics())
     }
 
-    /// Lower a body-owned type through both its lexical name overlay and the
-    /// synthesized bindings for nested `unreflect(...)` atoms. Diagnostics
-    /// are scoped to this store and lowering operation.
-    pub fn lower_type_ref_with_runtime_bindings_and_diagnostics(
-        &self,
-        store: &TypeRefStore,
-        id: TypeRefId,
-        position: TypePosition,
-        overlay: &[ParamTy],
-        runtime_type_params: &FxHashMap<TypeRefId, ParamTy>,
-    ) -> (LoweringTy, Vec<LoweringDiag>) {
-        let mut fork = self.fork_with_overlay_and_diagnostics(overlay);
-        fork.runtime_type_params.clone_from(runtime_type_params);
-        let ty = fork.lower_type_ref_at(store, id, position);
-        (ty, fork.take_diagnostics())
-    }
     /// [`Self::lower_type_path`] through the same body-local overlay.
     pub fn lower_type_path_with_overlay(
         &self,
@@ -430,7 +407,6 @@ impl<'db> LowerCtx<'db> {
             self_ty: self.self_ty.clone(),
             self_impl_target: self.self_impl_target.clone(),
             bounds: self.bounds.clone(),
-            runtime_type_params: self.runtime_type_params.clone(),
             holes: self.holes,
         }
     }
@@ -461,19 +437,6 @@ impl<'db> LowerCtx<'db> {
             position
         };
         match &store[id].kind {
-            TypeRefKind::Unreflect { .. } => {
-                if let Some(param) = self.runtime_type_params.get(&id) {
-                    LoweringTy::TypeVar(param.clone(), attr())
-                } else {
-                    if let Some(diags) = &self.diags {
-                        diags.borrow_mut().push(LoweringDiag {
-                            type_ref: id,
-                            kind: LoweringDiagKind::RuntimeTypeHasNoScope,
-                        });
-                    }
-                    LoweringTy::error()
-                }
-            }
             TypeRefKind::Int => LoweringTy::int(),
             TypeRefKind::Bigint => LoweringTy::Bigint { attr: attr() },
             TypeRefKind::Float => LoweringTy::float(),
@@ -2547,7 +2510,6 @@ pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTy
         }
         LoweringDiagKind::Projection(error) => (**error).clone(),
         LoweringDiagKind::FnTypeMissingThrows => TirTypeError::FunctionTypeMissingThrows,
-        LoweringDiagKind::RuntimeTypeHasNoScope => TirTypeError::RuntimeTypeHasNoScope,
         // The position's own report is the specific one (an interface
         // signature's is E0170, raised once per method by
         // `interface_lowering_diagnostics`); this is the generic spelling for

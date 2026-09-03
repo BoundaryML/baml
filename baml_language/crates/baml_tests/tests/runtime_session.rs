@@ -340,7 +340,8 @@ function package_current_is_rejected() -> bool {
 function runtime_and_failed_contracts() -> bool {
   let s = reflect.Session.new()
   let string_t = reflect.Type.of<string>()
-  let value = s.eval<unreflect(string_t)>(`"ok"`)
+  type StringT = unreflect(string_t)
+  let value = s.eval<StringT>(`"ok"`)
   let rejected = (s.eval<string>(`
     let should_not_exist = 7
     42

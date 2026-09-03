@@ -3017,9 +3017,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type_primary(&mut self, consume_union: bool) {
-        // `unreflect(expr)` is a type atom. Its legality is deliberately not
-        // a grammar decision: body positions lower it to a scoped runtime
-        // binding, while declaration signatures diagnose it in the checker.
+        // `unreflect(expr)` parses as a type atom everywhere so the removed
+        // inline spelling still recovers cleanly. Its legality is decided at
+        // CST→AST lowering: only the whole right-hand side of a body-level
+        // `type T = …;` statement lowers it; every other position reports
+        // E0168 and lowers to the error type.
         if self.at_contextual_kw("unreflect")
             && self
                 .peek(1)

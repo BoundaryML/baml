@@ -17,8 +17,8 @@ use crate::{
         CatchArmId, CatchClause, CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat,
         FunctionDefaults, LambdaDef, LambdaKind, LetDef, LetOrigin, Literal, LoopOrigin,
         MapExprEntry, MatchArm, MatchArmId, ObjectExprField, Param, PatId, Pattern, SpreadField,
-        Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag, TypeAnnotId, TypeExpr,
-        TypeExprKind, UnaryOp,
+        Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag, TypeAnnotId,
+        TypeBindingValue, TypeExpr, TypeExprKind, UnaryOp,
     },
 };
 
@@ -1255,119 +1255,22 @@ impl LoweringContext {
             .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()))
     }
 
-    fn attach_unreflect_operands(
-        ty: &mut TypeExpr,
-        operands: &std::collections::HashMap<TextRange, ExprId>,
-    ) {
-        match &mut ty.kind {
-            TypeExprKind::Unreflect { operand, .. } => {
-                *operand = operands.get(&ty.span).copied();
-            }
-            TypeExprKind::Path {
-                generic_args,
-                associated_type_bindings,
-                ..
-            } => {
-                for arg in generic_args {
-                    Self::attach_unreflect_operands(arg, operands);
-                }
-                for binding in associated_type_bindings {
-                    Self::attach_unreflect_operands(&mut binding.ty, operands);
-                }
-            }
-            TypeExprKind::AssociatedTypeProjection {
-                base, interface, ..
-            } => {
-                Self::attach_unreflect_operands(base, operands);
-                if let Some(interface) = interface {
-                    Self::attach_unreflect_operands(interface, operands);
-                }
-            }
-            TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
-                Self::attach_unreflect_operands(inner, operands);
-            }
-            TypeExprKind::Map { key, value, .. } => {
-                Self::attach_unreflect_operands(key, operands);
-                Self::attach_unreflect_operands(value, operands);
-            }
-            TypeExprKind::Union { variants, .. } => {
-                for variant in variants {
-                    Self::attach_unreflect_operands(variant, operands);
-                }
-            }
-            TypeExprKind::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } => {
-                for param in params {
-                    Self::attach_unreflect_operands(&mut param.ty, operands);
-                }
-                Self::attach_unreflect_operands(ret, operands);
-                if let Some(throws) = throws {
-                    Self::attach_unreflect_operands(throws, operands);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    /// Allocate each runtime carrier in `type_expr` into this body's expression
-    /// arena, then attach those expression ids to the already-lowered type.
-    fn attach_body_type_operands(
-        &mut self,
-        type_expr: &baml_compiler_syntax::ast::TypeExpr,
-        ty: &mut TypeExpr,
-    ) {
-        let mut operands = std::collections::HashMap::new();
-        let mut preorder = type_expr.syntax().preorder();
-        while let Some(event) = preorder.next() {
-            let rowan::WalkEvent::Enter(node) = event else {
-                continue;
-            };
-            if node.kind() != SyntaxKind::UNREFLECT_TYPE {
-                continue;
-            }
-            let operand = self.lower_unreflect_operand(&node);
-            self.source_map
-                .unreflect_arg_spans
-                .insert(operand, node.span_range());
-            operands.insert(node.span_range(), operand);
-            // Lowering this outer operand recursively lowers any unreflect type
-            // arguments inside it. Do not allocate those nested carriers again.
-            preorder.skip_subtree();
-        }
-        Self::attach_unreflect_operands(ty, &operands);
-    }
-
-    /// Lower a type written inside this body, allocating each runtime carrier
-    /// into the body's expression arena before attaching it to the type atom.
+    /// Lower a type written inside this body, collecting its lowering
+    /// diagnostics with the body's.
     fn lower_body_type_expr(
         &mut self,
         type_expr: &baml_compiler_syntax::ast::TypeExpr,
     ) -> TypeExpr {
-        let mut ty = crate::lower_type_expr::lower_type_expr_node(type_expr, &mut self.diags);
-        self.attach_body_type_operands(type_expr, &mut ty);
-        ty
+        crate::lower_type_expr::lower_type_expr_node(type_expr, &mut self.diags)
     }
 
-    /// Lower an associated binding written in this body through the same
-    /// body-aware road as every other type expression. The item-level helper
-    /// cannot allocate `unreflect(...)` carriers into this expression arena.
+    /// Lower an associated binding written in this body, collecting its
+    /// lowering diagnostics with the body's.
     fn lower_body_associated_type_binding(
         &mut self,
         binding: &baml_compiler_syntax::ast::AssociatedTypeDecl,
     ) -> Option<AssociatedTypeBinding> {
-        let name = binding.name()?;
-        let ty = binding
-            .default_or_binding()
-            .map(|ty| self.lower_body_type_expr(&ty))
-            .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default()));
-        Some(AssociatedTypeBinding {
-            name: Name::new(name.text()),
-            ty: Box::new(ty),
-        })
+        crate::lower_type_expr::lower_associated_type_binding(binding, &mut self.diags)
     }
 
     fn warn_const_introducer(&mut self, span: TextRange) {
@@ -2861,7 +2764,7 @@ impl LoweringContext {
                     );
                 }
             }
-            Pattern::Wildcard | Pattern::Unreflect(_) => {}
+            Pattern::Wildcard => {}
             Pattern::Bind { subpat, .. } => {
                 if let Some(sp) = subpat {
                     self.check_pattern_void_in_annotation(sp, context);
@@ -2882,15 +2785,7 @@ impl LoweringContext {
             return self.alloc_pattern(Pattern::Wildcard, node.span_range());
         };
         let ty = self.lower_body_type_expr(&type_expr);
-        if let TypeExprKind::Unreflect {
-            operand: Some(operand),
-            ..
-        } = ty.kind
-        {
-            self.alloc_pattern(Pattern::Unreflect(operand), node.span_range())
-        } else {
-            self.alloc_pattern(Pattern::Type(ty), node.span_range())
-        }
+        self.alloc_pattern(Pattern::Type(ty), node.span_range())
     }
 
     /// Lower a `DESTRUCTURE_PATTERN` (`(let|const)? PATH ('<' types '>')? '{' field_list '}'`).
@@ -3362,7 +3257,7 @@ impl LoweringContext {
         let callee_generic_args = callee_node.as_ref().and_then(find_callee_generic_args);
         let type_args: Vec<TypeExpr> = callee_generic_args
             .as_ref()
-            .map(|ga| self.lower_call_generic_args_node(ga))
+            .map(|ga| self.lower_generic_args_node(ga))
             .unwrap_or_default();
         // Mark EVERY `GENERIC_ARGS` node in the callee subtree as consumed, so
         // lowering the callee/receiver below does not wrap any of them into an
@@ -3503,13 +3398,6 @@ impl LoweringContext {
             .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| self.lower_body_type_expr(&te))
             .collect()
-    }
-
-    /// Lower a call's generic arguments. Unlike type constructors and
-    /// value-position generic application, calls may contain the contextual
-    /// whole-slot `unreflect(expr)` form.
-    fn lower_call_generic_args_node(&mut self, ga: &SyntaxNode) -> Vec<TypeExpr> {
-        self.lower_generic_args_node(ga)
     }
 
     /// If `node` has a direct, unconsumed `GENERIC_ARGS` child, wrap `base` in an
@@ -5305,7 +5193,7 @@ impl LoweringContext {
         // recovery and ignored here — `LambdaDef` has nowhere to put them.
 
         // Lower parameter list — gives us Vec<Param>
-        let (mut params, defaults) = node
+        let (params, defaults) = node
             .children()
             .find(|n| n.kind() == SyntaxKind::PARAMETER_LIST)
             .and_then(ast::ParameterList::cast)
@@ -5320,24 +5208,6 @@ impl LoweringContext {
                 )
             })
             .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
-
-        if let Some(parameter_list) = node
-            .children()
-            .find(|n| n.kind() == SyntaxKind::PARAMETER_LIST)
-            .and_then(ast::ParameterList::cast)
-        {
-            for parameter in parameter_list.params() {
-                let Some(type_expr) = parameter.ty() else {
-                    continue;
-                };
-                let span = parameter.syntax().span_range();
-                if let Some(lowered) = params.iter_mut().find(|param| param.span == span)
-                    && let Some(lowered_ty) = &mut lowered.type_expr
-                {
-                    self.attach_body_type_operands(&type_expr, lowered_ty);
-                }
-            }
-        }
 
         // Lower optional return type: the TYPE_EXPR that is a direct child of the
         // lambda node, appearing after PARAMETER_LIST but before THROWS_CLAUSE/BLOCK_EXPR.
@@ -5538,6 +5408,10 @@ impl LoweringContext {
         self.alloc_stmt(Stmt::Return(expr), node.span_range())
     }
 
+    /// `type T = RHS;` in a body. The RHS is either the whole marker
+    /// `unreflect(expr)` — the one position that lowers it — or a static
+    /// type, which takes the ordinary type road (where a nested `unreflect`
+    /// is rejected like every other inline occurrence).
     fn lower_type_binding_stmt(&mut self, node: &SyntaxNode) -> StmtId {
         let name = node
             .children_with_tokens()
@@ -5545,12 +5419,35 @@ impl LoweringContext {
             .find(|token| token.kind() == SyntaxKind::WORD)
             .map(|token| Name::new(token.text()))
             .unwrap_or_else(|| Name::new("<missing>"));
-        let value = node
+        let value = match node
             .children()
             .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
-            .map(|ty| self.lower_body_type_expr(&ty))
-            .unwrap_or_else(|| TypeExprKind::Error { attrs: Vec::new() }.at(node.span_range()));
+        {
+            Some(type_expr) => match Self::whole_unreflect_marker(&type_expr) {
+                Some(marker) => TypeBindingValue::Runtime(self.lower_unreflect_operand(&marker)),
+                None => TypeBindingValue::Static(self.lower_body_type_expr(&type_expr)),
+            },
+            None => TypeBindingValue::Static(
+                TypeExprKind::Error { attrs: Vec::new() }.at(node.span_range()),
+            ),
+        };
         self.alloc_stmt(Stmt::TypeBinding { name, value }, node.span_range())
+    }
+
+    /// The `UNREFLECT_TYPE` node when `type_expr` is exactly `unreflect(expr)`:
+    /// not a union member, not under a postfix modifier, nothing else around
+    /// it. `unreflect(t)?` or `Wrapper<unreflect(t)>` are not the marker; they
+    /// take the static road and are diagnosed there.
+    fn whole_unreflect_marker(
+        type_expr: &baml_compiler_syntax::ast::TypeExpr,
+    ) -> Option<SyntaxNode> {
+        if type_expr.is_union() || !type_expr.postfix_modifiers().is_empty() {
+            return None;
+        }
+        type_expr
+            .syntax()
+            .children()
+            .find(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
     }
 
     /// Lower the optional value of a `return` node — shared by `RETURN_STMT`

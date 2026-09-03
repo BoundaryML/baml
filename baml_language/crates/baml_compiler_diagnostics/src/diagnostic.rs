@@ -384,10 +384,10 @@ pub enum DiagnosticId {
     /// A condition whose static type decides the branch (always truthy /
     /// always falsy) - B-1563 truthiness.
     ConditionAlwaysConstant,
-    /// An inline `unreflect(value)` type argument would escape its call: the
-    /// runtime type parameter is rigid for that one call, but the expression's
-    /// published type still mentions it. The lexical `type T = unreflect(v)`
-    /// binding is the spelling that outlives the call.
+    /// `unreflect(value)` was written somewhere other than as the whole
+    /// right-hand side of a body-level `type T = …;` binding. The binding is
+    /// the one spelling that lifts a runtime type; every other position names
+    /// the bound `T`.
     RuntimeTypeMustBeNamed,
     /// `reflect.function.Type.specialize` was given type arguments the
     /// callable cannot accept: the wrong number of them, one that fails a

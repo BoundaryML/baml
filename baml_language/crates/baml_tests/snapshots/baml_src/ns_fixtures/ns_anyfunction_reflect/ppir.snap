@@ -42,7 +42,7 @@ function user.fixtures.anyfunction_reflect.heterogeneous_tool_map() -> map<strin
   { return map { "search": web_search, "now": current_time } }
 }
 function user.fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> string  [expr] {
-  { let category = reflect.enum.new("Category", [reflect.enum.value("RED", alias = "k7", description = "warm"), "BLUE"]); let prompt = RuntimeClassify@render_prompt("sample").text(); let parsed = RuntimeClassify@parse(`...`); return prompt Add reflect.enum.get_value(parsed) }
+  { let category = reflect.enum.new("Category", [reflect.enum.value("RED", alias = "k7", description = "warm"), "BLUE"]); type Category = unreflect(category); let prompt = RuntimeClassify@render_prompt("sample").text(); let parsed = RuntimeClassify@parse(`...`); return prompt Add reflect.enum.get_value(parsed) }
 }
 function user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction) -> string  [expr] {
   { let sig = reflect.signature(f); let parts = sig.returns.to_string() Add sig.errors.to_string() Add sig.args.length().to_string(); for arg in sig.args { parts = parts Add arg.name Add arg.type.to_string() }; for key in sig.opts.keys() { let opt = sig.opts.get(key) } if (opt Ne null) { parts = parts Add key Add opt.type.to_string() }; return parts }

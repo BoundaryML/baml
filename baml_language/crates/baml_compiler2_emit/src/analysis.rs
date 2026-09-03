@@ -707,13 +707,6 @@ fn walk_rvalue_locals(rvalue: &Rvalue<'_>, f: &mut impl FnMut(Local)) {
         Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
             walk_operand_locals(operand, f);
         }
-        Rvalue::RuntimeIsType {
-            operand,
-            type_value,
-        } => {
-            walk_operand_locals(operand, f);
-            walk_operand_locals(type_value, f);
-        }
         Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 walk_operand_locals(cap, f);
@@ -1694,7 +1687,6 @@ fn rvalue_allocates_with_identity(rvalue: &Rvalue<'_>) -> bool {
         | Rvalue::Len(_)
         | Rvalue::IsType { .. }
         | Rvalue::IsTypeTag { .. }
-        | Rvalue::RuntimeIsType { .. }
         | Rvalue::VirtualFieldAccess { .. }
         | Rvalue::MakeGenericFunction { .. }
         | Rvalue::MakeGenericFunctionFromValue { .. }
@@ -1779,10 +1771,6 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue<'_>) -> bool {
         Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
             operand_has_projection(operand)
         }
-        Rvalue::RuntimeIsType {
-            operand,
-            type_value,
-        } => operand_has_projection(operand) || operand_has_projection(type_value),
         Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
         Rvalue::MakeBoundMethod { receiver, .. }
         | Rvalue::MakeVirtualBoundMethod { receiver, .. }
@@ -1970,7 +1958,6 @@ fn rvalue_can_panic<'db>(body: &MirFunctionBody<'db>, rvalue: &Rvalue<'db>) -> b
         | Rvalue::Len(_)
         | Rvalue::IsType { .. }
         | Rvalue::IsTypeTag { .. }
-        | Rvalue::RuntimeIsType { .. }
         | Rvalue::MakeClosure { .. }
         | Rvalue::MakeBoundMethod { .. }
         | Rvalue::MakeVirtualBoundMethod { .. }

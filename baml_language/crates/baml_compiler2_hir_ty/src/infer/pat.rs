@@ -75,15 +75,6 @@ impl<'db> InferenceContext<'db> {
             .copied();
         let scrut_ty = match written_scrutinee {
             Some(type_ref) => {
-                let mut nested = Vec::new();
-                super::collect_unreflect_type_refs(
-                    &self.type_refs.store,
-                    self.type_refs.raw_id(type_ref),
-                    &mut nested,
-                );
-                for (_, operand) in nested {
-                    self.validate_runtime_type_operand(body, operand);
-                }
                 let annotation = self.lower_body_annotation(type_ref);
                 self.check_expr(body, scrutinee, &annotation);
                 // A match annotation declares the matrix's full input type.
@@ -446,20 +437,6 @@ impl<'db> InferenceContext<'db> {
                 .flatten()
                 .map(|(_, type_ref)| *type_ref),
         );
-        let mut operands = Vec::new();
-        for type_ref in written_refs {
-            let mut nested = Vec::new();
-            super::collect_unreflect_type_refs(
-                &self.type_refs.store,
-                self.type_refs.raw_id(type_ref),
-                &mut nested,
-            );
-            operands.extend(nested.into_iter().map(|(_, operand)| operand));
-        }
-        for operand in operands {
-            self.validate_runtime_type_operand(body, operand);
-        }
-
         match &body.patterns[pat] {
             Pattern::Wildcard => PatternOutcome {
                 dpat: DPat::wildcard(dpat_ty(scrut)),
@@ -498,29 +475,6 @@ impl<'db> InferenceContext<'db> {
                     .map(|type_ref| self.lower_body_annotation(type_ref))
                     .unwrap_or_else(Ty::error);
                 self.type_pattern_outcome(pat, scrut, &pat_ty)
-            }
-            Pattern::Unreflect(operand) => {
-                self.validate_runtime_type_operand(body, *operand);
-                let mut identity = self.body_owner_identity;
-                for byte in pat.into_raw().into_u32().to_le_bytes() {
-                    identity ^= u32::from(byte);
-                    identity = identity.wrapping_mul(0x0100_0193);
-                }
-                let parameter = baml_type::ParamTy::new(
-                    0xc000_0000 | (identity & 0x3fff_ffff),
-                    baml_type::Name::new(format!("$unreflect${identity:08x}")),
-                );
-                let constructor = Ty::intern(InferTy::TypeVar(parameter, TyAttr::default()));
-                PatternOutcome {
-                    // Each runtime predicate is possible but cannot cover a
-                    // static alphabet. Its statement-independent rigid
-                    // singleton also keeps two source patterns distinct.
-                    dpat: DPat::single(dpat_ty(&constructor), dpat_ty(scrut)),
-                    matched_ty: scrut.clone(),
-                    recorded_ty: None,
-                    covers_type: false,
-                    consumes_matched: false,
-                }
             }
             Pattern::Class { class, fields, .. } => {
                 let class = class.clone();
@@ -1540,7 +1494,7 @@ impl<'db> InferenceContext<'db> {
             },
             // Type patterns carry their own runtime test; the lowering
             // settles their claim - no discrimination here.
-            Pattern::Type(_) | Pattern::Unreflect(_) => true,
+            Pattern::Type(_) => true,
             Pattern::Or(alternatives) => {
                 let alternatives = alternatives.clone();
                 alternatives

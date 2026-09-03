@@ -16,9 +16,6 @@
 use std::fmt;
 
 use baml_base::{FileId, Name, SourceFile};
-use baml_compiler_diagnostics::runtime_type::{
-    RuntimeTypeEscape, RuntimeTypeNameRewrite, runtime_type_must_be_named_help,
-};
 use baml_compiler2_ast::{AstSourceMap, ExprId, StmtId, TypeAnnotId};
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -133,20 +130,10 @@ pub enum TirTypeError {
     UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
-    /// A value name was written bare in a generic slot. Runtime-computed
-    /// slots require the whole-slot `unreflect(value)` marker.
+    /// A value name was written bare in a generic slot. A runtime type is
+    /// lifted into a type position only by a `type T = unreflect(value)`
+    /// binding; the slot then names `T`.
     ComputedGenericArgumentRequiresUnreflect { name: Name },
-    /// An inline `unreflect(value)` type argument would escape its call: the
-    /// runtime parameter is rigid for that one call, but a type the call
-    /// publishes still mentions it, so the value or error that comes back
-    /// would carry a name that no longer means anything. The lexical
-    /// `type T = unreflect(v)` binding is the spelling that outlives a call.
-    /// `escape` picks the note; the headline and the fix are the same either
-    /// way.
-    RuntimeTypeMustBeNamed { escape: RuntimeTypeEscape },
-    /// `unreflect(...)` in a declaration signature has no executable scope
-    /// in which to allocate its runtime type slot.
-    RuntimeTypeHasNoScope,
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
@@ -435,9 +422,6 @@ pub enum TirTypeError {
         expected: usize,
         got: usize,
     },
-    /// Runtime type arguments cannot enter the generated streaming
-    /// specialization path.
-    RuntimeTypeArgumentOnStreamingCall { callee_name: Name },
     /// Indirect call opcodes have no runtime-type-check operand, so allowing
     /// one would either panic during debug emission or skip the check in
     /// release builds.
@@ -1042,16 +1026,6 @@ impl fmt::Display for TirTypeError {
                     );
                 f.write_str(diagnostic.message.as_str())
             }
-            TirTypeError::RuntimeTypeMustBeNamed { .. } => {
-                let diagnostic =
-                    baml_compiler_diagnostics::runtime_type::runtime_type_must_be_named();
-                f.write_str(diagnostic.message.as_str())
-            }
-            TirTypeError::RuntimeTypeHasNoScope => {
-                let diagnostic =
-                    baml_compiler_diagnostics::runtime_type::runtime_type_has_no_scope();
-                f.write_str(diagnostic.message.as_str())
-            }
             TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
                 if suggestions.is_empty() {
                     write!(
@@ -1563,12 +1537,6 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "function `{callee_name}` expects {expected} type argument(s), got {got}"
-                )
-            }
-            TirTypeError::RuntimeTypeArgumentOnStreamingCall { callee_name } => {
-                write!(
-                    f,
-                    "runtime type arguments are not supported on streaming call `{callee_name}`"
                 )
             }
             TirTypeError::RuntimeTypeArgumentOnIndirectCall => {
@@ -2450,14 +2418,6 @@ pub enum DiagnosticLocation {
     /// `(object_expr, field_value_expr)` resolves through
     /// `object_field_name_span` at render time.
     ObjectFieldName(ExprId, ExprId),
-    /// A whole `unreflect(carrier)` type-argument slot, named by its carrier
-    /// expression, inside the expression that wrote it. E0168 reports at the
-    /// slot and quotes `enclosing` back with the slot renamed, so both spans
-    /// travel together to the renderer, which is where the file text lives.
-    UnreflectArg {
-        carrier: ExprId,
-        enclosing: ExprId,
-    },
     Span(TextRange),
 }
 
@@ -2526,13 +2486,10 @@ impl<'db> TirDiagnostic<'db> {
             DiagnosticLocation::BodyTypeRef(id) => type_ref_spans
                 .map(|spans| spans.span(*id))
                 .unwrap_or_default(),
-            DiagnosticLocation::UnreflectArg { carrier, .. } => source_map
-                .map(|sm| sm.unreflect_arg_span(*carrier))
-                .unwrap_or_default(),
             DiagnosticLocation::Span(range) => *range,
         };
 
-        let mut related: Vec<RenderedRelatedInformation> = self
+        let related: Vec<RenderedRelatedInformation> = self
             .related
             .iter()
             .filter_map(|note| {
@@ -2545,36 +2502,6 @@ impl<'db> TirDiagnostic<'db> {
                 )
             })
             .collect();
-
-        // E0168's suggestion quotes the author's own line back at them. This
-        // is the first point that holds both the file text and the resolved
-        // spans, so the rewrite is assembled here rather than in inference,
-        // which sees arena ids and no source at all.
-        if let DiagnosticLocation::UnreflectArg { enclosing, .. } = &self.primary
-            && let Some(source_map) = source_map
-        {
-            let enclosing = source_map.expr_span(*enclosing);
-            let rewrite = if enclosing.contains_range(primary_range) {
-                let text = scope_file.text(db);
-                let start = usize::from(enclosing.start());
-                text.get(start..usize::from(enclosing.end()))
-                    .map(|written| {
-                        RuntimeTypeNameRewrite::from_source(
-                            written,
-                            usize::from(primary_range.start()) - start
-                                ..usize::from(primary_range.end()) - start,
-                        )
-                    })
-                    .unwrap_or_default()
-            } else {
-                RuntimeTypeNameRewrite::default()
-            };
-            related.push(RenderedRelatedInformation {
-                file_id: scope_file.file_id(db),
-                range: primary_range,
-                message: runtime_type_must_be_named_help(&rewrite),
-            });
-        }
 
         RenderedTirDiagnostic {
             error: self.error.clone(),

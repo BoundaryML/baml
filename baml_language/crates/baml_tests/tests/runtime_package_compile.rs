@@ -30,7 +30,8 @@ class ExtractedRecord {
   let pkg = reflect.Package.compile({ "schema.baml": source })
   let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
   let document_text = `{"account":"AC-1","amount":42}`
-  let record = Extract@parse<unreflect(record_t.as_type())>(document_text)
+  type Record = unreflect(record_t.as_type())
+  let record = Extract@parse<Record>(document_text)
   json.to_string(record)
 }
 
@@ -39,7 +40,8 @@ function rendered_schema() -> string {
     "schema.baml": "class ExtractedRecord { account string amount int }"
   })
   let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
-  Extract@render_prompt<unreflect(record_t.as_type())>("sample document").text()
+  type Record = unreflect(record_t.as_type())
+  Extract@render_prompt<Record>("sample document").text()
 }
 
 function declaration_identity_properties() -> bool {
