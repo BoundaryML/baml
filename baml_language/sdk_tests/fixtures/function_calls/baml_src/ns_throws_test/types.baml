@@ -17,8 +17,8 @@ function ThrowMyError() -> int throws MyError {
   throw MyError { code: 42, detail: "boom" }
 }
 
-// stdlib error arm: bad input throws `baml.json.JsonParseError`.
-function ParseJson(s: string) -> baml.json.json throws baml.json.JsonParseError {
+// stdlib error arm: bad input throws `baml.json.ParseError`.
+function ParseJson(s: string) -> baml.json.json throws baml.json.ParseError {
   baml.json.parse(s)
 }
 

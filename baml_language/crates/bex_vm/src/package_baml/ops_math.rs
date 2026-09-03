@@ -17,9 +17,9 @@
 //!   [`VmPanic::IntegerOverflow`], exactly like the checked
 //!   `AddInt` / `SubInt` / `MulInt` / `DivInt` / `Neg` opcodes (B-266) — this
 //!   includes `INT_MIN / -1` and `-INT_MIN`.
-//! - `float` `+` `-` `*` `%` follow IEEE-754 (`%` by zero yields `NaN`); `/` by
-//!   zero throws [`VmPanic::DivisionByZero`], like `DivFloat` and the generic
-//!   mixed int/float path.
+//! - `float` `+` `-` `*` `/` `%` follow IEEE-754 throughout: `%` by zero yields
+//!   `NaN`, and `/` by zero yields `±inf` (or `NaN` for `0.0 / 0.0`), like
+//!   `DivFloat` and the generic mixed int/float path. Nothing panics.
 //! - integer (`int` / `bigint`) `/` and `%` by zero throw
 //!   [`VmPanic::DivisionByZero`]; a `bigint` product beyond the workspace size
 //!   cap throws [`VmPanic::AllocFailure`].
@@ -29,7 +29,6 @@
 
 use std::sync::Arc;
 
-use bex_heap::TlabHolder;
 use bex_vm_types::{Value, errors::VmPanic};
 use num_bigint::BigInt;
 
@@ -81,17 +80,12 @@ const fn widen(n: i64) -> f64 {
     n as f64
 }
 
-/// `l / r` for the float `Divide` impls: a zero divisor throws the catchable
-/// `baml.panics.DivisionByZero`, exactly like the `DivFloat` opcode and the
-/// generic mixed int/float path — never IEEE `inf`/`NaN`. The operand `Value`s
-/// are allocated only on the cold path.
-fn float_div(vm: &mut BexVm, l: f64, r: f64) -> Result<f64, VmRustFnError> {
-    if r == 0.0 {
-        let left = Value::object(vm.alloc_float(l));
-        let right = Value::object(vm.alloc_float(r));
-        return Err(division_by_zero(left, right));
-    }
-    Ok(l / r)
+/// `l / r` for the float `Divide` impls, IEEE-754 throughout: division by zero
+/// yields `±inf` (or `NaN` for `0.0 / 0.0`) rather than panicking. Only the
+/// integer types treat a zero divisor as a panic, because they have no value to
+/// represent it with.
+fn float_div(l: f64, r: f64) -> f64 {
+    l / r
 }
 
 /// Build the `baml.panics.DivisionByZero` raised by integer `/` or `%` with a
@@ -276,8 +270,8 @@ impl BamlClassOpsDivide_int__for_int for PackageBamlImpl {
 }
 
 impl BamlClassOpsDivide_float__for_float for PackageBamlImpl {
-    fn div(vm: &mut BexVm, float: f64, rhs: f64) -> Result<f64, VmRustFnError> {
-        float_div(vm, float, rhs)
+    fn div(_vm: &mut BexVm, float: f64, rhs: f64) -> Result<f64, VmRustFnError> {
+        Ok(float_div(float, rhs))
     }
 }
 
@@ -297,16 +291,16 @@ impl BamlClassOpsDivide_bigint__for_bigint for PackageBamlImpl {
 }
 
 impl BamlClassOpsDivide_int__for_float for PackageBamlImpl {
-    // `float / int` — a zero divisor throws DivisionByZero (generic opcode path).
-    fn div(vm: &mut BexVm, float: f64, rhs: i64) -> Result<f64, VmRustFnError> {
-        float_div(vm, float, widen(rhs))
+    // `float / int` — IEEE-754, exactly like `float / float`.
+    fn div(_vm: &mut BexVm, float: f64, rhs: i64) -> Result<f64, VmRustFnError> {
+        Ok(float_div(float, widen(rhs)))
     }
 }
 
 impl BamlClassOpsDivide_float__for_int for PackageBamlImpl {
-    // `int / float` — a zero divisor throws DivisionByZero (generic opcode path).
-    fn div(vm: &mut BexVm, int: i64, rhs: f64) -> Result<f64, VmRustFnError> {
-        float_div(vm, widen(int), rhs)
+    // `int / float` — IEEE-754, exactly like `float / float`.
+    fn div(_vm: &mut BexVm, int: i64, rhs: f64) -> Result<f64, VmRustFnError> {
+        Ok(float_div(widen(int), rhs))
     }
 }
 

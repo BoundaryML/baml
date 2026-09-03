@@ -141,6 +141,10 @@ test "multiple_defs_preserve_side_effects" {
         multiple_defs_preserve_side_effects_helper();
         baml.sys.panic("expected multiple_defs_preserve_side_effects_helper() to throw")
     } catch (e) {
-        baml.panics.UserPanic => null
+        // `assert.is_true` raises `AssertionFailed`; the explicit
+        // `baml.sys.panic` above it raises `UserPanic`. Either means the
+        // helper's side effect ran.
+        baml.panics.AssertionFailed => null,
+        baml.panics.UserPanic => null,
     }
 }

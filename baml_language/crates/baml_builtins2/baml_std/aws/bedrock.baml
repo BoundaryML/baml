@@ -1,16 +1,15 @@
-// `aws.BedrockClient` — one model turn against the Amazon Bedrock Converse
-// API (`POST /model/{modelId}/converse`).
-//
-// The wire format, the URL and the response parse are pure BAML
-// (`root.internal`, ns_internal/bedrock.baml); only the SigV4 signature is
-// Rust, because the stdlib has no HMAC-SHA256 (`root.internal.sign_request`,
-// ns_internal/auth.baml).
-//
-// Credentials and region are NEVER read at construction time. `new()` is pure,
-// so declaring a client is always safe; the AWS provider chain (environment,
-// shared config/credentials files, `credential_process`, SSO cache, container
-// endpoint, EC2 IMDS) runs when a request is signed.
-
+/// One model turn against the Amazon Bedrock Converse
+/// API (`POST /model/{modelId}/converse`).
+///
+/// The wire format, the URL and the response parse are pure BAML
+/// (`aws.internal`, ns_internal/bedrock.baml); only the SigV4 signature is
+/// Rust, because the stdlib has no HMAC-SHA256 (`aws.internal.sign_request`,
+/// ns_internal/auth.baml).
+///
+/// Credentials and region are NEVER read at construction time. `new()` is pure,
+/// so declaring a client is always safe; the AWS provider chain (environment,
+/// shared config/credentials files, `credential_process`, SSO cache, container
+/// endpoint, EC2 IMDS) runs when a request is signed.
 class BedrockClient {
     /// A foundation-model id (`anthropic.claude-3-5-haiku-20241022-v1:0`), a
     /// cross-region inference-profile id (`us.anthropic.claude-haiku-4-5-…`),
@@ -96,6 +95,9 @@ class BedrockClient {
     /// flag only gates the bodies.
     capture_wire: bool,
 
+    /// Creates a client. Construction reads no environment variable, so
+    /// declaring one is always safe; credentials and endpoints resolve when a
+    /// request is built.
     function new(
         model: string,
         region: string? = null,
@@ -152,8 +154,8 @@ class BedrockClient {
             `bedrock/${self.model}`
         }
 
-        // This is deliberately the unsigned Converse request. Signing is an
-        // invocation concern and would read credentials during a snapshot.
+        /// This is deliberately the unsigned Converse request. Signing is an
+        /// invocation concern and would read credentials during a snapshot.
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             aws.internal.build_request(self, input, preview = true) catch_all (e) {
                 _ => throw ai.errors.normalize(e),

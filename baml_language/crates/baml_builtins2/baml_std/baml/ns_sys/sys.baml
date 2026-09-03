@@ -39,11 +39,13 @@ class ShellOutput {
 
 /// The terminal status of a process created with `start_process`.
 class ProcessExit {
+    /// The exit code of the process.
     exit_code: int,
+    /// The signal that caused the process to exit, if any.
     signal: string?,
 
     /// Returns `true` if the process exited normally with code `0`.
-    function ok(self) -> bool {
+    function ok(self) -> bool throws never {
         self.exit_code == 0
     }
 }
@@ -105,7 +107,7 @@ class ReadPipeLines {
     }
 }
 
-/// Drop one trailing carriage return so CRLF input produces clean lines.
+/// (internal) Drop one trailing carriage return so CRLF input produces clean lines.
 function _strip_carriage_return(line: uint8array) -> uint8array throws never {
     match (line.at(line.length() - 1)) {
         13 => line.slice(0, line.length() - 1),
@@ -225,16 +227,24 @@ function collect_garbage() -> null throws never {
     $rust_io_function
 }
 
-/// Panics with `message`, throwing a `baml.panics.UserPanic`. Never returns.
+/// Panics with `message`.
+///
+/// # Panics
+///
+/// - Always panics with `baml.panics.UserPanic`.
 //baml:fallible
 function panic(message: string) -> never throws never {
-    $rust_function
+    throw root.panics.UserPanic { message };
 }
 
-/// Terminates the process with the given exit `code`. Throws `baml.panics.Exit` which, if unhandled, exits the process.
+/// Terminates the process with the given exit `code`.
+///
+/// # Panics
+///
+/// - Always panics with `baml.panics.Exit` which, if unhandled, exits the process.
 //baml:fallible
 function exit(code: int) -> never throws never {
-    $rust_function
+    throw root.panics.Exit { code };
 }
 
 //baml:mut_vm
@@ -245,9 +255,9 @@ function argv() -> string[] throws never {
 
 /// Returns the process ID of the current process.
 ///
-/// ## Panics
-/// If the environment does not support process IDs (e.g. in a browser), with
-/// `baml.panics.HostUnavailable`.
+/// # Panics
+///
+/// - `baml.panics.HostUnavailable` if the environment does not support process IDs (e.g. in a browser).
 function pid() -> int throws never {
     $rust_io_function
 }

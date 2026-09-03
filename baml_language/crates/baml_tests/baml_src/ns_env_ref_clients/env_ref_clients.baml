@@ -331,8 +331,8 @@ function explicit_credential_wins_per_client_family() -> string {
         openai.OpenRouterClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
         openai.OllamaClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
         openai.GenericClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
-        anthropic.AnthropicClient.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
-        google.GoogleClient.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
+        anthropic.Client.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
+        google.GeminiClient.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
         google.VertexClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
         vercel.AiGatewayImageClient.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
     ].join("|")
@@ -419,7 +419,7 @@ test "resolve_without_a_slash_is_typed" {
 // typed, CATCHABLE failure naming the variable — not a panic that escapes the
 // caller's catch_all.
 function resolve_of_a_ref_reads_at_call_time() -> string {
-    let selector: ai.ClientSelector = env.BAML_TEST_ENV_REF_UNSET_CLIENT;
+    let selector: ai.Selector = env.BAML_TEST_ENV_REF_UNSET_CLIENT;
     ai.clients.resolve(selector).id() catch (e) {
         ai.errors.InvalidRequest => e.detail,
     }

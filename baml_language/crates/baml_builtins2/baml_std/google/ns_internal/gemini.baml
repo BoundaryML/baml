@@ -1,5 +1,5 @@
 // The Gemini `generateContent` wire format, shared by both Google backends:
-// root.GoogleClient (generativelanguage.googleapis.com) and root.VertexClient
+// root.GeminiClient (generativelanguage.googleapis.com) and root.VertexClient
 // (aiplatform.googleapis.com). Only URL construction and authentication differ
 // between them, so everything below — typed request classes, prompt/journal
 // lowering, the response envelope, the SSE decoder — is written once here and
@@ -24,15 +24,15 @@ class GmInlineData {
     data: string,
 }
 
-// `mimeType` is optional: the URI forms the API resolves by itself (a YouTube
-// watch URL, a Files-API handle) carry no MIME type, and guessing one from the
-// URL's spelling puts a wrong type on the wire.
+/// `mimeType` is optional: the URI forms the API resolves by itself (a YouTube
+/// watch URL, a Files-API handle) carry no MIME type, and guessing one from the
+/// URL's spelling puts a wrong type on the wire.
 class GmFileData {
     mimeType: string?,
     fileUri: string,
 }
 
-// Gemini has no tool-call ids: a call is correlated to its result by NAME.
+/// Gemini has no tool-call ids: a call is correlated to its result by NAME.
 class GmFunctionCall {
     name: string,
     args: map<string, unknown>,
@@ -43,15 +43,15 @@ class GmFunctionResponse {
     response: map<string, unknown>,
 }
 
-// One `Part` of a content. Exactly one payload field is set; the rest are
-// stripped before serialization.
-//
-// `thoughtSignature` is the exception: it is a SIBLING of the payload field,
-// not a payload of its own. Gemini 3 issues one with every `functionCall` it
-// emits and REQUIRES it back when that call is replayed in `contents` — a
-// bare replayed `functionCall` is rejected with HTTP 400 ("Function call is
-// missing a thought_signature in functionCall parts"), which breaks every
-// multi-turn tool loop on the 3.x models. See `_gm_encode_call_id`.
+/// One `Part` of a content. Exactly one payload field is set; the rest are
+/// stripped before serialization.
+///
+/// `thoughtSignature` is the exception: it is a SIBLING of the payload field,
+/// not a payload of its own. Gemini 3 issues one with every `functionCall` it
+/// emits and REQUIRES it back when that call is replayed in `contents` — a
+/// bare replayed `functionCall` is rejected with HTTP 400 ("Function call is
+/// missing a thought_signature in functionCall parts"), which breaks every
+/// multi-turn tool loop on the 3.x models. See `_gm_encode_call_id`.
 class GmPart {
     text: string?,
     inlineData: GmInlineData?,
@@ -93,9 +93,9 @@ class GmPart {
         }
     }
 
-    // `signature` is the `thoughtSignature` Gemini issued alongside this call
-    // (null for a model that issues none, and for a call replayed from a
-    // journal written before it existed).
+    /// `signature` is the `thoughtSignature` Gemini issued alongside this call
+    /// (null for a model that issues none, and for a call replayed from a
+    /// journal written before it existed).
     function of_function_call(call: GmFunctionCall, signature: string?) -> GmPart {
         GmPart {
             text: null,
@@ -119,15 +119,15 @@ class GmPart {
     }
 }
 
-// A `Content`: one turn's parts plus its role. `systemInstruction` is a
-// Content with no role, hence the optional.
+/// A `Content`: one turn's parts plus its role. `systemInstruction` is a
+/// Content with no role, hence the optional.
 class GmContent {
     role: string?,
     parts: GmPart[],
 }
 
-// `parametersJsonSchema` takes an unconstrained JSON Schema document (the
-// newer field; the legacy `parameters` accepts only the OpenAPI subset).
+/// `parametersJsonSchema` takes an unconstrained JSON Schema document (the
+/// newer field; the legacy `parameters` accepts only the OpenAPI subset).
 class GmFunctionDeclaration {
     name: string,
     description: string,
@@ -146,10 +146,10 @@ class GmToolConfig {
     functionCallingConfig: GmFunctionCallingConfig,
 }
 
-// The typed subset of `generationConfig` the clients expose as first-class
-// options. Everything else the API accepts (thinkingConfig, responseSchema,
-// seed, penalties, …) rides the `request_body` passthrough, which merges into
-// this object key-by-key rather than replacing it.
+/// The typed subset of `generationConfig` the clients expose as first-class
+/// options. Everything else the API accepts (thinkingConfig, responseSchema,
+/// seed, penalties, …) rides the `request_body` passthrough, which merges into
+/// this object key-by-key rather than replacing it.
 class GmGenerationConfig {
     temperature: float?,
     maxOutputTokens: int?,
@@ -235,9 +235,9 @@ class GmPromptFeedback {
     safetyRatings: GmSafetyRating[]?,
 }
 
-// The `{"error": {...}}` document Google returns for a failed call. It arrives
-// with a non-2xx status on the unary path (where `ai.wire.send_as` classifies
-// it) and can also arrive as an SSE payload mid-stream.
+/// The `{"error": {...}}` document Google returns for a failed call. It arrives
+/// with a non-2xx status on the unary path (where `ai.wire.send_as` classifies
+/// it) and can also arrive as an SSE payload mid-stream.
 class GmError {
     code: int?,
     message: string?,
@@ -256,17 +256,17 @@ class GmResponse {
 // ---------------------------------------------------------------------------
 // Serialization helpers.
 
-// Keys whose values are documents supplied by the caller or by reflection, not
-// wire fields we own: a `null` inside them is DATA (a JSON Schema default, a
-// tool argument) and must survive.
+/// (internal) Keys whose values are documents supplied by the caller or by reflection, not
+/// wire fields we own: a `null` inside them is DATA (a JSON Schema default, a
+/// tool argument) and must survive.
 function _gm_is_opaque_key(key: string) -> bool {
     key == "args" || key == "response" || key == "parametersJsonSchema"
 }
 
-// Drop every null-valued object entry, recursively — the BAML equivalent of
-// serde's `skip_serializing_if = "Option::is_none"`. Array ELEMENTS are never
-// dropped (a null element is a positional value), and `_gm_is_opaque_key`
-// subtrees are copied verbatim.
+/// (internal) Drop every null-valued object entry, recursively — the BAML equivalent of
+/// serde's `skip_serializing_if = "Option::is_none"`. Array ELEMENTS are never
+/// dropped (a null element is a positional value), and `_gm_is_opaque_key`
+/// subtrees are copied verbatim.
 function _gm_strip_nulls(value: baml.json.json, opaque: bool) -> baml.json.json {
     if (opaque) {
         return value;
@@ -295,10 +295,10 @@ function _gm_strip_nulls(value: baml.json.json, opaque: bool) -> baml.json.json 
     }
 }
 
-// A query-string component. There is no percent-encoder in the stdlib, so this
-// covers the characters that would otherwise change the URL's structure plus
-// the ones that are simply illegal in a query. Values that need more than this
-// (raw UTF-8, control characters) should be encoded by the caller.
+/// (internal) A query-string component. There is no percent-encoder in the stdlib, so this
+/// covers the characters that would otherwise change the URL's structure plus
+/// the ones that are simply illegal in a query. Values that need more than this
+/// (raw UTF-8, control characters) should be encoded by the caller.
 function _gm_encode_query(value: string) -> string {
     value.replace_all("%", "%25")
         .replace_all(" ", "%20")
@@ -313,8 +313,8 @@ function _gm_encode_query(value: string) -> string {
         .replace_all("?", "%3F")
 }
 
-// Append `params` to `url`, respecting a query string the URL already has
-// (`:streamGenerateContent?alt=sse`).
+/// (internal) Append `params` to `url`, respecting a query string the URL already has
+/// (`:streamGenerateContent?alt=sse`).
 function _gm_apply_query(url: string, params: map<string, string>?) -> string {
     if let items: map<string, string> = params {
         let out = url;
@@ -333,9 +333,9 @@ function _gm_apply_query(url: string, params: map<string, string>?) -> string {
     }
 }
 
-// Apply the caller's `headers` option over the provider defaults. Header names
-// are lower-cased, matching what the HTTP layer does on the wire. Auth headers
-// are set AFTER this, so a user header can never displace credentials.
+/// (internal) Apply the caller's `headers` option over the provider defaults. Header names
+/// are lower-cased, matching what the HTTP layer does on the wire. Auth headers
+/// are set AFTER this, so a user header can never displace credentials.
 function _gm_apply_headers(
     headers: map<string, string>,
     extra: map<string, string>?,
@@ -350,8 +350,8 @@ function _gm_apply_headers(
     }
 }
 
-// The typed `generationConfig`, or null when the client set none of its
-// fields — an empty object would still be a wire difference.
+/// (internal) The typed `generationConfig`, or null when the client set none of its
+/// fields — an empty object would still be a wire difference.
 function _gm_generation_config(
     temperature: float?,
     max_output_tokens: int?,
@@ -384,7 +384,7 @@ function _gm_generation_config(
 // ---------------------------------------------------------------------------
 // Prompt lowering.
 
-// The URL a media part was built from, if it was built from one at all.
+/// (internal) The URL a media part was built from, if it was built from one at all.
 function _gm_media_url(media: ai.MediaPart) -> string? {
     match (media) {
         let image: baml.media.Image => image.url(),
@@ -394,11 +394,11 @@ function _gm_media_url(media: ai.MediaPart) -> string? {
     }
 }
 
-// URLs the API resolves SERVER-SIDE and that must therefore never be fetched
-// and inlined: `gs://` Cloud Storage objects (handled inside `resolve_media`
-// itself), Files-API handles, and YouTube videos — a documented `fileData`
-// input on both backends. Fetching a YouTube watch URL inlines the watch
-// PAGE's HTML as base64 "video", which is garbage on the wire.
+/// (internal) URLs the API resolves SERVER-SIDE and that must therefore never be fetched
+/// and inlined: `gs://` Cloud Storage objects (handled inside `resolve_media`
+/// itself), Files-API handles, and YouTube videos — a documented `fileData`
+/// input on both backends. Fetching a YouTube watch URL inlines the watch
+/// PAGE's HTML as base64 "video", which is garbage on the wire.
 function _gm_is_provider_uri(url: string) -> bool {
     url.starts_with("gs://")
         || url.includes("://generativelanguage.googleapis.com/v1beta/files/")
@@ -408,9 +408,9 @@ function _gm_is_provider_uri(url: string) -> bool {
         || url.includes("://youtu.be/")
 }
 
-// A `fileData` URI Gemini resolves by itself carries no MIME type we can know
-// (a YouTube watch URL has no extension), so send none rather than the guess
-// `resolve_media` derives from the URL's spelling.
+/// (internal) A `fileData` URI Gemini resolves by itself carries no MIME type we can know
+/// (a YouTube watch URL has no extension), so send none rather than the guess
+/// `resolve_media` derives from the URL's spelling.
 function _gm_mime_for_uri(url: string, mime: string) -> string? {
     if (url.starts_with("gs://")) {
         mime
@@ -421,16 +421,16 @@ function _gm_mime_for_uri(url: string, mime: string) -> string? {
     }
 }
 
-// One prompt media part -> `inlineData` (base64) or `fileData` (a URI the API
-// resolves itself).
-//
-// `fetch_url` is the backend's URL strategy, mirroring sys_llm's per-provider
-// media defaults: the Gemini Developer API has no server-side URL fetch, so an
-// http(s) URL is downloaded and inlined (`true`), while Vertex takes the URL
-// through as `fileData.fileUri` (`false`) — which also keeps large media out
-// of the inline request-size cap. Local files always become base64 and
-// existing base64 is retained on both backends, and a `_gm_is_provider_uri`
-// URL is passed through even when `fetch_url` is set.
+/// (internal) One prompt media part -> `inlineData` (base64) or `fileData` (a URI the API
+/// resolves itself).
+///
+/// `fetch_url` is the backend's URL strategy, mirroring sys_llm's per-provider
+/// media defaults: the Gemini Developer API has no server-side URL fetch, so an
+/// http(s) URL is downloaded and inlined (`true`), while Vertex takes the URL
+/// through as `fileData.fileUri` (`false`) — which also keeps large media out
+/// of the inline request-size cap. Local files always become base64 and
+/// existing base64 is retained on both backends, and a `_gm_is_provider_uri`
+/// URL is passed through even when `fetch_url` is set.
 function _gm_media_part(media: ai.MediaPart, fetch_url: bool, preview: bool = false) -> GmPart {
     let source = _gm_media_url(media);
     let passthrough = if let url: string = source {
@@ -493,22 +493,18 @@ function _gm_prompt_parts(
     parts
 }
 
-class GooglePrompt {
+class Prompt {
     system_parts: GmPart[],
     contents: GmContent[],
 }
 
-// Gemini spells assistant as `model` and carries system instructions outside
-// `contents`. Role-less prompt content is an ordinary user turn.
-//
-// ALL system messages merge into one `systemInstruction` (PLAN §5: google
-// merges, the other providers demote the 2nd+ to user) — matching sys_llm's
-// builder and the shipped native behavior.
-function google_lower_prompt(
-    prompt: ai.Prompt,
-    fetch_url: bool = true,
-    preview: bool = false,
-) -> GooglePrompt {
+/// Gemini spells assistant as `model` and carries system instructions outside
+/// `contents`. Role-less prompt content is an ordinary user turn.
+///
+/// ALL system messages merge into one `systemInstruction` (PLAN §5: google
+/// merges, the other providers demote the 2nd+ to user) — matching sys_llm's
+/// builder and the shipped native behavior.
+function lower_prompt(prompt: ai.Prompt, fetch_url: bool = true, preview: bool = false) -> Prompt {
     let system_parts: GmPart[] = [];
     let contents: GmContent[] = [];
     for (let message in prompt.messages()) {
@@ -528,32 +524,32 @@ function google_lower_prompt(
             null
         };
     }
-    GooglePrompt { system_parts: system_parts, contents: contents }
+    Prompt { system_parts: system_parts, contents: contents }
 }
 
-// ---------------------------------------------------------------------------
-// Thought signatures (Gemini 3.x).
-//
-// Gemini 3 returns a `thoughtSignature` on every `functionCall` part and
-// REJECTS the request (HTTP 400, "Function call is missing a thought_signature
-// in functionCall parts") when that call is replayed in `contents` without it.
-// Every multi-turn tool loop replays exactly that, so the signature has to
-// survive the round-trip through the journal — and the journal's
-// `ai.content.ToolUse` has only `id`, `name` and `args`, none of which is a
-// metadata slot.
-//
-// The id is the one field this client OWNS: Gemini sends no call ids at all,
-// `google_parse` synthesizes them (`call_<seq>_<i>`), and they are opaque
-// correlation handles everywhere else (`ai.wire` documents id shape as "that
-// provider's business" and deliberately never rewrites them). So the signature
-// rides the id: `call_0_0~gts~<signature>`. It round-trips through
-// AssistantMessage -> ToolRequested -> ToolCompleted untouched, needs no shared
-// -file change, and is stripped back off at the one place that rebuilds the
-// wire part.
-//
-// Signatures are base64, which cannot contain `~`, so the marker is
-// unambiguous; an id without it (another provider's journal, a journal written
-// before this existed, a 2.x model) simply yields no signature.
+/// (internal) ---------------------------------------------------------------------------
+/// Thought signatures (Gemini 3.x).
+///
+/// Gemini 3 returns a `thoughtSignature` on every `functionCall` part and
+/// REJECTS the request (HTTP 400, "Function call is missing a thought_signature
+/// in functionCall parts") when that call is replayed in `contents` without it.
+/// Every multi-turn tool loop replays exactly that, so the signature has to
+/// survive the round-trip through the journal — and the journal's
+/// `ai.content.ToolUse` has only `id`, `name` and `args`, none of which is a
+/// metadata slot.
+///
+/// The id is the one field this client OWNS: Gemini sends no call ids at all,
+/// `parse` synthesizes them (`call_<seq>_<i>`), and they are opaque
+/// correlation handles everywhere else (`ai.wire` documents id shape as "that
+/// provider's business" and deliberately never rewrites them). So the signature
+/// rides the id: `call_0_0~gts~<signature>`. It round-trips through
+/// AssistantMessage -> ToolRequested -> ToolCompleted untouched, needs no shared
+/// -file change, and is stripped back off at the one place that rebuilds the
+/// wire part.
+///
+/// Signatures are base64, which cannot contain `~`, so the marker is
+/// unambiguous; an id without it (another provider's journal, a journal written
+/// before this existed, a 2.x model) simply yields no signature.
 function _gm_sig_marker() -> string {
     "~gts~"
 }
@@ -566,7 +562,7 @@ function _gm_encode_call_id(id: string, signature: string?) -> string {
     }
 }
 
-// The `thoughtSignature` carried by a synthesized call id, if it carries one.
+/// (internal) The `thoughtSignature` carried by a synthesized call id, if it carries one.
 function _gm_call_id_signature(id: string) -> string? {
     let marker = _gm_sig_marker();
     if let at: int = id.index_of(marker) {
@@ -576,8 +572,8 @@ function _gm_call_id_signature(id: string) -> string? {
     }
 }
 
-// Gemini correlates tool results by NAME, not id: find the tool name for a
-// result id by scanning the ai.AssistantMessage ai.ToolUse blocks in the journal.
+/// (internal) Gemini correlates tool results by NAME, not id: find the tool name for a
+/// result id by scanning the ai.AssistantMessage ai.ToolUse blocks in the journal.
 function _gm_tool_name_for(j: ai.Journal, id: string) -> string {
     let name = "";
     for (let e in j.entries()) {
@@ -604,11 +600,11 @@ function _gm_tool_name_for(j: ai.Journal, id: string) -> string {
     name
 }
 
-// ai.Journal -> generateContent `contents`. Only promptable events lower;
-// ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are journal-only.
-// Consecutive tool results merge into ONE user content of functionResponse
-// parts, matching how Gemini expects results for a multi-call turn.
-function google_lower_journal(j: ai.Journal) -> GmContent[] {
+/// ai.Journal -> generateContent `contents`. Only promptable events lower;
+/// ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are journal-only.
+/// Consecutive tool results merge into ONE user content of functionResponse
+/// parts, matching how Gemini expects results for a multi-call turn.
+function lower_journal(j: ai.Journal) -> GmContent[] {
     let contents: GmContent[] = [];
     let pending: GmPart[] = []; // functionResponse parts awaiting flush
     for (let e in j.entries()) {
@@ -701,14 +697,14 @@ function google_lower_journal(j: ai.Journal) -> GmContent[] {
 // ---------------------------------------------------------------------------
 // Body construction — shared by both clients.
 
-// ai.ModelTurnInput -> the serialized generateContent body.
-//
-// The last step is always `ai.wire.merge_request_body`, so `request_body`
-// overrides everything the typed request built (and a null value in it DELETES
-// the key the client injected).
-//
-// `fetch_url` is the backend's media strategy (see `_gm_media_part`): the
-// Developer API inlines http(s) media, Vertex passes the URL through.
+/// ai.ModelTurnInput -> the serialized generateContent body.
+///
+/// The last step is always `ai.wire.merge_request_body`, so `request_body`
+/// overrides everything the typed request built (and a null value in it DELETES
+/// the key the client injected).
+///
+/// `fetch_url` is the backend's media strategy (see `_gm_media_part`): the
+/// Developer API inlines http(s) media, Vertex passes the URL through.
 function gemini_build_body(
     input: ai.ModelTurnInput,
     client_id: string,
@@ -719,10 +715,10 @@ function gemini_build_body(
     preview: bool = false,
 ) -> string {
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
-    let lowered = google_lower_prompt(prompt, fetch_url = fetch_url, preview = preview);
+    let lowered = lower_prompt(prompt, fetch_url = fetch_url, preview = preview);
     let contents = lowered.contents;
     let journal = ai.wire.sanitize_for_client(input.journal, client_id);
-    for (let item in google_lower_journal(journal)) {
+    for (let item in lower_journal(journal)) {
         contents.push(item);
     }
 
@@ -743,7 +739,7 @@ function gemini_build_body(
     };
 
     // Gemini answers `contents: []` with an HTTP 400. Say so locally instead,
-    // the way the Anthropic (`anthropic_messages_request`) and Bedrock
+    // the way the Anthropic (`messages_request`) and Bedrock
     // (`converse_request`) clients do for the same shape.
     if (contents.length() == 0) {
         throw ai.errors.InvalidRequest {
@@ -787,7 +783,7 @@ function gemini_build_body(
     baml.json.stringify(ai.wire.merge_request_body(base, request_body))
 }
 
-// The RPC verb for one call: `:generateContent`, or the SSE streaming variant.
+/// The RPC verb for one call: `:generateContent`, or the SSE streaming variant.
 function gemini_method(stream: bool) -> string {
     if (stream) {
         ":streamGenerateContent?alt=sse"
@@ -799,10 +795,10 @@ function gemini_method(stream: bool) -> string {
 // ---------------------------------------------------------------------------
 // Response parsing — shared by both clients.
 
-// One base64 payload from an `inlineData` response part -> a media block. The
-// media kind follows the MIME type; `ai.content.Media.new` is the only
-// supported way to build one (a primitive media value is not assignable to a
-// baml.media.* field).
+/// (internal) One base64 payload from an `inlineData` response part -> a media block. The
+/// media kind follows the MIME type; `ai.content.Media.new` is the only
+/// supported way to build one (a primitive media value is not assignable to a
+/// baml.media.* field).
 function _gm_output_media(mime: string, data: string) -> ai.content.Media {
     let value: image | audio | video | pdf = if (mime.starts_with("audio/")) {
         baml.media.Audio.from_base64(data, mime)
@@ -816,9 +812,9 @@ function _gm_output_media(mime: string, data: string) -> ai.content.Media {
     ai.content.Media.new(value)
 }
 
-// The finish reasons that mean "the model refused / was blocked" rather than
-// "the model finished". Everything else is Complete (an unknown reason must
-// never masquerade as a refusal).
+/// (internal) The finish reasons that mean "the model refused / was blocked" rather than
+/// "the model finished". Everything else is Complete (an unknown reason must
+/// never masquerade as a refusal).
 function _gm_is_blocked(finish: string) -> bool {
     finish == "SAFETY"
         || finish == "RECITATION"
@@ -844,16 +840,16 @@ function _gm_usage(usage: GmUsageMetadata?) -> ai.events.Usage? {
     }
 }
 
-// One decoded response -> canonical content blocks and a stop reason.
-// Gemini sends no call ids; synthesize `call_<seq>_<i>` from the journal
-// position and the call's index within the turn (plus the `thoughtSignature`
-// the call must be replayed with — see `_gm_encode_call_id`).
-//
-// A document that carries no turn at all (`{}` from a broken proxy, an
-// `{"error": …}` body served with a 200) is a FAILURE, not an empty answer:
-// silently returning an empty Complete turn makes a `-> string` function
-// return "" as a success. `provider` names the backend in that failure.
-function google_parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.ModelTurn {
+/// One decoded response -> canonical content blocks and a stop reason.
+/// Gemini sends no call ids; synthesize `call_<seq>_<i>` from the journal
+/// position and the call's index within the turn (plus the `thoughtSignature`
+/// the call must be replayed with — see `_gm_encode_call_id`).
+///
+/// A document that carries no turn at all (`{}` from a broken proxy, an
+/// `{"error": …}` body served with a 200) is a FAILURE, not an empty answer:
+/// silently returning an empty Complete turn makes a `-> string` function
+/// return "" as a success. `provider` names the backend in that failure.
+function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.ModelTurn {
     // An error document that reached this far was served with a 2xx status
     // (`ai.wire.send_as` classifies the non-2xx case). Classify it the same
     // way rather than reading a turn out of a body that has none.
@@ -925,17 +921,22 @@ function google_parse(resp: GmResponse, seq: int, provider: string = "google") -
     } else {
         ai.content.StopReason.Complete
     };
-    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: _gm_usage(resp.usageMetadata) }
+    ai.ModelTurn {
+        calls: [],
+        content: content,
+        stop_reason: stop,
+        usage: _gm_usage(resp.usageMetadata),
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Transport helpers — shared by both clients.
 
-// `baml.http.fetch_sse` rejects a non-2xx response by throwing an
-// `baml.errors.Io` whose message embeds the status and the body
-// (sys_native/src/io_impls.rs). Recover that status so an SSE failure lands in
-// the SAME taxonomy as a unary one: a 400 must NOT become a retry-safe
-// NetworkFailure, or a Retry policy would replay an invalid request forever.
+/// (internal) `baml.http.fetch_sse` rejects a non-2xx response by throwing an
+/// `baml.errors.Io` whose message embeds the status and the body
+/// (sys_native/src/io_impls.rs). Recover that status so an SSE failure lands in
+/// the SAME taxonomy as a unary one: a 400 must NOT become a retry-safe
+/// NetworkFailure, or a Retry policy would replay an invalid request forever.
 function _gm_sse_failure(provider: string, error: unknown) -> ai.errors.Failure {
     // `baml.errors.Io.message` is the raw text; anything else is rendered.
     // Redacted because Vertex express mode signs the request with `?key=…` in
@@ -962,16 +963,17 @@ function _gm_sse_failure(provider: string, error: unknown) -> ai.errors.Failure 
             return ai.errors.classify_http(provider, status, body);
         }
     }
-    ai.errors.NetworkFailure { status_code: null,
+    ai.errors.NetworkFailure {
+        status_code: null,
         provider: provider,
         detail: `transport failed before a response arrived: ${text}`,
         raw_body: null,
     }
 }
 
-// Route failures from the shared Google / Vertex stream opener. Timeout and
-// cancellation keep their typed control-flow meaning; only transport errors
-// enter the provider failure taxonomy.
+/// (internal) Route failures from the shared Google / Vertex stream opener. Timeout and
+/// cancellation keep their typed control-flow meaning; only transport errors
+/// enter the provider failure taxonomy.
 function _gm_route_sse_open(
     provider: string,
     open: () -> baml.http.SseStream throws unknown,
@@ -983,7 +985,7 @@ function _gm_route_sse_open(
     }
 }
 
-// Open the SSE connection, classifying the failure precisely.
+/// (internal) Open the SSE connection, classifying the failure precisely.
 function _gm_open_sse(
     req: baml.http.Request,
     provider: string,
@@ -999,23 +1001,23 @@ function _gm_open_sse(
     })
 }
 
-// One SseStream batch -> provider-agnostic stream events.
-//
-// Wire shape: each SSE `data:` payload is a GmResponse fragment; text deltas
-// ride in candidates[0].content.parts[].text, the last fragment carries
-// finishReason, and usageMetadata (cumulative) appears on fragments.
-//
-// Termination: Gemini's SSE has no terminal sentinel — the fragment carrying
-// `finishReason` IS the end of the turn, and the connection then closes. That
-// fragment is decoded as `ai.stream.TurnDone`, which lets both stream call
-// sites pass `require_terminal`: a connection cut mid-answer then surfaces as
-// an `ai.errors.NetworkFailure` instead of a silently truncated Complete turn.
-//
-// A `data:` payload that is not decodable is a failure too. Dropping it (what
-// this used to do) turns a cut or a proxy's error page into missing text that
-// no caller can see.
-function _gm_decode_batch(batch: string, provider: string) -> ai.stream.StreamEvent[] {
-    let out: ai.stream.StreamEvent[] = [];
+/// (internal) One SseStream batch -> provider-agnostic stream events.
+///
+/// Wire shape: each SSE `data:` payload is a GmResponse fragment; text deltas
+/// ride in candidates[0].content.parts[].text, the last fragment carries
+/// finishReason, and usageMetadata (cumulative) appears on fragments.
+///
+/// Termination: Gemini's SSE has no terminal sentinel — the fragment carrying
+/// `finishReason` IS the end of the turn, and the connection then closes. That
+/// fragment is decoded as `ai.stream.TurnDone`, which lets both stream call
+/// sites pass `require_terminal`: a connection cut mid-answer then surfaces as
+/// an `ai.errors.NetworkFailure` instead of a silently truncated Complete turn.
+///
+/// A `data:` payload that is not decodable is a failure too. Dropping it (what
+/// this used to do) turns a cut or a proxy's error page into missing text that
+/// no caller can see.
+function _gm_decode_batch(batch: string, provider: string) -> ai.stream.Event[] {
+    let out: ai.stream.Event[] = [];
     for (let raw in ai.stream.decode_sse_batch(batch)) {
         let payload = (raw.data ?? "").trim();
         // A comment/keep-alive carries no data; `[DONE]` is not Gemini's
@@ -1088,23 +1090,23 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.StreamEv
 }
 
 // ---------------------------------------------------------------------------
-// root.GoogleClient — the Gemini Developer API backend.
+// root.GeminiClient — the Gemini Developer API backend.
 
-// ai.ModelTurnInput -> one generateContent request.
-function google_render(c: root.GoogleClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _google_request(c, input, false, preview = false)
+/// ai.ModelTurnInput -> one generateContent request.
+function render(c: root.GeminiClient, input: ai.ModelTurnInput) -> baml.http.Request {
+    _request(c, input, false, preview = false)
 }
 
 /// The request one `render` would send. URL media unsupported by the Gemini
 /// Developer API is rejected before any download is attempted.
-function google_preview(c: root.GoogleClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _google_request(c, input, false, preview = true)
+function preview(c: root.GeminiClient, input: ai.ModelTurnInput) -> baml.http.Request {
+    _request(c, input, false, preview = true)
 }
 
-// The shared request builder: identical body for both paths; streaming swaps
-// the RPC verb for `:streamGenerateContent?alt=sse`.
-function _google_request(
-    c: root.GoogleClient,
+/// (internal) The shared request builder: identical body for both paths; streaming swaps
+/// the RPC verb for `:streamGenerateContent?alt=sse`.
+function _request(
+    c: root.GeminiClient,
     input: ai.ModelTurnInput,
     stream: bool,
     preview: bool = false,
@@ -1139,34 +1141,29 @@ function _google_request(
     baml.http.Request { method: "POST", url: url, headers: with_user, body: body }
 }
 
-// The one internal entry point: render, send, normalize — one model turn.
-function gemini_invoke(c: root.GoogleClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
+/// The one internal entry point: render, send, normalize — one model turn.
+function gemini_invoke(c: root.GeminiClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     // ai.Journal position before this turn commits; the ai.AssistantMessage
     // the runner appends will land at this index, so ids synthesized
     // from it are stable across re-renders.
     let seq = input.journal.entries().length();
-    let req = google_render(c, input);
-    let sent = ai.wire.send_as_with_wire<GmResponse>(
-        req,
-        "google",
-        c.id(),
-        capture_wire = c.capture_wire,
-    );
-    let turn = google_parse(sent.value, seq);
+    let req = render(c, input);
+    let sent = ai.wire.send_as_with_wire<GmResponse>(req, "google", c.id(), capture_wire = c.capture_wire);
+    let turn = parse(sent.value, seq);
     ai.ModelTurn { ...turn, calls: [sent.call] }
 }
 
-function _google_decode_batch(batch: string) -> ai.stream.StreamEvent[] {
+function _decode_batch(batch: string) -> ai.stream.Event[] {
     _gm_decode_batch(batch, "google")
 }
 
-// The streaming entry point: the same request body as `gemini_invoke` against
-// the `:streamGenerateContent?alt=sse` verb, wrapped in an ai.TurnStream.
+/// The streaming entry point: the same request body as `gemini_invoke` against
+/// the `:streamGenerateContent?alt=sse` verb, wrapped in an ai.TurnStream.
 function gemini_invoke_stream(
-    c: root.GoogleClient,
+    c: root.GeminiClient,
     input: ai.ModelTurnInput,
 ) -> ai.stream.TurnStream {
-    let req = _google_request(c, input, true);
+    let req = _request(c, input, true);
     let started = baml.time.Instant.now();
     let sse = _gm_open_sse(req, "google");
     // Strict termination: the `finishReason` fragment decodes as TurnDone, so
@@ -1174,7 +1171,7 @@ function gemini_invoke_stream(
     let stream = ai.stream.TurnStream.from_sse(
         sse,
         (batch: string) -> {
-            _google_decode_batch(batch) catch_all (e) {
+            _decode_batch(batch) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         },
@@ -1198,11 +1195,7 @@ function gemini_invoke_stream(
         } else {
             null
         },
-        http_response: ai.events.HttpResponse {
-            status: sse.status_code,
-            headers: sse.headers,
-            body: null,
-        },
+        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
         usage: null,
         selected: true,
         sse_responses: if (c.capture_wire) {

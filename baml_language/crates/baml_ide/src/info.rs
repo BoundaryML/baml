@@ -1748,7 +1748,7 @@ mod tests {
         let TypeInfo::Documentation { detail, .. } = info_at(&test) else {
             panic!("builtin type hovers as documentation");
         };
-        assert!(detail.contains("A 63-bit signed integer. Range: -2^62 to 2^62-1"));
+        assert!(detail.contains("A 63-bit signed integer"));
         assert!(!detail.contains("with checked arithmetic"));
     }
 
@@ -2035,7 +2035,7 @@ class Foo<[CURSOR] {
         assert!(
             docstring
                 .as_deref()
-                .is_some_and(|d| d.contains("Negative indices")),
+                .is_some_and(|d| d.contains("Returns the element at")),
             "stdlib method docstring rides along, got: {docstring:?}"
         );
     }

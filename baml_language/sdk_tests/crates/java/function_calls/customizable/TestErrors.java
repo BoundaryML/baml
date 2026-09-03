@@ -23,7 +23,6 @@ import baml_bridge.BamlCallContext;
 import baml_bridge.BamlCancelledError;
 import baml_bridge.BamlError;
 import baml_bridge.BamlPanic;
-import baml_sdk.baml.json.JsonParseError;
 import baml_sdk.baml.panics.UserPanic;
 import baml_sdk.raises_test.ParseError;
 import baml_sdk.throws_test.MyError;
@@ -48,11 +47,11 @@ class TestErrors {
     @Test
     void test_errors_stdlib_error_surfaces_as_baml_error() {
         // `baml.json.parse` on bad input -> BamlError whose `.value()` is a
-        // `JsonParseError` (a plain generated value class). Proves stdlib error
+        // `baml.json.ParseError` (a plain generated value class). Proves stdlib error
         // classes surface structured, independent of any `throws` clause.
         BamlError exc =
                 assertThrows(BamlError.class, () -> baml_sdk.throws_test.Fns.ParseJson(BAD_JSON));
-        assertInstanceOf(JsonParseError.class, exc.value());
+        assertInstanceOf(baml_sdk.baml.json.ParseError.class, exc.value());
     }
 
     @Test

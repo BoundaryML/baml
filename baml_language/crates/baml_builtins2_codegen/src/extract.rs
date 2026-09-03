@@ -351,7 +351,7 @@ fn extract_from_class(
 
         // Always set receiver for class methods — even static methods (no `self`)
         // need it for dispatch routing. The runtime path is
-        // "baml.sap.ParseCache.new" which dispatches via class name.
+        // "baml.sap._ParseCache._new" which dispatches via class name.
         let receiver_type = if !has_self {
             ReceiverType::Static
         } else if is_mut {
@@ -1342,11 +1342,13 @@ mod tests {
             .expect("missing Array.push");
         assert!(array_push.receiver.as_ref().unwrap().receiver_type.is_mut());
 
-        let string_length = vm_builtins
+        // `String.length` is a BAML-bodied alias for `char_count`; the native
+        // builtin behind both is `char_count`.
+        let string_char_count = vm_builtins
             .iter()
-            .find(|b| b.path == "baml.String.length")
-            .expect("missing String.length");
-        assert_eq!(string_length.fn_name, "baml_string_length");
+            .find(|b| b.path == "baml.String.char_count")
+            .expect("missing String.char_count");
+        assert_eq!(string_char_count.fn_name, "baml_string_char_count");
 
         let trunc_to_int = vm_builtins
             .iter()
@@ -1407,7 +1409,7 @@ mod tests {
 
         let sap_final = io_builtins
             .iter()
-            .find(|b| b.path == "baml.sap.__parse_final")
+            .find(|b| b.path == "baml.sap._ParseCache._parse_final")
             .unwrap();
         assert_eq!(sap_final.throws, throws(&["LlmClient"]));
     }

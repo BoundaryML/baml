@@ -1,16 +1,15 @@
-// openai.OpenRouterClient — OpenRouter's chat-completions gateway.
-//
-// A plain bearer-auth chat-completions endpoint at
-// `https://openrouter.ai/api/v1`, keyed by OPENROUTER_API_KEY. Model ids are
-// namespaced by upstream provider ("openai/gpt-4o-mini",
-// "anthropic/claude-3.5-sonnet", …).
-//
-// App-attribution headers are not a special option: pass them through the
-// ordinary `headers` field —
-// `headers = {"HTTP-Referer": "https://myapp.com", "X-Title": "My App"}`.
-// OpenRouter-specific body fields (`provider`, `route`, `transforms`) go
-// through `request_body`.
-
+/// OpenRouter's chat-completions gateway.
+///
+/// A plain bearer-auth chat-completions endpoint at
+/// `https://openrouter.ai/api/v1`, keyed by OPENROUTER_API_KEY. Model ids are
+/// namespaced by upstream provider ("openai/gpt-4o-mini",
+/// "anthropic/claude-3.5-sonnet", …).
+///
+/// App-attribution headers are not a special option: pass them through the
+/// ordinary `headers` field —
+/// `headers = {"HTTP-Referer": "https://myapp.com", "X-Title": "My App"}`.
+/// OpenRouter-specific body fields (`provider`, `route`, `transforms`) go
+/// through `request_body`.
 class OpenRouterClient {
     model: string,
     api_key: ai.Credential?,
@@ -30,6 +29,9 @@ class OpenRouterClient {
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
 
+    /// Creates a client. Construction reads no environment variable, so
+    /// declaring one is always safe; credentials and endpoints resolve when a
+    /// request is built.
     function new(
         model: string,
         api_key: ai.Credential? = null,
@@ -60,44 +62,52 @@ class OpenRouterClient {
         }
     }
 
+    /// The request-time credential: the explicit value, else
+    /// `OPENROUTER_API_KEY`. Null is reported as a configuration error when
+    /// the request is built.
     function resolved_api_key(self) -> string? {
         ai.wire.resolve_credential(self.api_key, "OPENROUTER_API_KEY")
     }
 
+    /// The request-time base URL, or `https://openrouter.ai/api/v1`.
     function resolved_base_url(self) -> string {
         ai.wire.resolve_credential(self.base_url, null) ?? "https://openrouter.ai/api/v1"
     }
 
+    /// The provider record: everything the shared chat core needs to know
+    /// about this endpoint.
     function compat(self) -> root.internal.ChatCompat {
-        root.internal
-            .ChatCompat
-            .new(
-                provider = "openrouter",
-                base_url = self.resolved_base_url(),
-                api_key_env = "OPENROUTER_API_KEY",
-                api_key_required = true,
-            )
+        root.internal.ChatCompat.new(
+            provider = "openrouter",
+            base_url = self.resolved_base_url(),
+            api_key_env = "OPENROUTER_API_KEY",
+            api_key_required = true,
+        )
     }
 
+    /// The per-request parameters handed to the shared chat core.
+    ///
+    /// # Parameters
+    ///
+    /// - `preview`: omit the credential, for rendering a request without
+    ///   sending it.
     function params(self, preview: bool = false) -> root.internal.ChatParams {
-        root.internal
-            .ChatParams
-            .new(
-                model = self.model,
-                api_key = if (preview) {
-                    null
-                } else {
-                    self.resolved_api_key()
-                },
-                temperature = self.temperature,
-                max_tokens = self.max_tokens,
-                top_p = self.top_p,
-                stop = self.stop,
-                seed = self.seed,
-                headers = self.headers,
-                query_params = self.query_params,
-                request_body = self.request_body,
-            )
+        root.internal.ChatParams.new(
+            model = self.model,
+            api_key = if (preview) {
+                null
+            } else {
+                self.resolved_api_key()
+            },
+            temperature = self.temperature,
+            max_tokens = self.max_tokens,
+            top_p = self.top_p,
+            stop = self.stop,
+            seed = self.seed,
+            headers = self.headers,
+            query_params = self.query_params,
+            request_body = self.request_body,
+        )
     }
 
     implements ai.Client {
@@ -112,7 +122,12 @@ class OpenRouterClient {
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-            root.internal.chat_invoke(self.compat(), self.params(), input, capture_wire = self.capture_wire) catch_all (e) {
+            root.internal.chat_invoke(
+                self.compat(),
+                self.params(),
+                input,
+                capture_wire = self.capture_wire,
+            ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
         }
@@ -120,7 +135,12 @@ class OpenRouterClient {
 
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-            root.internal.chat_invoke_stream(self.compat(), self.params(), input, capture_wire = self.capture_wire) catch_all (e) {
+            root.internal.chat_invoke_stream(
+                self.compat(),
+                self.params(),
+                input,
+                capture_wire = self.capture_wire,
+            ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
         }

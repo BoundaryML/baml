@@ -10,12 +10,10 @@ class User {
     age: int,
 }
 
-function serialize_user(u: User) -> string throws baml.json.JsonSerializationError {
+function serialize_user(u: User) -> string throws baml.json.SerializationError {
     baml.json.to_string(u)
 }
 
-function deserialize_user(
-    s: string,
-) -> User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function deserialize_user(s: string) -> User throws baml.json.ParseError | baml.json.DecodeError {
     baml.json.from_string<User>(s)
 }

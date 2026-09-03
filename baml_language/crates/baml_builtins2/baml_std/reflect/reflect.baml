@@ -1,56 +1,65 @@
 /// One parameter of a function signature (BEP-062).
 class Arg {
-  /// The parameter's name. When the callable carries no name for a
-  /// positional parameter (a host callable from a language without
-  /// parameter-name introspection), this is the placeholder `$argN` for
-  /// position N. `$` cannot appear in a user identifier, so a placeholder
-  /// can never collide with a declared parameter or named-argument key.
-  name string
-  /// The parameter's type.
-  type reflect.Type
+    /// The parameter's name. When the callable carries no name for a
+    /// positional parameter (a host callable from a language without
+    /// parameter-name introspection), this is the placeholder `$argN` for
+    /// position N. `$` cannot appear in a user identifier, so a placeholder
+    /// can never collide with a declared parameter or named-argument key.
+    name: string,
+    /// The parameter's type.
+    type: reflect.Type,
 }
 
 /// Metadata baked into reflected schema definitions.
 class Meta {
-  alias string?
-  description string?
-  docstring string?
-  other map<string, string>
+    alias: string?,
+    description: string?,
+    docstring: string?,
+    other: map<string, string>,
 }
 
 /// A value paired with schema metadata. For type values this lets metadata be
 /// attached without mutating the minted definition.
 class WithMeta<T> {
-  ty T
-  alias string?
-  description string?
-  docstring string?
-  other map<string, string>
+    ty: T,
+    alias: string?,
+    description: string?,
+    docstring: string?,
+    other: map<string, string>,
 }
 
 /// A source range attached to a compiler diagnostic. Compile- and eval-door
 /// diagnostics carry their source range; structured construction diagnostics
 /// report `span = null`, including constructors invoked from BAML.
 class Span {
-  file string?
-  start int
-  end int
+    file: string?,
+    start: int,
+    end: int,
 }
 
 /// The stable structured diagnostic surfaced by reflection constructors.
 class Diagnostic {
-  code string
-  span Span?
-  message string
+    code: string,
+    span: Span?,
+    message: string,
 }
 
 /// Common identity-preserving surface shared by every reflection kind view.
 interface TypeView {
+  /// The `type` value this view wraps, restoring the unnarrowed type.
   function as_type(self) -> reflect.Type throws never
 }
 
 /// The closed set of reflection views for a runtime `type` value.
-type TypeKind = reflect.class.Type | reflect.enum.Type | reflect.union.Type | reflect.literal.Type | reflect.array.Type | reflect.map.Type | reflect.interface.Type | reflect.primitive.Type | reflect.function.Type
+type TypeKind = reflect.class.Type
+    | reflect.enum.Type
+    | reflect.union.Type
+    | reflect.literal.Type
+    | reflect.array.Type
+    | reflect.map.Type
+    | reflect.interface.Type
+    | reflect.primitive.Type
+    | reflect.function.Type;
 
 /// Implemented automatically by every function value, with its parameter
 /// list erased. `Returns` pins the held function's return type and `Throws`
@@ -60,7 +69,9 @@ type TypeKind = reflect.class.Type | reflect.enum.Type | reflect.union.Type | re
 /// the held function through `reflect.call_any`; read its signature with
 /// `reflect.signature`.
 interface AnyFunction {
+  /// The held function's return type. `unknown` accepts any return.
   type Returns = unknown
+  /// The held function's error type. `unknown` accepts any throws clause.
   type Throws = unknown
 }
 
@@ -103,6 +114,8 @@ interface AnyClass {
     null
   }
 
+  /// Whether this value's runtime class declares a field called `name`.
+  /// `false` when the runtime type is not a class.
   function has_field(self, name: string) -> bool throws never {
     let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
       return false
@@ -132,14 +145,18 @@ interface AnyClass {
     fields
   }
 
+  /// The rendered name of this value's concrete runtime type.
   function name(self) -> string throws never {
     reflect.Type.of_value(self).to_string()
   }
 
+  /// This value's concrete runtime type.
   function type(self) -> reflect.Type throws never {
     reflect.Type.of_value(self)
   }
 
+  /// The class declaration's schema metadata, or empty metadata when the
+  /// runtime type is not a class.
   function attributes(self) -> reflect.Meta throws never {
     let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
       return reflect.Meta {
@@ -160,19 +177,19 @@ implement<T> AnyClass for T {}
 /// declaration order; named/optional parameters appear in `opts`, keyed by
 /// name. A bound method reports its receiver-adjusted signature (no `self`).
 class Signature {
-  /// The name the function was declared with; null for host callables and
-  /// compiler-synthesized callables (including lambdas).
-  name string?
-  /// Positional (required) parameters, in order.
-  args Arg[]
-  /// Named/optional parameters, keyed by parameter name.
-  opts map<string, Arg>
-  /// The return type.
-  returns reflect.Type
-  /// The error type; `never` if the function cannot throw.
-  errors reflect.Type
-  /// The function's doc comment (joined `///` lines); null when absent.
-  docstring string?
+    /// The name the function was declared with; null for host callables and
+    /// compiler-synthesized callables (including lambdas).
+    name: string?,
+    /// Positional (required) parameters, in order.
+    args: Arg[],
+    /// Named/optional parameters, keyed by parameter name.
+    opts: map<string, Arg>,
+    /// The return type.
+    returns: reflect.Type,
+    /// The error type; `never` if the function cannot throw.
+    errors: reflect.Type,
+    /// The function's doc comment (joined `///` lines); null when absent.
+    docstring: string?,
 }
 
 /// Thrown by `reflect.call_any` when the supplied arguments or returned value
@@ -183,154 +200,216 @@ class Signature {
 /// parameter's type and `never`; a key naming no parameter reports the
 /// callee's whole function type and the value's type.
 class InvalidArgumentError {
-  argument string
-  expected reflect.Type
-  got reflect.Type
+    argument: string,
+    expected: reflect.Type,
+    got: reflect.Type,
 }
 
 /// One-shot compiler output consumed by Package._finish or Session._finish.
 class CompileArtifact {
-  _inner unknown
+    _inner: unknown,
 }
 
 /// An isolated runtime-compiled package.
 class Package {
-  _inner unknown
+    _inner: unknown,
 
-  /// The package lexically enclosing this call site.
-  function current() -> Package throws never {
-    $compiler_intrinsic
-  }
+    /// The package lexically enclosing this call site.
+    function current() -> Package throws never {
+        $compiler_intrinsic
+    }
 
-  function compile(files: map<string, string>, packages: map<string, Package> = {}) -> Package throws unknown {
-    let artifact = Package._compile(files, packages)
-    Package._finish(artifact, packages)
-  }
+    /// Compiles `files` into an isolated package, resolving its dependencies
+    /// against `packages`.
+    ///
+    /// # Parameters
+    ///
+    /// - `files`: source text keyed by path, as the package's `baml_src`.
+    /// - `packages`: packages the source may depend on, keyed by the alias it
+    ///   imports them under.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.CompilationError` if the source does not compile.
+    /// - anything the package's top-level initialization throws, which is why
+    ///   the clause is `unknown`.
+    function compile(
+        files: map<string, string>,
+        packages: map<string, Package> = {},
+    ) -> Package throws unknown {
+        let artifact = Package._compile(files, packages);
+        Package._finish(artifact, packages)
+    }
 
-  function _compile(files: map<string, string>, packages: map<string, Package>) -> CompileArtifact throws reflect.errors.CompilationError {
-    $rust_io_function
-  }
+    function _compile(
+        files: map<string, string>,
+        packages: map<string, Package>,
+    ) -> CompileArtifact throws reflect.errors.CompilationError {
+        $rust_io_function
+    }
 
-  //baml:mut_vm
-  //baml:may_yield
-  function _finish(artifact: CompileArtifact, packages: map<string, Package>) -> Package throws unknown {
-    $rust_function
-  }
+    //baml:mut_vm
+    //baml:may_yield
+    function _finish(
+        artifact: CompileArtifact,
+        packages: map<string, Package>,
+    ) -> Package throws unknown {
+        $rust_function
+    }
 
-  //baml:mut_vm
-  function get_class(self, name: string) -> reflect.class.Type? throws never {
-    $rust_function
-  }
+    /// The exported class called `name`, or `null` if the package exports none.
+    //baml:mut_vm
+    function get_class(self, name: string) -> reflect.class.Type? throws never {
+        $rust_function
+    }
 
-  //baml:mut_vm
-  function get_enum(self, name: string) -> reflect.enum.Type? throws never {
-    $rust_function
-  }
+    /// The exported enum called `name`, or `null` if the package exports none.
+    //baml:mut_vm
+    function get_enum(self, name: string) -> reflect.enum.Type? throws never {
+        $rust_function
+    }
 
-  //baml:mut_vm
-  function get_interface(self, name: string) -> reflect.interface.Type? throws never {
-    $rust_function
-  }
+    /// The exported interface called `name`, or `null` if the package exports
+    /// none.
+    //baml:mut_vm
+    function get_interface(self, name: string) -> reflect.interface.Type? throws never {
+        $rust_function
+    }
 
-  /// Return a derived package view that exports exact runtime type values
-  /// under source-visible names for subsequent Package.compile calls.
-  //baml:mut_vm
-  function with_types(self, types: map<string, reflect.Type | reflect.TypeView>) -> Package throws reflect.errors.CompilationError {
-    $rust_function
-  }
-  //baml:mut_vm
-  /// Extract an exported function through an ordinary function-type contract.
-  ///
-  /// A lookup by name has nowhere to put type arguments, so an unspecialized
-  /// generic function is refused here.
-  function get_function<F>(self, name: string) -> F? throws reflect.errors.CompilationError {
-    $rust_function
-  }
+    /// Return a derived package view that exports exact runtime type values
+    /// under source-visible names for subsequent Package.compile calls.
+    //baml:mut_vm
+    function with_types(
+        self,
+        types: map<string, reflect.Type | reflect.TypeView>,
+    ) -> Package throws reflect.errors.CompilationError {
+        $rust_function
+    }
+    //baml:mut_vm
+    /// Extract an exported function through an ordinary function-type contract.
+    ///
+    /// A lookup by name has nowhere to put type arguments, so an unspecialized
+    /// generic function is refused here.
+    function get_function<F>(self, name: string) -> F? throws reflect.errors.CompilationError {
+        $rust_function
+    }
 
-  //baml:mut_vm
-  function classes(self) -> map<string, reflect.class.Type> throws never {
-    $rust_function
-  }
+    /// Exported class types, keyed by package-local name.
+    //baml:mut_vm
+    function classes(self) -> map<string, reflect.class.Type> throws never {
+        $rust_function
+    }
 
-  //baml:mut_vm
-  function enums(self) -> map<string, reflect.enum.Type> throws never {
-    $rust_function
-  }
+    /// Exported enum types, keyed by package-local name.
+    //baml:mut_vm
+    function enums(self) -> map<string, reflect.enum.Type> throws never {
+        $rust_function
+    }
 
-  //baml:mut_vm
-  function interfaces(self) -> map<string, reflect.interface.Type> throws never {
-    $rust_function
-  }
+    /// Exported interface types, keyed by package-local name.
+    //baml:mut_vm
+    function interfaces(self) -> map<string, reflect.interface.Type> throws never {
+        $rust_function
+    }
 
-  //baml:mut_vm
-  /// Exported free-function signatures, keyed by package-local name.
-  function functions(self) -> map<string, reflect.function.Type> throws never {
-    $rust_function
-  }
+    //baml:mut_vm
+    /// Exported free-function signatures, keyed by package-local name.
+    function functions(self) -> map<string, reflect.function.Type> throws never {
+        $rust_function
+    }
 
-  /// Bundled tests as directly invocable zero-argument callables.
-  //baml:mut_vm
-  //baml:may_yield
-  function tests(self) -> map<string, () -> null throws unknown> throws unknown {
-    $rust_function
-  }
+    /// Bundled tests as directly invocable zero-argument callables.
+    //baml:mut_vm
+    //baml:may_yield
+    function tests(self) -> map<string, () -> null throws unknown> throws unknown {
+        $rust_function
+    }
 
-  //baml:mut_vm
-  function diagnostics(self) -> Diagnostic[] throws never {
-    $rust_function
-  }
+    /// Diagnostics produced while compiling this package.
+    //baml:mut_vm
+    function diagnostics(self) -> Diagnostic[] throws never {
+        $rust_function
+    }
 }
 
 /// A live incremental evaluation environment. Its dependency aliases are
 /// fixed at construction; every eval checks in a fresh compiler context and
 /// commits successful statements to this Session's persistent runtime image.
 class Session {
-  _inner unknown
+    _inner: unknown,
 
-  function new(packages: map<string, Package> = {}) -> Session throws reflect.errors.CompilationError {
-    Session._new(packages)
-  }
+    /// Opens a session whose dependency aliases are fixed to `packages`.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.CompilationError` if the dependencies do not resolve.
+    function new(
+        packages: map<string, Package> = {},
+    ) -> Session throws reflect.errors.CompilationError {
+        Session._new(packages)
+    }
 
-  //baml:mut_vm
-  function _new(packages: map<string, Package>) -> Session throws reflect.errors.CompilationError {
-    $rust_function
-  }
+    //baml:mut_vm
+    function _new(
+        packages: map<string, Package>,
+    ) -> Session throws reflect.errors.CompilationError {
+        $rust_function
+    }
 
-  function eval<T>(self, source: string) -> T throws reflect.errors.CompilationError | reflect.errors.EvaluationError | reflect.errors.SessionBusy {
-    let artifact = self._compile<T>(source)
-    self._finish<T>(artifact) catch (cause) {
-      _ => {
-        throw reflect.errors.EvaluationError {
+    /// Compiles and runs `source` against this session, returning its value
+    /// as `T`.
+    ///
+    /// Each call checks in a fresh compiler context; statements that succeed
+    /// are committed to the session's persistent image and are visible to
+    /// later calls. A call that throws commits nothing.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.CompilationError` if `source` does not compile.
+    /// - `reflect.errors.EvaluationError` if it compiles but throws when run.
+    /// - `reflect.errors.SessionBusy` if the session is already evaluating.
+    function eval<T>(
+        self,
+        source: string,
+    ) -> T throws reflect.errors.CompilationError | reflect.errors.EvaluationError | reflect.errors.SessionBusy {
+        let artifact = self._compile<T>(source);
+        self._finish<T>(artifact) catch (cause) {
+            _ => {
+                throw reflect.errors.EvaluationError {
           message: _render_cause(cause),
           cause: cause,
         }
-      }
+            }
+        }
     }
-  }
 
-  function _compile<T>(self, source: string) -> CompileArtifact throws reflect.errors.CompilationError | reflect.errors.SessionBusy {
-    $rust_io_function
-  }
+    function _compile<T>(
+        self,
+        source: string,
+    ) -> CompileArtifact throws reflect.errors.CompilationError | reflect.errors.SessionBusy {
+        $rust_io_function
+    }
 
-  //baml:mut_vm
-  //baml:may_yield
-  function _finish<T>(self, artifact: CompileArtifact) -> T throws unknown {
-    $rust_function
-  }
+    //baml:mut_vm
+    //baml:may_yield
+    function _finish<T>(self, artifact: CompileArtifact) -> T throws unknown {
+        $rust_function
+    }
 
-  //baml:mut_vm
-  function diagnostics(self) -> Diagnostic[] throws never {
-    $rust_function
-  }
+    /// Diagnostics from this session's most recent `eval`.
+    //baml:mut_vm
+    function diagnostics(self) -> Diagnostic[] throws never {
+        $rust_function
+    }
 }
 
-/// Structural error rendering for `Session.eval` that keeps `reflect` a root
+/// (internal) Structural error rendering for `Session.eval` that keeps `reflect` a root
 /// package. This is the dependency-free counterpart of `string.from`: its VM
 /// implementation shares the same renderer without importing `baml`.
 //baml:mut_vm
 //baml:may_yield
 function _render_cause(value: unknown) -> string throws never {
-  $rust_function
+    $rust_function
 }
 
 /// Returns the runtime signature of `f`.
@@ -341,7 +420,7 @@ function _render_cause(value: unknown) -> string throws never {
 //baml:mut_vm
 //baml:fallible
 function signature(f: AnyFunction) -> Signature throws never {
-  $rust_function
+    $rust_function
 }
 
 /// Calls `f` with `args`, every argument keyed by parameter name (a nameless
@@ -357,6 +436,9 @@ function signature(f: AnyFunction) -> Signature throws never {
 /// `reflect.errors.CompilationError`).
 //baml:mut_vm
 //baml:may_yield
-function call_any<R, E>(f: AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R throws E | InvalidArgumentError | reflect.errors.CompilationError {
-  $rust_function
+function call_any<R, E>(
+    f: AnyFunction<Returns = R, Throws = E>,
+    args: map<string, unknown>,
+) -> R throws E | InvalidArgumentError | reflect.errors.CompilationError {
+    $rust_function
 }

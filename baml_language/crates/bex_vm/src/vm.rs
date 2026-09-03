@@ -4726,16 +4726,8 @@ impl BexVm {
                 ErrorClass::RenderPrompt,
                 vec![Value::object(self.alloc_string(message))],
             ),
-            VmBamlError::NotImplemented { message } => (
-                ErrorClass::NotImplemented,
-                vec![Value::object(self.alloc_string(message))],
-            ),
             VmBamlError::LlmClient { message } => (
                 ErrorClass::LlmClient,
-                vec![Value::object(self.alloc_string(message))],
-            ),
-            VmBamlError::DevOther { message } => (
-                ErrorClass::DevOther,
                 vec![Value::object(self.alloc_string(message))],
             ),
             // Field order matches the `HostCallable` class in
@@ -4817,7 +4809,7 @@ impl BexVm {
         self.alloc_error_value(ErrorClass::StackTrace, vec![frames_array])
     }
 
-    /// Construct a `baml.errors.ErrorContext` for a thrown value: the error
+    /// Construct a `baml.errors.Context` for a thrown value: the error
     /// itself, the `StackTrace` where it was thrown, and the `cause` it
     /// superseded while unwinding (or `Value::NULL` for a fresh error).
     ///
@@ -4831,7 +4823,7 @@ impl BexVm {
         cause: Value,
     ) -> Value {
         let stack_trace = self.alloc_stack_trace(trace);
-        self.alloc_error_value(ErrorClass::ErrorContext, vec![error, stack_trace, cause])
+        self.alloc_error_value(ErrorClass::Context, vec![error, stack_trace, cause])
     }
 
     pub fn panic_to_exception_value(&mut self, panic: VmPanic) -> Value {
@@ -5139,6 +5131,21 @@ impl BexVm {
             .collect()
     }
 
+    /// The stack trace a caller sees on a thrown value or an escaping panic:
+    /// [`Self::capture_stack_trace`] with the standard-library frames removed.
+    ///
+    /// A `<builtin>/…` frame is nothing user code can act on, and a native
+    /// builtin never produced one - it pushes no frame at all. Filtering here
+    /// keeps a builtin whose body is written in BAML (`baml.sys.panic`,
+    /// `baml.sys.exit`) indistinguishable from one written in Rust. Internal
+    /// errors keep the full trace, where those frames are the point.
+    fn capture_user_stack_trace(&self) -> Vec<StackFrame> {
+        self.capture_stack_trace()
+            .into_iter()
+            .filter(|frame| !frame.is_builtin())
+            .collect()
+    }
+
     /// Walk the call stack outward from the current frame looking for an
     /// exception handler.
     ///
@@ -5381,7 +5388,7 @@ impl BexVm {
         let (trace, cause_context) = if let Some(context) = preserved {
             (context.trace, context.cause)
         } else {
-            let trace = Arc::from(self.capture_stack_trace());
+            let trace = Arc::from(self.capture_user_stack_trace());
             let cause = if is_rethrow {
                 self.recorded_throw_cause(exception_value)
             } else {
@@ -7414,7 +7421,7 @@ impl BexVm {
     pub fn try_handle_external_thrown(&mut self, thrown: VmThrown) -> Result<(), VmError> {
         let exception_value = thrown.value;
         if self.frames.is_empty() {
-            let trace = self.capture_stack_trace();
+            let trace = self.capture_user_stack_trace();
             return Err(VmError::ThrownUnhandled {
                 value: exception_value,
                 trace,
@@ -7428,7 +7435,7 @@ impl BexVm {
         let mut seed_idx = self.frames.len() - 1;
         while !matches!(&self.frames[seed_idx], Frame::Bytecode(_)) {
             if seed_idx == 0 {
-                let trace = self.capture_stack_trace();
+                let trace = self.capture_user_stack_trace();
                 return Err(VmError::ThrownUnhandled {
                     value: exception_value,
                     trace,
@@ -7648,29 +7655,11 @@ impl BexVm {
                 .map(|i| i as f64)
                 .or_else(|| value_as_float(right)),
         ) {
+            // IEEE-754 throughout, exactly like the specialized `DivFloat`
+            // opcode and the `float` operator impls: a zero divisor yields
+            // `±inf` (or `NaN` for `0.0 / 0.0`). Only the integer branch above
+            // panics, because it has no value to represent the result with.
             let f = match op {
-                BinOp::Div if r == 0.0 => {
-                    // Reuse the heap-boxed float operands directly; only
-                    // allocate when a side was an Int promoted to f64
-                    // (since the panic payload is conventionally a Float
-                    // value here, matching the operation's result type).
-                    let left_v = if left.is_object() {
-                        left
-                    } else {
-                        Value::object(self.alloc_float(l))
-                    };
-                    let right_v = if right.is_object() {
-                        right
-                    } else {
-                        Value::object(self.alloc_float(r))
-                    };
-                    return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                        VmPanic::DivisionByZero {
-                            left: left_v,
-                            right: right_v,
-                        },
-                    )));
-                }
                 BinOp::Add => l + r,
                 BinOp::Sub => l - r,
                 BinOp::Mul => l * r,
@@ -8451,7 +8440,7 @@ impl BexVm {
                     } else if let Some(ptr) = config_value.as_object_ptr()
                         && matches!(unsafe { ptr.get() }, Object::Instance(_))
                     {
-                        // Must be an instance (`baml.spawn.SpawnParams`) — an
+                        // Must be an instance (`baml.spawn.Params`) — an
                         // arbitrary heap object here would turn a local type
                         // error into a VM→engine contract break downstream.
                         Some(ptr)
@@ -10128,9 +10117,10 @@ impl BexVm {
                     self.stack.push(v);
                 }
                 OpCode::DivFloat => {
-                    // Keep the Value handles around so the DivisionByZero
-                    // panic can reuse them instead of allocating two more
-                    // `Object::Float` boxes on the TLAB just to error.
+                    // IEEE-754: a zero divisor yields `±inf`, and `0.0 / 0.0`
+                    // yields `NaN`. Unlike `int` and `bigint`, `float` has
+                    // values for those results, so there is nothing to panic
+                    // about.
                     let right_v = self.stack.ensure_pop();
                     let left_v = self.stack.ensure_pop();
                     let Some(r) = value_as_float(right_v) else {
@@ -10139,14 +10129,6 @@ impl BexVm {
                     let Some(l) = value_as_float(left_v) else {
                         std::hint::unreachable_unchecked()
                     };
-                    if r == 0.0 {
-                        return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                            VmPanic::DivisionByZero {
-                                left: left_v,
-                                right: right_v,
-                            },
-                        )));
-                    }
                     let v = Value::object(self.alloc_float(l / r));
                     self.stack.push(v);
                 }

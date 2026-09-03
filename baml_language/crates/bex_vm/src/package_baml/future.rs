@@ -69,7 +69,7 @@ impl BamlClassFutureFuture for PackageBamlImpl {
         };
         // Surface `InternalError` as `is_error()` too — both are "future
         // failed" from the user's point of view; the user-facing enum
-        // `FutureState` has no separate `InternalError` variant.
+        // `State` has no separate `InternalError` variant.
         matches!(
             fut.read(),
             FutureRead::Error(_) | FutureRead::InternalError(_)
@@ -87,7 +87,7 @@ impl BamlClassFutureFuture for PackageBamlImpl {
             FutureRead::Error(_) | FutureRead::InternalError(_) => "Error",
             FutureRead::Cancelled => "Cancelled",
         };
-        let Some(enm_ptr) = vm.lookup_type_by_fqn("baml.future.FutureState") else {
+        let Some(enm_ptr) = vm.lookup_type_by_fqn("baml.future.State") else {
             return Value::NULL;
         };
         // SAFETY: enm_ptr came from resolved_class_names which holds

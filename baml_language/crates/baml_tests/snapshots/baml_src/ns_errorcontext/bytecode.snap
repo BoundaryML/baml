@@ -101,7 +101,7 @@ function errorcontext.ec_deferbody_main() -> string {
     load_var e
     throw_if_panic
     load_var _2
-    call baml.errors.ErrorContext.root_cause
+    call baml.errors.Context.root_cause
     load_field .error
     store_var _5
     load_var _5
@@ -294,7 +294,7 @@ function errorcontext.ec_deferunwind_main() -> string {
     load_var e
     throw_if_panic
     load_var _2
-    call baml.errors.ErrorContext.root_cause
+    call baml.errors.Context.root_cause
     load_field .error
     store_var _5
     load_var _5
@@ -391,7 +391,7 @@ function errorcontext.ec_hazard_a_main() -> string {
     load_var e2
     throw_if_panic
     load_var _6
-    call baml.errors.ErrorContext.root_cause
+    call baml.errors.Context.root_cause
     jump L0
     load_var _3
     rethrow
@@ -435,7 +435,7 @@ function errorcontext.ec_hazard_b_main() -> string {
     load_var e2
     throw_if_panic
     load_var _10
-    call baml.errors.ErrorContext.root_cause
+    call baml.errors.Context.root_cause
     load_field .error
     store_var _13
     load_var _13
@@ -474,7 +474,7 @@ function errorcontext.ec_nested_main() -> string {
     load_var e2
     throw_if_panic
     load_var _4
-    call baml.errors.ErrorContext.root_cause
+    call baml.errors.Context.root_cause
     load_field .error
     store_var _7
     load_var _7
@@ -539,7 +539,7 @@ function errorcontext.ec_sibling_main() -> string {
     load_var e
     throw_if_panic
     load_var _2
-    call baml.errors.ErrorContext.root_cause
+    call baml.errors.Context.root_cause
     load_field .error
     store_var _5
     load_var _5
@@ -580,7 +580,7 @@ function errorcontext.ec_single_main() -> string {
     load_var e
     throw_if_panic
     load_var _2
-    call baml.errors.ErrorContext.root_cause
+    call baml.errors.Context.root_cause
     load_field .error
     store_var _5
     load_var _5
@@ -610,7 +610,7 @@ function errorcontext.ec_stackdefers_main() -> string {
     load_var e
     throw_if_panic
     load_var _2
-    call baml.errors.ErrorContext.root_cause
+    call baml.errors.Context.root_cause
     load_field .error
     store_var _5
     load_var _5

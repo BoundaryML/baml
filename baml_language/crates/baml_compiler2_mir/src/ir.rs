@@ -61,7 +61,7 @@ pub struct CatchRegion {
     pub body_blocks: Vec<BlockId>,
     /// All blocks making up the handler body (the arms). BEP-042 cause-chain: a
     /// throw whose PC lies in any of these blocks is "during handling of"
-    /// `error_local`, so that error's `ErrorContext` becomes the new error's
+    /// `error_local`, so that error's `baml.errors.Context` becomes the new error's
     /// cause. Captured as the blocks created while lowering the arms (plus the
     /// handler block itself); empty means "never chains" (e.g. a defer pad).
     /// Layout can fragment these across non-contiguous PCs, so the emitter must

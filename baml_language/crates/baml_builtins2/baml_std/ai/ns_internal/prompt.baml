@@ -6,12 +6,16 @@
 
 /// Reject output types that cannot be represented faithfully at the shared
 /// LLM render boundary. Both prompt preview and execution call this guard.
-function validate_output_type(return_type: reflect.Type) -> void throws reflect.errors.CompilationError {
+function validate_output_type(
+    return_type: reflect.Type,
+) -> void throws reflect.errors.CompilationError {
     return_type._validate_renderable();
     match (return_type.as_enum()) {
         let enum_type: reflect.enum.Type => {
             if (enum_type.values().length() == 0) {
-                let message = "empty enum `" + return_type.to_string() + "` cannot be rendered as an LLM output schema";
+                let message = "empty enum `"
+                    + return_type.to_string()
+                    + "` cannot be rendered as an LLM output schema";
                 throw reflect.errors.CompilationError {
                     message: message,
                     diagnostics: [reflect.Diagnostic {
@@ -32,7 +36,7 @@ function render_output_format(return_type: reflect.Type) -> string throws never 
 }
 
 /// Local spelling of the public handle, so the builtin-IO extractor keeps
-/// resolving the return type to `root.OutputFormat`'s generated struct.
+/// resolving the return type to `ai.OutputFormat`'s generated struct.
 type OutputFormat = root.OutputFormat;
 
 /// Build the output-format handle used by render contexts.

@@ -26,15 +26,15 @@ function echo_done(value: baml.iter.Done) -> baml.iter.Done {
   value
 }
 
-function echo_csv_error_kind(value: baml.csv.CsvErrorKind) -> baml.csv.CsvErrorKind {
+function echo_csv_error_kind(value: baml.csv.ErrorKind) -> baml.csv.ErrorKind {
   value
 }
 
-function echo_csv_error(value: baml.csv.CsvError) -> baml.csv.CsvError {
+function echo_csv_error(value: baml.csv.Error) -> baml.csv.Error {
   value
 }
 
-function echo_csv_position(value: baml.csv.CsvPosition) -> baml.csv.CsvPosition {
+function echo_csv_position(value: baml.csv.Position) -> baml.csv.Position {
   value
 }
 

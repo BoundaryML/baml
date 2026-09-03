@@ -29,12 +29,12 @@ test "int_abs_zero" {
 }
 
 // int.min_value() is -2^62; its abs() is 2^62 which exceeds int.max_value().
-test "int_abs_min_value_throws" {
+test "int_abs_min_value_panics" {
     {
         int.min_value().abs();
-        baml.sys.panic("expected int.min_value().abs() to throw")
+        baml.sys.panic("expected int.min_value().abs() to panic")
     } catch (e) {
-        baml.errors.InvalidArgument => null
+        baml.panics.IntegerOverflow => null
     }
 }
 

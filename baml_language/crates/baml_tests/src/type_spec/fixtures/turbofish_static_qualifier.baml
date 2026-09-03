@@ -2,7 +2,7 @@
 class TfBox<T> {
     value: T
 }
-function tf_from_json() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function tf_from_json() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j = baml.json.parse("{\"value\": 42}")
     let b: TfBox<int> = TfBox<int>.from_json(j)
      // ^ user.TfBox<int>

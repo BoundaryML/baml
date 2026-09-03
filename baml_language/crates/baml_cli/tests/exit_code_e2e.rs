@@ -635,7 +635,7 @@ class LoggedConversion {
     value string
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             log.warn("from-json-detail");
             LoggedConversion {
                 value: baml.json.from_json<string>(baml.json.field(j, "value"))
@@ -644,7 +644,7 @@ class LoggedConversion {
     }
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             log.error("to-json-detail");
             self.value
         }
@@ -803,8 +803,8 @@ class BrokenConversion {
     value int
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-            throw baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
+            throw baml.json.SerializationError {
                 message: "serialize-boom",
                 path: "",
                 reason: "serialize-boom"

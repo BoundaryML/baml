@@ -7,7 +7,7 @@
 // else about a provider request — URLs, bodies, headers, parsing — is BAML.
 // Internal to the `ai` package; not intended to be called directly.
 
-/// Mints a Google Cloud OAuth2 access token for `scope`, returning the bare
+/// (internal) Mints a Google Cloud OAuth2 access token for `scope`, returning the bare
 /// token (the caller builds the `Bearer` header).
 ///
 /// `credentials_json` is an inline credential JSON document — service account,
@@ -27,26 +27,37 @@ function _gcp_access_token(
     $rust_io_function
 }
 
-/// Resolves the Google Cloud project id from `credentials_json` when it carries
-/// one, else from the google-auth chain (`GOOGLE_CLOUD_PROJECT` /
-/// `GCLOUD_PROJECT`, the ADC and gcloud config files, the metadata server).
-/// `null` means "not discoverable"; the caller decides whether that is fatal.
-function _gcp_project_id(
-    credentials_json: string?,
-) -> string? throws baml.errors.Io | baml.errors.AccessError {
+/// (internal) Resolves the Google Cloud project id from `credentials_json`
+/// when it carries one, else from the google-auth chain
+/// (`GOOGLE_CLOUD_PROJECT` / `GCLOUD_PROJECT`, the ADC and gcloud config
+/// files, the metadata server).
+///
+/// Discovery is best-effort and never fails: every unreadable or absent source
+/// is simply skipped.
+///
+/// # Returns
+///
+/// The project id, or `null` when it is not discoverable — the caller decides
+/// whether that is fatal.
+function _gcp_project_id(credentials_json: string?) -> string? throws never {
     $rust_io_function
 }
 
-/// Resolves the quota/billing project for the `x-goog-user-project` header,
-/// matching google-auth's `Credentials.apply`: `GOOGLE_CLOUD_QUOTA_PROJECT`
-/// always wins, then the credential document's `quota_project_id`.
-function _gcp_quota_project_id(
-    credentials_json: string?,
-) -> string? throws baml.errors.Io | baml.errors.AccessError {
+/// (internal) Resolves the quota/billing project for the
+/// `x-goog-user-project` header, matching google-auth's `Credentials.apply`:
+/// `GOOGLE_CLOUD_QUOTA_PROJECT` always wins, then the credential document's
+/// `quota_project_id`.
+///
+/// Discovery is best-effort and never fails.
+///
+/// # Returns
+///
+/// The quota project id, or `null` when it is not discoverable.
+function _gcp_quota_project_id(credentials_json: string?) -> string? throws never {
     $rust_io_function
 }
 
-/// SigV4-signs `request` for `service` and returns it with the signature
+/// (internal) SigV4-signs `request` for `service` and returns it with the signature
 /// headers applied (`authorization`, `x-amz-date`, and `x-amz-security-token`
 /// for session credentials).
 ///
@@ -70,12 +81,14 @@ function _aws_sign_request(
     $rust_io_function
 }
 
-/// Resolves the AWS region: `region` when set, else `AWS_REGION`,
-/// `AWS_DEFAULT_REGION`, or the active profile's `region` key. `null` means
-/// "not discoverable".
-function _aws_resolve_region(
-    region: string?,
-    profile: string?,
-) -> string? throws baml.errors.Io | baml.errors.AccessError {
+/// (internal) Resolves the AWS region: `region` when set, else `AWS_REGION`,
+/// `AWS_DEFAULT_REGION`, or the active profile's `region` key.
+///
+/// Discovery is best-effort and never fails.
+///
+/// # Returns
+///
+/// The region, or `null` when it is not discoverable.
+function _aws_resolve_region(region: string?, profile: string?) -> string? throws never {
     $rust_io_function
 }

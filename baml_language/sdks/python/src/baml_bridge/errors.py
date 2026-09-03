@@ -95,7 +95,7 @@ def attach_baml_traceback(exc: _E) -> _E:
 def _format_message(class_name: Optional[str], value: Any) -> str:
     """A non-empty message for `str(e)` (the `@trace` / telemetry path records
     it). `class_name` is the thrown value's BAML FQN when known (e.g.
-    `baml.json.JsonParseError`); `{value!r}` works for arbitrary user-thrown
+    `baml.json.ParseError`); `{value!r}` works for arbitrary user-thrown
     types that have no `message` field."""
     name = class_name or type(value).__name__
     return f"{name}: {value!r}"

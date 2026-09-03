@@ -149,12 +149,12 @@ function ts_symbol_text(symbol: TsSymbol) -> string {
 /// this exists to prevent.
 function load_revision(path: string) -> Revision {
     let report = baml.json.to<PriorReport>(baml.json.parse(baml.fs.read(path))) catch (_) {
-        baml.json.JsonParseError => {
+        baml.json.ParseError => {
             throw baml.errors.InvalidArgument {
                 message: `${path} is not valid JSON; regenerate it with tools/stdlib-matrix/run`,
             }
         },
-        baml.json.JsonDecodeError => {
+        baml.json.DecodeError => {
             throw baml.errors.InvalidArgument {
                 message: `${path} does not match the current report model, probably written by an older tool; regenerate it with tools/stdlib-matrix/run`,
             }
