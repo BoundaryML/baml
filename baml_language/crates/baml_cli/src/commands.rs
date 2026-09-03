@@ -353,10 +353,6 @@ impl RuntimeCli {
         // Resolve every output dial once, before any subcommand writes.
         crate::output::init(self.output);
 
-        if self.command.requires_agent_skill() {
-            crate::skill_check::check(self.command.agent_skill_project_path())?;
-        }
-
         // Fire best-effort telemetry for this invocation. The
         // event is appended to an on-disk queue (one atomic write); on drop
         // of the guard (after the match below returns) the queue file is
@@ -365,6 +361,10 @@ impl RuntimeCli {
         let _telemetry = crate::telemetry::record_invocation(
             self.invoked_subcommand.as_deref().unwrap_or("unknown"),
         );
+
+        if self.command.requires_agent_skill() {
+            crate::skill_check::check(self.command.agent_skill_project_path())?;
+        }
 
         match &self.command {
             Commands::Init(args) => args.run(),
@@ -414,6 +414,8 @@ impl Commands {
             Self::Run(args) => args.from.as_deref(),
             Self::Pack(args) => args.from.as_deref(),
             Self::Playground(args) => args.from.as_deref(),
+            Self::Init(args) => Some(&args.path),
+            Self::New(args) => Some(&args.path),
             _ => None,
         }
     }
@@ -552,6 +554,23 @@ mod tests {
 
         let cli = RuntimeCli::parse_from_smart(vec!["baml-cli".into(), "check".into()]);
         assert_eq!(cli.invoked_subcommand.as_deref(), Some("check"));
+    }
+
+    #[test]
+    fn init_and_new_use_their_target_for_agent_skill_checks() {
+        let init_target = PathBuf::from("init-target");
+        let init = Commands::Init(crate::init_command::InitArgs {
+            path: init_target.clone(),
+            name: None,
+        });
+        assert_eq!(init.agent_skill_project_path(), Some(init_target.as_path()));
+
+        let new_target = PathBuf::from("new-target");
+        let new = Commands::New(crate::init_command::NewArgs {
+            path: new_target.clone(),
+            name: None,
+        });
+        assert_eq!(new.agent_skill_project_path(), Some(new_target.as_path()));
     }
 
     #[test]

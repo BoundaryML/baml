@@ -10,7 +10,6 @@
 )]
 
 pub(crate) mod agent_command;
-pub(crate) mod agent_harness;
 pub(crate) mod auth;
 pub(crate) mod bytecode_cache;
 #[cfg(test)]

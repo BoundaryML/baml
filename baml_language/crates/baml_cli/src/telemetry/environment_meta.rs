@@ -63,7 +63,7 @@ fn compute() -> EnvironmentMeta {
         is_wsl: detect_wsl(),
         is_ci: env_is_truthy("CI"),
         ci_name,
-        agent_harness: crate::agent_harness::detect(),
+        agent_harness: crate::output::detected_agent_harness(),
         machine_hostname: hostname::get()
             .ok()
             .and_then(|hostname| hostname.into_string().ok())

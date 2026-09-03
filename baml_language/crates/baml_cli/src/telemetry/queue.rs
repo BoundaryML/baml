@@ -78,12 +78,42 @@ pub(super) fn new_live_path_in(dir: &Path) -> PathBuf {
 pub(super) fn append_line(path: &Path, line: &str) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
+        set_owner_only_dir_permissions(parent)?;
     }
-    let mut file = fs::OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(path)?;
+    let mut options = fs::OpenOptions::new();
+    options.append(true).create(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    set_owner_only_file_permissions(&file)?;
     file.write_all(format!("{line}\n").as_bytes())
+}
+
+#[cfg(unix)]
+fn set_owner_only_dir_permissions(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+}
+
+#[cfg(not(unix))]
+fn set_owner_only_dir_permissions(_path: &Path) -> std::io::Result<()> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn set_owner_only_file_permissions(file: &fs::File) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    file.set_permissions(fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(not(unix))]
+fn set_owner_only_file_permissions(_file: &fs::File) -> std::io::Result<()> {
+    Ok(())
 }
 
 /// Seal a live file (rename `live_*` → `sealed_*`) if it has any content.
@@ -351,6 +381,27 @@ mod tests {
 
         let contents = fs::read_to_string(&sealed).unwrap();
         assert_eq!(contents.lines().count(), 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn queue_directory_and_file_are_owner_only() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let root = tempfile::tempdir().unwrap();
+        let queue = root.path().join("telemetry");
+        let live = new_live_path_in(&queue);
+
+        append_line(&live, r#"{"event":"a"}"#).unwrap();
+
+        assert_eq!(
+            fs::metadata(&queue).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            fs::metadata(&live).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
     }
 
     /// Sealing a missing or empty live file is a no-op (`None`), and any

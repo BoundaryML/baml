@@ -74,10 +74,7 @@ fn skill_warning_message(status: SkillStatus) -> Option<&'static str> {
 
 fn project_skill_status(project: Option<&Path>) -> anyhow::Result<SkillStatus> {
     let mut dir = match project {
-        Some(project) => match crate::project_load::find_project_root_from(Some(project))? {
-            Some(root) => root,
-            None => return Ok(SkillStatus::Missing),
-        },
+        Some(project) => skill_search_start(project)?,
         None => match std::env::current_dir() {
             Ok(dir) => dir,
             Err(_) => return Ok(SkillStatus::Missing),
@@ -100,6 +97,26 @@ fn project_skill_status(project: Option<&Path>) -> anyhow::Result<SkillStatus> {
     }
 
     Ok(SkillStatus::Missing)
+}
+
+/// Resolve the closest existing directory at or above a command's project path.
+/// `init` and `new` may target directories that do not exist until after the
+/// preflight check, so project discovery cannot require the target itself to
+/// canonicalize yet.
+fn skill_search_start(project: &Path) -> anyhow::Result<PathBuf> {
+    let mut candidate = if project.is_absolute() {
+        project.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(project)
+    };
+
+    loop {
+        match std::fs::canonicalize(&candidate) {
+            Ok(path) => return Ok(baml_db::project_search_dir(&path)),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound && candidate.pop() => {}
+            Err(err) => return Err(err.into()),
+        }
+    }
 }
 
 fn installed_skill_status(skills_dir: &Path) -> SkillStatus {
@@ -177,5 +194,16 @@ mod tests {
         )
         .unwrap();
         assert_eq!(installed_skill_status(tmp.path()), SkillStatus::Outdated);
+    }
+
+    #[test]
+    fn skill_search_uses_existing_parent_for_new_project_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("new").join("project");
+
+        assert_eq!(
+            skill_search_start(&target).unwrap(),
+            std::fs::canonicalize(tmp.path()).unwrap(),
+        );
     }
 }

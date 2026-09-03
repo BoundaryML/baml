@@ -74,20 +74,35 @@ fn git_output(args: &[&str]) -> Option<String> {
 
 fn parse_origin(value: &str) -> Option<GitOrigin> {
     let value = value.trim();
-    let (authority, path) = if let Some((_, rest)) = value.split_once("://") {
-        rest.split_once('/')?
+    let (authority, path, is_url) = if let Some((_, rest)) = value.split_once("://") {
+        let (authority, path) = rest.split_once('/')?;
+        (authority, path, true)
     } else {
         // Git's SCP-like syntax: `[user@]host:path`.
-        value.split_once(':')?
+        let (authority, path) = value.split_once(':')?;
+        (authority, path, false)
     };
 
     let host_with_port = authority
         .rsplit_once('@')
         .map_or(authority, |(_, host)| host);
-    let host = host_with_port
-        .split_once(':')
-        .map_or(host_with_port, |(host, _)| host)
-        .trim();
+    let host = if let Some(bracketed) = host_with_port.strip_prefix('[') {
+        let closing_bracket = bracketed.find(']')?;
+        &bracketed[..closing_bracket]
+    } else {
+        host_with_port
+            .split_once(':')
+            .map_or(host_with_port, |(host, _)| host)
+    }
+    .trim();
+    // URL queries and fragments can contain credentials. They are not part of
+    // the repository path and must be discarded before any telemetry field is
+    // constructed. SCP-like remotes do not have URL query/fragment syntax.
+    let path = if is_url {
+        &path[..path.find(['?', '#']).unwrap_or(path.len())]
+    } else {
+        path
+    };
     let repo = path
         .trim_matches('/')
         .strip_suffix(".git")
@@ -131,6 +146,8 @@ mod tests {
             "git@github.com:BoundaryML/baml.git",
             "ssh://git@github.com/BoundaryML/baml.git",
             "ssh://git@github.com:22/BoundaryML/baml.git",
+            "https://github.com/BoundaryML/baml.git?access_token=SECRET",
+            "https://github.com/BoundaryML/baml.git#fragment",
         ] {
             assert_eq!(
                 parse_origin(value),
@@ -142,6 +159,18 @@ mod tests {
                 "origin: {value}",
             );
         }
+    }
+
+    #[test]
+    fn parses_bracketed_ipv6_origin_host() {
+        assert_eq!(
+            parse_origin("ssh://git@[2001:db8::1]:22/BoundaryML/baml.git"),
+            Some(GitOrigin {
+                host: "2001:db8::1".to_string(),
+                org: "BoundaryML".to_string(),
+                repo: "BoundaryML/baml".to_string(),
+            }),
+        );
     }
 
     #[test]

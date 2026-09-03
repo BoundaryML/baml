@@ -3,7 +3,7 @@
 //! A preset produces a concrete output policy. Explicit CLI flags and their
 //! environment-variable equivalents override individual fields afterward.
 
-use std::{io::IsTerminal, sync::RwLock};
+use std::{ffi::OsString, io::IsTerminal, sync::RwLock};
 
 use baml_db::baml_compiler_diagnostics::render::{DiagnosticFormat, RenderConfig};
 use clap::{Args, ValueEnum};
@@ -324,7 +324,7 @@ fn resolve_hyperlinks(choice: HyperlinkChoice, is_terminal: bool) -> bool {
 
 fn output_signals() -> OutputSignals {
     OutputSignals {
-        running_in_agent: crate::agent_harness::detect().is_some(),
+        running_in_agent: detected_agent_harness().is_some(),
         color_forced: env_truthy("CLICOLOR_FORCE"),
         stdout_auto_color: auto_color(&console::Term::stdout()),
         stderr_auto_color: auto_color(&console::Term::stderr()),
@@ -346,9 +346,59 @@ fn env_truthy(var: &str) -> bool {
     std::env::var(var).is_ok_and(|value| !value.is_empty() && value != "0")
 }
 
+/// Return the known coding-agent harness name used by the existing output-mode detector.
+pub(crate) fn detected_agent_harness() -> Option<String> {
+    detect_agent_harness_with(|name| std::env::var_os(name))
+}
+
+/// Environment variables that identify known coding-agent processes.
+const AGENT_ENV_VARS: &[(&str, &str)] = &[
+    ("CLAUDECODE", "claude"),
+    ("CODEX_SANDBOX", "codex"),
+    ("PI_CODING_AGENT", "pi"),
+    ("OPENCODE_CLIENT", "opencode"),
+    ("CURSOR_TRACE_ID", "cursor"),
+    ("REPL_ID", "replit"),
+];
+
+fn detect_agent_harness_with(lookup: impl Fn(&str) -> Option<OsString>) -> Option<String> {
+    // `AI_AGENT` follows the generic convention from `@vercel/detect-agent`:
+    // its value is the harness name, so this one marker must be valid UTF-8.
+    if let Some(name) = lookup("AI_AGENT")
+        .and_then(|value| value.into_string().ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty() && value != "0")
+    {
+        return Some(name);
+    }
+
+    // Named markers only need to be present and truthy. Do not decode them:
+    // environment values can be non-UTF-8 on Unix and their contents are not
+    // used as the reported harness name.
+    for &(variable, harness) in AGENT_ENV_VARS {
+        if lookup(variable).is_some_and(|value| !value.is_empty() && value != "0") {
+            return Some(harness.to_string());
+        }
+    }
+
+    lookup("AGENT")
+        .filter(|value| !value.is_empty() && value != "0")
+        .map(|_| "unknown".to_string())
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
+
+    fn detect_agent_from(values: &[(&str, &str)]) -> Option<String> {
+        let values = values
+            .iter()
+            .map(|(key, value)| ((*key).to_string(), OsString::from(value)))
+            .collect::<HashMap<_, _>>();
+        detect_agent_harness_with(|key| values.get(key).cloned())
+    }
 
     const INTERACTIVE: OutputSignals = OutputSignals {
         running_in_agent: false,
@@ -387,6 +437,44 @@ mod tests {
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Agent);
         assert!(!policy.progress);
         assert_eq!(policy.agent_skill_check, AgentSkillCheckPolicy::Require);
+    }
+
+    #[test]
+    fn detects_agent_harness_names_with_the_output_mode_markers() {
+        for &(variable, harness) in AGENT_ENV_VARS {
+            assert_eq!(
+                detect_agent_from(&[(variable, "1")]).as_deref(),
+                Some(harness),
+                "variable: {variable}",
+            );
+        }
+        assert_eq!(
+            detect_agent_from(&[("AI_AGENT", "custom-harness")]).as_deref(),
+            Some("custom-harness"),
+        );
+        assert_eq!(
+            detect_agent_from(&[("AGENT", "1")]).as_deref(),
+            Some("unknown"),
+        );
+    }
+
+    #[test]
+    fn empty_and_zero_agent_markers_are_ignored() {
+        assert_eq!(detect_agent_from(&[("CLAUDECODE", "")]), None);
+        assert_eq!(detect_agent_from(&[("CODEX_SANDBOX", "0")]), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_utf8_named_marker_still_detects_agent_harness() {
+        use std::os::unix::ffi::OsStringExt as _;
+
+        let invalid = OsString::from_vec(vec![0xff]);
+        assert_eq!(
+            detect_agent_harness_with(|key| (key == "CODEX_SANDBOX").then(|| invalid.clone()))
+                .as_deref(),
+            Some("codex"),
+        );
     }
 
     #[test]
