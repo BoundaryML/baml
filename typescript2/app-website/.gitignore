@@ -21,9 +21,6 @@
 # production
 /build
 
-# generated from baml_language/CHANGELOG.md before dev and production builds
-/data/changelog.md
-
 # misc
 .DS_Store
 *.pem

@@ -433,11 +433,6 @@ export const siteConfig = {
     // },
     {
       links: [
-        {
-          id: 16,
-          title: 'Changelog',
-          url: '/changelog',
-        },
         { id: 18, title: 'Docs', url: '/quickstart' },
         { id: 19, title: 'Jobs', url: '/jobs' },
         { id: 24, title: 'Blog', url: '/blog' },

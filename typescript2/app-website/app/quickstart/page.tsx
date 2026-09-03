@@ -87,10 +87,6 @@ export default function QuickstartPage() {
               <span className="qs-card-t">Explore BAML</span>
               <span className="qs-card-v">see the language and code</span>
             </a>
-            <a className="qs-card" href="/changelog">
-              <span className="qs-card-t">Changelog</span>
-              <span className="qs-card-v">language release notes</span>
-            </a>
             <a
               className="qs-card"
               href="https://github.com/boundaryml/baml-demos"
