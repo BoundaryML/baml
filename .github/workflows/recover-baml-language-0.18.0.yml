@@ -1,0 +1,300 @@
+name: Publish BAML Toolchain 0.18.0
+
+run-name: Publish BAML toolchain 0.18.0 from verified release artifacts
+
+# One-shot recovery for the main BAML toolchain only. The original release run
+# built every toolchain archive and the VSIX successfully, then failed in the
+# unrelated C# bridge verification gate before any publisher could run.
+on:
+  push:
+    branches: [canary]
+    paths:
+      - .github/workflows/recover-baml-language-0.18.0.yml
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: publish-baml-toolchain-0.18.0
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  RELEASE_RUN_ID: "33224762615"
+  RELEASE_RUN_ATTEMPT: "2"
+  RELEASE_SOURCE_SHA: 7622555396a99db466afaea09dea2cad259d4033
+  RELEASE_SOURCE_CI_RUN_ID: "33224009970"
+  RELEASE_SOURCE_REF: baml-language-source-7622555396a99db466afaea09dea2cad259d4033
+  RELEASE_TAG: baml-language-0.18.0
+  RELEASE_VERSION: 0.18.0
+
+jobs:
+  publish:
+    name: Verify and publish main toolchain assets
+    if: ${{ github.repository == 'BoundaryML/baml' && github.ref == 'refs/heads/canary' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Require this workflow to be newly introduced
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          error="$RUNNER_TEMP/previous-file-error.txt"
+          if gh api \
+            "repos/$GITHUB_REPOSITORY/contents/.github/workflows/recover-baml-language-0.18.0.yml?ref=$BEFORE_SHA" \
+            >/dev/null 2>"$error"; then
+            echo "::error::this one-shot recovery workflow already existed before the push"
+            exit 1
+          fi
+          if ! grep -qF "HTTP 404" "$error"; then
+            cat "$error"
+            echo "::error::could not prove this push introduced the recovery workflow"
+            exit 1
+          fi
+
+      - name: Attest the failed release and its successful source CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID")"
+          if ! jq -e \
+            --arg attempt "$RELEASE_RUN_ATTEMPT" \
+            --arg source_sha "$RELEASE_SOURCE_SHA" \
+            --arg source_ref "$RELEASE_SOURCE_REF" \
+            '
+              .path == ".github/workflows/release-baml-language.yml"
+              and .event == "workflow_dispatch"
+              and .head_sha == $source_sha
+              and .head_branch == $source_ref
+              and (.run_attempt | tostring) == $attempt
+              and .status == "completed"
+              and .conclusion == "failure"
+            ' <<<"$run_json" >/dev/null; then
+            echo "::error::run $RELEASE_RUN_ID is not the pinned failed BAML Language 0.18.0 attempt"
+            jq '{path,event,head_sha,head_branch,run_attempt,status,conclusion,html_url}' <<<"$run_json"
+            exit 1
+          fi
+
+          failed="$RUNNER_TEMP/failed-jobs.txt"
+          gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID/attempts/$RELEASE_RUN_ATTEMPT/jobs?per_page=100" \
+            --jq '.jobs[] | select(.conclusion == "failure") | .name' > "$failed"
+          if [[ "$(wc -l < "$failed" | tr -d ' ')" != "1" ]] ||
+             ! grep -qxF "Verify C# SDK product package / Assemble one provenance-bound package" "$failed"; then
+            echo "::error::release attempt does not have exactly the known unrelated C# failure"
+            cat "$failed"
+            exit 1
+          fi
+
+          ci_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_SOURCE_CI_RUN_ID")"
+          if ! jq -e \
+            --arg source_sha "$RELEASE_SOURCE_SHA" \
+            '
+              .name == "CI - BAML Language"
+              and .path == ".github/workflows/ci.yaml"
+              and .event == "push"
+              and .head_branch == "canary"
+              and .head_sha == $source_sha
+              and .status == "completed"
+              and .conclusion == "success"
+            ' <<<"$ci_json" >/dev/null; then
+            echo "::error::source CI run does not attest the pinned release source"
+            jq '{name,path,event,head_branch,head_sha,status,conclusion,html_url}' <<<"$ci_json"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_SOURCE_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download the frozen release plan
+        uses: actions/download-artifact@v8
+        with:
+          name: release-plan
+          path: recovered-plan
+          repository: ${{ github.repository }}
+          run-id: ${{ env.RELEASE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Verify the frozen release plan
+        run: |
+          set -euo pipefail
+          scripts/baml-language-version plan --channel canary --out recomputed-plan.json
+          diff -u \
+            <(jq -S . recovered-plan/release-plan.json) \
+            <(jq -S . recomputed-plan.json)
+          jq -e \
+            --arg version "$RELEASE_VERSION" \
+            --arg tag "$RELEASE_TAG" \
+            '
+              .schema == 3
+              and .channel == "canary"
+              and .canonical_version == $version
+              and .canary_version == $version
+              and .git_tag == $tag
+            ' recovered-plan/release-plan.json >/dev/null
+
+      - name: Download the successful toolchain archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: toolchain-*
+          path: dist/toolchain
+          merge-multiple: true
+          repository: ${{ github.repository }}
+          run-id: ${{ env.RELEASE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Download the successful VSIX
+        uses: actions/download-artifact@v8
+        with:
+          name: baml-vscode-vsix
+          path: dist/vsix
+          repository: ${{ github.repository }}
+          run-id: ${{ env.RELEASE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Verify every toolchain artifact
+        run: |
+          set -euo pipefail
+          mapfile -t expected_targets < <(
+            jq -r '
+              .targets[]
+              | select(.artifacts.toolchain != null)
+              | select((.artifacts.toolchain.experimental // false) == false)
+              | .triple
+            ' release/platforms.json | sort
+          )
+          actual_targets="$RUNNER_TEMP/actual-targets.txt"
+          : > "$actual_targets"
+          shopt -s nullglob
+          archives=(dist/toolchain/baml-language-"$RELEASE_VERSION"-*.tar.gz dist/toolchain/baml-language-"$RELEASE_VERSION"-*.zip)
+          if [[ "${#archives[@]}" -ne "${#expected_targets[@]}" ]]; then
+            echo "::error::found ${#archives[@]} toolchain archives, expected ${#expected_targets[@]}"
+            find dist/toolchain -maxdepth 1 -type f -print
+            exit 1
+          fi
+
+          for archive in "${archives[@]}"; do
+            name="$(basename "$archive")"
+            target="${name#baml-language-$RELEASE_VERSION-}"
+            target="${target%.tar.gz}"
+            target="${target%.zip}"
+            printf '%s\n' "$target" >> "$actual_targets"
+
+            extract="$(mktemp -d "$RUNNER_TEMP/toolchain.XXXXXX")"
+            if [[ "$archive" == *.zip ]]; then
+              unzip -q "$archive" -d "$extract"
+              suffix=.exe
+            else
+              tar -xzf "$archive" -C "$extract"
+              suffix=
+            fi
+            grep -qxF "$RELEASE_VERSION" "$extract/VERSION"
+            for binary in "$extract/bin/baml-cli$suffix" "$extract/bin/baml-pack-host$suffix"; do
+              test -f "$binary"
+              if ! strings "$binary" | grep -F "$RELEASE_SOURCE_SHA" >/dev/null; then
+                echo "::error::$name contains a binary without the pinned source fingerprint: $binary"
+                exit 1
+              fi
+            done
+            test -f "$extract/assets/baml-vscode.vsix"
+            test -f "$extract/assets/playground/index.html"
+          done
+
+          diff -u \
+            <(printf '%s\n' "${expected_targets[@]}") \
+            <(sort "$actual_targets")
+
+          mapfile -t vsix_files < <(find dist/vsix -maxdepth 1 -type f -name '*.vsix' -print)
+          if [[ "${#vsix_files[@]}" -ne 1 || "$(basename "${vsix_files[0]}")" != "baml-language-$RELEASE_VERSION.vsix" ]]; then
+            echo "::error::expected exactly baml-language-$RELEASE_VERSION.vsix"
+            find dist/vsix -maxdepth 1 -type f -print
+            exit 1
+          fi
+
+      - name: Generate checksum sidecars
+        run: |
+          set -euo pipefail
+          find dist -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.vsix' \) -print0 |
+            while IFS= read -r -d '' file; do
+              (cd "$(dirname "$file")" && sha256sum "$(basename "$file")" > "$(basename "$file").sha256")
+            done
+
+      - name: Publish immutable GitHub release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          resolve_tag() {
+            local object
+            object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object | [.type,.sha] | @tsv')"
+            local type="${object%%$'\t'*}"
+            local sha="${object#*$'\t'}"
+            while [[ "$type" == "tag" ]]; do
+              object="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq '.object | [.type,.sha] | @tsv')"
+              type="${object%%$'\t'*}"
+              sha="${object#*$'\t'}"
+            done
+            [[ "$type" == "commit" ]]
+            printf '%s\n' "$sha"
+          }
+
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            tag_sha="$(resolve_tag)"
+            if [[ "$tag_sha" != "$RELEASE_SOURCE_SHA" ]]; then
+              echo "::error::$RELEASE_TAG points to $tag_sha, expected $RELEASE_SOURCE_SHA"
+              exit 1
+            fi
+          fi
+
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --target "$RELEASE_SOURCE_SHA" \
+              --title "BAML Language $RELEASE_VERSION" \
+              --notes "BAML language toolchain $RELEASE_VERSION"
+          fi
+
+          tag_sha="$(resolve_tag)"
+          if [[ "$tag_sha" != "$RELEASE_SOURCE_SHA" ]]; then
+            echo "::error::$RELEASE_TAG points to $tag_sha after release creation, expected $RELEASE_SOURCE_SHA"
+            exit 1
+          fi
+
+          existing="$RUNNER_TEMP/existing-assets.txt"
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > "$existing"
+          shopt -s nullglob
+          assets=(dist/toolchain/* dist/vsix/*)
+          for asset in "${assets[@]}"; do
+            name="$(basename "$asset")"
+            if grep -qxF "$name" "$existing"; then
+              downloaded="$RUNNER_TEMP/$name"
+              gh release download "$RELEASE_TAG" --pattern "$name" --output "$downloaded" --clobber
+              if ! cmp -s "$asset" "$downloaded"; then
+                echo "::error::release asset already exists with different bytes: $name"
+                exit 1
+              fi
+              echo "asset already exists and matches: $name"
+            else
+              gh release upload "$RELEASE_TAG" "$asset"
+              echo "uploaded: $name"
+            fi
+          done
+
+          expected_count="${#assets[@]}"
+          actual_count="$(gh release view "$RELEASE_TAG" --json assets --jq '.assets | length')"
+          if [[ "$actual_count" != "$expected_count" ]]; then
+            echo "::error::release has $actual_count assets, expected $expected_count"
+            gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name'
+            exit 1
+          fi
+          echo "Published https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
