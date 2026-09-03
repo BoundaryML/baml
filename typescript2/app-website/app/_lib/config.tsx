@@ -533,6 +533,7 @@ export const siteConfig = {
   nav: {
     links: [
       { href: '/quickstart', id: 8, name: 'Quickstart' },
+      { href: '/blog', id: 9, name: 'Blog' },
       { href: '/podcast', id: 4, name: 'Podcast' },
       { href: '/who-are-we', id: 5, name: 'Team' },
       // { href: '/play', id: 5, name: 'Playground' },
