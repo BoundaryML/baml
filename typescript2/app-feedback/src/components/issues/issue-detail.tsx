@@ -216,7 +216,7 @@ export function IssueDetail({ issue }: { issue: Issue }) {
                     <dt className="text-muted-foreground">PR</dt>
                     <dd>
                       <a
-                        href={o.pr}
+                        href={o.pr.startsWith("https://github.com/") ? o.pr : undefined}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 underline underline-offset-2"
