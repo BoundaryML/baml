@@ -875,7 +875,7 @@ function f() -> int {
     }
 
     #[test]
-    fn a_package_qualifier_hides_the_companion_carriers() {
+    fn a_package_qualifier_hides_only_the_carriers_with_another_spelling() {
         let test = CursorTest::new(
             r#"function f() -> int {
     let a = baml.<[CURSOR]
@@ -886,18 +886,63 @@ function f() -> int {
         let items = complete(&test);
         let labels = labels(&items);
         // `baml.Int` is where `int`'s methods live, and `int` is how it is
-        // written; the same for `baml.Array` (`T[]`) and `baml.Map`
-        // (`map<K, V>`). Listing the carrier teaches a spelling nobody uses.
-        for carrier in ["Int", "String", "Array", "Map", "Bool", "TypeValue"] {
+        // written. Listing the carrier teaches a spelling nobody uses.
+        for carrier in [
+            "Int",
+            "Bigint",
+            "Float",
+            "String",
+            "Bool",
+            "Null",
+            "Uint8Array",
+        ] {
             assert!(
                 !labels.contains(&carrier),
-                "`baml.{carrier}` is a companion carrier, not a name to write: {labels:?}"
+                "`{carrier}` is reached as its alias, not by its carrier path: {labels:?}"
+            );
+        }
+        // The containers have no such alias: neither `int[].filled` nor
+        // `map<string, int>.of` parses, so hiding the carrier would leave
+        // their statics with no spelling at all.
+        for carrier in ["Array", "Map"] {
+            assert!(
+                labels.contains(&carrier),
+                "`baml.{carrier}` is the only handle on its statics: {labels:?}"
             );
         }
         assert!(
             labels.contains(&"iter") && labels.contains(&"Sortable"),
             "the namespace's own items and children still come back: {labels:?}"
         );
+    }
+
+    /// `reflect.Type`'s class name IS the builtin's canonical spelling
+    /// (`TYPE_SYSTEM.md`), not a stand-in for one, so the carrier rule must
+    /// not reach it — there is nothing else to write.
+    #[test]
+    fn a_self_spelled_builtin_is_offered_under_its_own_path() {
+        for (source, expected) in [
+            (
+                "function f() -> int {\n    let a = reflect.<[CURSOR]\n    0\n}\n",
+                "Type",
+            ),
+            (
+                "function f(a: reflect.<[CURSOR]) -> int throws never { 0 }\n",
+                "Type",
+            ),
+            (
+                "function f() -> int {\n    let a = baml.future.<[CURSOR]\n    0\n}\n",
+                "Future",
+            ),
+        ] {
+            let test = CursorTest::new(source);
+            let items = complete(&test);
+            let labels = labels(&items);
+            assert!(
+                labels.contains(&expected),
+                "`{expected}` has no spelling but its own path: {labels:?}"
+            );
+        }
     }
 
     #[test]

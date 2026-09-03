@@ -87,15 +87,18 @@ fn is_type_definition(def: Definition<'_>) -> bool {
     )
 }
 
-/// Whether a definition is a COMPANION CARRIER — the class a builtin's
-/// methods are declared on, whose written spelling is the builtin itself.
+/// Whether a definition is a companion carrier the reader can reach some
+/// other way — in which case its package path is a spelling nobody writes.
 ///
-/// `baml.Int` is where `int`'s methods live and `int` is how it is written;
-/// likewise `baml.Array<T>.item` reads `T[].item` and `baml.Map<K, V>.item`
-/// reads `map<K, V>.item`. Offering the carrier under its package path would
-/// teach a spelling nobody uses, so `baml.` lists neither it nor its
-/// siblings. The set is the language's own
-/// ([`builtin_companion_of`](baml_type::type_kind::builtin_companion_of)),
+/// `baml.Int` is where `int`'s methods live and `int` is how it is written,
+/// so `baml.` offers `int` rather than teaching the carrier. But a carrier
+/// is only noise when there IS another spelling: `int[].filled` and
+/// `map<string, int>.of` do not parse, and `reflect.Type` has no alias at
+/// all, so `baml.Array`, `baml.Map`, and `reflect.Type` are the only handles
+/// on those members and hiding them would make them unreachable.
+///
+/// The distinction is the language's own
+/// ([`members_reachable_without_carrier`](baml_type::type_kind::BuiltinCompanion::members_reachable_without_carrier)),
 /// not a list kept here.
 fn is_builtin_companion(db: &dyn baml_compiler2_ppir::Db, def: Definition<'_>) -> bool {
     let Definition::Class(class) = def else {
@@ -108,5 +111,5 @@ fn is_builtin_companion(db: &dyn baml_compiler2_ppir::Db, def: Definition<'_>) -
         baml_compiler2_hir::package::lang_roots(db),
         &qtn,
     )
-    .is_some()
+    .is_some_and(|companion| companion.members_reachable_without_carrier)
 }
