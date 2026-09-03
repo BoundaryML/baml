@@ -35,9 +35,15 @@ const BOARD_COLUMNS: { state: StatusState; label: string; color: string }[] = [
   { state: "rejected", label: "Rejected", color: "bg-red-500" },
 ];
 
+/** The clock the relative times are measured against; ticks every minute, the
+ * precision relativeTime shows. */
 function useNow() {
   const [now, setNow] = useState(0);
-  useEffect(() => setNow(Date.now()), []);
+  useEffect(() => {
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   return now;
 }
 
@@ -190,9 +196,10 @@ export function IssueList({ issues }: { issues: Issue[] }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
+          <label className="flex items-center gap-1.5" htmlFor="filter-subsystem">
             subsystem
             <select
+              id="filter-subsystem"
               value={subsystem}
               onChange={(e) => setSubsystem(e.target.value as Subsystem | "all")}
               className="rounded border bg-background px-1.5 py-0.5 text-xs text-foreground"
@@ -204,10 +211,11 @@ export function IssueList({ issues }: { issues: Issue[] }) {
                 </option>
               ))}
             </select>
-          </span>
-          <span className="flex items-center gap-1.5">
+          </label>
+          <label className="flex items-center gap-1.5" htmlFor="filter-difficulty">
             difficulty
             <select
+              id="filter-difficulty"
               value={difficulty}
               onChange={(e) => setDifficulty(e.target.value as Difficulty | "all")}
               className="rounded border bg-background px-1.5 py-0.5 text-xs text-foreground"
@@ -219,7 +227,7 @@ export function IssueList({ issues }: { issues: Issue[] }) {
                 </option>
               ))}
             </select>
-          </span>
+          </label>
           {evalCount > 0 && (
             <label className="flex items-center gap-1.5 cursor-pointer select-none">
               <input

@@ -46,10 +46,13 @@ function getStoredTheme(): ThemeMode {
 }
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<ThemeMode>(() => {
-    if (typeof window === "undefined") return "system";
-    return getStoredTheme();
-  });
+  // "system" on the server and on the client's first render, so the markup
+  // hydrates identically; the stored choice is read once mounted
+  const [theme, setTheme] = useState<ThemeMode>("system");
+
+  useEffect(() => {
+    setTheme(getStoredTheme());
+  }, []);
 
   useEffect(() => {
     applyTheme(theme);

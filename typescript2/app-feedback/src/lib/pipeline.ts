@@ -161,6 +161,7 @@ export function formatSeconds(s: number): string {
 
 export function relativeTime(iso: string, now: number): string {
   const diff = now - new Date(iso).getTime();
+  if (diff < 0) return "in the future";
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
