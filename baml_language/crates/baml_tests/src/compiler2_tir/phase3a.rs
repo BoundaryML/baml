@@ -2133,6 +2133,99 @@ fn void_function_bare_return() {
 }
 
 #[test]
+fn non_void_lambda_bare_return_is_rejected() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        "function f() -> bool { let g = () -> int { return; }; true }",
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f() -> bool throws never {
+      { : true
+        let g = : () -> int throws never
+          () -> int { ... } : () -> int throws never
+            {
+              return
+            }
+        true : true
+      }
+      !! 43..50: type mismatch: expected int, got void
+    }
+    lambda user.f {
+    }
+    "#);
+}
+
+#[test]
+fn contextual_nested_generic_bare_return_is_rejected_after_inference() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Pair<A, B> {
+  first A
+  second B
+}
+
+function accept<T>(callback: () -> Pair<T, int>, value: T) -> bool { true }
+
+function f() -> bool {
+  accept(() -> { return; }, "later evidence")
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("type mismatch: expected Pair<string, int>, got void"),
+        "{tir}"
+    );
+}
+
+#[test]
+fn contextual_generic_bare_return_accepts_unit_after_inference() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+function accept<T>(callback: () -> T, value: T) -> bool { true }
+
+function f() -> bool {
+  accept(() -> { return; }, null)
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(!tir.contains("!!"), "{tir}");
+}
+
+#[test]
+fn lambda_return_mismatch_uses_lambda_contract() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"function f() -> bool {
+  let g = () -> int { return "wrong" }
+  true
+}"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f() -> bool throws never {
+      { : true
+        let g = : () -> int throws never
+          () -> int { ... } : () -> int throws never
+            {
+              return "wrong"
+            }
+        true : true
+      }
+      !! 52..59: type mismatch: expected int, got "wrong"
+    }
+    lambda user.f {
+    }
+    "#);
+}
+
+#[test]
 fn void_function_return_value_error() {
     let mut db = make_db();
     let file = db.file("test.baml", "function f() -> void { return 42; }");
