@@ -1,24 +1,10 @@
-# sccache strategy
-# ================
-#
-# These jobs compile the same release artifacts the cargo tests do, so they
-# share the sccache + Swatinem/rust-cache setup documented at the top of
-# cargo-tests.reusable.yaml: sccache holds the compiled `target/` tree (R2
-# backend), while rust-cache keeps the registry/git state (`cache-all-crates:
-# true`, `cache-targets: false`). They are read-only consumers of the shared
-# rust-cache entries written by canary in cargo-tests.reusable.yaml, and read
-# the same sccache R2 cache via .envrc.
-#
-# Secretless runs (e.g. fork PRs) still install sccache, but .envrc sees no R2
-# credentials and falls back to the runner-local cache.
+# Size-gate jobs share cargo tests' R2 sccache and read-only rust-cache entries.
+# .envrc configures sccache, with secretless fork PRs falling back to local cache.
 name: Size Gate (Reusable)
 
 on:
   workflow_call:
-    # Callers intentionally map these names even though the values exist only
-    # in the GitHub Environment. The mapping establishes the reusable-workflow
-    # secret contract; each job's environment supplies the actual value.
-    # Keep them optional so fork PRs retain the secretless local-cache path.
+    # Optional so secretless fork PRs can use the local cache.
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID:
         required: false
@@ -30,30 +16,22 @@ defaults:
     shell: bash
 
 env:
-  # Inputs read by .envrc; everything else (RUSTC_WRAPPER, SCCACHE_*) is set by
-  # .envrc itself so it stays the single source of truth across CI and local.
+  # .envrc supplies the remaining sccache configuration.
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
   RUSTUP_MAX_RETRIES: 10
 
-# Individual measure-baml-size jobs are intentionally never allowed to fail.
-# Each platform job has `continue-on-error: true` so a violation, runner
-# death, or build hiccup does not fail the calling workflow. The
-# enforce-baml-size job aggregates all available reports and is the one
-# place where a real failure (policy violation or a missing platform
-# report) can block CI.
+# Measure jobs collect reports without failing early; the report job enforces policy.
 
 jobs:
   size-gate-linux:
     name: "measure-baml-size (linux)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    environment: infisical-github-ci
     timeout-minutes: 30
     continue-on-error: true
-    env:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -138,12 +116,8 @@ jobs:
   size-gate-macos:
     name: "measure-baml-size (macos)"
     runs-on: blacksmith-6vcpu-macos-latest
-    environment: infisical-github-ci
     timeout-minutes: 20
     continue-on-error: true
-    env:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -228,14 +202,11 @@ jobs:
   size-gate-windows:
     name: "measure-baml-size (windows)"
     runs-on: blacksmith-8vcpu-windows-2025
-    environment: infisical-github-ci
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 45
     continue-on-error: true
     env:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       CARGO_BUILD_JOBS: "16"
     steps:
       - uses: actions/checkout@v7
@@ -339,12 +310,8 @@ jobs:
   size-gate-wasm:
     name: "measure-baml-size (wasm)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    environment: infisical-github-ci
     timeout-minutes: 25
     continue-on-error: true
-    env:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -431,15 +398,11 @@ jobs:
   size-gate-report:
     name: "enforce-baml-size"
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    environment: infisical-github-ci
     if: ${{ always() && !cancelled() }}
     needs: [size-gate-linux, size-gate-macos, size-gate-windows, size-gate-wasm]
     permissions:
       contents: read
       pull-requests: write
-    env:
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     steps:
       - uses: useblacksmith/checkout@v1
         with:
