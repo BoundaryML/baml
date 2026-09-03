@@ -87,6 +87,21 @@ interface DeclarationRecord {
   routePath: string;
 }
 
+// The compiler intentionally allows this one namespace shadow while the
+// underlying compiler bug is fixed elsewhere. Keep the portal exception just
+// as narrow: the declaration and namespace descendants remain routable, but
+// the colliding synthetic namespace landing page is not projected.
+function isHiddenNamespacePage(
+  packageName: string,
+  namespacePath: readonly string[],
+): boolean {
+  return (
+    packageName === 'boundary' &&
+    namespacePath.length === 1 &&
+    namespacePath[0] === 'id'
+  );
+}
+
 type ProjectedMemberAnchor = ReturnType<typeof createMemberAnchors>[number] & {
   memberKind: string;
 };
@@ -180,7 +195,7 @@ function collectKnownCrossReferences(
   }
 }
 
-function buildReferencePages(
+export function buildReferencePages(
   packageName: string,
   formatVersion: number,
   items: ExportedItem[],
@@ -289,7 +304,13 @@ function buildReferencePages(
 
   const packageChildren = [
     ...[...namespaceKeys]
-      .filter((key) => !key.includes('.'))
+      .filter((key) => {
+        const namespacePath = key.split('.');
+        return (
+          namespacePath.length === 1 &&
+          !isHiddenNamespacePage(packageName, namespacePath)
+        );
+      })
       .map((key) => childForNamespace([key])),
     ...declarations
       .filter((declaration) => declaration.namespace.length === 0)
@@ -318,13 +339,17 @@ function buildReferencePages(
 
   for (const key of [...namespaceKeys].sort()) {
     const namespacePath = key.split('.');
+    if (isHiddenNamespacePage(packageName, namespacePath)) {
+      continue;
+    }
     const qualifiedName = [packageName, ...namespacePath].join('.');
     const childNamespaces = [...namespaceKeys]
       .map((candidate) => candidate.split('.'))
       .filter(
         (candidate) =>
           candidate.length === namespacePath.length + 1 &&
-          candidate.slice(0, -1).join('.') === key,
+          candidate.slice(0, -1).join('.') === key &&
+          !isHiddenNamespacePage(packageName, candidate),
       )
       .map(childForNamespace);
     const childDeclarations = declarations

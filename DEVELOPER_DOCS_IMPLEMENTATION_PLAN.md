@@ -196,7 +196,7 @@ This gate has two ordered checkpoints:
 1. **Target and migration approval.** A human reviews the exact `boundaryml` organization, database, development branch, and SQL migration. After approval, apply the migration to that isolated development target with the authenticated `pscale` workflow.
 2. **Payload and rendering approval.** Publish the representative exact-version sample through the shared population command, then review the stored payloads and Postgres-backed rendered pages.
 
-Execution status: checkpoint 1 was approved and completed on 2026-09-03 for `boundaryml/developer-docs/development` with migration `0001-generated-content.sql`. The applied-schema evidence and remaining checkpoint-2 blocker are recorded in [DEVELOPER_DOCS_STATUS.md](./DEVELOPER_DOCS_STATUS.md). Checkpoint 1 approval did not authorize generated-content population or a channel-pointer update.
+Execution status: checkpoint 1 was approved and completed on 2026-09-03 for `boundaryml/developer-docs/development` with migration `0001-generated-content.sql`. The applied-schema evidence, user-approved temporary `boundary.id` namespace-page exception, and checkpoint-2 progress are recorded in [DEVELOPER_DOCS_STATUS.md](./DEVELOPER_DOCS_STATUS.md). Checkpoint 1 approval did not authorize generated-content population or a channel-pointer update.
 
 Stop before expanding the generators or renderers. Across the two checkpoints, a human reviews:
 

@@ -6,6 +6,7 @@ import {
   jsonValueSchema,
   sha256,
 } from '../lib/generated-content/json.ts';
+import { buildReferencePages } from '../lib/generated-content/package-generator.ts';
 import {
   createMemberAnchors,
   deriveParentQualifiedName,
@@ -125,5 +126,36 @@ test('reference page rows reject routes that diverge from the qualified name', (
   assert.throws(
     () => referencePageRowSchema.parse({ ...row, route_path: 'kind/baml' }),
     /route does not match/,
+  );
+});
+
+test('only the compiler-allowlisted boundary.id namespace landing page is hidden', () => {
+  const collidingItems = [
+    {
+      id: 'V:boundary.id',
+      kind: 'function' as const,
+      name: 'id',
+    },
+    {
+      id: 'V:boundary.id.current',
+      kind: 'function' as const,
+      name: 'current',
+      namespace: ['id'],
+    },
+  ];
+
+  const boundaryPages = buildReferencePages('boundary', 1, collidingItems, []);
+  assert.deepEqual(
+    boundaryPages.map((page) => [page.qualifiedName, page.pageKind]),
+    [
+      ['boundary', 'package'],
+      ['boundary.id', 'function'],
+      ['boundary.id.current', 'function'],
+    ],
+  );
+
+  assert.throws(
+    () => buildReferencePages('not_boundary', 1, collidingItems, []),
+    /Projected package route collision: not_boundary\/id/,
   );
 });

@@ -27,8 +27,8 @@ If implementation evidence requires a material change, record it under **Deviati
 
 ## Current snapshot
 
-- **Current phase:** Human Gate 1 checkpoint 1 is complete; checkpoint 2 preparation is next.
-- **Current gate:** Checkpoint 2 — stored payload and rendering approval — is blocked on the `boundary/id` export collision below.
+- **Current phase:** Human Gate 1 checkpoint 1 is complete; checkpoint 2 preparation is active.
+- **Current gate:** Checkpoint 2 — stored payload and rendering approval — is unblocked but not yet complete.
 - **Live database mutations:** Approved checkpoint-1 creation and migration only: `boundaryml/developer-docs/development` now contains the five empty generated-content tables. No generated rows or channel pointers were written.
 - **Generated-content publication:** None.
 - **Last updated:** 2026-09-03.
@@ -64,7 +64,7 @@ If implementation evidence requires a material change, record it under **Deviati
 ### Human Gate 1 — stored and rendered contract approval
 
 - **Checkpoint 1, target and migration:** Approved and completed on 2026-09-03.
-- **Checkpoint 2, payload and rendering:** Prepared with representative in-memory payloads, but live population is blocked on a real collision in the candidate `boundary` export described below.
+- **Checkpoint 2, payload and rendering:** Complete in-memory generation now passes with the approved temporary `boundary.id` namespace-page exception. Live population and Postgres-backed rendering review remain pending.
 - No population or channel-pointer update is authorized by checkpoint 1 approval. Checkpoint 2 remains open.
 
 #### Checkpoint 1 review package
@@ -146,16 +146,16 @@ Approval required: Explicitly requested by the human reviewer on 2026-09-02.
 Status: Accepted for documentation-shell, static-route, and representative authored-subpage work only.
 ```
 
-The following evidence-backed blocker remains open:
+The following compiler condition and user-approved temporary portal exception are recorded:
 
 ```text
 Date: 2026-09-01
 Plan/proposal requirement: Package routes come directly from qualified-name segments; kind segments and other collision workarounds are forbidden, and a complete allowlisted release must be validated before publication.
 Observed evidence: Candidate binaries through 0.18.1-nightly.20260901.a export both top-level function V:boundary.id (qualified name boundary.id) and namespace-owned function V:boundary.id.current with namespace ["id"] and name "current". Under the approved projection, packages, namespaces, and top-level classes, enums, interfaces, aliases, and functions are routable; nested members and implementations are anchor-only. The namespace page boundary.id and top-level function boundary.id are therefore both legitimately routable and both require route_path boundary/id. Compiler source currently has an explicit boundary.id-only exception in crates/baml_compiler2_hir/src/package.rs that suppresses the otherwise detected namespace-shadow diagnostic.
-Impact: The generator correctly rejects the boundary package with "Projected package route collision: boundary/id." A complete 13-package release cannot be generated or populated from this candidate binary. The independent target-and-migration review is not blocked.
-Proposed deviation or resolution: No portal deviation. The user identified this as a compiler bug and will fix it outside this documentation work. After that fix produces a new exact binary, rerun the unchanged complete-release collision check before checkpoint-2 population.
-Approval required: None for a portal workaround because no workaround is authorized or planned. A fixed exact compiler binary is required to continue.
-Status: Identified and externally owned; blocks Human Gate 1 checkpoint 2 population until a fixed binary is available.
+Impact: Without an explicit exception, the generator correctly rejects the boundary package with "Projected package route collision: boundary/id." The user identified the underlying namespace shadow as a compiler bug and will fix it outside this documentation work.
+Proposed deviation or resolution: Temporarily suppress only the synthesized boundary.id namespace landing page. Preserve the top-level boundary.id function page and boundary.id.current function page. Keep ordinary namespace projection and collision failures unchanged for every other package and qualified name. Remove or reassess this exception after the compiler no longer exports the shadow.
+Approval required: Explicitly approved by the user on 2026-09-03.
+Status: Accepted temporary portal exception. The full 13-package dry run now passes; the compiler bug remains externally owned.
 ```
 
 Use this format for future entries:
@@ -212,6 +212,9 @@ Status:
 | 2026-09-03 | Applied-schema verification | Queried table inventory, `pg_catalog` constraints, PlanetScale branch schema, and all five row counts | Passed; exact five-table shape present and all tables empty |
 | 2026-09-03 | Default-branch isolation | Queried `developer-docs/main` after migration | Passed; zero `developer_docs` tables on `main` |
 | 2026-09-03 | `boundary/id` root cause | Rechecked nightly `0.18.1-nightly.20260901.a`, the approved routability rules, builtin sources, and compiler namespace-shadow detection | Confirmed compiler bug; portal projection is correct, compiler fix is externally owned |
+| 2026-09-03 | Temporary namespace-page exception | Added exact-match suppression for only the synthesized `boundary.id` namespace page plus a negative-control regression test | Passed; `boundary.id` function and `boundary.id.current` function remain routed, all other collisions still fail |
+| 2026-09-03 | Complete-release dry run | Generated all 13 allowlisted packages and recursive CLI payload from exact nightly `0.18.1-nightly.20260901.a` | Passed; 1,496 projected pages, 37 CLI commands, no writes |
+| 2026-09-03 | Temporary-exception quality checks | Portal lint, TypeScript type-check, 17-test suite, and preview production build | Passed; build generated 26 static pages |
 | 2026-09-03 | Framework dependency upgrade | Upgraded only `app-developer-docs` to Next.js 16.3.4, React 19.2.8, Fumadocs core/UI 16.15.4, and Fumadocs MDX 15.4.0 | Passed installation and peer-dependency validation without changing sibling application versions |
 | 2026-09-03 | Next.js 16 quality checks | Portal lint, TypeScript type-check, 16-test suite, and preview production build | Passed; build exported 26 static pages and preview `robots.txt` retained `Disallow: /` |
 | 2026-09-03 | Next.js 16 browser regression | Rechecked desktop shell, search navigation, theme switching, active navigation, TOC, overflow, and browser console | Passed; no console warnings or errors |
@@ -221,6 +224,6 @@ Status:
 
 | Gate | State | Approval evidence | Notes |
 |---|---|---|---|
-| Human Gate 1 | Checkpoint 1 complete; checkpoint 2 blocked | User reply “I'm good to check off!” on 2026-09-03 | Migration applied and verified only on `boundaryml/developer-docs/development`; no population or pointer update. |
+| Human Gate 1 | Checkpoint 1 complete; checkpoint 2 in progress | User reply “I'm good to check off!” on 2026-09-03 | Migration applied and verified only on `boundaryml/developer-docs/development`; complete generation now passes, but no population or pointer update has occurred. |
 | Human Gate 2 | Not started | None | Requires completed architecture-proof preview. |
 | Human Gate 3 | Not started | None | Requires completed launch candidate. |
