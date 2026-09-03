@@ -446,34 +446,34 @@ function sc_companion() -> baml.Map<string, int> throws never {
     assert_eq!(session_args, Some(vec!["unknown".to_string()]));
 }
 
+// The inference tables behind a scoped `type T = …` binding, which BAML
+// cannot observe: the call plan carries the binding's own rigid parameter
+// (marked by the scoped index bit) while the name is in scope, and the
+// shadowed static class again once the block closes. The observable
+// semantics live in `baml_src/ns_scoped_type_bindings` and the
+// `scoped_type_*` diagnostic projects.
 #[test]
-fn scoped_runtime_types_shadow_and_erase_at_block_exit() {
+fn scoped_type_bindings_are_rigid_frame_parameters() {
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
 
     let source = r#"
 class ScopeT {}
-function scope_id<X>(value: X) -> X throws never { value }
-function scope_use(runtime_t: reflect.Type) -> ScopeT throws never {
-    let escaped = {
+function scope_id<X>(value: unknown) -> reflect.Type throws never { reflect.Type.of<X>() }
+function scope_use(runtime_t: reflect.Type) -> reflect.Type throws never {
+    let inner = {
         type ScopeT = unreflect(runtime_t)
         scope_id<ScopeT>(1)
     }
-    scope_id<ScopeT>(ScopeT {})
+    scope_id<ScopeT>(3)
 }
-function scope_lambda(runtime_t: reflect.Type) -> ((int) -> unknown throws never) throws never {
-    {
-        type LambdaT = unreflect(runtime_t)
-        (x: int) -> { scope_id<LambdaT>(x) }
-    }
-}
-function scope_branch(runtime_t: reflect.Type, choose: bool) -> ScopeT throws never {
+function scope_branch(runtime_t: reflect.Type, choose: bool) -> reflect.Type throws never {
     let branch_value = if choose {
         type ScopeT = unreflect(runtime_t)
         scope_id<ScopeT>(2)
     } else {
-        null
+        scope_id<int>(0)
     }
-    scope_id<ScopeT>(ScopeT {})
+    scope_id<ScopeT>(4)
 }
 function scope_bad() -> null throws never {
     type Bad = unreflect(42)
@@ -488,13 +488,10 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
     let mut db = crate::compiler2_tir::support::make_db();
     let file = db.file("test.baml", source);
     let mut saw_inner = false;
-    let mut saw_outer = false;
+    let mut saw_outer = 0;
     let mut saw_branch = false;
-    let mut saw_erased_block = false;
-    let mut saw_lambda_erasure = false;
     let mut saw_bad_operand = false;
     let mut saw_static_shape_error = false;
-    let mut runtime_checks = 0;
     let mut diagnostics = Vec::new();
     for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
         let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
@@ -502,21 +499,6 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
         };
         let result = infer_body(&db, owner);
         diagnostics.extend(result.diagnostics.iter().map(|diag| diag.error.clone()));
-        runtime_checks += result.runtime_checks.len();
-        for check in &result.runtime_checks {
-            assert!(
-                matches!(
-                    check,
-                    baml_compiler2_hir_ty::infer::RuntimeCheck::Argument { expected, .. }
-                        if matches!(
-                            expected,
-                            baml_type::Ty::TypeVar(param, _)
-                                if param.index() & 0x8000_0000 != 0
-                        )
-                ),
-                "unexpected runtime check: {check:?}"
-            );
-        }
         saw_bad_operand |= result.diagnostics.iter().any(|diag| {
             matches!(
                 &diag.error,
@@ -558,60 +540,27 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                         if param == &binding.parameter)
                 ));
             }
-            if snippet == "scope_id<ScopeT>(ScopeT {})" {
-                saw_outer = true;
+            if snippet == "scope_id<ScopeT>(3)" || snippet == "scope_id<ScopeT>(4)" {
+                saw_outer += 1;
                 assert!(matches!(
                     plan.type_args.as_slice(),
                     [ty] if ty.render_canonical() == "user.ScopeT"
                 ));
             }
         }
-
-        let mut binding_blocks: Vec<_> = result
-            .type_of_expr
-            .iter()
-            .filter_map(|(&expr, ty)| {
-                let snippet = &source[source_map.expr_span(expr)];
-                snippet
-                    .contains("type ScopeT = unreflect(runtime_t)")
-                    .then_some((snippet.len(), ty))
-            })
-            .collect();
-        binding_blocks.sort_by_key(|(len, _)| *len);
-        if let Some((_, ty)) = binding_blocks.first() {
-            saw_erased_block = true;
-            assert_eq!(ty.render_canonical(), "unknown");
-        }
-
-        let mut lambda_binding_blocks: Vec<_> = result
-            .type_of_expr
-            .iter()
-            .filter_map(|(&expr, ty)| {
-                let snippet = &source[source_map.expr_span(expr)];
-                snippet
-                    .contains("type LambdaT = unreflect(runtime_t)")
-                    .then_some((snippet.len(), ty))
-            })
-            .collect();
-        lambda_binding_blocks.sort_by_key(|(len, _)| *len);
-        if let Some((_, ty)) = lambda_binding_blocks.first() {
-            saw_lambda_erasure = true;
-            assert!(matches!(
-                &**ty,
-                baml_type::Ty::Function { ret, .. }
-                    if ret.render_canonical() == "unknown"
-            ));
-        }
     }
-    assert!(saw_inner && saw_outer && saw_branch && saw_erased_block && saw_lambda_erasure);
-    assert_eq!(runtime_checks, 3, "each scoped dependent check is durable");
+    assert!(saw_inner && saw_branch);
+    assert_eq!(
+        saw_outer, 2,
+        "the static class is restored at both closing braces"
+    );
     assert!(
         saw_bad_operand,
         "type-binding operand must be checked below `type`"
     );
     assert!(
         saw_static_shape_error,
-        "a runtime-dependent type must retain its statically known shape"
+        "a literal is not a value of a rigid scoped type"
     );
     assert_eq!(
         diagnostics.len(),

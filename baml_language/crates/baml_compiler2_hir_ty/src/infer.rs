@@ -46,6 +46,7 @@ use baml_type::{
 use rustc_hash::FxHashMap;
 
 use crate::{
+    diagnostics::ScopedTypeEscapeKind,
     facts::Facts,
     infer::unify::InferenceTable,
     lower::{
@@ -507,7 +508,7 @@ pub enum Adjust {
 /// Sema-recorded argument matching consumed by `SILGen`. Keyed by the CALL
 /// expression.
 #[derive(Debug, Clone, PartialEq)]
-pub struct CallPlan<T = baml_type::Ty, I = baml_type::Interface> {
+pub struct CallPlan<T = baml_type::Ty> {
     /// Parameter-ordered bindings over the callee's parameter list MINUS
     /// any bound receiver slot (the list written arguments match).
     /// Required parameters with no argument get no entry (the arity
@@ -533,10 +534,6 @@ pub struct CallPlan<T = baml_type::Ty, I = baml_type::Interface> {
     /// Every WRITTEN type-argument slot, in source order, with the written
     /// shape MIR emits alongside the solved type.
     pub slots: Vec<CallTypeArgPlan<T>>,
-    /// Checks whose declared shape mentions at least one runtime slot. They
-    /// are intentionally not discharged by the static solver; MIR emits the
-    /// equivalent runtime gate from this ledger.
-    pub deferred_checks: Vec<RuntimeCheck<T, I>>,
     /// The trailing `$id = ...` side-channel argument (TIR's
     /// `CallSideChannels`, flattened until a second channel exists).
     pub runtime_id: Option<ExprId>,
@@ -546,9 +543,9 @@ pub struct CallPlan<T = baml_type::Ty, I = baml_type::Interface> {
     pub target: Option<crate::callable::ExternalCallTarget>,
 }
 
-/// Hand-written: the derive would bound `T: Default` + `I: Default`, which
-/// neither type vocabulary provides (or needs — no field holds a bare `T`).
-impl<T, I> Default for CallPlan<T, I> {
+/// Hand-written: the derive would bound `T: Default`, which neither type
+/// vocabulary provides (or needs — no field holds a bare `T`).
+impl<T> Default for CallPlan<T> {
     fn default() -> Self {
         CallPlan {
             bindings: Vec::new(),
@@ -556,7 +553,6 @@ impl<T, I> Default for CallPlan<T, I> {
             own_offset: 0,
             explicit: false,
             slots: Vec::new(),
-            deferred_checks: Vec::new(),
             runtime_id: None,
             target: None,
         }
@@ -571,15 +567,6 @@ pub struct CallTypeArgPlan<T = baml_type::Ty> {
     /// Written type shape used only when MIR emits `LoadType`. It is
     /// resolved without union set-algebra so coercion try-order survives.
     pub emission_ty: T,
-}
-
-/// A static check deferred precisely because its declared shape depends on a
-/// runtime generic slot. Types remain symbolic over those runtime parameters;
-/// all other call parameters have already been substituted.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RuntimeCheck<T = baml_type::Ty, I = baml_type::Interface> {
-    Argument { arg: ExprId, expected: T },
-    Bound { argument: T, bound: I },
 }
 
 /// One lexical `type T = …` binding: a rigid parameter whose identity is the
@@ -664,6 +651,10 @@ enum InferVarOrigin {
 struct ReturnFrame {
     expected: Option<Ty>,
     candidates: Vec<Ty>,
+    /// Depth of the scoped-binding stack when the frame opened. A binding at
+    /// or past it belongs to this frame and closes before the frame's value
+    /// is published, so a `return` typed by one is an escape.
+    scoped_bindings_floor: usize,
 }
 
 /// S17 pending diagnostic (engine-internal): arena-anchored, payload
@@ -836,8 +827,15 @@ enum PendingDiag<'db> {
         expr: ExprId,
         path: baml_type::Name,
     },
-    RuntimeTypeArgumentOnIndirectCall {
-        expr: ExprId,
+    /// A value typed by a block-scoped `type T = …` binding would be
+    /// observable outside its block: the block's value (anchored at the
+    /// tail), or a thrown type an inferred clause would publish (anchored
+    /// at the throw). `value` is the escaping type, `name` the binding's.
+    ScopedTypeEscapesBlock {
+        at: ExprId,
+        name: baml_type::Name,
+        value: Ty,
+        kind: crate::diagnostics::ScopedTypeEscapeKind,
     },
     CannotConstructReflectionKind {
         expr: ExprId,
@@ -1085,7 +1083,7 @@ enum PendingDiag<'db> {
 /// Grows one map per slice; consumers must treat a missing entry as "not
 /// inferred", never as an error.
 #[derive(Debug, Clone, PartialEq)]
-pub struct InferenceResult<'db, T = baml_type::Ty, I = baml_type::Interface> {
+pub struct InferenceResult<'db, T = baml_type::Ty> {
     pub type_of_expr: FxHashMap<ExprId, T>,
     pub type_of_pat: FxHashMap<PatId, T>,
     /// The owner's effect: the declared clause when written, else the
@@ -1115,16 +1113,11 @@ pub struct InferenceResult<'db, T = baml_type::Ty, I = baml_type::Interface> {
     /// Per-call argument matching and solved instantiations, keyed by the
     /// CALL expression. S16: MIR's argument emission and `LoadType`
     /// operands read this instead of re-planning.
-    pub call_plans: FxHashMap<ExprId, CallPlan<T, I>>,
-    /// Durable lexical runtime-type bindings, keyed by the statement that
+    pub call_plans: FxHashMap<ExprId, CallPlan<T>>,
+    /// Durable lexical `type T = …` bindings, keyed by the statement that
     /// evaluates and installs them. MIR consumes this identity instead of
     /// rebuilding a synthetic parameter from syntax.
     pub type_bindings: FxHashMap<StmtId, ScopedTypeBinding<T>>,
-    /// Checks whose expected shape depends on a lexical runtime-type binding.
-    /// Static inference records the actual expression type but cannot decide
-    /// the relation until the binding's operand has produced a runtime type;
-    /// MIR emits that gate from this ledger.
-    pub runtime_checks: Vec<RuntimeCheck<T, I>>,
     /// Coercion steps per expression (r-a's `expr_adjustments` shape).
     /// S16: MIR synthesizes the recorded adapters instead of re-deciding.
     pub expr_adjustments: FxHashMap<ExprId, Box<[Adjustment<T>]>>,
@@ -1140,9 +1133,9 @@ pub struct InferenceResult<'db, T = baml_type::Ty, I = baml_type::Interface> {
 /// The working instantiation: the engine records in its native interned
 /// vocabulary; `finish` finalizes in place and then materializes into the
 /// public plain `InferenceResult` through the `materialize_ty` seam.
-pub(crate) type WorkingResult<'db> = InferenceResult<'db, Ty, baml_type::interned::InferInterface>;
+pub(crate) type WorkingResult<'db> = InferenceResult<'db, Ty>;
 
-impl<T, I> InferenceResult<'_, T, I> {
+impl<T> InferenceResult<'_, T> {
     /// The empty result at the given effect seed — shared by the per-
     /// vocabulary `Default`s, whose only difference is which `never` they
     /// can spell.
@@ -1158,7 +1151,6 @@ impl<T, I> InferenceResult<'_, T, I> {
             path_resolutions: FxHashMap::default(),
             call_plans: FxHashMap::default(),
             type_bindings: FxHashMap::default(),
-            runtime_checks: Vec::new(),
             expr_adjustments: FxHashMap::default(),
             desugared_callees: rustc_hash::FxHashSet::default(),
         }
@@ -1583,6 +1575,11 @@ impl Diverges {
 enum Expectation {
     None,
     HasType(Ty),
+    /// The value is not observed: a statement expression, a loop or
+    /// `defer` body, the tail of a `-> void` body. It constrains nothing,
+    /// and nothing typed by a block-scoped `type T = …` binding can leave
+    /// a block through it.
+    Discarded,
 }
 
 impl Expectation {
@@ -1601,7 +1598,7 @@ impl Expectation {
     fn only_has_type(&self) -> Option<&Ty> {
         match self {
             Expectation::HasType(ty) => Some(ty),
-            Expectation::None => None,
+            Expectation::None | Expectation::Discarded => None,
         }
     }
 
@@ -1619,6 +1616,7 @@ impl Expectation {
                 }
             }
             Expectation::None => Expectation::None,
+            Expectation::Discarded => Expectation::Discarded,
         }
     }
 }
@@ -1837,6 +1835,7 @@ impl<'db> InferenceContext<'db> {
                 .map(|expected| ReturnFrame {
                     expected: Some(expected),
                     candidates: Vec::new(),
+                    scoped_bindings_floor: 0,
                 })
                 .collect(),
             declared_throws: None,
@@ -1904,7 +1903,7 @@ impl<'db> InferenceContext<'db> {
                 // the last line of a `-> void` fn is fine) - the body
                 // still walks fully, it just isn't checked against unit.
                 Some(return_ty) if is_unit(&return_ty) => {
-                    self.infer_expr(body, root, &Expectation::None);
+                    self.infer_expr(body, root, &Expectation::Discarded);
                 }
                 Some(return_ty) if !return_ty.has_error() => {
                     self.check_expr(body, root, &return_ty);
@@ -1970,236 +1969,17 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// Reject an impossible outer shape before replacing runtime-rigid leaves
-    /// with inference variables. `Sub` intentionally treats some
-    /// variable-carrying pairs as deferred, so by itself it cannot distinguish
-    /// `int` from `list<?runtime>` at this stage.
-    fn runtime_static_skeleton_matches(
-        &mut self,
-        actual: &Ty,
-        expected: &Ty,
-        runtime_params: &[baml_type::ParamTy],
-    ) -> bool {
-        let actual = self.table.shallow_resolve(actual);
-        let expected = self.table.shallow_resolve(expected);
-        if actual.has_error() || expected.has_error() {
-            return true;
-        }
-        if matches!(expected.kind(), InferTy::TypeVar(param, _) if runtime_params.contains(param)) {
-            return true;
-        }
-        if !actual.has_infer()
-            && !expected.has_infer()
-            && !runtime_params
-                .iter()
-                .any(|param| ty_mentions_param(&expected, param))
-        {
-            return self.cached_subtype(&actual, &expected);
-        }
-
-        match (actual.kind(), expected.kind()) {
-            (InferTy::Union(actual_members, _), _) => {
-                for member in actual_members {
-                    if !self.runtime_static_skeleton_matches(member, &expected, runtime_params) {
-                        return false;
-                    }
-                }
-                true
-            }
-            (_, InferTy::Union(expected_members, _)) => {
-                for member in expected_members {
-                    if self.runtime_static_skeleton_matches(&actual, member, runtime_params) {
-                        return true;
-                    }
-                }
-                false
-            }
-            (InferTy::List(actual_item, _), InferTy::List(expected_item, _)) => {
-                self.runtime_static_skeleton_matches(actual_item, expected_item, runtime_params)
-            }
-            (
-                InferTy::Map {
-                    key: actual_key,
-                    value: actual_value,
-                    ..
-                },
-                InferTy::Map {
-                    key: expected_key,
-                    value: expected_value,
-                    ..
-                },
-            ) => {
-                self.runtime_static_skeleton_matches(actual_key, expected_key, runtime_params)
-                    && self.runtime_static_skeleton_matches(
-                        actual_value,
-                        expected_value,
-                        runtime_params,
-                    )
-            }
-            (
-                InferTy::Class(actual_name, actual_args, _),
-                InferTy::Class(expected_name, expected_args, _),
-            ) if actual_name == expected_name && actual_args.len() == expected_args.len() => {
-                for (actual_arg, expected_arg) in actual_args.iter().zip(expected_args) {
-                    if !self.runtime_static_skeleton_matches(
-                        actual_arg,
-                        expected_arg,
-                        runtime_params,
-                    ) {
-                        return false;
-                    }
-                }
-                true
-            }
-            (
-                InferTy::Interface(actual_name, actual_args, actual_pins, _),
-                InferTy::Interface(expected_name, expected_args, expected_pins, _),
-            ) if actual_name == expected_name && actual_args.len() == expected_args.len() => {
-                for (actual_arg, expected_arg) in actual_args.iter().zip(expected_args) {
-                    if !self.runtime_static_skeleton_matches(
-                        actual_arg,
-                        expected_arg,
-                        runtime_params,
-                    ) {
-                        return false;
-                    }
-                }
-                for (name, expected_pin) in expected_pins {
-                    if let Some((_, actual_pin)) = actual_pins
-                        .iter()
-                        .find(|(actual_name, _)| actual_name == name)
-                        && !self.runtime_static_skeleton_matches(
-                            actual_pin,
-                            expected_pin,
-                            runtime_params,
-                        )
-                    {
-                        return false;
-                    }
-                }
-                true
-            }
-            // A class may satisfy a runtime-parameterized interface. The
-            // subsequent `Sub` call owns that implementation lookup.
-            (InferTy::Class(..), InferTy::Interface(..)) => true,
-            (
-                InferTy::Function {
-                    params: actual_params,
-                    ret: actual_ret,
-                    throws: actual_throws,
-                    ..
-                },
-                InferTy::Function {
-                    params: expected_params,
-                    ret: expected_ret,
-                    throws: expected_throws,
-                    ..
-                },
-            ) if actual_params.len() == expected_params.len() => {
-                for (actual_param, expected_param) in actual_params.iter().zip(expected_params) {
-                    if !self.runtime_static_skeleton_matches(
-                        &actual_param.ty,
-                        &expected_param.ty,
-                        runtime_params,
-                    ) {
-                        return false;
-                    }
-                }
-                self.runtime_static_skeleton_matches(actual_ret, expected_ret, runtime_params)
-                    && self.runtime_static_skeleton_matches(
-                        actual_throws,
-                        expected_throws,
-                        runtime_params,
-                    )
-            }
-            (
-                InferTy::Future(actual_value, actual_error, _),
-                InferTy::Future(expected_value, expected_error, _),
-            ) => {
-                self.runtime_static_skeleton_matches(actual_value, expected_value, runtime_params)
-                    && self.runtime_static_skeleton_matches(
-                        actual_error,
-                        expected_error,
-                        runtime_params,
-                    )
-            }
-            // Projections are resolved by `Sub`; their head may legitimately
-            // differ from the concrete type they reduce to.
-            (_, InferTy::AssociatedTypeProjection { .. }) => true,
-            // Open inference and rigid generic leaves carry no statically
-            // inspectable shape. The committed `Sub` relation immediately
-            // after this guard owns their bounds and obligations.
-            (InferTy::InferVar { .. } | InferTy::TypeVar(..), _)
-            | (_, InferTy::InferVar { .. } | InferTy::TypeVar(..)) => true,
-            _ => false,
-        }
-    }
-
     /// Checking mode: infer with the expectation, then constrain -
     /// `Sub(actual, expected)`, discharged eagerly. Definite failures are
     /// recorded against the checked expression, never dropped.
     fn check_expr(&mut self, body: &ExprBody, expr: ExprId, expected: &Ty) -> Ty {
-        // A lexical `type T = unreflect(value)` is rigid for identity and
-        // name resolution, but its actual runtime shape is unavailable to
-        // static inference. Preserve the check structurally for MIR instead
-        // of either accepting it blindly or diagnosing every concrete value
-        // against the opaque parameter. The expression still infers without
-        // an expectation so its own diagnostics/effects and actual type are
-        // retained.
-        let depends_on_scoped_type = self
-            .scoped_type_bindings
-            .iter()
-            .any(|binding| ty_mentions_param(expected, &binding.parameter));
-        if depends_on_scoped_type {
-            let ty = self.infer_deferred_runtime_expr(body, expr, expected);
-            // Erasing only the dynamic leaves a static skeleton: `list<T>`
-            // still rejects an `int`, while a `list<int>` advances to the
-            // runtime gate for its element relation. This is the same
-            // dependent-only discipline used by call-site runtime slots.
-            // Replace each runtime-rigid leaf with one fresh inference variable
-            // for this static shape check. `unknown` is still an ordinary,
-            // invariant generic argument (`Wrapper<string>` is not a subtype
-            // of `Wrapper<unknown>`), whereas this check needs a true hole:
-            // prove the surrounding constructors line up, then leave the leaf
-            // relation to MIR's runtime gate.
-            let runtime_params: Vec<_> = self
-                .scoped_type_bindings
-                .iter()
-                .map(|binding| binding.parameter.clone())
-                .collect();
-            let skeleton_matches =
-                self.runtime_static_skeleton_matches(&ty, expected, &runtime_params);
-            let dynamic_holes: Vec<_> = runtime_params
-                .into_iter()
-                .map(|parameter| {
-                    (
-                        parameter,
-                        self.table.new_var_ty_of(unify::VarPolicy::RuntimeHole),
-                    )
-                })
-                .collect();
-            let static_expected = dynamic_holes
-                .iter()
-                .fold(expected.clone(), |expected, (parameter, hole)| {
-                    replace_rigid_param(&expected, parameter, hole)
-                });
-            let saved_anchor = self.obligation_anchor.replace(expr);
-            let fits_static_shape = skeleton_matches && self.sub(&ty, &static_expected);
-            self.obligation_anchor = saved_anchor;
-            if fits_static_shape {
-                self.result.runtime_checks.push(RuntimeCheck::Argument {
-                    arg: expr,
-                    expected: expected.clone(),
-                });
-                self.record_checked_function_adapter(expr, &ty, expected);
-            } else {
-                self.result
-                    .type_mismatches
-                    .insert(expr, (expected.clone(), ty.clone()));
-            }
-            return ty;
-        }
         let ty = self.infer_expr(body, expr, &Expectation::has_type(expected.clone()));
+        self.check_inferred(expr, ty, expected)
+    }
+
+    /// The checking half of [`Self::check_expr`]: relate an already inferred
+    /// `ty` to `expected` at `expr`, recording the mismatch or the adapter.
+    fn check_inferred(&mut self, expr: ExprId, ty: Ty, expected: &Ty) -> Ty {
         let saved_anchor = self.obligation_anchor.replace(expr);
         let fits = self.sub(&ty, expected);
         self.obligation_anchor = saved_anchor;
@@ -2229,15 +2009,39 @@ impl<'db> InferenceContext<'db> {
         stmt: Option<StmtId>,
         expr: Option<ExprId>,
     ) {
-        let expected = self
-            .return_frames
-            .last()
-            .and_then(|frame| frame.expected.clone());
+        let (expected, floor) = match self.return_frames.last() {
+            Some(frame) => (frame.expected.clone(), frame.scoped_bindings_floor),
+            None => (None, 0),
+        };
         let actual = match value {
-            Some(value) => match &expected {
-                Some(expected) if !expected.has_error() => self.check_expr(body, value, expected),
-                _ => self.infer_expr(body, value, &Expectation::None),
-            },
+            Some(value) => {
+                let context = expected.as_ref().filter(|expected| !expected.has_error());
+                let expectation = match context {
+                    Some(context) => Expectation::has_type(context.clone()),
+                    None => Expectation::None,
+                };
+                let ty = self.infer_expr(body, value, &expectation);
+                match self.frame_scoped_param(&ty, floor) {
+                    // A context already diagnosed suppresses the escape too.
+                    Some(_) if expected.as_ref().is_some_and(Ty::has_error) => ty,
+                    // A `return` leaves every block of its frame at once, so a
+                    // value typed by a binding the frame opened is judged
+                    // here, at the return, the way a declared `throws` judges
+                    // a throw: the binding is still in scope, so the closing
+                    // brace would never see it, and a frame candidate carries
+                    // no anchor to report at.
+                    Some(escaped) => {
+                        let context = context
+                            .map(|context| self.table.resolve_completely(context))
+                            .filter(|context| self.frame_scoped_param(context, floor).is_none());
+                        self.publish_scoped_value(value, &escaped, &ty, context)
+                    }
+                    None => match context {
+                        Some(context) => self.check_inferred(value, ty, context),
+                        None => ty,
+                    },
+                }
+            }
             None => {
                 let actual = Ty::void();
                 if let Some(expected) = &expected
@@ -2259,18 +2063,6 @@ impl<'db> InferenceContext<'db> {
         if let Some(frame) = self.return_frames.last_mut() {
             frame.candidates.push(actual);
         }
-    }
-
-    /// Infer an expression whose outer type relation is checked at runtime.
-    /// A lambda still receives the callback shape for contextual signature
-    /// deduction: a runtime-bound parameter is opaque, not absent.
-    fn infer_deferred_runtime_expr(&mut self, body: &ExprBody, expr: ExprId, expected: &Ty) -> Ty {
-        let expectation = if matches!(body.exprs[expr], Expr::Lambda(_)) {
-            Expectation::has_type(expected.clone())
-        } else {
-            Expectation::None
-        };
-        self.infer_expr(body, expr, &expectation)
     }
 
     /// rustc/r-a record coercions as per-expression adjustments consumed
@@ -2542,7 +2334,7 @@ impl<'db> InferenceContext<'db> {
                     }
                     None => Ty::void(),
                 };
-                self.finish_scoped_type_bindings(type_scope, ty)
+                self.finish_scoped_type_bindings(type_scope, expr, *tail_expr, ty, expected)
             }
             Expr::If {
                 condition,
@@ -3034,9 +2826,7 @@ impl<'db> InferenceContext<'db> {
                 self.check_needless_chain(body, expr, *callee, &callee_ty);
                 let nonnull = self.peel_chain_null(&callee_ty);
                 let args = args.clone();
-                let ret = self.check_call_args(body, expr, *callee, &nonnull, false, &args);
-                self.report_runtime_indirect_call(expr, *callee);
-                ret
+                self.check_call_args(body, expr, *callee, &nonnull, false, &args)
             }
             Expr::Lambda(def) => self.infer_lambda(body, expr, def, expected),
             Expr::Match {
@@ -3074,7 +2864,7 @@ impl<'db> InferenceContext<'db> {
     fn infer_stmt(&mut self, body: &ExprBody, stmt: StmtId) {
         match &body.stmts[stmt] {
             Stmt::Expr(expr) => {
-                self.infer_expr(body, *expr, &Expectation::None);
+                self.infer_expr(body, *expr, &Expectation::Discarded);
             }
             Stmt::TypeBinding { name, value } => {
                 self.bind_scoped_type(body, stmt, name.clone(), value);
@@ -3128,7 +2918,7 @@ impl<'db> InferenceContext<'db> {
                 // control flow is rejected (loop-aware - a loop opened
                 // inside the defer may break/continue freely).
                 self.defer_loop_floors.push(self.loop_depth);
-                self.infer_expr(body, *defer_body, &Expectation::None);
+                self.infer_expr(body, *defer_body, &Expectation::Discarded);
                 self.defer_loop_floors.pop();
             }
             Stmt::Assign { target, value } => {
@@ -3157,7 +2947,7 @@ impl<'db> InferenceContext<'db> {
                 self.apply_facts(&facts.when_true);
                 let saved = self.diverges;
                 self.loop_depth += 1;
-                self.infer_expr(body, *loop_body, &Expectation::None);
+                self.infer_expr(body, *loop_body, &Expectation::Discarded);
                 self.loop_depth -= 1;
                 if let Some(after) = after {
                     self.infer_stmt(body, *after);
@@ -3196,7 +2986,7 @@ impl<'db> InferenceContext<'db> {
                 }
                 let saved = self.diverges;
                 self.loop_depth += 1;
-                self.infer_expr(body, *loop_body, &Expectation::None);
+                self.infer_expr(body, *loop_body, &Expectation::Discarded);
                 self.loop_depth -= 1;
                 self.diverges = saved;
                 self.flow = entry_flow;
@@ -3232,7 +3022,7 @@ impl<'db> InferenceContext<'db> {
                 let entry_flow = self.flow.clone();
                 let saved = self.diverges;
                 self.loop_depth += 1;
-                self.infer_expr(body, *loop_body, &Expectation::None);
+                self.infer_expr(body, *loop_body, &Expectation::Discarded);
                 self.loop_depth -= 1;
                 self.diverges = saved;
                 self.flow = entry_flow;
@@ -3334,73 +3124,185 @@ impl<'db> InferenceContext<'db> {
         }
         let binding = ScopedTypeBinding {
             name: name.clone(),
-            parameter: baml_type::ParamTy::new(0x8000_0000 | (identity & 0x7fff_ffff), name),
+            parameter: baml_type::ParamTy::new(
+                SCOPED_PARAM_BIT | (identity & !SCOPED_PARAM_BIT),
+                name,
+            ),
             source,
         };
         self.result.type_bindings.insert(stmt, binding.clone());
+        self.table.bind_scoped_param(&binding.parameter);
         self.scoped_type_bindings.push(binding);
     }
 
-    /// Erase every binding introduced by this block from values that can flow
-    /// out, then restore the lexical overlay checkpoint. Interior expression
-    /// and pattern tables intentionally retain the rigid identity for MIR.
-    fn finish_scoped_type_bindings(&mut self, checkpoint: usize, mut block_ty: Ty) -> Ty {
-        let erased = Ty::intern(InferTy::Unknown {
-            attr: TyAttr::default(),
-        });
-        for binding in self.scoped_type_bindings[checkpoint..].iter().rev() {
-            block_ty = replace_rigid_param(&block_ty, &binding.parameter, &erased);
-            for ty in self.flow.values_mut() {
-                *ty = replace_rigid_param(ty, &binding.parameter, &erased);
-            }
-            // The effect channel leaves the block exactly as the value does.
-            // An undeclared `throws` is assembled from these contributions at
-            // finalize, so a rigid parameter left in one becomes part of the
-            // OWNER's published effect — a type naming a parameter that stops
-            // existing at the closing brace, which reaches lowering with no
-            // type argument to bind it to.
-            for channel in &mut self.throws_channels {
-                for (_, contribution) in channel.iter_mut() {
-                    *contribution = replace_rigid_param(contribution, &binding.parameter, &erased);
-                }
-            }
-            for frame in &mut self.return_frames {
-                if let Some(expected) = &mut frame.expected {
-                    *expected = replace_rigid_param(expected, &binding.parameter, &erased);
-                }
-                for candidate in &mut frame.candidates {
-                    *candidate = replace_rigid_param(candidate, &binding.parameter, &erased);
-                }
-            }
-            // A contract violation stashed inside the block quotes the effect
-            // it saw. `extra` is a COPY of a contribution — compiler-derived,
-            // and quoted in a report about what the enclosing function may
-            // throw — so it is erased for the same reason the contribution is.
-            //
-            // `declared` deliberately is NOT. It is the clause an author WROTE
-            // at that site: only a lambda's own clause can name a block-scoped
-            // binding, its violation is anchored inside that block, and the
-            // line one row above the caret reads `throws Boom<Out>`. Erasing
-            // it would print `Boom<unknown>` next to the user's own `Out` —
-            // `a_lambda_clause_inside_the_block_is_quoted_as_written` pins
-            // both halves of that asymmetry.
-            for pending in &mut self.pending_diags {
-                match pending {
-                    PendingDiag::ThrowsViolation { extra, .. } => {
-                        *extra = replace_rigid_param(extra, &binding.parameter, &erased);
-                    }
-                    PendingDiag::ReturnTypeMismatch {
-                        expected, actual, ..
-                    } => {
-                        *expected = replace_rigid_param(expected, &binding.parameter, &erased);
-                        *actual = replace_rigid_param(actual, &binding.parameter, &erased);
-                    }
-                    _ => {}
-                }
-            }
+    /// Close the `type T = …` bindings this block introduced. Nothing typed
+    /// by a closed binding may be observable afterwards: the binding
+    /// re-executes on every pass through its block and may bind `T` to a
+    /// different type each time, so a `T`-typed value that outlived the
+    /// block could enter a container whose element type it no longer
+    /// satisfies. Hence:
+    /// - the block's VALUE leaves only through an expected type that
+    ///   mentions no closed binding and admits it (`-> unknown`,
+    ///   `let v: unknown = { … }`), or not at all when the value is
+    ///   discarded; otherwise E0171 at the tail and the `Error` fill;
+    /// - flow narrowings typed by a closed binding end here (the binding
+    ///   reverts to its declared type);
+    /// - the effect channel is judged where it is consumed
+    ///   ([`Self::drop_escaping_effects`]): a declared clause already judged
+    ///   each contribution at its throw and publishes nothing.
+    ///
+    /// Interior expression and pattern tables keep the rigid identity: MIR
+    /// binds the frame slot from them.
+    fn finish_scoped_type_bindings(
+        &mut self,
+        checkpoint: usize,
+        block: ExprId,
+        tail: Option<ExprId>,
+        block_ty: Ty,
+        expected: &Expectation,
+    ) -> Ty {
+        if self.scoped_type_bindings.len() == checkpoint {
+            return block_ty;
         }
         self.scoped_type_bindings.truncate(checkpoint);
-        block_ty
+        self.table.close_scopes_to(
+            u32::try_from(checkpoint).unwrap_or_else(|_| unreachable!("block depth fits in u32")),
+        );
+        let narrowed: Vec<(BindingId, Ty)> = self
+            .flow
+            .iter()
+            .filter(|(_, ty)| ty.has_typevar() || ty.has_infer())
+            .map(|(binding, ty)| (*binding, ty.clone()))
+            .collect();
+        for (binding, ty) in narrowed {
+            if self.escaping_scoped_param(&ty).is_some() {
+                self.flow.remove(&binding);
+            }
+        }
+        let Some(escaped) = self.escaping_scoped_param(&block_ty) else {
+            return block_ty;
+        };
+        let at = tail.unwrap_or(block);
+        match expected {
+            // Nobody reads the value, so its slot takes the top type: no
+            // reader can observe the binding through it.
+            Expectation::Discarded => Ty::intern(InferTy::Unknown {
+                attr: TyAttr::default(),
+            }),
+            Expectation::HasType(context) => {
+                let context = self.table.resolve_completely(context);
+                let context = self
+                    .escaping_scoped_param(&context)
+                    .is_none()
+                    .then_some(context);
+                self.publish_scoped_value(at, &escaped, &block_ty, context)
+            }
+            Expectation::None => self.publish_scoped_value(at, &escaped, &block_ty, None),
+        }
+    }
+
+    /// A value typed by a binding that is closing leaves only through a
+    /// context that admits it and is ground — an open one would SOLVE to the
+    /// escaping type — and that the caller has vetted as free of the closing
+    /// binding; the value then takes the context's type. Otherwise E0171 at
+    /// `at` and the `Error` fill. Shared by a block's tail and a `return`.
+    fn publish_scoped_value(
+        &mut self,
+        at: ExprId,
+        escaped: &baml_type::ParamTy,
+        value: &Ty,
+        context: Option<Ty>,
+    ) -> Ty {
+        if let Some(context) = context
+            && !context.has_infer()
+        {
+            let saved_anchor = self.obligation_anchor.replace(at);
+            let fits = self.sub(value, &context);
+            self.obligation_anchor = saved_anchor;
+            if fits {
+                return context;
+            }
+        }
+        self.report_scoped_type_escape(at, escaped, value, ScopedTypeEscapeKind::Value)
+    }
+
+    /// The first binding `ty` mentions (through solved variables) that the
+    /// return frame with `floor` opened — at or past `floor` in the binding
+    /// stack — and so closes before the frame publishes its value.
+    fn frame_scoped_param(&mut self, ty: &Ty, floor: usize) -> Option<baml_type::ParamTy> {
+        debug_assert!(floor <= self.scoped_type_bindings.len());
+        let ty = self.table.resolve_completely(ty);
+        let mut escaped = None;
+        scoped_params_in(&ty, &mut |param| {
+            if escaped.is_none()
+                && self.scoped_type_bindings[floor..]
+                    .iter()
+                    .any(|binding| &binding.parameter == param)
+            {
+                escaped = Some(param.clone());
+            }
+        });
+        escaped
+    }
+
+    /// The first block-scoped parameter `ty` mentions (through solved
+    /// variables) whose binding is no longer in scope.
+    fn escaping_scoped_param(&mut self, ty: &Ty) -> Option<baml_type::ParamTy> {
+        let ty = self.table.resolve_completely(ty);
+        let mut escaped = None;
+        scoped_params_in(&ty, &mut |param| {
+            if escaped.is_none()
+                && !self
+                    .scoped_type_bindings
+                    .iter()
+                    .any(|binding| &binding.parameter == param)
+            {
+                escaped = Some(param.clone());
+            }
+        });
+        escaped
+    }
+
+    fn report_scoped_type_escape(
+        &mut self,
+        at: ExprId,
+        param: &baml_type::ParamTy,
+        value: &Ty,
+        kind: ScopedTypeEscapeKind,
+    ) -> Ty {
+        self.pending_diags
+            .push(PendingDiag::ScopedTypeEscapesBlock {
+                at,
+                name: param.name().clone(),
+                value: value.clone(),
+                kind,
+            });
+        Ty::error()
+    }
+
+    /// The effect channel's escape rule: whoever consumes a channel
+    /// PUBLISHES its contributions - an inferred owner or lambda clause as
+    /// its surface, a `catch` as its arms' bindings - so a contribution
+    /// typed by a scoped binding whose block has closed is reported at its
+    /// throw (E0171) and dropped. A declared clause judges each
+    /// contribution at the throw itself and publishes nothing, so that road
+    /// never comes here.
+    fn drop_escaping_effects(&mut self, channel: Vec<(ExprId, Ty)>) -> Vec<(ExprId, Ty)> {
+        let mut kept = Vec::with_capacity(channel.len());
+        for (at, contribution) in channel {
+            match self.escaping_scoped_param(&contribution) {
+                Some(param) => {
+                    self.report_scoped_type_escape(
+                        at,
+                        &param,
+                        &contribution,
+                        ScopedTypeEscapeKind::Thrown,
+                    );
+                }
+                None => kept.push((at, contribution)),
+            }
+        }
+        kept
     }
 
     fn scoped_type_params(&self) -> Vec<baml_type::ParamTy> {
@@ -3793,6 +3695,9 @@ impl<'db> InferenceContext<'db> {
             // flowing into a variable: lower bound. (Var-var records on
             // both sides; resolution sees through whichever solves first.)
             (InferTy::InferVar { var, .. }, _) => {
+                if self.reject_scoped_escape_into_var(*var, &expected) {
+                    return false;
+                }
                 self.table.add_upper_bound(*var, expected.clone());
                 if let InferTy::InferVar { var: other, .. } = expected.kind() {
                     self.table.add_lower_bound(*other, actual.clone());
@@ -3800,6 +3705,9 @@ impl<'db> InferenceContext<'db> {
                 true
             }
             (_, InferTy::InferVar { var, .. }) => {
+                if self.reject_scoped_escape_into_var(*var, &actual) {
+                    return false;
+                }
                 self.table.add_lower_bound(*var, actual.clone());
                 true
             }
@@ -4151,7 +4059,47 @@ impl<'db> InferenceContext<'db> {
             self.deferred_subs.push((b, a, self.obligation_anchor));
             return true;
         }
-        self.table.unify(&a, &b).is_ok()
+        match self.table.unify(&a, &b) {
+            Ok(()) => true,
+            Err(unify::UnifyError {
+                left,
+                right,
+                escaped: Some(param),
+            }) => {
+                // The variable side is `left` (the table's `bind` reports
+                // the variable first); it takes the `Error` fill so the
+                // failure does not cascade into an unresolved-type report.
+                if let Some(at) = self.obligation_anchor {
+                    self.report_scoped_type_escape(at, &param, &right, ScopedTypeEscapeKind::Value);
+                }
+                if let InferTy::InferVar { var, .. } = left.kind() {
+                    self.table.solve(*var, Ty::error());
+                }
+                false
+            }
+            Err(unify::UnifyError { escaped: None, .. }) => false,
+        }
+    }
+
+    /// rustc's universe check at a bound's deposit point: a variable minted
+    /// outside a block may not be solved to a type mentioning a binding the
+    /// block introduced (an outer `let xs = []` must not become `T[]`
+    /// through a `push` inside the block). Reported at the current anchor
+    /// (E0171); the variable takes the `Error` fill so the failure does not
+    /// cascade into an unresolved-type report.
+    fn reject_scoped_escape_into_var(
+        &mut self,
+        var: baml_type::interned::InferVar,
+        ty: &Ty,
+    ) -> bool {
+        let Some(param) = self.table.escaping_scoped_param(var, ty) else {
+            return false;
+        };
+        if let Some(at) = self.obligation_anchor {
+            self.report_scoped_type_escape(at, &param, ty, ScopedTypeEscapeKind::Value);
+        }
+        self.table.solve(var, Ty::error());
+        true
     }
 
     fn cached_equivalent(&self, a: &Ty, b: &Ty) -> bool {
@@ -5137,48 +5085,8 @@ impl<'db> InferenceContext<'db> {
         self.report_mounted_reserved_call(call, callee);
         self.seed_implicit_llm_schema(body, call, callee, args);
         let ret = self.check_call_args(body, call, callee, &callee_fn_ty, bound_receiver, args);
-        self.report_runtime_indirect_call(call, callee);
         self.default_uncontracted_session_eval(body, call, callee);
         ret
-    }
-
-    fn report_runtime_indirect_call(&mut self, call: ExprId, callee: ExprId) {
-        let Some(plan) = self.result.call_plans.get(&call) else {
-            return;
-        };
-        let requires_runtime_check = !plan.deferred_checks.is_empty()
-            || self.result.runtime_checks.iter().any(|check| match check {
-                RuntimeCheck::Argument { arg, .. } => plan.bindings.iter().any(|binding| {
-                    matches!(binding, ParamBinding::Provided { arg: provided, .. } if provided == arg)
-                }),
-                RuntimeCheck::Bound { .. } => !self.scoped_type_bindings.is_empty(),
-            });
-        if !requires_runtime_check {
-            return;
-        }
-
-        let resolution = self.result.member_resolutions.get(&callee).or_else(|| {
-            self.result
-                .path_resolutions
-                .get(&callee)
-                .and_then(|path| path.segments.last())
-                .and_then(|segment| segment.resolution.as_ref())
-        });
-        let direct_or_checked = matches!(
-            resolution,
-            Some(
-                MemberResolution::Free { .. }
-                    | MemberResolution::BoundMethod { .. }
-                    | MemberResolution::UnboundMethod { .. }
-                    | MemberResolution::InterfaceVirtualMethod { .. }
-                    | MemberResolution::InterfaceConcreteMethod { .. }
-                    | MemberResolution::External(_)
-            )
-        );
-        if !direct_or_checked {
-            self.pending_diags
-                .push(PendingDiag::RuntimeTypeArgumentOnIndirectCall { expr: call });
-        }
     }
 
     fn report_mounted_reserved_call(&mut self, call: ExprId, callee: ExprId) {
@@ -8135,13 +8043,14 @@ impl<'db> InferenceContext<'db> {
                 self.return_frames.push(ReturnFrame {
                     expected: ret_expectation.clone(),
                     candidates: Vec::new(),
+                    scoped_bindings_floor: self.scoped_type_bindings.len(),
                 });
                 let body_ty = match &ret_expectation {
                     // A void lambda DISCARDS its body's tail value, the
                     // same statement semantics void functions get (test
                     // bodies are synthesized `() -> void` lambdas).
                     Some(ret) if is_unit(ret) => {
-                        self.infer_expr(body, lambda_body, &Expectation::None)
+                        self.infer_expr(body, lambda_body, &Expectation::Discarded)
                     }
                     Some(ret) if !ret.has_error() => self.check_expr(body, lambda_body, ret),
                     _ => self.infer_expr(body, lambda_body, &Expectation::None),
@@ -8210,21 +8119,28 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
-        let throws_ty = written_throws.unwrap_or_else(|| {
-            if channel.is_empty() {
-                Ty::never()
-            } else {
-                // The INFERRED surface keeps literal grain (spec rule;
-                // TIR diverged by widening thrown literals here) - a
-                // body-inferred `throw "neg"` surfaces as `throws
-                // "neg"`, and the grain flows into effect params.
-                let tys: Vec<Ty> = channel
-                    .iter()
-                    .map(|(_, ty)| self.table.resolve_completely(ty))
-                    .collect();
-                self.union_of(&tys)
+        let throws_ty = match written_throws {
+            Some(declared) => declared,
+            None => {
+                // An INFERRED clause publishes every contribution as part
+                // of the lambda's type, so one typed by a binding the
+                // body's own blocks closed cannot stay.
+                let channel = self.drop_escaping_effects(channel);
+                if channel.is_empty() {
+                    Ty::never()
+                } else {
+                    // The INFERRED surface keeps literal grain (spec rule;
+                    // TIR diverged by widening thrown literals here) - a
+                    // body-inferred `throw "neg"` surfaces as `throws
+                    // "neg"`, and the grain flows into effect params.
+                    let tys: Vec<Ty> = channel
+                        .iter()
+                        .map(|(_, ty)| self.table.resolve_completely(ty))
+                        .collect();
+                    self.union_of(&tys)
+                }
             }
-        });
+        };
 
         let params: Box<[baml_type::interned::InferFunctionParamTy]> = def
             .params
@@ -8285,50 +8201,9 @@ impl<'db> InferenceContext<'db> {
                 // Declared bounds are plain; the obligation machinery's
                 // vocabulary is interned — ingest once per bound.
                 let bound = InferInterface::from_constraint(&bound);
-                let bound = &bound;
-                if self.scoped_type_bindings.is_empty() {
-                    let interface = baml_type::interned::InferInterface::new(
-                        bound.name.clone(),
-                        bound
-                            .generics
-                            .iter()
-                            .map(|generic| substitute_params(generic, instantiation))
-                            .collect(),
-                        bound
-                            .associated_types
-                            .iter()
-                            .map(|(name, ty)| (name.clone(), substitute_params(ty, instantiation)))
-                            .collect(),
-                    );
-                    self.register_obligation(obligations::Obligation::Implements {
-                        ty: arg.clone(),
-                        interface,
-                        at,
-                        not_concrete_rejects: (param.index() as usize) >= own_start,
-                    });
-                    continue;
-                }
-                let argument = substitute_params(
-                    &Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default())),
-                    instantiation,
-                );
-                let bound = substitute_interface_params(bound, instantiation);
-                let scoped_binding_dependent = self.scoped_type_bindings.iter().any(|binding| {
-                    ty_mentions_param(&argument, &binding.parameter)
-                        || interface_mentions_param(&bound, &binding.parameter)
-                });
-                if scoped_binding_dependent {
-                    self.result
-                        .call_plans
-                        .entry(at)
-                        .or_default()
-                        .deferred_checks
-                        .push(RuntimeCheck::Bound { argument, bound });
-                    continue;
-                }
                 self.register_obligation(obligations::Obligation::Implements {
                     ty: arg.clone(),
-                    interface: bound,
+                    interface: substitute_interface_params(&bound, instantiation),
                     at,
                     not_concrete_rejects: (param.index() as usize) >= own_start,
                 });
@@ -8359,27 +8234,9 @@ impl<'db> InferenceContext<'db> {
             };
             for bound in bounds {
                 let bound = InferInterface::from_constraint(bound);
-                let argument = substitute_params(
-                    &Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default())),
-                    instantiation,
-                );
-                let bound = substitute_interface_params(&bound, instantiation);
-                let scoped_binding_dependent = self.scoped_type_bindings.iter().any(|binding| {
-                    ty_mentions_param(&argument, &binding.parameter)
-                        || interface_mentions_param(&bound, &binding.parameter)
-                });
-                if scoped_binding_dependent {
-                    self.result
-                        .call_plans
-                        .entry(at)
-                        .or_default()
-                        .deferred_checks
-                        .push(RuntimeCheck::Bound { argument, bound });
-                    continue;
-                }
                 self.register_obligation(obligations::Obligation::Implements {
                     ty: arg.clone(),
-                    interface: bound,
+                    interface: substitute_interface_params(&bound, instantiation),
                     at,
                     not_concrete_rejects: (param.index() as usize) >= own_start,
                 });
@@ -10109,6 +9966,9 @@ impl<'db> InferenceContext<'db> {
         self.throws_channels.push(Vec::new());
         let base_ty = self.infer_expr(body, base, &branch_expectation);
         let channel = self.throws_channels.pop().expect("pushed above");
+        // An arm's binding would carry the fact's type past the block that
+        // scoped it.
+        let channel = self.drop_escaping_effects(channel);
         // catch discharges a SET of throw FACTS, never a value of a
         // union type (match scrutinizes values; catch removes facts):
         // each contribution finalizes and top-level unions split into
@@ -10721,6 +10581,9 @@ impl<'db> InferenceContext<'db> {
             // declared + inferred).
             declared => {
                 let contributions = self.throws_channels[0].clone();
+                // Every block has closed: a contribution still typed by a
+                // scoped binding would be published as the owner's surface.
+                let contributions = self.drop_escaping_effects(contributions);
                 let mut resolved: Vec<Ty> = contributions
                     .iter()
                     .map(|(_, ty)| self.finalize_ty(ty).into_ty())
@@ -11263,9 +11126,19 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::MountedPackageCallUnsupported { expr, path } => {
                         (TirTypeError::MountedPackageCallUnsupported { path }, expr)
                     }
-                    PendingDiag::RuntimeTypeArgumentOnIndirectCall { expr } => {
-                        (TirTypeError::RuntimeTypeArgumentOnIndirectCall, expr)
-                    }
+                    PendingDiag::ScopedTypeEscapesBlock {
+                        at,
+                        name,
+                        value,
+                        kind,
+                    } => (
+                        TirTypeError::ScopedTypeEscapesBlock {
+                            name,
+                            value: self.plain_finalized(&value),
+                            kind,
+                        },
+                        at,
+                    ),
                     PendingDiag::CannotConstructReflectionKind { expr, class_name } => (
                         TirTypeError::CannotConstructReflectionKind { class_name },
                         expr,
@@ -11943,52 +11816,6 @@ impl<'db> InferenceContext<'db> {
                 *ty = self.finalize_ty(ty).into_ty();
                 *emission_ty = self.finalize_emission_ty(emission_ty).into_ty();
             }
-            for check in &mut plan.deferred_checks {
-                match check {
-                    RuntimeCheck::Argument { expected, .. } => {
-                        *expected = self.finalize_ty(expected).into_ty();
-                    }
-                    RuntimeCheck::Bound { argument, bound } => {
-                        *argument = self.finalize_ty(argument).into_ty();
-                        *bound = InferInterface::new(
-                            bound.name.clone(),
-                            bound
-                                .generics
-                                .iter()
-                                .map(|ty| self.finalize_ty(ty).into_ty())
-                                .collect(),
-                            bound
-                                .associated_types
-                                .iter()
-                                .map(|(name, ty)| (name.clone(), self.finalize_ty(ty).into_ty()))
-                                .collect(),
-                        );
-                    }
-                }
-            }
-        }
-        for check in &mut result.runtime_checks {
-            match check {
-                RuntimeCheck::Argument { expected, .. } => {
-                    *expected = self.finalize_ty(expected).into_ty();
-                }
-                RuntimeCheck::Bound { argument, bound } => {
-                    *argument = self.finalize_ty(argument).into_ty();
-                    *bound = InferInterface::new(
-                        bound.name.clone(),
-                        bound
-                            .generics
-                            .iter()
-                            .map(|ty| self.finalize_ty(ty).into_ty())
-                            .collect(),
-                        bound
-                            .associated_types
-                            .iter()
-                            .map(|(name, ty)| (name.clone(), self.finalize_ty(ty).into_ty()))
-                            .collect(),
-                    );
-                }
-            }
         }
         for adjustments in result.expr_adjustments.values_mut() {
             for adjustment in adjustments.iter_mut() {
@@ -12413,6 +12240,13 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         };
+        // Every deposit was universe-checked, but a var-var chain can route
+        // a scoped parameter here through a deeper class that solved to it.
+        // There is no site to anchor a report on, so the class stays
+        // unsolved and reports as an unresolved type at its origin.
+        if self.table.escaping_scoped_param(var, &solution).is_some() {
+            return false;
+        }
         self.table.solve(var, solution);
         true
     }
@@ -12907,25 +12741,24 @@ fn external_target_path(target: &crate::callable::ExternalCallTarget) -> baml_ty
     baml_type::Name::new(path)
 }
 
-fn interface_mentions_param(interface: &InferInterface, param: &baml_type::ParamTy) -> bool {
-    interface
-        .generics
-        .iter()
-        .chain(interface.associated_types.iter().map(|(_, ty)| ty))
-        .any(|ty| ty_mentions_param(ty, param))
-}
+/// The index bit that marks a block-scoped `type T = …` parameter. Declared
+/// generic parameters are De Bruijn positions in a frame and never reach it;
+/// a scoped parameter's identity is a hash of its binding statement, and
+/// this bit keeps the two spaces disjoint.
+pub(crate) const SCOPED_PARAM_BIT: u32 = 0x8000_0000;
 
-fn replace_rigid_param(ty: &Ty, param: &baml_type::ParamTy, replacement: &Ty) -> Ty {
-    if matches!(ty.kind(), InferTy::TypeVar(candidate, _) if candidate == param) {
-        return replacement.clone();
-    }
+/// Every block-scoped parameter (`type T = …`, marked by
+/// [`SCOPED_PARAM_BIT`]) that `ty` mentions, in walk order.
+fn scoped_params_in(ty: &Ty, visit: &mut impl FnMut(&baml_type::ParamTy)) {
     if !ty.has_typevar() {
-        return ty.clone();
+        return;
     }
-    Ty::intern(
-        ty.kind()
-            .map_children(|child| replace_rigid_param(child, param, replacement)),
-    )
+    if let InferTy::TypeVar(param, _) = ty.kind()
+        && param.index() & SCOPED_PARAM_BIT != 0
+    {
+        visit(param);
+    }
+    baml_type::interned::for_each_child(ty.kind(), |child| scoped_params_in(child, visit));
 }
 
 /// [`substitute_params`] over every type an interface constraint carries.
@@ -13061,7 +12894,6 @@ impl<'db> InferenceContext<'db> {
             path_resolutions,
             call_plans,
             type_bindings,
-            runtime_checks,
             expr_adjustments,
             desugared_callees,
         } = working;
@@ -13117,10 +12949,6 @@ impl<'db> InferenceContext<'db> {
             type_bindings: type_bindings
                 .into_iter()
                 .map(|(stmt, binding)| (stmt, self.materialize_scoped_binding(binding)))
-                .collect(),
-            runtime_checks: runtime_checks
-                .into_iter()
-                .map(|check| self.materialize_runtime_check(check))
                 .collect(),
             expr_adjustments: expr_adjustments
                 .into_iter()
@@ -13206,14 +13034,13 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn materialize_call_plan(&mut self, plan: CallPlan<Ty, InferInterface>) -> CallPlan {
+    fn materialize_call_plan(&mut self, plan: CallPlan<Ty>) -> CallPlan {
         let CallPlan {
             bindings,
             type_args,
             own_offset,
             explicit,
             slots,
-            deferred_checks,
             runtime_id,
             target,
         } = plan;
@@ -13229,28 +13056,8 @@ impl<'db> InferenceContext<'db> {
                     emission_ty: self.materialize_ty(&emission_ty),
                 })
                 .collect(),
-            deferred_checks: deferred_checks
-                .into_iter()
-                .map(|check| self.materialize_runtime_check(check))
-                .collect(),
             runtime_id,
             target,
-        }
-    }
-
-    fn materialize_runtime_check(
-        &mut self,
-        check: RuntimeCheck<Ty, InferInterface>,
-    ) -> RuntimeCheck {
-        match check {
-            RuntimeCheck::Argument { arg, expected } => RuntimeCheck::Argument {
-                arg,
-                expected: self.materialize_ty(&expected),
-            },
-            RuntimeCheck::Bound { argument, bound } => RuntimeCheck::Bound {
-                argument: self.materialize_ty(&argument),
-                bound: self.materialize_interface(&bound),
-            },
         }
     }
 

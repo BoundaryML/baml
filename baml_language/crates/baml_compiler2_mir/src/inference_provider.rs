@@ -116,7 +116,6 @@ pub(crate) struct CallPlan {
     pub(crate) own_offset: usize,
     pub(crate) explicit: bool,
     pub(crate) slots: Vec<CallTypeArgPlan>,
-    pub(crate) deferred_checks: Vec<RuntimeCheck>,
     pub(crate) target: Option<ExternalCallTarget>,
     /// Hidden call metadata which is not part of the callee's parameter list.
     pub(crate) side_channels: CallSideChannels,
@@ -126,18 +125,6 @@ pub(crate) struct CallPlan {
 pub(crate) struct CallTypeArgPlan {
     pub(crate) ty: Tir2Ty,
     pub(crate) emission_ty: Tir2Ty,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum RuntimeCheck {
-    Argument {
-        arg: AstExprId,
-        expected: Tir2Ty,
-    },
-    Bound {
-        argument: Tir2Ty,
-        bound: baml_type::Interface,
-    },
 }
 
 /// One lexical `type T = …` binding: the rigid parameter MIR reserves a
@@ -246,7 +233,6 @@ pub(crate) struct ConvertedTables<'db> {
     path_member_resolutions: FxHashMap<AstExprId, Vec<MemberResolution<'db>>>,
     call_plans: FxHashMap<AstExprId, CallPlan>,
     type_bindings: FxHashMap<AstStmtId, ScopedTypeBinding>,
-    runtime_checks: Vec<RuntimeCheck>,
     function_coercions: FxHashMap<AstExprId, FunctionCoercion>,
     /// Condition expressions the checker marked for truthiness coercion
     /// (`Adjust::Truthy`, B-1563): lowering wraps the operand in the
@@ -307,10 +293,6 @@ impl<'db> ConvertedTables<'db> {
     }
     pub(crate) fn type_binding(&self, stmt: AstStmtId) -> Option<&ScopedTypeBinding> {
         self.type_bindings.get(&stmt)
-    }
-    #[allow(dead_code)]
-    pub(crate) fn runtime_checks(&self) -> &[RuntimeCheck] {
-        &self.runtime_checks
     }
     pub(crate) fn function_coercion(&self, expr: AstExprId) -> Option<&FunctionCoercion> {
         self.function_coercions.get(&expr)
@@ -401,11 +383,6 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                         emission_ty: slot.emission_ty.clone(),
                     })
                     .collect(),
-                deferred_checks: plan
-                    .deferred_checks
-                    .iter()
-                    .map(convert_runtime_check)
-                    .collect(),
                 target: plan.target.clone(),
                 side_channels: CallSideChannels {
                     runtime_id: plan.runtime_id,
@@ -417,11 +394,6 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         .type_bindings
         .iter()
         .map(|(&stmt, binding)| (stmt, convert_scoped_type_binding(binding)))
-        .collect();
-    out.runtime_checks = result
-        .runtime_checks
-        .iter()
-        .map(convert_runtime_check)
         .collect();
     for (&expr, adjustments) in &result.expr_adjustments {
         for adjustment in adjustments {
@@ -472,19 +444,6 @@ fn convert_scoped_type_binding(binding: &hir_infer::ScopedTypeBinding) -> Scoped
         source: match &binding.source {
             hir_infer::ScopedTypeSource::Runtime(operand) => ScopedTypeSource::Runtime(*operand),
             hir_infer::ScopedTypeSource::Static(ty) => ScopedTypeSource::Static(ty.clone()),
-        },
-    }
-}
-
-fn convert_runtime_check(check: &hir_infer::RuntimeCheck) -> RuntimeCheck {
-    match check {
-        hir_infer::RuntimeCheck::Argument { arg, expected } => RuntimeCheck::Argument {
-            arg: *arg,
-            expected: expected.clone(),
-        },
-        hir_infer::RuntimeCheck::Bound { argument, bound } => RuntimeCheck::Bound {
-            argument: argument.clone(),
-            bound: bound.clone(),
         },
     }
 }

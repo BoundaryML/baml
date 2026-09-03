@@ -1,0 +1,75 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:26:9]
+ 26 │         as_t<T>(1)
+    ·         ─────┬────
+    ·              ╰── this has type `T`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+    ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:34:5]
+ 34 │     as_t<T>(1)
+    ·     ─────┬────
+    ·          ╰── this has type `T`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+    ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:40:5]
+ 40 │     risky<T>(as_t<T>("x"), false)
+    ·     ────┬───
+    ·         ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block instead
+    ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:47:9]
+ 47 │         risky<T>(as_t<T>("x"), false)
+    ·         ────┬───
+    ·             ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block instead
+    ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:56:9]
+ 56 │         risky<T>(as_t<T>("x"), true)
+    ·         ────┬───
+    ·             ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block instead
+    ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:69:17]
+ 69 │         xs.push(as_t<T>(1))
+    ·                 ─────┬────
+    ·                      ╰── this has type `T`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+    ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:79:16]
+ 79 │         return as_t<T>("x")
+    ·                ──────┬─────
+    ·                      ╰── this has type `T`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+    ╰────
+
+  [type] E0171
+
+  × scoped runtime type `T` cannot leave the block that binds it
+    ╭─[scoped_type_escape.baml:87:12]
+ 87 │     return as_t<T>(1)
+    ·            ─────┬────
+    ·                 ╰── this has type `T`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+    ╰────

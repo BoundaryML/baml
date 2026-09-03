@@ -1,0 +1,44 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.Boom {
+  payload: T
+}
+class user.Boom$stream {
+  payload: T | null
+}
+function user.as_t(v: unknown) -> T  [expr] {
+  {  } match (v) { x: T => x, _ => throw "not a T" }
+}
+function user.body_value_against_a_narrower_return(t: reflect.Type) -> int  [expr] {
+  { type T = unreflect(t) } as_t(1)
+}
+function user.catch_outside_the_block(t: reflect.Type) -> int  [expr] {
+  { let n = { type T = unreflect(t) } risky(as_t("x"), true) catch (e) { _ => 0 } } n
+}
+function user.inferred_throws_publish_the_binding(t: reflect.Type) -> int  [expr] {
+  { type T = unreflect(t) } risky(as_t("x"), false)
+}
+function user.lambda_infers_its_own_clause(t: reflect.Type) -> unknown  [expr] {
+  { let f = () -> { { type T = unreflect(t) } risky(as_t("x"), false) } } f
+}
+function user.outer_container_takes_the_binding(t: reflect.Type) -> unknown  [expr] {
+  { let xs = []; { type T = unreflect(t) } xs.push(as_t(1)) } xs
+}
+function user.return_against_a_narrower_type(t: reflect.Type) -> int  [expr] {
+  { type T = unreflect(t); return as_t(1) }
+}
+function user.return_from_an_inferred_lambda(t: reflect.Type) -> unknown  [expr] {
+  { let f = () -> { { type T = unreflect(t); return as_t("x") } } } f
+}
+function user.risky(v: T, fail: bool) -> int  [expr] {
+  { if (fail) { throw user.Boom { payload: v } } } 0
+}
+function user.unannotated_block_value(t: reflect.Type) -> unknown  [expr] {
+  { let escaped = { type T = unreflect(t) } as_t(1) } escaped
+}
+
+--- captures ---
+lambda () in lambda_infers_its_own_clause: captures [t]
+lambda () in return_from_an_inferred_lambda: captures [t]

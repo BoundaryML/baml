@@ -1,4 +1,5 @@
-//! BEP-066 M-1/M-6/E-1/E-5 diagnostic consistency oracles.
+//! Diagnostic consistency oracles: the static checker and runtime
+//! reflection agree on codes and messages.
 
 use baml_compiler_diagnostics::Severity;
 use baml_tests::{
@@ -34,89 +35,6 @@ function main() -> unknown {
         diagnostic.1.contains("unreflect"),
         "diagnostic must name the required `unreflect` spelling: {diagnostic:?}"
     );
-}
-
-#[test]
-fn indirect_runtime_checked_call_is_rejected_before_emission() {
-    let rows = diagnostics(
-        r#"
-function main() -> int {
-  type T = unreflect(reflect.Type.of<string>());
-  let indirect = (value: T) => { 1 }
-  indirect("checked at runtime")
-}
-"#,
-    );
-    assert!(
-        rows.iter().any(|(code, message)| {
-            code == "E0010"
-                && message == "runtime-checked arguments are not supported on indirect calls"
-        }),
-        "expected the indirect-call runtime-type diagnostic, got {rows:?}"
-    );
-}
-
-#[test]
-fn optional_indirect_runtime_checked_call_is_rejected_before_emission() {
-    let rows = diagnostics(
-        r#"
-function main() -> int? {
-  type T = unreflect(reflect.Type.of<string>());
-  let indirect: ((value: T) -> int throws never)? = (value: T) => { 1 }
-  indirect?.("checked at runtime")
-}
-"#,
-    );
-    assert!(
-        rows.iter().any(|(code, message)| {
-            code == "E0010"
-                && message == "runtime-checked arguments are not supported on indirect calls"
-        }),
-        "expected the optional indirect-call runtime-type diagnostic, got {rows:?}"
-    );
-}
-
-#[tokio::test]
-async fn m6_runtime_bound_diagnostic_matches_static_oracle_before_call() {
-    let static_rows = diagnostics(
-        r#"
-interface Named { name string }
-function bounded<T extends Named>() -> int { 1 }
-function main() -> int { bounded<string>() }
-"#,
-    );
-    let static_diagnostic = static_rows
-        .iter()
-        .find(|(code, _)| code == "E0001")
-        .cloned()
-        .expect("static bound violation should produce E0001");
-
-    let output = baml_test!(
-        r#"
-interface Named { name string }
-function bounded<T extends Named>() -> int {
-  baml.sys.panic("callee body entered")
-}
-function main() -> string {
-  type T = unreflect(reflect.Type.of<string>())
-  let result = bounded<T>() catch (e) {
-    reflect.errors.CompilationError => {
-      e.diagnostics[0].code + "|" + e.diagnostics[0].message
-    }
-  }
-  let diagnostic = if result is string { result } else { "bound accepted" }
-  diagnostic
-}
-"#
-    );
-    let Ok(BexExternalValue::String(runtime)) = output.result else {
-        panic!("expected runtime diagnostic, got {:?}", output.result)
-    };
-    let (runtime_code, runtime_message) = runtime
-        .split_once('|')
-        .expect("runtime result should contain code and message");
-    assert_eq!(runtime_code, static_diagnostic.0);
-    assert_eq!(runtime_message, static_diagnostic.1);
 }
 
 #[tokio::test]

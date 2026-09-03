@@ -150,11 +150,16 @@ pub fn runtime_type_must_be_named() -> Diagnostic {
     )
 }
 
-/// E0010 — an indirect call cannot carry a deferred runtime argument check.
-pub fn runtime_type_argument_on_indirect_call() -> Diagnostic {
+/// E0171 — a value typed by a body-scoped `type T = …` binding would be
+/// observable outside the block that binds `T`. The binding re-executes on
+/// every pass through its block and may bind `T` to a different type each
+/// time, so a `T`-typed value that outlived the block could break the
+/// invariants of whatever it landed in. A value leaves a block only through
+/// a type that does not mention `T` (such as `unknown`).
+pub fn scoped_type_escapes_block(name: &str) -> Diagnostic {
     Diagnostic::error(
-        DiagnosticId::InvalidSyntax,
-        "runtime-checked arguments are not supported on indirect calls",
+        DiagnosticId::ScopedTypeEscapesBlock,
+        format!("scoped runtime type `{name}` cannot leave the block that binds it"),
     )
 }
 
@@ -282,9 +287,9 @@ mod tests {
                 "`runtime_t` is a value, not a type; bind its runtime type first with `type T = unreflect(runtime_t);` and write `T` here",
             ),
             (
-                runtime_type_argument_on_indirect_call(),
-                "E0010",
-                "runtime-checked arguments are not supported on indirect calls",
+                scoped_type_escapes_block("Out"),
+                "E0171",
+                "scoped runtime type `Out` cannot leave the block that binds it",
             ),
             (
                 duplicate_member(DuplicateMemberKind::Field, "Collision", "wire"),

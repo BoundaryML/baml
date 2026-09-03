@@ -21,39 +21,38 @@ fn user.f(t: reflect.Type, value: unknown) -> bool {
     let _0: bool // _0 // return
     let _1: reflect.Type // t // param
     let _2: unknown // value // param
-    let _3: unknown // result
-    let _4: bool
-    let _5: bool
-    let _6: bool
-    let _7: bool
+    let _3: unknown
+    let _4: T // x
+    let _5: T
+    let _6: T
+    let _7: reflect.Type
+    let _8: bool
 
     bb0: {
         bind_type(0, [Copy(Local(Local(1)))]);
-        _3 = call const fn user.accept<copy _1>(copy _2; runtime_type_check) -> [bb1];
+        _3 = copy _2;
+        _3 = narrow_bind copy _3 as TypeArgRef(0) -> [bb2, bb1];
     }
 
     bb1: {
-        _6 = is_type(copy _3, #0);
-        _5 = copy _6;
-        goto -> bb2;
+        _0 = const false;
+        goto -> bb4;
     }
 
     bb2: {
-        _4 = short_circuit(&&) copy _5 -> [eval: bb3, join: bb4];
+        _4 = copy _3;
+        _6 = copy _4;
+        _7 = load_type(#0);
+        _5 = call const fn user.accept<copy _7>(copy _6) -> [bb3];
     }
 
     bb3: {
-        _7 = runtime_is_type(copy _3, copy _1);
-        _4 = copy _7;
+        _8 = is_type(copy _5, #0);
+        _0 = copy _8;
         goto -> bb4;
     }
 
     bb4: {
-        _0 = copy _4;
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }

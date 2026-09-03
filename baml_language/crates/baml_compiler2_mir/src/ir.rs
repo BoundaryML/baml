@@ -157,10 +157,9 @@ pub struct RuntimeSignature {
     pub name: Option<String>,
     /// Display strings for the generic type parameters (`T extends Bound`).
     pub display_type_params: Vec<String>,
-    /// Runtime-checkable interface bounds, parallel to the callee frame's
-    /// De Bruijn generic parameter slots.  Kept separately from display text
-    /// so `unreflect(...)` calls can validate opaque runtime types before the
-    /// callee executes.
+    /// Interface bounds, parallel to the callee frame's De Bruijn generic
+    /// parameter slots. Kept as executable metadata (not display text) so
+    /// reflection and runtime specialization can check them.
     pub generic_param_bounds: Vec<Vec<RuntimeInterfaceBound>>,
     /// Display strings for the parameter types, parallel to `param_names`.
     pub display_param_types: Vec<String>,
@@ -456,10 +455,6 @@ pub enum Terminator<'db> {
         /// calls to generic functions where at least one type argument is
         /// threaded at the call site (explicit `<T>` or type-arg forwarding).
         ntypeargs: usize,
-        /// At least one explicit type argument was supplied through
-        /// `unreflect(...)`. The emitter encodes this on the call instruction so
-        /// the VM performs M-5/M-6 checks only for marker-instantiated calls.
-        runtime_type_check: bool,
         /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
         ///
         /// This is not part of ordinary call arity. Emitters push it above the
@@ -500,9 +495,6 @@ pub enum Terminator<'db> {
         /// Number of leading `args` entries that are method-level type arguments.
         /// Zero for a non-generic method.
         ntypeargs: usize,
-        /// Whether this call carries an `unreflect(...)` type argument and must
-        /// execute the runtime generic gate before entering the resolved method.
-        runtime_type_check: bool,
         /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
         runtime_id: Option<Operand<'db>>,
         /// Where to store the result.
@@ -929,7 +921,8 @@ pub enum Rvalue<'db> {
         method: String,
         /// Method-level type-argument OPERANDS from the reference site,
         /// appended to the resolved impl frame by the VM. Operands rather
-        /// than templates so a runtime type argument (`m<unreflect(t)>(…)`)
+        /// than templates so a scoped runtime type argument (`m<T>(…)` under
+        /// `type T = unreflect(t)`)
         /// flows like any other — a written static argument is materialized
         /// by the producer as a `LoadType` temp. The VM pops each as an
         /// `Object::Type` either way.

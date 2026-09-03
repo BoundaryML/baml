@@ -2343,12 +2343,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 callee,
                 args,
                 ntypeargs,
-                runtime_type_check,
                 runtime_id,
                 destination,
                 target,
                 unwind: _,
             } => {
+                let ntypeargs = u16::try_from(*ntypeargs).expect("ntypeargs fits in u16");
                 let call_span = self.current_debug_span;
                 let callee_item = pull_semantics::resolve_constant_function_item(
                     callee,
@@ -2368,18 +2368,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     let instruction = if runtime_id.is_some() {
                         Instruction::CallWithRuntimeId {
                             callee: global_callee,
-                            ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
-                                *ntypeargs,
-                                *runtime_type_check,
-                            ),
+                            ntypeargs,
                         }
                     } else {
                         Instruction::Call {
                             callee: global_callee,
-                            ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
-                                *ntypeargs,
-                                *runtime_type_check,
-                            ),
+                            ntypeargs,
                         }
                     };
                     // Pulling nested argument producers may install their own
@@ -2415,7 +2409,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 method,
                 args,
                 ntypeargs,
-                runtime_type_check,
                 runtime_id,
                 destination,
                 target,
@@ -2437,22 +2430,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
                 }
                 let nargs = args.len() - ntypeargs;
+                let nargs = u16::try_from(nargs).expect("nargs fits in u16");
+                let ntypeargs = u16::try_from(*ntypeargs).expect("ntypeargs fits in u16");
                 let instruction = if runtime_id.is_some() {
-                    Instruction::VirtualCallWithRuntimeId {
-                        nargs: u16::try_from(nargs).expect("nargs fits in u16"),
-                        ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
-                            *ntypeargs,
-                            *runtime_type_check,
-                        ),
-                    }
+                    Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs }
                 } else {
-                    Instruction::VirtualCall {
-                        nargs: u16::try_from(nargs).expect("nargs fits in u16"),
-                        ntypeargs: bex_vm_types::bytecode::encode_call_type_args(
-                            *ntypeargs,
-                            *runtime_type_check,
-                        ),
-                    }
+                    Instruction::VirtualCall { nargs, ntypeargs }
                 };
                 let inst = self.emit(instruction);
                 self.set_operand(inst, OperandMeta::Callable(method.clone()));

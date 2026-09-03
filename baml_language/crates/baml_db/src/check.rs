@@ -43,7 +43,7 @@ use baml_compiler_diagnostics::{
     ParseError, ToDiagnostic, runtime_type,
 };
 use baml_compiler2_hir::{file_semantic_index, package::PackageItems, scope::ScopeKind};
-use baml_compiler2_hir_ty::diagnostics::TirTypeError;
+use baml_compiler2_hir_ty::diagnostics::{ScopedTypeEscapeKind, TirTypeError};
 use baml_type::{QualifiedTypeName, Ty, TyRenderStrategy};
 use text_size::TextRange;
 
@@ -1560,6 +1560,20 @@ fn new_tir_diagnostic(
             .with_primary_span(span)
             .with_phase(DiagnosticPhase::Type);
     }
+    if let TirTypeError::ScopedTypeEscapesBlock { name, value, kind } = error {
+        let value = value.render_user_facing();
+        let label = match kind {
+            ScopedTypeEscapeKind::Value => format!(
+                "this has type `{value}`; a value leaves the block only through a type that does not mention `{name}`, such as `unknown`"
+            ),
+            ScopedTypeEscapeKind::Thrown => format!(
+                "this throws `{value}`, which would be published past the block; catch it inside the block instead"
+            ),
+        };
+        return runtime_type::scoped_type_escapes_block(name.as_str())
+            .with_primary(span, label)
+            .with_phase(DiagnosticPhase::Type);
+    }
     if let TirTypeError::CannotConstructBuiltinCompanion {
         class_name,
         companion,
@@ -1887,9 +1901,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::TypeIsNotGeneric { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::GenericFunctionValueNotSpecialized { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::WrongTypeArgArity { .. } => DiagnosticId::ArgumentCountMismatch,
-        TirTypeError::RuntimeTypeArgumentOnIndirectCall => {
-            runtime_type::runtime_type_argument_on_indirect_call().id
-        }
+        TirTypeError::ScopedTypeEscapesBlock { .. } => DiagnosticId::ScopedTypeEscapesBlock,
         // Optional chaining diagnostics
         TirTypeError::UnnecessaryOptionalChaining { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnnecessaryNullCoalesce { .. } => DiagnosticId::InvalidOperator,

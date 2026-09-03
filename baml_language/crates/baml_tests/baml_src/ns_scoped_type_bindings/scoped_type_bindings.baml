@@ -95,10 +95,72 @@ function risky<T>(v: T, fail: bool) -> int throws Boom<T> {
     0
 }
 
+// A test body's own `throws` clause is inferred, so a `Boom<Out>` it would
+// publish is caught inside the block instead.
 test "a scoped runtime type in the error channel runs" {
     let t = reflect.Type.of<string>()
     type Out = unreflect(t)
-    assert.equal(risky<Out>(as_t<Out>("x"), false), 0)
+    let outcome = risky<Out>(as_t<Out>("x"), false) catch (e) {
+        Boom<Out> => -1,
+        string => -2,
+    }
+    assert.equal(outcome, 0)
+}
+
+// What leaves a block. A value leaves only through a type that does not
+// mention the binding (`-> unknown`, an `unknown` annotation), and a thrown
+// type only through a catch inside the block.
+function leaves_as_unknown(t: reflect.Type) -> unknown {
+    type T = unreflect(t)
+    as_t<T>(1)
+}
+
+function published_through_an_annotation(t: reflect.Type) -> reflect.Type {
+    let boxed: unknown = {
+        type T = unreflect(t)
+        as_t<T>("a")
+    }
+    reflect.Type.of_value(boxed)
+}
+
+function caught_inside(t: reflect.Type) -> int throws never {
+    type T = unreflect(t)
+    risky<T>(as_t<T>("x"), true) catch (e) {
+        Boom<T> => 1,
+        string => 2,
+    }
+}
+
+// A binding's narrowing ends with its block: `v` reads as its declared
+// `unknown` again afterwards.
+function narrowing_ends_with_the_block(t: reflect.Type, v: unknown) -> bool {
+    {
+        type T = unreflect(t)
+        if (v is T) {
+            let narrowed: T = v
+            let _ = narrowed
+        }
+    }
+    v is string
+}
+
+// A `return` from inside the binding's scope leaves through the frame's
+// declared return type, exactly as a tail value leaves through its context.
+function returns_through_the_declared_type(t: reflect.Type, early: bool) -> unknown {
+    type T = unreflect(t)
+    if (early) { return as_t<T>(1) }
+    as_t<T>(2)
+}
+
+test "values and effects leave a block only through binding-free types" {
+    let int_t = reflect.Type.of<int>()
+    let string_t = reflect.Type.of<string>()
+    assert.is_true(reflect.Type.of_value(leaves_as_unknown(int_t)) == int_t)
+    assert.is_true(published_through_an_annotation(string_t) == string_t)
+    assert.equal(caught_inside(string_t), 1)
+    assert.is_true(narrowing_ends_with_the_block(string_t, "s"))
+    assert.is_true(reflect.Type.of_value(returns_through_the_declared_type(int_t, true)) == int_t)
+    assert.is_true(reflect.Type.of_value(returns_through_the_declared_type(int_t, false)) == int_t)
 }
 
 // The Agent scenario: the spec slot takes the bound name, and the program

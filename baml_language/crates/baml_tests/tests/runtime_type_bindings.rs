@@ -119,7 +119,7 @@ async fn scenario_four_pattern_two_mounts_a_runtime_type_as_a_static_name() {
 }
 
 #[tokio::test]
-async fn scoped_type_binding_evaluates_once_types_contracts_and_widens_on_escape() {
+async fn scoped_type_binding_evaluates_once_types_contracts_and_leaves_as_unknown() {
     let output = baml_test!(TYPE_BINDING_SOURCE);
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
@@ -142,45 +142,6 @@ function main() -> bool {
     reflect.Type.of<T>() == int_t
   }
   reflect.Type.of<T>() == string_t && inner && check(int_t)
-}
-"#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
-}
-
-#[tokio::test]
-async fn scoped_type_argument_without_value_args_enforces_runtime_bounds() {
-    let output = baml_test!(
-        r#"
-interface SomeInterface {
-  label string
-}
-
-function needs_bound<A extends SomeInterface>() -> string {
-  "ok"
-}
-
-function main() -> bool {
-  let witness = reflect.interface.implementation<SomeInterface>().field("label")
-  let conforming = reflect.class.new("Conforming", {
-    "label": reflect.Type.of<string>(),
-  }, implementations = [witness])
-  let nonconforming = reflect.class.new("Nonconforming", {
-    "other": reflect.Type.of<string>(),
-  })
-
-  let rejected = {
-    type T = unreflect(nonconforming.as_type());
-    let result = needs_bound<T>() catch (e) {
-      reflect.errors.CompilationError => e.diagnostics[0].code
-    }
-    result is string && result == "E0001"
-  }
-  let accepted = {
-    type T = unreflect(conforming.as_type());
-    needs_bound<T>() == "ok"
-  }
-  rejected && accepted
 }
 "#
     );

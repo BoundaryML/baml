@@ -2970,16 +2970,14 @@ impl<'db> LoweringContext<'db> {
 
     fn erase_compiler_only_ty(ty: Tir2Ty) -> Tir2Ty {
         match ty {
-            // BUG: `Error` here is NOT only "a diagnostic was emitted". Finalize
-            // also erases a still-free var to `Error` when a call is deferred to
-            // a runtime gate (`type T = unreflect(expr)`), which is well-typed
-            // source with no diagnostic — see
-            // `ns_runtime_type_binding_generic_calls`. Laundering both to the top
-            // type is what keeps that source compiling, and it is also what
-            // defuses `ResolvedAliases::convert`'s `unreachable!` on every MIR
-            // path. Fix by giving a runtime-gated slot its own representation
-            // (the deferred-slot marker `inferred_ty_to_template` wants too),
-            // then delete this arm so the guard can do its job.
+            // BUG: `Error` is an unrecoverable check's fill and must stay
+            // `Error` so downstream diagnostics stay suppressed; laundering it
+            // to the top type is what defuses `ResolvedAliases::convert`'s
+            // `unreachable!` on every MIR path. The one well-typed producer
+            // (a slot left unsolved for the runtime type gate, since removed)
+            // is gone, so every `Error` reaching here now carries a
+            // diagnostic; delete this arm once lowering of diagnosed bodies
+            // is guarded upstream, so the guard can do its job.
             Tir2Ty::Error { attr } => Tir2Ty::Unknown { attr },
             Tir2Ty::TypeVar(param, attr) if baml_type::is_synthetic_effect_param(param.name()) => {
                 Tir2Ty::Unknown { attr }
@@ -3425,7 +3423,7 @@ impl<'db> LoweringContext<'db> {
         if shape.takes_self {
             // The receiver road derives `Self` from the value, so it needs
             // only the interface VIEW (the static frame prefix); the method's
-            // own type args — runtime `unreflect` operands included — are
+            // own type args — scoped `type T = …` slots included — are
             // lowered by the virtual-call machinery itself.
             let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned() else {
                 return false;
@@ -3525,8 +3523,8 @@ impl<'db> LoweringContext<'db> {
     /// interface generics ++ associated slots` (no surface syntax can make
     /// those runtime — turbofish binds the method's OWN generics only), and
     /// the method's own type arguments as OPERANDS — written static args and
-    /// runtime args (`m<unreflect(t)>(…)`) alike, so neither shape can fall
-    /// off this road.
+    /// scoped runtime slots (`m<T>(…)` under `type T = unreflect(t)`) alike,
+    /// so neither shape can fall off this road.
     fn interface_item_slots(
         &mut self,
         expr_id: AstExprId,
@@ -3614,15 +3612,13 @@ impl<'db> LoweringContext<'db> {
     ) {
         let target = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        let runtime_type_check = self.call_requires_runtime_type_check(expr_id);
         let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
         match dest {
             Place::Local(_) => {
-                self.builder.call_with_runtime_type_check(
+                self.builder.call_with_type_args_and_runtime_id(
                     callee_op,
                     arg_operands,
                     0,
-                    runtime_type_check,
                     runtime_id_operand,
                     dest.clone(),
                     target,
@@ -3633,11 +3629,10 @@ impl<'db> LoweringContext<'db> {
             _ => {
                 let call_ty = self.expr_ty(expr_id);
                 let tmp = self.builder.temp(call_ty);
-                self.builder.call_with_runtime_type_check(
+                self.builder.call_with_type_args_and_runtime_id(
                     callee_op,
                     arg_operands,
                     0,
-                    runtime_type_check,
                     runtime_id_operand,
                     Place::local(tmp),
                     target,
@@ -7505,7 +7500,6 @@ impl<'db> LoweringContext<'db> {
             method,
             vec![lhs_op, rhs_op],
             /* ntypeargs */ 0,
-            /* runtime_type_check */ false,
             /* runtime_id */ None,
             bool_ty,
             unwind,
@@ -9446,7 +9440,6 @@ impl<'db> LoweringContext<'db> {
             call_type_arg_operands
         };
         let ntypeargs = type_arg_operands.len();
-        let runtime_type_check = self.call_requires_runtime_type_check(expr_id);
 
         // Prepend type-arg operands before the value-arg operands.
         // (For regular BAML calls, type args are leading so the callee's frame
@@ -9539,11 +9532,10 @@ impl<'db> LoweringContext<'db> {
             match &dest {
                 Place::Local(_) => {
                     let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
-                    self.builder.call_with_runtime_type_check(
+                    self.builder.call_with_type_args_and_runtime_id(
                         callee_operand,
                         all_arg_operands_for_call,
                         ntypeargs,
-                        runtime_type_check,
                         runtime_id_operand,
                         dest,
                         target,
@@ -9554,11 +9546,10 @@ impl<'db> LoweringContext<'db> {
                     let call_ty = self.expr_ty(expr_id);
                     let tmp = self.builder.temp(call_ty);
                     let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
-                    self.builder.call_with_runtime_type_check(
+                    self.builder.call_with_type_args_and_runtime_id(
                         callee_operand,
                         all_arg_operands_for_call,
                         ntypeargs,
-                        runtime_type_check,
                         runtime_id_operand,
                         Place::local(tmp),
                         target,
@@ -10103,12 +10094,9 @@ impl<'db> LoweringContext<'db> {
     /// than lowered from written syntax.
     ///
     /// Inference finalizes a slot it could not solve to an error-recovery
-    /// sentinel (`erase_infer` turns a still-free var into `Error`). That
-    /// happens on well-typed code whenever the call is deferred to a runtime
-    /// gate: a generic method called on a value whose type came from a
-    /// `type T = unreflect(...)` binding never solves its own slots
-    /// statically. Runtime lowering treats a sentinel as a compiler bug and
-    /// ICEs, so widen it to the top type first — the same answer the adjacent
+    /// sentinel (`erase_infer` turns a still-free var into `Error`), and
+    /// runtime lowering treats a sentinel as a compiler bug and ICEs, so
+    /// widen it to the top type first — the same answer the adjacent
     /// out-of-scope-type-variable case already gives.
     ///
     /// A type variable absent from `generic_params` is widened for the same
@@ -10121,15 +10109,13 @@ impl<'db> LoweringContext<'db> {
     /// EFFECT one, where the language's defaulting rule is `never`
     /// (`default_unsolved_effects_to_never`, which only sees params named
     /// `__effect_param_N` — a user-written `filter<E>(…) throws E` is missed).
-    /// Seeding `unknown` there makes the runtime gate report `mismatched
-    /// types` for e.g. `xs.filter(…)` where `xs: T[]` under such a binding.
     /// Fixing that needs the callee's declared params here, or effect-position
     /// classification for user-written params in inference; either way it is a
     /// wrong ANSWER rather than the ICE this guard removes.
     // BUG: widening an Error-recovery sentinel to `Unknown` launders a
     // compile error into the top type (an unrecoverable check must stay
-    // `Error` so downstream diagnostics stay suppressed). The deferred slot
-    // deserves its own marker realized at the runtime gate, not `unknown`.
+    // `Error` so downstream diagnostics stay suppressed). An unsolved slot
+    // is a compile error and should never reach lowering.
     fn inferred_ty_to_template(&self, ty: &Tir2Ty, generic_params: &[ParamTy]) -> TyTemplate {
         let widened = if baml_type_runtime::contains_error_recovery(ty)
             || baml_type_runtime::contains_typevar_where(ty, &|name| {
@@ -10301,7 +10287,8 @@ impl<'db> LoweringContext<'db> {
             // is the same "no static answer" case as an out-of-scope type
             // variable (see `inferred_ty_to_template`), so widen it here too.
             // BUG: same Error→Unknown laundering as `inferred_ty_to_template`;
-            // both sites should carry a deferred-slot marker instead.
+            // an unsolved slot is a compile error and should never reach
+            // lowering.
             if baml_type_runtime::contains_error_recovery(ty)
                 || baml_type_runtime::contains_typevar_where(ty, &|name| {
                     !caller_generic_params.iter().any(|param| param == name)
@@ -10324,27 +10311,6 @@ impl<'db> LoweringContext<'db> {
         // `reflect.Type.of<T>()` under an unknown-typed call still reflects
         // the honest top type.
         self.emit_frame_type_arg_ops(&inferred_type_args)
-    }
-
-    fn call_requires_runtime_type_check(&self, call_expr_id: AstExprId) -> bool {
-        use crate::inference_provider::RuntimeCheck;
-
-        let scope = self.tables.for_scope(self.current_metadata_scope);
-        let Some(plan) = scope.call_plan(call_expr_id) else {
-            return false;
-        };
-        if !plan.deferred_checks.is_empty() {
-            return true;
-        }
-
-        // Lexical runtime-type bindings defer checks in the body's durable
-        // ledger rather than in one call plan. Associate argument checks back
-        // to this call through its parameter bindings; a bound check is active
-        // for the current lexical frame as a whole.
-        scope.runtime_checks().iter().any(|check| match check {
-            RuntimeCheck::Argument { arg, .. } => plan.provided_args().any(|it| it == *arg),
-            RuntimeCheck::Bound { .. } => !self.runtime_type_binding_params.is_empty(),
-        })
     }
 
     /// Lower `foo<int>` (a `GenericApply` value). If the base resolves to a
@@ -11514,7 +11480,6 @@ impl<'db> LoweringContext<'db> {
             method.as_str(),
             all_args,
             ntypeargs,
-            self.call_requires_runtime_type_check(expr_id),
             runtime_id_operand,
             result_ty,
             unwind,
@@ -11549,7 +11514,6 @@ impl<'db> LoweringContext<'db> {
         method: &str,
         args: Vec<Operand<'db>>,
         ntypeargs: usize,
-        runtime_type_check: bool,
         runtime_id: Option<Operand<'db>>,
         result_ty: RuntimeTy,
         unwind: Option<BlockId>,
@@ -11563,12 +11527,11 @@ impl<'db> LoweringContext<'db> {
                 (Place::local(tmp), Some(projection))
             }
         };
-        self.builder.virtual_call_with_runtime_type_check(
+        self.builder.virtual_call_with_runtime_id(
             iface,
             method.to_string(),
             args,
             ntypeargs,
-            runtime_type_check,
             runtime_id,
             call_dest.clone(),
             resume,

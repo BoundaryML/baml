@@ -24,6 +24,18 @@ use baml_compiler2_hir::{
 use baml_type::{QualifiedTypeName, Ty};
 use text_size::TextRange;
 
+/// How a value typed by a block-scoped `type T = …` binding would leave its
+/// block (E0171); the two roads have different remedies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScopedTypeEscapeKind {
+    /// The block's value: it leaves only through a type that does not
+    /// mention `T`, such as `unknown`.
+    Value,
+    /// A thrown type an inferred `throws` clause or an enclosing `catch`
+    /// would publish: catch it inside the block instead.
+    Thrown,
+}
+
 /// The syntactic context an irrefutable-pattern rule fires in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IrrefutableContextKind {
@@ -422,10 +434,15 @@ pub enum TirTypeError {
         expected: usize,
         got: usize,
     },
-    /// Indirect call opcodes have no runtime-type-check operand, so allowing
-    /// one would either panic during debug emission or skip the check in
-    /// release builds.
-    RuntimeTypeArgumentOnIndirectCall,
+    /// A value typed by a body-scoped `type T = …` binding would be
+    /// observable outside the block that binds `T` (E0171): the block's
+    /// value, or a thrown type an inferred `throws` clause would publish.
+    /// `value` is the escaping type as it mentions `T`.
+    ScopedTypeEscapesBlock {
+        name: Name,
+        value: Ty,
+        kind: ScopedTypeEscapeKind,
+    },
     /// Type arguments were supplied for a type that is not generic
     /// (enums and type aliases cannot take type parameters).
     TypeIsNotGeneric { type_name: Name, kind: &'static str },
@@ -1539,10 +1556,10 @@ impl fmt::Display for TirTypeError {
                     "function `{callee_name}` expects {expected} type argument(s), got {got}"
                 )
             }
-            TirTypeError::RuntimeTypeArgumentOnIndirectCall => {
-                let diagnostic =
-                    baml_compiler_diagnostics::runtime_type::runtime_type_argument_on_indirect_call(
-                    );
+            TirTypeError::ScopedTypeEscapesBlock { name, .. } => {
+                let diagnostic = baml_compiler_diagnostics::runtime_type::scoped_type_escapes_block(
+                    name.as_str(),
+                );
                 f.write_str(diagnostic.message.as_str())
             }
             TirTypeError::TypeIsNotGeneric { type_name, kind } => {

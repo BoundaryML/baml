@@ -19,7 +19,10 @@
 //! ACI-equality cases (reordered/var-bearing unions in invariant positions)
 //! are the deferred-with-budget class that arrives with `Sub` constraints.
 
-use baml_type::interned::{InferTy, InferVar, Ty, for_each_child};
+use baml_type::{
+    ParamTy,
+    interned::{InferTy, InferVar, Ty, for_each_child},
+};
 use ena::unify as ut;
 use rustc_hash::FxHashMap;
 
@@ -70,12 +73,6 @@ pub enum VarPolicy {
     /// commits the slot to top - TIR's frozen-Evolving behavior at
     /// exactly the demanded case.
     ContainerSlot,
-    /// A dynamic hole standing in for a runtime type binding's rigid
-    /// parameter (`type T = unreflect(value)`) in a static-skeleton check:
-    /// the outer constructors are judged statically, the leaf relation by
-    /// MIR's runtime gate, so the hole must absorb whatever the actual
-    /// provides. Same derived behaviors as [`VarPolicy::ContainerSlot`].
-    RuntimeHole,
 }
 
 impl VarPolicy {
@@ -84,7 +81,7 @@ impl VarPolicy {
     /// ordinary var (a call instantiation) fails resolution instead.
     pub fn first_demand_commits(self) -> bool {
         match self {
-            VarPolicy::LambdaParam | VarPolicy::ContainerSlot | VarPolicy::RuntimeHole => true,
+            VarPolicy::LambdaParam | VarPolicy::ContainerSlot => true,
             VarPolicy::Value | VarPolicy::Effect => false,
         }
     }
@@ -95,7 +92,7 @@ impl VarPolicy {
     /// solution (and launder "couldn't infer" into `unknown`).
     pub fn absorbs_unknown(self) -> bool {
         match self {
-            VarPolicy::ContainerSlot | VarPolicy::RuntimeHole => true,
+            VarPolicy::ContainerSlot => true,
             VarPolicy::Value | VarPolicy::Effect | VarPolicy::LambdaParam => false,
         }
     }
@@ -105,10 +102,7 @@ impl VarPolicy {
     pub fn defaults_to_never(self) -> bool {
         match self {
             VarPolicy::Effect => true,
-            VarPolicy::Value
-            | VarPolicy::LambdaParam
-            | VarPolicy::ContainerSlot
-            | VarPolicy::RuntimeHole => false,
+            VarPolicy::Value | VarPolicy::LambdaParam | VarPolicy::ContainerSlot => false,
         }
     }
 
@@ -116,8 +110,7 @@ impl VarPolicy {
     /// a lambda parameter absorbed into a container/hole class takes that
     /// class's policy (its behavior set is a strict superset - real case:
     /// `let xs = []; xs.push(x)` inside a lambda unions the element slot
-    /// with the parameter). `ContainerSlot` and `RuntimeHole` share one
-    /// behavior set; the container spelling wins deterministically. An
+    /// with the parameter). An
     /// effect class joining any specialized class is not constructible
     /// under the current minting discipline (effects only ever unify with
     /// throws slots, which are ground, effect vars, or plain hole vars);
@@ -135,9 +128,7 @@ impl VarPolicy {
             }
             (VarPolicy::Value, other) | (other, VarPolicy::Value) => other,
             (VarPolicy::LambdaParam, other) | (other, VarPolicy::LambdaParam) => other,
-            (VarPolicy::ContainerSlot, VarPolicy::ContainerSlot | VarPolicy::RuntimeHole)
-            | (VarPolicy::RuntimeHole, VarPolicy::ContainerSlot) => VarPolicy::ContainerSlot,
-            (VarPolicy::RuntimeHole, VarPolicy::RuntimeHole) => VarPolicy::RuntimeHole,
+            (VarPolicy::ContainerSlot, VarPolicy::ContainerSlot) => VarPolicy::ContainerSlot,
         }
     }
 }
@@ -153,7 +144,15 @@ impl VarPolicy {
 /// `Unsolved` value, policy included, through the ena undo log.
 #[derive(Debug, Clone, PartialEq)]
 enum VarValue {
-    Unsolved(VarPolicy),
+    Unsolved {
+        policy: VarPolicy,
+        /// The block-scope depth the class was minted in (see
+        /// [`InferenceTable::bind_scoped_param`]): a solution may mention
+        /// a scoped `type T = …` parameter only from a depth at most this.
+        /// A var-var union keeps the shallower depth, since the merged
+        /// class is observable from the outer scope.
+        universe: u32,
+    },
     Solved(Ty),
 }
 
@@ -167,18 +166,34 @@ impl ut::UnifyValue for VarValue {
             ),
             // The solving moment (`bind`/`solve` union a solution into an
             // open class): the policy has done its job and retires.
-            (VarValue::Solved(ty), VarValue::Unsolved(_))
-            | (VarValue::Unsolved(_), VarValue::Solved(ty)) => VarValue::Solved(ty.clone()),
-            (VarValue::Unsolved(a), VarValue::Unsolved(b)) => VarValue::Unsolved(a.join(*b)),
+            (VarValue::Solved(ty), VarValue::Unsolved { .. })
+            | (VarValue::Unsolved { .. }, VarValue::Solved(ty)) => VarValue::Solved(ty.clone()),
+            (
+                VarValue::Unsolved {
+                    policy: a,
+                    universe: ua,
+                },
+                VarValue::Unsolved {
+                    policy: b,
+                    universe: ub,
+                },
+            ) => VarValue::Unsolved {
+                policy: a.join(*b),
+                universe: (*ua).min(*ub),
+            },
         })
     }
 }
 
 /// A structural mismatch: the innermost pair of types that failed to unify.
+/// `escaped` names the block-scoped parameter when the failure is a
+/// solution that would leave its block (`right` mentions it; `left` is the
+/// variable), rather than a shape mismatch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnifyError {
     pub left: Ty,
     pub right: Ty,
+    pub escaped: Option<ParamTy>,
 }
 
 /// Sub-constraint evidence accumulated on an unsolved variable's class:
@@ -207,6 +222,15 @@ pub struct InferenceTable {
     /// Bounds per CLASS, keyed by the root's index; var-var unions merge the
     /// two roots' entries.
     bounds: FxHashMap<u32, VarBounds>,
+    /// The current block-scope depth: how many `type T = …` bindings are
+    /// open. Fresh variables record it; see
+    /// [`InferenceTable::bind_scoped_param`]. Not part of a snapshot: the
+    /// walk opens and closes scopes symmetrically inside any probe.
+    universe: u32,
+    /// The depth each scoped parameter was bound at, by parameter index.
+    /// Append-only (a statement binds its parameter once), so it needs no
+    /// rollback either.
+    scoped_params: FxHashMap<u32, u32>,
 }
 
 impl InferenceTable {
@@ -220,7 +244,67 @@ impl InferenceTable {
     }
 
     fn new_var_of(&mut self, policy: VarPolicy) -> InferVar {
-        self.vars.new_key(VarValue::Unsolved(policy)).0
+        self.vars
+            .new_key(VarValue::Unsolved {
+                policy,
+                universe: self.universe,
+            })
+            .0
+    }
+
+    /// Opens the scope of a block-level `type T = …` binding: variables
+    /// minted from here until the matching
+    /// [`InferenceTable::close_scopes_to`] live one universe deeper and may
+    /// be solved to `param`; variables minted outside may not (rustc's
+    /// universe check on placeholders - an outer `let xs = []` must not
+    /// become `T[]` through a push inside the block).
+    pub fn bind_scoped_param(&mut self, param: &ParamTy) {
+        self.universe += 1;
+        self.scoped_params.insert(param.index(), self.universe);
+    }
+
+    /// Closes every scope deeper than `depth`, the enclosing block's count
+    /// of open bindings. The closed parameters stay registered at their
+    /// depth, so a later mention still counts as escaping.
+    pub fn close_scopes_to(&mut self, depth: u32) {
+        debug_assert!(depth <= self.universe, "scopes close innermost first");
+        self.universe = depth;
+    }
+
+    /// The first block-scoped parameter in `ty` (through solved variables)
+    /// that `var`'s class may not take as a solution: one bound deeper than
+    /// the class was minted, or one this table never saw bound. `None` for
+    /// a solved class - its solution was judged when it was made.
+    pub fn escaping_scoped_param(&mut self, var: InferVar, ty: &Ty) -> Option<ParamTy> {
+        fn walk(
+            scoped_params: &FxHashMap<u32, u32>,
+            universe: u32,
+            ty: &Ty,
+            escaped: &mut Option<ParamTy>,
+        ) {
+            if escaped.is_some() || !ty.has_typevar() {
+                return;
+            }
+            if let InferTy::TypeVar(param, _) = ty.kind()
+                && param.index() & super::SCOPED_PARAM_BIT != 0
+                && scoped_params
+                    .get(&param.index())
+                    .is_none_or(|depth| *depth > universe)
+            {
+                *escaped = Some(param.clone());
+                return;
+            }
+            for_each_child(ty.kind(), |child| {
+                walk(scoped_params, universe, child, escaped);
+            });
+        }
+        let VarValue::Unsolved { universe, .. } = self.vars.probe_value(VarKey(var)) else {
+            return None;
+        };
+        let ty = self.resolve_completely(ty);
+        let mut escaped = None;
+        walk(&self.scoped_params, universe, &ty, &mut escaped);
+        escaped
     }
 
     /// Allocates a fresh variable of `policy`, as a type.
@@ -233,7 +317,7 @@ impl InferenceTable {
     /// retires at solution, so a solved class has none to ask about.
     pub fn unsolved_policy(&mut self, var: InferVar) -> Option<VarPolicy> {
         match self.vars.probe_value(VarKey(var)) {
-            VarValue::Unsolved(policy) => Some(policy),
+            VarValue::Unsolved { policy, .. } => Some(policy),
             VarValue::Solved(_) => None,
         }
     }
@@ -247,7 +331,7 @@ impl InferenceTable {
     /// still lacks a solution.
     pub fn unsolved_root_var(&mut self, var: InferVar) -> Option<InferVar> {
         let root = self.vars.find(VarKey(var));
-        matches!(self.vars.probe_value(root), VarValue::Unsolved(_)).then_some(root.0)
+        matches!(self.vars.probe_value(root), VarValue::Unsolved { .. }).then_some(root.0)
     }
 
     /// Defaults every still-unsolved effect variable's class to `never`.
@@ -257,7 +341,7 @@ impl InferenceTable {
             .unwrap_or_else(|_| unreachable!("ena keys are u32-indexed"));
         for index in 0..len {
             let key = VarKey(InferVar::new(index));
-            if let VarValue::Unsolved(policy) = self.vars.probe_value(key)
+            if let VarValue::Unsolved { policy, .. } = self.vars.probe_value(key)
                 && policy.defaults_to_never()
             {
                 self.vars.union_value(key, VarValue::Solved(Ty::never()));
@@ -287,7 +371,7 @@ impl InferenceTable {
             .unwrap_or_else(|_| unreachable!("ena keys are u32-indexed"));
         for index in 0..len {
             let key = VarKey(InferVar::new(index));
-            let VarValue::Unsolved(policy) = self.vars.probe_value(key) else {
+            let VarValue::Unsolved { policy, .. } = self.vars.probe_value(key) else {
                 continue;
             };
             if !policy.defaults_to_never() {
@@ -313,7 +397,7 @@ impl InferenceTable {
             };
             match self.vars.probe_value(VarKey(*var)) {
                 VarValue::Solved(solution) => ty = solution,
-                VarValue::Unsolved(_) => return ty,
+                VarValue::Unsolved { .. } => return ty,
             }
         }
     }
@@ -452,7 +536,7 @@ impl InferenceTable {
         let mut out = Vec::new();
         for root in roots {
             let key = VarKey(InferVar::new(root));
-            if matches!(self.vars.probe_value(key), VarValue::Unsolved(_)) {
+            if matches!(self.vars.probe_value(key), VarValue::Unsolved { .. }) {
                 let bounds = self.bounds.get(&root).cloned().unwrap_or_default();
                 out.push((InferVar::new(root), bounds));
             }
@@ -484,6 +568,14 @@ impl InferenceTable {
             return Err(UnifyError {
                 left: var_ty.clone(),
                 right: ty.clone(),
+                escaped: None,
+            });
+        }
+        if let Some(param) = self.escaping_scoped_param(var, ty) {
+            return Err(UnifyError {
+                left: var_ty.clone(),
+                right: ty.clone(),
+                escaped: Some(param),
             });
         }
         self.vars
@@ -528,6 +620,7 @@ impl InferenceTable {
         let mismatch = || UnifyError {
             left: left.clone(),
             right: right.clone(),
+            escaped: None,
         };
         let pairs: Vec<(Ty, Ty)> = match (left.kind(), right.kind()) {
             (InferTy::Class(ln, la, lat), InferTy::Class(rn, ra, rat))
@@ -682,7 +775,8 @@ mod tests {
             err,
             UnifyError {
                 left: Ty::int(),
-                right: Ty::string()
+                right: Ty::string(),
+                escaped: None,
             }
         );
     }
@@ -1041,6 +1135,59 @@ mod tests {
         assert_eq!(policy, VarPolicy::ContainerSlot);
         assert!(policy.first_demand_commits());
         assert!(policy.absorbs_unknown());
+    }
+
+    #[test]
+    fn a_scoped_parameter_solves_only_variables_minted_in_its_scope() {
+        let mut table = InferenceTable::new();
+        let outer = table.new_var();
+        let param = ParamTy::new(
+            super::super::SCOPED_PARAM_BIT | 7,
+            baml_type::Name::new("T"),
+        );
+        let scoped = Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default()));
+
+        table.bind_scoped_param(&param);
+        let inner = table.new_var();
+        // Minted inside the binding's scope: may take the parameter.
+        table.unify(&Ty::infer_var(inner), &scoped).unwrap();
+        assert_eq!(table.shallow_resolve(&Ty::infer_var(inner)), scoped);
+        // Minted outside: may not, even under a constructor, and stays open.
+        let err = table
+            .unify(&Ty::infer_var(outer), &Ty::list(scoped.clone()))
+            .unwrap_err();
+        assert_eq!(err.escaped.as_ref(), Some(&param));
+        assert!(table.unsolved_root_var(outer).is_some());
+        assert_eq!(
+            table.escaping_scoped_param(outer, &Ty::list(scoped.clone())),
+            Some(param.clone())
+        );
+        assert_eq!(table.escaping_scoped_param(inner, &scoped), None);
+
+        // A var-var union is observable from the shallower scope, so the
+        // merged class takes the shallower universe.
+        let inner_alias = table.new_var();
+        table
+            .unify(&Ty::infer_var(inner_alias), &Ty::infer_var(outer))
+            .unwrap();
+        assert_eq!(
+            table.escaping_scoped_param(inner_alias, &scoped),
+            Some(param.clone())
+        );
+
+        // After the block closes, a fresh variable is outer again, and the
+        // closed parameter still counts as escaping.
+        table.close_scopes_to(0);
+        let later = table.new_var();
+        assert_eq!(
+            table.escaping_scoped_param(later, &scoped),
+            Some(param.clone())
+        );
+        // A rollback restores the universe with the rest of the var state.
+        let snapshot = table.snapshot();
+        table.unify(&Ty::infer_var(later), &Ty::int()).unwrap();
+        table.rollback_to(snapshot);
+        assert_eq!(table.escaping_scoped_param(later, &scoped), Some(param));
     }
 
     #[test]

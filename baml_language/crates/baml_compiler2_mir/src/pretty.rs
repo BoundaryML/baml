@@ -261,7 +261,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
             args,
             ntypeargs,
             runtime_id,
-            runtime_type_check,
             destination,
             target,
             unwind,
@@ -289,9 +288,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
                 wrote_arg = true;
             }
             write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
-            if *runtime_type_check {
-                write!(f, "; runtime_type_check")?;
-            }
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -304,7 +300,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
             args,
             ntypeargs,
             runtime_id,
-            runtime_type_check,
             destination,
             target,
             unwind,
@@ -331,9 +326,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
                 wrote_arg = true;
             }
             write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
-            if *runtime_type_check {
-                write!(f, "; runtime_type_check")?;
-            }
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -733,7 +725,6 @@ mod tests {
             callee: local_copy(1),
             args: Vec::new(),
             ntypeargs: 0,
-            runtime_type_check: false,
             runtime_id: Some(local_copy(9)),
             destination: Place::local(Local(0)),
             target: BlockId(1),
@@ -757,7 +748,6 @@ mod tests {
             method: "eq".to_string(),
             args: Vec::new(),
             ntypeargs: 0,
-            runtime_type_check: false,
             runtime_id: Some(local_copy(9)),
             destination: Place::local(Local(0)),
             target: BlockId(1),

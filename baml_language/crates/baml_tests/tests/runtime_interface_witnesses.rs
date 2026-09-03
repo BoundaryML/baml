@@ -1,5 +1,6 @@
-//! Executable oracles for structured runtime interface witnesses,
-//! bounded `unreflect`, open-schema rendering failures, and dynamic-rule GC.
+//! Executable oracles for structured runtime interface witnesses, scoped
+//! runtime types read back through their anchor interface, open-schema
+//! rendering failures, and dynamic-rule GC.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -74,7 +75,7 @@ async fn scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves() {
     base_url = "http://localhost:1234",
 );
 
-        function ExtractPerson<T extends PersonAnchor>(input: string) -> T {
+        function ExtractPerson<T>(input: string) -> T {
             client: TestClient
             prompt: `Extract a person from ${input}.\n${ctx.output_format()}`
         }
@@ -118,99 +119,6 @@ async fn scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves() {
         result.ends_with("<RESULT>Ada|ada@example.com|vim"),
         "typed virtual fields or runtime leaf failed: {result}"
     );
-}
-
-#[tokio::test]
-async fn bounded_unreflect_fails_before_rendering() {
-    let output = baml_test!(
-        r##"
-        interface PersonAnchor {
-            name: string
-            email: string
-        }
-
-        client TestClient = openai.ResponsesClient.new(
-    model = "gpt-4o-mini",
-    api_key = "test-key",
-    base_url = "http://localhost:1234",
-);
-
-        function ExtractPerson<T extends PersonAnchor>() -> T {
-            client: TestClient
-            prompt: `${ctx.output_format()}`
-        }
-
-        function main() -> string {
-            // If rendering ran first this empty enum would produce E0159.
-            let not_a_person = reflect.enum.new("NoPerson", [])
-            type NoPerson = unreflect(not_a_person)
-            let result = ExtractPerson@render_prompt<NoPerson>() catch (e) {
-                reflect.errors.CompilationError => {
-                    e.diagnostics[0].code + "|" + e.diagnostics[0].message
-                }
-            }
-            if result is string {
-                return result
-            }
-            return "bound did not throw"
-        }
-        "##
-    );
-
-    let BexExternalValue::String(result) =
-        output.result.expect("bound failure should be catchable")
-    else {
-        panic!("expected string result")
-    };
-    assert_eq!(
-        result.as_str(),
-        "E0001|mismatched types",
-        "render ran before the static-equivalent bound diagnostic: {result}"
-    );
-}
-
-#[tokio::test]
-async fn unreflect_argument_is_revalidated_against_the_runtime_type() {
-    let output = baml_test!(
-        r#"
-        interface PersonAnchor {
-            name: string
-            email: string
-        }
-
-        function Echo<T extends PersonAnchor>(value: T) -> T {
-            value
-        }
-
-        function main() -> string {
-            let witness = reflect.interface.implementation<PersonAnchor>()
-                .field("name")
-                .field("email")
-            let person_t = reflect.class.new("Person", {
-                "name": reflect.Type.of<string>(),
-                "email": reflect.Type.of<string>(),
-            }, implementations = [witness])
-            type Person = unreflect(person_t.as_type())
-            let result = Echo<Person>(42) catch (e) {
-                reflect.errors.CompilationError => {
-                    e.diagnostics[0].code + "|" + e.diagnostics[0].message
-                }
-            }
-            if result is string {
-                return result
-            }
-            return "argument check did not throw"
-        }
-        "#
-    );
-
-    let BexExternalValue::String(result) = output
-        .result
-        .expect("runtime argument mismatch should be catchable")
-    else {
-        panic!("expected string result")
-    };
-    assert_eq!(result.as_str(), "E0001|mismatched types");
 }
 
 #[tokio::test]
@@ -278,7 +186,7 @@ async fn equivalent_witnessed_definitions_render_and_parse_identically() {
     base_url = "http://localhost:1234",
 );
 
-        function ExtractPerson<T extends PersonAnchor>() -> T {
+        function ExtractPerson<T>() -> T {
             client: TestClient
             prompt: `${ctx.output_format()}`
         }
@@ -385,7 +293,7 @@ async fn witness_inherits_interface_default_methods() {
     base_url = "http://localhost:1234",
 );
 
-        function ExtractGreeter<T extends Greeter>(input: string) -> T {
+        function ExtractGreeter<T>(input: string) -> T {
             client: TestClient
             prompt: `Extract from ${input}.\n${ctx.output_format()}`
         }

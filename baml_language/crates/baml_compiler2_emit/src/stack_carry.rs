@@ -1753,7 +1753,6 @@ mod tests {
             callee: Operand::Constant(Constant::Null),
             args: vec![],
             ntypeargs: 0,
-            runtime_type_check: false,
             runtime_id: None,
             destination: Place::Local(right),
             target: BlockId(1),
