@@ -370,7 +370,8 @@ pub enum Instruction {
     SubFloat,
     /// `[left: Float, right: Float] → [Float]`
     MulFloat,
-    /// `[left: Float, right: Float] → [Float]` — throws `DivisionByZero` if right == 0.0
+    /// `[left: Float, right: Float] → [Float]` — IEEE-754; a zero divisor
+    /// yields `±inf`, or `NaN` for `0.0 / 0.0`. Never panics.
     DivFloat,
 
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`

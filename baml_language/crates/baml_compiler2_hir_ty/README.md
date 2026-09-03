@@ -402,7 +402,7 @@ diagnostic (S17).
   function annotation gives params `!error`. Fix: structurally_resolve
   the expectation.
 - A3 `dispatch_operator`/`operand_members` never expand aliases; also
-  await (false mismatch on aliased Future), spawn body/SpawnParams
+  await (false mismatch on aliased Future), spawn body/baml.spawn.Params
   (silent wrong future value), obligation subjects (alias -> permanent
   stall), `sub()` decomposition arms (alias skips invariant arms),
   upcast targets, `expectation_shape` (bounded vars don't adopt).

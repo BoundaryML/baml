@@ -1,24 +1,22 @@
-/// BEP-034 — concurrency via `spawn` / `await`.
-///
-/// `Future<T, E>` is the handle returned by `spawn { body }`. Awaiting
-/// a future blocks the current thread until the future settles; on
-/// settle, `await` either yields the value or re-throws the future's
-/// error.
-///
-/// Sys-op calls (e.g. `http.fetch`, `fs.read`) are not futures — they
-/// return their value directly and yield cooperatively under the hood.
-/// To run one concurrently, wrap it in `spawn { ... }`.
-///
-/// The class is opaque to user code — its fields are runtime-managed.
-/// All operations on a future go through the methods declared below.
-///
-/// State transitions: `Pending` → (`Ready` | `Error` | `Cancelled`).
-/// Once settled, a future never changes state again.
+//! Concurrency via `spawn` / `await`.
+//!
+//! `Future<T, E>` is the handle returned by `spawn { body }`. Awaiting
+//! a future blocks the current thread until the future settles; on
+//! settle, `await` either yields the value or re-throws the future's
+//! error.
+//!
+//! Sys-op calls (e.g. `http.fetch`, `fs.read`) are not futures — they
+//! return their value directly and yield cooperatively under the hood.
+//! To run one concurrently, wrap it in `spawn { ... }`.
+//!
+//! The class is opaque to user code — its fields are runtime-managed.
+//! All operations on a future go through the methods declared below.
+//!
+//! State transitions: `Pending` → (`Ready` | `Error` | `Cancelled`).
+//! Once settled, a future never changes state again.
 
-/// Surface enumeration mirroring the runtime's `bex_vm_types::FutureRead`
-/// states. Used by `Future.state(self)` to expose the settle status of
-/// a future to BAML code.
-enum FutureState {
+/// The settle status of a future, as reported by `Future.state`.
+enum State {
     Pending,
     Ready,
     Error,
@@ -61,10 +59,10 @@ class Future<T, E> {
         $rust_function
     }
 
-    /// Return the current state of the future as a [`FutureState`]
+    /// Return the current state of the future as a [`State`]
     /// variant.
     //baml:mut_vm
-    function state(self) -> FutureState throws never {
+    function state(self) -> State throws never {
         $rust_function
     }
 }
@@ -136,7 +134,7 @@ class AllFailed<E> {
     errors: E[],
 }
 
-/// BEP-034 internal primitive: suspend until the FIRST of `futures` settles —
+/// (internal) BEP-034 internal primitive: suspend until the FIRST of `futures` settles —
 /// whether it succeeds, fails, or is cancelled — and return its index in input
 /// order. Compiles to a dedicated `AwaitAny` suspend point (it is `await` over
 /// many futures), and is the building block for `race` and `any`. The inputs
@@ -240,10 +238,20 @@ function any<T, Err>(
 }
 
 /// Run `body` under a deadline.
+///
+/// # Throws
+///
+/// - `baml.errors.Timeout` if `limit` elapses first.
+/// - whatever `body` throws.
+///
+/// # Panics
+///
+/// - `baml.panics.Cancelled` re-raised, when the cancellation came from
+///   somewhere other than this deadline.
 function with_timeout<T, E>(
     limit: baml.time.Duration,
     body: () -> T throws E,
-) -> T throws E | baml.errors.Timeout | baml.panics.Cancelled {
+) -> T throws E | baml.errors.Timeout {
     let token = baml.spawn.CancelToken.new();
     let work = spawn with baml.spawn.options(cancel = token) { body() };
     let deadline = spawn {

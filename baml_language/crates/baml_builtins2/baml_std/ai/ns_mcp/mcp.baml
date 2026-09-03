@@ -2,14 +2,14 @@
 // primitives (baml.sys.start_process, root.raw_tool), not part of
 // ai: the core namespace carries no protocol knowledge.
 //
-// One McpConnection is one server child process speaking JSON-RPC 2.0 over
+// One Connection is one server child process speaking JSON-RPC 2.0 over
 // stdio, one message per line. tools() projects the server's catalog into
 // root.Tool values whose handlers proxy tools/call, so MCP calls are
 // executed by the runner, journaled as ToolRequested/ToolCompleted, and
 // visible to on_event — with any client.
 // Mirrors _planv2/pages/03_how_to/06_use_mcp_tools_with_any_client.md.
 
-// One JSON-RPC message as one line. Pure; tested with literal values.
+/// One JSON-RPC message as one line. Pure; tested with literal values.
 function rpc_line(id: int?, method: string, params: map<string, unknown>?) -> string {
     let m: map<string, unknown> = { "jsonrpc": "2.0", "method": method };
     if let i: int = id {
@@ -21,21 +21,21 @@ function rpc_line(id: int?, method: string, params: map<string, unknown>?) -> st
     baml.json.stringify(baml.json.to_json(m))
 }
 
-class McpConnection {
+class Connection {
     server_name: string,
     p: baml.sys.Process,
     out: baml.sys.ReadPipeLines,
     timeout_ms: int,
     next_id: int,
 
-    // Spawn the server and perform the initialize handshake. The connection
-    // is live until close(); the caller owns the lifetime.
+    /// Spawn the server and perform the initialize handshake. The connection
+    /// is live until close(); the caller owns the lifetime.
     function connect(
         name: string,
         command: string,
         args: string[],
         timeout_ms: int = 30000,
-    ) -> McpConnection {
+    ) -> Connection {
         let p = baml.sys.start_process(
             command,
             args,
@@ -49,7 +49,7 @@ class McpConnection {
                 }
             },
         };
-        let conn = McpConnection {
+        let conn = Connection {
             server_name: name,
             p: p,
             out: p.stdout.lines(),
@@ -82,8 +82,8 @@ class McpConnection {
         };
     }
 
-    // One request/response round-trip. Server notifications and unrelated
-    // ids are skipped; a JSON-RPC error object throws.
+    /// (internal) One request/response round-trip. Server notifications and unrelated
+    /// ids are skipped; a JSON-RPC error object throws.
     function _request(self, method: string, params: map<string, unknown>) -> json {
         let id = self.next_id;
         self.next_id += 1;
@@ -147,9 +147,9 @@ class McpConnection {
         }
     }
 
-    // The server's catalog as ordinary tools. Each tool's inputSchema is
-    // already JSON Schema, so it carries into Tool.input_schema unchanged;
-    // the handler proxies tools/call over this connection.
+    /// The server's catalog as ordinary tools. Each tool's inputSchema is
+    /// already JSON Schema, so it carries into Tool.input_schema unchanged;
+    /// the handler proxies tools/call over this connection.
     function tools(self) -> root.tools.Tool[] {
         let result = self._request("tools/list", {});
         let out: root.tools.Tool[] = [];
@@ -175,8 +175,8 @@ class McpConnection {
         out
     }
 
-    // One tools/call. Text content items join as the tool's result; an
-    // isError result throws, which the runner journals as ToolFailed.
+    /// One tools/call. Text content items join as the tool's result; an
+    /// isError result throws, which the runner journals as ToolFailed.
     function call_tool(self, name: string, args: map<string, unknown>) -> string {
         let params: map<string, unknown> = { "name": name, "arguments": args };
         let result = self._request("tools/call", params);

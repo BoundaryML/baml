@@ -55,9 +55,6 @@ pub enum LlmOpError {
         actual: String,
     },
 
-    #[error("Render prompt error: {0}")]
-    RenderPrompt(String),
-
     #[error("Parse response error: {0}")]
     ParseResponseError(String),
 
@@ -66,12 +63,6 @@ pub enum LlmOpError {
 
     #[error("SAP error: {0}")]
     SapError(::bex_sap::deserializer::coercer::ParsingError),
-
-    #[error("{0}")]
-    Other(String),
-
-    #[error("Not implemented: {message}")]
-    NotImplemented { message: String },
 }
 
 impl From<LlmOpError> for ::sys_types::VmRustFnError {
@@ -82,10 +73,6 @@ impl From<LlmOpError> for ::sys_types::VmRustFnError {
                     message: format!("expected {expected}, got {actual}"),
                 }
             }
-            LlmOpError::RenderPrompt(msg) => {
-                ::sys_types::VmBamlError::RenderPrompt { message: msg }
-            }
-            LlmOpError::Other(msg) => ::sys_types::VmBamlError::DevOther { message: msg },
             LlmOpError::ParseResponseError(e) => ::sys_types::VmBamlError::LlmClient { message: e },
             LlmOpError::JsonishError(e) => ::sys_types::VmBamlError::LlmClient {
                 message: e.to_string(),
@@ -93,9 +80,6 @@ impl From<LlmOpError> for ::sys_types::VmRustFnError {
             LlmOpError::SapError(e) => ::sys_types::VmBamlError::LlmClient {
                 message: e.to_string(),
             },
-            LlmOpError::NotImplemented { message } => {
-                ::sys_types::VmBamlError::NotImplemented { message }
-            }
         };
         baml.into()
     }
@@ -163,8 +147,8 @@ mod tests {
 
     /// A parse failure must reach BAML as `LlmClient`, which is what
     /// `ai.errors.normalize` classifies into `ai.errors.ParseFailed`. Mapping
-    /// it to `DevOther` instead would make a provider's bad answer look like an
-    /// internal defect and escape the client error taxonomy.
+    /// it to a generic internal error instead would make a provider's bad
+    /// answer look like an engine defect and escape the client error taxonomy.
     #[test]
     fn parse_response_error_maps_to_llm_client() {
         let mapped: ::sys_types::VmRustFnError =

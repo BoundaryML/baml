@@ -15,18 +15,18 @@
 // receiver's class-level type-args are misinterpreted as method-level
 // type-args of the static callee, producing
 // "function `from_json` expects 0 type argument(s), got 1".
-function decode_root(j: baml.json.json) -> root.fixtures.json_cross_namespace_static_call.pkg.inner.Box<int> throws baml.json.JsonDecodeError {
+function decode_root(j: baml.json.json) -> root.fixtures.json_cross_namespace_static_call.pkg.inner.Box<int> throws baml.json.DecodeError {
     root.fixtures.json_cross_namespace_static_call.pkg.inner.Box<int>.from_json(j)
 }
 
 // Same generic path, second class — both desugar to `baml.json.to<AutoBox<int>>(j)`.
-function decode_auto(j: baml.json.json) -> root.fixtures.json_cross_namespace_static_call.pkg.inner.AutoBox<int> throws baml.json.JsonDecodeError {
+function decode_auto(j: baml.json.json) -> root.fixtures.json_cross_namespace_static_call.pkg.inner.AutoBox<int> throws baml.json.DecodeError {
     root.fixtures.json_cross_namespace_static_call.pkg.inner.AutoBox<int>.from_json(j)
 }
 
 // Non-generic qualified PATH receiver: `root.fixtures.json_cross_namespace_static_call.pkg.inner.Plain.from_json(j)` parses
 // as a flat `Expr::Path` (no type-args), exercising the Path branch of the sugar's
 // receiver-type lookup.
-function decode_plain(j: baml.json.json) -> root.fixtures.json_cross_namespace_static_call.pkg.inner.Plain throws baml.json.JsonDecodeError {
+function decode_plain(j: baml.json.json) -> root.fixtures.json_cross_namespace_static_call.pkg.inner.Plain throws baml.json.DecodeError {
     root.fixtures.json_cross_namespace_static_call.pkg.inner.Plain.from_json(j)
 }

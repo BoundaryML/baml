@@ -2,7 +2,7 @@
 // request-body merging, and journal sanitization. Nothing here is part of the
 // public ai surface.
 
-// A credential value, or `null` when it is blank (see `ai.wire.resolve_credential`).
+/// (internal) A credential value, or `null` when it is blank (see `ai.wire.resolve_credential`).
 function _configured(value: string) -> string? {
     if (value.trim() == "") {
         null
@@ -11,8 +11,8 @@ function _configured(value: string) -> string? {
     }
 }
 
-// Replace the value that follows each `marker` with `REDACTED`, up to the first
-// delimiter that can end a query value inside a rendered error string.
+/// (internal) Replace the value that follows each `marker` with `REDACTED`, up to the first
+/// delimiter that can end a query value inside a rendered error string.
 function _redact_after(text: string, marker: string) -> string {
     let out = "";
     let rest = text;
@@ -43,8 +43,8 @@ function _redact_value_end(tail: string) -> int {
     cut
 }
 
-// Recursive merge of one patch value into one base value. Public entry point
-// is `ai.wire.merge_request_body`; this is the arm that recurses on objects.
+/// (internal) Recursive merge of one patch value into one base value. Public entry point
+/// is `ai.wire.merge_request_body`; this is the arm that recurses on objects.
 function _merge_json(base: baml.json.json, patch: baml.json.json) -> baml.json.json {
     match (patch) {
         let patch_object: map<string, baml.json.json> => {
@@ -83,14 +83,11 @@ function _merge_json(base: baml.json.json, patch: baml.json.json) -> baml.json.j
     }
 }
 
-// The blocks of one assistant turn that can still go on the wire.
-// Reasoning survives only for the client that produced it; empty and
-// whitespace-only text blocks are dropped (Anthropic rejects them outright,
-// and no provider needs them).
-function _wire_blocks(
-    content: root.content.Block[],
-    keep_reasoning: bool,
-) -> root.content.Block[] {
+/// (internal) The blocks of one assistant turn that can still go on the wire.
+/// Reasoning survives only for the client that produced it; empty and
+/// whitespace-only text blocks are dropped (Anthropic rejects them outright,
+/// and no provider needs them).
+function _wire_blocks(content: root.content.Block[], keep_reasoning: bool) -> root.content.Block[] {
     let out: root.content.Block[] = [];
     for (let block in content) {
         match (block) {
@@ -119,10 +116,10 @@ function _wire_blocks(
     out
 }
 
-// Close every tool call still awaiting a result, in request order, and reset
-// the pending list. `out` and `pending` are mutated in place. The repair is a
-// FAILED result rather than a successful empty one: the model must be able to
-// tell that the call did not run.
+/// (internal) Close every tool call still awaiting a result, in request order, and reset
+/// the pending list. `out` and `pending` are mutated in place. The repair is a
+/// FAILED result rather than a successful empty one: the model must be able to
+/// tell that the call did not run.
 function _flush_orphaned_calls(out: root.events.Event[], pending: string[]) -> void {
     for (let id in pending) {
         out.push(root.events.ToolFailed { id: id, message: "No result provided" });
@@ -130,7 +127,7 @@ function _flush_orphaned_calls(out: root.events.Event[], pending: string[]) -> v
     pending.clear();
 }
 
-// Mark one tool call answered.
+/// (internal) Mark one tool call answered.
 function _resolve_pending_call(pending: string[], id: string) -> void {
     if let index: int = pending.index_of(id) {
         let _ = pending.remove_at(index);

@@ -1,0 +1,102 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function test_runners.$init_test_ns_test_runners_runners(registry: testing.TestCollector) -> null {
+    call testing.Sequential
+    store_var _4
+    load_var registry
+    load_const "root.test_runners"
+    load_const "retry"
+    make_closure .<lambda($init_test_ns_test_runners_runners, 0)>, 0
+    load_var _4
+    call testing.TestCollector.register_test_set_at
+    pop 1
+    call testing.Sequential
+    store_var _7
+    load_var registry
+    load_const "root.test_runners"
+    load_const "retry exhausted"
+    make_closure .<lambda($init_test_ns_test_runners_runners, 3)>, 0
+    load_var _7
+    call testing.TestCollector.register_test_set_at
+    pop 1
+    call testing.Sequential
+    store_var _10
+    load_var registry
+    load_const "root.test_runners"
+    load_const "quorum"
+    make_closure .<lambda($init_test_ns_test_runners_runners, 6)>, 0
+    load_var _10
+    call testing.TestCollector.register_test_set_at
+    pop 1
+    call testing.Sequential
+    store_var _13
+    load_var registry
+    load_const "root.test_runners"
+    load_const "quorum shortfall"
+    make_closure .<lambda($init_test_ns_test_runners_runners, 9)>, 0
+    load_var _13
+    call testing.TestCollector.register_test_set_at
+    pop 1
+    load_const 0.5
+    call testing.PassRate
+    store_var _16
+    load_var registry
+    load_const "root.test_runners"
+    load_const "pass rate tolerates a minority"
+    make_closure .<lambda($init_test_ns_test_runners_runners, 12)>, 0
+    load_var _16
+    call testing.TestCollector.register_test_set_at
+    pop 1
+    call testing.FailFast
+    load_const 1
+    call user.test_runners.expect_set_fail
+    store_var _19
+    load_var registry
+    load_const "root.test_runners"
+    load_const "fail fast stops at the first failure"
+    make_closure .<lambda($init_test_ns_test_runners_runners, 15)>, 0
+    load_var _19
+    call testing.TestCollector.register_test_set_at
+    pop 1
+    call testing.Sequential
+    store_var _23
+    load_var registry
+    load_const "root.test_runners"
+    load_const "sequential preserves order"
+    make_closure .<lambda($init_test_ns_test_runners_runners, 18)>, 0
+    load_var _23
+    call testing.TestCollector.register_test_set_at
+    pop 1
+    load_const null
+    return
+}
+
+function test_runners.expect_fail(inner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_deref ?1
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_deref ?1
+
+  L0:
+    load_var inner
+    make_closure .<lambda(expect_fail, 0)>, 1
+    return
+}
+
+function test_runners.expect_set_fail(inner: (testing.TestSetChild[]) -> testing.TestSetReport throws never, ran: int) -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var2 1 2
+    make_closure .<lambda(expect_set_fail, 0)>, 2
+    return
+}

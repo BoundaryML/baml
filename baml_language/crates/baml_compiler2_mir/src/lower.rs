@@ -5692,7 +5692,7 @@ impl<'db> LoweringContext<'db> {
         let mut shared_error: Option<Local> = None;
         // BEP-042 cause chain: a throw inside a defer pad — a sibling defer that
         // throws while the scope is already unwinding — is "during handling of"
-        // the in-flight error. All pads in this block share one ErrorContext
+        // the in-flight error. All pads in this block share one baml.errors.Context
         // slot; the throw funnel materializes the in-flight error into it when
         // an error reaches a pad, and the next sibling defer's throw chains onto
         // it. Lazily declared alongside `shared_error`.
@@ -5740,7 +5740,7 @@ impl<'db> LoweringContext<'db> {
                         handler: pad,
                         // handler_body and body_blocks are filled in once the
                         // pad bodies are lowered (below). `stack_trace_local`
-                        // holds the in-flight error's ErrorContext so a sibling
+                        // holds the in-flight error's baml.errors.Context so a sibling
                         // defer that throws while unwinding chains onto it
                         // (BEP-042 cause chain).
                         handler_body: Vec::new(),
@@ -6111,7 +6111,7 @@ impl<'db> LoweringContext<'db> {
                 // `AstStmt::Throw`) rather than a static jump to
                 // `catch_context.unwind_target`. The funnel computes the
                 // BEP-042 cause chain (`find_cause_context`) and materializes
-                // the destination handler's `ErrorContext`; a static goto
+                // the destination handler's `baml.errors.Context`; a static goto
                 // bypasses both, so a `throw` in expression position inside a
                 // `defer` region (or a `catch` arm/base) would drop its cause
                 // and leave a bound `ctx` unmaterialized (B-611). The exception
@@ -6228,9 +6228,9 @@ impl<'db> LoweringContext<'db> {
         };
 
         // BEP-034 middleware: with transformers present, package the body
-        // closure + name into a `baml.spawn.SpawnParams` instance, apply each
+        // closure + name into a `baml.spawn.Params` instance, apply each
         // `with` expression to it left-to-right (each is a function
-        // `(SpawnParams<T, E>) -> SpawnParams<U, F>`), and hand the FINAL
+        // `(Params<T, E>) -> Params<U, F>`), and hand the FINAL
         // params to the spawn as the config operand. The engine reads
         // body/name/group/cancel/detach from its fields — a transformer may
         // have replaced any of them, including the body. Fields are built in
@@ -6246,7 +6246,7 @@ impl<'db> LoweringContext<'db> {
                 Place::Local(params_local),
                 Rvalue::Aggregate {
                     kind: AggregateKind::Class {
-                        name: "baml.spawn.SpawnParams".to_string(),
+                        name: "baml.spawn.Params".to_string(),
                         type_arg_templates: Vec::new(),
                     },
                     fields: vec![
@@ -8281,7 +8281,7 @@ impl<'db> LoweringContext<'db> {
     /// `implements baml.ToJson` (a bare one is banned), handled by the dispatch
     /// paths in `lower_call`. `baml.json.from` honors any `baml.ToJson` override via
     /// its runtime shim, so it matches a real call. Unlike `string.from` it throws
-    /// `JsonSerializationError`, so the call's unwind target carries the throw.
+    /// `SerializationError`, so the call's unwind target carries the throw.
     /// Returns `true` (and emits the call) when it handled the expression.
     fn try_lower_to_json_fallback(
         &mut self,
@@ -9092,7 +9092,7 @@ impl<'db> LoweringContext<'db> {
                     _ => self.tir_expr_type(self.expr_metadata_key(*base)).is_some(),
                 };
                 // Check if the resolved method expects a `self` receiver.
-                // Static methods (e.g. ParseCache.new) have no `self` param
+                // Static methods (e.g. _ParseCache._new) have no `self` param
                 // and must not get the class reference prepended as an argument.
                 let method_takes_self = {
                     self.tir_resolution(self.expr_metadata_key(callee))
@@ -10144,7 +10144,7 @@ impl<'db> LoweringContext<'db> {
         // args synthesized by PPIR companions reference `*$stream` classes
         // (e.g. `parse<Payload$stream | null, Payload>`), which only exist in
         // the PPIR-expanded item universe. Resolving against HIR's original
-        // items lowered them to `Unknown` → `Void` and broke `ParseCache.new`
+        // items lowered them to `Unknown` → `Void` and broke `_ParseCache._new`
         // at runtime.
         let pkg_items = baml_compiler2_ppir::package_items(self.db, pkg_id);
         lower_expr_in_scope(
@@ -10928,7 +10928,7 @@ impl<'db> LoweringContext<'db> {
     ) {
         let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
         // Prefer the explicitly written type name. If absent (e.g., when the
-        // type is a qualified path like `baml.errors.DevOther`), fall back to
+        // type is a qualified path like `baml.errors.Io`), fall back to
         // the TIR-inferred type to get the short class name.
         //
         // We also extract a `TypeName` for looking up fields in `class_fields`,
@@ -15825,15 +15825,23 @@ fn lower_function_impl<'db>(
             // from the stack.
             let extra_arity = if matches!(kind, BuiltinKind::Io) {
                 // For IO builtins (`$rust_io_function`), the compiler injects
-                // one synthetic trailing value-arg slot for each *function-level*
-                // generic type parameter.  Class-level generics (from the
-                // enclosing class definition) do NOT generate extra slots —
-                // `baml_builtins2_codegen` only adds type-arg params for
-                // function-level generics.  We therefore only count the
-                // function's own generic_params here.
+                // one synthetic trailing value-arg slot per generic type
+                // parameter the call site threads. That is the function's own
+                // generics *plus*, for a method on a generic class, the
+                // enclosing class's: the call path prepends the receiver's
+                // class type args (see `receiver_class_type_arg_operands`), so
+                // they occupy real operand slots and must be counted here or
+                // `ScheduleFuture` drains the wrong window off the stack.
+                //
+                // Must stay in lockstep with `baml_builtins2_codegen`'s
+                // `fn_only_generic_count`, which decides how many type-arg
+                // slots the generated glue reads back.
                 baml_compiler2_ppir::item_data::function_data(db, func_loc)
                     .generic_params
                     .len()
+                    + baml_compiler2_ppir::item_data::enclosing_type_generic_param_count(
+                        db, func_loc,
+                    )
             } else {
                 0
             };

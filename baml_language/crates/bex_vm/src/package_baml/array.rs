@@ -180,8 +180,14 @@ fn value_type_name(vm: &BexVm, value: Value) -> String {
     "unknown".to_string()
 }
 
+/// A natural-order sort saw a value its domain cannot order.
+///
+/// `baml._rust_sort` declares `throws never`, and `Sortable.sort` only reaches
+/// it behind the `_is_primitive_array` guard on a homogeneous `T[]`, so every
+/// rejection here is a guard/element-type inconsistency rather than anything
+/// user code can provoke.
 fn invalid_sort(context: &str, message: impl Into<String>) -> VmRustFnError {
-    VmBamlError::InvalidArgument {
+    VmInternalError::BridgeFailure {
         message: format!("{context}: {}", message.into()),
     }
     .into()

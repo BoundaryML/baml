@@ -81,11 +81,11 @@ class Aes256GcmSiv {
     implements GenerateKey {
         /// Draws a fresh 32-byte key from `rng`. Pass the result to
         /// `Aes256GcmSiv.new`.
-        // BUG: the return type spells out `GenerateKey.Key`'s concrete value
-        // instead of `Self.Key`, which lowers to an error type here even though
-        // `Self` is the enclosing class and the projection has every input it
-        // needs to reduce. Restore `Self.Key` once concrete-site associated
-        // projections resolve.
+        /// BUG: the return type spells out `GenerateKey.Key`'s concrete value
+        /// instead of `Self.Key`, which lowers to an error type here even though
+        /// `Self` is the enclosing class and the projection has every input it
+        /// needs to reduce. Restore `Self.Key` once concrete-site associated
+        /// projections resolve.
         function random_key(rng: root.random.Rng) -> uint8array throws never {
             rng.random(32)
         }
@@ -158,8 +158,8 @@ class Aes128GcmSiv {
     implements GenerateKey {
         /// Draws a fresh 16-byte key from `rng`. Pass the result to
         /// `Aes128GcmSiv.new`.
-        // BUG: see `Aes256GcmSiv.random_key`. `Self.Key` lowers to an error type
-        // at a concrete impl site, so the concrete type is spelled out.
+        /// BUG: see `Aes256GcmSiv.random_key`. `Self.Key` lowers to an error type
+        /// at a concrete impl site, so the concrete type is spelled out.
         function random_key(rng: root.random.Rng) -> uint8array throws never {
             rng.random(16)
         }

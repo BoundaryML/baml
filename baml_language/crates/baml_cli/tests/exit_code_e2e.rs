@@ -45,6 +45,7 @@ fn run_baml_cli_with_env(built: &Path, dir: &Path, args: &[&str], env: &[(&str, 
     // CLAUDECODE/AI_AGENT/… environment flips `--output-preset auto` to
     // `agent`, which disables the progress lines some assertions read.
     cmd.env("BAML_OUTPUT_PRESET", "human");
+    cmd.env("BAML_AGENT_SKILL_CHECK", "off");
     cmd.env("BAML_HOME", &home);
     // Tests are quiet unless they explicitly exercise the inherited log level.
     cmd.env_remove("BAML_LOG");
@@ -634,7 +635,7 @@ class LoggedConversion {
     value string
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             log.warn("from-json-detail");
             LoggedConversion {
                 value: baml.json.from_json<string>(baml.json.field(j, "value"))
@@ -643,7 +644,7 @@ class LoggedConversion {
     }
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             log.error("to-json-detail");
             self.value
         }
@@ -802,8 +803,8 @@ class BrokenConversion {
     value int
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-            throw baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
+            throw baml.json.SerializationError {
                 message: "serialize-boom",
                 path: "",
                 reason: "serialize-boom"
@@ -1216,6 +1217,7 @@ test "streams" {
         // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
         // cannot flip `--output-preset auto` to `agent` and hide progress lines.
         .env("BAML_OUTPUT_PRESET", "human")
+        .env("BAML_AGENT_SKILL_CHECK", "off")
         .env("BAML_HOME", &home)
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .stdout(Stdio::piped())
@@ -2196,6 +2198,7 @@ fn run_file_script_mode_passes_args_after_separator_as_argv() {
     let output = Command::new(&script)
         .args(["--", "alpha", "--beta", "gamma"])
         .current_dir(tmp.path())
+        .env("BAML_AGENT_SKILL_CHECK", "off")
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .output()
         .expect("execute the shebang script directly");
@@ -2249,6 +2252,7 @@ fn shebang_can_name_a_specific_function() {
 
     let output = Command::new(&script)
         .current_dir(tmp.path())
+        .env("BAML_AGENT_SKILL_CHECK", "off")
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .output()
         .expect("execute the shebang script directly");
@@ -2302,6 +2306,7 @@ fn executable_baml_script_runs_via_kernel_shebang() {
     // takes none. The kernel drives `#! … run --file <this script>`.
     let output = Command::new(&script)
         .current_dir(tmp.path())
+        .env("BAML_AGENT_SKILL_CHECK", "off")
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .output()
         .expect("execute the shebang script directly");

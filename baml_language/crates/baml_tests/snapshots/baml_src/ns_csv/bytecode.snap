@@ -726,7 +726,7 @@ function csv.csv_bom_stripped_by_default() -> string {
     call baml.deep_copy
     load_const <omitted>
     call baml.csv.reader
-    call baml.csv.CsvReader.headers
+    call baml.csv.Reader.headers
     store_var_load_var _6
     load_const null
     cmp_op ==
@@ -779,10 +779,10 @@ function csv.csv_caller_owned_handles_stay_open() -> string {
     load_const 1
     load_type null | bool | int | bigint | float | string
     alloc_array 2
-    call baml.csv.CsvWriter.write_record
+    call baml.csv.Writer.write_record
     pop 1
     load_var w
-    call baml.csv.CsvWriter.close
+    call baml.csv.Writer.close
     pop 1
     load_var wf
     load_const "tail\n"
@@ -887,17 +887,17 @@ function csv.csv_create_then_fs_read() -> string {
     load_const "v"
     load_type string
     alloc_array 2
-    call baml.csv.CsvWriter.write_header
+    call baml.csv.Writer.write_header
     pop 1
     load_var w
     load_const "x"
     load_const 1
     load_type null | bool | int | bigint | float | string
     alloc_array 2
-    call baml.csv.CsvWriter.write_record
+    call baml.csv.Writer.write_record
     pop 1
     load_var w
-    call baml.csv.CsvWriter.close
+    call baml.csv.Writer.close
     pop 1
     load_var path
     sys_op baml.fs.read
@@ -1023,7 +1023,7 @@ function csv.csv_decode_error_details() -> string {
     pop 1
     jump L3
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -1238,7 +1238,7 @@ function csv.csv_decode_missing_column_is_header_error() -> string {
     pop 1
     jump L3
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -1283,7 +1283,7 @@ function csv.csv_decode_one_cases() -> string {
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -1342,7 +1342,7 @@ function csv.csv_decode_one_cases() -> string {
     pop 1
     jump L6
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L4
     jump L5
 
@@ -1432,7 +1432,7 @@ function csv.csv_decode_optional_cases() -> string {
     pop 1
     jump L8
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L6
     jump L7
 
@@ -1528,7 +1528,7 @@ function csv.csv_decode_rejects_locale_numbers() -> string {
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -1555,7 +1555,7 @@ function csv.csv_decode_rejects_locale_numbers() -> string {
     pop 1
     jump L6
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L4
     jump L5
 
@@ -1591,7 +1591,7 @@ function csv.csv_decode_rejects_nonfinite_floats() -> string {
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -1620,7 +1620,7 @@ function csv.csv_duplicate_column_matched_is_header_error() -> string {
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -1643,7 +1643,7 @@ function csv.csv_duplicate_column_matched_is_header_error() -> string {
     load_const "first,first\nx,y\n"
     load_const <omitted>
     call baml.csv.reader
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
@@ -1656,7 +1656,7 @@ function csv.csv_duplicate_column_matched_is_header_error() -> string {
     load_type string
     load_var _9
     load_const 1
-    call baml.csv.CsvRecord.get_at
+    call baml.csv.Record.get_at
     store_var_load_var _12
     load_const null
     cmp_op ==
@@ -1741,7 +1741,7 @@ function csv.csv_encoding_strict_throws() -> string {
     call baml.sys.panic
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -1954,7 +1954,7 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1965,13 +1965,13 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
 
   L0:
     load_var _5
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     load_const "|"
     call user.csv.join
     store_var first
     jump L4
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L1
     jump L2
 
@@ -1998,7 +1998,7 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
 
   L4:
     load_var r
-    call baml.csv.CsvReader.headers
+    call baml.csv.Reader.headers
     store_var _15
     load_var _15
     load_const null
@@ -2013,7 +2013,7 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
     store_var headers_after
     jump L9
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L6
     jump L7
 
@@ -2040,7 +2040,7 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
 
   L9:
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _24
@@ -2051,7 +2051,7 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
 
   L10:
     load_var _24
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     load_const "|"
     call user.csv.join
     store_var next_after
@@ -2078,7 +2078,7 @@ function csv.csv_headers_variants() -> string {
     load_const "a,b\n1,2\n"
     load_const <omitted>
     call baml.csv.reader
-    call baml.csv.CsvReader.headers
+    call baml.csv.Reader.headers
     store_var_load_var _3
     load_const null
     cmp_op ==
@@ -2114,7 +2114,7 @@ function csv.csv_headers_variants() -> string {
     load_const null
     init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
     call baml.csv.reader
-    call baml.csv.CsvReader.headers
+    call baml.csv.Reader.headers
     store_var _8
     load_var _8
     load_const null
@@ -2137,7 +2137,7 @@ function csv.csv_headers_variants() -> string {
     load_const ""
     load_const <omitted>
     call baml.csv.reader
-    call baml.csv.CsvReader.headers
+    call baml.csv.Reader.headers
     store_var _15
     load_var _15
     load_const null
@@ -2176,18 +2176,18 @@ function csv.csv_iterator_adapters() -> int {
     store_var r
     load_type csv.IntRow
     load_var r
-    call baml.csv.CsvReader.rows
+    call baml.csv.Reader.rows
     store_var _4
     load_type int
     load_type never
     load_var _4
     make_closure .<lambda(csv_iterator_adapters, 0)>, 0
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.IntRow>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = csv.IntRow>
     load_const "map"
     virtual_call nargs=2 ntypeargs=2
     store_var _3
     load_var _3
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = int>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
     store_var doubled
@@ -2227,7 +2227,7 @@ function csv.csv_malformed_header_exhausts_reader() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -2238,13 +2238,13 @@ function csv.csv_malformed_header_exhausts_reader() -> string {
 
   L0:
     load_var _4
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     load_const "|"
     call user.csv.join
     store_var first
     jump L4
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L1
     jump L2
 
@@ -2271,7 +2271,7 @@ function csv.csv_malformed_header_exhausts_reader() -> string {
 
   L4:
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _13
@@ -2282,7 +2282,7 @@ function csv.csv_malformed_header_exhausts_reader() -> string {
 
   L5:
     load_var _13
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     load_const "|"
     call user.csv.join
     store_var second
@@ -2307,7 +2307,7 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -2318,13 +2318,13 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
 
   L0:
     load_var _4
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     load_const "|"
     call user.csv.join
     store_var first
     jump L4
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L1
     jump L2
 
@@ -2351,7 +2351,7 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
 
   L4:
     load_var r
-    call baml.csv.CsvReader.headers
+    call baml.csv.Reader.headers
     store_var _14
     load_var _14
     load_const null
@@ -2366,7 +2366,7 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
     store_var headers_after
     jump L9
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L6
     jump L7
 
@@ -2393,7 +2393,7 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
 
   L9:
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _23
@@ -2404,7 +2404,7 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
 
   L10:
     load_var _23
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     load_const "|"
     call user.csv.join
     store_var next_after
@@ -2529,7 +2529,7 @@ function csv.csv_null_semantics_quoted_empty() -> string {
     pop 1
     jump L6
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L4
     jump L5
 
@@ -2636,7 +2636,7 @@ function csv.csv_null_values_option() -> string {
     pop 1
     jump L6
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L4
     jump L5
 
@@ -2735,14 +2735,14 @@ function csv.csv_on_skip_observer() -> string {
     call baml.csv.reader
     load_const 0
     store_var count
-    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterable<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
 
   L0:
     load_var _7
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _8
@@ -2801,15 +2801,15 @@ function csv.csv_open_streams_file() -> string {
     store_var total
     load_type csv.IntRow
     load_var r
-    call baml.csv.CsvReader.rows
-    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.IntRow>
+    call baml.csv.Reader.rows
+    load_type baml.iter.Iterable<Error = baml.csv.Error | baml.errors.Io, Item = csv.IntRow>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _14
 
   L0:
     load_var _14
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.IntRow>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = csv.IntRow>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _15
@@ -2827,7 +2827,7 @@ function csv.csv_open_streams_file() -> string {
 
   L2:
     load_var r
-    call baml.csv.CsvReader.close
+    call baml.csv.Reader.close
     pop 1
     load_var path
     sys_op baml.fs.remove
@@ -2862,7 +2862,7 @@ function csv.csv_options_validation() -> string {
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -2906,7 +2906,7 @@ function csv.csv_options_validation() -> string {
     pop 1
     jump L6
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L4
     jump L5
 
@@ -3296,7 +3296,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
     pop 1
     jump L5
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L3
     jump L4
 
@@ -3386,7 +3386,7 @@ function csv.csv_ragged_pad() -> string {
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -3421,7 +3421,7 @@ function csv.csv_ragged_strict() -> string {
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -3494,7 +3494,7 @@ function csv.csv_ragged_truncate() -> string {
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -3528,24 +3528,24 @@ function csv.csv_reader_close() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     pop 1
     load_var r
-    call baml.csv.CsvReader.close
+    call baml.csv.Reader.close
     pop 1
     load_var r
-    call baml.csv.CsvReader.close
+    call baml.csv.Reader.close
     pop 1
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -3567,11 +3567,11 @@ function csv.csv_reader_close() -> string {
     bin_op +
     store_var _12
     load_var r
-    call baml.csv.CsvReader.skipped_count
+    call baml.csv.Reader.skipped_count
     call baml.json.stringify
     store_var _14
     load_var r
-    call baml.csv.CsvReader.position
+    call baml.csv.Reader.position
     load_field .record
     call baml.json.stringify
     store_var _16
@@ -3616,18 +3616,18 @@ function csv.csv_reader_position() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    call baml.csv.CsvReader.headers
+    call baml.csv.Reader.headers
     pop 1
     load_var r
-    call baml.csv.CsvReader.position
+    call baml.csv.Reader.position
     store_var p1
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     pop 1
     load_var r
-    call baml.csv.CsvReader.position
+    call baml.csv.Reader.position
     store_var p2
     load_var p1
     load_field .byte
@@ -3694,7 +3694,7 @@ function csv.csv_reader_resumes_after_throw() -> string {
     load_const true
     pop_jump_if_false L7
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
@@ -3705,13 +3705,13 @@ function csv.csv_reader_resumes_after_throw() -> string {
 
   L1:
     load_var _6
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     load_const "|"
     call user.csv.join
     store_var step
     jump L5
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L2
     jump L3
 
@@ -3774,7 +3774,7 @@ function csv.csv_record_api() -> string {
     load_const "name,score\nalice,9\n"
     load_const <omitted>
     call baml.csv.reader
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -3790,7 +3790,7 @@ function csv.csv_record_api() -> string {
     alloc_array 0
     store_var parts
     load_var rec
-    call baml.csv.CsvRecord.length
+    call baml.csv.Record.length
     call baml.json.stringify
     store_var _7
     load_type string
@@ -3798,7 +3798,7 @@ function csv.csv_record_api() -> string {
     call baml.Array.push
     pop 1
     load_var rec
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     load_const "|"
     call user.csv.join
     store_var _11
@@ -3809,7 +3809,7 @@ function csv.csv_record_api() -> string {
     load_type string
     load_var rec
     load_const "name"
-    call baml.csv.CsvRecord.get
+    call baml.csv.Record.get
     store_var_load_var _16
     load_const null
     cmp_op ==
@@ -3825,7 +3825,7 @@ function csv.csv_record_api() -> string {
     load_type int
     load_var rec
     load_const "score"
-    call baml.csv.CsvRecord.get
+    call baml.csv.Record.get
     load_const "<null>"
     call user.csv.int_or
     store_var _22
@@ -3836,7 +3836,7 @@ function csv.csv_record_api() -> string {
     load_type string
     load_var rec
     load_const "absent"
-    call baml.csv.CsvRecord.get
+    call baml.csv.Record.get
     store_var_load_var _28
     load_const null
     cmp_op ==
@@ -3852,7 +3852,7 @@ function csv.csv_record_api() -> string {
     load_type string
     load_var rec
     load_const 99
-    call baml.csv.CsvRecord.get_at
+    call baml.csv.Record.get_at
     store_var_load_var _35
     load_const null
     cmp_op ==
@@ -3866,7 +3866,7 @@ function csv.csv_record_api() -> string {
     call baml.Array.push
     pop 1
     load_var rec
-    call baml.csv.CsvRecord.to_map
+    call baml.csv.Record.to_map
     store_var m
     load_type string
     load_var2 3 10
@@ -3890,7 +3890,7 @@ function csv.csv_record_decode_single() -> string {
     load_const "n\n5\n"
     load_const <omitted>
     call baml.csv.reader
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -3902,7 +3902,7 @@ function csv.csv_record_decode_single() -> string {
   L0:
     load_type csv.IntRow
     load_var _2
-    call baml.csv.CsvRecord.decode
+    call baml.csv.Record.decode
     load_field .n
     call baml.json.stringify
     jump L2
@@ -3918,7 +3918,7 @@ function csv.csv_record_get_decode_error() -> string {
     load_const "n\noops\n"
     load_const <omitted>
     call baml.csv.reader
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -3931,11 +3931,11 @@ function csv.csv_record_get_decode_error() -> string {
     load_type int
     load_var _3
     load_const "n"
-    call baml.csv.CsvRecord.get
+    call baml.csv.Record.get
     pop 1
     jump L4
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L1
     jump L2
 
@@ -3998,7 +3998,7 @@ function csv.csv_record_get_without_headers() -> string {
     load_const null
     init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
     call baml.csv.reader
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -4011,11 +4011,11 @@ function csv.csv_record_get_without_headers() -> string {
     load_type int
     load_var _4
     load_const "n"
-    call baml.csv.CsvRecord.get
+    call baml.csv.Record.get
     pop 1
     jump L3
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L1
     jump L2
 
@@ -4045,18 +4045,18 @@ function csv.csv_record_snapshot_outlives_reader() -> string {
     load_const <omitted>
     call baml.csv.reader
     store_var r
-    load_type baml.csv.CsvRecord
+    load_type baml.csv.Record
     alloc_array 0
     store_var kept
     load_var r
-    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterable<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -4066,7 +4066,7 @@ function csv.csv_record_snapshot_outlives_reader() -> string {
     jump L2
 
   L1:
-    load_type baml.csv.CsvRecord
+    load_type baml.csv.Record
     load_var2 2 4
     call baml.Array.push
     pop 1
@@ -4077,14 +4077,14 @@ function csv.csv_record_snapshot_outlives_reader() -> string {
     alloc_array 0
     store_var parts
     load_var kept
-    load_type baml.iter.Iterable<Error = never, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterable<Error = never, Item = baml.csv.Record>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _14
 
   L3:
     load_var _14
-    load_type baml.iter.Iterator<Error = never, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = never, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _15
@@ -4095,7 +4095,7 @@ function csv.csv_record_snapshot_outlives_reader() -> string {
 
   L4:
     load_var _15
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     store_var _21
     load_type string
     load_var2 5 8
@@ -4119,11 +4119,11 @@ function csv.csv_rows_rejects_nested_class() -> string {
     store_var r
     load_type csv.Nested
     load_var r
-    call baml.csv.CsvReader.rows
+    call baml.csv.Reader.rows
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -4151,11 +4151,11 @@ function csv.csv_rows_validates_eagerly() -> string {
     store_var r
     load_type csv.IntRow
     load_var r
-    call baml.csv.CsvReader.rows
+    call baml.csv.Reader.rows
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -4228,14 +4228,14 @@ function csv.csv_skip_mode_diagnostics() -> string {
     load_const 0
     store_var count
     load_var r
-    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterable<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
 
   L0:
     load_var _5
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
@@ -4255,9 +4255,9 @@ function csv.csv_skip_mode_diagnostics() -> string {
 
   L2:
     load_var r
-    call baml.csv.CsvReader.skipped
+    call baml.csv.Reader.skipped
     store_var _12
-    load_type baml.csv.CsvError
+    load_type baml.csv.Error
     load_var _12
     load_const 0
     call baml.Array.at
@@ -4285,11 +4285,11 @@ function csv.csv_skip_mode_diagnostics() -> string {
     call baml.json.stringify
     store_var _22
     load_var r
-    call baml.csv.CsvReader.skipped_count
+    call baml.csv.Reader.skipped_count
     call baml.json.stringify
     store_var _24
     load_var r
-    call baml.csv.CsvReader.skipped
+    call baml.csv.Reader.skipped
     container_len
     store_var _27
     load_var _27
@@ -4338,15 +4338,15 @@ function csv.csv_skip_mode_typed_decode() -> string {
     store_var total
     load_type csv.IntRow
     load_var r
-    call baml.csv.CsvReader.rows
-    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.IntRow>
+    call baml.csv.Reader.rows
+    load_type baml.iter.Iterable<Error = baml.csv.Error | baml.errors.Io, Item = csv.IntRow>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
 
   L0:
     load_var _6
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.IntRow>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = csv.IntRow>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
@@ -4367,7 +4367,7 @@ function csv.csv_skip_mode_typed_decode() -> string {
     call baml.json.stringify
     store_var _13
     load_var r
-    call baml.csv.CsvReader.skipped_count
+    call baml.csv.Reader.skipped_count
     call baml.json.stringify
     store_var _15
     load_var _13
@@ -4544,14 +4544,14 @@ function csv.csv_smoke_on_error_skip() -> string {
     load_const 0
     store_var count
     load_var r
-    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterable<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
 
   L0:
     load_var _5
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
@@ -4574,7 +4574,7 @@ function csv.csv_smoke_on_error_skip() -> string {
     call baml.json.stringify
     store_var _11
     load_var r
-    call baml.csv.CsvReader.skipped_count
+    call baml.csv.Reader.skipped_count
     call baml.json.stringify
     store_var _13
     load_var _11
@@ -4612,14 +4612,14 @@ function csv.csv_smoke_reader_streaming_get() -> int {
     call baml.csv.reader
     load_const 0
     store_var total
-    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterable<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -4632,7 +4632,7 @@ function csv.csv_smoke_reader_streaming_get() -> int {
     load_type int
     load_var _5
     load_const "n"
-    call baml.csv.CsvRecord.get
+    call baml.csv.Record.get
     store_var _10
     load_var _10
     load_const null
@@ -4690,7 +4690,7 @@ function csv.csv_smoke_record_error_resumes() -> string {
     load_const true
     pop_jump_if_false L11
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
@@ -4701,10 +4701,10 @@ function csv.csv_smoke_record_error_resumes() -> string {
 
   L1:
     load_var _7
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     jump L7
     load_var _
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L2
     jump L3
 
@@ -4829,7 +4829,7 @@ function csv.csv_smoke_typed_returns_probe() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -4842,7 +4842,7 @@ function csv.csv_smoke_typed_returns_probe() -> string {
     load_type string
     load_var _3
     load_const "name"
-    call baml.csv.CsvRecord.get
+    call baml.csv.Record.get
     store_var_load_var _6
     load_const null
     cmp_op ==
@@ -4864,15 +4864,15 @@ function csv.csv_smoke_typed_returns_probe() -> string {
     store_var total
     load_type csv.CsvSmokeIntRow
     load_var r
-    call baml.csv.CsvReader.rows
-    load_type baml.iter.Iterable<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.CsvSmokeIntRow>
+    call baml.csv.Reader.rows
+    load_type baml.iter.Iterable<Error = baml.csv.Error | baml.errors.Io, Item = csv.CsvSmokeIntRow>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _13
 
   L4:
     load_var _13
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = csv.CsvSmokeIntRow>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = csv.CsvSmokeIntRow>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _14
@@ -5153,7 +5153,7 @@ function csv.csv_trim_all() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    call baml.csv.CsvReader.headers
+    call baml.csv.Reader.headers
     store_var_load_var _4
     load_const null
     cmp_op ==
@@ -5168,7 +5168,7 @@ function csv.csv_trim_all() -> string {
     call user.csv.join
     store_var h
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _10
@@ -5179,7 +5179,7 @@ function csv.csv_trim_all() -> string {
 
   L1:
     load_var _10
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     load_const "|"
     call user.csv.join
     store_var row
@@ -5274,7 +5274,7 @@ function csv.csv_unterminated_quote_exhausts() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -5285,7 +5285,7 @@ function csv.csv_unterminated_quote_exhausts() -> string {
 
   L0:
     load_var _4
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     load_const "|"
     call user.csv.join
     store_var first
@@ -5297,7 +5297,7 @@ function csv.csv_unterminated_quote_exhausts() -> string {
 
   L2:
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _10
@@ -5308,13 +5308,13 @@ function csv.csv_unterminated_quote_exhausts() -> string {
 
   L3:
     load_var _10
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     load_const "|"
     call user.csv.join
     store_var second
     jump L7
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L4
     jump L5
 
@@ -5335,7 +5335,7 @@ function csv.csv_unterminated_quote_exhausts() -> string {
 
   L7:
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _17
@@ -5346,7 +5346,7 @@ function csv.csv_unterminated_quote_exhausts() -> string {
 
   L8:
     load_var _17
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     load_const "|"
     call user.csv.join
     store_var third
@@ -5385,11 +5385,11 @@ function csv.csv_write_rows_batch_is_atomic() -> string {
     init_instance user.csv.MdRow .metric, .value
     load_type csv.MdRow
     alloc_array 2
-    call baml.csv.CsvWriter.write_rows
+    call baml.csv.Writer.write_rows
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -5411,10 +5411,10 @@ function csv.csv_write_rows_batch_is_atomic() -> string {
     bin_op +
     store_var _14
     load_var w
-    call baml.csv.CsvWriter.text
+    call baml.csv.Writer.text
     store_var _16
     load_var w
-    call baml.csv.CsvWriter.records_written
+    call baml.csv.Writer.records_written
     call baml.json.stringify
     store_var _17
     load_var2 4 5
@@ -5444,10 +5444,10 @@ function csv.csv_writer_bom() -> string {
     load_const "x"
     load_type null | bool | int | bigint | float | string
     alloc_array 1
-    call baml.csv.CsvWriter.write_record
+    call baml.csv.Writer.write_record
     pop 1
     load_var w
-    call baml.csv.CsvWriter.text
+    call baml.csv.Writer.text
     store_var out
     load_var out
     call baml.String.length
@@ -5511,11 +5511,11 @@ function csv.csv_writer_bom_survives_encode_error() -> string {
     load_const "a,b"
     load_type null | bool | int | bigint | float | string
     alloc_array 1
-    call baml.csv.CsvWriter.write_record
+    call baml.csv.Writer.write_record
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -5539,10 +5539,10 @@ function csv.csv_writer_bom_survives_encode_error() -> string {
     load_const "x"
     load_type null | bool | int | bigint | float | string
     alloc_array 1
-    call baml.csv.CsvWriter.write_record
+    call baml.csv.Writer.write_record
     pop 1
     load_var w
-    call baml.csv.CsvWriter.text
+    call baml.csv.Writer.text
     store_var out
     load_var caught
     load_const "#"
@@ -5580,13 +5580,13 @@ function csv.csv_writer_buffer_basics() -> string {
     init_instance user.csv.OutRow .id, .note
     load_type csv.OutRow
     alloc_array 2
-    call baml.csv.CsvWriter.write_rows
+    call baml.csv.Writer.write_rows
     pop 1
     load_var w
-    call baml.csv.CsvWriter.text
+    call baml.csv.Writer.text
     store_var _8
     load_var w
-    call baml.csv.CsvWriter.records_written
+    call baml.csv.Writer.records_written
     call baml.json.stringify
     store_var _9
     load_var _8
@@ -5606,24 +5606,24 @@ function csv.csv_writer_closed_throws() -> string {
     load_const 1
     load_const 2
     init_instance user.csv.Pos2 .a, .b
-    call baml.csv.CsvWriter.write_row
+    call baml.csv.Writer.write_row
     pop 1
     load_var w
-    call baml.csv.CsvWriter.close
+    call baml.csv.Writer.close
     pop 1
     load_var w
-    call baml.csv.CsvWriter.close
+    call baml.csv.Writer.close
     pop 1
     load_type csv.Pos2
     load_var w
     load_const 3
     load_const 4
     init_instance user.csv.Pos2 .a, .b
-    call baml.csv.CsvWriter.write_row
+    call baml.csv.Writer.write_row
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -5645,7 +5645,7 @@ function csv.csv_writer_closed_throws() -> string {
     bin_op +
     store_var _14
     load_var w
-    call baml.csv.CsvWriter.records_written
+    call baml.csv.Writer.records_written
     call baml.json.stringify
     store_var _16
     load_var2 3 4
@@ -5684,24 +5684,24 @@ function csv.csv_writer_explicit_header() -> string {
     load_const "b"
     load_type string
     alloc_array 2
-    call baml.csv.CsvWriter.write_header
+    call baml.csv.Writer.write_header
     pop 1
     load_type csv.Pos2
     load_var w
     load_const 1
     load_const 2
     init_instance user.csv.Pos2 .a, .b
-    call baml.csv.CsvWriter.write_row
+    call baml.csv.Writer.write_row
     pop 1
     load_var w
     load_const "x"
     load_type string
     alloc_array 1
-    call baml.csv.CsvWriter.write_header
+    call baml.csv.Writer.write_header
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -5722,7 +5722,7 @@ function csv.csv_writer_explicit_header() -> string {
 
   L3:
     load_var w
-    call baml.csv.CsvWriter.text
+    call baml.csv.Writer.text
     load_const "#"
     bin_op +
     load_var after_data
@@ -5749,10 +5749,10 @@ function csv.csv_writer_float_canonical() -> string {
     load_const 0.1
     load_type null | bool | int | bigint | float | string
     alloc_array 2
-    call baml.csv.CsvWriter.write_record
+    call baml.csv.Writer.write_record
     pop 1
     load_var w
-    call baml.csv.CsvWriter.text
+    call baml.csv.Writer.text
     return
 }
 
@@ -5800,11 +5800,11 @@ function csv.csv_writer_nonfinite_float_throws() -> string {
     load_var2 1 2
     load_type null | bool | int | bigint | float | string
     alloc_array 1
-    call baml.csv.CsvWriter.write_record
+    call baml.csv.Writer.write_record
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -5866,7 +5866,7 @@ function csv.csv_writer_quote_styles() -> string {
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -5913,10 +5913,10 @@ function csv.csv_writer_sanitize_formulas() -> string {
     load_const "safe"
     load_type null | bool | int | bigint | float | string
     alloc_array 2
-    call baml.csv.CsvWriter.write_record
+    call baml.csv.Writer.write_record
     pop 1
     load_var w
-    call baml.csv.CsvWriter.text
+    call baml.csv.Writer.text
     return
 }
 
@@ -5931,11 +5931,11 @@ function csv.csv_writer_state_survives_encode_error() -> string {
     load_const "bad"
     load_var _6
     init_instance user.csv.MdRow .metric, .value
-    call baml.csv.CsvWriter.write_row
+    call baml.csv.Writer.write_row
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -5960,17 +5960,17 @@ function csv.csv_writer_state_survives_encode_error() -> string {
     load_const "ok"
     load_const 1.5
     init_instance user.csv.MdRow .metric, .value
-    call baml.csv.CsvWriter.write_row
+    call baml.csv.Writer.write_row
     pop 1
     load_var caught
     load_const "#"
     bin_op +
     store_var _15
     load_var w
-    call baml.csv.CsvWriter.text
+    call baml.csv.Writer.text
     store_var _17
     load_var w
-    call baml.csv.CsvWriter.records_written
+    call baml.csv.Writer.records_written
     call baml.json.stringify
     store_var _18
     load_var2 5 6
@@ -6000,11 +6000,11 @@ function csv.csv_writer_text_on_file_writer_throws() -> string {
     call baml.csv.create
     store_var w
     load_var w
-    call baml.csv.CsvWriter.text
+    call baml.csv.Writer.text
     pop 1
     jump L2
     load_var e
-    is_type baml.csv.CsvError
+    is_type baml.csv.Error
     pop_jump_if_false L0
     jump L1
 
@@ -6025,7 +6025,7 @@ function csv.csv_writer_text_on_file_writer_throws() -> string {
 
   L3:
     load_var w
-    call baml.csv.CsvWriter.close
+    call baml.csv.Writer.close
     pop 1
     load_var path
     sys_op baml.fs.remove
@@ -6057,10 +6057,10 @@ function csv.csv_writer_write_record_raw() -> string {
     load_const "txt"
     load_type null | bool | int | bigint | float | string
     alloc_array 6
-    call baml.csv.CsvWriter.write_record
+    call baml.csv.Writer.write_record
     pop 1
     load_var w
-    call baml.csv.CsvWriter.text
+    call baml.csv.Writer.text
     return
 }
 
@@ -6171,48 +6171,48 @@ function csv.join(parts: string[], sep: string) -> string {
     return
 }
 
-function csv.kind_name(k: baml.csv.CsvErrorKind) -> string {
+function csv.kind_name(k: baml.csv.ErrorKind) -> string {
     load_var k
     discriminant
     jump_table [L9, L8, L7, L6, L5, L4, L3, L2, L1, L0], default L11
 
-  L0: CsvErrorKind.Closed
+  L0: ErrorKind.Closed
     load_const "Closed"
     jump L10
 
-  L1: CsvErrorKind.TooManyRows
+  L1: ErrorKind.TooManyRows
     load_const "TooManyRows"
     jump L10
 
-  L2: CsvErrorKind.NotFound
+  L2: ErrorKind.NotFound
     load_const "NotFound"
     jump L10
 
-  L3: CsvErrorKind.Encode
+  L3: ErrorKind.Encode
     load_const "Encode"
     jump L10
 
-  L4: CsvErrorKind.Decode
+  L4: ErrorKind.Decode
     load_const "Decode"
     jump L10
 
-  L5: CsvErrorKind.Header
+  L5: ErrorKind.Header
     load_const "Header"
     jump L10
 
-  L6: CsvErrorKind.Encoding
+  L6: ErrorKind.Encoding
     load_const "Encoding"
     jump L10
 
-  L7: CsvErrorKind.FieldCount
+  L7: ErrorKind.FieldCount
     load_const "FieldCount"
     jump L10
 
-  L8: CsvErrorKind.Quote
+  L8: ErrorKind.Quote
     load_const "Quote"
     jump L10
 
-  L9: CsvErrorKind.Options
+  L9: ErrorKind.Options
     load_const "Options"
 
   L10:

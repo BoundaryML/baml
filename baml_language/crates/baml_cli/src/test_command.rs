@@ -713,6 +713,7 @@ impl TestArgs {
                     | "--no-profile"
                     | "--project"
                     | "--directory"
+                    | "--agent-skill-check"
                     | "--from"
                     | "--features"
                     | "--help"
@@ -720,11 +721,12 @@ impl TestArgs {
             ) || token.starts_with("--profile=")
                 || token.starts_with("--project=")
                 || token.starts_with("--directory=")
+                || token.starts_with("--agent-skill-check=")
                 || token.starts_with("--from=")
                 || token.starts_with("--features=");
             if bootstrap {
                 anyhow::bail!(
-                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project, --directory, --from, --features, or --help"
+                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project, --directory, --agent-skill-check, --from, --features, or --help"
                 );
             }
         }
@@ -1337,6 +1339,17 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("cannot contain --profile"), "{error}");
+
+        let error = TestArgs::parse_profile_args(
+            "bad_skill_check",
+            &["--agent-skill-check=off".to_string()],
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            error.contains("cannot contain") && error.contains("--agent-skill-check"),
+            "{error}"
+        );
     }
 
     #[test]

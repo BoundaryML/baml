@@ -220,19 +220,13 @@ impl BamlClassTimePlainDate for PackageBamlImpl {
         Ok(bex_str::BexStr::from(out))
     }
 
-    fn _to_plain_datetime(vm: &mut BexVm, plaindate: &Value, time: Option<&Value>) -> Value {
+    fn _to_plain_datetime(vm: &mut BexVm, plaindate: &Value, time_ns: i64) -> Value {
         let days = {
             let instance = vm
                 .as_instance(plaindate)
                 .expect("PlainDate.to_plain_datetime: expected PlainDate instance");
             view::time::PlainDate { instance }._days()
         };
-        let time_ns = time.map_or(0, |t| {
-            let instance = vm
-                .as_instance(t)
-                .expect("PlainDate.to_plain_datetime: expected PlainTime instance");
-            view::time::PlainTime { instance }._nanoseconds()
-        });
         let civil = i128::from(days) * NANOS_PER_DAY + i128::from(time_ns);
         let plaindatetime = copy::time::PlainDateTime {
             _nanoseconds: Arc::new(num_bigint::BigInt::from(civil)),

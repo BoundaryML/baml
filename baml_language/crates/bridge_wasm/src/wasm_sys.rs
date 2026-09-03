@@ -109,7 +109,8 @@ impl io::IoClassSysReadPipe for WasmSys {
         _limit: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Vec<u8>>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Live processes are not supported on this platform".to_string(),
         })
     }
@@ -121,7 +122,8 @@ impl io::IoClassSysReadPipe for WasmSys {
         _readpipe: io::owned::sys::ReadPipe,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Live processes are not supported on this platform".to_string(),
         })
     }
@@ -136,7 +138,8 @@ impl io::IoClassSysWritePipe for WasmSys {
         _data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Live processes are not supported on this platform".to_string(),
         })
     }
@@ -148,7 +151,8 @@ impl io::IoClassSysWritePipe for WasmSys {
         _writepipe: io::owned::sys::WritePipe,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Live processes are not supported on this platform".to_string(),
         })
     }
@@ -160,7 +164,8 @@ impl io::IoClassSysWritePipe for WasmSys {
         _writepipe: io::owned::sys::WritePipe,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Live processes are not supported on this platform".to_string(),
         })
     }
@@ -174,7 +179,8 @@ impl io::IoClassSysProcess for WasmSys {
         _process: io::owned::sys::Process,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessExit> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Live processes are not supported on this platform".to_string(),
         })
     }
@@ -186,7 +192,8 @@ impl io::IoClassSysProcess for WasmSys {
         _process: io::owned::sys::Process,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Live processes are not supported on this platform".to_string(),
         })
     }
@@ -266,7 +273,8 @@ impl IoNamespaceSys for WasmSys {
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::Process> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Live processes are not supported on this platform".to_string(),
         })
     }

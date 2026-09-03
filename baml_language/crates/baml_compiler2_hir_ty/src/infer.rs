@@ -72,14 +72,14 @@ fn type_admits_null(ty: &Ty) -> bool {
     }
 }
 
-/// The implicit `baml.spawn.SpawnParams<V, E>` a spawn's `with` chain
+/// The implicit `baml.spawn.Params<V, E>` a spawn's `with` chain
 /// threads (BEP-034).
 fn spawn_params_ty(value: Ty, error: Ty) -> Ty {
     Ty::intern(InferTy::Class(
         baml_type::TypeName::new(
             baml_type::Name::new("baml"),
             vec![baml_type::Name::new("spawn")],
-            baml_type::Name::new("SpawnParams"),
+            baml_type::Name::new("Params"),
         ),
         Box::new([value, error]),
         TyAttr::default(),
@@ -90,7 +90,7 @@ fn is_spawn_params_qtn(qtn: &baml_type::TypeName) -> bool {
     qtn.package().as_str() == "baml"
         && qtn.namespace().len() == 1
         && qtn.namespace()[0].as_str() == "spawn"
-        && qtn.name().as_str() == "SpawnParams"
+        && qtn.name().as_str() == "Params"
 }
 
 /// Negate a numeric literal into the negative literal TYPE (ruling 2:
@@ -4612,8 +4612,8 @@ impl<'db> InferenceContext<'db> {
     /// channel (the S12 discipline) is the future's error side, read
     /// straight off the lambda's fn type. Fresh literals widen out of
     /// both slots. `with` transformers fold left-to-right over
-    /// `SpawnParams<T, E>`: each checks against
-    /// `(SpawnParams<cur>) -> SpawnParams<unknown, unknown>`, the
+    /// `Params<T, E>`: each checks against
+    /// `(Params<cur>) -> Params<unknown, unknown>`, the
     /// concrete input binding a generic transformer's params through
     /// ordinary unification (TIR needs a value-ref workaround here;
     /// inference variables make it unnecessary), and the transformer's
@@ -10718,20 +10718,20 @@ impl<'db> InferenceContext<'db> {
                 .insert(clause.binding, clause_binding_ty);
             if let Some(context) = clause.stack_trace_binding {
                 // The second binding (`catch (e, ctx)`) is the full error
-                // CONTEXT - `baml.errors.ErrorContext` (the AST field's
+                // CONTEXT - `baml.errors.Context` (the AST field's
                 // "stack trace" name understates it; TIR resolves the
                 // class). Lookup-gated, fail-safe to Error.
                 let context_ty = match self.facts.definition_of(&baml_type::TypeName::new(
                     baml_type::Name::new("baml"),
                     vec![baml_type::Name::new("errors")],
-                    baml_type::Name::new("ErrorContext"),
+                    baml_type::Name::new("Context"),
                 )) {
                     Some(baml_compiler2_hir::contributions::Definition::Class(_)) => {
                         Ty::intern(InferTy::Class(
                             baml_type::TypeName::new(
                                 baml_type::Name::new("baml"),
                                 vec![baml_type::Name::new("errors")],
-                                baml_type::Name::new("ErrorContext"),
+                                baml_type::Name::new("Context"),
                             ),
                             Box::new([]),
                             TyAttr::default(),
@@ -10843,6 +10843,32 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             _ => None,
+        }
+    }
+
+    /// The non-`baml.panics.*` component of a thrown type - what a `throw`
+    /// actually contributes to the channel.
+    ///
+    /// The complement of [`Self::panic_subset`]: that one keeps the half a
+    /// catch arm may always trap, this one keeps the half a `throws` clause
+    /// must account for. `None` means the type was panics all the way down.
+    fn non_panic_subset(&mut self, ty: &Ty) -> Option<Ty> {
+        let expanded = self.expand_alias_ty(ty);
+        match expanded.kind() {
+            InferTy::Class(qtn, _, _) if qtn.is_panic_type() => None,
+            InferTy::Union(members, _) => {
+                let members = members.to_vec();
+                let rest: Vec<Ty> = members
+                    .iter()
+                    .filter_map(|member| self.non_panic_subset(member))
+                    .collect();
+                if rest.is_empty() {
+                    None
+                } else {
+                    Some(self.union_of(&rest))
+                }
+            }
+            _ => Some(expanded.clone()),
         }
     }
 
@@ -10975,12 +11001,28 @@ impl<'db> InferenceContext<'db> {
         if matches!(ty.kind(), InferTy::Never { .. }) || ty.has_error() {
             return;
         }
+        // Panics are RAISED, not thrown: catchable at runtime, but never part
+        // of a `throws` contract. `throw baml.panics.X` therefore contributes
+        // nothing to the channel - it re-raises, exactly as `baml.sys.panic`
+        // does, and the emitted `ThrowIfPanic` guard already carries the
+        // matching runtime behaviour past wildcard arms. A throw whose type
+        // mixes panics with ordinary errors contributes only the ordinary
+        // half. Untouched when no panic is present, so every other throw
+        // records exactly the type it always did.
+        let ty = if self.panic_subset(ty).is_some() {
+            match self.non_panic_subset(ty) {
+                Some(rest) => rest,
+                None => return,
+            }
+        } else {
+            ty.clone()
+        };
         // Thrown literals KEEP their literal types (no widening): catch
         // arms match on literal error codes, and the canonical union at
         // the channel is the generation site. The RUNTIME boundary
         // widens (the provider's conversion): `reflect.signature` on a
         // `throw "negative"` lambda reconstructs `string`.
-        let contribution = ty.clone();
+        let contribution = ty;
         // An OPEN clause (`throws T | _`) admits every contribution; the
         // remainder joins the surface at finalize instead of erroring.
         if let Some(declared) = self.declared_throws.clone()

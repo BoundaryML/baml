@@ -401,7 +401,7 @@ function json_auto_derive.<(user.json_auto_derive.SecretReset as baml.FromJson)>
 function json_auto_derive.G.f(self: json_auto_derive.G<#0>) -> baml.json.json[] {
     load_type #0
     load_type baml.json.json
-    load_type baml.json.JsonParseError | baml.json.JsonSerializationError
+    load_type baml.json.ParseError | baml.json.SerializationError
     load_var self
     load_field .items
     load_type #0

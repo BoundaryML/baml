@@ -63,13 +63,13 @@ test "toml_parse_nested_table" {
     )
 }
 
-// The error branch in `toml.rs`: malformed input throws `TomlParseError`.
+// The error branch in `toml.rs`: malformed input throws `ParseError`.
 test "toml_parse_invalid_throws" {
     {
         baml.toml.Table.parse("= = =");
         baml.sys.panic("expected Table.parse(\"= = =\") to throw")
     } catch (e) {
-        baml.toml.TomlParseError => null
+        baml.toml.ParseError => null
     }
 }
 
@@ -82,7 +82,7 @@ test "toml_item_from_json_rejects_null" {
         baml.toml.item_from_json(null);
         baml.sys.panic("expected item_from_json(null) to throw")
     } catch (e) {
-        baml.json.JsonDecodeError => null
+        baml.json.DecodeError => null
     }
 }
 

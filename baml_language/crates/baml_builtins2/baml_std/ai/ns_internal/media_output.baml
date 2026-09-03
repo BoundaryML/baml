@@ -9,11 +9,11 @@
 // Like that port, only `image` has list and text-union forms — `audio[]` and
 // friends were never supported and still fall through to the text parse.
 
-// Classify a declared output type as `"<form>:<kind>"`, or `""` when it holds
-// no media and the ordinary SAP path applies. `type` values only compare
-// structurally (there is no reflection into a type's shape), so the supported
-// shapes are enumerated. The nullable list/union forms behave exactly like
-// their non-null counterparts once decoded, so they share a form.
+/// (internal) Classify a declared output type as `"<form>:<kind>"`, or `""` when it holds
+/// no media and the ordinary SAP path applies. `type` values only compare
+/// structurally (there is no reflection into a type's shape), so the supported
+/// shapes are enumerated. The nullable list/union forms behave exactly like
+/// their non-null counterparts once decoded, so they share a form.
 function _media_shape(t: reflect.Type) -> string {
     if (t == reflect.Type.of<image>()) {
         return "one:image";
@@ -51,8 +51,8 @@ function _media_shape(t: reflect.Type) -> string {
     ""
 }
 
-// A media block's payload as its BEP-038 `{kind, source, value, mime}`
-// envelope — the form `baml.json.from_json<Out>` decodes media back from.
+/// (internal) A media block's payload as its BEP-038 `{kind, source, value, mime}`
+/// envelope — the form `baml.json.from_json<Out>` decodes media back from.
 function _media_envelope(m: root.content.Media) -> baml.json.json {
     baml.json.to_json(m.media) catch_all (e) {
         _ => {
@@ -61,7 +61,7 @@ function _media_envelope(m: root.content.Media) -> baml.json.json {
     }
 }
 
-// The turn's media payloads of `kind`, in order (sys_llm's `media_parts`).
+/// (internal) The turn's media payloads of `kind`, in order (sys_llm's `media_parts`).
 function _media_of_kind(turn: root.ModelTurn, kind: string) -> baml.json.json[] {
     let out: baml.json.json[] = [];
     for (let b in turn.content) {
@@ -74,9 +74,9 @@ function _media_of_kind(turn: root.ModelTurn, kind: string) -> baml.json.json[] 
     out
 }
 
-// The turn's non-blank text and image payloads, in document order
-// (sys_llm's `mixed_text_image_parts`). Blank text is dropped, as are
-// reasoning and tool-use blocks, which were never output parts.
+/// (internal) The turn's non-blank text and image payloads, in document order
+/// (sys_llm's `mixed_text_image_parts`). Blank text is dropped, as are
+/// reasoning and tool-use blocks, which were never output parts.
 function _media_mixed_parts(turn: root.ModelTurn) -> baml.json.json[] {
     let items: baml.json.json[] = [];
     for (let b in turn.content) {
@@ -118,8 +118,8 @@ function _media_join_text(items: baml.json.json[]) -> baml.json.json {
     out
 }
 
-// sys_llm's `reject_mixed_media_only_output`: a media-only output type refuses
-// to silently drop whatever else the model said.
+/// (internal) sys_llm's `reject_mixed_media_only_output`: a media-only output type refuses
+/// to silently drop whatever else the model said.
 function _media_reject_mixed(turn: root.ModelTurn, kind: string, provider: string) -> void {
     let unexpected = 0;
     for (let b in turn.content) {

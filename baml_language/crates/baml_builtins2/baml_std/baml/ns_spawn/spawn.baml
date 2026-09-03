@@ -1,22 +1,23 @@
-/// BEP-034 — spawn options and `with` middleware.
-///
-/// This namespace holds the values a `spawn` can be configured with: a
-/// `CancelToken` for cooperative cancellation, a `TaskGroup` for rate
-/// limiting, and the `detach` flag — plus `SpawnParams`, the value a
-/// `spawn ... with` middleware pipeline transforms before the runtime
-/// creates the future.
+//! BEP-034 — spawn options and `with` middleware.
+//!
+//! This namespace holds the values a `spawn` can be configured with: a
+//! `CancelToken` for cooperative cancellation, a `TaskGroup` for rate
+//! limiting, and the `detach` flag — plus `Params`, the value a
+//! `spawn ... with` middleware pipeline transforms before the runtime
+//! creates the future.
 
-/// Every `spawn` implicitly constructs a `SpawnParams` from its name and
+/// The parameters for spawning a new green thread.
+///
+/// Every `spawn` implicitly constructs a `Params` from its name and
 /// body; the `with` pipeline transforms it left-to-right before the runtime
 /// creates the future. Each transformer is an ordinary function
-/// `(SpawnParams<T, E>) -> SpawnParams<U, F>` — it may set config fields,
+/// `(Params<T, E>) -> Params<U, F>` — it may set config fields,
 /// wrap `body` (retry, timing), or replace it entirely (type-changing
 /// transformers like a fallback that erases the error type).
-///
-/// NOTE for the runtime: the engine reads these fields BY INDEX at the spawn
-/// dispatch site (body=0, name=1, group=2, cancel=3, detach=4) — keep the
-/// declaration order in sync with `bex_engine`'s `read_spawn_params`.
-class SpawnParams<T, E> {
+class Params<T, E> {
+    // NOTE for the runtime: the engine reads these fields BY INDEX at the spawn
+    // dispatch site (body=0, name=1, group=2, cancel=3, detach=4) — keep the
+    // declaration order in sync with `bex_engine`'s `read_spawn_params`.
     body: () -> T throws E,
     name: string?,
     group: TaskGroup?,
@@ -24,10 +25,14 @@ class SpawnParams<T, E> {
     detach: bool,
 }
 
-/// Caps how many spawns referencing it run concurrently. Excess spawns queue
-/// FIFO and start as earlier ones settle; the `spawn` still returns its
-/// `Future` immediately, so queueing is invisible. Two spawns share a limit iff
-/// they reference the same `TaskGroup` value — there is no global registry.
+/// A logical group of green threads.
+///
+/// These have three primary purposes:
+/// - Task groups limit how many spawns referencing it run concurrently. Excess spawns queue
+///   FIFO and start as earlier ones settle; the `spawn` still returns its
+///   `Future` immediately, so queueing is invisible.
+/// - Shared cancellation: calling `cancel` on a group cancels all tasks in the group.
+/// - Debugging: task groups have an optional name and provide logical grouping of tasks.
 class TaskGroup {
     _handle: $rust_type,
 
@@ -78,10 +83,21 @@ class TaskGroup {
     }
 }
 
-/// A cooperative, one-shot cancellation handle backed by a runtime
+/// A one-shot cancellation handle backed by a runtime
 /// cancellation token. Passing one via `options(cancel = ...)` links it into a
-/// spawned task's effective token: once fired, the task's next `await` throws
+/// spawned task's effective token: once fired, the task's next `await` panics with
 /// `baml.panics.Cancelled`. Once cancelled, a token stays cancelled forever.
+///
+/// # Examples
+///
+/// ```baml
+/// let token = baml.spawn.CancelToken.new()
+/// spawn with baml.spawn.options(cancel = token) {
+///     baml.sys.sleep(baml.time.Duration.from_seconds(5)); // cancellation triggers here inside `sleep`
+///     baml.io.println("sleep finished");
+/// }
+/// token.cancel();
+/// ```
 class CancelToken {
     _handle: $rust_type,
 
@@ -124,9 +140,9 @@ function options<T, E>(
     group: TaskGroup? = null,
     cancel: CancelToken? = null,
     detach: bool? = null,
-) -> (SpawnParams<T, E>) -> SpawnParams<T, E> throws never {
-    (params: SpawnParams<T, E>) -> SpawnParams<T, E> {
-        SpawnParams {
+) -> (Params<T, E>) -> Params<T, E> throws never {
+    (params: Params<T, E>) -> Params<T, E> {
+        Params {
             body: params.body,
             name: params.name,
             group: group ?? params.group,

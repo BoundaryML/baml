@@ -107,12 +107,12 @@ Done doneResult = await UserFunctions.EchoDoneAsync(new Done());
 Require(doneResult is not null, "iter.Done structural roundtrip changed");
 
 Require(
-    UserFunctions.EchoCsvErrorKind(CsvErrorKind.FieldCount) == CsvErrorKind.FieldCount,
+    UserFunctions.EchoCsvErrorKind(Baml.Csv.ErrorKind.FieldCount) == Baml.Csv.ErrorKind.FieldCount,
     "CSV error enum roundtrip changed");
 
-var csvError = new CsvError
+var csvError = new Baml.Csv.Error
 {
-    Kind = CsvErrorKind.Decode,
+    Kind = Baml.Csv.ErrorKind.Decode,
     Message = "bad cell\0雪",
     Line = 41,
     Record = 39,
@@ -121,7 +121,7 @@ var csvError = new CsvError
     Expected = null,
     Found = null,
 };
-CsvError csvErrorResult = UserFunctions.EchoCsvError(csvError);
+Baml.Csv.Error csvErrorResult = UserFunctions.EchoCsvError(csvError);
 Require(
     csvErrorResult.Kind == csvError.Kind
         && csvErrorResult.Message == csvError.Message
@@ -133,8 +133,8 @@ Require(
         && csvErrorResult.Found is null,
     "CSV error roundtrip changed");
 
-var position = new CsvPosition { Byte = 9, Line = 2, Record = 1 };
-CsvPosition positionResult = await UserFunctions.EchoCsvPositionAsync(position);
+var position = new Baml.Csv.Position { Byte = 9, Line = 2, Record = 1 };
+Baml.Csv.Position positionResult = await UserFunctions.EchoCsvPositionAsync(position);
 Require(
     positionResult.Byte == position.Byte
         && positionResult.Line == position.Line

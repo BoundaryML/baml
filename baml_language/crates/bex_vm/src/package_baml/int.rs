@@ -1,7 +1,7 @@
 use bex_vm_types::Value;
 
 use super::{BamlClassInt, PackageBamlImpl};
-use crate::errors::{VmBamlError, VmRustFnError};
+use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
 
 /// Number of values in the BAML `int` domain.
 const INT_DOMAIN_SPAN: u128 = (Value::INT_MAX as i128 - Value::INT_MIN as i128 + 1).cast_unsigned();
@@ -14,8 +14,8 @@ impl BamlClassInt for PackageBamlImpl {
         // absolute value of `Value::INT_MIN` (`-2^62`) is `2^62`, which is
         // ONE PAST `Value::INT_MAX` and therefore not representable.
         if int == Value::INT_MIN {
-            return Err(VmBamlError::InvalidArgument {
-                message: "int.abs: cannot represent the absolute value of int.min_value() (would overflow)".to_string(),
+            return Err(VmPanic::IntegerOverflow {
+                message: format!("abs({int}) overflows int"),
             }
             .into());
         }

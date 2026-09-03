@@ -212,7 +212,7 @@ fn render_to_json_done(
 /// default. Mirrors `root.rs`'s `render_to_string`, but produces a
 /// `serde_json::Value` instead of a `String` and can fail: a value with no json
 /// representation (`uint8array` without explicit encoding, functions, futures,
-/// ...) raises `JsonSerializationError`. A node whose runtime class overrides
+/// ...) raises `SerializationError`. A node whose runtime class overrides
 /// `baml.ToJson` (recorded pre-order in `pending` by `collect_to_json_overrides`)
 /// is rendered via its precomputed `results[*counter]`. Because collect and
 /// render share the same pre-order, `pending[*counter]` is exactly the next
@@ -429,9 +429,9 @@ impl Continuation for ToJsonWalkContinuation {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const JSON_PARSE_ERROR_FQN: &str = "baml.json.JsonParseError";
-const JSON_DECODE_ERROR_FQN: &str = "baml.json.JsonDecodeError";
-const JSON_SERIALIZATION_ERROR_FQN: &str = "baml.json.JsonSerializationError";
+const JSON_PARSE_ERROR_FQN: &str = "baml.json.ParseError";
+const JSON_DECODE_ERROR_FQN: &str = "baml.json.DecodeError";
+const JSON_SERIALIZATION_ERROR_FQN: &str = "baml.json.SerializationError";
 
 // ─── Trait implementation ─────────────────────────────────────────────────────
 
@@ -516,7 +516,7 @@ impl BamlNamespaceJson for PackageBamlImpl {
 /// - JSON array    → heap-boxed `Object::Array`
 /// - JSON object   → heap-boxed `Object::Map`
 ///
-/// On failure, throws a `baml.json.JsonParseError { message }` instance.
+/// On failure, throws a `baml.json.ParseError { message }` instance.
 pub fn json_parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
     let parsed: serde_json::Value = serde_json::from_str(s).map_err(|e| {
         let msg = e.to_string();
@@ -732,7 +732,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
 /// Serialize a VM `Value` to a JSON string driven by the runtime `RealizedTy`.
 ///
 /// Walks the value matching the shape of `ty`.  Throws
-/// `JsonSerializationError` for non-representable types (`uint8array`,
+/// `SerializationError` for non-representable types (`uint8array`,
 /// function values, etc.).
 pub fn json_to_string_typed(
     vm: &mut BexVm,
@@ -1114,7 +1114,7 @@ pub(crate) fn read_media_value(
 /// Parse a JSON string and coerce it to a VM `Value` of the given runtime
 /// `RealizedTy`.
 ///
-/// Throws `JsonParseError` for invalid JSON and `JsonDecodeError` when the
+/// Throws `ParseError` for invalid JSON and `DecodeError` when the
 /// parsed JSON does not match the target type.
 pub fn json_from_string_typed(
     vm: &mut BexVm,
@@ -1133,7 +1133,7 @@ pub fn json_from_string_typed(
 }
 
 /// Walk a parsed `serde_json::Value` driven by `ty`, allocating VM values.
-/// Throws `JsonDecodeError` on shape mismatch.
+/// Throws `DecodeError` on shape mismatch.
 fn ty_serde_to_value(
     vm: &mut BexVm,
     json: &serde_json::Value,

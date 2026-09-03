@@ -10,11 +10,14 @@
 //! - `Glob.matches(path)` — pure-Rust glob matching via the compiled
 //!   `GlobPattern` from the handle.
 
-use std::sync::Arc;
+use std::{
+    any::{Any as _, TypeId},
+    sync::Arc,
+};
 
 use sys_glob::GlobPattern;
 use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, owned};
-use sys_types::BexHeap;
+use sys_types::{BexHeap, VmInternalError, VmPanic};
 
 use crate::{send_wrapper::SendWrapper, wasm_vfs::WasmVfs};
 
@@ -42,12 +45,13 @@ impl WasmIoGlob {
 
 type GlobHandle = GlobPattern;
 
-fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmBamlError> {
+fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmInternalError> {
     glob._handle
         .clone()
         .downcast::<GlobHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid glob handle type".into(),
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<GlobHandle>(),
+            got: glob._handle.type_id(),
         })
 }
 
@@ -64,7 +68,7 @@ impl io::IoNamespaceGlob for WasmIoGlob {
                 let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(compiled);
                 SysOpOutput::ok(owned::glob::Glob { _handle: handle })
             }
-            Err(e) => SysOpOutput::err(VmBamlError::InvalidArgument { message: e }),
+            Err(e) => SysOpOutput::err(VmBamlError::ParseError { message: e }),
         }
     }
 }
@@ -88,7 +92,22 @@ impl io::IoClassGlobGlob for WasmIoGlob {
         };
         let scan_args = match ScanArgs::from_root(&root) {
             Ok(args) => args,
-            Err(e) => return SysOpOutput::err(VmBamlError::InvalidArgument { message: e }),
+            // `root` is declared `string | ScanOptions`, so a value of any
+            // other shape means the wire value disagrees with the declared
+            // parameter type.
+            Err(ScanArgError::Shape(message)) => {
+                return SysOpOutput::err(VmInternalError::BridgeFailure { message });
+            }
+            // A legal option this host cannot honor is a missing host
+            // capability, not a bridge fault: `scan` declares only `throws
+            // Io`, so it surfaces on the panic channel like every other
+            // absent facility.
+            Err(ScanArgError::Unsupported(message)) => {
+                return SysOpOutput::err(VmPanic::HostUnavailable {
+                    resource: "filesystem".to_string(),
+                    message,
+                });
+            }
         };
 
         let mut scanned_paths = Vec::new();
@@ -149,8 +168,17 @@ struct ScanArgs {
     only_files: bool,
 }
 
+/// Why [`ScanArgs::from_root`] rejected the wire value.
+enum ScanArgError {
+    /// The value disagrees with the declared `string | ScanOptions` type: a
+    /// bridge fault, never something user code can provoke.
+    Shape(String),
+    /// A legal `ScanOptions` value this host cannot honor.
+    Unsupported(String),
+}
+
 impl ScanArgs {
-    fn from_root(root: &BexExternalValue) -> Result<Self, String> {
+    fn from_root(root: &BexExternalValue) -> Result<Self, ScanArgError> {
         match root {
             BexExternalValue::String(cwd) => Ok(Self {
                 cwd: normalize_cwd(cwd),
@@ -159,24 +187,28 @@ impl ScanArgs {
                 only_files: true,
             }),
             BexExternalValue::Instance { fields, .. } => {
-                let cwd = get_string_field(fields, "cwd", ".")?;
-                let dot = get_bool_field(fields, "dot", false)?;
-                let absolute = get_bool_field(fields, "absolute", false)?;
-                let only_files = get_bool_field(fields, "only_files", true)?;
+                let cwd = get_string_field(fields, "cwd", ".").map_err(ScanArgError::Shape)?;
+                let dot = get_bool_field(fields, "dot", false).map_err(ScanArgError::Shape)?;
+                let absolute =
+                    get_bool_field(fields, "absolute", false).map_err(ScanArgError::Shape)?;
+                let only_files =
+                    get_bool_field(fields, "only_files", true).map_err(ScanArgError::Shape)?;
                 // The WASM bridge has no symlink concept (entries come from a
                 // VFS that doesn't model symlinks). Reject explicit non-default
                 // values for these options instead of silently no-opping, so
                 // users don't think the option took effect.
-                if get_bool_field(fields, "follow_symlinks", false)? {
-                    return Err(
+                if get_bool_field(fields, "follow_symlinks", false).map_err(ScanArgError::Shape)? {
+                    return Err(ScanArgError::Unsupported(
                         "ScanOptions.follow_symlinks is not supported in the WASM bridge".into(),
-                    );
+                    ));
                 }
-                if get_bool_field(fields, "throw_error_on_broken_symlink", false)? {
-                    return Err(
+                if get_bool_field(fields, "throw_error_on_broken_symlink", false)
+                    .map_err(ScanArgError::Shape)?
+                {
+                    return Err(ScanArgError::Unsupported(
                         "ScanOptions.throw_error_on_broken_symlink is not supported in the WASM bridge"
                             .into(),
-                    );
+                    ));
                 }
                 Ok(Self {
                     cwd: normalize_cwd(&cwd),
@@ -185,7 +217,9 @@ impl ScanArgs {
                     only_files,
                 })
             }
-            _ => Err("scan argument must be a string or ScanOptions".into()),
+            _ => Err(ScanArgError::Shape(
+                "scan argument must be a string or ScanOptions".into(),
+            )),
         }
     }
 }
