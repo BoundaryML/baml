@@ -56,7 +56,7 @@
     "shiki": "^3.21.0",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4",
-    "uuid": "^13.0.0"
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
