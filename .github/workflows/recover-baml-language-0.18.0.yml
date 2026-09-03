@@ -7,9 +7,7 @@ run-name: Publish BAML toolchain 0.18.0 from verified release artifacts
 # unrelated SDK verification gates before any publisher could run.
 on:
   push:
-    branches: [sxlijin/publish-baml-toolchain-0.18.0]
-    paths:
-      - .github/workflows/recover-baml-language-0.18.0.yml
+    tags: [baml-language-source-recovery-*]
 
 permissions:
   actions: read
@@ -27,7 +25,7 @@ defaults:
 env:
   RELEASE_RUN_ID: "33224762615"
   RELEASE_RUN_ATTEMPT: "2"
-  RELEASE_TRIGGER_PARENT_SHA: 767ff069e0f1ca06f0b65ca00317fabbaf244302
+  RELEASE_TRIGGER_TAG_PREFIX: baml-language-source-recovery-
   RELEASE_SOURCE_SHA: 7622555396a99db466afaea09dea2cad259d4033
   RELEASE_SOURCE_CI_RUN_ID: "33224009970"
   RELEASE_SOURCE_REF: baml-language-source-7622555396a99db466afaea09dea2cad259d4033
@@ -40,17 +38,19 @@ env:
 jobs:
   publish:
     name: Verify and publish main toolchain assets
-    if: ${{ github.repository == 'BoundaryML/baml' && github.ref == 'refs/heads/sxlijin/publish-baml-toolchain-0.18.0' }}
+    if: ${{ github.repository == 'BoundaryML/baml' && startsWith(github.ref, 'refs/tags/baml-language-source-recovery-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - name: Require the intended one-shot trigger
         env:
-          BEFORE_SHA: ${{ github.event.before }}
+          TRIGGER_REF_NAME: ${{ github.ref_name }}
+          TRIGGER_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          if [[ "$BEFORE_SHA" != "$RELEASE_TRIGGER_PARENT_SHA" ]]; then
-            echo "::error::unexpected trigger parent $BEFORE_SHA; expected $RELEASE_TRIGGER_PARENT_SHA"
+          expected="$RELEASE_TRIGGER_TAG_PREFIX$TRIGGER_SHA"
+          if [[ "$TRIGGER_REF_NAME" != "$expected" ]]; then
+            echo "::error::unexpected recovery tag $TRIGGER_REF_NAME; expected $expected"
             exit 1
           fi
 
