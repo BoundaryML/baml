@@ -1132,7 +1132,7 @@ jobs:
         run: chmod -R +x baml_language/target/codspeed/walltime
 
       - name: "Run benchmarks (walltime)"
-        uses: CodSpeedHQ/action@v4
+        uses: CodSpeedHQ/action@v5
         # Benchmarks are advisory — never block a merge on a measurement blip.
         continue-on-error: true
         env:

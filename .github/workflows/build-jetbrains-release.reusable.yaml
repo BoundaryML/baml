@@ -46,12 +46,12 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Java
         uses: ./.github/actions/setup-java
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       # Set environment variables
       - name: Export Properties
@@ -88,7 +88,7 @@ jobs:
 
   #     # Check out the current repository
   #     - name: Fetch Sources
-  #       uses: actions/checkout@v6
+  #       uses: actions/checkout@v7
 
   #     # Set up Java environment for the next steps
   #     - name: Setup Java
@@ -99,7 +99,7 @@ jobs:
 
   #     # Setup Gradle
   #     - name: Setup Gradle
-  #       uses: gradle/actions/setup-gradle@v4
+  #       uses: gradle/actions/setup-gradle@v6
 
   #     # Run tests
   #     - name: Run Tests
@@ -130,7 +130,7 @@ jobs:
   #     pull-requests: write
   #   steps:
   #     # Check out the current repository
-  #     - uses: actions/checkout@v6
+  #     - uses: actions/checkout@v7
   #       with:
   #         ref: ${{ github.event.pull_request.head.sha }}  # to check out the actual pull request commit, not the merge commit
   #         fetch-depth: 0  # a full history is required for pull request analysis
@@ -155,16 +155,16 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Java
         uses: ./.github/actions/setup-java
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Cache Plugin Verifier IDEs
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ${{ needs.build.outputs.pluginVerifierHomeDir }}/ides
           key: jetbrains-plugin-verifier-${{ runner.os }}-${{ hashFiles('jetbrains/gradle.properties') }}

@@ -28,7 +28,7 @@ jobs:
       CRATES: baml baml-cli baml-macros baml-sys
     steps:
       - name: Checkout one-off release tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
