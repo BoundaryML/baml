@@ -437,3 +437,31 @@ jobs:
           test -x "$cli"
           "$cli" --version | grep -F "baml-cli $RELEASE_VERSION"
           echo "Published and installed $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Promote and verify the canary manifest
+        run: |
+          set -euo pipefail
+          source="manifests/version/$RELEASE_VERSION.json"
+          destination="manifest/v1/canary.json"
+          aws s3 cp "$source" "s3://$PKG_BUCKET/$destination" \
+            --content-type application/json \
+            --cache-control "public, max-age=60, must-revalidate"
+
+          public="$RUNNER_TEMP/public-canary-manifest.json"
+          url="https://pkg.boundaryml.com/$destination"
+          for attempt in $(seq 1 30); do
+            if curl -fsSL "$url?recovery_run=$GITHUB_RUN_ID&attempt=$attempt" -o "$public" && cmp -s "$source" "$public"; then
+              break
+            fi
+            if [[ "$attempt" == 30 ]]; then
+              echo "::error::public canary manifest did not converge: $url"
+              exit 1
+            fi
+            sleep 5
+          done
+          jq -e \
+            --arg version "$RELEASE_VERSION" \
+            --arg source_sha "$RELEASE_SOURCE_SHA" \
+            '.version == $version and .channel == "canary" and .source_sha == $source_sha' \
+            "$public" >/dev/null
+          echo "Promoted $url to $RELEASE_VERSION" >> "$GITHUB_STEP_SUMMARY"
