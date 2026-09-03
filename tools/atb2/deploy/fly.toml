@@ -1,0 +1,43 @@
+# The atb2 runner on Fly. One image; processes are BAML expressions:
+#   pipeline  runs the feedback pipeline every five minutes
+#
+#   fly deploy --config tools/atb2/deploy/fly.toml   (from the repo root; CI does this
+#                                                     on every push to canary touching tools/atb2)
+#
+# One machine per process; both mount the same volume for the cached clone
+# and cargo target, so create the volume once:
+#   fly volumes create atb2_data --size 80 --region sjc -a atb2-runner
+# Secrets are set on the app once, by hand, from Infisical (boundary-tools, prod):
+#   infisical export --projectId <boundary-tools> --env prod --format dotenv \
+#     | grep -E '^(FEEDBACK_SUPABASE_URL|FEEDBACK_SUPABASE_KEY|ATB_SLACK_BOT_TOKEN|ATB_SLACK_FIX_CHANNEL|ATB_POSTHOG_API_KEY|ATB_POSTHOG_PROJECT_ID|ATB_POSTHOG_HOST)=' \
+#     | fly secrets import -a atb2-runner
+#   fly secrets set -a atb2-runner GH_TOKEN=... CLAUDE_CODE_OAUTH_TOKEN=...
+# CI never sees them; it only holds a Fly deploy token.
+app = "atb2-runner"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "tools/atb2/deploy/Dockerfile"
+  # the build context is the repo root (run fly deploy from there)
+
+[env]
+  ATB2_HOME = "/data"
+  ATB2_DATASET = "live"
+  ATB2_POLL_S = "60"
+
+[processes]
+  pipeline = "pipeline_loop(every_s = 300)"
+
+[[mounts]]
+  source = "atb2_data"
+  destination = "/data"
+  processes = ["pipeline"]
+
+# the gate runs cargo builds and nextest: give it room
+[[vm]]
+  size = "performance-8x"
+  memory = "32gb"
+  processes = ["pipeline"]
+
+[checks]
+  # no http surface; liveness is the process itself

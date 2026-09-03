@@ -1932,6 +1932,10 @@ testset "fix_in_budget" with testing.PassRate(0.6) {
                     let target = with_difficulty(reference_as_issue(issue.number, r), r.difficulty);
                     handle_issue(target, mode = HandleMode.DryRun);
                     let out = read_outcome(target) ?? baml.sys.panic("no outcome for #" + key);
+                    // the store, when configured, gets the eval's rows marked dataset=eval
+                    // (run_tests.sh exports ATB2_DATASET=eval); never mixed with live ones
+                    save_issue(target);
+                    save_run(target, out, HandleMode.DryRun);
                     log.info(
                         {
                             "issue": key,

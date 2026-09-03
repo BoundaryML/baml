@@ -39,11 +39,13 @@ class MergeResult {
     rounds: int,
 }
 
-//#merge_issue(pr: string, mode: HandleMode = HandleMode.Live, max_rounds: int = 3) -> MergeResult
+//#merge_issue(pr: string, mode: HandleMode = HandleMode.Live, max_rounds: int = 3, issue_id: string? = null) -> MergeResult
 function merge_issue(
     pr: string,
     mode: HandleMode = HandleMode.Live,
     max_rounds: int = 3,
+    /// The store's issue the PR belongs to, for the merge_rounds rows.
+    issue_id: string? = null,
 ) -> MergeResult {
     let started = baml.time.Instant.now();
     let first = pr_snapshot(pr);
@@ -105,6 +107,17 @@ function merge_issue(
         let round = state.rounds + 1;
         let kind = round_outcome(snap.branch, round);
         state = MergeState { rounds: round, handled_ids: state.handled_ids };
+        //# the round goes to the store
+        save_merge_round(
+            issue_id,
+            pr,
+            round,
+            kind,
+            fb.comments.map((c: ReviewComment) -> int {
+                c.id
+            }),
+            brief,
+        );
         if (kind != "fixed") {
             //## the round ended without a push: nothing on the PR changed
             write_merge_state(snap.branch, state);

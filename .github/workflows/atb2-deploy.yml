@@ -1,0 +1,47 @@
+# Redeploys the atb2 runner (tools/atb2/deploy) on every push to canary that
+# touches tools/atb2. One secret: FLY_API_TOKEN, a deploy token scoped to the
+# atb2-runner app. The runner's own secrets are set on Fly by hand (see
+# tools/atb2/deploy/fly.toml); CI never handles them. The job skips itself
+# until the token exists.
+#
+# The site (typescript2/app-feedback) deploys through the Vercel GitHub app
+# once its project is linked; nothing here touches it.
+name: atb2 deploy
+
+on:
+  push:
+    branches: [canary]
+    paths:
+      - "tools/atb2/**"
+      - ".github/workflows/atb2-deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: atb2-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  runner:
+    name: Fly (atb2-runner)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Skip without a Fly token
+        if: env.FLY_API_TOKEN == ''
+        run: echo "FLY_API_TOKEN is not set; skipping the runner deploy"
+
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+        if: env.FLY_API_TOKEN != ''
+
+      - name: Deploy
+        if: env.FLY_API_TOKEN != ''
+        run: flyctl deploy --config tools/atb2/deploy/fly.toml --remote-only --ha=false
