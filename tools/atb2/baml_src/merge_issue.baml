@@ -7,6 +7,7 @@
 //
 //   cd tools/atb2 && baml run -e 'merge_issue("https://github.com/BoundaryML/baml/pull/4634")'
 //   ATB2_REVIEWERS=coderabbitai[bot],sxlijin   # whose comments are acted on
+//   PRs from forks are refused: the sandbox and the push know origin only.
 //   ATB2_POLL_S=120  ATB2_MAX_WAIT_S=14400
 //
 // Works on any PR of the repo, not only the ones handle_issue opened.
@@ -24,9 +25,9 @@ class MergeResult {
     /// spent with feedback still pending. dry_run: one round, nothing pushed.
     /// round_failed: a round ended without a push (gate failed, agent
     /// stopped); nothing on the PR changed, so a human takes it from here.
-    /// fork_refused: the PR's branch lives in another repository; its code
-    /// would run on this host (build scripts, tests, the agent), so it is
-    /// not touched unless ATB2_ALLOW_FORKS=1.
+    /// fork_refused: the PR's branch lives in another repository. Its code
+    /// would run on this host, and the sandbox and the push only know
+    /// origin, so a fork's branch is never touched.
     kind: "merged"
         | "green"
         | "closed"
@@ -61,8 +62,9 @@ function merge_issue(
         log.info({ "pr": pr, "result": kind, "rounds": state.rounds });
         MergeResult { kind: kind, pr: pr, rounds: state.rounds }
     };
-    //# refuse: a fork's code would run on this host
-    if (first.cross_repo && !forks_allowed()) {
+    //# refuse: a fork's code would run on this host, and the sandbox and
+    //# the push resolve branches against origin only
+    if (first.cross_repo) {
         return done("fork_refused");
     };
     //# poll the PR until it merges, closes, or something needs fixing
@@ -213,12 +215,6 @@ function max_wait_s() -> int {
     int.parse(baml.env.get("ATB2_MAX_WAIT_S") ?? "14400") catch (_) {
         _ => 14400,
     }
-}
-
-/// Whether a PR from a fork may be worked on. Off by default: the PR's
-/// branch is built and tested here, and the agent runs Bash in it.
-function forks_allowed() -> bool {
-    (baml.env.get("ATB2_ALLOW_FORKS") ?? "0") == "1"
 }
 
 /// GitHub logins whose review comments are acted on. Humans are not on the
@@ -707,7 +703,6 @@ testset "merge_issue" {
 
     test "config defaults" {
         assert.equal(reviewers(), ["coderabbitai[bot]"]);
-        assert.equal(forks_allowed(), false);
         assert.is_true(poll_s() > 0 && max_wait_s() > poll_s());
     }
 }
