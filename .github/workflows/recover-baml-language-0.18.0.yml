@@ -14,6 +14,7 @@ on:
 permissions:
   actions: read
   contents: write
+  id-token: write
 
 concurrency:
   group: publish-baml-toolchain-0.18.0
@@ -26,12 +27,15 @@ defaults:
 env:
   RELEASE_RUN_ID: "33224762615"
   RELEASE_RUN_ATTEMPT: "2"
-  RELEASE_TRIGGER_PARENT_SHA: 449216608e5232a6a29306116e6ccdb9922e6b27
+  RELEASE_TRIGGER_PARENT_SHA: 767ff069e0f1ca06f0b65ca00317fabbaf244302
   RELEASE_SOURCE_SHA: 7622555396a99db466afaea09dea2cad259d4033
   RELEASE_SOURCE_CI_RUN_ID: "33224009970"
   RELEASE_SOURCE_REF: baml-language-source-7622555396a99db466afaea09dea2cad259d4033
   RELEASE_TAG: baml-language-0.18.0
   RELEASE_VERSION: 0.18.0
+  AWS_REGION: us-east-1
+  AWS_ROLE_ARN: arn:aws:iam::277707123528:role/pkg-boundaryml-com-github-release
+  PKG_BUCKET: pkgboundarymlcomstack-pkgboundarymlcomsitebucket4f-ybhvygkqittp
 
 jobs:
   publish:
@@ -289,3 +293,147 @@ jobs:
             exit 1
           fi
           echo "Published https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate the toolchain-only exact-version manifest
+        run: |
+          set -euo pipefail
+          mkdir -p manifests/version
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          version = os.environ["RELEASE_VERSION"]
+          tag = os.environ["RELEASE_TAG"]
+          repository = os.environ["GITHUB_REPOSITORY"]
+          source_sha = os.environ["RELEASE_SOURCE_SHA"]
+          released_at = json.loads(Path("recovered-plan/release-plan.json").read_text())["released_at"]
+          contract = json.loads(Path("release/platforms.json").read_text())
+          expected_targets = {
+              target["triple"]
+              for target in contract["targets"]
+              if target["artifacts"].get("toolchain") is not None
+              and not target["artifacts"]["toolchain"].get("experimental", False)
+          }
+
+          def digest(path: Path) -> str:
+              value = hashlib.sha256()
+              with path.open("rb") as source:
+                  for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                      value.update(chunk)
+              return value.hexdigest()
+
+          artifacts = {}
+          prefix = f"baml-language-{version}-"
+          for path in sorted(Path("dist/toolchain").iterdir()):
+              if path.name.endswith(".sha256") or not path.name.startswith(prefix):
+                  continue
+              target = path.name.removeprefix(prefix)
+              for suffix in (".tar.gz", ".zip"):
+                  if target.endswith(suffix):
+                      target = target.removesuffix(suffix)
+                      break
+              else:
+                  continue
+              artifacts[target] = {
+                  "url": f"https://github.com/{repository}/releases/download/{tag}/{path.name}",
+                  "sha256": digest(path),
+              }
+
+          if set(artifacts) != expected_targets:
+              raise SystemExit(
+                  f"toolchain target mismatch: actual={sorted(artifacts)} expected={sorted(expected_targets)}"
+              )
+          vsix_files = list(Path("dist/vsix").glob("*.vsix"))
+          if len(vsix_files) != 1:
+              raise SystemExit(f"expected one VSIX, found {len(vsix_files)}")
+          vsix = vsix_files[0]
+          manifest = {
+              "schema": 1,
+              "version": version,
+              "channel": "canary",
+              "released_at": released_at,
+              "artifacts": artifacts,
+              "vsix": {
+                  "url": f"https://github.com/{repository}/releases/download/{tag}/{vsix.name}",
+                  "sha256": digest(vsix),
+              },
+              "source_sha": source_sha,
+          }
+          output = Path("manifests/version") / f"{version}.json"
+          output.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+          PY
+          jq -e \
+            --arg version "$RELEASE_VERSION" \
+            --arg source_sha "$RELEASE_SOURCE_SHA" \
+            '
+              .schema == 1
+              and .version == $version
+              and .channel == "canary"
+              and .source_sha == $source_sha
+              and (.artifacts | length == 8)
+              and (.vsix.url | endswith("/baml-language-0.18.0.vsix"))
+            ' "manifests/version/$RELEASE_VERSION.json" >/dev/null
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: toolchain-manifest-0.18.0
+          path: manifests/version/0.18.0.json
+          if-no-files-found: error
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: baml-toolchain-018-recovery-${{ github.run_id }}
+
+      - name: Publish the immutable exact-version manifest
+        run: |
+          set -euo pipefail
+          source="manifests/version/$RELEASE_VERSION.json"
+          destination="manifest/v1/version/$RELEASE_VERSION.json"
+          existing="$RUNNER_TEMP/existing-manifest.json"
+          error="$RUNNER_TEMP/existing-manifest-error.txt"
+          if aws s3api head-object --bucket "$PKG_BUCKET" --key "$destination" >/dev/null 2>"$error"; then
+            aws s3 cp "s3://$PKG_BUCKET/$destination" "$existing" >/dev/null
+            if ! cmp -s "$source" "$existing"; then
+              echo "::error::immutable manifest already exists with different content: $destination"
+              exit 1
+            fi
+            echo "immutable manifest already exists and matches: $destination"
+          elif grep -Eq '(\(404\)|Not Found|NoSuchKey)' "$error"; then
+            aws s3 cp "$source" "s3://$PKG_BUCKET/$destination" \
+              --content-type application/json \
+              --cache-control "public, max-age=86400, immutable"
+          else
+            cat "$error"
+            echo "::error::failed to inspect immutable manifest destination: $destination"
+            exit 1
+          fi
+
+      - name: Dogfood the public 0.18.0 toolchain
+        run: |
+          set -euo pipefail
+          manifest="manifests/version/$RELEASE_VERSION.json"
+          public="$RUNNER_TEMP/public-manifest.json"
+          url="https://pkg.boundaryml.com/manifest/v1/version/$RELEASE_VERSION.json"
+          for attempt in $(seq 1 30); do
+            if curl -fsSL "$url?recovery_run=$GITHUB_RUN_ID&attempt=$attempt" -o "$public" && cmp -s "$manifest" "$public"; then
+              break
+            fi
+            if [[ "$attempt" == 30 ]]; then
+              echo "::error::public exact-version manifest did not converge: $url"
+              exit 1
+            fi
+            sleep 5
+          done
+
+          install="$RUNNER_TEMP/install.sh"
+          curl -fsSL https://pkg.boundaryml.com/install.sh -o "$install"
+          export BAML_HOME="$RUNNER_TEMP/baml-home"
+          sh "$install" --version "$RELEASE_VERSION" --no-modify-path --yes
+          cli="$BAML_HOME/toolchains/$RELEASE_VERSION/bin/baml-cli"
+          test -x "$cli"
+          "$cli" --version | grep -F "baml-cli $RELEASE_VERSION"
+          echo "Published and installed $url" >> "$GITHUB_STEP_SUMMARY"
