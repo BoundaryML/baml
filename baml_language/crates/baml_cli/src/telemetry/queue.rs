@@ -120,6 +120,12 @@ fn set_owner_only_file_permissions(_file: &fs::File) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Open a queue file without reading it and normalize its permissions in place.
+fn normalize_queue_file_permissions(path: &Path) -> std::io::Result<()> {
+    let file = fs::File::open(path)?;
+    set_owner_only_file_permissions(&file)
+}
+
 /// Seal a live file (rename `live_*` → `sealed_*`) if it has any content.
 /// Returns the sealed path, or `None` if the file was missing/empty (in
 /// which case an empty leftover is removed). Rename is atomic on POSIX
@@ -201,6 +207,12 @@ pub(super) fn spawn_flush_child() {
 /// Runs in the detached child, after the parent CLI has already exited,
 /// so nothing here is latency-sensitive.
 pub(super) fn drain(dir: &Path, disabled: bool) {
+    // A detached flush may encounter a queue created by an older CLI without
+    // calling `append_line` first. Tighten the directory before scanning it.
+    if set_owner_only_dir_permissions(dir).is_err() {
+        return;
+    }
+
     if disabled {
         // Opt-out wins retroactively and completely: remove *every* queue
         // file — `live_*` (possibly still being written by a long-running
@@ -256,6 +268,10 @@ fn claim(sealed: &Path) -> Option<PathBuf> {
     let name = sealed.file_name()?.to_str()?;
     let claimed = sealed.with_file_name(format!("sending_{}_{name}", std::process::id()));
     fs::rename(sealed, &claimed).ok()?;
+    if normalize_queue_file_permissions(&claimed).is_err() {
+        let _ = unclaim(&claimed);
+        return None;
+    }
     Some(claimed)
 }
 
@@ -415,6 +431,35 @@ mod tests {
 
         assert_eq!(
             fs::metadata(&existing_live).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn drain_and_claim_normalize_preexisting_queue_permissions() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let root = tempfile::tempdir().unwrap();
+        let queue = root.path().join("telemetry");
+        fs::create_dir(&queue).unwrap();
+        fs::set_permissions(&queue, fs::Permissions::from_mode(0o755)).unwrap();
+
+        drain(&queue, false);
+
+        assert_eq!(
+            fs::metadata(&queue).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+
+        let sealed = queue.join("sealed_1_existing.jsonl");
+        fs::write(&sealed, r#"{"event":"a"}"#).unwrap();
+        fs::set_permissions(&sealed, fs::Permissions::from_mode(0o644)).unwrap();
+
+        let claimed = claim(&sealed).expect("existing sealed file should be claimed");
+
+        assert_eq!(
+            fs::metadata(&claimed).unwrap().permissions().mode() & 0o777,
             0o600
         );
     }
