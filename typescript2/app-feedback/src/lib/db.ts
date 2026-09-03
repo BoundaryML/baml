@@ -24,12 +24,24 @@ export const dataSource: DataSource = URL && KEY ? "supabase" : "mock";
 /** Seconds a page result is cached before PostgREST is asked again. */
 export const REVALIDATE_S = 30;
 
+/** Milliseconds a PostgREST request may take before the page fails instead of hanging. */
+const TIMEOUT_MS = 10_000;
+
 async function rest<T>(path: string): Promise<T> {
   if (!URL || !KEY) throw new Error("supabase is not configured");
-  const res = await fetch(`${URL}/rest/v1/${path}`, {
-    headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: "application/json" },
-    next: { revalidate: REVALIDATE_S },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${URL}/rest/v1/${path}`, {
+      headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: "application/json" },
+      next: { revalidate: REVALIDATE_S },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "TimeoutError") {
+      throw new Error(`supabase: no answer within ${TIMEOUT_MS / 1000}s for ${path}`);
+    }
+    throw err;
+  }
   if (!res.ok) {
     throw new Error(`supabase: ${res.status} for ${path}: ${(await res.text()).slice(0, 200)}`);
   }
