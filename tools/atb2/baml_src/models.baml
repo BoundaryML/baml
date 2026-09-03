@@ -5,6 +5,8 @@
 enum FeedbackSource {
     BamlFeedback,
     Github,
+    /// A report posted in the intake channel (slack.baml).
+    Slack,
 }
 
 /// The reporter. At least one identity must be present — enforced by
