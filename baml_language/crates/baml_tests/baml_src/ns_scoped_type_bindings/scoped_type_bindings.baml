@@ -107,9 +107,35 @@ test "a scoped runtime type in the error channel runs" {
     assert.equal(outcome, 0)
 }
 
+// A declared `throws unknown` is the nearest relaxation of a thrown `Boom<T>`
+// or `T[]` (their arguments are invariant, so nothing closer than `unknown`
+// is free of `T`), so the clause is precise, not extraneous. The thrown value
+// keeps its runtime type.
+function throws_boom(t: reflect.Type) -> int throws unknown {
+    type T = unreflect(t)
+    risky<T>(as_t<T>("x"), true)
+}
+
+function throws_list(t: reflect.Type) -> string throws unknown {
+    type T = unreflect(t)
+    let v: T = as_t<T>(1)
+    let a: T[] = [v]
+    throw a
+}
+
+test "a declared throws unknown covers a scoped thrown type" {
+    let string_t = reflect.Type.of<string>()
+    let int_t = reflect.Type.of<int>()
+    let boomed = throws_boom(string_t) catch (e) { _ => e }
+    let listed = throws_list(int_t) catch (e) { _ => e }
+    assert.is_true(reflect.Type.of_value(boomed) == reflect.Type.of<Boom<string>>())
+    assert.is_true(reflect.Type.of_value(listed) == reflect.Type.of<int[]>())
+}
+
 // What leaves a block. A value leaves only through a type that does not
 // mention the binding (`-> unknown`, an `unknown` annotation), and a thrown
-// type only through a catch inside the block.
+// type only through a catch inside the block or a clause that names its
+// nearest relaxation.
 function leaves_as_unknown(t: reflect.Type) -> unknown {
     type T = unreflect(t)
     as_t<T>(1)

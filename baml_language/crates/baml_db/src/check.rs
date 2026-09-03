@@ -1567,7 +1567,7 @@ fn new_tir_diagnostic(
                 "this has type `{value}`; a value leaves the block only through a type that does not mention `{name}`, such as `unknown`"
             ),
             ScopedTypeEscapeKind::Thrown => format!(
-                "this throws `{value}`, which would be published past the block; catch it inside the block instead"
+                "this throws `{value}`, which would be published past the block; catch it inside the block, or declare a `throws` clause naming its nearest relaxation"
             ),
         };
         return runtime_type::scoped_type_escapes_block(name.as_str())

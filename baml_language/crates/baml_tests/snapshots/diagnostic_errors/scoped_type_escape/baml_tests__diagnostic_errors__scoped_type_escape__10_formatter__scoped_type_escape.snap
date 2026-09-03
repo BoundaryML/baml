@@ -78,6 +78,44 @@ function outer_container_takes_the_binding(t: reflect.Type) -> unknown {
     xs
 }
 
+// With no clause, a thrown `T[]` cannot be published, and it is never
+// relaxed for the author: its nearest relaxation is `unknown` (an invariant
+// `T[]` collapses whole, never to `unknown[]`), which the clause must say.
+function thrown_list_without_a_clause(t: reflect.Type) -> string {
+    type T = unreflect(t)
+    let v: T = as_t<T>(1);
+    let a: T[] = [v];
+    throw a
+}
+
+// `unknown[]` is NOT a relaxation of `T[]`, nor `Boom<unknown>` of
+// `Boom<T>`: their arguments are invariant, so the clause must say `unknown`.
+// Each is judged at the throw against the clause as written.
+function list_relaxed_wrongly(t: reflect.Type) -> string throws unknown[] | string {
+    type T = unreflect(t)
+    let v: T = as_t<T>(1);
+    let a: T[] = [v];
+    throw a
+}
+
+function boom_relaxed_wrongly(t: reflect.Type) -> int throws Boom<unknown> | string {
+    type T = unreflect(t)
+    risky<T>(as_t<T>("x"), true)
+}
+
+function ident<T>(v: T) -> T throws never {
+    v
+}
+
+// `throws unknown` is imprecise when something closer exists: a thrown
+// `() -> T throws never` relaxes to `() -> unknown throws never` (the return
+// is covariant), and that is what the clause should say.
+function imprecise_unknown_clause(t: reflect.Type) -> int throws unknown {
+    type T = unreflect(t)
+    let v: T = as_t<T>(1);
+    throw () -> { ident<T>(v) }
+}
+
 // A `return` leaves every block of its lambda at once, and a lambda with no
 // declared return type would publish `T` as its result.
 function return_from_an_inferred_lambda(t: reflect.Type) -> unknown throws never {

@@ -10632,12 +10632,31 @@ impl<'db> InferenceContext<'db> {
                     crate::throw_facts::flatten_declared_ty_to_facts(&self.plain_finalized(ty))
                 })
                 .collect();
+            // A contribution typed by a block-scoped binding was judged at
+            // its throw, where the name was in scope; the clause outside
+            // cannot name it, so what the clause may say about it is its
+            // NEAREST RELAXATION: `Boom<T>` and `T[]` relax to `unknown`
+            // (invariant arguments), `() -> T throws never` to
+            // `() -> unknown throws never`. Coverage judges declared facts
+            // against those relaxations too.
+            let relaxed: std::collections::BTreeSet<baml_type::Ty> = effective
+                .iter()
+                .filter(|fact| mentions_scoped_param(fact))
+                .flat_map(|fact| {
+                    crate::throw_facts::flatten_declared_ty_to_facts(&nearest_scoped_relaxation(
+                        fact,
+                        RelaxationVariance::Covariant,
+                    ))
+                })
+                .collect();
             let extraneous: Vec<baml_type::Ty> = declared_facts
                 .iter()
                 .filter(|decl| {
                     let widened_decl: std::collections::BTreeSet<baml_type::Ty> =
                         crate::throw_facts::flatten_declared_ty_to_facts(decl);
-                    let covered = widened_decl.iter().all(|w| effective.contains(w));
+                    let covered = widened_decl
+                        .iter()
+                        .all(|w| effective.contains(w) || relaxed.contains(w));
                     !(covered
                         || matches!(decl, baml_type::Ty::Interface(..))
                             && effective.iter().any(|eff| {
@@ -10647,12 +10666,21 @@ impl<'db> InferenceContext<'db> {
                 .cloned()
                 .collect();
             if is_open_contract {
+                // A declared `unknown` is precise exactly when something
+                // thrown relaxes to nothing closer than `unknown` itself.
                 let throws_unknown = effective
                     .iter()
-                    .any(|ty| crate::lower::is_open_throws_contract(self.db, &Ty::from_plain(ty)));
+                    .any(|ty| crate::lower::is_open_throws_contract(self.db, &Ty::from_plain(ty)))
+                    || relaxed
+                        .iter()
+                        .any(|ty| matches!(ty, baml_type::Ty::Unknown { .. }));
                 if !throws_unknown {
+                    // Report what the clause SHOULD say: a scoped
+                    // contribution by its relaxation, everything else as is.
                     let inferred_types = effective
                         .iter()
+                        .filter(|fact| !mentions_scoped_param(fact))
+                        .chain(relaxed.iter())
                         .map(baml_type::Ty::render_user_facing)
                         .collect();
                     self.pending_diags
@@ -12746,6 +12774,133 @@ fn external_target_path(target: &crate::callable::ExternalCallTarget) -> baml_ty
 /// a scoped parameter's identity is a hash of its binding statement, and
 /// this bit keeps the two spaces disjoint.
 pub(crate) const SCOPED_PARAM_BIT: u32 = 0x8000_0000;
+
+/// Whether a finalized (plain) type names a block-scoped parameter.
+fn mentions_scoped_param(ty: &baml_type::Ty) -> bool {
+    baml_type::contains_ty_where(
+        ty,
+        &|candidate| matches!(candidate, baml_type::Ty::TypeVar(param, _) if param.index() & SCOPED_PARAM_BIT != 0),
+    )
+}
+
+/// The direction a position relates to the value it describes, for
+/// [`nearest_scoped_relaxation`]: a `throws` clause (like a return) is a
+/// supertype of what is thrown; a function type's parameters flip it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RelaxationVariance {
+    Covariant,
+    Contravariant,
+}
+
+impl RelaxationVariance {
+    fn flip(self) -> RelaxationVariance {
+        match self {
+            RelaxationVariance::Covariant => RelaxationVariance::Contravariant,
+            RelaxationVariance::Contravariant => RelaxationVariance::Covariant,
+        }
+    }
+
+    /// The type a bare block-scoped parameter relaxes to in this direction.
+    fn bound(self) -> baml_type::Ty {
+        match self {
+            RelaxationVariance::Covariant => baml_type::Ty::unknown(),
+            RelaxationVariance::Contravariant => baml_type::Ty::never(),
+        }
+    }
+}
+
+/// The nearest type free of block-scoped parameters that still relates to
+/// `ty` in `variance`'s direction - a supertype when covariant, a subtype
+/// when contravariant - following the subtyping rules: a bare parameter
+/// becomes the direction's bound (`unknown`, or `never` under a function
+/// parameter); a union relaxes its members and simplifies (`T | int` →
+/// `unknown`; under a parameter, `(T | int) -> void` → `(int) -> void`); a
+/// function flips the direction for its parameters and keeps it for the
+/// return and throws (`() -> T throws T` → `() -> unknown throws unknown`);
+/// an invariant constructor (classes, lists, maps, interfaces, futures,
+/// projections) has no nearer relative than the bound itself, so any
+/// mention inside collapses it whole (`T[]` → `unknown`).
+///
+/// This is what a clause outside the block may say about a value typed by
+/// the binding; it is never applied for the author - they write it.
+fn nearest_scoped_relaxation(ty: &baml_type::Ty, variance: RelaxationVariance) -> baml_type::Ty {
+    use baml_type::Ty as Plain;
+    if !mentions_scoped_param(ty) {
+        return ty.clone();
+    }
+    match ty {
+        Plain::TypeVar(..) => variance.bound(),
+        Plain::Union(members, attr) => {
+            let mut flat: Vec<Plain> = Vec::with_capacity(members.len());
+            let mut push = |member: Plain| {
+                if !flat.contains(&member) {
+                    flat.push(member);
+                }
+            };
+            for member in members {
+                let relaxed = nearest_scoped_relaxation(member, variance);
+                match relaxed {
+                    // The top type absorbs the union; the bottom type
+                    // vanishes from it.
+                    Plain::Unknown { .. } => return relaxed,
+                    Plain::Never { .. } => {}
+                    Plain::Union(inner, _) => inner.iter().cloned().for_each(&mut push),
+                    _ => push(relaxed),
+                }
+            }
+            match flat.len() {
+                0 => Plain::never(),
+                1 => flat.pop().unwrap_or_else(|| unreachable!("length checked")),
+                _ => Plain::Union(flat.into(), attr.clone()),
+            }
+        }
+        Plain::Function {
+            params,
+            ret,
+            throws,
+            attr,
+        } => Plain::Function {
+            params: params
+                .iter()
+                .map(|param| baml_type::FunctionParamTy {
+                    name: param.name.clone(),
+                    ty: nearest_scoped_relaxation(&param.ty, variance.flip()),
+                    mode: param.mode,
+                })
+                .collect(),
+            ret: Box::new(nearest_scoped_relaxation(ret, variance)),
+            throws: Box::new(nearest_scoped_relaxation(throws, variance)),
+            attr: attr.clone(),
+        },
+        Plain::Class(..)
+        | Plain::Interface(..)
+        | Plain::List(..)
+        | Plain::Map { .. }
+        | Plain::Future(..)
+        | Plain::AssociatedTypeProjection { .. } => variance.bound(),
+        // Leaves cannot mention a parameter; the guard above returns them.
+        Plain::Int { .. }
+        | Plain::Bigint { .. }
+        | Plain::Float { .. }
+        | Plain::String { .. }
+        | Plain::Bool { .. }
+        | Plain::Null { .. }
+        | Plain::Uint8Array { .. }
+        | Plain::Media(..)
+        | Plain::Literal(..)
+        | Plain::Enum(..)
+        | Plain::EnumVariant(..)
+        | Plain::RustType { .. }
+        | Plain::Type { .. }
+        | Plain::Resource { .. }
+        | Plain::PromptAst { .. }
+        | Plain::Void { .. }
+        | Plain::TypeAlias(..)
+        | Plain::Unknown { .. }
+        | Plain::Never { .. }
+        | Plain::Error { .. } => ty.clone(),
+    }
+}
 
 /// Every block-scoped parameter (`type T = …`, marked by
 /// [`SCOPED_PARAM_BIT`]) that `ty` mentions, in walk order.
