@@ -428,7 +428,7 @@ jobs:
 
   changelog-only:
     name: "Changelog is the only changed file"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     timeout-minutes: 5
     steps:
