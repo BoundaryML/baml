@@ -72,6 +72,7 @@ fn skill_warning_message(status: SkillStatus) -> Option<&'static str> {
     }
 }
 
+/// Inspect the target path and its ancestors for a current BAML agent skill.
 fn project_skill_status(project: Option<&Path>) -> anyhow::Result<SkillStatus> {
     let mut dir = match project {
         Some(project) => skill_search_start(project)?,

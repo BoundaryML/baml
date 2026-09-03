@@ -400,6 +400,7 @@ impl RuntimeCli {
 }
 
 impl Commands {
+    /// Return the command-specific path from which agent skill lookup should begin.
     fn agent_skill_project_path(&self) -> Option<&Path> {
         match self {
             Self::Check(args) => args.from.as_deref(),
@@ -420,6 +421,7 @@ impl Commands {
         }
     }
 
+    /// Whether this command consumes BAML source and therefore needs a matching agent skill.
     fn requires_agent_skill(&self) -> bool {
         matches!(
             self,

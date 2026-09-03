@@ -361,6 +361,7 @@ const AGENT_ENV_VARS: &[(&str, &str)] = &[
     ("REPL_ID", "replit"),
 ];
 
+/// Detect an agent harness through an injectable environment lookup.
 fn detect_agent_harness_with(lookup: impl Fn(&str) -> Option<OsString>) -> Option<String> {
     // `AI_AGENT` follows the generic convention from `@vercel/detect-agent`:
     // its value is the harness name, so this one marker must be valid UTF-8.
@@ -392,6 +393,7 @@ mod tests {
 
     use super::*;
 
+    /// Detect a harness from a deterministic set of UTF-8 environment values.
     fn detect_agent_from(values: &[(&str, &str)]) -> Option<String> {
         let values = values
             .iter()

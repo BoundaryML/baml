@@ -24,11 +24,13 @@ struct GitOrigin {
     repo: String,
 }
 
+/// Return Git metadata collected once for the lifetime of this process.
 pub(super) fn get() -> &'static GitMeta {
     static META: OnceLock<GitMeta> = OnceLock::new();
     META.get_or_init(compute)
 }
 
+/// Collect sanitized origin fields and effective author/committer identities.
 fn compute() -> GitMeta {
     // One local Git process yields config plus both effective identities.
     // This performs no network access and keeps invocation overhead bounded.
@@ -48,6 +50,7 @@ fn compute() -> GitMeta {
     }
 }
 
+/// Read one exact key from the newline-delimited output of `git var -l`.
 fn git_var<'a>(vars: &'a str, name: &str) -> Option<&'a str> {
     vars.lines().find_map(|line| {
         let (key, value) = line.split_once('=')?;
@@ -55,6 +58,7 @@ fn git_var<'a>(vars: &'a str, name: &str) -> Option<&'a str> {
     })
 }
 
+/// Run a local, non-interactive Git query and return non-empty UTF-8 output.
 fn git_output(args: &[&str]) -> Option<String> {
     let output = Command::new("git")
         .args(args)
@@ -72,6 +76,7 @@ fn git_output(args: &[&str]) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+/// Reduce a supported Git remote URL to credential-free host, organization, and repository fields.
 fn parse_origin(value: &str) -> Option<GitOrigin> {
     let value = value.trim();
     let (authority, path, is_url) = if let Some((_, rest)) = value.split_once("://") {
@@ -121,6 +126,7 @@ fn parse_origin(value: &str) -> Option<GitOrigin> {
     })
 }
 
+/// Extract the name and email from a `git var GIT_*_IDENT` value.
 fn parse_ident(value: &str) -> Option<(String, String)> {
     // `git var GIT_*_IDENT` returns `Name <email> timestamp timezone`.
     let email_end = value.rfind('>')?;

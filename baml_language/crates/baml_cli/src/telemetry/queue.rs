@@ -93,6 +93,7 @@ pub(super) fn append_line(path: &Path, line: &str) -> std::io::Result<()> {
 }
 
 #[cfg(unix)]
+/// Restrict an existing or newly created queue directory to its owner.
 fn set_owner_only_dir_permissions(path: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt as _;
 
@@ -100,11 +101,13 @@ fn set_owner_only_dir_permissions(path: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(not(unix))]
+/// Rely on platform ACL inheritance where Unix permission bits are unavailable.
 fn set_owner_only_dir_permissions(_path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
 #[cfg(unix)]
+/// Restrict an existing or newly created queue file to its owner.
 fn set_owner_only_file_permissions(file: &fs::File) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt as _;
 
@@ -112,6 +115,7 @@ fn set_owner_only_file_permissions(file: &fs::File) -> std::io::Result<()> {
 }
 
 #[cfg(not(unix))]
+/// Rely on platform ACL inheritance where Unix permission bits are unavailable.
 fn set_owner_only_file_permissions(_file: &fs::File) -> std::io::Result<()> {
     Ok(())
 }
@@ -400,6 +404,17 @@ mod tests {
         );
         assert_eq!(
             fs::metadata(&live).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+
+        let existing_live = new_live_path_in(&queue);
+        fs::write(&existing_live, "").unwrap();
+        fs::set_permissions(&existing_live, fs::Permissions::from_mode(0o644)).unwrap();
+
+        append_line(&existing_live, r#"{"event":"b"}"#).unwrap();
+
+        assert_eq!(
+            fs::metadata(&existing_live).unwrap().permissions().mode() & 0o777,
             0o600
         );
     }
