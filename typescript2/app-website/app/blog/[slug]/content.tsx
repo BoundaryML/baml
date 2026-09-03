@@ -84,8 +84,25 @@ export async function PostBody({ children }: { children: string }) {
   });
 
   return (
-    <div className="prose flex flex-col flex-1 mx-auto container-sm max-w-screen-md">
-      {content}
-    </div>
+    <>
+      <div className="blog-post-body prose flex flex-col flex-1 mx-auto container-sm max-w-screen-md">
+        {content}
+      </div>
+      <style>{`
+        .blog-post-body :not(pre) > code {
+          background: #eeeeee;
+          border: 1px solid #dedede;
+          border-radius: 0.45em;
+          color: inherit;
+          font-size: 0.875em;
+          font-weight: 500;
+          padding: 0.12em 0.35em;
+        }
+        .blog-post-body :not(pre) > code::before,
+        .blog-post-body :not(pre) > code::after {
+          content: none;
+        }
+      `}</style>
+    </>
   );
 }
