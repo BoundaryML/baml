@@ -426,6 +426,60 @@ jobs:
 
           echo "run=false" >> "$GITHUB_OUTPUT"
 
+  changelog-only:
+    name: "Changelog is the only changed file"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 5
+    steps:
+      - name: "Check changed files"
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const escapeHatch = 'TEST_CHANGELOG_ONLY=skip';
+            const changelog = 'baml_language/CHANGELOG.md';
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request.number;
+
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number,
+            });
+            if ((pullRequest.body || '').includes(escapeHatch)) {
+              core.notice(`Skipping the changelog-only check because the PR description contains ${escapeHatch}.`);
+              return;
+            }
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+            const changelogChanged = files.some(
+              (file) => file.filename === changelog || file.previous_filename === changelog,
+            );
+            if (!changelogChanged) {
+              core.info(`${changelog} was not changed.`);
+              return;
+            }
+
+            const otherFiles = files
+              .map((file) => file.filename)
+              .filter((filename) => filename !== changelog);
+            if (otherFiles.length === 0) {
+              core.info(`${changelog} is the only changed file.`);
+              return;
+            }
+
+            core.setFailed([
+              `${changelog} must be the only changed file in this PR.`,
+              `Other changed files:`,
+              ...otherFiles.map((filename) => `- ${filename}`),
+              `To bypass this check, add ${escapeHatch} to the PR description and rerun this job.`,
+            ].join('\n'));
+
   # Lint checks
   prek:
     name: "Pre-commit Checks"
@@ -1241,6 +1295,7 @@ jobs:
     name: "CI-v2 Failure Alert"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs:
+      - changelog-only
       - prek
       - release-metadata
       - bridge-cffi-release
@@ -1270,6 +1325,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| changelog-only | ${{ needs.changelog-only.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| prek | ${{ needs.prek.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| release-metadata | ${{ needs.release-metadata.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| bridge-cffi-release | ${{ needs.bridge-cffi-release.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -1309,6 +1365,7 @@ jobs:
     name: "Tag Release Source & Dispatch Canary Cut"
     runs-on: ubuntu-latest
     needs:
+      - changelog-only
       - prek
       - release-metadata
       - bridge-cffi-release
