@@ -1,17 +1,17 @@
 {
   "dependencies": {
     "@b/pkg-grammar": "workspace:*",
-    "fumadocs-core": "15.8.5",
-    "fumadocs-mdx": "12.0.3",
-    "fumadocs-ui": "15.8.5",
+    "fumadocs-core": "16.15.4",
+    "fumadocs-mdx": "15.4.0",
+    "fumadocs-ui": "16.15.4",
     "geist": "1.4.2",
     "js-yaml": "4.1.1",
     "lucide-react": "0.532.0",
-    "next": "15.5.9",
+    "next": "16.3.4",
     "next-themes": "0.4.6",
     "postgres": "3.4.9",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "shiki": "3.8.1",
     "zod": "4.0.10"
   },

@@ -19,6 +19,7 @@
       "!node_modules/**",
       "!**/node_modules/**",
       "!**/.next/**",
+      "!app-developer-docs/next-env.d.ts",
       "!**/.react-email/**",
       "!**/baml_client/**",
       "!app-website/lib/baml-docs/stdlib.json",

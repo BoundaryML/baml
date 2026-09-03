@@ -27,11 +27,11 @@ If implementation evidence requires a material change, record it under **Deviati
 
 ## Current snapshot
 
-- **Current phase:** Corrective documentation-shell review after Phase 1; database work remains stopped at Human Gate 1.
-- **Current gate:** Checkpoint 1 — exact target and migration — remains unapproved.
-- **Live database mutations:** None.
+- **Current phase:** Human Gate 1 checkpoint 1 is complete; checkpoint 2 preparation is next.
+- **Current gate:** Checkpoint 2 — stored payload and rendering approval — is blocked on the `boundary/id` export collision below.
+- **Live database mutations:** Approved checkpoint-1 creation and migration only: `boundaryml/developer-docs/development` now contains the five empty generated-content tables. No generated rows or channel pointers were written.
 - **Generated-content publication:** None.
-- **Last updated:** 2026-09-02.
+- **Last updated:** 2026-09-03.
 
 ## Progress by phase
 
@@ -63,25 +63,27 @@ If implementation evidence requires a material change, record it under **Deviati
 
 ### Human Gate 1 — stored and rendered contract approval
 
-- **Checkpoint 1, target and migration:** Ready for review; approval has not been granted.
-- **Checkpoint 2, payload and rendering:** Prepared with representative in-memory payloads, but blocked on checkpoint 1 by plan order and on a real collision in the candidate `boundary` export described below.
-- No PlanetScale branch/database creation, migration, or population is authorized before checkpoint 1 approval identifies the exact target.
+- **Checkpoint 1, target and migration:** Approved and completed on 2026-09-03.
+- **Checkpoint 2, payload and rendering:** Prepared with representative in-memory payloads, but live population is blocked on a real collision in the candidate `boundary` export described below.
+- No population or channel-pointer update is authorized by checkpoint 1 approval. Checkpoint 2 remains open.
 
 #### Checkpoint 1 review package
 
-The proposed isolated development target is:
+The approved and applied isolated development target is:
 
 | Field | Proposed value | Evidence and constraint |
 |---|---|---|
 | Organization | `boundaryml` | The authenticated CLI can enumerate this organization. |
-| Database | `developer-docs` | New dedicated PostgreSQL database; it does not currently exist. |
-| Branch | `development` | New isolated non-production branch; it does not currently exist. |
+| Database | `developer-docs` | Dedicated PostgreSQL database, created 2026-09-03 in AWS `us-east`. |
+| Branch | `development` | Isolated non-production `PS-DEV` branch, created from the empty default branch and ready. |
 | Canonical migration | [`typescript2/app-developer-docs/migrations/0001-generated-content.sql`](./typescript2/app-developer-docs/migrations/0001-generated-content.sql) | Exact five-table proposal schema. |
 | Migration SHA-256 | `f2cbc7f5cd2b1f062458a2ff9df57d03e21ae753621689638821e14225d7b915` | Recomputed by the review-only migration command. |
 
-Read-only discovery found only `boundaryml/ops-product-metrics/main`; its `main` branch is production. That existing database is explicitly excluded from this project and was not selected merely because it already exists.
+Initial read-only discovery found only `boundaryml/ops-product-metrics/main`; its `main` branch is production. That existing database remains explicitly excluded from this project.
 
-Approval of this checkpoint authorizes only the normal next actions in the implementation plan: create the exact dedicated PostgreSQL target above if still absent, create its isolated development branch if still absent, acquire credentials through the supported PostgreSQL role workflow without logging or persisting them, and apply the reviewed migration to that development branch. It does not authorize production work, destructive SQL, population, or a channel-pointer update.
+The user approved this checkpoint on 2026-09-03 by replying “I'm good to check off!” to the explicit target-and-migration approval request. PlanetScale created its ordinary default `main` branch along with the database; no schema was applied there, and a read-only catalog check confirmed it has zero `developer_docs` tables. The reviewed migration was applied only to `development` through PlanetScale's PostgreSQL shell. No connection string or password was printed or persisted.
+
+Read-only post-migration verification found exactly the five expected tables, all empty. PlanetScale's branch-schema output and `pg_catalog` confirmed their primary keys, unique constraints, foreign keys with `ON DELETE RESTRICT`, check constraints, identity column, data types, and defaults.
 
 ### Corrective shell pass requested during review
 
@@ -115,16 +117,19 @@ Approval of this checkpoint authorizes only the normal next actions in the imple
 ### Repository and tooling
 
 - The `typescript2` workspace uses pnpm 11.1.3, Turbo 2.8.9, and top-level `app-*` packages.
-- The existing workspace Next.js application establishes Next.js 15.5.9 and React 19.2.3 as compatible local baselines.
+- The existing workspace Next.js application originally established Next.js 15.5.9 and React 19.2.3 as compatible local baselines. With explicit user approval, the developer-docs application was subsequently upgraded in place to the validated Next.js 16 stack recorded below; sibling applications were not upgraded.
 - The local shadcn v4 reference exists at `/Users/vbv/repos/reference/shadcn-ui/apps/v4` and is exactly at commit `63c1308d112b6b1205d86244a156cca1abef5087`, matching the proposal.
 - The reference is MIT licensed. Any substantially adapted shell code requires the notice in `typescript2/app-developer-docs/THIRD_PARTY_NOTICES.md`.
 - A compiled `baml` binary is available at `/opt/homebrew/bin/baml`. Preflight output reports wrapper `0.2.4` and toolchain `0.18.1-nightly.20260828.a`. It is a candidate for representative contract generation, not an approved canary/nightly publication binary.
 
 ### Dependency compatibility notes
 
-- The shadcn reference's Fumadocs 16.10.5 packages require Next.js 16 and therefore cannot be copied blindly into the Next.js 15.5.9 workspace baseline.
-- The shell now uses the same Geist package and directly ported Typeset rules as the reference while retaining the workspace-compatible Next.js and Fumadocs versions.
-- Fumadocs core/UI 15.8.5 declare Next.js 14 or 15 compatibility. Fumadocs MDX 14.3.2 advertised a broad core peer range but failed at install time because it imported a core 16-only module; the scaffold therefore uses MDX 12.0.3, whose declared peer range and release timing match core 15 and Next.js 15. This is a compatibility correction, not a specification deviation.
+- The initial scaffold used Next.js 15.5.9, Fumadocs core/UI 15.8.5, and Fumadocs MDX 12.0.3. That tuple was a valid compatibility fallback after Fumadocs MDX 14.3.2 failed at install time by importing a core 16-only module.
+- With explicit user approval on 2026-09-03, the application was upgraded to Next.js 16.3.4, React and React DOM 19.2.8, Fumadocs core/UI 16.15.4, and Fumadocs MDX 15.4.0. These are stable releases newer than the pinned shadcn reference's Next.js 16.3.0 canary, Fumadocs core/UI 16.10.5, Fumadocs MDX 15.0.12, and React 19.2.3 tuple.
+- A direct post-upgrade audit found that the Fumadocs APIs used by the pinned shadcn shell were also exported by the former core 15.8.5 and MDX 12.0.3 packages. The earlier version constraint prevented copying the reference dependency tuple verbatim, but it did not require the shell-level navigation, search, breadcrumb, TOC, primitive-component, or route-architecture differences. Those differences are local product, dependency-surface, or static-export decisions.
+- The workspace continues to override React type packages to `@types/react` 18.3.26 and `@types/react-dom` 18.3.7 for sibling-package compatibility. The developer-docs application passes type-check with that shared override; a workspace-wide React 19 type migration is outside this portal upgrade.
+- Tailwind CSS remains 4.1.11 rather than the reference's 4.3.x line. Direct compilation probes confirmed that the distinctive reference utilities used by the shell are accepted by 4.1.11, so no audited shell difference is attributable to that version gap.
+- The remaining non-verbatim shadcn areas are documented in `DEVELOPER_DOCS_SHADCN_COPY_REPORT.md`. In particular, the reference's fetch-backed search endpoint cannot be copied literally while this application retains `output: 'export'`; that is a deployment-architecture constraint, not a framework-version constraint.
 - Final dependency selections are recorded only after installation, peer-dependency validation, type-check, tests, and production build succeed.
 
 ## Deviations and blockers
@@ -146,11 +151,11 @@ The following evidence-backed blocker remains open:
 ```text
 Date: 2026-09-01
 Plan/proposal requirement: Package routes come directly from qualified-name segments; kind segments and other collision workarounds are forbidden, and a complete allowlisted release must be validated before publication.
-Observed evidence: Candidate binary 0.18.1-nightly.20260828.a exports both top-level function V:boundary.id (qualified name boundary.id) and namespace-owned function V:boundary.id.current with namespace ["id"] and name "current". The namespace page boundary.id and the top-level function boundary.id both require route_path boundary/id.
+Observed evidence: Candidate binaries through 0.18.1-nightly.20260901.a export both top-level function V:boundary.id (qualified name boundary.id) and namespace-owned function V:boundary.id.current with namespace ["id"] and name "current". Under the approved projection, packages, namespaces, and top-level classes, enums, interfaces, aliases, and functions are routable; nested members and implementations are anchor-only. The namespace page boundary.id and top-level function boundary.id are therefore both legitimately routable and both require route_path boundary/id. Compiler source currently has an explicit boundary.id-only exception in crates/baml_compiler2_hir/src/package.rs that suppresses the otherwise detected namespace-shadow diagnostic.
 Impact: The generator correctly rejects the boundary package with "Projected package route collision: boundary/id." A complete 13-package release cannot be generated or populated from this candidate binary. The independent target-and-migration review is not blocked.
-Proposed deviation or resolution: Do not change the portal route contract. Select the exact current canary/nightly publication binary and require it to pass the same collision check; if its export retains the collision, obtain an explicit compiler/product decision that gives the declarations distinct qualified names before checkpoint 2.
-Approval required: Human direction is required if the release binary still contains the collision. Any proposal to change the closed route contract would require an explicit specification change.
-Status: Open; blocks Human Gate 1 checkpoint 2 population, not checkpoint 1.
+Proposed deviation or resolution: No portal deviation. The user identified this as a compiler bug and will fix it outside this documentation work. After that fix produces a new exact binary, rerun the unchanged complete-release collision check before checkpoint-2 population.
+Approval required: None for a portal workaround because no workaround is authorized or planned. A fixed exact compiler binary is required to continue.
+Status: Identified and externally owned; blocks Human Gate 1 checkpoint 2 population until a fixed binary is available.
 ```
 
 Use this format for future entries:
@@ -201,11 +206,21 @@ Status:
 | 2026-09-02 | Collapsible hierarchy | Browser-tested first- and second-level disclosure controls, persistent user state, automatic active-ancestor expansion, deepest-page selection, nested width calculation, and full-rail overflow | Passed; second-level content ends exactly at the 232px rail boundary with zero document overflow |
 | 2026-09-02 | Tree regression checks | Portal lint, TypeScript type-check, and nested route ancestry/uniqueness tests | Passed; full suite now 15 tests |
 | 2026-09-02 | Current shadcn provenance audit | Recalculated after the local recursive tree implementation | Shell: 49.7% directly copied/adapted and 50.3% not copied; strict near-verbatim measurement: 28.5% / 71.5% |
+| 2026-09-03 | Human Gate 1 checkpoint 1 | User approved the explicitly proposed `boundaryml/developer-docs/development` target and migration `f2cbc7f5…b915` | Approved |
+| 2026-09-03 | PlanetScale target creation | Created dedicated PostgreSQL database `developer-docs` and non-production `PS-DEV` branch `development` in `boundaryml` | Passed; both resources reached ready state |
+| 2026-09-03 | Development migration | Applied unchanged `0001-generated-content.sql` through the supported PlanetScale PostgreSQL shell | Passed; one schema and five tables created |
+| 2026-09-03 | Applied-schema verification | Queried table inventory, `pg_catalog` constraints, PlanetScale branch schema, and all five row counts | Passed; exact five-table shape present and all tables empty |
+| 2026-09-03 | Default-branch isolation | Queried `developer-docs/main` after migration | Passed; zero `developer_docs` tables on `main` |
+| 2026-09-03 | `boundary/id` root cause | Rechecked nightly `0.18.1-nightly.20260901.a`, the approved routability rules, builtin sources, and compiler namespace-shadow detection | Confirmed compiler bug; portal projection is correct, compiler fix is externally owned |
+| 2026-09-03 | Framework dependency upgrade | Upgraded only `app-developer-docs` to Next.js 16.3.4, React 19.2.8, Fumadocs core/UI 16.15.4, and Fumadocs MDX 15.4.0 | Passed installation and peer-dependency validation without changing sibling application versions |
+| 2026-09-03 | Next.js 16 quality checks | Portal lint, TypeScript type-check, 16-test suite, and preview production build | Passed; build exported 26 static pages and preview `robots.txt` retained `Disallow: /` |
+| 2026-09-03 | Next.js 16 browser regression | Rechecked desktop shell, search navigation, theme switching, active navigation, TOC, overflow, and browser console | Passed; no console warnings or errors |
+| 2026-09-03 | shadcn version-constraint audit | Compared every Fumadocs API imported by the pinned reference with both the former and current installed packages, and compiled the reference's distinctive Tailwind utility forms with 4.1.11 | No shell-level difference was forced by the former Next.js/Fumadocs/Tailwind versions; remaining differences are architectural or product-specific |
 
 ## Human gate record
 
 | Gate | State | Approval evidence | Notes |
 |---|---|---|---|
-| Human Gate 1 | Awaiting checkpoint 1 approval | None | Proposed target is `boundaryml/developer-docs/development`; stop before target creation or live schema application. |
+| Human Gate 1 | Checkpoint 1 complete; checkpoint 2 blocked | User reply “I'm good to check off!” on 2026-09-03 | Migration applied and verified only on `boundaryml/developer-docs/development`; no population or pointer update. |
 | Human Gate 2 | Not started | None | Requires completed architecture-proof preview. |
 | Human Gate 3 | Not started | None | Requires completed launch candidate. |

@@ -5,11 +5,11 @@
 For the current documentation-shell implementation:
 
 - **49.7% is directly copied and mechanically adapted from the pinned shadcn v4 reference.**
-- **50.3% is not copied from shadcn.** It is Boundary-specific content, interaction code, compatibility work, or locally designed implementation.
+- **50.3% is not copied from shadcn.** It is Boundary-specific content, interaction code, architectural adaptation, or locally designed implementation.
 
 This is an implementation-provenance measurement, not a visual-similarity score. Code that merely recreates a shadcn-like result does **not** count as copied.
 
-The stricter near-verbatim-line measurement is **28.5% copied / 71.5% not copied**. It counts only long, meaningful, non-import lines that still match the mapped reference files after whitespace, quote-style, and trailing-semicolon normalization. It intentionally misses copied lines that required JSX, dependency, icon, product-name, or Tailwind compatibility edits.
+The stricter near-verbatim-line measurement is **28.5% copied / 71.5% not copied**. It counts only long, meaningful, non-import lines that still match the mapped reference files after whitespace, quote-style, and trailing-semicolon normalization. It intentionally misses copied lines that required JSX, local-component, icon, or product-name edits.
 
 ## Scope and reference
 
@@ -17,7 +17,9 @@ The stricter near-verbatim-line measurement is **28.5% copied / 71.5% not copied
 - Reference: `/Users/vbv/repos/reference/shadcn-ui/apps/v4`
 - Pinned reference commit: `63c1308d112b6b1205d86244a156cca1abef5087`
 - Snapshot date: 2026-09-02
+- Dependency-constraint audit date: 2026-09-03
 - License notice: `typescript2/app-developer-docs/THIRD_PARTY_NOTICES.md`
+- Related execution record: [DEVELOPER_DOCS_STATUS.md](./DEVELOPER_DOCS_STATUS.md)
 
 The primary percentage covers the visible shell: global styles and Typeset rules, root layout, homepage composition, header, footer, primary and mobile navigation, documentation sidebar/article/TOC layout, page actions, theme control, search dialog, brand mark, reusable documentation card, and custom 404. It excludes route content, database and generation code, validators, scripts, tests, and configuration because those are not shadcn shell code.
 
@@ -29,7 +31,7 @@ A block counts as directly copied and adapted only when all of these are true:
 2. The local block was transferred from that source block.
 3. Its control flow, JSX hierarchy, CSS-token set, or Tailwind utility sequence remains recognizably the same after mechanical changes.
 
-Mechanical changes include replacing shadcn identity with BAML/Boundary identity, swapping icons, changing imports to locally compatible components, removing product-specific controls, and adjusting syntax for the selected Next.js/Tailwind versions.
+Mechanical changes include replacing shadcn identity with BAML/Boundary identity, swapping icons, changing imports to local components, removing product-specific controls, and normalizing syntax to the local source conventions.
 
 The following do **not** count as copied:
 
@@ -66,6 +68,18 @@ The numerator is a conservative line-equivalent count from a block-by-block prov
 
 The largest non-copied portions are the recursive collapsible tree, persisted disclosure state, static search implementation, BAML/Boundary information architecture, nested breadcrumbs, labeled bottom navigation, route data, brand mark, contextual 404, and local callout/table styling. The copied portions include the design tokens, Geist typography setup, core Typeset rules, responsive containers, root layout, header/footer structure, homepage hero/card rail, primary/mobile navigation frame, docs grid, scroll-preserving sidebar frame, 640px article column, 288px TOC rail, top page actions, right-rail CTA pattern, and theme patterns.
 
+## Version-constraint audit
+
+The initial scaffold could not copy the pinned reference's package versions verbatim because Fumadocs core/UI 16.10.5 required Next.js 16 while the selected workspace baseline was Next.js 15.5.9. The application was upgraded with user approval on 2026-09-03 to Next.js 16.3.4, React 19.2.8, Fumadocs core/UI 16.15.4, and Fumadocs MDX 15.4.0.
+
+The follow-up source and installed-package audit found no shell-level implementation difference that was actually forced by the former versions:
+
+- Every Fumadocs API directly imported by the pinned reference—source loading, page-tree neighbors, breadcrumbs, client search, and server search—was already exported by the former Fumadocs core 15.8.5 and MDX 12.0.3 packages.
+- The reference's audited Next.js usage did not require a Next.js 16-only shell API.
+- Tailwind CSS 4.1.11 successfully compiled the reference's CSS-variable shorthand, compound variants, `group-has-data-*` variants, arbitrary spacing, and important-modifier forms used in the shell.
+
+Accordingly, versioning prevented dependency-file parity but did not account for the non-copied shell blocks in this report. The remaining differences come from BAML's information architecture and identity, the deliberately smaller local primitive dependency surface, authored route structure, and the static-export deployment model. The static search implementation is the clearest architectural example: shadcn's `createFromSource` fetch endpoint is available in the installed Fumadocs version, but a runtime query endpoint cannot be copied literally into an application built with Next.js static export.
+
 ## Strict near-verbatim-line measurement
 
 For an independently reproducible lower bound, the shell was compared only with its mapped reference files as follows:
@@ -84,6 +98,6 @@ Across all non-test TypeScript, TSX, and CSS under the portal's `app`, `componen
 
 ## Interpretation
 
-The current visible shell is almost evenly split: 49.7% is directly traceable to transferred shadcn reference blocks and 50.3% is local implementation. The copied share decreased because the requested recursive tree, open-state behavior, deep hierarchy, breadcrumbs, tables, callouts, and labeled page navigation have no directly copied counterpart in shadcn's flat documentation rail. The visual and interaction review remains separate from this provenance percentage: the shell keeps shadcn's measured geometry and visual language without mislabeling new hierarchy code as copied.
+The current visible shell is almost evenly split: 49.7% is directly traceable to transferred shadcn reference blocks and 50.3% is local implementation. The copied share decreased because the requested recursive tree, open-state behavior, deep hierarchy, breadcrumbs, tables, callouts, and labeled page navigation have no directly copied counterpart in shadcn's flat documentation rail. The visual and interaction review remains separate from this provenance percentage: the shell keeps shadcn's measured geometry and visual language without mislabeling new hierarchy code as copied. The dependency upgrade does not change these percentages because the audited shell source did not change.
 
 This report must be recalculated if the shell files change before final sign-off. It is a requested audit artifact, not an upstream synchronization mechanism, patch queue, or claim that the reference remains authoritative.
