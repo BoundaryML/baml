@@ -46,8 +46,7 @@ jobs:
   cargo-tests:
     needs: purge
     uses: ./.github/workflows/cargo-tests.reusable.yaml
-    # Structural mapping only: the called jobs get the values from their
-    # infisical-github-ci Environment, not from repository secrets.
+    # Map repository Actions secrets into the reusable-workflow contract.
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
