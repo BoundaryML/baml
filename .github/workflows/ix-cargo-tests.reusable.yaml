@@ -646,6 +646,9 @@ jobs:
                 "rust-cache-key": "macos-cargo",
                 "timeout": 40,
               },
+              /*
+               * Windows SDK tests are intentionally disabled because their compute cost is too high for the value they provide.
+               * Restore them by removing this block comment.
               {
                 "sdk-label": "go",
                 "sdk-dir": "go",
@@ -734,6 +737,7 @@ jobs:
                 "rust-cache-key": "windows-cargo",
                 "timeout": 60,
               },
+              */
             ];
 
             // TODO(B-1545): Re-enable macOS SDK tests after the SIGABRT flakiness is fixed: https://linear.app/boundaryml2/issue/B-1545/investigate-flakiness-in-cargo-test-aarch64-apple-darwin-ci-job
