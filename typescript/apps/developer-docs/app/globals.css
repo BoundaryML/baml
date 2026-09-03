@@ -180,6 +180,30 @@
 }
 
 @layer components {
+  .baml-example-button {
+    @apply inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-xs font-medium transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .baml-example-button svg {
+    @apply size-3.5;
+  }
+
+  .baml-example-highlight .shiki {
+    margin: 0;
+    overflow-x: auto;
+    background-color: transparent !important;
+    padding: calc(var(--spacing) * 4);
+    font-size: 13px;
+    line-height: calc(var(--spacing) * 6);
+  }
+
+  .dark .baml-example-highlight .shiki span {
+    color: var(--shiki-dark) !important;
+    font-style: var(--shiki-dark-font-style) !important;
+    font-weight: var(--shiki-dark-font-weight) !important;
+    text-decoration: var(--shiki-dark-text-decoration) !important;
+  }
+
   [data-rehype-pretty-code-figure] {
     position: relative;
     margin-top: calc(var(--spacing) * 6);
