@@ -170,8 +170,8 @@ tokio = { version = "1", default-features = false, features = [
   "time",
 ] }
 
-js-sys = "=0.3.82"
-wasm-bindgen = "=0.2.105"
+js-sys = "=0.3.83"
+wasm-bindgen = "=0.2.106"
 wasm-bindgen-futures = "0.4.42"
 wasm-bindgen-test = "0.3.45"
 web-sys = { version = "0.3.78", features = [
