@@ -72,7 +72,7 @@ type Db = dyn baml_compiler2_ppir::Db;
 
 // ── Type heads (rustdoc-style lossy impl attachment) ─────────────────────────
 //
-// An impl's `for` type may be generic (`implements<T extends Comparable>
+// An impl's `for` type may be generic (`implements<T extends baml.ops.Compare>
 // Sortable for T[]`), so attaching impls to a declaration cannot go through
 // the type checker's `impls_for_type` — that path *discharges bounds*, and
 // with no scope bounds registered for `T` it would silently drop every
@@ -183,7 +183,7 @@ fn impl_attaches(impl_head: &TyHead, decl_head: &TyHead) -> bool {
 // M:baml.time.Duration.abs          method
 // F:user.Point.x                    field
 // E:user.Color.Red                  enum variant
-// A:baml.Comparable.CompareError    associated type
+// A:baml.ops.Compare.Ordering       associated type
 // M:(int as baml.ops.Add<bigint>).add   method reached through an impl block
 // ```
 //
@@ -448,7 +448,7 @@ impl TyRef {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GenericExport {
     pub name: String,
-    /// Bound interfaces, rendered (`baml.Comparable`); listed, not proven.
+    /// Bound interfaces, rendered (`baml.ops.Compare`); listed, not proven.
     pub bounds: Vec<String>,
 }
 
@@ -1470,8 +1470,8 @@ mod tests {
                 .unwrap_or_else(|| panic!("missing item {id}"))
         };
 
-        // Cross-link: baml.Int's impl list includes the Comparable block,
-        // and that block's export carries `compare`.
+        // Cross-link: baml.Int's impl list includes the Compare block,
+        // and that block's export carries `cmp`.
         let int = find("T:baml.Int");
         let int_impls: Vec<&str> = int["impls"]
             .as_array()
@@ -1481,20 +1481,20 @@ mod tests {
             .collect();
         let comparable_impl = int_impls
             .iter()
-            .find(|id| id.contains("baml.Comparable for int"))
-            .unwrap_or_else(|| panic!("Int lists its Comparable impl: {int_impls:?}"));
+            .find(|id| id.contains("baml.ops.Compare for int"))
+            .unwrap_or_else(|| panic!("Int lists its Compare impl: {int_impls:?}"));
         let impls = json["impls"].as_array().unwrap();
         let block = impls
             .iter()
             .find(|imp| imp["id"] == **comparable_impl)
-            .expect("Comparable-for-int block is exported");
+            .expect("Compare-for-int block is exported");
         assert!(
             block["methods"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .any(|m| m["name"] == "compare"),
-            "compare is listed"
+                .any(|m| m["name"] == "cmp"),
+            "cmp is listed"
         );
 
         // The generic Sortable impl attaches to Array with its symbolic
@@ -1514,21 +1514,18 @@ mod tests {
         );
 
         // Interface records list their implementors.
-        let comparable = find("T:baml.Comparable");
+        let comparable = find("T:baml.ops.Compare");
         assert!(
             comparable["implementors"].as_array().unwrap().len() >= 4,
-            "Comparable lists implementors"
+            "Compare lists implementors"
         );
         // Required-method signature: Self stays symbolic in the export.
         let required = comparable["required_methods"].as_array().unwrap();
-        let compare = required
+        let cmp = required
             .iter()
-            .find(|m| m["name"] == "compare")
-            .expect("Comparable::compare is required");
-        assert_eq!(
-            compare["signature"]["throws"]["display"],
-            "(Self as baml.Comparable).CompareError"
-        );
+            .find(|m| m["name"] == "cmp")
+            .expect("Compare::cmp is required");
+        assert_eq!(cmp["signature"]["params"][0]["ty"]["display"], "Self");
 
         // An interface exports the parameters it declares, and only those.
         // The in-scope view leads with the implicit `Self`, which belongs to
@@ -1552,14 +1549,14 @@ mod tests {
         );
         // Associated types are exported as members of the interface that
         // owns them.
-        let sortable = find("T:baml.Sortable");
+        let summable = find("T:baml.Summable");
         assert!(
-            sortable["assoc_types"]
+            summable["assoc_types"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .any(|a| a["name"] == "SortError"),
-            "Sortable carries SortError"
+                .any(|a| a["name"] == "Sum"),
+            "Summable carries Sum"
         );
 
         // Synthetic companions are present and flagged, never dropped.

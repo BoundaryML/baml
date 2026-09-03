@@ -41,27 +41,15 @@ impl BamlClassFloat for PackageBamlImpl {
 
     // Note: `is_finite` is implemented directly in `float.baml`.
 
-    // ── Comparisons / clamping ────────────────────────────────────────────────
+    // ── Magnitude ─────────────────────────────────────────────────────────────
 
     fn abs(float: f64) -> f64 {
         float.abs()
     }
 
-    fn min(float: f64, other: f64) -> f64 {
-        // `f64::min` returns the non-NaN operand if exactly one is NaN
-        // (NaN-suppressing). See doc on the .baml side.
-        float.min(other)
-    }
-
-    fn max(float: f64, other: f64) -> f64 {
-        float.max(other)
-    }
-
-    fn clamp(float: f64, min: f64, max: f64) -> f64 {
-        // Two-step (cap then floor) to avoid `f64::clamp`'s `min <= max`
-        // requirement. NaN propagates through `f64::min`/`max`.
-        float.min(max).max(min)
-    }
+    // No `min` / `max` / `clamp` here: `float` gets them from
+    // `baml.ops.Compare`, whose defaults are driven by the total float order
+    // (`bex_vm_types::float_order`). See the note in `float.baml`.
 
     // ── Rounding (returns float) ──────────────────────────────────────────────
 

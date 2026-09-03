@@ -108,31 +108,40 @@ test "driver_containers" {
     assert.is_true(!cd_eq_map_diff())
 }
 
-// Non-reflexivity: NaN != NaN, so a value containing NaN is not equal even to
-// itself (the SAME object). `cd_eq_float_same` is the reflexive sanity check.
+// Reflexivity: NaN == NaN, so a value containing NaN equals itself and equals a
+// structurally identical value. `cd_eq_float_same` is the ordinary sanity check;
+// `cd_eq_signed_zeros` pins that `-0.0` and `0.0` are one value.
 function cd_eq_float_same() -> bool { baml.ops.equals_equals([1.5], [1.5]) }
+function cd_eq_float_diff() -> bool { baml.ops.equals_equals([1.5], [2.5]) }
 function cd_eq_nan_pair() -> bool { baml.ops.equals_equals([float.nan()], [float.nan()]) }
 function cd_eq_nan_self() -> bool {
     let arr = [float.nan()];
     baml.ops.equals_equals(arr, arr)
 }
+function cd_eq_nan_vs_number() -> bool { baml.ops.equals_equals([float.nan()], [1.5]) }
+function cd_eq_signed_zeros() -> bool { baml.ops.equals_equals([-0.0], [0.0]) }
 
-test "driver_non_reflexive_nan" {
+test "driver_reflexive_nan" {
     assert.is_true(cd_eq_float_same())
-    // Two distinct arrays each holding NaN: NaN != NaN ⇒ unequal.
-    assert.is_true(!cd_eq_nan_pair())
-    // The SAME array holding NaN, compared to itself: still unequal (no
-    // same-pointer shortcut, because equality is not reflexive).
-    assert.is_true(!cd_eq_nan_self())
+    assert.is_true(!cd_eq_float_diff())
+    // Two distinct arrays each holding NaN: NaN == NaN ⇒ equal. This is the
+    // leaf comparison, not the same-pointer shortcut — the arrays differ.
+    assert.is_true(cd_eq_nan_pair())
+    // The SAME array holding NaN, compared to itself: equal by reflexivity.
+    assert.is_true(cd_eq_nan_self())
+    // NaN is still distinct from every number.
+    assert.is_true(!cd_eq_nan_vs_number())
+    // `-0.0` and `0.0` are one value, as under IEEE.
+    assert.is_true(cd_eq_signed_zeros())
 }
 
 // ─── `bool`'s Compare, reached by method call ────────────────────────────────
 // Regression: `bool`'s `Compare` must be reflexive at the equal-operand
 // boundary. The stdlib once overrode `ge(self, _) = self` / `le(self, _) = !self`,
 // so `false >= false` and `true <= true` wrongly returned `false`. Dropping
-// those overrides lets `bool` inherit the `Compare` defaults (`ge = !lt`,
-// `le = lt || eq`), which are reflexive. Dispatched through a `bool`-typed
-// method call, so it exercises the inherited default bodies.
+// those overrides lets `bool` inherit the `Compare` defaults, which read `cmp`
+// and are reflexive because `cmp(x, x)` is `Ordering.Equal`. Dispatched through
+// a `bool`-typed method call, so it exercises the inherited default bodies.
 
 function cd_m_ge_b(a: bool, b: bool) -> bool { a.ge(b) }
 function cd_m_le_b(a: bool, b: bool) -> bool { a.le(b) }
@@ -315,9 +324,9 @@ test "bool_ordering_operators_dispatch_compare" {
     assert.is_true(!cd_op_ge_false_true())
 }
 
-// A class implementing only the required `lt`: `le`/`gt`/`ge` must resolve to
-// the interface defaults, which are merged into the impl's method table at bake
-// time.
+// A class implementing only the required `cmp`: `lt`/`le`/`gt`/`ge` must resolve
+// to the interface defaults, which are merged into the impl's method table at
+// bake time.
 
 class CdMoney {
     cents: int
@@ -325,7 +334,15 @@ class CdMoney {
         function eq(self, other: Self) -> bool throws never { self.cents == other.cents }
     }
     implements baml.ops.Compare {
-        function lt(self, other: Self) -> bool throws never { self.cents < other.cents }
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            if (self.cents < other.cents) {
+                baml.ops.Ordering.Less
+            } else if (self.cents > other.cents) {
+                baml.ops.Ordering.Greater
+            } else {
+                baml.ops.Ordering.Equal
+            }
+        }
     }
 }
 
@@ -348,9 +365,9 @@ test "user_class_ordering_dispatches_compare" {
 }
 
 // Each operator dispatches its own method, so an override wins over the default
-// it replaces. `gt` here is deliberately inconsistent with `!le` — the default
+// it replaces. `gt` here is deliberately inconsistent with `cmp` — the default
 // would make `a > a` false, the override makes it true. Pins that `>` is not
-// lowered as `!(a <= b)` or as a swapped `b.lt(a)`.
+// lowered as `!(a <= b)`, as a swapped `b.lt(a)`, nor as a `cmp` call.
 
 class CdOdd {
     n: int
@@ -358,7 +375,15 @@ class CdOdd {
         function eq(self, other: Self) -> bool throws never { self.n == other.n }
     }
     implements baml.ops.Compare {
-        function lt(self, other: Self) -> bool throws never { self.n < other.n }
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            if (self.n < other.n) {
+                baml.ops.Ordering.Less
+            } else if (self.n > other.n) {
+                baml.ops.Ordering.Greater
+            } else {
+                baml.ops.Ordering.Equal
+            }
+        }
         function gt(self, other: Self) -> bool throws never { true }
     }
 }
@@ -369,7 +394,7 @@ function cd_le_self() -> bool { cd_odd(1) <= cd_odd(1) }
 
 test "user_class_ordering_honors_gt_override" {
     assert.is_true(cd_gt_self())
-    // The un-overridden `le` still follows the default (`lt || eq`).
+    // The un-overridden `le` still follows the default (`cmp != Greater`).
     assert.is_true(cd_le_self())
 }
 
@@ -386,7 +411,9 @@ implement baml.ops.Equals for CdOrderedEnum {
 }
 
 implement baml.ops.Compare for CdOrderedEnum {
-    function lt(self, other: Self) -> bool throws never { true }
+    function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+        baml.ops.Ordering.Less
+    }
 }
 
 function cd_lt_variants() -> bool { CdOrderedEnum.A < CdOrderedEnum.B }
@@ -394,7 +421,7 @@ function cd_gt_variants() -> bool { CdOrderedEnum.A > CdOrderedEnum.B }
 
 test "enum_ordering_dispatches_compare" {
     assert.is_true(cd_lt_variants())
-    // `gt` defaults to `!le` = `!(lt || eq)` = `!(true || false)`.
+    // `gt` reads `cmp`, which this impl pins to `Less` for every pair.
     assert.is_true(!cd_gt_variants())
 }
 

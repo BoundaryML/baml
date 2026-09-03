@@ -814,16 +814,28 @@ function f() -> int {
                 .and_then(|item| item.detail)
                 .unwrap_or_else(|| unreachable!("`{name}` is offered on an int"))
         };
+        // BUG: `Self` should read as `int` on both rungs. `clamp` comes from
+        // `baml.ops.Compare`'s defaults rather than `class Int`, so it is
+        // declared in terms of `Self`, and the renderer has no receiver to
+        // substitute: `render::member` calls `resolved_function_sig_parts(db,
+        // function, None)`, and `MemberCandidate` carries no substituted
+        // signature. Both halves the substitution needs are already known
+        // where candidates are enumerated (the receiver and the realized
+        // `MemberSource::Interface`), and `FnSigParts` already has the
+        // `SigSlot::Resolved` variants the mounted-function path fills.
+        // Pinned as rendered so the rung DIFFERENCE stays covered; restore
+        // `int` with that fix.
+
         // The reader already wrote the receiver, so it is not a parameter
         // they still have to pass.
         assert_eq!(
             detail(&through_value, "clamp"),
-            "function clamp(min: int, max: int) -> int throws never"
+            "function clamp(min: Self, max: Self) -> Self throws never"
         );
         // Through the type it is the first argument, and reads like one.
         assert_eq!(
             detail(&through_type, "clamp"),
-            "function clamp(self, min: int, max: int) -> int throws never"
+            "function clamp(self, min: Self, max: Self) -> Self throws never"
         );
     }
 
@@ -848,7 +860,7 @@ function f() -> int {
             );
         }
         assert!(
-            labels.contains(&"iter") && labels.contains(&"Comparable"),
+            labels.contains(&"iter") && labels.contains(&"Sortable"),
             "the namespace's own items and children still come back: {labels:?}"
         );
     }

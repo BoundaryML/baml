@@ -205,14 +205,22 @@ class Array<T> {
         $rust_function
     }
 
-    /// Sorts the array in place and returns `self` — the same array object, not
-    /// a copy.
+    // `sort()` is no longer a method of `Array<T>`: it is provided by the
+    // `Sortable` interface (`baml/sortable.baml`), blanket-implemented for
+    // `T[]` where `T implements baml.ops.Compare`. This makes `sort()` reject
+    // non-orderable element types at compile time (with a `sort_by` pointer)
+    // and infallible (`throws never`), instead of the old unconditional
+    // `throws InvalidArgument`. `sort_by`/`sort_by_key` remain here.
+
+    /// Sorts the array in place using a comparator and returns `self` — the
+    /// same array object, not a copy.
     ///
-    /// `compare` follows the JavaScript
-    /// [`sort`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort)
-    /// convention: negative sorts the first argument before the second, zero
-    /// keeps their relative order, positive sorts it after. The sort is stable,
-    /// so elements the comparator calls equal stay in their original order.
+    /// The comparator returns a `baml.ops.Ordering`: `Less` sorts the first
+    /// argument before the second, `Equal` keeps their relative order, and
+    /// `Greater` sorts it after. This is the same three-way answer
+    /// `baml.ops.Compare.cmp` produces, so `a.cmp(b)` is directly usable as a
+    /// comparator body. The sort is stable, so elements the comparator calls
+    /// `Equal` stay in their original order.
     ///
     /// Comparator calls run sequentially in a deterministic merge order, but
     /// that order is an implementation detail; a comparator must not depend on
@@ -221,10 +229,16 @@ class Array<T> {
     /// The write-back happens only once the whole sort completes. A comparator
     /// that throws therefore leaves `self` in its pre-sort order, and one that
     /// mutates `self` has those mutations discarded.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// xs.sort_by((a: int, b: int) -> baml.ops.Ordering throws never { a.cmp(b) })
+    /// ```
     //baml:mut_vm
     //baml:may_yield
     //baml:mut_self
-    function sort_by<E>(self, compare: (T, T) -> int throws E) -> T[] throws E {
+    function sort_by<E>(self, compare: (T, T) -> baml.ops.Ordering throws E) -> T[] throws E {
         $rust_function
     }
 
@@ -232,23 +246,22 @@ class Array<T> {
     /// object, not a copy.
     ///
     /// Each key is computed exactly once, left to right, and the elements are
-    /// then ordered by their keys' natural order (`Comparable.compare`). That
+    /// then ordered by their keys' natural order (`baml.ops.Compare.cmp`). That
     /// compute-once guarantee is what makes this cheaper than the equivalent
     /// `sort_by` when the key is expensive to derive. The sort is stable, so
     /// elements with equal keys keep their original order.
     ///
-    /// Like `sort_by`, the write-back happens only on success: a `key` or
-    /// comparison that throws leaves `self` in its pre-sort order, and a `key`
-    /// that mutates `self` has those mutations discarded.
+    /// Like `sort_by`, the write-back happens only on success: a `key` that
+    /// throws leaves `self` in its pre-sort order, and a `key` that mutates
+    /// `self` has those mutations discarded.
     ///
-    /// The key type must be `Comparable`, and `U.CompareError` — the key's own
-    /// comparison error — propagates alongside `E`. For `int`, `bigint`,
-    /// `string` and `float` keys that is `never`, leaving only `E`.
+    /// The key type must implement `baml.ops.Compare`, whose ordering is total
+    /// and `throws never`, so the only error is the key callback's own `E`.
     //baml:mut_self
-    function sort_by_key<U extends Comparable, E>(
+    function sort_by_key<U extends baml.ops.Compare, E>(
         self,
         key: (T) -> U throws E,
-    ) -> T[] throws E | U.CompareError {
+    ) -> T[] throws E {
         let n = self.length();
         if (n <= 1) {
             return self;
@@ -267,12 +280,12 @@ class Array<T> {
             order.push(p);
             p += 1;
         }
-        order.sort_by((i: int, j: int) -> int throws U.CompareError {
+        order.sort_by((i: int, j: int) -> baml.ops.Ordering throws never {
             match (keys.at(i)) {
-                null => 0,
+                null => baml.ops.Ordering.Equal,
                 let ki: U => match (keys.at(j)) {
-                    null => 0,
-                    let kj: U => ki.compare(kj),
+                    null => baml.ops.Ordering.Equal,
+                    let kj: U => ki.cmp(kj),
                 },
             }
         });
@@ -937,14 +950,13 @@ implements FloatStats for float[] {
 
     /// Returns the median (the middle value) of `self`.
     ///
-    /// The elements are copied and sorted ascending by IEEE 754 `totalOrder`,
-    /// matching `float[].sort()`, so the caller's array is left untouched. An
-    /// odd element count yields the single middle element; an even count yields
-    /// the arithmetic mean of the two middle elements, computed so the
-    /// intermediate sum cannot overflow. `totalOrder` gives `NaN` a defined
-    /// position at the extremes, so a `NaN` element shifts the middle; the
-    /// result is `NaN` only when a `NaN` is itself one of the two middle
-    /// elements of an even-length array.
+    /// The elements are copied and sorted ascending by BAML's total float
+    /// order, matching `float[].sort()`, so the caller's array is left
+    /// untouched. An odd element count yields the single middle element; an
+    /// even count yields the arithmetic mean of the two middle elements,
+    /// computed so the intermediate sum cannot overflow. The total order places
+    /// `NaN` above every number, so a `NaN` element shifts the middle; the
+    /// result is `NaN` only when a `NaN` is itself a middle element.
     ///
     /// # Throws
     /// - `baml.errors.InvalidArgument` when `self` is empty.
@@ -986,7 +998,7 @@ function _sum_float(values: float[]) -> float throws never {
 }
 
 /// (internal) Native backing for `float[].median()`; call that instead. Sorts a
-/// *copy* of `values` by IEEE 754 `totalOrder` and returns the middle element,
+/// *copy* of `values` by BAML's total float order and returns the middle element,
 /// or the mean of the two middle elements for an even count, leaving `values`
 /// untouched.
 ///

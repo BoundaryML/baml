@@ -850,8 +850,9 @@ fn build_packages<'db>(
         // Lower a type ref (in the owner's `TypeRefStore`) in this file's
         // namespace, discarding diagnostics (these targets were already validated
         // upstream). `bounds` carries the enclosing impl's/class's generic-param
-        // bounds so a bound-typevar projection in a binding value
-        // (`type SortError = T.CompareError`) determines its interface instead of
+        // bounds so a bound-typevar projection in a binding value — the
+        // `implements<T extends Iface> Other for T[] { type E = T.Assoc }` shape,
+        // which only user code writes now — determines its interface instead of
         // erasing.
         let lower = |store: &TypeRefStore,
                      id: TypeRefId,

@@ -142,13 +142,13 @@ test "float_min_basic" {
     assert.is_true(((3.0).min(5.0) - 3.0).abs() < 0.000000000001)
 }
 
-// f.min(NaN) suppresses NaN and returns f.
-test "float_min_with_nan_suppresses_nan" {
+// NaN is the largest float in BAML's total order, so it loses every `min` it
+// does not tie. Both receiver forms agree, and both agree with `Compare.min`.
+test "float_min_with_nan_keeps_the_number" {
     assert.equal((3.0).min(float.nan()), 3.0)
 }
 
-// NaN.min(f) suppresses NaN and returns f.
-test "float_min_nan_receiver_suppresses_nan" {
+test "float_min_nan_receiver_keeps_the_number" {
     assert.equal(float.nan().min(3.0), 3.0)
 }
 
@@ -160,12 +160,23 @@ test "float_max_basic" {
     assert.is_true(((3.0).max(5.0) - 5.0).abs() < 0.000000000001)
 }
 
-test "float_max_with_nan_suppresses_nan" {
-    assert.equal((3.0).max(float.nan()), 3.0)
+// The mirror of `min`: NaN is the largest float, so it wins every `max`.
+test "float_max_with_nan_is_nan" {
+    assert.is_true((3.0).max(float.nan()).is_nan())
 }
 
-test "float_max_nan_receiver_suppresses_nan" {
-    assert.equal(float.nan().max(3.0), 3.0)
+test "float_max_nan_receiver_is_nan" {
+    assert.is_true(float.nan().max(3.0).is_nan())
+}
+
+// A literal receiver and a `float`-typed one must resolve to the same `max`.
+function float_max_via_local() -> float throws never {
+    let a: float = 3.0
+    a.max(float.nan())
+}
+
+test "float_max_receiver_form_does_not_change_the_answer" {
+    assert.is_true(float_max_via_local().is_nan())
 }
 
 // ─── clamp ────────────────────────────────────────────────────────────────────
@@ -180,6 +191,12 @@ test "float_clamp_below" {
 
 test "float_clamp_above" {
     assert.is_true(((15.0).clamp(0.0, 10.0) - 10.0).abs() < 0.000000000001)
+}
+
+// NaN clamps down to `max` rather than propagating: it is the largest float, so
+// the upper clamp catches it.
+test "float_clamp_nan_clamps_to_max" {
+    assert.is_true(((float.nan()).clamp(0.0, 10.0) - 10.0).abs() < 0.000000000001)
 }
 
 // ─── floor / ceil / round / trunc / fract ─────────────────────────────────────
@@ -794,10 +811,11 @@ test "float_random_uses_rng" {
 
 // ─── Equality (== / !=) ───────────────────────────────────────────────────────
 //
-// Float `==`/`!=` follow JS/TS (IEEE 754) semantics: NaN != NaN, NaN == NaN is
-// false, +0.0 == -0.0, +inf == +inf, +inf != -inf. int/float mix is allowed
-// (int widened to f64); float-vs-bigint is the one rejected pairing (compile
-// error E0004 — bigint past 2^53 can't round-trip f64).
+// Float `==`/`!=` follow IEEE 754 except for NaN, where BAML's reflexive
+// `Equals` wins: NaN == NaN is true (and every NaN equals every other), while
+// +0.0 == -0.0, +inf == +inf, +inf != -inf are unchanged. int/float mix is
+// allowed (int widened to f64); float-vs-bigint is the one rejected pairing
+// (compile error E0004 — bigint past 2^53 can't round-trip f64).
 //
 // Two distinct code paths are exercised: the compiler constant-folds `==` on two
 // float literals (try_fold_binary), while a non-literal operand forces the VM
@@ -877,8 +895,11 @@ test "float_eq_half_underflow_to_zero" {
     assert.is_true((float.parse("5e-324") / 2.0) == 0.0)
 }
 
-test "float_eq_inf_minus_inf_is_nan_ne_self" {
-    assert.is_true((float.inf() - float.inf()) != (float.inf() - float.inf()))
+// A NaN produced by arithmetic still equals itself — `Equals` is reflexive, and
+// the NaN's sign and payload (which differ by CPU architecture) are not
+// observable through comparison.
+test "float_eq_inf_minus_inf_is_nan_eq_self" {
+    assert.is_true((float.inf() - float.inf()) == (float.inf() - float.inf()))
 }
 
 test "float_eq_inf_plus_one_equals_inf" {
@@ -901,8 +922,8 @@ test "float_eq_mul_imprecision_ne_point3" {
     assert.is_true(0.1 * 3.0 != 0.3)
 }
 
-test "float_eq_nan_arith_propagates_ne_self" {
-    assert.is_true((float.nan() + 1.0) != (float.nan() + 1.0))
+test "float_eq_nan_arith_propagates_eq_self" {
+    assert.is_true((float.nan() + 1.0) == (float.nan() + 1.0))
 }
 
 test "float_eq_nan_const_not_equal_number" {
@@ -917,16 +938,16 @@ test "float_eq_nan_ne_number_is_true" {
     assert.is_true(float.nan() != 0.0)
 }
 
-test "float_eq_nan_ne_self_is_true" {
-    assert.is_true(float.parse("nan") != float.parse("nan"))
+test "float_eq_nan_ne_self_is_false" {
+    assert.is_true(!(float.parse("nan") != float.parse("nan")))
 }
 
 test "float_eq_nan_not_equal_infinity" {
     assert.is_true((float.nan() == float.inf()) == false)
 }
 
-test "float_eq_nan_not_equal_to_self" {
-    assert.is_true((float.parse("nan") == float.parse("nan")) == false)
+test "float_eq_nan_equal_to_self" {
+    assert.is_true(float.parse("nan") == float.parse("nan"))
 }
 
 test "float_eq_neg_inf_equals_neg_inf" {
@@ -1025,28 +1046,43 @@ test "float_eq_sum_equals_exact_rounded" {
     assert.is_true(0.1 + 0.2 == 0.30000000000000004)
 }
 
-// ─── NaN ordering (IEEE: every comparison involving NaN is false) ─────────────
-// `float` implements `baml.ops.Compare`, and its ordering must be IEEE — so NaN
-// is unordered: `<` `<=` `>` `>=` are all `false`, even `nan <= nan` / `nan >= nan`
-// (NaN is not even equal to itself). Regression guard for the float `Compare`
-// override (the boolean-derived defaults `gt = !le` would otherwise return `true`).
+// ─── NaN ordering (BAML: a total order, with NaN above every number) ──────────
+// `float` implements `baml.ops.Compare`, which is a *total* order, so NaN cannot
+// be left unordered the way IEEE leaves it. NaN sits above every number and is
+// equal to itself, which is what makes `nan <= nan` / `nan >= nan` true.
 test "nan_comparison" {
-    assert.is_true(!(float.nan() < 1.0));
-    assert.is_true(!(1.0 < float.nan()));
-    assert.is_true(!(float.nan() > 1.0));
-    assert.is_true(!(float.nan() < float.nan()));
-    assert.is_true(!(float.nan() <= float.nan()));
-    assert.is_true(!(float.nan() >= float.nan()))
+    assert.is_true(!(float.nan() < 1.0))
+    assert.is_true(1.0 < float.nan())
+    assert.is_true(float.nan() > 1.0)
+    assert.is_true(!(float.nan() < float.nan()))
+    assert.is_true(float.nan() <= float.nan())
+    assert.is_true(float.nan() >= float.nan())
+    assert.is_true(float.nan() > float.inf())
+    assert.is_true(float.nan() == float.nan())
 }
 
-// The same via the `Compare` *method* surface (`lt`/`le`/`gt`/`ge`), which is the
-// override that makes the operator correct.
+// `Equals` is reflexive, so — unlike IEEE — no float is unequal to itself, and
+// `x != x` is never a NaN test. Use `is_nan()`.
+test "float_eq_is_reflexive_for_nan" {
+    assert.is_true(!(float.nan() != float.nan()))
+    assert.is_true(float.nan().eq(float.nan()))
+}
+
+// Signed zeros stay one value, as under IEEE.
+test "float_signed_zeros_are_equal" {
+    assert.is_true(-0.0 == 0.0)
+    assert.is_true(!(-0.0 < 0.0))
+    assert.is_true(-0.0 <= 0.0)
+}
+
+// The same via the `Compare` *method* surface (`lt`/`le`/`gt`/`ge`), which the
+// interface derives from `cmp`.
 test "float_nan_lt_method_is_false" {
     assert.is_true(!float.nan().lt(1.0))
 }
 
-test "float_nan_ge_method_is_false" {
-    assert.is_true(!float.nan().ge(float.nan()))
+test "float_nan_ge_method_is_true" {
+    assert.is_true(float.nan().ge(float.nan()))
 }
 
 // ─── regression: bare-literal method receiver (B-614) ─────────────────────────

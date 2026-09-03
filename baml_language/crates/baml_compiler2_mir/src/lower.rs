@@ -1838,8 +1838,8 @@ struct LoweringContext<'db> {
     // `path_segment_types` for a lambda-parameter receiver (`(a: T) -> a.m()`),
     // so interface dispatch on such a receiver falls back to this map to learn
     // its static type — e.g. a bounded type variable whose `extends` bound
-    // names the dispatching interface (`a.compare(b)` where `T extends
-    // Comparable`). Saved/restored across nested lambdas.
+    // names the dispatching interface (`a.cmp(b)` where `T extends
+    // baml.ops.Compare`). Saved/restored across nested lambdas.
     lambda_param_tir_types: FxHashMap<Name, Tir2Ty>,
 
     /// The `(local, resolved static type)` of the value the enclosing `match` is
@@ -3787,6 +3787,12 @@ impl<'db> LoweringContext<'db> {
         recv_ty: &Tir2Ty,
         method: &Name,
     ) -> Option<InterfaceTypeView> {
+        // A literal-typed receiver is concrete and dispatches as its base
+        // primitive — the same widening `l1_impl_views_for_recv` applies below,
+        // hoisted so the kind test admits `(3.0).cmp(x)` rather than dropping it
+        // to the direct-call path, which would name an interface-keyed global
+        // that a required method has no body for.
+        let recv_ty = &widen_literal_bases(recv_ty);
         // Only concrete receivers — interfaces/type-vars dispatch via the
         // arms above. Containers are concrete too (`implements<T> I for T[]`),
         // and so is a reflected type value (`reflect.Type` is its canonical
@@ -7459,8 +7465,7 @@ impl<'db> LoweringContext<'db> {
     /// concrete `implements` block has already been resolved to the block's
     /// subject — the *MIR local* type keeps the unresolved `Self` (see
     /// `lower_signature_runtime_ty`), and reading that instead would deoptimize
-    /// `int`'s `baml.Comparable` impl (`<(int as baml.Comparable)>.compare`)
-    /// and friends off the opcode path.
+    /// `baml.ops.Compare$for$int.cmp` and friends off the opcode path.
     fn ordering_uses_primitive_opcode(&self, lhs: AstExprId, rhs: AstExprId) -> bool {
         /// `arith_primitive`, minus the `null`-transparency carve-out.
         fn orderable(ty: &RuntimeTy) -> bool {
@@ -7507,12 +7512,12 @@ impl<'db> LoweringContext<'db> {
     /// it still goes through `__union_neg`.)
     ///
     /// Each operator dispatches its *own* method rather than deriving the other
-    /// three from `lt`. `implement Compare for float` overrides all four
-    /// natively so that NaN is unordered in every direction, which `ge = !lt`
-    /// would break; and rewriting `a > b` as `b.lt(a)` would ignore a user's
-    /// `gt` override. The interface's defaults still supply whichever methods an
-    /// impl leaves out — they are merged into the impl's method table when the
-    /// program is baked.
+    /// three from `lt` (or from `cmp`): rewriting `a > b` as `b.lt(a)` would
+    /// ignore a user's `gt` override, and an impl overrides `gt` precisely to
+    /// avoid paying for `cmp`. Where an impl declares only the required `cmp`,
+    /// the interface's `lt`/`le`/`gt`/`ge` defaults supply the rest — they are
+    /// merged into the impl's method table when the program is baked, so this
+    /// dispatch finds a method either way.
     fn lower_ordering_via_virtual_call(
         &mut self,
         method: &str,

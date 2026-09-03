@@ -2403,13 +2403,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                         .iter()
                         .any(|name| name == &segments[0]);
                 // A projection off one of the function's own generic params —
-                // e.g. `T.CompareError` for `<T extends Comparable>`, which parses
-                // as a dotted path at this phase. The concrete error is the
+                // e.g. `T.Error` for `<T extends Iface>`, which parses as a
+                // dotted path at this phase. The concrete error is the
                 // implementor's associated type, resolved at the call site; the
                 // host fn just propagates whatever the dispatched method throws
-                // (the declared `throws` is erased for builtins). Lets
-                // `_compare_shim` declare `throws T.CompareError` instead of an
-                // unconstrained error param that call sites cannot pin.
+                // (the declared `throws` is erased for builtins). Lets a builtin
+                // declare `throws T.Error` instead of an unconstrained error
+                // param that call sites cannot pin.
                 let is_generic_param_projection = segments.len() >= 2
                     && generic_args.is_empty()
                     && allowed_generic_params
@@ -2429,12 +2429,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             // A projection off one of the function's own generic params — e.g.
-            // `T.CompareError` for `<T extends Comparable>`. The concrete error is
-            // the implementor's associated type, resolved at the call site; the
-            // host fn just propagates whatever the dispatched method throws (the
-            // declared `throws` is erased for builtins), so this is sound. Lets
-            // `_compare_shim` declare `throws T.CompareError` rather than an
-            // unconstrained error param that call sites cannot pin.
+            // `T.Error` for `<T extends Iface>`. The concrete error is the
+            // implementor's associated type, resolved at the call site; the host
+            // fn just propagates whatever the dispatched method throws (the
+            // declared `throws` is erased for builtins), so this is sound. Lets a
+            // builtin declare `throws T.Error` rather than an unconstrained error
+            // param that call sites cannot pin.
             ast::TypeExprKind::AssociatedTypeProjection { base, .. }
                 if matches!(
                     &base.kind,
