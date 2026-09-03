@@ -695,6 +695,22 @@ pre > code {
   counter-reset: line;
 }
 
+/* Shared inline code treatment for long-form prose. */
+.inline-code-content :not(pre) > code {
+  padding: 2px 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.86em;
+  font-weight: inherit;
+  color: inherit;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+}
+
+.inline-code-content :not(pre) > code::before,
+.inline-code-content :not(pre) > code::after {
+  content: none;
+}
+
 @media (prefers-color-scheme: dark) {
   .dark code[data-theme*=" "],
   .dark code[data-theme*=" "] span {
