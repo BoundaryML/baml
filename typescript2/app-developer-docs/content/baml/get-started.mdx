@@ -1,0 +1,27 @@
+---
+title: Get started
+description: The shortest path from installing BAML to checking your first function.
+breadcrumbs:
+  - href: /baml
+    label: BAML
+  - label: Get started
+---
+
+## Install the toolchain
+
+Install the BAML CLI and editor support for your environment. The versioned CLI reference remains the canonical source for exact installation methods and supported environments.
+
+## Create a project
+
+A normal BAML project contains a `baml.toml` file and a `baml_src/` directory. Put your functions and types under that source directory so the ordinary toolchain can discover them.
+
+```text
+my-project/
+├── baml.toml
+└── baml_src/
+    └── main.baml
+```
+
+## Check your work
+
+Use the CLI to check the project before generating or running client code. Continue to the [BAML CLI overview](/cli) for the versioned command surface.

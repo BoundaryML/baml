@@ -30,13 +30,13 @@ test('navigation says Cloud while product content keeps the official name', asyn
   const primaryCloud = primaryNavigation.find((item) => item.href === '/bcs');
   const sidebarCloud = searchablePages.find((item) => item.href === '/bcs');
   const cloudPage = await readFile(
-    resolve(process.cwd(), 'app/bcs/page.tsx'),
+    resolve(process.cwd(), 'content/bcs/index.mdx'),
     'utf8',
   );
 
   assert.equal(primaryCloud?.label, 'Cloud');
   assert.equal(sidebarCloud?.label, 'Cloud');
-  assert.match(cloudPage, /title="Boundary Cloud Services"/);
+  assert.match(cloudPage, /title: Boundary Cloud Services/);
 });
 
 test('nested navigation preserves canonical path ancestry and unique routes', () => {

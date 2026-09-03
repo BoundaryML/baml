@@ -1,0 +1,45 @@
+---
+title: Functions
+description: Declare named, typed operations with expression or model-backed bodies.
+breadcrumbs:
+  - href: /baml
+    label: BAML
+  - href: /baml/language
+    label: Language reference
+  - label: Functions
+---
+
+## Syntax
+
+<BamlSnippet id="functions/return-number" />
+
+| Part | Required | Purpose |
+| --- | --- | --- |
+| Function name | Yes | Names the generated client method. |
+| Parameters | Yes | Declares the named, typed inputs; the list may be empty. |
+| Return type | Yes | Defines the result expected by BAML and generated clients. |
+| Body | Yes | Computes the result or declares a client and prompt. |
+
+## Parameters
+
+Parameters are named and typed. Separate multiple parameters with commas. Callers pass them in declaration order through generated client methods.
+
+<BamlSnippet id="functions/typed-parameters" />
+
+## Function bodies
+
+Expression functions evaluate ordinary BAML expressions. Model-backed functions declare a client and prompt. Both forms must satisfy the declared return type.
+
+| Body kind | Use it for |
+| --- | --- |
+| Expression | Deterministic transforms, branching, and composition. |
+| Client + prompt | Typed operations whose result is produced by a model. |
+
+## Examples
+
+See a function in context in [Classify support tickets](/examples/classify-support-tickets). For a guided explanation, read the [functions chapter](/baml/book/foundations/functions).
+
+## Related pages
+
+- [TypeScript bridge](/baml/bridges/typescript)
+- [Structured extraction tutorial](/tutorials/structured-extraction)

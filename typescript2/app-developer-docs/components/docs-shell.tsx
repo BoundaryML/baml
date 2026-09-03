@@ -14,7 +14,7 @@ interface BreadcrumbItem {
 
 interface TocItem {
   href: string;
-  label: string;
+  label: React.ReactNode;
 }
 
 export function DocsShell({
