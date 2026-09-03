@@ -207,12 +207,15 @@ pub(super) fn spawn_flush_child() {
 /// Runs in the detached child, after the parent CLI has already exited,
 /// so nothing here is latency-sensitive.
 pub(super) fn drain(dir: &Path, disabled: bool) {
-    // A detached flush may encounter a queue created by an older CLI without
-    // calling `append_line` first. Tighten the directory before scanning it.
-    if set_owner_only_dir_permissions(dir).is_err() {
-        return;
-    }
+    drain_with_dir_permissions(dir, disabled, set_owner_only_dir_permissions);
+}
 
+/// Drain with an injectable directory-permission operation for failure testing.
+fn drain_with_dir_permissions(
+    dir: &Path,
+    disabled: bool,
+    set_dir_permissions: impl FnOnce(&Path) -> std::io::Result<()>,
+) {
     if disabled {
         // Opt-out wins retroactively and completely: remove *every* queue
         // file — `live_*` (possibly still being written by a long-running
@@ -224,7 +227,16 @@ pub(super) fn drain(dir: &Path, disabled: bool) {
         // rotation (≤10 min) refreshes the config and stops it, and the
         // next flush child purges anything left — so lingering data is
         // bounded to a single rotation window.
+        // Opt-out deletion must not depend on chmod succeeding. Attempt to
+        // tighten the surviving directory only after all queue files are gone.
         purge_all_in(dir);
+        let _ = set_dir_permissions(dir);
+        return;
+    }
+
+    // A detached flush may encounter a queue created by an older CLI without
+    // calling `append_line` first. Tighten the directory before scanning it.
+    if set_dir_permissions(dir).is_err() {
         return;
     }
 
@@ -524,6 +536,22 @@ mod tests {
 
         let remaining = fs::read_dir(d).unwrap().flatten().count();
         assert_eq!(remaining, 0, "disabled drain must purge the whole queue");
+    }
+
+    #[test]
+    fn disabled_drain_purges_when_directory_permission_update_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let queued = dir.path().join("sealed_1_existing.jsonl");
+        fs::write(&queued, r#"{"event":"a"}"#).unwrap();
+
+        drain_with_dir_permissions(dir.path(), true, |_| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "injected chmod failure",
+            ))
+        });
+
+        assert!(!queued.exists(), "opt-out purge must not depend on chmod");
     }
 
     /// Fresh files survive both sweeps: too young to be orphans, too
