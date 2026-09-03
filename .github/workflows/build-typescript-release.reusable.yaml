@@ -97,7 +97,7 @@ jobs:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Check GLIBC version for Linux targets (skip musl targets)
       - name: Check GLIBC version
@@ -108,8 +108,6 @@ jobs:
       # Setup using standardized actions
       - name: Setup Node.js
         uses: ./.github/actions/engine-setup-node
-        with:
-          node-action-version: v6
 
       - name: Setup Rust
         uses: ./.github/actions/engine-setup-rust

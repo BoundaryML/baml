@@ -29,7 +29,7 @@ runs:
         
         df -h /
     - name: Setup mise
-      uses: jdx/mise-action@v2
+      uses: jdx/mise-action@v4.2.4
       with:
         install_args: "protoc-gen-go"
         cache: true

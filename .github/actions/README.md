@@ -259,14 +259,14 @@ This approach gives you the fastest builds by only setting up what you need.
 The setup actions include optimized [Turborepo caching](https://turborepo.com/docs/guides/ci-vendors/github-actions) configuration:
 
 ### Dual Caching Strategy
-- **GitHub Actions Cache**: Fast local caching using `actions/cache@v4`
+- **GitHub Actions Cache**: Fast local caching using `actions/cache@v6`
 - **Vercel Remote Cache**: Team-wide cache sharing using `TURBO_TOKEN` and `TURBO_TEAM`
 
 ### Configuration
 The `setup-node` action automatically configures Turbo caching:
 ```yaml
 - name: Cache Turbo build setup
-  uses: actions/cache@v4
+  uses: actions/cache@v6
   with:
     path: .turbo
     key: ${{ runner.os }}-turbo-${{ github.sha }}
