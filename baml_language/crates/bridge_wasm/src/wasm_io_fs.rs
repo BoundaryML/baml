@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use js_sys::Uint8Array;
 use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, owned};
-use sys_types::BexHeap;
+use sys_types::{BexHeap, VmInternalError, VmPanic};
 
 use crate::{send_wrapper::SendWrapper, wasm_vfs::WasmVfs};
 
@@ -194,7 +194,8 @@ impl io::IoClassFsFile for WasmIoFs {
         _n: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Vec<u8>>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -206,7 +207,8 @@ impl io::IoClassFsFile for WasmIoFs {
         _f: owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -220,7 +222,8 @@ impl io::IoClassFsFile for WasmIoFs {
         _o: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -233,7 +236,8 @@ impl io::IoClassFsFile for WasmIoFs {
         _d: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -245,7 +249,8 @@ impl io::IoClassFsFile for WasmIoFs {
         _f: owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -265,7 +270,8 @@ impl io::IoNamespaceFs for WasmIoFs {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::fs::File> {
         // File handle operations not supported in WASM.
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -394,7 +400,7 @@ impl io::IoNamespaceFs for WasmIoFs {
     ) -> SysOpOutput<i64> {
         let data = content.into_bytes();
         let Ok(len) = i64::try_from(data.len()) else {
-            return SysOpOutput::err(VmBamlError::InvalidArgument {
+            return SysOpOutput::err(VmInternalError::BridgeFailure {
                 message: format!("write size {} exceeds i64::MAX", data.len()),
             });
         };
@@ -416,7 +422,7 @@ impl io::IoNamespaceFs for WasmIoFs {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
         let Ok(len) = i64::try_from(content.len()) else {
-            return SysOpOutput::err(VmBamlError::InvalidArgument {
+            return SysOpOutput::err(VmInternalError::BridgeFailure {
                 message: format!("write size {} exceeds i64::MAX", content.len()),
             });
         };
@@ -448,8 +454,12 @@ impl io::IoNamespaceFs for WasmIoFs {
                         match serde_wasm_bindgen::from_value(v) {
                             Ok(e) => e,
                             Err(e) => {
-                                return SysOpOutput::err(VmBamlError::ParseError {
-                                    message: format!("readDirEntries returned invalid entry: {e}"),
+                                return SysOpOutput::err(VmPanic::HostContractViolation {
+                                    message: format!(
+                                        "readDirEntries returned an invalid entry: {e}"
+                                    ),
+                                    class_name: None,
+                                    language: None,
                                 });
                             }
                         };
@@ -470,8 +480,10 @@ impl io::IoNamespaceFs for WasmIoFs {
                 let mut entries = Vec::with_capacity(arr.length() as usize);
                 for v in arr.iter() {
                     let Some(name) = v.as_string() else {
-                        return SysOpOutput::err(VmBamlError::DevOther {
-                            message: "readDir entry is not a string".into(),
+                        return SysOpOutput::err(VmPanic::HostContractViolation {
+                            message: "readDir returned an entry that is not a string".to_string(),
+                            class_name: None,
+                            language: None,
                         });
                     };
                     // Legacy readDir doesn't expose type info. Probe metadata
@@ -582,11 +594,8 @@ impl io::IoNamespaceFs for WasmIoFs {
         }
     }
 
-    // The JS VFS contract exposes neither permissions nor links, and both are
-    // reported as `Io` rather than `Unsupported` because that is the only
-    // category these two sysops declare — an `Unsupported` would escape every
-    // typed `catch` arm the caller can write. Growing the VFS with `chmod` /
-    // `symlink` methods is what would make these real here.
+    // The JS VFS contract exposes neither permissions nor links. Growing the
+    // VFS with `chmod` / `symlink` methods is what would make these real here.
     fn chmod(
         &self,
         _h: &Arc<BexHeap>,
@@ -595,7 +604,8 @@ impl io::IoNamespaceFs for WasmIoFs {
         _mode: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Io {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "File permissions are not supported by the JavaScript filesystem".to_string(),
         })
     }
@@ -608,7 +618,8 @@ impl io::IoNamespaceFs for WasmIoFs {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Io {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Symbolic links are not supported by the JavaScript filesystem".to_string(),
         })
     }

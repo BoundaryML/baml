@@ -3,7 +3,6 @@ function normalized_kind(error: ai.errors.RaisedInClient) -> string {
         let timeout: baml.errors.Timeout => {
             `Timeout:${timeout.message}:${timeout.duration_ms ?? -1}`
         },
-        let cancelled: baml.panics.Cancelled => `Cancelled:${cancelled.message}`,
         let network: ai.errors.NetworkFailure => `NetworkFailure:${network.detail}`,
         let unknown_error: baml.errors.UnknownError => {
             `UnknownError:${unknown_error.message.join("|")}`
@@ -75,13 +74,6 @@ function timeout_detail(error: unknown) -> string {
         let timeout: baml.errors.Timeout => `${timeout.message}:${timeout.duration_ms ?? -1}`,
         _ => `unexpected:${error.to_string()}`,
     }
-}
-
-test "normalize_invoke_preserves_cancelled_identity" {
-    let original = baml.panics.Cancelled { message: "before" };
-    let normalized = ai.errors.normalize_invoke(original);
-    original.message = "after";
-    assert.equal(normalized_kind(normalized), "Cancelled:after")
 }
 
 test "normalize_invoke_preserves_timeout_identity" {

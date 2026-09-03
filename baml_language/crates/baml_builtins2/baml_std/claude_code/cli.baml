@@ -1,7 +1,6 @@
-// A harness client: the authenticated Claude Code CLI as a ai.Client.
-// The transport is a local process, not HTTP; the output contract travels
-// natively via --json-schema; BAML tools ride the `outcome` envelope.
-
+/// A harness client: the authenticated Claude Code CLI as an `ai.Client`.
+/// The transport is a local process, not HTTP; the output contract travels
+/// natively via --json-schema; BAML tools ride the `outcome` envelope.
 class ClaudeCodeClient {
     executable: string,
     model: string,
@@ -18,6 +17,9 @@ class ClaudeCodeClient {
     // response to record, and this client never fabricates wire records.
     capture_wire: bool,
 
+    /// Creates a client. Construction reads no environment variable, so
+    /// declaring one is always safe; credentials and endpoints resolve when a
+    /// request is built.
     function new(
         model: string = "haiku",
         executable: string = "claude",
@@ -46,9 +48,9 @@ class ClaudeCodeClient {
             `claude-code/${self.model}`
         }
 
-        // Claude Code is a process-backed client rather than an HTTP client;
-        // there is no wire Request to preview. Keep this explicit so adding
-        // render to ai.Client cannot accidentally invoke the CLI.
+        /// Claude Code is a process-backed client rather than an HTTP client;
+        /// there is no wire Request to preview. Keep this explicit so adding
+        /// render to ai.Client cannot accidentally invoke the CLI.
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             throw ai.errors.PreviewUnsupported {
                 provider: "claude-code",

@@ -4,12 +4,16 @@
 //! `sys_types::io`. They coexist with the legacy `SysOp*` trait impls in
 //! `lib.rs` during the transition.
 
-use std::sync::{Arc, OnceLock};
+use std::{
+    any::{Any, TypeId},
+    sync::{Arc, OnceLock},
+};
 
 use bex_heap::{BexExternalValue, BexHeap};
 use sys_ops::io::{
     self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError, owned,
 };
+use sys_types::VmInternalError;
 
 const MAX_READ_CHUNK: usize = 64 * 1024;
 
@@ -37,7 +41,8 @@ impl io::IoClassReflectPackage for NativeSysOps {
         _packages: indexmap::IndexMap<String, io::owned::reflect::Package>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "runtime-compiler".to_string(),
             message: "runtime compiler is not installed".to_string(),
         })
     }
@@ -53,7 +58,8 @@ impl io::IoClassReflectSession for NativeSysOps {
         _type_arg_0: ::sys_types::SapTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "runtime-compiler".to_string(),
             message: "runtime compiler is not installed".to_string(),
         })
     }
@@ -260,6 +266,21 @@ impl io::IoNamespaceRandom for NativeSysOps {}
 // IO (stdin input)
 // ============================================================================
 
+/// A write to stdout/stderr failed.
+///
+/// `baml.io.print`/`println`/`eprint`/`eprintln` declare `throws never`, so a
+/// dead output stream is not something they can report as an error value.
+/// Following Rust — whose `println!` panics on write failure — a broken pipe
+/// or closed console panics with `baml.panics.HostUnavailable` naming the
+/// stream. `baml.io.input` is the deliberate exception: reading input is an
+/// operation callers want to handle, so it declares `throws root.errors.Io`.
+fn output_stream_unavailable(stream: &'static str, context: &str, e: &std::io::Error) -> VmPanic {
+    VmPanic::HostUnavailable {
+        resource: stream.to_string(),
+        message: format!("{context}: {e}"),
+    }
+}
+
 impl io::IoNamespaceIo for NativeSysOps {
     fn input(
         &self,
@@ -316,12 +337,11 @@ impl io::IoNamespaceIo for NativeSysOps {
             stdout
                 .write_all(s.as_bytes())
                 .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to write stdout: {e}"),
-                })?;
-            stdout.flush().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to flush stdout: {e}"),
-            })?;
+                .map_err(|e| output_stream_unavailable("stdout", "failed to write stdout", &e))?;
+            stdout
+                .flush()
+                .await
+                .map_err(|e| output_stream_unavailable("stdout", "failed to flush stdout", &e))?;
             Ok(())
         })
     }
@@ -340,12 +360,14 @@ impl io::IoNamespaceIo for NativeSysOps {
             // interleave on a line boundary.
             let mut buf = s.into_bytes();
             buf.push(b'\n');
-            stdout.write_all(&buf).await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to write stdout: {e}"),
-            })?;
-            stdout.flush().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to flush stdout: {e}"),
-            })?;
+            stdout
+                .write_all(&buf)
+                .await
+                .map_err(|e| output_stream_unavailable("stdout", "failed to write stdout", &e))?;
+            stdout
+                .flush()
+                .await
+                .map_err(|e| output_stream_unavailable("stdout", "failed to flush stdout", &e))?;
             Ok(())
         })
     }
@@ -363,12 +385,11 @@ impl io::IoNamespaceIo for NativeSysOps {
             stderr
                 .write_all(s.as_bytes())
                 .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to write stderr: {e}"),
-                })?;
-            stderr.flush().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to flush stderr: {e}"),
-            })?;
+                .map_err(|e| output_stream_unavailable("stderr", "failed to write stderr", &e))?;
+            stderr
+                .flush()
+                .await
+                .map_err(|e| output_stream_unavailable("stderr", "failed to flush stderr", &e))?;
             Ok(())
         })
     }
@@ -385,12 +406,14 @@ impl io::IoNamespaceIo for NativeSysOps {
             let mut stderr = tokio::io::stderr();
             let mut buf = s.into_bytes();
             buf.push(b'\n');
-            stderr.write_all(&buf).await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to write stderr: {e}"),
-            })?;
-            stderr.flush().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to flush stderr: {e}"),
-            })?;
+            stderr
+                .write_all(&buf)
+                .await
+                .map_err(|e| output_stream_unavailable("stderr", "failed to write stderr", &e))?;
+            stderr
+                .flush()
+                .await
+                .map_err(|e| output_stream_unavailable("stderr", "failed to flush stderr", &e))?;
             Ok(())
         })
     }
@@ -402,22 +425,17 @@ impl io::IoNamespaceIo for NativeSysOps {
 
 type FsFileHandle = tokio::sync::Mutex<Option<tokio::fs::File>>;
 
-fn downcast_handle(file: &owned::fs::File) -> Result<Arc<FsFileHandle>, VmBamlError> {
+fn downcast_handle(file: &owned::fs::File) -> Result<Arc<FsFileHandle>, VmInternalError> {
     file._handle
         .clone()
         .downcast::<FsFileHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid file handle type".into(),
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<FsFileHandle>(),
+            got: file._handle.type_id(),
         })
 }
 
 fn closed_err() -> VmBamlError {
-    VmBamlError::InvalidArgument {
-        message: "File is closed".into(),
-    }
-}
-
-fn closed_io_err() -> VmBamlError {
     VmBamlError::Io {
         message: "File is closed".into(),
     }
@@ -432,9 +450,38 @@ impl io::IoClassFsFile for NativeSysOps {
         limit: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Vec<u8>>> {
-        SysOpOutput::async_op(
-            async move { read_up_to(&file, limit).await.map_err(VmRustFnError::from) },
-        )
+        let limit = match limit {
+            ..=0 => return SysOpOutput::Ready(Ok(Some(Vec::new()))),
+            1.. => usize::try_from(limit)
+                .unwrap_or(MAX_READ_CHUNK)
+                .min(MAX_READ_CHUNK),
+        };
+        SysOpOutput::async_op(async move {
+            use tokio::io::AsyncReadExt;
+
+            let mut buf = Vec::new();
+            buf.try_reserve(limit).map_err(|e| VmPanic::AllocFailure {
+                message: e.to_string(),
+            })?;
+            buf.resize(limit, 0);
+
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
+            let len = f.read(&mut buf).await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to read file: {e}"),
+            })?;
+            match len {
+                0 => Ok(None),
+                // `buf` was sized to `limit` up front; a short read leaves the
+                // tail as the zero fill, so it has to be cut back to what was
+                // actually read.
+                _ => {
+                    buf.truncate(len);
+                    Ok(Some(buf))
+                }
+            }
+        })
     }
 
     fn close(
@@ -508,9 +555,26 @@ impl io::IoClassFsFile for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
         SysOpOutput::async_op(async move {
-            write_all_bytes(&file, data)
-                .await
-                .map_err(VmRustFnError::from)
+            use tokio::io::AsyncWriteExt;
+
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
+            let len = f.write(&data).await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to write: {e}"),
+            })?;
+            // `tokio::fs::File` buffers: `write` copies into its buffer and
+            // dispatches the real write to the blocking pool, so a rejection
+            // (a read-only handle, a full disk) would otherwise surface on a
+            // *later* call or be lost entirely. Settling it here keeps
+            // `write_some` an unbuffered primitive, matching this interface's
+            // other implementors and every other language's raw file handle.
+            f.flush().await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to write: {e}"),
+            })?;
+            let len = i64::try_from(len)
+                .unwrap_or_else(|_| unreachable!("There are no systems with this much memory"));
+            Ok(len)
         })
     }
 
@@ -526,53 +590,13 @@ impl io::IoClassFsFile for NativeSysOps {
         SysOpOutput::async_op(async move {
             let handle = downcast_handle(&file)?;
             let mut guard = handle.lock().await;
-            let f = guard.as_mut().ok_or_else(closed_io_err)?;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
             f.flush().await.map_err(|e| VmBamlError::Io {
                 message: format!("Failed to flush: {e}"),
             })?;
             Ok(())
         })
     }
-}
-
-async fn read_up_to(file: &owned::fs::File, limit: i64) -> Result<Option<Vec<u8>>, VmBamlError> {
-    use tokio::io::AsyncReadExt;
-
-    let limit = usize::try_from(limit)
-        .ok()
-        .filter(|limit| *limit > 0)
-        .ok_or_else(|| VmBamlError::Io {
-            message: "read limit must be greater than zero".to_string(),
-        })?;
-    let cap = limit.min(MAX_READ_CHUNK) as u64;
-    let handle = downcast_handle(file)?;
-    let mut guard = handle.lock().await;
-    let f = guard.as_mut().ok_or_else(closed_io_err)?;
-    let mut buf = Vec::new();
-    f.take(cap)
-        .read_to_end(&mut buf)
-        .await
-        .map_err(|e| VmBamlError::Io {
-            message: format!("Failed to read file: {e}"),
-        })?;
-    Ok((!buf.is_empty()).then_some(buf))
-}
-
-async fn write_all_bytes(file: &owned::fs::File, data: Vec<u8>) -> Result<i64, VmBamlError> {
-    use tokio::io::AsyncWriteExt;
-
-    let handle = downcast_handle(file)?;
-    let mut guard = handle.lock().await;
-    let f = guard.as_mut().ok_or_else(closed_io_err)?;
-    #[allow(clippy::cast_possible_wrap)]
-    let len = data.len() as i64;
-    f.write_all(&data).await.map_err(|e| VmBamlError::Io {
-        message: format!("Failed to write: {e}"),
-    })?;
-    f.flush().await.map_err(|e| VmBamlError::Io {
-        message: format!("Failed to write: {e}"),
-    })?;
-    Ok(len)
 }
 
 impl io::IoNamespaceFs for NativeSysOps {
@@ -1032,12 +1056,13 @@ use sys_glob::GlobPattern;
 
 type GlobHandle = GlobPattern;
 
-fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmBamlError> {
+fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmInternalError> {
     glob._handle
         .clone()
         .downcast::<GlobHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid glob handle type".into(),
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<GlobHandle>(),
+            got: glob._handle.type_id(),
         })
 }
 
@@ -1103,8 +1128,14 @@ impl io::IoClassGlobGlob for NativeSysOps {
                     )
                 }
                 _ => {
-                    return Err(VmRustFnError::from(VmBamlError::InvalidArgument {
-                        message: "scan argument must be a string or ScanOptions".into(),
+                    // `root` is declared `string | ScanOptions`, so a value of
+                    // any other shape means the wire value disagrees with the
+                    // declared parameter type.
+                    return Err(VmRustFnError::from(VmInternalError::BridgeFailure {
+                        message: format!(
+                            "glob scan root is neither a string nor a ScanOptions: {}",
+                            root.type_name()
+                        ),
                     }));
                 }
             };
@@ -1241,44 +1272,55 @@ struct WritePipeHandle {
 
 fn stderr_stdio(
     mode: Option<&BexExternalValue>,
-) -> Result<(std::process::Stdio, bool), VmBamlError> {
+) -> Result<(std::process::Stdio, bool), VmInternalError> {
     use std::process::Stdio;
 
     let Some(mode) = mode else {
         return Ok((Stdio::inherit(), false));
     };
+    // `mode` is the `baml.sys.StderrMode` enum, so neither a non-variant value
+    // nor an unrecognized variant is reachable from well-typed BAML: the first
+    // means the wire value disagrees with the declared type, the second that
+    // the enum grew a variant this match was never taught.
     let BexExternalValue::Variant { variant_name, .. } = mode else {
-        return Err(VmBamlError::InvalidArgument {
-            message: format!("Invalid stderr mode: {}", mode.type_name()),
+        return Err(VmInternalError::BridgeFailure {
+            message: format!(
+                "stderr mode is not a StderrMode variant: {}",
+                mode.type_name()
+            ),
         });
     };
     match variant_name.as_str() {
         "Inherit" => Ok((Stdio::inherit(), false)),
         "Pipe" => Ok((Stdio::piped(), true)),
         "Discard" => Ok((Stdio::null(), false)),
-        other => Err(VmBamlError::InvalidArgument {
+        other => Err(VmInternalError::BridgeFailure {
             message: format!(
-                "Unsupported stderr mode '{other}': expected Inherit, Pipe, or Discard"
+                "unrecognized StderrMode variant '{other}': expected Inherit, Pipe, or Discard"
             ),
         }),
     }
 }
 
-fn downcast_read_pipe(pipe: &owned::sys::ReadPipe) -> Result<Arc<ReadPipeHandle>, VmBamlError> {
+fn downcast_read_pipe(pipe: &owned::sys::ReadPipe) -> Result<Arc<ReadPipeHandle>, VmInternalError> {
     pipe._pipe
         .clone()
         .downcast::<ReadPipeHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid read pipe handle type".into(),
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<ReadPipeHandle>(),
+            got: pipe._pipe.type_id(),
         })
 }
 
-fn downcast_write_pipe(pipe: &owned::sys::WritePipe) -> Result<Arc<WritePipeHandle>, VmBamlError> {
+fn downcast_write_pipe(
+    pipe: &owned::sys::WritePipe,
+) -> Result<Arc<WritePipeHandle>, VmInternalError> {
     pipe._pipe
         .clone()
         .downcast::<WritePipeHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid write pipe handle type".into(),
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<WritePipeHandle>(),
+            got: pipe._pipe.type_id(),
         })
 }
 
@@ -1321,13 +1363,14 @@ fn write_pipe(
 
 fn downcast_process_handle(
     process: &owned::sys::Process,
-) -> Result<Arc<LiveProcessHandle>, VmBamlError> {
+) -> Result<Arc<LiveProcessHandle>, VmInternalError> {
     process
         ._handle
         .clone()
         .downcast::<LiveProcessHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid process handle type".into(),
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<LiveProcessHandle>(),
+            got: process._handle.type_id(),
         })
 }
 
@@ -1378,13 +1421,11 @@ impl io::IoClassSysReadPipe for NativeSysOps {
     ) -> SysOpOutput<Option<Vec<u8>>> {
         use tokio::io::AsyncReadExt as _;
 
-        let limit = match usize::try_from(limit).ok().filter(|limit| *limit > 0) {
-            Some(limit) => limit.min(MAX_READ_CHUNK),
-            None => {
-                return SysOpOutput::err(VmBamlError::Io {
-                    message: "read limit must be greater than zero".to_string(),
-                });
-            }
+        let limit = match limit {
+            ..=0 => return SysOpOutput::Ready(Ok(Some(Vec::new()))),
+            1.. => usize::try_from(limit)
+                .unwrap_or(MAX_READ_CHUNK)
+                .min(MAX_READ_CHUNK),
         };
         SysOpOutput::async_op(async move {
             let handle = downcast_read_pipe(&readpipe)?;
@@ -1925,13 +1966,14 @@ pub(crate) fn timeout_from_nanos(nanos: &num_bigint::BigInt) -> Option<std::time
 
 fn downcast_tcpstream(
     stream: &owned::net::TcpStream,
-) -> Result<Arc<NetTcpStreamHandle>, VmBamlError> {
+) -> Result<Arc<NetTcpStreamHandle>, VmInternalError> {
     stream
         ._handle
         .clone()
         .downcast::<NetTcpStreamHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid TcpStream handle type".to_string(),
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<NetTcpStreamHandle>(),
+            got: stream._handle.type_id(),
         })
 }
 
@@ -1953,25 +1995,27 @@ fn tcp_stream_closed_error() -> VmBamlError {
 
 fn downcast_tcplistener(
     listener: &owned::net::TcpListener,
-) -> Result<Arc<NetTcpListenerHandle>, VmBamlError> {
+) -> Result<Arc<NetTcpListenerHandle>, VmInternalError> {
     listener
         ._handle
         .clone()
         .downcast::<NetTcpListenerHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid TcpListener handle type".to_string(),
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<NetTcpListenerHandle>(),
+            got: listener._handle.type_id(),
         })
 }
 
 fn downcast_udpsocket(
     socket: &owned::net::UdpSocket,
-) -> Result<Arc<NetUdpSocketHandle>, VmBamlError> {
+) -> Result<Arc<NetUdpSocketHandle>, VmInternalError> {
     socket
         ._handle
         .clone()
         .downcast::<NetUdpSocketHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid UdpSocket handle type".to_string(),
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<NetUdpSocketHandle>(),
+            got: socket._handle.type_id(),
         })
 }
 
@@ -2020,13 +2064,11 @@ impl io::IoClassNetTcpStream for NativeSysOps {
     ) -> SysOpOutput<Option<Vec<u8>>> {
         use tokio::io::AsyncReadExt;
 
-        let limit = match usize::try_from(limit).ok().filter(|limit| *limit > 0) {
-            Some(limit) => limit.min(MAX_READ_CHUNK),
-            None => {
-                return SysOpOutput::err(VmBamlError::Io {
-                    message: "read limit must be greater than zero".to_string(),
-                });
-            }
+        let limit = match limit {
+            ..=0 => return SysOpOutput::Ready(Ok(Some(Vec::new()))),
+            1.. => usize::try_from(limit)
+                .unwrap_or(MAX_READ_CHUNK)
+                .min(MAX_READ_CHUNK),
         };
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
@@ -2692,14 +2734,16 @@ impl io::IoClassHttpSseStream for NativeSysOps {
             let handle = sse_stream
                 ._handle
                 .downcast::<bex_resource_types::ResourceHandle>()
-                .map_err(|_| VmBamlError::DevOther {
-                    message: "Invalid SSE stream handle type".into(),
+                .map_err(|handle| VmInternalError::RustTypeError {
+                    expected: TypeId::of::<bex_resource_types::ResourceHandle>(),
+                    got: handle.type_id(),
                 })?;
 
             let (buffer, notify, closed) = crate::registry::REGISTRY
                 .get_sse_stream(handle.key())
-                .ok_or_else(|| VmBamlError::DevOther {
-                message: "SSE stream handle is invalid".into(),
+                .ok_or(VmInternalError::UnresolvedResourceHandle {
+                kind: "SSE stream",
+                key: handle.key(),
             })?;
 
             loop {
@@ -2723,8 +2767,8 @@ impl io::IoClassHttpSseStream for NativeSysOps {
                             })
                             .collect();
                         return Ok(Some(serde_json::to_string(&events).map_err(|e| {
-                            VmBamlError::DevOther {
-                                message: format!("Failed to serialize SSE events: {e}"),
+                            VmInternalError::BridgeFailure {
+                                message: format!("failed to serialize SSE events: {e}"),
                             }
                         })?));
                     }
@@ -3142,13 +3186,15 @@ impl io::IoClassWsWsStream for NativeSysOps {
             let handle = stream
                 ._handle
                 .downcast::<bex_resource_types::ResourceHandle>()
-                .map_err(|_| VmBamlError::DevOther {
-                    message: "Invalid WebSocket stream handle type".into(),
+                .map_err(|handle| VmInternalError::RustTypeError {
+                    expected: TypeId::of::<bex_resource_types::ResourceHandle>(),
+                    got: handle.type_id(),
                 })?;
             let (sink, _) = crate::registry::REGISTRY
                 .get_ws_stream(handle.key())
-                .ok_or_else(|| VmBamlError::DevOther {
-                    message: "WebSocket stream handle is invalid".into(),
+                .ok_or(VmInternalError::UnresolvedResourceHandle {
+                    kind: "WebSocket stream",
+                    key: handle.key(),
                 })?;
             sink.lock()
                 .await
@@ -3191,13 +3237,15 @@ impl io::IoClassWsWsStream for NativeSysOps {
             let handle = stream
                 ._handle
                 .downcast::<bex_resource_types::ResourceHandle>()
-                .map_err(|_| VmBamlError::DevOther {
-                    message: "Invalid WebSocket stream handle type".into(),
+                .map_err(|handle| VmInternalError::RustTypeError {
+                    expected: TypeId::of::<bex_resource_types::ResourceHandle>(),
+                    got: handle.type_id(),
                 })?;
             let (sink, source) = crate::registry::REGISTRY
                 .get_ws_stream(handle.key())
-                .ok_or_else(|| VmBamlError::DevOther {
-                    message: "WebSocket stream handle is invalid".into(),
+                .ok_or(VmInternalError::UnresolvedResourceHandle {
+                    kind: "WebSocket stream",
+                    key: handle.key(),
                 })?;
             let mut source = source.lock().await;
             loop {

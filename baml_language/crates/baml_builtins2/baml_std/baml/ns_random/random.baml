@@ -7,7 +7,7 @@
 interface Rng {
     /// Produces `bytes` uniformly random bytes.
     ///
-    /// ## Panics
+    /// # Panics
     ///
     /// - If `bytes` is negative.
     /// - If `bytes` bytes cannot be allocated (`baml.panics.AllocFailure`).
@@ -64,12 +64,12 @@ class Xoshiro256PlusPlus {
 
     /// Creates a new `Xoshiro256PlusPlus` pseudo-random number generator.
     ///
-    /// ## Parameters
+    /// # Parameters
     /// - `seed`: The seed for the random number generator.
     ///   If no seed is provided, a random seed is generated using the system random number generator.
     ///   The seed must be at least 32 bytes long.
     ///
-    /// ## Panics
+    /// # Panics
     /// If `seed` is shorter than 32 bytes.
     function new(
         seed: uint8array = SystemRandom.get().random(32),
@@ -110,12 +110,12 @@ class ChaCha20 {
 
     /// Creates a new `ChaCha20` pseudo-random number generator.
     ///
-    /// ## Parameters
+    /// # Parameters
     /// - `seed`: The seed for the random number generator.
     ///   If no seed is provided, a random seed is generated using the system random number generator.
     ///   The seed must be at least 32 bytes long.
     ///
-    /// ## Panics
+    /// # Panics
     /// If `seed` is shorter than 32 bytes.
     function new(seed: uint8array = SystemRandom.get().random(32)) -> ChaCha20 throws never {
         // A `$rust_function` builtin can't fill omitted default args, so this

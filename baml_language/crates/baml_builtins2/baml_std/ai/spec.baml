@@ -21,8 +21,8 @@ type Credential = string | baml.env.Ref;
 
 /// What a `client:` position accepts. Defined in `ai/ns_clients/clients.baml`
 /// next to `ai.clients.resolve`, which consumes it; re-exported here so the
-/// package-root name `ai.ClientSelector` reads alongside `ai.Client`.
-type ClientSelector = root.clients.ClientSelector;
+/// package-root name `ai.Selector` reads alongside `ai.Client`.
+type Selector = root.clients.Selector;
 
 /// Provider-neutral media retained inside a rendered prompt.
 type MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf;
@@ -41,7 +41,7 @@ class PromptMessage {
     /// readable `content` projection so media survives prompt rendering.
     parts: PromptPart[],
     /// Per-message provider directives, carried verbatim from the
-    /// `root.Role.metadata` of the `${role(...)}` marker that opened
+    /// `ai.Role.metadata` of the `${role(...)}` marker that opened
     /// this message — Anthropic `cache_control`, for example. Empty when the
     /// message carried none.
     metadata: map<string, baml.json.json>,
@@ -78,16 +78,15 @@ class Prompt {
 function prompt(
     // No `throws` clause: the callback's effect is inferred per call site
     // (rule 5); whatever a template expression throws is wrapped below.
-    body: (
-        role: (string) -> root.Role throws never,
-        ctx: root.Context,
-    ) -> baml.TaggedString,
+    body: (role: (string) -> root.Role throws never, ctx: root.Context) -> baml.TaggedString,
 ) -> (root.Context) -> Prompt throws root.errors.PromptRenderError {
     let render = (ctx: root.Context) -> {
         let tagged = body(root.internal.make_role, ctx) catch_all (e) {
-            _ => throw root.errors.PromptRenderError {
+            _ => {
+                throw root.errors.PromptRenderError {
                 message: "prompt template rendering threw",
                 cause: e,
+            }
             }
         };
         root.internal.assemble_prompt(tagged.parts, tagged.values)
@@ -95,10 +94,12 @@ function prompt(
     render
 }
 
-// One unit of model work, bound and unrun. `MyFunc@spec(args)` calls the
-// compiler-generated private ordinary `MyFunc@spec` companion. Streaming calls
-// the separate private ordinary `MyFunc@stream` companion, whose return type
-// carries the existing `Out$stream` schema. Neither companion is public.
+/// One unit of model work, bound and unrun. Immutable; getters only.
+///
+/// `MyFunc@spec(args)` calls the compiler-generated private `MyFunc@spec`
+/// companion. Streaming calls the separate private `MyFunc@stream` companion,
+/// whose return type carries the `Out$stream` schema. Neither companion is
+/// public.
 class FunctionSpec<Out> {
     spec_name: string,
     args: map<string, unknown>,
@@ -106,9 +107,9 @@ class FunctionSpec<Out> {
     toolbox: root.tools.Toolbox,
     default_client: Client,
 
-    // Execute this bound spec through the default Agent. Null uses the bound
-    // client and an optional event callback observes the same journal events
-    // as a direct LLM-function call.
+    /// Runs this bound spec through the default agent. `client` overrides the
+    /// bound client; null keeps it. `on_event` observes the same journal
+    /// events a direct LLM-function call reports.
     function call(
         self,
         client: Client? = null,
@@ -117,24 +118,23 @@ class FunctionSpec<Out> {
         Agent.new(client = client, on_event = on_event).run(self).value
     }
 
-    // Parse an existing model reply using this spec's realized output type.
+    /// Parses an existing model reply using this spec's realized output type.
     function parse(self, json: string) -> Out {
         baml.sap.parse<Out>(json)
     }
 
-    // Build the provider HTTP request shape for this spec without invoking the model.
-    // A supplied client overrides the spec's default; null uses the default.
+    /// Builds the provider HTTP request shape for this spec without invoking
+    /// the model. `client` overrides the spec's default; null uses the default.
     function build_request(self, client: Client? = null) -> baml.http.Request {
         let selected = client ?? self.default_client;
-        selected
-            .render(
-                ModelTurnInput {
-                    prompt: self.prompt_template,
-                    journal: Journal.new(self),
-                    toolbox: self.tools(),
-                    output_type: self.output_type(),
-                },
-            )
+        selected.render(
+            ModelTurnInput {
+                prompt: self.prompt_template,
+                journal: Journal.new(self),
+                toolbox: self.tools(),
+                output_type: self.output_type(),
+            },
+        )
     }
 
     function name(self) -> string {

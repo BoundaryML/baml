@@ -9,6 +9,6 @@ class Container<T> {
   item T
 }
 
-function decode_container(s: string) -> Container<User> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function decode_container(s: string) -> Container<User> throws baml.json.ParseError | baml.json.DecodeError {
   baml.json.from_string<Container<User>>(s)
 }

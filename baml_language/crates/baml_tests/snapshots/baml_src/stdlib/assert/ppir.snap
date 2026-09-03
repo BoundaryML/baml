@@ -5,23 +5,20 @@ source: crates/baml_tests/src/corpus.rs
 
 --- <builtin>/assert/assert.baml ---
 function assert.approx_equal(actual: float, expected: float, eps: float) -> void  [expr] {
-  { if (eps Lt 0.0 Or eps.is_nan()) {  } baml.sys.panic("assertion failed:..."); let delta = actual Sub expected.abs() } if (delta.is_nan() Or delta Gt eps) {  } baml.sys.panic(`...`)
+  { if (eps Lt 0.0 Or eps.is_nan()) { throw baml.panics.AssertionFailed { message: "assertion failed:..." } }; let delta = actual Sub expected.abs() } if (delta.is_nan() Or delta Gt eps) { throw baml.panics.AssertionFailed { message: `...` } }
 }
 function assert.contains(haystack: string, needle: string) -> void  [expr] {
-  {  } if (Not haystack.includes(needle)) {  } baml.sys.panic("assertion failed:...")
+  {  } if (Not haystack.includes(needle)) { throw baml.panics.AssertionFailed { message: "assertion failed:..." } }
 }
 function assert.equal(actual: unknown, expected: unknown) -> void  [expr] {
-  {  } if (actual Ne expected) {  } baml.sys.panic(`...`)
-}
-function assert.format_operand(value: unknown) -> string  [expr] {
-  {  } match (value) { text: string => `...`, _ => string.from(value) }
+  {  } if (actual Ne expected) { let actual_str = match (actual) { string => `...`, _ => string.from(actual) }; let expected_str = match (expected) { string => `...`, _ => string.from(expected) }; throw baml.panics.AssertionFailed { message: `...` } }
 }
 function assert.is_true(condition: bool) -> void  [expr] {
-  {  } if (Not condition) {  } baml.sys.panic("assertion failed:...")
+  {  } if (Not condition) { throw baml.panics.AssertionFailed { message: "assertion failed:..." } }
 }
 function assert.is_type(actual: unknown) -> T  [expr] {
-  {  } match (actual) { T => actual, _ => { let t: reflect.Type = reflect.Type.of() } baml.sys.panic(`...`) }
+  {  } match (actual) { T => actual, _ => { let t: reflect.Type = reflect.Type.of(); throw baml.panics.AssertionFailed { message: `...` } } }
 }
 function assert.not_null(value: unknown?) -> void  [expr] {
-  {  } if (value Eq null) {  } baml.sys.panic("assertion failed:...")
+  {  } if (value Eq null) { throw baml.panics.AssertionFailed { message: "assertion failed:..." } }
 }

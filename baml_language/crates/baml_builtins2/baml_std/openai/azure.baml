@@ -1,17 +1,16 @@
-// openai.AzureClient — Azure OpenAI Service chat completions.
-//
-// Azure differs from OpenAI in three ways, all of them config:
-//   * the deployment is part of the URL —
-//     `https://{resource_name}.openai.azure.com/openai/deployments/{deployment_id}/chat/completions`
-//     — with the API version as a query parameter;
-//   * the credential rides in an `api-key` header, not `Authorization: Bearer`;
-//   * a token ceiling is effectively mandatory, so 4096 is injected when the
-//     caller set neither `max_tokens` nor `max_completion_tokens` (including
-//     through `request_body`). Passing `request_body = {"max_tokens": null}`
-//     removes it again — the merge runs after the default is applied.
-//
-// Supply either `base_url` OR both `resource_name` and `deployment_id`.
-
+/// Azure OpenAI Service chat completions.
+///
+/// Azure differs from OpenAI in three ways, all of them config:
+///   * the deployment is part of the URL —
+///     `https://{resource_name}.openai.azure.com/openai/deployments/{deployment_id}/chat/completions`
+///     — with the API version as a query parameter;
+///   * the credential rides in an `api-key` header, not `Authorization: Bearer`;
+///   * a token ceiling is effectively mandatory, so 4096 is injected when the
+///     caller set neither `max_tokens` nor `max_completion_tokens` (including
+///     through `request_body`). Passing `request_body = {"max_tokens": null}`
+///     removes it again — the merge runs after the default is applied.
+///
+/// Supply either `base_url` OR both `resource_name` and `deployment_id`.
 class AzureClient {
     // The model name reported in `id()` and sent in the body. Azure routes on
     // the deployment, so this is usually the same string as deployment_id.
@@ -59,6 +58,9 @@ class AzureClient {
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
 
+    /// Creates a client. Construction reads no environment variable, so
+    /// declaring one is always safe; credentials and endpoints resolve when a
+    /// request is built.
     function new(
         model: string,
         resource_name: string? = null,
@@ -97,11 +99,14 @@ class AzureClient {
         }
     }
 
+    /// The request-time credential: the explicit value, else
+    /// `AZURE_OPENAI_API_KEY`. Azure sends it in an `api-key` header rather
+    /// than as a bearer token.
     function resolved_api_key(self) -> string? {
         ai.wire.resolve_credential(self.api_key, "AZURE_OPENAI_API_KEY")
     }
 
-    // The deployment segment: the caller's `deployment_id`, else the model.
+    /// The deployment segment: the caller's `deployment_id`, else the model.
     function resolved_deployment_id(self) -> string {
         self.deployment_id ?? self.model
     }
@@ -156,44 +161,48 @@ class AzureClient {
         )
     }
 
+    /// The provider record: everything the shared chat core needs to know
+    /// about this endpoint.
     function compat(self) -> root.internal.ChatCompat {
         let query: map<string, string> = {};
         if let version: string = self.api_version {
             let _ = query.set("api-version", version);
         }
-        root.internal
-            .ChatCompat
-            .new(
-                provider = "azure",
-                base_url = self.resolved_base_url(),
-                auth = root.internal.ChatAuth.ApiKeyHeader,
-                api_key_env = "AZURE_OPENAI_API_KEY",
-                api_key_required = true,
-                default_max_tokens = 4096,
-                compat_query = query,
-            )
+        root.internal.ChatCompat.new(
+            provider = "azure",
+            base_url = self.resolved_base_url(),
+            auth = root.internal.ChatAuth.ApiKeyHeader,
+            api_key_env = "AZURE_OPENAI_API_KEY",
+            api_key_required = true,
+            default_max_tokens = 4096,
+            compat_query = query,
+        )
     }
 
+    /// The per-request parameters handed to the shared chat core.
+    ///
+    /// # Parameters
+    ///
+    /// - `preview`: omit the credential, for rendering a request without
+    ///   sending it.
     function params(self, preview: bool = false) -> root.internal.ChatParams {
-        root.internal
-            .ChatParams
-            .new(
-                model = self.model,
-                api_key = if (preview) {
-                    null
-                } else {
-                    self.resolved_api_key()
-                },
-                temperature = self.temperature,
-                max_tokens = self.max_tokens,
-                max_completion_tokens = self.max_completion_tokens,
-                top_p = self.top_p,
-                stop = self.stop,
-                seed = self.seed,
-                headers = self.headers,
-                query_params = self.query_params,
-                request_body = self.request_body,
-            )
+        root.internal.ChatParams.new(
+            model = self.model,
+            api_key = if (preview) {
+                null
+            } else {
+                self.resolved_api_key()
+            },
+            temperature = self.temperature,
+            max_tokens = self.max_tokens,
+            max_completion_tokens = self.max_completion_tokens,
+            top_p = self.top_p,
+            stop = self.stop,
+            seed = self.seed,
+            headers = self.headers,
+            query_params = self.query_params,
+            request_body = self.request_body,
+        )
     }
 
     implements ai.Client {
@@ -208,7 +217,12 @@ class AzureClient {
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-            root.internal.chat_invoke(self.compat(), self.params(), input, capture_wire = self.capture_wire) catch_all (e) {
+            root.internal.chat_invoke(
+                self.compat(),
+                self.params(),
+                input,
+                capture_wire = self.capture_wire,
+            ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
         }
@@ -216,7 +230,12 @@ class AzureClient {
 
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-            root.internal.chat_invoke_stream(self.compat(), self.params(), input, capture_wire = self.capture_wire) catch_all (e) {
+            root.internal.chat_invoke_stream(
+                self.compat(),
+                self.params(),
+                input,
+                capture_wire = self.capture_wire,
+            ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
         }

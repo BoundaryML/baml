@@ -13,18 +13,18 @@
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function kind_name(k: baml.csv.CsvErrorKind) -> string {
+function kind_name(k: baml.csv.ErrorKind) -> string {
     match (k) {
-        baml.csv.CsvErrorKind.Options => "Options",
-        baml.csv.CsvErrorKind.Quote => "Quote",
-        baml.csv.CsvErrorKind.FieldCount => "FieldCount",
-        baml.csv.CsvErrorKind.Encoding => "Encoding",
-        baml.csv.CsvErrorKind.Header => "Header",
-        baml.csv.CsvErrorKind.Decode => "Decode",
-        baml.csv.CsvErrorKind.Encode => "Encode",
-        baml.csv.CsvErrorKind.NotFound => "NotFound",
-        baml.csv.CsvErrorKind.TooManyRows => "TooManyRows",
-        baml.csv.CsvErrorKind.Closed => "Closed",
+        baml.csv.ErrorKind.Options => "Options",
+        baml.csv.ErrorKind.Quote => "Quote",
+        baml.csv.ErrorKind.FieldCount => "FieldCount",
+        baml.csv.ErrorKind.Encoding => "Encoding",
+        baml.csv.ErrorKind.Header => "Header",
+        baml.csv.ErrorKind.Decode => "Decode",
+        baml.csv.ErrorKind.Encode => "Encode",
+        baml.csv.ErrorKind.NotFound => "NotFound",
+        baml.csv.ErrorKind.TooManyRows => "TooManyRows",
+        baml.csv.ErrorKind.Closed => "Closed",
     }
 }
 
@@ -303,7 +303,7 @@ function csv_trim_all() -> string {
     let h = join(headers, "|");
     let row = match (r.next()) {
         baml.iter.Done => "none",
-        let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+        let rec: baml.csv.Record => join(rec.fields(), "|"),
     };
     h + "/" + row
 }
@@ -327,7 +327,7 @@ function csv_encoding_strict_throws() -> string {
         baml.csv.parse(b"a\n\xFF\n", options = baml.csv.ReaderOptions { has_header: false });
         baml.sys.panic("expected Encoding error")
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     }
 }
 
@@ -377,7 +377,7 @@ function csv_null_semantics_quoted_empty() -> string {
         baml.csv.decode<NullProbe>("a,s,so,io\nx,,,\"\"\n");
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     ok + "/" + err
 }
@@ -397,7 +397,7 @@ function csv_null_values_option() -> string {
         baml.csv.decode<NullProbe>("a,s,so,io\nx,N/A,,\n", options = opts);
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     // Quoted cells never match null_values.
     let quoted = match (baml.csv.decode<NullProbe>("a,s,so,io\nx,y,\"N/A\",\n", options = opts).at(0)) {
@@ -497,7 +497,7 @@ function csv_decode_missing_column_is_header_error() -> string {
         baml.csv.decode<Pos>("first,other\nx,y\n");
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind) + ":" + (e.column ?? "?"),
+        baml.csv.Error => kind_name(e.kind) + ":" + (e.column ?? "?"),
     }
 }
 
@@ -525,13 +525,13 @@ function csv_duplicate_column_matched_is_header_error() -> string {
         baml.csv.decode<OnlyFirst>("first,first\nx,y\n");
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     // Positional access is unaffected by duplicate names.
     let r = baml.csv.reader("first,first\nx,y\n");
     let positional = match (r.next()) {
         baml.iter.Done => "none",
-        let rec: baml.csv.CsvRecord => rec.get_at<string>(1) ?? "<null>",
+        let rec: baml.csv.Record => rec.get_at<string>(1) ?? "<null>",
     };
     err + "/" + positional
 }
@@ -549,7 +549,7 @@ function csv_decode_error_details() -> string {
         baml.csv.decode<IntRow>("n\n1\noops\n");
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind)
+        baml.csv.Error => kind_name(e.kind)
             + " line=" + int_or(e.line, "?")
             + " record=" + int_or(e.record, "?")
             + " column=" + (e.column ?? "?"),
@@ -565,13 +565,13 @@ function csv_decode_rejects_locale_numbers() -> string {
         baml.csv.decode<IntRow>("n\n\"1,000\"\n");
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     let two = {
         baml.csv.decode<IntRow>("n\n 5\n");
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     one + "/" + two
 }
@@ -589,7 +589,7 @@ function csv_decode_rejects_nonfinite_floats() -> string {
         baml.csv.decode<FloatRow>("x\nNaN\n");
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     }
 }
 
@@ -604,7 +604,7 @@ function csv_ragged_strict() -> string {
         baml.csv.parse("a,b\n1\n");
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind)
+        baml.csv.Error => kind_name(e.kind)
             + " expected=" + int_or(e.expected, "?")
             + " found=" + int_or(e.found, "?"),
     }
@@ -622,7 +622,7 @@ function csv_ragged_pad() -> string {
         baml.csv.parse("a,b\n1,2,3\n", options = opts);
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     short + "/" + long
 }
@@ -638,7 +638,7 @@ function csv_ragged_truncate() -> string {
         baml.csv.parse("a,b\n1\n", options = opts);
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     long + "/" + short
 }
@@ -657,10 +657,10 @@ function csv_reader_resumes_after_throw() -> string {
         let step = {
             match (r.next()) {
                 baml.iter.Done => "done",
-                let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+                let rec: baml.csv.Record => join(rec.fields(), "|"),
             }
         } catch (e) {
-            baml.csv.CsvError => {
+            baml.csv.Error => {
                 bad += 1;
                 "<" + kind_name(e.kind) + ">"
             },
@@ -680,20 +680,20 @@ function csv_unterminated_quote_exhausts() -> string {
     let r = baml.csv.reader("a\n\"open\n1\n", options = baml.csv.ReaderOptions { has_header: false });
     let first = match (r.next()) {
         baml.iter.Done => "done",
-        let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+        let rec: baml.csv.Record => join(rec.fields(), "|"),
     };
     let second = {
         match (r.next()) {
             baml.iter.Done => "done",
-            let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+            let rec: baml.csv.Record => join(rec.fields(), "|"),
         }
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     // An unterminated quote legally consumes the rest of the input.
     let third = match (r.next()) {
         baml.iter.Done => "done",
-        let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+        let rec: baml.csv.Record => join(rec.fields(), "|"),
     };
     first + "/" + second + "/" + third
 }
@@ -713,7 +713,7 @@ function csv_skip_mode_diagnostics() -> string {
     }
     let first_line = match (r.skipped().at(0)) {
         null => "?",
-        let e: baml.csv.CsvError => int_or(e.line, "?"),
+        let e: baml.csv.Error => int_or(e.line, "?"),
     };
     baml.json.stringify(count)
         + " skipped=" + baml.json.stringify(r.skipped_count())
@@ -730,7 +730,7 @@ function csv_on_skip_observer() -> string {
     let log: string[] = [];
     let r = baml.csv.reader("a,b\n1\n2,3\n", options = baml.csv.ReaderOptions {
         on_error: "skip",
-        on_skip: (e: baml.csv.CsvError) -> null {
+        on_skip: (e: baml.csv.Error) -> null {
             log.push(kind_name(e.kind));
             null
         },
@@ -775,7 +775,7 @@ function csv_decode_optional_cases() -> string {
         baml.csv.decode_optional<IntRow>("n\n1\n2\n");
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     zero + "/" + one + "/" + two
 }
@@ -789,7 +789,7 @@ function csv_decode_one_cases() -> string {
         baml.csv.decode_one<IntRow>("n\n");
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     let one = baml.json.stringify(baml.csv.decode_one<IntRow>("n\n7\n").n);
     // A bare row, positionally decoded: the LLM single-row case.
@@ -798,7 +798,7 @@ function csv_decode_one_cases() -> string {
         baml.csv.decode_one<IntRow>("n\n1\n2\n");
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     zero + "/" + one + "/" + bare + "/" + two
 }
@@ -807,13 +807,13 @@ test "csv_decode_one_cases" {
     assert.equal(csv_decode_one_cases(), "NotFound/7/9/TooManyRows")
 }
 
-// ─── CsvRecord API ──────────────────────────────────────────────────────────
+// ─── Record API ──────────────────────────────────────────────────────────
 
 function csv_record_api() -> string {
     let r = baml.csv.reader("name,score\nalice,9\n");
     match (r.next()) {
         baml.iter.Done => "none",
-        let rec: baml.csv.CsvRecord => {
+        let rec: baml.csv.Record => {
             let parts: string[] = [];
             parts.push(baml.json.stringify(rec.length()));
             parts.push(join(rec.fields(), "|"));
@@ -837,13 +837,13 @@ function csv_record_get_decode_error() -> string {
     {
         match (r.next()) {
             baml.iter.Done => "none",
-            let rec: baml.csv.CsvRecord => {
+            let rec: baml.csv.Record => {
                 rec.get<int>("n");
                 "no-throw"
             },
         }
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind) + ":" + (e.column ?? "?"),
+        baml.csv.Error => kind_name(e.kind) + ":" + (e.column ?? "?"),
     }
 }
 
@@ -856,13 +856,13 @@ function csv_record_get_without_headers() -> string {
     {
         match (r.next()) {
             baml.iter.Done => "none",
-            let rec: baml.csv.CsvRecord => {
+            let rec: baml.csv.Record => {
                 rec.get<int>("n");
                 "no-throw"
             },
         }
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     }
 }
 
@@ -875,7 +875,7 @@ function csv_record_decode_single() -> string {
     let r = baml.csv.reader("n\n5\n");
     match (r.next()) {
         baml.iter.Done => "none",
-        let rec: baml.csv.CsvRecord => baml.json.stringify(rec.decode<IntRow>().n),
+        let rec: baml.csv.Record => baml.json.stringify(rec.decode<IntRow>().n),
     }
 }
 
@@ -886,7 +886,7 @@ test "csv_record_decode_single" {
 function csv_record_snapshot_outlives_reader() -> string {
     // Records have snapshot semantics: still valid after the reader advances.
     let r = baml.csv.reader("a\nfirst\nsecond\n");
-    let kept: baml.csv.CsvRecord[] = [];
+    let kept: baml.csv.Record[] = [];
     for (let rec in r) {
         kept.push(rec);
     }
@@ -901,7 +901,7 @@ test "csv_record_snapshot_outlives_reader" {
     assert.equal(csv_record_snapshot_outlives_reader(), "first,second")
 }
 
-// ─── CsvReader API ──────────────────────────────────────────────────────────
+// ─── Reader API ──────────────────────────────────────────────────────────
 
 function csv_headers_variants() -> string {
     let with_header = join(baml.csv.reader("a,b\n1,2\n").headers() ?? ["<null>"], "|");
@@ -954,7 +954,7 @@ function csv_reader_close() -> string {
         r.next();
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     // Diagnostic accessors remain valid after close.
     err + ":" + baml.json.stringify(r.skipped_count()) + ":" + baml.json.stringify(r.position().record)
@@ -971,7 +971,7 @@ function csv_rows_validates_eagerly() -> string {
         r.rows<IntRow>();
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     }
 }
 
@@ -993,7 +993,7 @@ function csv_rows_rejects_nested_class() -> string {
         r.rows<Nested>();
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     }
 }
 
@@ -1024,13 +1024,13 @@ function csv_options_validation() -> string {
         baml.csv.reader("a\n", options = baml.csv.ReaderOptions { delimiter: "ab" });
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     let clash = {
         baml.csv.reader("a\n", options = baml.csv.ReaderOptions { delimiter: "\"" });
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     multi + "/" + clash
 }
@@ -1070,7 +1070,7 @@ function csv_writer_quote_styles() -> string {
         baml.csv.stringify<OutRow>([OutRow { id: 1, note: "a,b" }], options = baml.csv.WriterOptions { quote_style: "never" });
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     all + "#" + never_err
 }
@@ -1109,7 +1109,7 @@ function csv_writer_explicit_header() -> string {
         w.write_header(["x"]);
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     w.text() + "#" + after_data
 }
@@ -1120,7 +1120,7 @@ test "csv_writer_explicit_header" {
 
 function csv_writer_write_record_raw() -> string {
     let w = baml.csv.buffer(options = baml.csv.WriterOptions { write_header: false });
-    let record: baml.csv.CsvValue[] = [null, true, 7, 12345678901234567890123n, 2.5, "txt"];
+    let record: baml.csv.Value[] = [null, true, 7, 12345678901234567890123n, 2.5, "txt"];
     w.write_record(record);
     w.text()
 }
@@ -1132,7 +1132,7 @@ test "csv_writer_write_record_raw" {
 
 function csv_writer_float_canonical() -> string {
     let w = baml.csv.buffer(options = baml.csv.WriterOptions { write_header: false });
-    let record: baml.csv.CsvValue[] = [2.0, 0.1];
+    let record: baml.csv.Value[] = [2.0, 0.1];
     w.write_record(record);
     w.text()
 }
@@ -1143,12 +1143,12 @@ test "csv_writer_float_canonical" {
 
 function csv_writer_nonfinite_float_throws() -> string {
     let w = baml.csv.buffer(options = baml.csv.WriterOptions { write_header: false });
-    let record: baml.csv.CsvValue[] = [float.nan()];
+    let record: baml.csv.Value[] = [float.nan()];
     {
         w.write_record(record);
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     }
 }
 
@@ -1159,7 +1159,7 @@ test "csv_writer_nonfinite_float_throws" {
 
 function csv_writer_sanitize_formulas() -> string {
     let w = baml.csv.buffer(options = baml.csv.WriterOptions { write_header: false, sanitize_formulas: true });
-    let record: baml.csv.CsvValue[] = ["=SUM(A1)", "safe"];
+    let record: baml.csv.Value[] = ["=SUM(A1)", "safe"];
     w.write_record(record);
     w.text()
 }
@@ -1170,7 +1170,7 @@ test "csv_writer_sanitize_formulas" {
 
 function csv_writer_bom() -> string {
     let w = baml.csv.buffer(options = baml.csv.WriterOptions { write_header: false, bom: true });
-    let record: baml.csv.CsvValue[] = ["x"];
+    let record: baml.csv.Value[] = ["x"];
     w.write_record(record);
     let out = w.text();
     // BOM + "x" + "\n" = 3 chars; the BOM strips on a default read-back.
@@ -1190,7 +1190,7 @@ function csv_writer_text_on_file_writer_throws() -> string {
         w.text();
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     w.close();
     baml.fs.remove(path);
@@ -1210,7 +1210,7 @@ function csv_writer_closed_throws() -> string {
         w.write_row<Pos2>(Pos2 { a: 3, b: 4 });
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     // records_written remains valid after close.
     err + ":" + baml.json.stringify(w.records_written())
@@ -1272,7 +1272,7 @@ function csv_create_then_fs_read() -> string {
     let path = `/tmp/baml_csv_create_read_${baml.time.Instant.now().to_timestamp_milliseconds()}.csv`;
     let w = baml.csv.create(path);
     w.write_header(["k", "v"]);
-    let record: baml.csv.CsvValue[] = ["x", 1];
+    let record: baml.csv.Value[] = ["x", 1];
     w.write_record(record);
     w.close();
     let content = baml.fs.read(path);
@@ -1369,14 +1369,14 @@ function csv_malformed_header_exhausts_reader() -> string {
     let first = {
         match (r.next()) {
             baml.iter.Done => "done",
-            let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+            let rec: baml.csv.Record => join(rec.fields(), "|"),
         }
     } catch (e) {
-        baml.csv.CsvError => "<" + kind_name(e.kind) + ">",
+        baml.csv.Error => "<" + kind_name(e.kind) + ">",
     };
     let second = match (r.next()) {
         baml.iter.Done => "done",
-        let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+        let rec: baml.csv.Record => join(rec.fields(), "|"),
     };
     first + "/" + second
 }
@@ -1392,10 +1392,10 @@ function csv_malformed_header_failure_is_terminal_for_headers() -> string {
     let first = {
         match (r.next()) {
             baml.iter.Done => "done",
-            let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+            let rec: baml.csv.Record => join(rec.fields(), "|"),
         }
     } catch (e) {
-        baml.csv.CsvError => "<" + kind_name(e.kind) + ">",
+        baml.csv.Error => "<" + kind_name(e.kind) + ">",
     };
     let headers_after = {
         match (r.headers()) {
@@ -1403,11 +1403,11 @@ function csv_malformed_header_failure_is_terminal_for_headers() -> string {
             let h: string[] => join(h, "|"),
         }
     } catch (e) {
-        baml.csv.CsvError => "<" + kind_name(e.kind) + ">",
+        baml.csv.Error => "<" + kind_name(e.kind) + ">",
     };
     let next_after = match (r.next()) {
         baml.iter.Done => "done",
-        let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+        let rec: baml.csv.Record => join(rec.fields(), "|"),
     };
     first + "/" + headers_after + "/" + next_after
 }
@@ -1423,10 +1423,10 @@ function csv_header_encoding_failure_is_terminal_for_headers() -> string {
     let first = {
         match (r.next()) {
             baml.iter.Done => "done",
-            let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+            let rec: baml.csv.Record => join(rec.fields(), "|"),
         }
     } catch (e) {
-        baml.csv.CsvError => "<" + kind_name(e.kind) + ">",
+        baml.csv.Error => "<" + kind_name(e.kind) + ">",
     };
     let headers_after = {
         match (r.headers()) {
@@ -1434,11 +1434,11 @@ function csv_header_encoding_failure_is_terminal_for_headers() -> string {
             let h: string[] => join(h, "|"),
         }
     } catch (e) {
-        baml.csv.CsvError => "<" + kind_name(e.kind) + ">",
+        baml.csv.Error => "<" + kind_name(e.kind) + ">",
     };
     let next_after = match (r.next()) {
         baml.iter.Done => "done",
-        let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+        let rec: baml.csv.Record => join(rec.fields(), "|"),
     };
     first + "/" + headers_after + "/" + next_after
 }
@@ -1456,7 +1456,7 @@ function csv_writer_state_survives_encode_error() -> string {
         w.write_row<MdRow>(MdRow { metric: "bad", value: float.nan() });
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     w.write_row<MdRow>(MdRow { metric: "ok", value: 1.5 });
     caught + "#" + w.text() + "#" + baml.json.stringify(w.records_written())
@@ -1476,14 +1476,14 @@ function csv_writer_bom_survives_encode_error() -> string {
         bom: true,
         quote_style: "never",
     });
-    let bad: baml.csv.CsvValue[] = ["a,b"];
+    let bad: baml.csv.Value[] = ["a,b"];
     let caught = {
         w.write_record(bad);
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
-    let good: baml.csv.CsvValue[] = ["x"];
+    let good: baml.csv.Value[] = ["x"];
     w.write_record(good);
     let out = w.text();
     // BOM + "x" + "\n" = 3 chars.
@@ -1505,7 +1505,7 @@ function csv_write_rows_batch_is_atomic() -> string {
         ]);
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     caught + "#" + w.text() + "#" + baml.json.stringify(w.records_written())
 }
@@ -1521,7 +1521,7 @@ function csv_caller_owned_handles_stay_open() -> string {
     let path = `/tmp/baml_csv_caller_owned_${baml.time.Instant.now().to_timestamp_milliseconds()}.csv`;
     let wf = baml.fs.open(path, "w");
     let w = baml.csv.writer(wf);
-    let record: baml.csv.CsvValue[] = ["x", 1];
+    let record: baml.csv.Value[] = ["x", 1];
     w.write_record(record);
     w.close();
     // The caller's handle is still usable after w.close().
@@ -1554,7 +1554,7 @@ function csv_plaindate_cells_roundtrip() -> string {
         baml.csv.decode<DatedRow>("day,at\nnot-a-date,2026-06-11T08:30:00\n");
         "no-throw"
     } catch (e) {
-        baml.csv.CsvError => kind_name(e.kind),
+        baml.csv.Error => kind_name(e.kind),
     };
     rendered + "#" + back + "#" + bad
 }

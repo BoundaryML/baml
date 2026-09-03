@@ -20,7 +20,7 @@ class Point {
     x int
     y int
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             { "pt": [baml.json.from(self.x), baml.json.from(self.y)] }
         }
     }
@@ -30,11 +30,11 @@ class Point {
 // `obj.to_json()` on a non-implementor has no real method; it desugars to
 // `baml.json.from(obj)` (structural), the json analog of `obj.to_string()`.
 
-function desugar_via_from_str() -> string throws baml.json.JsonSerializationError {
+function desugar_via_from_str() -> string throws baml.json.SerializationError {
     baml.json.stringify(baml.json.from(User { name: "Ada", age: 30 }))
 }
 
-function desugar_via_method_str() -> string throws baml.json.JsonSerializationError {
+function desugar_via_method_str() -> string throws baml.json.SerializationError {
     let u = User { name: "Ada", age: 30 };
     baml.json.stringify(u.to_json())
 }
@@ -47,7 +47,7 @@ test "operator_style_to_json_desugars_to_from" {
 // ─── operator_style_to_json_dispatches_override ───────────────────────────────
 // `obj.to_json()` on an implementor resolves the real interface method.
 
-function point_via_method_str() -> string throws baml.json.JsonSerializationError {
+function point_via_method_str() -> string throws baml.json.SerializationError {
     let p = Point { x: 1, y: 2 };
     baml.json.stringify(p.to_json())
 }
@@ -95,11 +95,11 @@ class PointEmptyImpl {
 
 class PointPlain { x int  y int }
 
-function point_empty_impl_str() -> string throws baml.json.JsonSerializationError {
+function point_empty_impl_str() -> string throws baml.json.SerializationError {
     baml.json.stringify(baml.json.from(PointEmptyImpl { x: 1, y: 2 }))
 }
 
-function point_plain_str() -> string throws baml.json.JsonSerializationError {
+function point_plain_str() -> string throws baml.json.SerializationError {
     baml.json.stringify(baml.json.from(PointPlain { x: 1, y: 2 }))
 }
 
@@ -126,7 +126,7 @@ test "implementor_override_is_used" {
 class Inner {
     v int
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             { "wrapped": baml.json.from(self.v) }
         }
     }
@@ -147,7 +147,7 @@ test "nested_override_is_honored_at_depth" {
 class Tag {
     name string
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             baml.json.from(self.name)
         }
     }

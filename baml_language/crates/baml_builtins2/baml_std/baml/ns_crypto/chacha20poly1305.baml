@@ -94,11 +94,11 @@ class ChaCha20Poly1305 {
     implements GenerateKey {
         /// Draws a fresh 32-byte key from `rng`. Pass the result to
         /// `ChaCha20Poly1305.new`.
-        // BUG: the return type spells out `GenerateKey.Key`'s concrete value
-        // instead of `Self.Key`, which lowers to an error type here even though
-        // `Self` is the enclosing class and the projection has every input it
-        // needs to reduce. Restore `Self.Key` once concrete-site associated
-        // projections resolve.
+        /// BUG: the return type spells out `GenerateKey.Key`'s concrete value
+        /// instead of `Self.Key`, which lowers to an error type here even though
+        /// `Self` is the enclosing class and the projection has every input it
+        /// needs to reduce. Restore `Self.Key` once concrete-site associated
+        /// projections resolve.
         function random_key(rng: root.random.Rng) -> uint8array throws never {
             rng.random(32)
         }
@@ -192,8 +192,8 @@ class XChaCha20Poly1305 {
     implements GenerateKey {
         /// Draws a fresh 32-byte key from `rng`. Pass the result to
         /// `XChaCha20Poly1305.new`.
-        // BUG: see `ChaCha20Poly1305.random_key`. `Self.Key` lowers to an error
-        // type at a concrete impl site, so the concrete type is spelled out.
+        /// BUG: see `ChaCha20Poly1305.random_key`. `Self.Key` lowers to an error
+        /// type at a concrete impl site, so the concrete type is spelled out.
         function random_key(rng: root.random.Rng) -> uint8array throws never {
             rng.random(32)
         }

@@ -1,3 +1,11 @@
+/// A common interface for writing bytes to a destination.
+///
+/// Callers can also write UTF-8-encoded strings via the `write` method.
+///
+/// Implementors are expected to provide a `write_some` method that attempts to write up to `limit` bytes to the destination.
+///
+/// Based on Rust's [`Write`](https://doc.rust-lang.org/std/io/trait.Write.html) trait
+/// and JavaScript's [`WritableStream`](https://developer.mozilla.org/en-US/docs/Web/API/WritableStream).
 interface Write {
     /// Attempt one write of `data` and return the number of bytes accepted.
     /// A partial write is successful.
@@ -9,6 +17,11 @@ interface Write {
     /// Write all of `data` to the destination.
     /// Strings are encoded as UTF-8.
     /// Returns the number of bytes written.
+    ///
+    /// Like Rust's `write_all`, this does not flush: it is a loop over
+    /// `write_some`, and pushing buffered bytes onward stays the caller's
+    /// separate `flush`. Implementors are expected to make `write_some` report
+    /// its own failures rather than defer them.
     function write(
         self,
         data: string | uint8array,

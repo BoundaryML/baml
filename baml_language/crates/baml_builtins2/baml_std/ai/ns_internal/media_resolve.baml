@@ -163,9 +163,9 @@ function _resolve_media_content(
     throw baml.errors.InvalidArgument { message: "media has no URL, file, or base64 content" }
 }
 
-// Preview-only counterpart to `_resolve_media_content`. The file branch is
-// rejected before opening anything, and ordinary URLs remain references rather
-// than being passed to `baml.http.fetch`.
+/// (internal) Preview-only counterpart to `_resolve_media_content`. The file branch is
+/// rejected before opening anything, and ordinary URLs remain references rather
+/// than being passed to `baml.http.fetch`.
 function _resolve_media_preview_content(
     url: string?,
     file: string?,

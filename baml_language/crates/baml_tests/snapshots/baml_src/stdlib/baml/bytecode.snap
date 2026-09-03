@@ -61,8 +61,31 @@ function baml.<(float as baml.Comparable)>.compare(self: float, other: float) ->
 
 function baml.<(float[] as baml.FloatStats)>.mean(self: float[]) -> float {
     load_var self
-    call baml._mean_float
+    container_len
+    store_var _3
+    load_var _3
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    load_type baml.Summable
+    load_const "sum"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var self
+    container_len
+    store_var _6
+    load_var2 3 4
+    bin_op /
     return
+
+  L1:
+    load_const "float[].mean: cannot take the mean of an empty array"
+    init_instance baml.errors.InvalidArgument .message
+    throw
 }
 
 function baml.<(float[] as baml.FloatStats)>.median(self: float[]) -> float {
@@ -1080,9 +1103,24 @@ function baml.String.ends_with(self: string, suffix: string) -> bool {
 }
 
 function baml.String.from(value: #0) -> string {
+    load_var value
+    is_type baml.ToString
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
     load_type #0
     load_var value
-    call baml._to_string_shim
+    call baml._to_string_default
+    jump L2
+
+  L1:
+    load_var value
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+
+  L2:
     return
 }
 
@@ -1164,6 +1202,9 @@ function baml.String.last_index_of(self: string, search: string) -> int | null {
 }
 
 function baml.String.length(self: string) -> int {
+    load_var self
+    call baml.String.char_count
+    return
 }
 
 function baml.String.lines(self: string) -> string[] {
@@ -1291,9 +1332,6 @@ function baml._from_json_shim(j: baml.json.json) -> #0 {
 function baml._is_primitive_array(arr: #0[]) -> bool {
 }
 
-function baml._mean_float(values: float[]) -> float {
-}
-
 function baml._median_float(values: float[]) -> float {
 }
 
@@ -1313,9 +1351,6 @@ function baml._to_json_shim(value: #0) -> baml.json.json {
 }
 
 function baml._to_string_default(value: #0) -> string {
-}
-
-function baml._to_string_shim(value: #0) -> string {
 }
 
 function baml._trunc_to_int(value: float) -> int {
@@ -1410,30 +1445,30 @@ function baml.crypto.Sha256.new() -> baml.crypto.Sha256 {
 function baml.crypto.XChaCha20Poly1305.new(key: uint8array) -> baml.crypto.XChaCha20Poly1305 {
 }
 
-function baml.csv.<(baml.csv.CsvReader as baml.iter.Iterable)>.iter(self: baml.csv.CsvReader) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord> {
+function baml.csv.<(baml.csv.Reader as baml.iter.Iterable)>.iter(self: baml.csv.Reader) -> baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record> {
     load_var self
     return
 }
 
-function baml.csv.<(baml.csv.CsvReader as baml.iter.Iterator)>.next(self: baml.csv.CsvReader) -> baml.csv.CsvRecord | baml.iter.Done {
+function baml.csv.<(baml.csv.Reader as baml.iter.Iterator)>.next(self: baml.csv.Reader) -> baml.csv.Record | baml.iter.Done {
   L0:
     load_const true
     pop_jump_if_false L1
     jump L2
 
   L1:
-    load_const "unreachable: CsvReader.next loop ended"
+    load_const "unreachable: Reader.next loop ended"
     call baml.sys.panic
     jump L10
 
   L2:
     load_var self
-    call baml.csv.CsvReader._poll
+    call baml.csv.Reader._poll
     store_var _2
     load_var _2
     store_var _3
     load_var _3
-    narrow_bind baml.csv.CsvRecord, slot=3
+    narrow_bind baml.csv.Record, slot=3
     pop_jump_if_false L3
     jump L9
 
@@ -1449,13 +1484,13 @@ function baml.csv.<(baml.csv.CsvReader as baml.iter.Iterator)>.next(self: baml.c
     load_var _2
     store_var _7
     load_var _7
-    narrow_bind baml.csv.CsvSkip, slot=5
+    narrow_bind baml.csv._Skip, slot=5
     pop_jump_if_false L5
     jump L6
 
   L5:
     load_var self
-    call baml.csv.CsvReader._read_chunk
+    call baml.csv.Reader._read_chunk
     pop 1
     jump L0
 
@@ -1489,26 +1524,26 @@ function baml.csv.<(baml.csv.CsvReader as baml.iter.Iterator)>.next(self: baml.c
     return
 }
 
-function baml.csv.<(baml.csv.CsvRows<#0> as baml.iter.Iterable)>.iter(self: baml.csv.CsvRows<#0>) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = #0> {
+function baml.csv.<(baml.csv.Rows<#0> as baml.iter.Iterable)>.iter(self: baml.csv.Rows<#0>) -> baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = #0> {
     load_var self
     return
 }
 
-function baml.csv.<(baml.csv.CsvRows<#0> as baml.iter.Iterator)>.next(self: baml.csv.CsvRows<#0>) -> #0 | baml.iter.Done {
+function baml.csv.<(baml.csv.Rows<#0> as baml.iter.Iterator)>.next(self: baml.csv.Rows<#0>) -> #0 | baml.iter.Done {
   L0:
     load_const true
     pop_jump_if_false L1
     jump L2
 
   L1:
-    load_const "unreachable: CsvRows.next loop ended"
+    load_const "unreachable: Rows.next loop ended"
     call baml.sys.panic
     jump L8
 
   L2:
     load_var self
     load_field .reader
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -1528,7 +1563,7 @@ function baml.csv.<(baml.csv.CsvRows<#0> as baml.iter.Iterator)>.next(self: baml
     load_var _7
     store_var _11
     load_var _11
-    narrow_bind baml.csv.CsvSkip, slot=5
+    narrow_bind baml.csv._Skip, slot=5
     pop_jump_if_false L4
     jump L5
 
@@ -1563,25 +1598,25 @@ function baml.csv.<(baml.csv.CsvRows<#0> as baml.iter.Iterator)>.next(self: baml
     return
 }
 
-function baml.csv.CsvReader._feed(self: baml.csv.CsvReader, chunk: uint8array) -> null {
+function baml.csv.Reader._feed(self: baml.csv.Reader, chunk: uint8array) -> null {
 }
 
-function baml.csv.CsvReader._feed_eof(self: baml.csv.CsvReader) -> null {
+function baml.csv.Reader._feed_eof(self: baml.csv.Reader) -> null {
 }
 
-function baml.csv.CsvReader._mark_closed(self: baml.csv.CsvReader) -> null {
+function baml.csv.Reader._mark_closed(self: baml.csv.Reader) -> null {
 }
 
-function baml.csv.CsvReader._mark_exhausted(self: baml.csv.CsvReader) -> null {
+function baml.csv.Reader._mark_exhausted(self: baml.csv.Reader) -> null {
 }
 
-function baml.csv.CsvReader._poll(self: baml.csv.CsvReader) -> baml.csv.CsvRecord | baml.csv.CsvSkip | baml.csv.CsvNeedData | baml.iter.Done {
+function baml.csv.Reader._poll(self: baml.csv.Reader) -> baml.csv.Record | baml.csv._Skip | baml.csv._NeedData | baml.iter.Done {
 }
 
-function baml.csv.CsvReader._poll_headers(self: baml.csv.CsvReader) -> baml.csv.CsvHeaders | baml.csv.CsvNeedData {
+function baml.csv.Reader._poll_headers(self: baml.csv.Reader) -> baml.csv._Headers | baml.csv._NeedData {
 }
 
-function baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> void {
+function baml.csv.Reader._read_chunk(self: baml.csv.Reader) -> void {
     load_var self
     load_field ._file
     load_const null
@@ -1609,7 +1644,7 @@ function baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> void {
 
   L2:
     load_var self
-    call baml.csv.CsvReader._mark_exhausted
+    call baml.csv.Reader._mark_exhausted
     pop 1
     load_var e
     rethrow
@@ -1627,14 +1662,14 @@ function baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> void {
 
   L5:
     load_var2 1 2
-    call baml.csv.CsvReader._feed
+    call baml.csv.Reader._feed
     pop 1
     load_const null
     jump L7
 
   L6:
     load_var self
-    call baml.csv.CsvReader._feed_eof
+    call baml.csv.Reader._feed_eof
     pop 1
     load_const null
 
@@ -1642,9 +1677,9 @@ function baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> void {
     return
 }
 
-function baml.csv.CsvReader.close(self: baml.csv.CsvReader) -> null {
+function baml.csv.Reader.close(self: baml.csv.Reader) -> null {
     load_var self
-    call baml.csv.CsvReader._mark_closed
+    call baml.csv.Reader._mark_closed
     pop 1
     load_var self
     load_field ._file
@@ -1652,59 +1687,50 @@ function baml.csv.CsvReader.close(self: baml.csv.CsvReader) -> null {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L3
+    jump L2
 
   L0:
     load_var self
     load_field ._owns_file
-    pop_jump_if_false L2
+    pop_jump_if_false L1
     load_var _3
     sys_op baml.fs.File.close
     pop 1
-    jump L2
-    load_var _
-    is_type baml.errors.InvalidArgument
-    pop_jump_if_false L1
-    jump L2
 
   L1:
-    load_var _
-    rethrow
+    load_const null
+    jump L3
 
   L2:
     load_const null
-    jump L4
 
   L3:
-    load_const null
-
-  L4:
     return
 }
 
-function baml.csv.CsvReader.headers(self: baml.csv.CsvReader) -> string[] | null {
+function baml.csv.Reader.headers(self: baml.csv.Reader) -> string[] | null {
   L0:
     load_const true
     pop_jump_if_false L1
     jump L2
 
   L1:
-    load_const "unreachable: CsvReader.headers loop ended"
+    load_const "unreachable: Reader.headers loop ended"
     call baml.sys.panic
     jump L5
 
   L2:
     load_var self
-    call baml.csv.CsvReader._poll_headers
+    call baml.csv.Reader._poll_headers
     store_var _3
     load_var _3
-    narrow_bind baml.csv.CsvHeaders, slot=2
+    narrow_bind baml.csv._Headers, slot=2
     pop_jump_if_false L3
     jump L4
 
   L3:
     load_var self
-    call baml.csv.CsvReader._read_chunk
+    call baml.csv.Reader._read_chunk
     pop 1
     jump L0
 
@@ -1716,12 +1742,12 @@ function baml.csv.CsvReader.headers(self: baml.csv.CsvReader) -> string[] | null
     return
 }
 
-function baml.csv.CsvReader.position(self: baml.csv.CsvReader) -> baml.csv.CsvPosition {
+function baml.csv.Reader.position(self: baml.csv.Reader) -> baml.csv.Position {
 }
 
-function baml.csv.CsvReader.rows(self: baml.csv.CsvReader) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = #0> {
+function baml.csv.Reader.rows(self: baml.csv.Reader) -> baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = #0> {
     load_var self
-    call baml.csv.CsvReader.headers
+    call baml.csv.Reader.headers
     pop 1
     load_type #0
     load_var self
@@ -1729,53 +1755,53 @@ function baml.csv.CsvReader.rows(self: baml.csv.CsvReader) -> baml.iter.Iterator
     pop 1
     load_var self
     load_type #0
-    init_instance<1> baml.csv.CsvRows .reader
+    init_instance<1> baml.csv.Rows .reader
     return
 }
 
-function baml.csv.CsvReader.skipped(self: baml.csv.CsvReader) -> baml.csv.CsvError[] {
+function baml.csv.Reader.skipped(self: baml.csv.Reader) -> baml.csv.Error[] {
 }
 
-function baml.csv.CsvReader.skipped_count(self: baml.csv.CsvReader) -> int {
+function baml.csv.Reader.skipped_count(self: baml.csv.Reader) -> int {
 }
 
-function baml.csv.CsvRecord.decode(self: baml.csv.CsvRecord) -> #0 {
+function baml.csv.Record.decode(self: baml.csv.Record) -> #0 {
     load_type #0
     load_var self
     call baml.csv._decode_record
     return
 }
 
-function baml.csv.CsvRecord.fields(self: baml.csv.CsvRecord) -> string[] {
+function baml.csv.Record.fields(self: baml.csv.Record) -> string[] {
 }
 
-function baml.csv.CsvRecord.get(self: baml.csv.CsvRecord, column: string) -> #0 | null {
+function baml.csv.Record.get(self: baml.csv.Record, column: string) -> #0 | null {
     load_type #0
     load_var2 1 2
     call baml.csv._cell_by_name
     return
 }
 
-function baml.csv.CsvRecord.get_at(self: baml.csv.CsvRecord, index: int) -> #0 | null {
+function baml.csv.Record.get_at(self: baml.csv.Record, index: int) -> #0 | null {
     load_type #0
     load_var2 1 2
     call baml.csv._cell_by_index
     return
 }
 
-function baml.csv.CsvRecord.length(self: baml.csv.CsvRecord) -> int {
+function baml.csv.Record.length(self: baml.csv.Record) -> int {
 }
 
-function baml.csv.CsvRecord.position(self: baml.csv.CsvRecord) -> baml.csv.CsvPosition {
+function baml.csv.Record.position(self: baml.csv.Record) -> baml.csv.Position {
 }
 
-function baml.csv.CsvRecord.to_map(self: baml.csv.CsvRecord) -> map<string, string> {
+function baml.csv.Record.to_map(self: baml.csv.Record) -> map<string, string> {
 }
 
-function baml.csv.CsvWriter._bytes_written(self: baml.csv.CsvWriter) -> int {
+function baml.csv.Writer._bytes_written(self: baml.csv.Writer) -> int {
 }
 
-function baml.csv.CsvWriter._emit(self: baml.csv.CsvWriter, out: string) -> null {
+function baml.csv.Writer._emit(self: baml.csv.Writer, out: string) -> null {
     load_var self
     load_field ._file
     store_var_load_var _3
@@ -1807,18 +1833,18 @@ function baml.csv.CsvWriter._emit(self: baml.csv.CsvWriter, out: string) -> null
     return
 }
 
-function baml.csv.CsvWriter._encode_header(self: baml.csv.CsvWriter, names: string[]) -> string {
+function baml.csv.Writer._encode_header(self: baml.csv.Writer, names: string[]) -> string {
 }
 
-function baml.csv.CsvWriter._encode_record(self: baml.csv.CsvWriter, record: (null | bool | int | bigint | float | string)[]) -> string {
+function baml.csv.Writer._encode_record(self: baml.csv.Writer, record: (null | bool | int | bigint | float | string)[]) -> string {
 }
 
-function baml.csv.CsvWriter._mark_closed(self: baml.csv.CsvWriter) -> null {
+function baml.csv.Writer._mark_closed(self: baml.csv.Writer) -> null {
 }
 
-function baml.csv.CsvWriter.close(self: baml.csv.CsvWriter) -> null {
+function baml.csv.Writer.close(self: baml.csv.Writer) -> null {
     load_var self
-    call baml.csv.CsvWriter._mark_closed
+    call baml.csv.Writer._mark_closed
     pop 1
     load_var self
     load_field ._file
@@ -1826,104 +1852,95 @@ function baml.csv.CsvWriter.close(self: baml.csv.CsvWriter) -> null {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L3
+    jump L2
 
   L0:
     load_var self
     load_field ._owns_file
-    pop_jump_if_false L2
+    pop_jump_if_false L1
     load_var _3
     sys_op baml.fs.File.close
     pop 1
-    jump L2
-    load_var _
-    is_type baml.errors.InvalidArgument
-    pop_jump_if_false L1
-    jump L2
 
   L1:
-    load_var _
-    rethrow
+    load_const null
+    jump L3
 
   L2:
     load_const null
-    jump L4
 
   L3:
-    load_const null
-
-  L4:
     return
 }
 
-function baml.csv.CsvWriter.flush(self: baml.csv.CsvWriter) -> null {
+function baml.csv.Writer.flush(self: baml.csv.Writer) -> null {
     load_const null
     return
 }
 
-function baml.csv.CsvWriter.records_written(self: baml.csv.CsvWriter) -> int {
+function baml.csv.Writer.records_written(self: baml.csv.Writer) -> int {
 }
 
-function baml.csv.CsvWriter.text(self: baml.csv.CsvWriter) -> string {
+function baml.csv.Writer.text(self: baml.csv.Writer) -> string {
 }
 
-function baml.csv.CsvWriter.write_header(self: baml.csv.CsvWriter, names: string[]) -> null {
+function baml.csv.Writer.write_header(self: baml.csv.Writer, names: string[]) -> null {
     load_var2 1 2
-    call baml.csv.CsvWriter._encode_header
+    call baml.csv.Writer._encode_header
     store_var _3
     load_var2 1 3
-    call baml.csv.CsvWriter._emit
+    call baml.csv.Writer._emit
     return
 }
 
-function baml.csv.CsvWriter.write_record(self: baml.csv.CsvWriter, record: (null | bool | int | bigint | float | string)[]) -> null {
+function baml.csv.Writer.write_record(self: baml.csv.Writer, record: (null | bool | int | bigint | float | string)[]) -> null {
     load_var2 1 2
-    call baml.csv.CsvWriter._encode_record
+    call baml.csv.Writer._encode_record
     store_var _3
     load_var2 1 3
-    call baml.csv.CsvWriter._emit
+    call baml.csv.Writer._emit
     return
 }
 
-function baml.csv.CsvWriter.write_row(self: baml.csv.CsvWriter, row: #0) -> null {
+function baml.csv.Writer.write_row(self: baml.csv.Writer, row: #0) -> null {
     load_type #0
     load_var2 1 2
     call baml.csv._encode_row
     store_var _3
     load_var2 1 3
-    call baml.csv.CsvWriter._emit
+    call baml.csv.Writer._emit
     return
 }
 
-function baml.csv.CsvWriter.write_rows(self: baml.csv.CsvWriter, rows: #0[]) -> null {
+function baml.csv.Writer.write_rows(self: baml.csv.Writer, rows: #0[]) -> null {
     load_type #0
     load_var2 1 2
     call baml.csv._encode_rows
     store_var _3
     load_var2 1 3
-    call baml.csv.CsvWriter._emit
+    call baml.csv.Writer._emit
     return
 }
 
-function baml.csv._buffer(options: baml.csv.WriterOptions | null) -> baml.csv.CsvWriter {
+function baml.csv._buffer(options: baml.csv.WriterOptions | null) -> baml.csv.Writer {
 }
 
-function baml.csv._cell_by_index(rec: baml.csv.CsvRecord, index: int) -> #0 | null {
+function baml.csv._cell_by_index(rec: baml.csv.Record, index: int) -> #0 | null {
 }
 
-function baml.csv._cell_by_name(rec: baml.csv.CsvRecord, column: string) -> #0 | null {
+function baml.csv._cell_by_name(rec: baml.csv.Record, column: string) -> #0 | null {
 }
 
-function baml.csv._decode_record(rec: baml.csv.CsvRecord) -> #0 {
+function baml.csv._decode_record(rec: baml.csv.Record) -> #0 {
 }
 
-function baml.csv._encode_row(w: baml.csv.CsvWriter, row: #0) -> string {
+function baml.csv._encode_row(w: baml.csv.Writer, row: #0) -> string {
 }
 
-function baml.csv._encode_rows(w: baml.csv.CsvWriter, rows: #0[]) -> string {
+function baml.csv._encode_rows(w: baml.csv.Writer, rows: #0[]) -> string {
 }
 
-function baml.csv._error(kind: baml.csv.CsvErrorKind, message: string) -> baml.csv.CsvError {
+function baml.csv._error(kind: baml.csv.ErrorKind, message: string) -> baml.csv.Error {
     load_var2 1 2
     load_const null
     load_const null
@@ -1931,11 +1948,11 @@ function baml.csv._error(kind: baml.csv.CsvErrorKind, message: string) -> baml.c
     load_const null
     load_const null
     load_const null
-    init_instance baml.csv.CsvError .kind, .message, .line, .record, .field, .column, .expected, .found
+    init_instance baml.csv.Error .kind, .message, .line, .record, .field, .column, .expected, .found
     return
 }
 
-function baml.csv._reader(source: string | uint8array | baml.fs.File, options: baml.csv.ReaderOptions | null, owns_file: bool) -> baml.csv.CsvReader {
+function baml.csv._reader(source: string | uint8array | baml.fs.File, options: baml.csv.ReaderOptions | null, owns_file: bool) -> baml.csv.Reader {
 }
 
 function baml.csv._to_markdown(rows: #0[], max_rows: int) -> string {
@@ -1944,16 +1961,16 @@ function baml.csv._to_markdown(rows: #0[], max_rows: int) -> string {
 function baml.csv._to_markdown_records(records: string[][], headers: string[] | null, max_rows: int) -> string {
 }
 
-function baml.csv._try_decode(rec: baml.csv.CsvRecord, r: baml.csv.CsvReader) -> #0 | baml.csv.CsvSkip {
+function baml.csv._try_decode(rec: baml.csv.Record, r: baml.csv.Reader) -> #0 | baml.csv._Skip {
 }
 
-function baml.csv._validate_columns(r: baml.csv.CsvReader) -> void {
+function baml.csv._validate_columns(r: baml.csv.Reader) -> void {
 }
 
-function baml.csv._writer(file: baml.fs.File, options: baml.csv.WriterOptions | null, owns_file: bool) -> baml.csv.CsvWriter {
+function baml.csv._writer(file: baml.fs.File, options: baml.csv.WriterOptions | null, owns_file: bool) -> baml.csv.Writer {
 }
 
-function baml.csv.buffer(options: baml.csv.WriterOptions | null) -> baml.csv.CsvWriter {
+function baml.csv.buffer(options: baml.csv.WriterOptions | null) -> baml.csv.Writer {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -1967,7 +1984,7 @@ function baml.csv.buffer(options: baml.csv.WriterOptions | null) -> baml.csv.Csv
     return
 }
 
-function baml.csv.create(path: string, options: baml.csv.WriterOptions | null) -> baml.csv.CsvWriter {
+function baml.csv.create(path: string, options: baml.csv.WriterOptions | null) -> baml.csv.Writer {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2016,8 +2033,8 @@ function baml.csv.decode(source: string | uint8array, options: baml.csv.ReaderOp
     store_var _6
     load_type #0
     load_var _6
-    call baml.csv.CsvReader.rows
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = #0>
+    call baml.csv.Reader.rows
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = #0>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
     jump L3
@@ -2103,8 +2120,8 @@ function baml.csv.decode_one(source: string | uint8array, options: baml.csv.Read
     load_var _14
     call baml.json.stringify
     store_var _13
-    load_const baml.csv.CsvErrorKind.TooManyRows
-    alloc_variant baml.csv.CsvErrorKind
+    load_const baml.csv.ErrorKind.TooManyRows
+    alloc_variant baml.csv.ErrorKind
     load_const "expected exactly one data record, found "
     load_var _13
     bin_op +
@@ -2112,8 +2129,8 @@ function baml.csv.decode_one(source: string | uint8array, options: baml.csv.Read
     throw
 
   L7:
-    load_const baml.csv.CsvErrorKind.NotFound
-    alloc_variant baml.csv.CsvErrorKind
+    load_const baml.csv.ErrorKind.NotFound
+    alloc_variant baml.csv.ErrorKind
     load_const "expected exactly one data record, found none"
     call baml.csv._error
     throw
@@ -2155,8 +2172,8 @@ function baml.csv.decode_optional(source: string | uint8array, options: baml.csv
     load_var _11
     call baml.json.stringify
     store_var _10
-    load_const baml.csv.CsvErrorKind.TooManyRows
-    alloc_variant baml.csv.CsvErrorKind
+    load_const baml.csv.ErrorKind.TooManyRows
+    alloc_variant baml.csv.ErrorKind
     load_const "expected at most one data record, found "
     load_var _10
     bin_op +
@@ -2164,7 +2181,7 @@ function baml.csv.decode_optional(source: string | uint8array, options: baml.csv
     throw
 }
 
-function baml.csv.open(path: string, options: baml.csv.ReaderOptions | null) -> baml.csv.CsvReader {
+function baml.csv.open(path: string, options: baml.csv.ReaderOptions | null) -> baml.csv.Reader {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2219,7 +2236,7 @@ function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOpt
     load_const true
     pop_jump_if_false L5
     load_var r
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
@@ -2230,7 +2247,7 @@ function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOpt
 
   L2:
     load_var _7
-    call baml.csv.CsvRecord.fields
+    call baml.csv.Record.fields
     store_var _11
     load_type string[]
     load_var2 5 7
@@ -2275,19 +2292,19 @@ function baml.csv.read(path: string, options: baml.csv.ReaderOptions | null) -> 
     store_var r
     load_type #0
     load_var r
-    call baml.csv.CsvReader.rows
-    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = #0>
+    call baml.csv.Reader.rows
+    load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = #0>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
     store_var result
     load_var r
-    call baml.csv.CsvReader.close
+    call baml.csv.Reader.close
     pop 1
     load_var result
     return
 }
 
-function baml.csv.reader(source: string | uint8array | baml.fs.File, options: baml.csv.ReaderOptions | null) -> baml.csv.CsvReader {
+function baml.csv.reader(source: string | uint8array | baml.fs.File, options: baml.csv.ReaderOptions | null) -> baml.csv.Reader {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2316,10 +2333,10 @@ function baml.csv.stringify(rows: #0[], options: baml.csv.WriterOptions | null) 
     store_var w
     load_type #0
     load_var2 4 1
-    call baml.csv.CsvWriter.write_rows
+    call baml.csv.Writer.write_rows
     pop 1
     load_var w
-    call baml.csv.CsvWriter.text
+    call baml.csv.Writer.text
     jump L3
     load_var _
     is_type baml.errors.Io
@@ -2372,13 +2389,13 @@ function baml.csv.stringify_records(records: (null | bool | int | bigint | float
 
   L2:
     load_var2 4 6
-    call baml.csv.CsvWriter.write_record
+    call baml.csv.Writer.write_record
     pop 1
     jump L1
 
   L3:
     load_var w
-    call baml.csv.CsvWriter.text
+    call baml.csv.Writer.text
     jump L6
     load_var _
     is_type baml.errors.Io
@@ -2452,17 +2469,17 @@ function baml.csv.write(path: string, rows: #0[], options: baml.csv.WriterOption
     store_var w
     load_type #0
     load_var2 4 2
-    call baml.csv.CsvWriter.write_rows
+    call baml.csv.Writer.write_rows
     pop 1
     load_var w
-    call baml.csv.CsvWriter.close
+    call baml.csv.Writer.close
     pop 1
     load_var w
-    call baml.csv.CsvWriter._bytes_written
+    call baml.csv.Writer._bytes_written
     return
 }
 
-function baml.csv.writer(file: baml.fs.File, options: baml.csv.WriterOptions | null) -> baml.csv.CsvWriter {
+function baml.csv.writer(file: baml.fs.File, options: baml.csv.WriterOptions | null) -> baml.csv.Writer {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2564,9 +2581,9 @@ function baml.env.ref(name: string) -> baml.env.Ref {
     return
 }
 
-function baml.errors.<(baml.errors.ErrorContext as baml.ToString)>.to_string(self: baml.errors.ErrorContext) -> string {
+function baml.errors.<(baml.errors.Context as baml.ToString)>.to_string(self: baml.errors.Context) -> string {
     load_var self
-    call baml.errors.ErrorContext._to_string_impl
+    call baml.errors.Context._to_string_impl
     return
 }
 
@@ -2629,10 +2646,10 @@ function baml.errors.<(baml.errors.UnknownError as baml.ToString)>.to_string(sel
     return
 }
 
-function baml.errors.ErrorContext._to_string_impl(self: baml.errors.ErrorContext) -> string {
+function baml.errors.Context._to_string_impl(self: baml.errors.Context) -> string {
 }
 
-function baml.errors.ErrorContext.root_cause(self: baml.errors.ErrorContext) -> baml.errors.ErrorContext {
+function baml.errors.Context.root_cause(self: baml.errors.Context) -> baml.errors.Context {
     load_var self
     load_field .cause
     store_var_load_var _2
@@ -2643,7 +2660,7 @@ function baml.errors.ErrorContext.root_cause(self: baml.errors.ErrorContext) -> 
 
   L0:
     load_var _2
-    call baml.errors.ErrorContext.root_cause
+    call baml.errors.Context.root_cause
     jump L2
 
   L1:
@@ -2908,7 +2925,7 @@ function baml.future.Future.is_result(self: baml.future.Future<#0, #1>) -> bool 
 function baml.future.Future.is_settled(self: baml.future.Future<#0, #1>) -> bool {
 }
 
-function baml.future.Future.state(self: baml.future.Future<#0, #1>) -> baml.future.FutureState {
+function baml.future.Future.state(self: baml.future.Future<#0, #1>) -> baml.future.State {
 }
 
 function baml.future.all(futures: baml.future.Future<#0, #1>[]) -> baml.future.Future<#0[], #1> {
@@ -3012,7 +3029,7 @@ function baml.future.with_timeout(limit: baml.time.Duration, body: () -> #0 thro
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _7
     call_indirect
     store_var _11
@@ -3119,7 +3136,7 @@ function baml.glob.Glob.scan(self: baml.glob.Glob, root: string | baml.glob.Scan
 function baml.glob.new(pattern: string) -> baml.glob.Glob {
 }
 
-function baml.host.call_host_value(handle: baml.host.HostValue, args: unknown[]) -> #0 {
+function baml.host.call_host_value(handle: baml.host.Value, args: unknown[]) -> #0 {
 }
 
 function baml.http.Response.bytes(self: baml.http.Response) -> uint8array {
@@ -3396,7 +3413,23 @@ function baml.io.Read.text(self: baml.io.Read) -> string {
     virtual_call nargs=1 ntypeargs=0
     store_var data
     load_var data
-    call baml.io._decode_utf8
+    call baml.String.from_utf8
+    jump L2
+    load_var e
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const "invalid utf-8"
+    init_instance baml.errors.ParseError .message
+    throw
+
+  L2:
     return
 }
 
@@ -3475,28 +3508,6 @@ function baml.io.Write.write(self: baml.io.Write, data: string | uint8array) -> 
     load_const "writer made invalid progress"
     init_instance baml.errors.Io .message
     throw
-}
-
-function baml.io._decode_utf8(data: uint8array) -> string {
-    load_var data
-    call baml.String.from_utf8
-    jump L2
-    load_var e
-    is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var e
-    rethrow
-
-  L1:
-    load_const "invalid utf-8"
-    init_instance baml.errors.ParseError .message
-    throw
-
-  L2:
-    return
 }
 
 function baml.io.eprint(s: string) -> null {
@@ -4706,7 +4717,7 @@ function baml.json._path_field(current: baml.json.json, key: string, selector: s
     load_const "' on a non-object"
     bin_op +
     load_var selector
-    init_instance baml.json.JsonPathError .message, .selector
+    init_instance baml.json.PathError .message, .selector
     throw
 
   L1:
@@ -4734,7 +4745,7 @@ function baml.json._path_field(current: baml.json.json, key: string, selector: s
     load_const "'"
     bin_op +
     load_var selector
-    init_instance baml.json.JsonPathError .message, .selector
+    init_instance baml.json.PathError .message, .selector
     throw
 }
 
@@ -4757,7 +4768,7 @@ function baml.json._path_index(current: baml.json.json, idx: int, selector: stri
     load_const "] on a non-array"
     bin_op +
     load_var selector
-    init_instance baml.json.JsonPathError .message, .selector
+    init_instance baml.json.PathError .message, .selector
     throw
 
   L1:
@@ -4809,7 +4820,7 @@ function baml.json._path_index(current: baml.json.json, idx: int, selector: stri
     load_const ")"
     bin_op +
     load_var selector
-    init_instance baml.json.JsonPathError .message, .selector
+    init_instance baml.json.PathError .message, .selector
     throw
 }
 
@@ -4883,7 +4894,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     call baml.json.to
     jump L7
     load_var _
-    is_type baml.json.JsonDecodeError
+    is_type baml.json.DecodeError
     pop_jump_if_false L5
     jump L6
 
@@ -4894,7 +4905,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
   L6:
     load_const "leaf does not coerce to the requested type"
     load_var selector
-    init_instance baml.json.JsonPathError .message, .selector
+    init_instance baml.json.PathError .message, .selector
     throw
 
   L7:
@@ -5024,7 +5035,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_const "]'"
     bin_op +
     load_var selector
-    init_instance baml.json.JsonPathError .message, .selector
+    init_instance baml.json.PathError .message, .selector
     throw
 
   L21:
@@ -5037,7 +5048,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
   L22:
     load_const "unterminated '[' segment"
     load_var selector
-    init_instance baml.json.JsonPathError .message, .selector
+    init_instance baml.json.PathError .message, .selector
     throw
 
   L23:
@@ -5150,7 +5161,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
   L35:
     load_const "unterminated quoted bracket key"
     load_var selector
-    init_instance baml.json.JsonPathError .message, .selector
+    init_instance baml.json.PathError .message, .selector
     throw
 
   L36:
@@ -5189,13 +5200,13 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
   L38:
     load_const "unterminated escape in quoted bracket key"
     load_var selector
-    init_instance baml.json.JsonPathError .message, .selector
+    init_instance baml.json.PathError .message, .selector
     throw
 
   L39:
     load_const "unterminated '[' segment"
     load_var selector
-    init_instance baml.json.JsonPathError .message, .selector
+    init_instance baml.json.PathError .message, .selector
     throw
 
   L40:
@@ -5207,7 +5218,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var _45
     bin_op +
     load_var selector
-    init_instance baml.json.JsonPathError .message, .selector
+    init_instance baml.json.PathError .message, .selector
     throw
 
   L41:
@@ -5281,7 +5292,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_const "'"
     bin_op +
     load_var selector
-    init_instance baml.json.JsonPathError .message, .selector
+    init_instance baml.json.PathError .message, .selector
     throw
 }
 
@@ -5291,7 +5302,7 @@ function baml.json.path_or(j: baml.json.json, selector: string, default: #0) -> 
     call baml.json.path
     jump L2
     load_var _
-    is_type baml.json.JsonPathError
+    is_type baml.json.PathError
     pop_jump_if_false L0
     jump L1
 
@@ -5458,8 +5469,28 @@ function baml.net.TcpStream.connect(addr: string, timeout: baml.time.Duration | 
 
   L0:
     load_var timeout
-    call baml.net._timeout_nanos
-    store_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var timeout
+    call baml.time.Duration.to_nanoseconds
+    jump L3
+
+  L2:
+    load_const null
+
+  L3:
+    store_var_load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const 0n
+    store_var _5
+
+  L4:
     load_var2 1 3
     sys_op baml.net.TcpStream._connect
     return
@@ -5487,8 +5518,28 @@ function baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket, timeout: baml.ti
 
   L0:
     load_var timeout
-    call baml.net._timeout_nanos
-    store_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var timeout
+    call baml.time.Duration.to_nanoseconds
+    jump L3
+
+  L2:
+    load_const null
+
+  L3:
+    store_var_load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const 0n
+    store_var _5
+
+  L4:
     load_var2 1 3
     sys_op baml.net.UdpSocket._recv_from
     return
@@ -5504,30 +5555,31 @@ function baml.net.UdpSocket.send_to(self: baml.net.UdpSocket, data: uint8array, 
 
   L0:
     load_var timeout
-    call baml.net._timeout_nanos
-    store_var _6
-    load_var2 1 2
-    load_var2 3 5
-    sys_op baml.net.UdpSocket._send_to
-    return
-}
-
-function baml.net._timeout_nanos(timeout: baml.time.Duration | null) -> bigint {
-    load_var timeout
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var timeout
-    call baml.time.Duration.to_nanoseconds
+    pop_jump_if_false L1
     jump L2
 
   L1:
-    load_const 0n
+    load_var timeout
+    call baml.time.Duration.to_nanoseconds
+    jump L3
 
   L2:
+    load_const null
+
+  L3:
+    store_var_load_var _7
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const 0n
+    store_var _7
+
+  L4:
+    load_var2 1 2
+    load_var2 3 5
+    sys_op baml.net.UdpSocket._send_to
     return
 }
 
@@ -6010,31 +6062,23 @@ function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xos
     return
 }
 
-function baml.sap.ParseCache.new(t_stream: reflect.Type, t_final: reflect.Type) -> baml.sap.ParseCache<#0, #1> {
+function baml.sap._ParseCache._parse_final(self: baml.sap._ParseCache<#0, #1>, json: string) -> #1 {
 }
 
-function baml.sap.__new_parse_cache() -> baml.sap.ParseCache<#0, #1> {
-    load_type #0
-    load_type #1
-    sys_op baml.sap.ParseCache.new
-    return
+function baml.sap._ParseCache._parse_partial(self: baml.sap._ParseCache<#0, #1>, json: string) -> #0 | baml.sap._NoYield {
 }
 
-function baml.sap.__parse_final(json: string, cache: baml.sap.ParseCache<#0, #1>) -> #1 {
-}
-
-function baml.sap.__parse_partial(json: string, cache: baml.sap.ParseCache<#0, #1>) -> #0 | baml.sap.NoYield {
+function baml.sap._new_parse_cache() -> baml.sap._ParseCache<#0, #1> {
 }
 
 function baml.sap.parse(text: string) -> #0 {
     load_type #0
     load_type #0
-    call baml.sap.__new_parse_cache
-    store_var cache
-    load_var2 1 2
+    sys_op baml.sap._new_parse_cache
+    load_var text
     load_type #0
     load_type #0
-    sys_op baml.sap.__parse_final
+    sys_op baml.sap._ParseCache._parse_final
     jump L2
     load_var _
     is_type baml.errors.LlmClient
@@ -6056,30 +6100,11 @@ function baml.sap.parse(text: string) -> #0 {
 }
 
 function baml.sap.parse_type(t: reflect.Type, text: string) -> unknown {
-    load_var2 1 1
-    sys_op baml.sap.ParseCache.new
-    store_var cache
-    load_var2 2 3
-    load_type unknown
-    load_type unknown
-    sys_op baml.sap.__parse_final
-    jump L2
-    load_var _
-    is_type baml.errors.LlmClient
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var _
-    rethrow
-
-  L1:
-    load_var _
-    load_field .0
-    init_instance baml.errors.ParseError .message
-    throw
-
-  L2:
+    load_var t
+    bind_type 0
+    load_type #0
+    load_var text
+    call baml.sap.parse
     return
 }
 
@@ -6116,7 +6141,7 @@ function baml.spawn.TaskGroup.queued_count(self: baml.spawn.TaskGroup) -> int {
 function baml.spawn.TaskGroup.set_limit(self: baml.spawn.TaskGroup, limit: int) -> void {
 }
 
-function baml.spawn.options(group: baml.spawn.TaskGroup | null, cancel: baml.spawn.CancelToken | null, detach: bool | null) -> (baml.spawn.SpawnParams<#0, #1>) -> baml.spawn.SpawnParams<#0, #1> throws never {
+function baml.spawn.options(group: baml.spawn.TaskGroup | null, cancel: baml.spawn.CancelToken | null, detach: bool | null) -> (baml.spawn.Params<#0, #1>) -> baml.spawn.Params<#0, #1> throws never {
     load_var ?1
     make_cell
     store_var ?1
@@ -6372,9 +6397,15 @@ function baml.sys.exec(program: string, args: string[] | null, options: baml.sys
 }
 
 function baml.sys.exit(code: int) -> never {
+    load_var code
+    init_instance baml.panics.Exit .code
+    throw
 }
 
 function baml.sys.panic(message: string) -> never {
+    load_var message
+    init_instance baml.panics.UserPanic .message
+    throw
 }
 
 function baml.sys.pid() -> int {
@@ -6472,7 +6503,7 @@ function baml.time.<(baml.time.Instant as baml.FromJson)>.from_json(j: baml.json
   L0:
     load_const "Expected timestamp string"
     load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
+    init_instance baml.json.DecodeError .message, .path
     throw
 
   L1:
@@ -6492,7 +6523,7 @@ function baml.time.<(baml.time.Instant as baml.FromJson)>.from_json(j: baml.json
     load_var _
     load_field .0
     load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
+    init_instance baml.json.DecodeError .message, .path
     throw
 
   L4:
@@ -6515,10 +6546,9 @@ function baml.time.<(baml.time.Instant as baml.ToJson)>.to_json(self: baml.time.
   L1:
     load_var _
     load_field .0
-    store_var_load_var message
     load_const ""
-    load_var message
-    init_instance baml.json.JsonSerializationError .message, .path, .reason
+    load_const "unserializable"
+    init_instance baml.json.SerializationError .message, .path, .reason
     throw
 
   L2:
@@ -6588,7 +6618,7 @@ function baml.time.<(baml.time.PlainDate as baml.FromJson)>.from_json(j: baml.js
   L0:
     load_const "Expected ISO 8601 date string"
     load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
+    init_instance baml.json.DecodeError .message, .path
     throw
 
   L1:
@@ -6608,7 +6638,7 @@ function baml.time.<(baml.time.PlainDate as baml.FromJson)>.from_json(j: baml.js
     load_var _
     load_field .0
     load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
+    init_instance baml.json.DecodeError .message, .path
     throw
 
   L4:
@@ -6631,10 +6661,9 @@ function baml.time.<(baml.time.PlainDate as baml.ToJson)>.to_json(self: baml.tim
   L1:
     load_var _
     load_field .0
-    store_var_load_var message
     load_const ""
-    load_var message
-    init_instance baml.json.JsonSerializationError .message, .path, .reason
+    load_const "unserializable"
+    init_instance baml.json.SerializationError .message, .path, .reason
     throw
 
   L2:
@@ -6674,7 +6703,7 @@ function baml.time.<(baml.time.PlainDateTime as baml.FromJson)>.from_json(j: bam
   L0:
     load_const "Expected zoneless ISO 8601 string"
     load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
+    init_instance baml.json.DecodeError .message, .path
     throw
 
   L1:
@@ -6694,7 +6723,7 @@ function baml.time.<(baml.time.PlainDateTime as baml.FromJson)>.from_json(j: bam
     load_var _
     load_field .0
     load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
+    init_instance baml.json.DecodeError .message, .path
     throw
 
   L4:
@@ -6717,10 +6746,9 @@ function baml.time.<(baml.time.PlainDateTime as baml.ToJson)>.to_json(self: baml
   L1:
     load_var _
     load_field .0
-    store_var_load_var message
     load_const ""
-    load_var message
-    init_instance baml.json.JsonSerializationError .message, .path, .reason
+    load_const "unserializable"
+    init_instance baml.json.SerializationError .message, .path, .reason
     throw
 
   L2:
@@ -6790,7 +6818,7 @@ function baml.time.<(baml.time.PlainTime as baml.FromJson)>.from_json(j: baml.js
   L0:
     load_const "Expected ISO 8601 time string"
     load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
+    init_instance baml.json.DecodeError .message, .path
     throw
 
   L1:
@@ -6810,7 +6838,7 @@ function baml.time.<(baml.time.PlainTime as baml.FromJson)>.from_json(j: baml.js
     load_var _
     load_field .0
     load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
+    init_instance baml.json.DecodeError .message, .path
     throw
 
   L4:
@@ -6878,7 +6906,7 @@ function baml.time.<(baml.time.ZonedDateTime as baml.FromJson)>.from_json(j: bam
   L0:
     load_const "Expected RFC 3339 / RFC 9557 timestamp string"
     load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
+    init_instance baml.json.DecodeError .message, .path
     throw
 
   L1:
@@ -6898,7 +6926,7 @@ function baml.time.<(baml.time.ZonedDateTime as baml.FromJson)>.from_json(j: bam
     load_var _
     load_field .0
     load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
+    init_instance baml.json.DecodeError .message, .path
     throw
 
   L4:
@@ -6907,68 +6935,66 @@ function baml.time.<(baml.time.ZonedDateTime as baml.FromJson)>.from_json(j: bam
 
 function baml.time.<(baml.time.ZonedDateTime as baml.ToJson)>.to_json(self: baml.time.ZonedDateTime) -> baml.json.json {
     load_var self
-    call baml.time.ZonedDateTime._to_string_impl
-    jump L6
+    load_field ._nanoseconds
+    store_var _3
+    load_var self
+    call baml.time.ZonedDateTime.timezone_offset
+    store_var _5
+    load_var2 3 4
+    load_field ._nanoseconds
+    load_var self
+    load_field ._iana
+    call baml.time._format_zoned
+    jump L4
     load_var _
     is_type baml.errors.InvalidArgument
     pop_jump_if_false L0
-    jump L5
+    jump L3
 
   L0:
     load_var _
     is_type baml.time.UnknownTimezoneError
     pop_jump_if_false L1
-    jump L4
+    jump L2
 
   L1:
     load_var _
-    is_type baml.errors.Io
-    pop_jump_if_false L2
-    jump L3
+    rethrow
 
   L2:
+    load_const "unknown timezone: "
     load_var _
-    rethrow
+    load_field .0
+    bin_op +
+    load_const ""
+    load_const "unserializable"
+    init_instance baml.json.SerializationError .message, .path, .reason
+    throw
 
   L3:
     load_var _
     load_field .0
-    store_var_load_var message
     load_const ""
-    load_var message
-    init_instance baml.json.JsonSerializationError .message, .path, .reason
+    load_const "unserializable"
+    init_instance baml.json.SerializationError .message, .path, .reason
     throw
 
   L4:
-    load_var _
-    load_field .0
-    store_var timezone
-    load_const "unknown timezone: "
-    load_var timezone
-    bin_op +
-    load_const ""
-    load_const "unknown timezone: "
-    load_var timezone
-    bin_op +
-    init_instance baml.json.JsonSerializationError .message, .path, .reason
-    throw
-
-  L5:
-    load_var _
-    load_field .0
-    store_var_load_var message
-    load_const ""
-    load_var message
-    init_instance baml.json.JsonSerializationError .message, .path, .reason
-    throw
-
-  L6:
     return
 }
 
 function baml.time.<(baml.time.ZonedDateTime as baml.ToString)>.to_string(self: baml.time.ZonedDateTime) -> string {
     load_var self
-    call baml.time.ZonedDateTime._to_string_impl
+    load_field ._nanoseconds
+    store_var _3
+    load_var self
+    call baml.time.ZonedDateTime.timezone_offset
+    store_var _5
+    load_var2 3 4
+    load_field ._nanoseconds
+    load_var self
+    load_field ._iana
+    call baml.time._format_zoned
     jump L0
     load_var _
     throw_if_panic
@@ -7366,7 +7392,7 @@ function baml.time.Instant.to_timestamp_seconds(self: baml.time.Instant) -> bigi
     return
 }
 
-function baml.time.PlainDate._to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime | null) -> baml.time.PlainDateTime {
+function baml.time.PlainDate._to_plain_datetime(self: baml.time.PlainDate, time: int) -> baml.time.PlainDateTime {
 }
 
 function baml.time.PlainDate._to_string_impl(self: baml.time.PlainDate) -> string {
@@ -7384,16 +7410,18 @@ function baml.time.PlainDate.month(self: baml.time.PlainDate) -> int {
 function baml.time.PlainDate.parse(s: string) -> baml.time.PlainDate {
 }
 
-function baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime | null) -> baml.time.PlainDateTime {
+function baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime) -> baml.time.PlainDateTime {
     load_var time
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_const null
+    load_const 0
+    init_instance baml.time.PlainTime ._nanoseconds
     store_var time
 
   L0:
     load_var2 1 2
+    load_field ._nanoseconds
     call baml.time.PlainDate._to_plain_datetime
     return
 }
@@ -7918,21 +7946,6 @@ function baml.time.TimeZoneOffset.utc() -> baml.time.TimeZoneOffset {
     return
 }
 
-function baml.time.ZonedDateTime._to_string_impl(self: baml.time.ZonedDateTime) -> string {
-    load_var self
-    load_field ._nanoseconds
-    store_var _2
-    load_var self
-    call baml.time.ZonedDateTime.timezone_offset
-    store_var _4
-    load_var2 2 3
-    load_field ._nanoseconds
-    load_var self
-    load_field ._iana
-    call baml.time._format_zoned
-    return
-}
-
 function baml.time.ZonedDateTime.day(self: baml.time.ZonedDateTime) -> int {
     load_var self
     call baml.time.ZonedDateTime.to_plain
@@ -8345,7 +8358,7 @@ function baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item {
   L0: list
     load_type baml.json.json
     load_type baml.toml.Item
-    load_type baml.json.JsonDecodeError
+    load_type baml.json.DecodeError
     load_var json
     load_const baml.toml.item_from_json
     call baml.Array.map
@@ -8363,7 +8376,7 @@ function baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item {
   L2: null
     load_const "TOML does not support null"
     load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
+    init_instance baml.json.DecodeError .message, .path
     throw
 
   L3: float
@@ -8413,7 +8426,7 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
   L4: list
     load_type baml.toml.Item
     load_type baml.json.json
-    load_type baml.json.JsonSerializationError
+    load_type baml.json.SerializationError
     load_var item
     load_const baml.toml.item_to_json
     call baml.Array.map
@@ -8445,7 +8458,7 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
   L0:
     load_const "expected map"
     load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
+    init_instance baml.json.DecodeError .message, .path
     throw
 
   L1:

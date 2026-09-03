@@ -69,7 +69,7 @@ function json_kind(value: baml.json.json) -> string {
   }
 }
 
-function json_path_string(value: baml.json.json, selector: string) -> string throws baml.json.JsonPathError {
+function json_path_string(value: baml.json.json, selector: string) -> string throws baml.json.PathError {
   baml.json.path<string>(value, selector)
 }
 

@@ -1676,7 +1676,7 @@ fn self_param_method_rejects_mismatched_literal_arg() {
 fn generic_class_unannotated_self_is_parameterized() {
     // An unannotated `self` in a generic class must be typed `Wrap<T>`, not bare
     // `Wrap`, so it satisfies a parameterized expected type. Regression for the
-    // ParseCache builtin failure: the auto-derived `to_json` passed a bare
+    // _ParseCache builtin failure: the auto-derived `to_json` passed a bare
     // `self` to `baml.json.to_string`. Because the
     // callee's generic is differently named, the class params stay rigid and the
     // argument is *checked* (not deferred), which surfaced the bare `self`.

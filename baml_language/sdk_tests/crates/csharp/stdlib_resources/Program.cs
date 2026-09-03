@@ -313,7 +313,7 @@ Require(
         && typedMarkdown.Contains("| alpha | 7 |", StringComparison.Ordinal),
     "baml.csv.to_markdown<T> changed");
 
-using (Baml.Csv.CsvWriter rawWriter = await Baml.Csv.Functions.BufferAsync())
+using (Baml.Csv.Writer rawWriter = await Baml.Csv.Functions.BufferAsync())
 {
     _ = await rawWriter.WriteHeaderAsync(new[] { "name", "count" });
     _ = rawWriter.WriteRecord(
@@ -325,7 +325,7 @@ using (Baml.Csv.CsvWriter rawWriter = await Baml.Csv.Functions.BufferAsync())
     Require(
         await rawWriter.RecordsWrittenAsync() == 1
             && await rawWriter.TextAsync() == "name,count\nraw,11\n",
-        "CsvWriter raw header/record methods changed");
+        "Writer raw header/record methods changed");
 }
 
 IReadOnlyList<IReadOnlyList<Baml.BamlUnion<long, System.Numerics.BigInteger, double, string, bool>?>> rawRecords =
@@ -357,13 +357,13 @@ try
         "baml.csv.write<T> returned the wrong byte count");
     IReadOnlyList<CsvRow> fileRows = await Baml.Csv.Functions.ReadAsync<CsvRow>(csvPath);
     Require(fileRows.Count == 2 && fileRows[0].Name == "alpha", "baml.csv.read<T> changed");
-    using (Baml.Csv.CsvReader openedReader = await Baml.Csv.Functions.OpenAsync(csvPath))
+    using (Baml.Csv.Reader openedReader = await Baml.Csv.Functions.OpenAsync(csvPath))
     {
         Require(openedReader.Headers()!.SequenceEqual(new[] { "name", "count" }), "baml.csv.open changed");
         _ = openedReader.Close();
     }
 
-    using (Baml.Csv.CsvWriter createdWriter = Baml.Csv.Functions.Create(createdCsvPath))
+    using (Baml.Csv.Writer createdWriter = Baml.Csv.Functions.Create(createdCsvPath))
     {
         _ = await createdWriter.WriteRowAsync(new CsvRow { Name = "created", Count = 13 });
         _ = await createdWriter.FlushAsync();
@@ -374,7 +374,7 @@ try
         "baml.csv.create changed");
 
     using Baml.Fs.File wrappedFile = Baml.Fs.Functions.Open(wrappedCsvPath, "w+");
-    using (Baml.Csv.CsvWriter wrappedWriter = await Baml.Csv.Functions.WriterAsync(wrappedFile))
+    using (Baml.Csv.Writer wrappedWriter = await Baml.Csv.Functions.WriterAsync(wrappedFile))
     {
         _ = wrappedWriter.WriteRow(new CsvRow { Name = "wrapped", Count = 14 });
         _ = await wrappedWriter.CloseAsync();
@@ -394,25 +394,25 @@ finally
     }
 }
 
-using Baml.Csv.CsvReader csvReader = Baml.Csv.Functions.Reader(
+using Baml.Csv.Reader csvReader = Baml.Csv.Functions.Reader(
     "name,count\nalpha,7\n");
 IReadOnlyList<string>? headers = await csvReader.HeadersAsync();
 Require(
     headers is not null && headers.SequenceEqual(new[] { "name", "count" }),
-    "native CsvReader.headers changed");
+    "native Reader.headers changed");
 
-using Baml.Csv.CsvRows<CsvRow> csvRows = csvReader.Rows<CsvRow>();
+using Baml.Csv.Rows<CsvRow> csvRows = csvReader.Rows<CsvRow>();
 // Interface-implementation methods such as iter and next are not emitted on generated C# resource classes.
 Require(
     csvRows.Reader.Headers()!.SequenceEqual(new[] { "name", "count" }),
-    "CsvRows<CsvRow>.Reader did not preserve the public resource field");
+    "Rows<CsvRow>.Reader did not preserve the public resource field");
 Require(
     csvReader.Skipped().Count == 0
         && await csvReader.SkippedCountAsync() == 0
         && csvReader.Position().Record == 0,
-    "CsvReader skipped/position state methods changed");
+    "Reader skipped/position state methods changed");
 
-using Baml.Csv.CsvWriter writer = Baml.Csv.Functions.Buffer();
+using Baml.Csv.Writer writer = Baml.Csv.Functions.Buffer();
 _ = writer.WriteRow(new CsvRow { Name = "alpha", Count = 7 });
 _ = await writer.WriteRowsAsync(
     new[]
@@ -422,7 +422,7 @@ _ = await writer.WriteRowsAsync(
 Require(
     writer.RecordsWritten() == 2
         && writer.Text() == "name,count\nalpha,7\nbeta,8\n",
-    "CsvWriter typed writes or buffer text changed");
+    "Writer typed writes or buffer text changed");
 _ = writer.Flush();
 _ = writer.Close();
 

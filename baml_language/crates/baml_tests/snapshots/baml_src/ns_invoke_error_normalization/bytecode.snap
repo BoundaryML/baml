@@ -4,50 +4,43 @@ source: crates/baml_tests/src/corpus.rs
 function invoke_error_normalization.$init_test_ns_invoke_error_normalization_invoke_error_normalization(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.invoke_error_normalization"
-    load_const "normalize_invoke_preserves_cancelled_identity"
+    load_const "normalize_invoke_preserves_timeout_identity"
     make_closure .<lambda($init_test_ns_invoke_error_normalization_invoke_error_normalization, 0)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.invoke_error_normalization"
-    load_const "normalize_invoke_preserves_timeout_identity"
+    load_const "normalize_invoke_preserves_failure_identity"
     make_closure .<lambda($init_test_ns_invoke_error_normalization_invoke_error_normalization, 1)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.invoke_error_normalization"
-    load_const "normalize_invoke_preserves_failure_identity"
+    load_const "normalize_invoke_preserves_unknown_error_identity"
     make_closure .<lambda($init_test_ns_invoke_error_normalization_invoke_error_normalization, 2)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.invoke_error_normalization"
-    load_const "normalize_invoke_preserves_unknown_error_identity"
+    load_const "normalize_invoke_classifies_config_errors"
     make_closure .<lambda($init_test_ns_invoke_error_normalization_invoke_error_normalization, 3)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.invoke_error_normalization"
-    load_const "normalize_invoke_classifies_config_errors"
+    load_const "Client and Agent preserve typed timeout"
     make_closure .<lambda($init_test_ns_invoke_error_normalization_invoke_error_normalization, 4)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.invoke_error_normalization"
-    load_const "Client and Agent preserve typed timeout"
-    make_closure .<lambda($init_test_ns_invoke_error_normalization_invoke_error_normalization, 5)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.invoke_error_normalization"
     load_const "non-stream composed clients preserve typed timeout without replay"
-    make_closure .<lambda($init_test_ns_invoke_error_normalization_invoke_error_normalization, 6)>, 0
+    make_closure .<lambda($init_test_ns_invoke_error_normalization_invoke_error_normalization, 5)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
@@ -114,7 +107,7 @@ function invoke_error_normalization.TimeoutSpec(client: ai.Client | null, on_eve
     store_var _8
     load_type string
     load_var2 4 5
-    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
     store_var _5
@@ -231,7 +224,7 @@ function invoke_error_normalization.capture_agent_timeout(client: ai.Client) -> 
     store_var _5
     load_type string
     load_var2 3 4
-    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
     jump L0
@@ -259,7 +252,7 @@ function invoke_error_normalization.capture_client_timeout(client: ai.Client) ->
     return
 }
 
-function invoke_error_normalization.normalized_kind(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> string {
+function invoke_error_normalization.normalized_kind(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> string {
     load_var error
     call ai.errors.normalize_invoke
     store_var _2
@@ -268,75 +261,56 @@ function invoke_error_normalization.normalized_kind(error: ai.errors.Failure | b
     load_var _3
     narrow_bind baml.errors.Timeout, slot=3
     pop_jump_if_false L0
-    jump L7
+    jump L5
 
   L0:
     load_var _2
     store_var _16
     load_var _16
-    narrow_bind baml.panics.Cancelled, slot=8
+    narrow_bind ai.errors.NetworkFailure, slot=8
     pop_jump_if_false L1
-    jump L6
+    jump L4
 
   L1:
     load_var _2
     store_var _21
     load_var _21
-    narrow_bind ai.errors.NetworkFailure, slot=10
+    narrow_bind baml.errors.UnknownError, slot=10
     pop_jump_if_false L2
-    jump L5
+    jump L3
 
   L2:
-    load_var _2
-    store_var _26
-    load_var _26
-    narrow_bind baml.errors.UnknownError, slot=12
-    pop_jump_if_false L3
-    jump L4
+    load_const "other"
+    jump L7
 
   L3:
-    load_const "other"
-    jump L9
-
-  L4:
     load_type string
-    load_var _26
+    load_var _21
     load_field .message
     load_const "|"
     call baml.Array.join
-    store_var _29
+    store_var _24
     load_type string
-    load_var _29
-    call baml.String.from
-    store_var _28
-    load_const "UnknownError:"
-    load_var _28
-    bin_op +
-    jump L9
-
-  L5:
-    load_type string
-    load_var _21
-    load_field .detail
+    load_var _24
     call baml.String.from
     store_var _23
-    load_const "NetworkFailure:"
+    load_const "UnknownError:"
     load_var _23
     bin_op +
-    jump L9
+    jump L7
 
-  L6:
+  L4:
     load_type string
     load_var _16
-    load_field .message
+    load_field .detail
     call baml.String.from
     store_var _18
-    load_const "Cancelled:"
+    load_const "NetworkFailure:"
     load_var _18
     bin_op +
-    jump L9
+    jump L7
 
-  L7:
+  L5:
     load_var _3
     store_var timeout
     load_type string
@@ -349,11 +323,11 @@ function invoke_error_normalization.normalized_kind(error: ai.errors.Failure | b
     store_var_load_var _12
     load_const null
     cmp_op ==
-    pop_jump_if_false L8
+    pop_jump_if_false L6
     load_const -1
     store_var _12
 
-  L8:
+  L6:
     load_type int
     load_var _12
     call baml.String.from
@@ -366,7 +340,7 @@ function invoke_error_normalization.normalized_kind(error: ai.errors.Failure | b
     load_var _10
     bin_op +
 
-  L9:
+  L7:
     return
 }
 

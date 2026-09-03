@@ -26,7 +26,6 @@ namespace baml:
   function _float_total_cmp
   function _from_json_shim<T>
   function _is_primitive_array<T>
-  function _mean_float
   function _median_float
   function _rust_sort<A>
   function _sum_float
@@ -34,7 +33,6 @@ namespace baml:
   function _to_json_default<T>
   function _to_json_shim<T>
   function _to_string_default<T>
-  function _to_string_shim<T>
   function _trunc_to_int
   function deep_copy<T>
 namespace baml.crypto:
@@ -48,19 +46,19 @@ namespace baml.crypto:
   class Sha256 { methods: [new] }
   class XChaCha20Poly1305 { methods: [new] }
 namespace baml.csv:
-  class CsvError { methods: [] }
-  enum CsvErrorKind
-  class CsvHeaders { methods: [] }
-  class CsvNeedData { methods: [] }
-  class CsvPosition { methods: [] }
-  class CsvReader { methods: [headers, rows, skipped, skipped_count, position, close, _poll, _poll_headers, _feed, _feed_eof, _mark_closed, _mark_exhausted, _read_chunk] }
-  class CsvRecord { methods: [get, get_at, fields, length, position, decode, to_map] }
-  class CsvRows<T> { methods: [] }
-  class CsvSkip { methods: [] }
-  type CsvValue
-  class CsvWriter { methods: [write_record, write_row, write_rows, write_header, records_written, text, flush, close, _encode_record, _encode_header, _bytes_written, _mark_closed, _emit] }
+  class Error { methods: [] }
+  enum ErrorKind
+  class Position { methods: [] }
+  class Reader { methods: [headers, rows, skipped, skipped_count, position, close, _poll, _poll_headers, _feed, _feed_eof, _mark_closed, _mark_exhausted, _read_chunk] }
   class ReaderOptions { methods: [] }
+  class Record { methods: [get, get_at, fields, length, position, decode, to_map] }
+  class Rows<T> { methods: [] }
+  type Value
+  class Writer { methods: [write_record, write_row, write_rows, write_header, records_written, text, flush, close, _encode_record, _encode_header, _bytes_written, _mark_closed, _emit] }
   class WriterOptions { methods: [] }
+  class _Headers { methods: [] }
+  class _NeedData { methods: [] }
+  class _Skip { methods: [] }
   function _buffer
   function _cell_by_index<T>
   function _cell_by_name<T>
@@ -98,14 +96,12 @@ namespace baml.env:
 namespace baml.errors:
   class AccessError { methods: [] }
   class CompilationError { methods: [] }
-  class DevOther { methods: [] }
-  class ErrorContext { methods: [root_cause, _to_string_impl] }
+  class Context { methods: [root_cause, _to_string_impl] }
   class GenericSdkError { methods: [] }
   class HostCallable { methods: [] }
   class InvalidArgument { methods: [] }
   class Io { methods: [] }
   class LlmClient { methods: [] }
-  class NotImplemented { methods: [] }
   class ParseError { methods: [] }
   class RenderPrompt { methods: [] }
   class StackFrame { methods: [] }
@@ -135,7 +131,7 @@ namespace baml.fs:
 namespace baml.future:
   class AllFailed<E> { methods: [] }
   class Future<T, E> { methods: [cancel, is_settled, is_cancelled, is_result, is_error, state] }
-  enum FutureState
+  enum State
   function __await_any<T, E>
   function all<T, E>
   function all_complete<T, E>
@@ -147,7 +143,7 @@ namespace baml.glob:
   class ScanOptions { methods: [] }
   function new
 namespace baml.host:
-  class HostValue { methods: [] }
+  class Value { methods: [] }
   function call_host_value<T, E>
 namespace baml.http:
   class Request { methods: [] }
@@ -169,7 +165,6 @@ namespace baml.id:
 namespace baml.io:
   type Read
   type Write
-  function _decode_utf8
   function eprint
   function eprintln
   function input
@@ -196,10 +191,10 @@ namespace baml.iter:
   class TakeWhile<T, E, E2> { methods: [] }
   function flatten<R, E, E3, I>
 namespace baml.json:
-  class JsonDecodeError { methods: [] }
-  class JsonParseError { methods: [] }
-  class JsonPathError { methods: [] }
-  class JsonSerializationError { methods: [] }
+  class DecodeError { methods: [] }
+  class ParseError { methods: [] }
+  class PathError { methods: [] }
+  class SerializationError { methods: [] }
   type json
   function _path_field
   function _path_index
@@ -228,7 +223,6 @@ namespace baml.net:
   class TcpListener { methods: [bind, accept, close] }
   class TcpStream { methods: [connect, _connect, close] }
   class UdpSocket { methods: [bind, send_to, _send_to, recv_from, _recv_from, close] }
-  function _timeout_nanos
 namespace baml.ops:
   type Add
   type BitAnd
@@ -275,16 +269,14 @@ namespace baml.random:
   class SystemRandom { methods: [get] }
   class Xoshiro256PlusPlus { methods: [new, _new] }
 namespace baml.sap:
-  class NoYield { methods: [] }
-  class ParseCache<TStream, TFinal> { methods: [new] }
-  function __new_parse_cache<TStream, TFinal>
-  function __parse_final<TStream, TFinal>
-  function __parse_partial<TStream, TFinal>
+  class _NoYield { methods: [] }
+  class _ParseCache<TStream, TFinal> { methods: [_parse_final, _parse_partial] }
+  function _new_parse_cache<TStream, TFinal>
   function parse<T>
   function parse_type
 namespace baml.spawn:
   class CancelToken { methods: [new, any, cancel, is_cancelled] }
-  class SpawnParams<T, E> { methods: [] }
+  class Params<T, E> { methods: [] }
   class TaskGroup { methods: [new, cancel, set_limit, limit, name, active_count, queued_count] }
   function options<T, E>
 namespace baml.sys:
@@ -316,7 +308,7 @@ namespace baml.time:
   class PlainTime { methods: [from_components, _from_components, parse, _to_string_impl, to_plain_datetime, hour, minute, second, millisecond] }
   class TimeZoneOffset { methods: [utc, new, from_timezone, local, from_duration, to_duration, hours, minutes] }
   class UnknownTimezoneError { methods: [] }
-  class ZonedDateTime { methods: [now, now_in, from_instant, to_instant, from_components, parse, _to_string_impl, max, min, with_timezone, timezone, timezone_offset, to_plain, year, month, day, hour, minute, second, millisecond] }
+  class ZonedDateTime { methods: [now, now_in, from_instant, to_instant, from_components, parse, max, min, with_timezone, timezone, timezone_offset, to_plain, year, month, day, hour, minute, second, millisecond] }
   function _format_zoned
   function _tz_offset_at
   function _tz_to_instant
@@ -324,8 +316,8 @@ namespace baml.time:
   function system_timezone
 namespace baml.toml:
   type Item
+  class ParseError { methods: [] }
   class Table { methods: [parse] }
-  class TomlParseError { methods: [] }
   function item_from_json
   function item_to_json
   function table_from_json
@@ -334,6 +326,6 @@ namespace baml.ws:
   function _connect
   function connect
 namespace baml.yaml:
-  class YamlParseError { methods: [] }
+  class ParseError { methods: [] }
   function deserialize<T>
   function parse

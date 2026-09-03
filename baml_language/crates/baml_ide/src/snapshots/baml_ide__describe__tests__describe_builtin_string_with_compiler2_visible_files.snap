@@ -2,103 +2,115 @@
 source: crates/baml_ide/src/describe.rs
 expression: "project.format_description(&descs[0])"
 ---
-class String  (string)  string.baml:5
+class String  (string)  string.baml:17
 /// A UTF-8 encoded string.
 ///
-/// Quoted strings may span multiple lines. Backtick strings support interpolation.
-/// All methods returning a new string do not mutate `self` unless noted otherwise.
+/// Strings are immutable: every method here returns a new string rather than
+/// modifying `self`. Quoted strings may span multiple lines; backtick strings
+/// interpolate.
+///
+/// Positions are **character** (Unicode code point) offsets, never byte offsets.
+/// `length`, `at`, `code_point_at`, `slice`, `index_of`, and `last_index_of` all
+/// agree with each other, and all disagree with `byte_length` as soon as one
+/// character takes more than one UTF-8 byte. A method taking a position also
+/// accepts a negative one, counting from the end. Python's `str` indexes the same
+/// way; JavaScript indexes by UTF-16 unit and so can cut an emoji in half.
+///
+/// The `is_*` predicates ask whether **every** character has the property, so all
+/// of them are true on the empty string. The `is_ascii_*` family is false for any
+/// character at or above U+0080.
 shape: class String {}
 methods:
-  /// Returns the number of **Unicode code points** (characters) in the string.
+  /// Returns the number of characters (Unicode code points).
   function length(self) -> int throws never
   /// Alias for `length()`.
   function char_count(self) -> int throws never
   /// Returns true if the string has no characters.
   function is_empty(self) -> bool throws never
-  /// Returns the length of the string in **UTF-8 bytes**.
+  /// Returns the length in UTF-8 bytes.
   function byte_length(self) -> int throws never
-  /// Returns the string with all Unicode characters converted to lowercase.
+  /// Returns the lowercase equivalent of this string.
   function to_lower_case(self) -> string throws never
-  /// Returns the string with all Unicode characters converted to uppercase.
+  /// Returns the uppercase equivalent of this string.
   function to_upper_case(self) -> string throws never
   /// Returns the string with leading and trailing whitespace removed.
   function trim(self) -> string throws never
-  /// Returns the string with leading whitespace removed (trailing whitespace
+  /// Returns the string with leading whitespace removed; trailing whitespace is
   function trim_start(self) -> string throws never
-  /// Returns the string with trailing whitespace removed (leading whitespace
+  /// Returns the string with trailing whitespace removed; leading whitespace is
   function trim_end(self) -> string throws never
-  /// Returns true if `search` appears anywhere in the string.
+  /// Returns true if `search` occurs anywhere in the string.
   function includes(self, search: string) -> bool throws never
   /// Returns true if the string starts with `prefix`.
   function starts_with(self, prefix: string) -> bool throws never
   /// Returns true if the string ends with `suffix`.
   function ends_with(self, suffix: string) -> bool throws never
-  /// Splits the string by `delimiter` and returns an array of substrings.
+  /// Splits the string on `delimiter`.
   function split(self, delimiter: string) -> string[] throws never
-  /// Returns the string's Unicode code points as one-character strings.
+  /// Returns each Unicode code point as a one-character string.
   function chars(self) -> string[] throws never
-  /// Splits the string into lines, recognizing both `\n` and `\r\n` as line
+  /// Splits the string into lines, on either `\n` or `\r\n`.
   function lines(self) -> string[] throws never
-  /// Returns the substring between two **character** offsets `[start, end)`.
+  /// Returns the characters in `[start, end)`.
   function slice(self, start: int, end: int) -> string throws never
   /// Replaces the first occurrence of `search` with `replacement`.
   function replace(self, search: string, replacement: string) -> string throws never
-  /// Returns the **character index** of the first occurrence of `search`, or
+  /// Returns the character index of the first occurrence of `search`, or `null`
   function index_of(self, search: string) -> int | null throws never
-  /// Returns the **character index** of the start of the last occurrence of `search`, or
+  /// Returns the character index at which the last occurrence of `search` starts,
   function last_index_of(self, search: string) -> int | null throws never
-  /// Returns the character at the given **codepoint index** as a
+  /// Returns the character at `index` as a one-character string, or `null` if
   function at(self, index: int) -> string | null throws never
-  /// Returns the **Unicode code point** of the character at the given codepoint
+  /// Returns the Unicode code point of the character at `index`, as an `int`.
   function code_point_at(self, index: int) -> int | null throws never
-  /// Returns a new string that repeats `self` the given number of times.
+  /// Returns `self` repeated `count` times. A negative `count` counts as 0.
   function repeat(self, count: int) -> string throws never
-  /// Replaces all occurrences of `search` with `replacement`.
+  /// Replaces every occurrence of `search` with `replacement`.
   function replace_all(self, search: string, replacement: string) -> string throws never
-  /// Returns true if every character is numeric per Unicode (general categories
+  /// Returns true if every character is numeric per Unicode: general categories
   function is_numeric(self) -> bool throws never
-  /// Returns true if every character is a Unicode letter (general category `L`).
+  /// Returns true if every character has the Unicode `Alphabetic` property.
   function is_alphabetic(self) -> bool throws never
-  /// Returns true if every character is alphabetic OR numeric per Unicode.
+  /// Returns true if every character is alphabetic or numeric per Unicode.
   function is_alphanumeric(self) -> bool throws never
-  /// Returns true if every character is uppercase per Unicode (general
+  /// Returns true if every character is uppercase per Unicode: general category
   function is_uppercase(self) -> bool throws never
-  /// Returns true if every character is lowercase per Unicode (general
+  /// Returns true if every character is lowercase per Unicode: general category
   function is_lowercase(self) -> bool throws never
-  /// Returns true if every character is whitespace per Unicode (`White_Space`
+  /// Returns true if every character has the Unicode `White_Space` property:
   function is_whitespace(self) -> bool throws never
-  /// Returns true if every character is a control character per Unicode
+  /// Returns true if every character is a control character per Unicode:
   function is_control(self) -> bool throws never
-  /// Returns true if every character is a "graphic" character — that is,
+  /// Returns true if every character is graphic: neither a control character
   function is_graphic(self) -> bool throws never
-  /// Returns true if every character is ASCII (i.e. has a code point in
+  /// Returns true if every character is ASCII: a code point in `[0x00, 0x7F]`.
   function is_ascii(self) -> bool throws never
-  /// Returns true if every character is an ASCII decimal digit (`0`..=`9`).
+  /// Returns true if every character is an ASCII decimal digit, `0` through `9`.
   function is_ascii_numeric(self) -> bool throws never
-  /// Returns true if every character is an ASCII letter (`A`..=`Z` or
+  /// Returns true if every character is an ASCII letter, `A` through `Z` or `a`
   function is_ascii_alphabetic(self) -> bool throws never
-  /// Returns true if every character is an ASCII letter or digit. Empty
+  /// Returns true if every character is an ASCII letter or digit.
   function is_ascii_alphanumeric(self) -> bool throws never
-  /// Returns true if every character is an ASCII uppercase letter
+  /// Returns true if every character is an ASCII uppercase letter, `A` through
   function is_ascii_uppercase(self) -> bool throws never
-  /// Returns true if every character is an ASCII lowercase letter
+  /// Returns true if every character is an ASCII lowercase letter, `a` through
   function is_ascii_lowercase(self) -> bool throws never
   /// Returns true if every character is ASCII whitespace: space (`\x20`),
   function is_ascii_whitespace(self) -> bool throws never
-  /// Returns true if every character is an ASCII control character — code
+  /// Returns true if every character is an ASCII control character: a code point
   function is_ascii_control(self) -> bool throws never
-  /// Returns true if every character is an ASCII "graphic" character —
+  /// Returns true if every character is an ASCII graphic character: printable,
   function is_ascii_graphic(self) -> bool throws never
-  /// Returns true if every character is an ASCII hexadecimal digit:
+  /// Returns true if every character is an ASCII hexadecimal digit: `0` through
   function is_ascii_hex(self) -> bool throws never
-  /// Returns the string encoded as a `uint8array` of UTF-8 bytes.
+  /// Returns the string encoded as UTF-8 bytes.
   function to_utf8(self) -> uint8array throws never
-  /// Returns the string's Unicode code points as an array of `int`s.
+  /// Returns the string's Unicode code points as `int`s.
   function to_code_points(self) -> int[] throws never
 static_methods:
-  /// Renders any value as a human-readable string.
+  /// Renders any value as human-readable text.
   function from<T>(value: T) -> string throws never
-  /// Decodes a `uint8array` of UTF-8 bytes into a string.
+  /// Decodes UTF-8 bytes into a string, rejecting anything malformed.
   function from_utf8(utf8: uint8array) -> string throws baml.errors.InvalidArgument
   /// Builds a string from an array of Unicode code points.
   function from_code_points(unicode: int[]) -> string throws baml.errors.InvalidArgument

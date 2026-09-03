@@ -281,7 +281,7 @@ async fn json_serializes_unknown_call_any_results_by_runtime_value() {
         class Wrapped {
             value int
             implements baml.ToJson {
-                function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+                function to_json(self) -> baml.json.json throws baml.json.SerializationError {
                     { "overridden": baml.json.from(self.value) }
                 }
             }
@@ -365,7 +365,7 @@ async fn json_rejects_unknown_uint8array_call_any_results() {
                 let _ = baml.json.to_string(value)
                 "unexpected success"
             } catch (e) {
-                let err: baml.json.JsonSerializationError => err.message,
+                let err: baml.json.SerializationError => err.message,
             }
         }
 
@@ -374,7 +374,7 @@ async fn json_rejects_unknown_uint8array_call_any_results() {
                 let _ = baml.json.to_json(value)
                 "unexpected success"
             } catch (e) {
-                let err: baml.json.JsonSerializationError => err.message,
+                let err: baml.json.SerializationError => err.message,
             }
         }
 

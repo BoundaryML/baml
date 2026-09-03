@@ -27,13 +27,13 @@ class Secret {
     value string
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             "[redacted]"
         }
     }
 }
 
-function user_to_json_override_result() -> baml.json.json throws baml.json.JsonSerializationError {
+function user_to_json_override_result() -> baml.json.json throws baml.json.SerializationError {
     let s: Secret = Secret { value: "hunter2" };
     s.to_json()
 }
@@ -89,7 +89,7 @@ test "null_to_json_resolves_and_executes" {
 
 // int[].to_json() must return a json array [1,2,3].
 // Structural check: stringify the result and compare.
-function array_of_int_to_json_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function array_of_int_to_json_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let a: int[] = [1, 2, 3];
     baml.json.stringify(a.to_json())
 }
@@ -103,13 +103,13 @@ class BArr {
     x int
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             99
         }
     }
 }
 
-function array_of_class_to_json_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function array_of_class_to_json_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let bs: BArr[] = [BArr { x: 1 }, BArr { x: 2 }];
     baml.json.stringify(bs.to_json())
 }
@@ -119,7 +119,7 @@ test "array_of_class_to_json_honors_override" {
 }
 
 // map<string,int>.to_json() must return a json map. Structural check via stringify.
-function map_of_int_to_json_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function map_of_int_to_json_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let m: map<string, int> = {"a": 1, "b": 2};
     baml.json.stringify(m.to_json())
 }
@@ -133,8 +133,8 @@ test "map_of_int_to_json_returns_json_map" {
 
 class G<T> {
     items T[]
-    function f(self) -> baml.json.json[] throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-        self.items.map((x: T) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError { x.to_json() })
+    function f(self) -> baml.json.json[] throws baml.json.SerializationError | baml.json.ParseError {
+        self.items.map((x: T) -> baml.json.json throws baml.json.SerializationError | baml.json.ParseError { x.to_json() })
     }
 }
 
@@ -147,7 +147,7 @@ test "typevar_to_json_compiles_in_generic_class" {
 
 class C1 { x int }
 
-function primitive_field_to_json_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function primitive_field_to_json_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let c: C1 = C1 { x: 42 };
     let j: baml.json.json = c.to_json();
     baml.json.stringify(j)
@@ -159,7 +159,7 @@ test "primitive_field_to_json" {
 
 class C2 { xs int[] }
 
-function array_of_primitive_to_json_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function array_of_primitive_to_json_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let c: C2 = C2 { xs: [1, 2, 3] };
     let j: baml.json.json = c.to_json();
     baml.json.stringify(j)
@@ -174,7 +174,7 @@ class BSecret {
     y int
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             "[secret]"
         }
     }
@@ -182,7 +182,7 @@ class BSecret {
 
 class ASecret { b BSecret }
 
-function nested_class_override_direct_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function nested_class_override_direct_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let a: ASecret = ASecret { b: BSecret { y: 7 } };
     let j: baml.json.json = a.to_json();
     baml.json.stringify(j)
@@ -197,7 +197,7 @@ class BZero {
     y int
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             0
         }
     }
@@ -205,7 +205,7 @@ class BZero {
 
 class AItems { items BZero[] }
 
-function nested_class_override_in_array_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function nested_class_override_in_array_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let a: AItems = AItems { items: [BZero { y: 1 }, BZero { y: 2 }] };
     let j: baml.json.json = a.to_json();
     baml.json.stringify(j)
@@ -220,7 +220,7 @@ class BStr {
     v int
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             "B"
         }
     }
@@ -228,7 +228,7 @@ class BStr {
 
 class ALookup { lookup map<string, BStr> }
 
-function nested_class_override_in_map_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function nested_class_override_in_map_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let a: ALookup = ALookup { lookup: {"k1": BStr { v: 1 }, "k2": BStr { v: 2 }} };
     let j: baml.json.json = a.to_json();
     baml.json.stringify(j)
@@ -246,7 +246,7 @@ class Tree {
     children Tree[]
 }
 
-function recursive_class_to_json_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function recursive_class_to_json_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let leaf: Tree = Tree { value: 2, children: [] };
     let root: Tree = Tree { value: 1, children: [leaf] };
     let j: baml.json.json = root.to_json();
@@ -263,7 +263,7 @@ test "recursive_class_to_json" {
 // generic_class_to_json_concrete: Box<int>{value:42}.to_json() → {"value":42}
 class Box1<T> { value T }
 
-function generic_class_to_json_concrete_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function generic_class_to_json_concrete_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let b: Box1<int> = Box1<int> { value: 42 };
     let j: baml.json.json = b.to_json();
     baml.json.stringify(j)
@@ -276,7 +276,7 @@ test "generic_class_to_json_concrete" {
 // generic_class_to_json_array_typearg: Box<int[]>{value:[1,2,3]}.to_json() → {"value":[1,2,3]}
 class Box2<T> { value T }
 
-function generic_class_to_json_array_typearg_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function generic_class_to_json_array_typearg_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let b: Box2<int[]> = Box2<int[]> { value: [1, 2, 3] };
     let j: baml.json.json = b.to_json();
     baml.json.stringify(j)
@@ -291,7 +291,7 @@ class SecretRedact {
     data string
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             "[redacted]"
         }
     }
@@ -299,7 +299,7 @@ class SecretRedact {
 
 class Box3<T> { value T }
 
-function generic_class_honors_override_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function generic_class_honors_override_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let b: Box3<SecretRedact> = Box3<SecretRedact> { value: SecretRedact { data: "hunter2" } };
     let j: baml.json.json = b.to_json();
     baml.json.stringify(j)
@@ -312,7 +312,7 @@ test "generic_class_honors_override_through_typevar" {
 // generic_class_with_optional_typevar_field: Box<int>{value:42}.to_json() → {"value":42}
 class Box4<T> { value T? }
 
-function generic_class_optional_typevar_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function generic_class_optional_typevar_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let b: Box4<int> = Box4<int> { value: 42 };
     let j: baml.json.json = b.to_json();
     baml.json.stringify(j)
@@ -323,7 +323,7 @@ test "generic_class_with_optional_typevar_field" {
 }
 
 // generic_class_with_optional_typevar_field_null: Box<int>{value:null}.to_json() → {"value":null}
-function generic_class_optional_typevar_null_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function generic_class_optional_typevar_null_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let b: Box4<int> = Box4<int> { value: null };
     let j: baml.json.json = b.to_json();
     baml.json.stringify(j)
@@ -338,7 +338,7 @@ class SecretRedact2 {
     data string
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             "[redacted]"
         }
     }
@@ -346,7 +346,7 @@ class SecretRedact2 {
 
 class Box5<T> { value T? }
 
-function generic_class_optional_override_str() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function generic_class_optional_override_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let b: Box5<SecretRedact2> = Box5<SecretRedact2> { value: SecretRedact2 { data: "hunter2" } };
     let j: baml.json.json = b.to_json();
     baml.json.stringify(j)
@@ -360,7 +360,7 @@ test "generic_class_with_optional_typevar_field_honors_override" {
 
 class C3 { x int }
 
-function primitive_field_from_json_val() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function primitive_field_from_json_val() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"x\":42}");
     let c: C3 = C3.from_json(j);
     c.x
@@ -372,7 +372,7 @@ test "primitive_field_from_json" {
 
 class C4 { xs int[] }
 
-function array_of_primitive_from_json_sum() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function array_of_primitive_from_json_sum() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"xs\":[1,2,3]}");
     let c: C4 = C4.from_json(j);
     c.xs[0] + c.xs[1] + c.xs[2]
@@ -387,7 +387,7 @@ class BOverride {
     y int
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             BOverride { y: 99 }
         }
     }
@@ -395,7 +395,7 @@ class BOverride {
 
 class AOverride { b BOverride }
 
-function nested_class_override_direct_from_json_val() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function nested_class_override_direct_from_json_val() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"b\":{\"y\":7}}");
     let a: AOverride = AOverride.from_json(j);
     a.b.y
@@ -410,7 +410,7 @@ class BZeroFrom {
     y int
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             BZeroFrom { y: 0 }
         }
     }
@@ -418,7 +418,7 @@ class BZeroFrom {
 
 class AItemsFrom { items BZeroFrom[] }
 
-function nested_class_override_array_from_json_sum() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function nested_class_override_array_from_json_sum() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"items\":[{\"y\":1},{\"y\":2}]}");
     let a: AItemsFrom = AItemsFrom.from_json(j);
     a.items[0].y + a.items[1].y
@@ -433,7 +433,7 @@ class BMapFrom {
     v int
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             BMapFrom { v: 0 }
         }
     }
@@ -441,7 +441,7 @@ class BMapFrom {
 
 class ALookupFrom { lookup map<string, BMapFrom> }
 
-function nested_class_override_map_from_json_sum() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function nested_class_override_map_from_json_sum() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"lookup\":{\"k1\":{\"v\":7},\"k2\":{\"v\":9}}}");
     let a: ALookupFrom = ALookupFrom.from_json(j);
     a.lookup["k1"].v + a.lookup["k2"].v
@@ -452,7 +452,7 @@ test "nested_class_override_honored_in_map_from_json" {
 }
 
 // recursive_class_from_json
-function recursive_class_from_json_sum() -> int throws baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError {
+function recursive_class_from_json_sum() -> int throws baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError {
     let leaf: Tree = Tree { value: 2, children: [] };
     let root: Tree = Tree { value: 1, children: [leaf] };
     let s: string = baml.json.stringify(root.to_json());
@@ -468,7 +468,7 @@ test "recursive_class_from_json" {
 // generic_class_from_json_concrete: Box<int>.from_json(parse("{\"value\":42}"))
 class Box6<T> { value T }
 
-function generic_class_from_json_concrete_val() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function generic_class_from_json_concrete_val() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"value\":42}");
     let b: Box6<int> = Box6<int>.from_json(j);
     b.value
@@ -483,7 +483,7 @@ class SecretReset {
     data string
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             SecretReset { data: "[reset]" }
         }
     }
@@ -491,7 +491,7 @@ class SecretReset {
 
 class Box7<T> { value T }
 
-function generic_class_honors_override_from_json_val() -> string throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function generic_class_honors_override_from_json_val() -> string throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"value\":{\"data\":\"hunter2\"}}");
     let b: Box7<SecretReset> = Box7<SecretReset>.from_json(j);
     b.value.data
@@ -508,7 +508,7 @@ class BOptFrom {
     y int
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             BOptFrom { y: 99 }
         }
     }
@@ -516,7 +516,7 @@ class BOptFrom {
 
 class AOptFrom { b BOptFrom? }
 
-function optional_class_override_non_null_val() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function optional_class_override_non_null_val() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"b\":{\"y\":7}}");
     let a: AOptFrom = AOptFrom.from_json(j);
     match (a.b) {
@@ -530,7 +530,7 @@ test "optional_class_override_honored_from_json_non_null" {
 }
 
 // optional_class_override_honored_from_json_null: same but b: null → -1
-function optional_class_override_null_val() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function optional_class_override_null_val() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"b\":null}");
     let a: AOptFrom = AOptFrom.from_json(j);
     match (a.b) {
@@ -546,7 +546,7 @@ test "optional_class_override_honored_from_json_null" {
 // optional_primitive_field_from_json: C{x:int?}, tests both non-null and null paths
 class C5 { x int? }
 
-function optional_primitive_field_from_json_sum() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function optional_primitive_field_from_json_sum() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j1: baml.json.json = baml.json.parse("{\"x\":42}");
     let c1: C5 = C5.from_json(j1);
     let j2: baml.json.json = baml.json.parse("{\"x\":null}");
@@ -570,7 +570,7 @@ test "optional_primitive_field_from_json" {
 // map_of_primitive_from_json: C{lookup:map<string,int>}
 class C6 { lookup map<string, int> }
 
-function map_of_primitive_from_json_sum() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function map_of_primitive_from_json_sum() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"lookup\":{\"a\":1,\"b\":2,\"c\":3}}");
     let c: C6 = C6.from_json(j);
     c.lookup["a"] + c.lookup["b"] + c.lookup["c"]
@@ -583,7 +583,7 @@ test "map_of_primitive_from_json" {
 // top_level_from_json_call_concrete_class
 class UserTL { name string  age int }
 
-function top_level_from_json_call_concrete_class_name() -> string throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function top_level_from_json_call_concrete_class_name() -> string throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"name\":\"Ada\",\"age\":30}");
     let u: UserTL = baml.json.from_json<UserTL>(j);
     u.name
@@ -594,7 +594,7 @@ test "top_level_from_json_call_concrete_class" {
 }
 
 // top_level_from_json_call_primitive
-function top_level_from_json_call_primitive_val() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function top_level_from_json_call_primitive_val() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("42");
     baml.json.from_json<int>(j)
 }
@@ -608,7 +608,7 @@ class BOnlyFrom {
     y int
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             BOnlyFrom { y: 99 }
         }
     }
@@ -616,7 +616,7 @@ class BOnlyFrom {
 
 class AOnlyFrom { b BOnlyFrom }
 
-function independent_synthesis_only_from_json_result() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError {
+function independent_synthesis_only_from_json_result() -> string throws baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError {
     let a_in: AOnlyFrom = AOnlyFrom { b: BOnlyFrom { y: 1 } };
     let s: string = baml.json.stringify(a_in.to_json());
     let parsed: AOnlyFrom = AOnlyFrom.from_json(baml.json.parse(s));
@@ -635,7 +635,7 @@ class BOnlyTo {
     y int
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             "[redacted]"
         }
     }
@@ -643,7 +643,7 @@ class BOnlyTo {
 
 class AOnlyTo { b BOnlyTo }
 
-function independent_synthesis_only_to_json_val() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function independent_synthesis_only_to_json_val() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"b\":{\"y\":7}}");
     let a: AOnlyTo = AOnlyTo.from_json(j);
     a.b.y
@@ -659,18 +659,18 @@ class SecretBoth {
     data string
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             "[redacted]"
         }
     }
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             SecretBoth { data: "[reset]" }
         }
     }
 }
 
-function round_trip_with_overrides_both_directions_val() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError {
+function round_trip_with_overrides_both_directions_val() -> string throws baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError {
     let s: SecretBoth = SecretBoth { data: "hunter2" };
     let json_val: baml.json.json = s.to_json();
     let stringified: string = baml.json.stringify(json_val);
@@ -688,7 +688,7 @@ class BAliasTo {
     y int
 
     implements baml.ToJson {
-        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
             42
         }
     }
@@ -697,7 +697,7 @@ class BAliasTo {
 type InnerTo = BAliasTo
 type OuterTo = InnerTo
 
-function alias_chain_dispatch_to_json_val() -> int throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function alias_chain_dispatch_to_json_val() -> int throws baml.json.SerializationError | baml.json.ParseError {
     let b: OuterTo = BAliasTo { y: 7 };
     let j: baml.json.json = b.to_json();
     match (j) {
@@ -715,7 +715,7 @@ class BAliasFrom {
     y int
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             BAliasFrom { y: 99 }
         }
     }
@@ -724,7 +724,7 @@ class BAliasFrom {
 type InnerFrom = BAliasFrom
 type OuterFrom = InnerFrom
 
-function alias_chain_dispatch_from_json_val() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function alias_chain_dispatch_from_json_val() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"y\":7}");
     let b: OuterFrom = OuterFrom.from_json(j);
     b.y
@@ -737,7 +737,7 @@ test "alias_chain_dispatch_from_json" {
 // from_json_wrapper_body_fallback: class Holder { value unknown }
 class Holder { value unknown }
 
-function from_json_wrapper_body_fallback_val() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function from_json_wrapper_body_fallback_val() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"value\":42}");
     let h: Holder = Holder.from_json(j);
     match (h.value) {

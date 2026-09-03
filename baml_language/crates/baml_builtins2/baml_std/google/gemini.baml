@@ -1,7 +1,7 @@
 /// One Gemini safety filter setting, in the API's own spelling — pass a list
 /// of these as a client's `safety_settings`:
 ///
-///     google.GoogleClient.new(
+///     google.GeminiClient.new(
 ///         model = "gemini-2.5-flash",
 ///         safety_settings = [
 ///             google.SafetySetting.new("HARM_CATEGORY_DANGEROUS_CONTENT", "BLOCK_ONLY_HIGH"),
@@ -18,6 +18,8 @@ class SafetySetting {
     category: string,
     threshold: string,
 
+    /// Creates a safety setting pairing a harm `category` with a blocking
+    /// `threshold`. Both strings go on the wire verbatim.
     function new(category: string, threshold: string) -> SafetySetting {
         SafetySetting { category: category, threshold: threshold }
     }
@@ -32,7 +34,7 @@ class SafetySetting {
 /// auth scheme and billing account behind an ambient env var is a footgun. Use
 /// the enterprise backend by naming it: `google.VertexClient.new(...)`, or the
 /// `"vertex/<model>"` client shorthand.
-class GoogleClient {
+class GeminiClient {
     model: string,
     // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
     // time), or null to resolve GOOGLE_API_KEY at request time. Construction
@@ -71,6 +73,9 @@ class GoogleClient {
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
 
+    /// Creates a client. Construction reads no environment variable, so
+    /// declaring one is always safe; credentials and endpoints resolve when a
+    /// request is built.
     function new(
         model: string = "gemini-2.5-flash",
         api_key: ai.Credential? = null,
@@ -86,8 +91,8 @@ class GoogleClient {
         response_modalities: string[]? = null,
         safety_settings: SafetySetting[]? = null,
         capture_wire: bool = true,
-    ) -> GoogleClient {
-        GoogleClient {
+    ) -> GeminiClient {
+        GeminiClient {
             model: model,
             api_key: api_key,
             base_url: base_url,
@@ -105,11 +110,11 @@ class GoogleClient {
         }
     }
 
-    // The request-time credential: an explicit value, else the provider's
-    // canonical one. A missing key is a CATCHABLE configuration error, not a
-    // panic: `baml.env.get_or_panic` unwinds past the `catch_all` +
-    // `ai.errors.normalize` wrapper below, so an unset variable would take the
-    // process down instead of surfacing as an `ai.errors.Failure`.
+    /// The request-time credential: an explicit value, else the provider's
+    /// canonical one. A missing key is a CATCHABLE configuration error, not a
+    /// panic: `baml.env.get_or_panic` unwinds past the `catch_all` +
+    /// `ai.errors.normalize` wrapper below, so an unset variable would take the
+    /// process down instead of surfacing as an `ai.errors.Failure`.
     function resolved_api_key(self) -> string {
         if let k: string = ai.wire.resolve_credential(self.api_key, "GOOGLE_API_KEY") {
             return k;
@@ -122,7 +127,7 @@ class GoogleClient {
         }
     }
 
-    // The request-time base URL, or null for the provider default.
+    /// The request-time base URL, or null for the provider default.
     function resolved_base_url(self) -> string? {
         ai.wire.resolve_credential(self.base_url, null)
     }
@@ -133,7 +138,7 @@ class GoogleClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            google.internal.google_preview(self, input) catch_all (e) {
+            google.internal.preview(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

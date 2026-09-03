@@ -259,7 +259,7 @@ function wrap<T>(x: T) -> GenericBox<T> {
 // Mirrors the real `fetch_as<T>` shape: forwards `T` into `from_string<T>`.
 // ---------------------------------------------------------------------------
 
-function parse_as<T>(source: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function parse_as<T>(source: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
   baml.json.from_string<T>(source)
 }
 

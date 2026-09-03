@@ -1,7 +1,7 @@
 // Spawn with-chain modifiers + labeled args by name
 //
 // A with-modifier is demanded STRUCTURALLY (a fn returning
-// SpawnParams), its generics solved from the chain's current link -
+// Params), its generics solved from the chain's current link -
 // not subtype-checked against open `unknown` slots (class invariance
 // would reject valid modifiers). Labeled call arguments select their
 // parameter by NAME: `options(cancel = tok)` checks `tok` against

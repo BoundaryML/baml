@@ -2218,7 +2218,7 @@ function exceptions.named_class_binding_dispatch_access_fields_fn() -> string {
     return
 }
 
-function exceptions.named_panic_binding_division_by_zero_field_fn() -> int {
+function exceptions.named_panic_binding_division_by_zero_field_fn() -> int | bigint {
     call user.exceptions.s5b_divides_2
     jump L2
     load_var e

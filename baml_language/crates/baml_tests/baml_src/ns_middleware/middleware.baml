@@ -1,5 +1,5 @@
 // Tests for BEP-034 `with` middleware: `spawn ... with` transformer pipelines
-// over `baml.spawn.SpawnParams`.
+// over `baml.spawn.Params`.
 //
 // Converted from crates/bex_engine/tests/middleware.rs. Each Rust test's
 // `function main()` becomes a top-level helper named after the test — the VM
@@ -10,9 +10,9 @@
 // ─── identity_transformer ─────────────────────────────────────────────────────
 
 // The simplest transformer: identity. Exercises the chain plumbing
-// (`SpawnParams` construction, transformer application, engine dispatch from
+// (`Params` construction, transformer application, engine dispatch from
 // the final params).
-function ident<T, E>() -> (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, E> throws never {
+function ident<T, E>() -> (baml.spawn.Params<T, E>) -> baml.spawn.Params<T, E> throws never {
     (params) -> { params }
 }
 
@@ -43,10 +43,10 @@ test "options_as_transformer" {
 // from the final params, not the original closure operand. Shared with
 // `chained_transformers_apply_left_to_right` and
 // `variable_bound_transformer_still_applies`, which use the same transformer.
-function withDouble<E>() -> (baml.spawn.SpawnParams<int, E>) -> baml.spawn.SpawnParams<int, E> throws never {
+function withDouble<E>() -> (baml.spawn.Params<int, E>) -> baml.spawn.Params<int, E> throws never {
     (params) -> {
         let original = params.body;
-        baml.spawn.SpawnParams {
+        baml.spawn.Params {
             body: () -> { original() * 2 },
             name: params.name,
             group: params.group,
@@ -67,10 +67,10 @@ test "body_wrapping_transformer" {
 
 // ─── chained_transformers_apply_left_to_right ─────────────────────────────────
 
-function withAddOne<E>() -> (baml.spawn.SpawnParams<int, E>) -> baml.spawn.SpawnParams<int, E> throws never {
+function withAddOne<E>() -> (baml.spawn.Params<int, E>) -> baml.spawn.Params<int, E> throws never {
     (params) -> {
         let original = params.body;
-        baml.spawn.SpawnParams {
+        baml.spawn.Params {
             body: () -> { original() + 1 },
             name: params.name,
             group: params.group,
@@ -104,10 +104,10 @@ function flaky_then_42(calls: int[]) -> int throws string {
 
 // The BEP's marquee example: user-written retry middleware. The body fails
 // twice then succeeds; `withRetry(5)` re-runs it until it does.
-function withRetry<T, E>(n: int) -> (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, E> throws never {
+function withRetry<T, E>(n: int) -> (baml.spawn.Params<T, E>) -> baml.spawn.Params<T, E> throws never {
     (params) -> {
         let original = params.body;
-        baml.spawn.SpawnParams {
+        baml.spawn.Params {
             body: () -> {
                 let winners: T[] = [];
                 let attempts = 0;
@@ -146,10 +146,10 @@ test "custom_with_retry" {
 // A TYPE-CHANGING transformer (the BEP's `withFallback`): wraps the body with a
 // catch-all, so the error type is erased — the spawn types `Future<int, never>`
 // and the failing body resolves to the default.
-function withFallback<T, E>(default_value: T) -> (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, never> throws never {
+function withFallback<T, E>(default_value: T) -> (baml.spawn.Params<T, E>) -> baml.spawn.Params<T, never> throws never {
     (params) -> {
         let original = params.body;
-        baml.spawn.SpawnParams {
+        baml.spawn.Params {
             body: () -> {
                 (original()) catch (e) {
                     let e => default_value
@@ -186,7 +186,7 @@ test "type_changing_fallback_transformer" {
 // throws does so at the spawn site — catchable there, and part of the CALLER's
 // throws surface (an explicit `throws never` caller is rejected; see the TIR
 // throws contribution).
-function withBomb<T, E>() -> (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, E> throws string throws never {
+function withBomb<T, E>() -> (baml.spawn.Params<T, E>) -> baml.spawn.Params<T, E> throws string throws never {
     (params) -> { throw "cfg-exploded" }
 }
 
@@ -209,7 +209,7 @@ test "throwing_transformer_throws_at_spawn_site" {
 
 // A transformer bound to a VARIABLE first (not called inline). The `let` binding
 // gives generic inference no context to solve `E`, so it is supplied explicitly
-// (`withDouble<never>()` — the spawn body throws nothing, so its `SpawnParams`
+// (`withDouble<never>()` — the spawn body throws nothing, so its `Params`
 // error type is `never`); the pipeline still runs from the variable.
 function variable_bound_transformer_still_applies() -> int {
     let t = withDouble<never>();

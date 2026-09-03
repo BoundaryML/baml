@@ -81,8 +81,7 @@ use indexmap::IndexMap;
 use js_sys::Function;
 use prost::Message;
 use sys_ops::io::{
-    self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput, SysOpResult, VmBamlError,
-    VmRustFnError,
+    self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput, SysOpResult, VmRustFnError,
 };
 use sys_types::{BexHeap, CompletionHandle, SysOp};
 use wasm_bindgen::prelude::*;
@@ -696,11 +695,15 @@ impl io::IoNamespaceHost for WasmHost {
         _type_arg_1: ::sys_types::SapTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        // Extract the HostValueArc from the incoming handle.
+        // Extract the HostValueArc from the incoming handle. Only
+        // compiler-synthesized wrapper closures reach this sysop and they
+        // always pass a `HostValue`, so anything else is an engine fault —
+        // and the `throws` clause here is the callable's own `E`, which
+        // cannot carry a `baml.errors.*` of our choosing.
         let host_arc = match handle {
             BexExternalValue::HostValue(arc) => arc,
             other => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
                     message: format!("expected HostValue, got {other:?}"),
                 });
             }

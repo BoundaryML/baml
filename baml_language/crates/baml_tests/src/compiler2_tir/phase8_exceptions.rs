@@ -455,7 +455,7 @@ fn single_panic_catch_binding_allows_field_access() {
   1 / 0
 }
 
-function f() -> int {
+function f() -> int | bigint {
   return fail() catch (e) {
     DivisionByZero => e.dividend
     _ => 0
@@ -1101,7 +1101,7 @@ fn spawn_with_non_callable_reports_concrete_mismatch() {
     let output = render_tir(&db, file);
     assert!(
         output.contains(
-            "expected (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got 42"
+            "expected (baml.spawn.Params<int, never>) -> baml.spawn.Params<unknown, unknown> throws unknown, got 42"
         ),
         "non-callable `with` must report the concrete transformer shape, got:\n{output}"
     );
@@ -1117,7 +1117,7 @@ function f() -> int { let x = spawn with g { 1 }; await x }"#,
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("must return a `baml.spawn.SpawnParams`")
+        output.contains("must return a `baml.spawn.Params`")
             && output.contains("got `(n: int) -> int throws never`"),
         "wrong-shape `with` must name the middleware contract, got:\n{output}"
     );
@@ -1128,13 +1128,13 @@ fn spawn_with_wrong_return_reports_link_input() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
-        r#"function h<T, E>() -> (baml.spawn.SpawnParams<T, E>) -> int throws never { (p) -> { 7 } }
+        r#"function h<T, E>() -> (baml.spawn.Params<T, E>) -> int throws never { (p) -> { 7 } }
 function f() -> int { let x = spawn with h() { 1 }; await x }"#,
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("this link receives `baml.spawn.SpawnParams<int, never>`")
-            && output.contains("must return a `baml.spawn.SpawnParams`"),
+        output.contains("this link receives `baml.spawn.Params<int, never>`")
+            && output.contains("must return a `baml.spawn.Params`"),
         "wrong-return transformer must report the link's concrete input, got:\n{output}"
     );
 }
@@ -1144,14 +1144,14 @@ fn spawn_with_chain_input_mismatch_is_concrete() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
-        r#"function fix() -> (baml.spawn.SpawnParams<string, never>) -> baml.spawn.SpawnParams<string, never> throws never { (p) -> { p } }
+        r#"function fix() -> (baml.spawn.Params<string, never>) -> baml.spawn.Params<string, never> throws never { (p) -> { p } }
 function f() -> int { let x = spawn with fix() { 1 }; await x }"#,
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("got (baml.spawn.SpawnParams<string, never>)")
-            && output.contains("expected (baml.spawn.SpawnParams<int, never>)"),
-        "chain input mismatch must show both concrete SpawnParams types, got:\n{output}"
+        output.contains("got (baml.spawn.Params<string, never>)")
+            && output.contains("expected (baml.spawn.Params<int, never>)"),
+        "chain input mismatch must show both concrete Params types, got:\n{output}"
     );
 }
 
@@ -1187,7 +1187,7 @@ function f() -> int {
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("this link receives `baml.spawn.SpawnParams<int, never>`"),
+        output.contains("this link receives `baml.spawn.Params<int, never>`"),
         "wrong-param variable transformer must report the link input, got:\n{output}"
     );
 }

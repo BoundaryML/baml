@@ -14,7 +14,7 @@
 use std::{collections::BTreeMap, fmt::Write};
 
 use crate::{
-    rust_ident::{rust_field_ident, rust_field_value_ident},
+    rust_ident::{rust_class_type_ident, rust_field_ident, rust_field_value_ident},
     types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage},
 };
 
@@ -550,9 +550,13 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     let inner = "    ".repeat(depth + 1);
     let inner2 = "    ".repeat(depth + 2);
 
+    // The BAML `_` internal marker has no Rust meaning; strip it so the
+    // generated type matches the rest of the generated surface.
+    let class_ident = rust_class_type_ident(class_name);
+
     // Struct definition with owned fields
     writeln!(out, "{indent}/// Generated from `{}`", def.source_file).unwrap();
-    writeln!(out, "{indent}pub struct {class_name} {{").unwrap();
+    writeln!(out, "{indent}pub struct {class_ident} {{").unwrap();
     for field in &def.fields {
         let rust_type = copy_field_type(&field.field_type);
         writeln!(
@@ -566,7 +570,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
 
     // Impl with to_value()
     let fqn = format!("{}.{}", def.namespace_prefix, def.name);
-    writeln!(out, "{indent}impl {class_name} {{").unwrap();
+    writeln!(out, "{indent}impl {class_ident} {{").unwrap();
     writeln!(
         out,
         "{inner}pub fn to_value(self, vm: &mut BexVm) -> bex_vm_types::Value {{"

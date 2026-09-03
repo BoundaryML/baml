@@ -898,8 +898,8 @@ pub(crate) fn spec_client_provider(client: &str) -> Option<(&'static str, &'stat
         "azure" => Some(("openai", "AzureClient")),
         "ollama" => Some(("openai", "OllamaClient")),
         "openrouter" => Some(("openai", "OpenRouterClient")),
-        "anthropic" => Some(("anthropic", "AnthropicClient")),
-        "google" => Some(("google", "GoogleClient")),
+        "anthropic" => Some(("anthropic", "Client")),
+        "google" => Some(("google", "GeminiClient")),
         "vertex" => Some(("google", "VertexClient")),
         "bedrock" => Some(("aws", "BedrockClient")),
         "ai-gateway-images" => Some(("vercel", "AiGatewayImageClient")),
@@ -964,7 +964,7 @@ pub(crate) enum LlmClientSpec {
         class: &'static str,
         model: String,
     },
-    /// An arbitrary expression evaluating to `ai.ClientSelector` (a declared
+    /// An arbitrary expression evaluating to `ai.Selector` (a declared
     /// client name, a constructor call, a wrapper, a runtime
     /// `"provider/model"` string, an `env.X` reference, ...). Wrapped in
     /// `ai.clients.resolve(...)` by `synthesize_llm_spec_body` and resolved

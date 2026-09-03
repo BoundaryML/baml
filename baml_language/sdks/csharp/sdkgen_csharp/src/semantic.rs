@@ -229,11 +229,11 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.net.Datagram"
         | "baml.time.Duration"
         | "baml.iter.Done"
-        | "baml.csv.CsvError"
-        | "baml.csv.CsvPosition"
+        | "baml.csv.Error"
+        | "baml.csv.Position"
         | "baml.csv.ReaderOptions"
         | "baml.csv.WriterOptions" => Some(BuiltinProjection::StructuralClass),
-        "baml.csv.CsvErrorKind" => Some(BuiltinProjection::StructuralEnum),
+        "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
         "baml.spawn.TaskGroup"
         | "baml.spawn.CancelToken"
         | "baml.http.Response"
@@ -243,20 +243,20 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.glob.Glob"
         | "baml.fs.File"
         | "boundary.LocalId"
-        | "baml.csv.CsvRecord"
-        | "baml.csv.CsvReader"
-        | "baml.csv.CsvRows"
-        | "baml.csv.CsvWriter"
+        | "baml.csv.Record"
+        | "baml.csv.Reader"
+        | "baml.csv.Rows"
+        | "baml.csv.Writer"
         | "baml.net.TcpStream"
         | "baml.net.TcpListener"
         | "baml.net.UdpSocket" => Some(BuiltinProjection::Resource),
         "ai.FunctionSpec" => Some(BuiltinProjection::FunctionSpec),
         "ai.Prompt" => Some(BuiltinProjection::Prompt),
-        "baml.csv.CsvNeedData"
-        | "baml.csv.CsvSkip"
-        | "baml.csv.CsvHeaders"
+        "baml.csv._NeedData"
+        | "baml.csv._Skip"
+        | "baml.csv._Headers"
         | "ai.OutputFormat"
-        | "baml.sap.ParseCache"
+        | "baml.sap._ParseCache"
         | "baml.errors.HostCallable"
         | "ai.PromptMessage"
         | AI_STREAM_STREAM
@@ -2063,12 +2063,12 @@ fn project_resource_method_result(owner: &Name, class: &Class, method: &Function
     }
 
     match (owner.to_string().as_str(), method.name.as_str()) {
-        ("baml.csv.CsvReader", "iter") => Ty::Class(owner.clone(), Box::new([]), attr.clone()),
-        ("baml.csv.CsvReader", "rows") => Ty::Class(
+        ("baml.csv.Reader", "iter") => Ty::Class(owner.clone(), Box::new([]), attr.clone()),
+        ("baml.csv.Reader", "rows") => Ty::Class(
             Name::new(
                 owner.package().clone(),
                 owner.namespace().clone(),
-                BaseName::new("CsvRows"),
+                BaseName::new("Rows"),
             ),
             method
                 .generic_params
@@ -2078,7 +2078,7 @@ fn project_resource_method_result(owner: &Name, class: &Class, method: &Function
                 .collect(),
             attr.clone(),
         ),
-        ("baml.csv.CsvRows", "iter") => Ty::Class(
+        ("baml.csv.Rows", "iter") => Ty::Class(
             owner.clone(),
             class
                 .generic_params
@@ -3050,7 +3050,7 @@ fn is_resource_iterator_identity_method(class: &ClassSpec<'_>, method: &MethodSp
         && method.arguments.is_empty()
         && matches!(
             class.name.to_string().as_str(),
-            "baml.csv.CsvReader" | "baml.csv.CsvRows"
+            "baml.csv.Reader" | "baml.csv.Rows"
         )
 }
 
@@ -5425,8 +5425,8 @@ mod tests {
     fn stdlib_structural_source() -> String {
         let scan_name = stdlib_name("glob", "ScanOptions");
         let datagram_name = stdlib_name("net", "Datagram");
-        let error_kind_name = stdlib_name("csv", "CsvErrorKind");
-        let error_name = stdlib_name("csv", "CsvError");
+        let error_kind_name = stdlib_name("csv", "ErrorKind");
+        let error_name = stdlib_name("csv", "Error");
         let reader_options_name = stdlib_name("csv", "ReaderOptions");
         let property = |name: &str, ty: Ty| ClassProperty {
             name: BaseName::new(name),
@@ -6269,8 +6269,8 @@ mod tests {
             ("fs", "DirEntry"),
             ("fs", "MkdirOptions"),
             ("net", "Datagram"),
-            ("csv", "CsvError"),
-            ("csv", "CsvPosition"),
+            ("csv", "Error"),
+            ("csv", "Position"),
             ("csv", "ReaderOptions"),
             ("csv", "WriterOptions"),
         ] {
@@ -6281,12 +6281,12 @@ mod tests {
             );
         }
         assert_eq!(
-            builtin_projection(&stdlib_name("csv", "CsvErrorKind")),
+            builtin_projection(&stdlib_name("csv", "ErrorKind")),
             Some(BuiltinProjection::StructuralEnum),
         );
 
         let mut symbols = HashMap::new();
-        for marker in ["CsvNeedData", "CsvSkip", "CsvHeaders"] {
+        for marker in ["_NeedData", "_Skip", "_Headers"] {
             let name = stdlib_name("csv", marker);
             symbols.insert(name.clone(), builtin_class(name, vec![]));
         }
@@ -6299,7 +6299,7 @@ mod tests {
             symbols,
             callables: HashMap::new(),
         };
-        for marker in ["CsvNeedData", "CsvSkip", "CsvHeaders"] {
+        for marker in ["_NeedData", "_Skip", "_Headers"] {
             let name = stdlib_name("csv", marker);
             let error = require_supported_type(
                 &Ty::Class(name, Box::new([]), TyAttr::EMPTY),
@@ -6332,7 +6332,7 @@ mod tests {
         for namespace in ["Baml.Glob", "Baml.Net", "Baml.Csv"] {
             assert!(source.contains(&format!("namespace {namespace};")));
         }
-        for class in ["ScanOptions", "Datagram", "CsvError"] {
+        for class in ["ScanOptions", "Datagram", "Error"] {
             assert!(source.contains(&format!("public sealed partial class {class}")));
         }
         for property in [
@@ -6340,7 +6340,7 @@ mod tests {
             "public required bool? Dot { get; init; }",
             "public required global::System.ReadOnlyMemory<byte> Data { get; init; }",
             "public required string Addr { get; init; }",
-            "public required global::Baml.Csv.CsvErrorKind Kind { get; init; }",
+            "public required global::Baml.Csv.ErrorKind Kind { get; init; }",
             "public required string Message { get; init; }",
             "public required long? Line { get; init; }",
             "public required global::Baml.BamlUnion<string, string>? Trim { get; init; }",
@@ -6350,14 +6350,14 @@ mod tests {
                 "missing exact projection `{property}`"
             );
         }
-        assert!(source.contains("public enum CsvErrorKind : long"));
+        assert!(source.contains("public enum ErrorKind : long"));
         assert!(source.contains("context.Class(\n                \"baml.net.Datagram\""));
         assert!(source.contains("new(\"data\", context.Encode("));
         assert!(source.contains("new(\"addr\", context.Encode("));
-        assert!(source.contains("context.ReadClass(value, \"baml.csv.CsvError\")"));
+        assert!(source.contains("context.ReadClass(value, \"baml.csv.Error\")"));
         assert!(source.contains("fields.TryGetValue(\"kind\""));
-        assert!(source.contains("context.Enum(\"baml.csv.CsvErrorKind\", wire)"));
-        assert!(source.contains("context.ReadEnum(value, \"baml.csv.CsvErrorKind\")"));
+        assert!(source.contains("context.Enum(\"baml.csv.ErrorKind\", wire)"));
+        assert!(source.contains("context.ReadEnum(value, \"baml.csv.ErrorKind\")"));
         assert!(source.contains("if (!value.HasValue)"));
         assert!(source.contains("return value.Value.Match("));
         assert!(source.contains("return default(global::Baml.BamlUnion<string, string>?)"));

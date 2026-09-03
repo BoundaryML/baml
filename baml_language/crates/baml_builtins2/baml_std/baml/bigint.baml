@@ -1,41 +1,38 @@
-/// Arbitrary-precision signed integer.
+/// An arbitrary-precision signed integer, like Python's `int` or JavaScript's
+/// `BigInt`. Where `int` panics on overflow, `bigint` grows.
 ///
-/// Literals are written with a trailing `n` in decimal (`42n`), hex
-/// (`0xFFn`), octal (`0o755n`), or binary (`0b1010n`), with `_` digit
-/// separators allowed (`1_000_000n`).
+/// Literals carry a trailing `n` and may be decimal (`42n`), hex (`0xFFn`),
+/// octal (`0o755n`), or binary (`0b1010n`), with `_` digit separators allowed
+/// (`1_000_000n`).
 ///
-/// # Bitwise on negatives
-///
-/// `&`, `|`, `^` use two's-complement semantics — bigints are treated as if
-/// they had an infinite sign-extended bit string. So `(-1n) & 1n == 1n`,
-/// `(-1n) | 0n == -1n`, `(-1n) ^ 0n == -1n`. This matches JavaScript `BigInt`
-/// and Python `int`.
+/// `&`, `|`, and `^` treat a bigint as an infinite sign-extended two's
+/// complement bit string, matching JavaScript `BigInt` and Python `int`:
+/// `(-1n) & 1n` is `1n`, `(-1n) | 0n` is `-1n`, `(-1n) ^ 0n` is `-1n`.
 ///
 /// # Panics
 ///
-/// Bigint operators and methods can raise the following unrecoverable
-/// panics. These are not declared via `throws` because they signal that
-/// the program tried to do something invalid (rather than a recoverable
-/// runtime condition):
+/// Bigint operators and methods raise the panics below. They are not declared
+/// via `throws` because they signal that the program tried to do something
+/// invalid, rather than a recoverable runtime condition.
 ///
 /// - `baml.panics.DivisionByZero` — `a / 0n` or `a % 0n`.
 /// - `baml.panics.NegativeBitShift` — `a << -1n` or `a >> -1n`. The shift
 ///   count must be non-negative.
-/// - `baml.panics.AllocFailure` — the operand or result would require
-///   more than ~268M bits (`bigint`'s workspace cap). Sources:
-///     * `a * b`, `a << n`, `a.pow(n)` where the predicted result exceeds
-///       the cap.
-///     * `bigint.parse(s)` where `s` carries more decimal digits than the
-///       cap permits.
+/// - `baml.panics.AllocFailure` — an operand or result would need more than
+///   about 268M bits, `bigint`'s workspace cap. Raised by `a * b`, `a << n`,
+///   and `a.pow(n)` when the predicted result exceeds the cap, and by
+///   `bigint.parse(s)` when `s` carries more decimal digits than the cap
+///   permits.
 class Bigint {
     // ─── Comparisons / clamping ───────────────────────────────────────────────
 
     /// Returns the absolute value of `self`.
+    ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (-7n).abs()         // 7n
     /// (3n).abs()          // 3n
-    /// (0n).abs()          // 0n
     /// ```
     function abs(self) -> bigint throws never {
         $rust_function
@@ -44,9 +41,10 @@ class Bigint {
     /// Returns the smaller of `self` and `other`.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (3n).min(5n)   // 3n
-    /// (3n).min(3)   // 3n (note we cast up from `int` to `bigint` here)
+    /// (3n).min(3)    // 3n  (the int widens to bigint)
     /// (-2n).min(0n)  // -2n
     /// ```
     function min(self, other: bigint) -> bigint throws never {
@@ -56,9 +54,10 @@ class Bigint {
     /// Returns the larger of `self` and `other`.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (3n).max(5n)   // 5n
-    /// (3n).max(3)   // 3n (note we cast up from `int` to `bigint` here)
+    /// (3n).max(3)    // 3n  (the int widens to bigint)
     /// (-2n).max(0n)  // 0n
     /// ```
     function max(self, other: bigint) -> bigint throws never {
@@ -67,15 +66,15 @@ class Bigint {
 
     /// Clamps `self` into the range `[min, max]`.
     ///
-    /// Equivalent to `self.min(max).max(min)`. Callers should pass `min <= max`;
-    /// if `min > max` the result is always `min` (the lower-clamp wins because
-    /// it runs after the upper-clamp).
+    /// Equivalent to `self.min(max).max(min)`. Pass `min <= max`; if `min > max`
+    /// the result is always `min`, because the lower clamp runs last.
     ///
     /// # Examples
-    /// ```
-    /// (5n).clamp(0n, 10n)    // 5n
-    /// (-3n).clamp(0, 10)   // 0n (note we cast up from `int` to `bigint` here)
-    /// (15n).clamp(0n, 10n)   // 10n
+    ///
+    /// ```baml
+    /// (5n).clamp(0n, 10n)   // 5n
+    /// (-3n).clamp(0, 10)    // 0n  (the ints widen to bigint)
+    /// (15n).clamp(0n, 10n)  // 10n
     /// ```
     function clamp(self, min: bigint, max: bigint) -> bigint throws never {
         $rust_function
@@ -83,16 +82,18 @@ class Bigint {
 
     // ─── Math ─────────────────────────────────────────────────────────────────
 
-    /// Returns the integer square root of `self` — that is, the largest `bigint`
-    /// `r` such that `r * r <= self`.
+    /// Returns the largest `r` such that `r * r <= self`: the integer square
+    /// root of `self`.
     ///
-    /// Throws `InvalidArgument` if `self` is negative.
+    /// # Throws
+    ///
+    /// - `baml.errors.InvalidArgument` if `self` is negative.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (10n).isqrt()   // 3n
     /// (16n).isqrt()   // 4n
-    /// (0n).isqrt()    // 0n
     /// (-1n).isqrt()   // throws
     /// ```
     function isqrt(self) -> bigint throws root.errors.InvalidArgument {
@@ -101,37 +102,41 @@ class Bigint {
 
     /// Returns `self ** exp`.
     ///
-    /// `0 ** 0` returns `1`, by convention.
+    /// `0 ** 0` is `1n`, by convention. A negative `exp` gives `0n`, because
+    /// the exact value `1 / self ** -exp` lies in `(-1, 1)` for `|self| > 1`
+    /// and rounds toward zero. That holds uniformly: for `self == 1n` or
+    /// `self == -1n` the exact value is `±1n`, and the result is still `0n`.
     ///
-    /// If `exp` is negative the result is `0`, since the mathematical value
-    /// `self ** -n = 1 / self ** n` is in `(-1, 1)` for `|self| > 1` and rounds
-    /// to zero. (For `self == 1` or `self == -1` the value is `±1` which rounds
-    /// to itself; this implementation still returns `0` for negative exponents
-    /// uniformly.)
+    /// # Panics
+    ///
+    /// - `baml.panics.AllocFailure` if the estimated result exceeds `bigint`'s
+    ///   workspace cap.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (2n).pow(10n)      // 1024n
     /// (2n).pow(0n)       // 1n
     /// (0n).pow(0n)       // 1n   (convention)
     /// (2n).pow(-1n)      // 0n
-    /// (10n).pow(100n)    // a very large number
     /// (-2n).pow(3n)      // -8n
+    /// (10n).pow(100n)    // a very large number
     /// ```
-    // Raises `baml.panics.AllocFailure` (a panic, not a catchable `throws`) when
-    // the estimated result exceeds `MAX_BIGINT_BITS`.
     //baml:fallible
     function pow(self, exp: bigint) -> bigint throws never {
         $rust_function
     }
 
-    /// Returns the integer logarithm of `self` in the given `base`, rounded
-    /// down — i.e. the largest `n` such that `base ** n <= self`.
+    /// Returns the largest `n` such that `base ** n <= self`: the logarithm of
+    /// `self` in `base`, rounded down.
     ///
-    /// Throws `InvalidArgument` if `self <= 0` or `base < 2`.
+    /// # Throws
+    ///
+    /// - `baml.errors.InvalidArgument` if `self <= 0` or `base < 2`.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (1000n).ilog(10n)   // 3n
     /// (1024n).ilog(2n)    // 10n
     /// (1n).ilog(10n)      // 0n
@@ -146,15 +151,15 @@ class Bigint {
 
     /// Narrows `self` to a fixed-width `int`.
     ///
-    /// Throws `InvalidArgument` if `self` is outside `int`'s range. BAML integers
-    /// are 63-bit signed, so that range (`int.min_value()` ..= `int.max_value()`)
-    /// is narrower than a machine 64-bit integer's.
+    /// # Throws
     ///
-    /// The opposite direction needs no conversion: an `int` widens to `bigint`
-    /// wherever a `bigint` is expected, and `0n + value` forces it explicitly.
+    /// - `baml.errors.InvalidArgument` if `self` falls outside `int`'s range.
+    ///   BAML integers are 63-bit signed, so `int.min_value()` through
+    ///   `int.max_value()` is narrower than a machine 64-bit integer.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// (42n).to_int()                          // 42
     /// (-7n).to_int()                          // -7
     /// (4611686018427387903n).to_int()         // int.max_value()
@@ -167,18 +172,21 @@ class Bigint {
 
     // ─── Parsing ──────────────────────────────────────────────────────────────
 
-    /// Parses `text` as a base-ten signed integer.
+    /// Parses `text` as a base ten signed integer.
     ///
-    /// Accepts an optional leading `+` or `-` sign followed by one or more
-    /// ASCII digits. No surrounding whitespace, no underscore separators,
-    /// no hex / octal / binary prefix (`0x` / `0o` / `0b`), no Unicode digits,
-    /// no scientific notation. Callers needing those should preprocess the
-    /// string.
+    /// Accepts an optional leading `+` or `-` followed by one or more ASCII
+    /// digits, and nothing else: no surrounding whitespace, no underscore
+    /// separators, no `0x` / `0o` / `0b` prefix, no Unicode digits, no
+    /// scientific notation. Preprocess the string if you need any of those.
     ///
-    /// Throws `ParseError` if `text` is empty or contains a non-digit character.
+    /// # Throws
+    ///
+    /// - `baml.errors.ParseError` if `text` is empty or holds a non-digit
+    ///   character.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// bigint.parse("42")       // 42n
     /// bigint.parse("-7")       // -7n
     /// bigint.parse("+0")       // 0n
@@ -186,7 +194,7 @@ class Bigint {
     /// bigint.parse("12a")      // throws — non-digit
     /// bigint.parse("0x2a")     // throws — hex prefix not accepted
     /// bigint.parse("1_000")    // throws — underscores not accepted
-    /// bigint.parse(" 5 ")      // throws — whitespace not allowed; trim first
+    /// bigint.parse(" 5 ")      // throws — whitespace; trim first
     /// bigint.parse("99999999999999999999")  // 99999999999999999999n
     /// ```
     function parse(text: string) -> bigint throws root.errors.ParseError {
@@ -196,15 +204,19 @@ class Bigint {
     /// Returns a uniformly distributed random integer in the half-open range
     /// `[lower, upper)`, drawn from `rng`.
     ///
-    /// Throws `InvalidArgument` if `lower >= upper` (the range would be empty).
     /// `rng` defaults to `random.SystemRandom`, the host's cryptographic entropy
-    /// source; pass a seeded generator to make the draw reproducible.
+    /// source; pass a seeded generator to make the draw reproducible. Rejection
+    /// sampling avoids modulo bias, so one result may consume several draws from
+    /// `rng`.
     ///
-    /// Rejection sampling avoids modulo bias, so one result may consume multiple
-    /// draws from `rng`.
+    /// # Throws
+    ///
+    /// - `baml.errors.InvalidArgument` if `lower >= upper`, which would leave
+    ///   the range empty.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```baml
     /// bigint.random(0n, 10n)         // some value in {0, 1, ..., 9}
     /// bigint.random(-5n, 5n)         // some value in {-5, -4, ..., 4}
     /// bigint.random(0n, 1n)          // always 0  (single-element range)
@@ -233,13 +245,13 @@ class Bigint {
         r
     }
 
-    /// Internal: number of bytes needed for one draw over `[lower, upper)`.
+    /// (internal) Number of bytes needed for one draw over `[lower, upper)`.
     function _random_byte_count(lower: bigint, upper: bigint) -> int throws never {
         $rust_function
     }
 
-    /// Internal: maps one draw onto `[lower, upper)`, returning `upper` when the
-    /// draw must be rejected.
+    /// (internal) Maps one draw onto `[lower, upper)`, returning `upper` when
+    /// the draw must be rejected.
     function _random_in_range(
         draw: uint8array,
         lower: bigint,

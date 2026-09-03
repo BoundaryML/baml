@@ -20,7 +20,7 @@ class ModelTurn {
     // retry/fallback wrappers, then the selected call (selected: true).
     calls: root.events.LLMCall[],
 
-    // The terminal Text block — the final candidate the runner parses.
+    /// The terminal Text block — the final candidate the runner parses.
     function terminal_text(self) -> string? {
         let out: string? = null;
         for (let b in self.content) {
@@ -31,8 +31,8 @@ class ModelTurn {
         out
     }
 
-    // The media payloads the turn produced, in order. A media-shaped output
-    // type is built from these instead of from the terminal text.
+    /// The media payloads the turn produced, in order. A media-shaped output
+    /// type is built from these instead of from the terminal text.
     function media(self) -> MediaPart[] {
         let out: MediaPart[] = [];
         for (let b in self.content) {
@@ -43,7 +43,7 @@ class ModelTurn {
         out
     }
 
-    // The ToolUse blocks of the turn, in order.
+    /// The ToolUse blocks of the turn, in order.
     function tool_uses(self) -> root.content.ToolUse[] {
         let out: root.content.ToolUse[] = [];
         for (let b in self.content) {
@@ -57,9 +57,9 @@ class ModelTurn {
 
 interface Client {
     function id(self) -> string throws never
-    // Render the provider request shape without performing I/O. Reliability
-    // wrappers use this as a stable request-shape preview: they do not sleep,
-    // rotate, or try fallback members while rendering.
+    /// Render the provider request shape without performing I/O. Reliability
+    /// wrappers use this as a stable request-shape preview: they do not sleep,
+    /// rotate, or try fallback members while rendering.
     function render(self, input: ModelTurnInput) -> baml.http.Request throws root.errors.InvokeError
     function invoke(self, input: ModelTurnInput) -> ModelTurn throws root.errors.InvokeError
 }

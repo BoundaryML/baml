@@ -1,4 +1,4 @@
-//! BEP-042 Part 3 — `ErrorContext` cause-chain tests.
+//! BEP-042 Part 3 — `baml.errors.Context` cause-chain tests.
 //!
 //! Cause is computed lazily at the throw funnel: a throw whose PC lies in a
 //! handler body chains onto that handler's caught error (`vm.rs`
@@ -17,7 +17,7 @@ fn expect_string(v: BexExternalValue) -> String {
     }
 }
 
-/// ErrorContext rendering runs inside a native call, so it cannot yield to
+/// baml.errors.Context rendering runs inside a native call, so it cannot yield to
 /// user `ToString` implementations. It must still preserve the qualified
 /// thrown class name and recursively render its fields.
 #[tokio::test]
@@ -62,7 +62,7 @@ function main() -> string {
     );
     assert!(
         !rendered.contains("OVERRIDE"),
-        "ErrorContext unexpectedly dispatched a user ToString override:\n{rendered}"
+        "baml.errors.Context unexpectedly dispatched a user ToString override:\n{rendered}"
     );
 }
 

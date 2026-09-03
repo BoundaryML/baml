@@ -523,7 +523,7 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
             ],
         ),
         (
-            "Csv/CsvRecord.g.cs",
+            "Csv/Record.g.cs",
             vec![
                 " Get<T>(",
                 " GetAsync<T>(",
@@ -542,7 +542,7 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
             ],
         ),
         (
-            "Csv/CsvReader.g.cs",
+            "Csv/Reader.g.cs",
             vec![
                 " Headers(",
                 " HeadersAsync(",
@@ -562,11 +562,11 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
             // `iter` / `next` come from `implements root.iter.Iterable` /
             // `Iterator`; interface-impl methods are not generated, so the
             // reader handle is the whole surface here.
-            "Csv/CsvRows.g.cs",
+            "Csv/Rows.g.cs",
             vec![" Reader { get; }"],
         ),
         (
-            "Csv/CsvWriter.g.cs",
+            "Csv/Writer.g.cs",
             vec![
                 " WriteRecord(",
                 " WriteRecordAsync(",

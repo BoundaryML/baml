@@ -5,14 +5,14 @@ source: crates/baml_tests/src/corpus.rs
 // MIR must show `LoadType(TypeArgRef(0))` at each forwarding level so the
 // caller's concrete type-arg threads all the way to the native handler.
 
-function level1<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function level1<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
     baml.json.from_string<T>(s)
 }
 
-function level2<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function level2<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
     level1<T>(s)
 }
 
-function level3<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function level3<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
     level2<T>(s)
 }
