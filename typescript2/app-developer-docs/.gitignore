@@ -29,3 +29,9 @@ temp/
 # Operating-system and editor state
 .DS_Store
 *.swp
+
+# Local developer-docs maintainer notes
+/content-data/README.md
+/content/README.md
+/content/code/README.md
+/scripts/README.md
