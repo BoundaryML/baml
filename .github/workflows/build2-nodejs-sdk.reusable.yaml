@@ -53,7 +53,7 @@ jobs:
             # This is newer than the ideal glibc floor; our users still need the oldest
             # practical compatible baseline we can support for this target.
             # See https://github.com/BoundaryML/baml/issues/2736
-            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
+            container: us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/manylinux_2_28-cross:aarch64@sha256:ca53fa07ecf1c3e6408c51fbca64c036d9d29af832d3f8bb954910e89097f275
             before: |
               echo "CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" >> "$GITHUB_ENV"
           - target: aarch64-apple-darwin

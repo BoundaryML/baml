@@ -69,12 +69,12 @@
       "artifacts": {
         "toolchain": {
           "runner": "ubuntu-24.04-arm",
-          "container": "ghcr.io/rust-cross/manylinux_2_28-cross:aarch64"
+          "container": "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/manylinux_2_28-cross:aarch64@sha256:ca53fa07ecf1c3e6408c51fbca64c036d9d29af832d3f8bb954910e89097f275"
         },
         "wrapper": {
           "runner": "ubuntu-latest",
           "variants": ["self-update", "no-self-update"],
-          "cross_image": "ghcr.io/rust-cross/manylinux_2_28-cross:aarch64"
+          "cross_image": "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/manylinux_2_28-cross:aarch64@sha256:ca53fa07ecf1c3e6408c51fbca64c036d9d29af832d3f8bb954910e89097f275"
         },
         "python": { "runner": "ubuntu-latest", "manylinux": "2_24" },
         "nodejs": {},
@@ -104,7 +104,11 @@
           "runner": "ubuntu-24.04-arm",
           "variants": ["self-update"]
         },
-        "python": { "runner": "ubuntu-latest", "manylinux": "musllinux_1_1" },
+        "python": {
+          "runner": "ubuntu-latest",
+          "manylinux": "musllinux_1_1",
+          "container": "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/rust-musl-cross:aarch64-musl@sha256:ecae5dd62d1c938c14f8071d36c16fa699860aace03bfb5284fb1216474d2643"
+        },
         "nodejs": {},
         "java": {
           "platform": "linux-aarch64-musl",
@@ -133,12 +137,12 @@
       "artifacts": {
         "toolchain": {
           "runner": "ubuntu-latest",
-          "cross_image": "ghcr.io/rust-cross/manylinux2014-cross:x86_64"
+          "cross_image": "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/manylinux2014-cross:x86_64@sha256:13670ccc63c35e072661938181c046243c01d7bca7976b3914177fb9b162998d"
         },
         "wrapper": {
           "runner": "ubuntu-latest",
           "variants": ["self-update", "no-self-update"],
-          "cross_image": "ghcr.io/rust-cross/manylinux2014-cross:x86_64"
+          "cross_image": "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/manylinux2014-cross:x86_64@sha256:13670ccc63c35e072661938181c046243c01d7bca7976b3914177fb9b162998d"
         },
         "python": { "runner": "ubuntu-latest", "manylinux": "2_17" },
         "nodejs": {},
@@ -166,7 +170,11 @@
       "artifacts": {
         "toolchain": { "runner": "ubuntu-latest" },
         "wrapper": { "runner": "ubuntu-latest", "variants": ["self-update"] },
-        "python": { "runner": "ubuntu-latest", "manylinux": "musllinux_1_1" },
+        "python": {
+          "runner": "ubuntu-latest",
+          "manylinux": "musllinux_1_1",
+          "container": "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/rust-musl-cross:x86_64-musl@sha256:ce75e9174325d4fbb3de85c309e2d7ca29f7500169bc4b5d2c611ff7e86d549a"
+        },
         "nodejs": {},
         "java": {
           "platform": "linux-x86_64-musl",

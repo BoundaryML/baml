@@ -80,6 +80,9 @@ pub struct PythonArtifact {
     /// `manylinux`/`musllinux` platform tag for maturin (Linux targets only).
     #[serde(default)]
     pub manylinux: Option<String>,
+    /// Explicit maturin build container (otherwise the action selects its default).
+    #[serde(default)]
+    pub container: Option<String>,
     /// Python-setup architecture override (arm64-Windows only).
     #[serde(default)]
     pub architecture: Option<String>,
@@ -235,6 +238,30 @@ mod tests {
     }
 
     #[test]
+    fn python_musl_images_are_explicit_without_changing_wheel_policy() {
+        for target in platforms().targets {
+            let Some(python) = target.artifacts.python else {
+                continue;
+            };
+            if target.libc.as_deref() == Some("musl") {
+                assert_eq!(python.manylinux.as_deref(), Some("musllinux_1_1"));
+                let image = python
+                    .container
+                    .expect("musl must override maturin's GHCR default");
+                assert!(image.starts_with(&format!(
+                    "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/rust-musl-cross:{}-musl@sha256:",
+                    target.arch
+                )));
+            } else {
+                assert!(
+                    python.container.is_none(),
+                    "preserve non-musl image defaults"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn toolchain_build_modes_are_preserved_and_mutually_exclusive() {
         let p = platforms();
         let arm = p
@@ -248,7 +275,9 @@ mod tests {
             .unwrap();
         assert_eq!(
             arm.container.as_deref(),
-            Some("ghcr.io/rust-cross/manylinux_2_28-cross:aarch64")
+            Some(
+                "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/manylinux_2_28-cross:aarch64@sha256:ca53fa07ecf1c3e6408c51fbca64c036d9d29af832d3f8bb954910e89097f275"
+            )
         );
         assert!(arm.cross_image.is_none());
 
