@@ -1628,11 +1628,9 @@ dependencies = [
 name = "bridge_ctypes"
 version = "0.1.0"
 dependencies = [
- "baml_builtins2",
  "baml_type",
  "base64",
- "bex_external_types",
- "bex_vm_types",
+ "bex_project",
  "indexmap",
  "num-bigint",
  "prost",

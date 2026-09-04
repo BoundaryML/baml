@@ -13,12 +13,14 @@ aws-crypto = [
   "reqwest/rustls",
   "rustls?/aws_lc_rs",
   "rustls?/std",
+  "bridge_ctypes/aws-crypto",
 ]
 ring-crypto = [
   "dep:rustls",
   "reqwest/rustls-no-provider",
   "rustls?/ring",
   "rustls?/std",
+  "bridge_ctypes/ring-crypto",
 ]
 native-tls = [ "reqwest/native-tls" ]
 rustls = [ "aws-crypto" ]

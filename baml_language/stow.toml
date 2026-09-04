@@ -165,21 +165,9 @@ link_crates = ["bex_project", "sys_native", "sys_types"]
 # bridge_python and bridge_cffi need bex_events for event handling.
 [[namespaces.dependency_rules]]
 pattern.select = "bex_*"
-pattern.exclude = ["bex_project", "bex_events", "bex_events_native", "bex_heap", "bex_resource_types", "bex_external_types", "bex_vm_types"]
+pattern.exclude = ["bex_project", "bex_events", "bex_events_native", "bex_heap", "bex_resource_types"]
 allowed_crates = []
 reason = "Bridge crates must use bex_project re-exports, not bex internals directly."
-
-# The shared codec sits below bex_engine and uses boundary types directly.
-# Host bridges still assemble the runtime through bex_project.
-[[namespaces.dependency_rules]]
-pattern = "bex_external_types"
-allowed_crates = ["bridge_ctypes"]
-reason = "Only the shared codec may depend directly on boundary types."
-
-[[namespaces.dependency_rules]]
-pattern = "bex_vm_types"
-allowed_crates = ["bridge_ctypes"]
-reason = "Only the shared codec may depend directly on VM types."
 
 # sys namespace configuration
 [[namespaces]]

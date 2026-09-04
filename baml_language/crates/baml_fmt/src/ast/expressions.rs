@@ -2887,7 +2887,22 @@ impl PrintMultiLine for CallArgs {
         printer.print_trivia_all_trailing_for(self.open_paren.span());
         printer.print_newline();
 
-        printer.print_comma_separated_lines(&self.args, &inner_shape);
+        for (arg, comma) in &self.args {
+            printer.print_trivia_all_leading_with_newline_for(
+                arg.leftmost_token(),
+                inner_shape.indent,
+            );
+            printer.print_spaces(inner_shape.indent);
+            printer.print(arg, inner_shape.clone());
+            if let Some(comma) = comma {
+                printer.print_raw_token(comma);
+                printer.print_trivia_all_trailing_for(comma.span());
+            } else {
+                printer.print_str(",");
+                printer.print_trivia_all_trailing_for(arg.rightmost_token());
+            }
+            printer.print_newline();
+        }
 
         printer
             .print_trivia_all_leading_with_newline_for(self.close_paren.span(), inner_shape.indent);
@@ -2907,7 +2922,42 @@ impl CallArgs {
         for t in open_trailing {
             len += t.single_line_len(input.input)?;
         }
-        len += input.comma_separated_width(&self.args, |item| item.single_line_width(input))?;
+        for (i, (arg, comma)) in self.args.iter().enumerate() {
+            let (arg_leading, arg_trailing) = input.trivia.get_for_element(arg);
+            for t in arg_leading {
+                len += t.single_line_len(input.input)?;
+            }
+            len += arg.single_line_width(input)?;
+            for t in arg_trailing {
+                len += t.single_line_len(input.input)?;
+            }
+            if i + 1 < self.args.len() {
+                if let Some(comma) = comma {
+                    let (comma_leading, comma_trailing) =
+                        input.trivia.get_for_range_split(comma.span());
+                    for t in comma_leading {
+                        len += t.single_line_len(input.input)?;
+                    }
+                    len += 1; // ","
+                    for t in comma_trailing {
+                        len += t.single_line_len(input.input)?;
+                    }
+                } else {
+                    len += 1; // ","
+                }
+                len += 1; // " "
+            } else if let Some(comma) = comma {
+                // Trailing comma is removed in single-line mode, but check trivia
+                let (comma_leading, comma_trailing) =
+                    input.trivia.get_for_range_split(comma.span());
+                for t in comma_leading {
+                    len += t.single_line_len(input.input)?;
+                }
+                for t in comma_trailing {
+                    len += t.single_line_len(input.input)?;
+                }
+            }
+        }
         let (close_leading, _) = input.trivia.get_for_range_split(self.close_paren.span());
         for t in close_leading {
             len += t.single_line_len(input.input)?;
@@ -2922,7 +2972,38 @@ impl CallArgs {
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
         printer.try_print_trivia_single_line_squished(open_trailing)?;
 
-        printer.try_print_comma_separated(&self.args, shape.width)?;
+        for (i, (arg, comma)) in self.args.iter().enumerate() {
+            if printer.output.len() > shape.width {
+                return None;
+            }
+            let (arg_leading, arg_trailing) = printer.trivia.get_for_element(arg);
+            printer.try_print_trivia_single_line_squished(arg_leading)?;
+            if printer
+                .print(arg, Shape::unlimited_single_line())
+                .multi_lined
+            {
+                return None;
+            }
+            printer.try_print_trivia_single_line_squished(arg_trailing)?;
+            if i + 1 < self.args.len() {
+                if let Some(comma) = comma {
+                    let (comma_leading, comma_trailing) =
+                        printer.trivia.get_for_range_split(comma.span());
+                    printer.try_print_trivia_single_line_squished(comma_leading)?;
+                    printer.print_raw_token(comma);
+                    printer.try_print_trivia_single_line_squished(comma_trailing)?;
+                } else {
+                    printer.print_str(",");
+                }
+                printer.print_str(" ");
+            } else if let Some(comma) = comma {
+                // Trailing comma is removed in single-line mode, but we still try the comments.
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(comma.span());
+                printer.try_print_trivia_single_line_squished(comma_leading)?;
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
+            }
+        }
 
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
         printer.try_print_trivia_single_line_squished(close_leading)?;
@@ -4211,7 +4292,22 @@ impl PrintMultiLine for MapLiteral {
         printer.print_trivia_all_trailing_for(self.open_brace.span());
         printer.print_newline();
 
-        printer.print_comma_separated_lines(&self.fields, &inner_shape);
+        for (field, comma) in &self.fields {
+            printer.print_trivia_all_leading_with_newline_for(
+                field.leftmost_token(),
+                inner_shape.indent,
+            );
+            printer.print_spaces(inner_shape.indent);
+            printer.print(field, inner_shape.clone());
+            if let Some(comma) = comma {
+                printer.print_raw_token(comma);
+                printer.print_trivia_all_trailing_for(comma.span());
+            } else {
+                printer.print_str(",");
+                printer.print_trivia_all_trailing_for(field.rightmost_token());
+            }
+            printer.print_newline();
+        }
 
         printer
             .print_trivia_all_leading_with_newline_for(self.close_brace.span(), inner_shape.indent);
@@ -4240,7 +4336,42 @@ impl MapLiteral {
         for t in open_trailing {
             len += t.single_line_len(input.input)?;
         }
-        len += input.comma_separated_width(&self.fields, |item| item.single_line_width(input))?;
+        for (i, (field, comma)) in self.fields.iter().enumerate() {
+            let (fld_leading, fld_trailing) = input.trivia.get_for_element(field);
+            for t in fld_leading {
+                len += t.single_line_len(input.input)?;
+            }
+            len += field.single_line_width(input)?;
+            for t in fld_trailing {
+                len += t.single_line_len(input.input)?;
+            }
+            if i + 1 < self.fields.len() {
+                if let Some(comma) = comma {
+                    let (comma_leading, comma_trailing) =
+                        input.trivia.get_for_range_split(comma.span());
+                    for t in comma_leading {
+                        len += t.single_line_len(input.input)?;
+                    }
+                    len += 1; // ","
+                    for t in comma_trailing {
+                        len += t.single_line_len(input.input)?;
+                    }
+                } else {
+                    len += 1; // ","
+                }
+                len += 1; // " "
+            } else if let Some(comma) = comma {
+                // Trailing comma is removed in single-line mode, but check trivia
+                let (comma_leading, comma_trailing) =
+                    input.trivia.get_for_range_split(comma.span());
+                for t in comma_leading {
+                    len += t.single_line_len(input.input)?;
+                }
+                for t in comma_trailing {
+                    len += t.single_line_len(input.input)?;
+                }
+            }
+        }
         for t in close_leading {
             len += t.single_line_len(input.input)?;
         }
@@ -4265,7 +4396,38 @@ impl MapLiteral {
         }
         printer.try_print_trivia_single_line_squished(open_trailing)?;
 
-        printer.try_print_comma_separated(&self.fields, shape.width)?;
+        for (i, (field, comma)) in self.fields.iter().enumerate() {
+            if printer.output.len() > shape.width {
+                return None;
+            }
+            let (fld_leading, fld_trailing) = printer.trivia.get_for_element(field);
+            printer.try_print_trivia_single_line_squished(fld_leading)?;
+            if printer
+                .print(field, Shape::unlimited_single_line())
+                .multi_lined
+            {
+                return None;
+            }
+            printer.try_print_trivia_single_line_squished(fld_trailing)?;
+            if i + 1 < self.fields.len() {
+                if let Some(comma) = comma {
+                    let (comma_leading, comma_trailing) =
+                        printer.trivia.get_for_range_split(comma.span());
+                    printer.try_print_trivia_single_line_squished(comma_leading)?;
+                    printer.print_raw_token(comma);
+                    printer.try_print_trivia_single_line_squished(comma_trailing)?;
+                } else {
+                    printer.print_str(",");
+                }
+                printer.print_str(" ");
+            } else if let Some(comma) = comma {
+                // Trailing comma is removed in single-line mode, but we still try the comments.
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(comma.span());
+                printer.try_print_trivia_single_line_squished(comma_leading)?;
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
+            }
+        }
         printer.try_print_trivia_single_line_squished(close_leading)?;
         if has_content {
             printer.print_str(" ");

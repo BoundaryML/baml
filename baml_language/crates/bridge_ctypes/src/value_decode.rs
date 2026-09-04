@@ -5,8 +5,9 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use baml_builtins2::{MediaValue, PromptAst, PromptAstSimple};
-use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, RuntimeTy};
+use bex_project::{
+    BexExternalAdt, BexExternalValue, MediaKind, MediaValue, PromptAst, PromptAstSimple, RuntimeTy,
+};
 use indexmap::IndexMap;
 use prost::Message;
 
@@ -87,9 +88,9 @@ pub fn inbound_to_external(
                 // last-drop fires the registered HostReleaseFn.
                 let host_value_kind =
                     if handle.handle_type == BamlHandleType::HostValueCallable as i32 {
-                        Some(bex_external_types::HostValueKind::Callable)
+                        Some(bex_project::HostValueKind::Callable)
                     } else if handle.handle_type == BamlHandleType::HostValueOpaque as i32 {
-                        Some(bex_external_types::HostValueKind::Opaque)
+                        Some(bex_project::HostValueKind::Opaque)
                     } else {
                         None
                     };
@@ -100,7 +101,7 @@ pub fn inbound_to_external(
                     // would mint an independent Arc with its own refcount and
                     // the first last-drop would fire HostReleaseFn, tearing the
                     // registry entry out from under the still-live other Arc.
-                    let arc = bex_external_types::HostValueArc::intern(handle.key, kind);
+                    let arc = bex_project::HostValueArc::intern(handle.key, kind);
                     return Ok(BexExternalValue::HostValue(arc));
                 }
                 let value = handle_table
@@ -568,7 +569,7 @@ mod tests {
         match result {
             BexExternalValue::HostValue(arc) => {
                 assert_eq!(arc.key, 999);
-                assert_eq!(arc.kind, bex_external_types::HostValueKind::Callable);
+                assert_eq!(arc.kind, bex_project::HostValueKind::Callable);
             }
             other => panic!("unexpected variant: {other:?}"),
         }
@@ -594,7 +595,7 @@ mod tests {
         match result {
             BexExternalValue::HostValue(arc) => {
                 assert_eq!(arc.key, 777);
-                assert_eq!(arc.kind, bex_external_types::HostValueKind::Opaque);
+                assert_eq!(arc.kind, bex_project::HostValueKind::Opaque);
             }
             other => panic!("unexpected variant: {other:?}"),
         }

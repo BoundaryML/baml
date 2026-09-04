@@ -17,6 +17,7 @@ aws-crypto = [
   "rustls?/aws_lc_rs",
   "rustls?/std",
   "bex_engine/aws-crypto",
+  "bridge_ctypes/aws-crypto",
   "sys_native/aws-crypto",
 ]
 ring-crypto = [
@@ -25,6 +26,7 @@ ring-crypto = [
   "rustls?/ring",
   "rustls?/std",
   "bex_engine/ring-crypto",
+  "bridge_ctypes/ring-crypto",
   "sys_native/ring-crypto",
 ]
 native-tls = [ "reqwest/native-tls", "sys_native/native-tls" ]

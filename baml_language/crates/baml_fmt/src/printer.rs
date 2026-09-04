@@ -1,10 +1,7 @@
 use rowan::TextRange;
 
 pub use crate::EmittableTrivia;
-use crate::{
-    FormatOptions, TriviaInfo,
-    ast::{Comma, Token},
-};
+use crate::{FormatOptions, TriviaInfo, ast::Token};
 
 pub struct Printer<'a> {
     pub input: &'a str,
@@ -57,89 +54,6 @@ impl<'a> Printer<'a> {
     #[allow(unused_must_use)]
     pub fn print(&mut self, printable: &impl Printable, shape: Shape) -> PrintInfo {
         printable.print(shape, self)
-    }
-
-    /// Prints list contents without delimiters, omitting the final comma.
-    /// Use a sub-printer so a failed single-line attempt can be discarded.
-    pub(crate) fn try_print_comma_separated<T: Printable>(
-        &mut self,
-        items: &[(T, Option<Comma>)],
-        width: usize,
-    ) -> Option<()> {
-        for (i, (arg, comma)) in items.iter().enumerate() {
-            if self.output.len() > width {
-                return None;
-            }
-            let (arg_leading, arg_trailing) = self.trivia.get_for_element(arg);
-            self.try_print_trivia_single_line_squished(arg_leading)?;
-            if self.print(arg, Shape::unlimited_single_line()).multi_lined {
-                return None;
-            }
-            self.try_print_trivia_single_line_squished(arg_trailing)?;
-            if i + 1 < items.len() {
-                if let Some(comma) = comma {
-                    let (comma_leading, comma_trailing) =
-                        self.trivia.get_for_range_split(comma.span());
-                    self.try_print_trivia_single_line_squished(comma_leading)?;
-                    self.print_raw_token(comma);
-                    self.try_print_trivia_single_line_squished(comma_trailing)?;
-                } else {
-                    self.print_str(",");
-                }
-                self.print_str(" ");
-            } else if let Some(comma) = comma {
-                // Trailing comma is removed in single-line mode, but we still try the comments.
-                let (comma_leading, comma_trailing) = self.trivia.get_for_range_split(comma.span());
-                self.try_print_trivia_single_line_squished(comma_leading)?;
-                self.try_print_trivia_single_line_squished(comma_trailing)?;
-            }
-        }
-        Some(())
-    }
-
-    pub(crate) fn comma_separated_width<T: Printable>(
-        &self,
-        items: &[(T, Option<Comma>)],
-        mut item_width: impl FnMut(&T) -> Option<usize>,
-    ) -> Option<usize> {
-        let mut len = 0;
-        for (i, (item, comma)) in items.iter().enumerate() {
-            let (leading, trailing) = self.trivia.get_for_element(item);
-            len += item_width(item)?;
-            for trivia in leading.iter().chain(trailing) {
-                len += trivia.single_line_len(self.input)?;
-            }
-            if let Some(comma) = comma {
-                let (leading, trailing) = self.trivia.get_for_range_split(comma.span());
-                for trivia in leading.iter().chain(trailing) {
-                    len += trivia.single_line_len(self.input)?;
-                }
-            }
-            if i + 1 < items.len() {
-                len += ", ".len();
-            }
-        }
-        Some(len)
-    }
-
-    pub(crate) fn print_comma_separated_lines<T: Printable>(
-        &mut self,
-        items: &[(T, Option<Comma>)],
-        shape: &Shape,
-    ) {
-        for (arg, comma) in items {
-            self.print_trivia_all_leading_with_newline_for(arg.leftmost_token(), shape.indent);
-            self.print_spaces(shape.indent);
-            self.print(arg, shape.clone());
-            if let Some(comma) = comma {
-                self.print_raw_token(comma);
-                self.print_trivia_all_trailing_for(comma.span());
-            } else {
-                self.print_str(",");
-                self.print_trivia_all_trailing_for(arg.rightmost_token());
-            }
-            self.print_newline();
-        }
     }
 
     /// Prints the given range of the input string, byte-for-byte.

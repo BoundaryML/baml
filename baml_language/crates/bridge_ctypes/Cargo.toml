@@ -9,9 +9,8 @@ license.workspace = true
 doctest = false
 
 [dependencies]
-baml_builtins2 = { workspace = true }
 baml_type = { workspace = true }
-bex_external_types = { workspace = true }
+bex_project = { workspace = true }
 base64 = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
@@ -24,8 +23,10 @@ web-time = { workspace = true }
 prost-build = { workspace = true }
 protoc-bin-vendored = { workspace = true }
 
-[dev-dependencies]
-bex_vm_types = { workspace = true }
+[features]
+default = [ "aws-crypto" ]
+aws-crypto = [ "bex_project/aws-crypto" ]
+ring-crypto = [ "bex_project/ring-crypto" ]
 
 [lints]
 workspace = true

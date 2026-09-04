@@ -148,7 +148,7 @@ function errorcontext.ec_deferthrow_check() -> bool {
     call user.errorcontext.ec_deferthrow_main
     store_var rendered
     load_var rendered
-    load_const "\norigin"
+    load_const "origin"
     call baml.String.index_of
     store_var_load_var _3
     load_const null
@@ -161,7 +161,7 @@ function errorcontext.ec_deferthrow_check() -> bool {
     load_var _3
     store_var origin_at
     load_var rendered
-    load_const "\nwrap"
+    load_const "wrap"
     call baml.String.index_of
     store_var_load_var _7
     load_const null
@@ -174,7 +174,7 @@ function errorcontext.ec_deferthrow_check() -> bool {
     load_var _7
     store_var wrap_at
     load_var rendered
-    load_const "\ncleanup"
+    load_const "cleanup"
     call baml.String.index_of
     store_var_load_var _11
     load_const null

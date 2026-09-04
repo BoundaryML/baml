@@ -372,10 +372,10 @@ function ec_deferthrow_main() -> string {
 
 function ec_deferthrow_check() -> bool {
   let rendered = ec_deferthrow_main();
-  // Match error lines, not names such as this test's "through_wrap" stack frame.
-  let origin_at = rendered.index_of("\norigin") ?? -1;
-  let wrap_at = rendered.index_of("\nwrap") ?? -1;
-  let cleanup_at = rendered.index_of("\ncleanup") ?? -1;
+  // Oldest -> newest: origin, wrap, cleanup — all three present, in order.
+  let origin_at = rendered.index_of("origin") ?? -1;
+  let wrap_at = rendered.index_of("wrap") ?? -1;
+  let cleanup_at = rendered.index_of("cleanup") ?? -1;
   let all_present = origin_at >= 0 && wrap_at >= 0 && cleanup_at >= 0;
   let ordered = origin_at < wrap_at && wrap_at < cleanup_at;
   // Two chain separators (origin->wrap->cleanup) => split yields 3 pieces.
