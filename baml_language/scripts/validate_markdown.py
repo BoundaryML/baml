@@ -29,33 +29,28 @@ def matches_pattern(path: str, pattern: str) -> bool:
 
 
 def main() -> int:
-    import subprocess
-
-    baml_language_dir = Path(__file__).parent.parent
+    baml_language_dir = Path(__file__).resolve().parent.parent
     whitelist_file = baml_language_dir / ".markdown-whitelist"
 
-    # Find all .md files tracked by git (respects .gitignore, excludes deleted files)
+    # Git hooks export GIT_DIR. Explicitly anchor the worktree so Git still
+    # reports paths relative to baml_language, including in linked worktrees.
     try:
         result = subprocess.run(
-            ["git", "ls-files", "--exclude-standard", "--cached", "*.md", "**/*.md"],
+            [
+                "git",
+                f"--work-tree={baml_language_dir.parent}",
+                "ls-files",
+                "--cached",
+                "-z",
+                "--",
+                "*.md",
+            ],
             cwd=baml_language_dir,
             capture_output=True,
             text=True,
             check=True,
         )
-        all_files = [line for line in result.stdout.strip().split("\n") if line]
-
-        # Exclude files that are staged for deletion
-        deleted_result = subprocess.run(
-            ["git", "diff", "--name-only", "--diff-filter=D", "--cached"],
-            cwd=baml_language_dir,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        deleted_files = set(line for line in deleted_result.stdout.strip().split("\n") if line)
-
-        md_files = sorted(f for f in all_files if f not in deleted_files)
+        md_files = sorted(filter(None, result.stdout.split("\0")))
     except subprocess.CalledProcessError:
         print("ERROR: Failed to list git tracked files")
         return 1
@@ -88,7 +83,7 @@ def main() -> int:
         print("To explicitly allow these files, add them to: baml_language/.markdown-whitelist")
         return 1
 
-    print("✓ All markdown files are valid (README.md or whitelisted)")
+    print("All markdown files are valid (README.md or whitelisted)")
     return 0
 
 

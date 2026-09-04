@@ -24,16 +24,11 @@ cd typescript2/pkg-proto && pnpm generate
 #   -> typescript2/pkg-proto/src/generated/baml_bridge/cffi/v1/*.ts
 
 # Go (protoc-gen-go)
-cd sdks/go/bridge_go && ./build.sh
-#   -> sdks/go/bridge_go/cffi/proto/baml_bridge/cffi/v1/*.pb.go
-# Keep baml_go's internal inbound/outbound consumers byte-identical:
-cp cffi/proto/baml_bridge/cffi/v1/baml_inbound.pb.go \
-  ../baml_go/internal/cffi/baml_inbound.pb.go
-cp cffi/proto/baml_bridge/cffi/v1/baml_outbound.pb.go \
-  ../baml_go/internal/cffi/baml_outbound.pb.go
+sdks/go/generate-protos.sh
+#   -> sdks/go/baml_go/internal/cffi/*.pb.go
 
 # C++ (pinned vendored protoc)
-cd ../../.. && cargo test -p sdkgen_cpp --test pb_generation regenerate -- --ignored --exact
+cargo test -p sdkgen_cpp --test pb_generation regenerate -- --ignored --exact
 #   -> sdks/cpp/bridge_cpp/pb/baml_bridge/cffi/v1/*.pb.{h,cc}
 
 # Swift (protoc-gen-swift; macOS: brew install protobuf swift-protobuf)

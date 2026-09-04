@@ -16,6 +16,9 @@ and retains the bridge identity for consistent diagnostics and telemetry.
 
 ## Local development
 
+The Go SDK and its integration tests use this module. Regenerate its protobuf
+code from the `baml_language` workspace with `sdks/go/generate-protos.sh`.
+
 Build the runtime and point generated Go tests at the platform library.
 
 macOS or Linux:
