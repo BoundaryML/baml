@@ -90,6 +90,7 @@ jobs:
             ':scripts/baml-package-manager-artifacts' \
             ':scripts/baml-release-platforms' \
             ':scripts/baml_release_platforms.py' \
+            ':scripts/baml_nightly_select.py' \
             ':scripts/baml-bridge-cffi-hygiene' \
             ':scripts/tests/**' \
             ':release/platforms.json' \
