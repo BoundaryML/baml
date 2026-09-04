@@ -92,41 +92,88 @@ jobs:
             echo "Local time is $local_now, not the midnight hour; the other cron entry owns tonight."
           fi
 
-      - name: Check out the nightly selection script
-        if: ${{ steps.clock.outputs.proceed == 'true' }}
-        uses: actions/checkout@v7.0.1
-        with:
-          path: nightly-dispatch-tools
-          sparse-checkout: scripts/baml_nightly_select.py
-          sparse-checkout-cone-mode: false
-          persist-credentials: false
-
       - name: Validate CI run freshness and select the newest green canary commit
         id: select
         if: ${{ steps.clock.outputs.proceed == 'true' }}
-        run: |
-          set -euo pipefail
-          runs="$RUNNER_TEMP/canary-ci-runs.json"
-          commits="$RUNNER_TEMP/canary-commits.json"
-          observed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          # Snapshot ancestry first so a push between requests cannot make the
-          # commits query demand a run newer than the runs query could see.
-          gh api "repos/$GH_REPO/commits?sha=canary&per_page=100" > "$commits"
-          echo "::group::100 most recent canary commits"
-          jq . "$commits"
-          echo "::endgroup::"
-          # GitHub's status=success filter has returned stale/incomplete HTTP
-          # 200 responses. Fetch all states and filter locally, with extra room
-          # for duplicate runs across the 100-commit ancestry window.
-          gh run list --workflow ci.yaml --branch canary --event push \
-            --limit 1000 \
-            --json headSha,databaseId,conclusion,createdAt > "$runs"
-          echo "::group::Unfiltered canary push CI runs"
-          jq . "$runs"
-          echo "::endgroup::"
-          python3 nightly-dispatch-tools/scripts/baml_nightly_select.py \
-            --commits "$commits" --runs "$runs" \
-            --observed-at "$observed_at" --output "$GITHUB_OUTPUT"
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const observedAt = Date.now();
+            const maxRunLag = 10 * 60 * 1000;
+            const dump = (title, data) => {
+              core.startGroup(title);
+              core.info(JSON.stringify(data, null, 2));
+              core.endGroup();
+            };
+
+            // Snapshot ancestry first so a push between requests cannot make
+            // us demand a run newer than the runs query could see.
+            const { data: commits } = await github.rest.repos.listCommits({
+              owner, repo, sha: 'canary', per_page: 100,
+            });
+            dump('100 most recent canary commits', commits);
+            if (commits.length === 0) {
+              throw new Error('Canary commits query returned no commits');
+            }
+
+            // The status=success filter has returned stale/incomplete HTTP 200
+            // responses. Fetch all states, with room for duplicate runs across
+            // the 100-commit ancestry window (at most 1,000 runs).
+            const runs = [];
+            for (let page = 1; page <= 10; page++) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner, repo, workflow_id: 'ci.yaml', branch: 'canary',
+                event: 'push', exclude_pull_requests: true, per_page: 100, page,
+              });
+              runs.push(...data.workflow_runs);
+              if (data.workflow_runs.length < 100) break;
+            }
+            dump('Unfiltered canary push CI runs', runs.map(run => ({
+              head_sha: run.head_sha, id: run.id,
+              conclusion: run.conclusion, created_at: run.created_at,
+            })));
+
+            // Canary uses one squash commit per push, so every commit should
+            // have a run. Any run state satisfies coverage. Check all commits
+            // before selecting: even a recent response can have missing runs.
+            const seen = new Set(runs.map(run => run.head_sha));
+            const missing = [];
+            for (const commit of commits) {
+              const committedAt = commit.commit.committer.date;
+              const age = observedAt - Date.parse(committedAt);
+              if (!Number.isFinite(age)) {
+                throw new Error(`Invalid committer timestamp for ${commit.sha}: ${committedAt}`);
+              }
+              if (seen.has(commit.sha)) continue;
+              const detail = `${commit.sha} (committed ${committedAt})`;
+              if (age > maxRunLag) {
+                missing.push(detail);
+              } else {
+                core.info(`Within the 10-minute CI visibility grace period: ${detail}`);
+              }
+            }
+            if (missing.length > 0) {
+              throw new Error(
+                `CI workflow runs query is stale or incomplete: missing runs for ${missing.length} ` +
+                `canary commit(s) older than 10 minutes; refusing to select a release source:\n` +
+                missing.join('\n'),
+              );
+            }
+            core.info(`CI coverage validated for ${commits.length} canary commits against ${runs.length} unfiltered runs.`);
+
+            // Ancestry determines the newest source, not run creation time.
+            // For duplicate successful runs of that source, use the newest ID.
+            for (const commit of commits) {
+              const successful = runs.filter(run => run.head_sha === commit.sha && run.conclusion === 'success');
+              if (successful.length === 0) continue;
+              const runId = Math.max(...successful.map(run => run.id));
+              core.setOutput('sha', commit.sha);
+              core.setOutput('run_id', runId);
+              core.info(`Newest green canary commit: ${commit.sha} (CI run ${runId})`);
+              return;
+            }
+            throw new Error(`No canary commit in the last ${commits.length} has a successful CI run, so nothing is releasable tonight`);
 
       - name: Decide whether canary moved since the last nightly
         id: decide
