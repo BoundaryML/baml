@@ -721,7 +721,7 @@ async fn process_media(
             Ok(BamlMedia::base64(
                 part.media_type,
                 if render_settings.as_shell_commands {
-                    format!("$(curl -L '{}' | base64)", &media_url.url)
+                    format!("$(curl -L '{}' | base64)", media_url.url)
                 } else {
                     base64
                 },

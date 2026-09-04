@@ -245,6 +245,13 @@ fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Op
             let a: f64 = a_text.parse().ok()?;
             let b: f64 = b_text.parse().ok()?;
             let float = |value: f64| Some(lit(Literal::Float(format_float(value)?)));
+            // The comparisons below are plain IEEE, not BAML's total float
+            // order (`bex_vm_types::float_order`, which the runtime opcodes
+            // use). The two agree on every finite value — they differ only on
+            // NaN — and a float LITERAL is always finite: source has no NaN
+            // spelling and `format_float` refuses to fold a non-finite result.
+            // A NaN-valued literal type would break that, so it would have to
+            // route these six through the total order instead.
             match op {
                 BinaryOp::Add => float(a + b),
                 BinaryOp::Sub => float(a - b),

@@ -1,140 +1,82 @@
-import { CategoryFilter } from './category-filter';
-import { NewsletterForm } from './newsletter-form';
+import { format } from 'date-fns';
+import { ArrowRight } from 'lucide-react';
+import Link from 'next/link';
+import type { Post } from '../_lib/get-posts';
+
+const filters = [
+  { href: '/blog', label: 'Everything', type: 'all' },
+  { href: '/blog?tags=article', label: 'Articles', type: 'article' },
+  { href: '/blog?tags=release', label: 'Releases', type: 'release' },
+] as const;
 
 interface HeroSectionProps {
-  selectedCategory: string;
-  onCategoryChange: (category: string) => void;
+  latestRelease?: Post;
+  selectedType: 'all' | 'article' | 'release';
 }
 
-const INK = '#1A1612';
-const MUTED = '#5C5852';
-const BORDER = '#D9D3C4';
-const ACCENT = '#6D28D9';
-const EYEBROW = '#8A8580';
-
-export function HeroSection({
-  selectedCategory,
-  onCategoryChange,
-}: HeroSectionProps) {
+export function HeroSection({ latestRelease, selectedType }: HeroSectionProps) {
   return (
-    <section
-      style={{
-        width: '100%',
-        padding: '96px 48px 64px',
-        borderBottom: `1px solid ${BORDER}`,
-      }}
-    >
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)',
-            gap: 64,
-            alignItems: 'start',
-          }}
-          className="blog-hero-grid"
-        >
-          {/* Left: title + newsletter */}
-          <div>
-            <p
-              style={{
-                fontSize: 13,
-                fontWeight: 500,
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-                color: EYEBROW,
-                margin: 0,
-              }}
-            >
-              Notes from the team
-            </p>
-            <h1
-              style={{
-                fontSize: 'clamp(2.5rem, 5vw, 4rem)',
-                fontWeight: 600,
-                lineHeight: 1.02,
-                letterSpacing: '-0.03em',
-                margin: '20px 0 0',
-                color: INK,
-              }}
-            >
-              BAML{' '}
-              <span
-                style={{
-                  fontFamily: 'var(--font-serif)',
-                  fontStyle: 'italic',
-                  fontWeight: 500,
-                  color: ACCENT,
-                }}
-              >
-                thoughts
-              </span>
-              .
-            </h1>
-            <p
-              style={{
-                fontSize: 18,
-                lineHeight: 1.6,
-                color: MUTED,
-                margin: '24px 0 0',
-                maxWidth: 540,
-              }}
-            >
-              Insights, tutorials, and updates from the BAML team. Stay ahead
-              with the latest in AI development.
-            </p>
+    <section className="border-b border-[#D9D3C4] px-6 py-16 md:px-12 md:py-24">
+      <div className="mx-auto max-w-5xl">
+        <h1 className="text-5xl font-semibold tracking-tight md:text-7xl">
+          Blog
+        </h1>
+        <p className="mt-5 max-w-2xl text-lg leading-8 text-[#5C5852]">
+          Articles and release notes from the team building BAML.
+        </p>
 
-            <div style={{ marginTop: 36, maxWidth: 480 }}>
-              <NewsletterForm />
-              <p
-                style={{
-                  fontSize: 12,
-                  letterSpacing: '0.04em',
-                  color: EYEBROW,
-                  margin: '12px 0 0',
-                }}
-              >
-                Get the latest posts delivered to your inbox.
-              </p>
-            </div>
-          </div>
-
-          {/* Right: categories */}
-          <div
-            style={{
-              borderLeft: `1px solid ${BORDER}`,
-              paddingLeft: 32,
-            }}
-            className="blog-hero-side"
+        {latestRelease && (
+          <Link
+            className="group mt-12 block border border-[#D9D3C4] bg-white p-6 transition-colors hover:border-[#1A1612] md:p-8"
+            href={`/blog/${latestRelease.slug}`}
           >
-            <p
-              style={{
-                fontSize: 12,
-                fontWeight: 500,
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                color: EYEBROW,
-                margin: 0,
-              }}
-            >
-              Browse by category
-            </p>
-            <div style={{ marginTop: 20 }}>
-              <CategoryFilter
-                onCategoryChange={onCategoryChange}
-                selectedCategory={selectedCategory}
-              />
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[#6B665F]">
+              <span className="font-medium uppercase tracking-[0.12em]">
+                Latest release
+              </span>
+              <time dateTime={latestRelease.date}>
+                {format(new Date(latestRelease.date), 'MMMM d, yyyy')}
+              </time>
             </div>
-          </div>
-        </div>
-      </div>
+            <div className="mt-8 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+              <div>
+                <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
+                  {latestRelease.title}
+                </h2>
+                <p className="mt-3 max-w-2xl leading-7 text-[#5C5852]">
+                  {latestRelease.description}
+                </p>
+              </div>
+              <span className="flex items-center gap-2 text-sm font-medium">
+                Read release notes
+                <ArrowRight
+                  className="transition-transform group-hover:translate-x-1"
+                  size={16}
+                />
+              </span>
+            </div>
+          </Link>
+        )}
 
-      <style>{`
-        @media (max-width: 900px) {
-          .blog-hero-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
-          .blog-hero-side { border-left: none !important; padding-left: 0 !important; border-top: 1px solid ${BORDER}; padding-top: 32px; }
-        }
-      `}</style>
+        <nav
+          aria-label="Filter blog posts"
+          className="mt-12 flex flex-wrap gap-2"
+        >
+          {filters.map((filter) => {
+            const active = selectedType === filter.type;
+            return (
+              <Link
+                aria-current={active ? 'page' : undefined}
+                className={`border px-4 py-2 text-sm font-medium transition-colors ${active ? 'border-[#1A1612] bg-[#1A1612] text-white' : 'border-[#D9D3C4] bg-transparent hover:border-[#1A1612]'}`}
+                href={filter.href}
+                key={filter.type}
+              >
+                {filter.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
     </section>
   );
 }

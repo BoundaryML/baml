@@ -76,14 +76,11 @@ fn find_matching_media_type_index(options: &[&TypeIR], value: &BamlValue) -> Opt
     };
 
     // Extract extension, handling URLs with query params/fragments
-    let ext = 'extract_ext: {
+    let ext = {
         let path_part = path.split('?').next().unwrap_or(path);
         let path_part = path_part.split('#').next().unwrap_or(path_part);
         let filename = path_part.rsplit('/').next().unwrap_or(path_part);
-        match Path::new(filename).extension().and_then(|e| e.to_str()) {
-            Some(ext) => break 'extract_ext ext,
-            None => return None,
-        }
+        Path::new(filename).extension().and_then(|e| e.to_str())?
     };
 
     let ext_lower = ext.to_lowercase();

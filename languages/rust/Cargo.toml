@@ -6,7 +6,7 @@ resolver = "2"
 # Please update rustfmt.toml when bumping the Rust edition
 edition = "2021"
 # This is the MSRV (Minimum Supported Rust Version) for the workspace
-rust-version = "1.70"
+rust-version = "1.83"
 authors = ["Boundary <contact@boundaryml.com>"]
 homepage = "https://github.com/BoundaryML/baml/blob/canary/README.v0.md"
 documentation = "https://docs.boundaryml.com"

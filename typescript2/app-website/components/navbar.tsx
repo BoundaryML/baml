@@ -131,9 +131,6 @@ export function Navbar() {
               {link.name}
             </Link>
           ))}
-          <Link className="nav-link" href="/changelog">
-            Changelog
-          </Link>
         </div>
         <div className="nav-desktop-actions">
           <NavDiscord />
@@ -189,13 +186,6 @@ export function Navbar() {
               {link.name}
             </Link>
           ))}
-          <Link
-            className="nav-mobile-link"
-            href="/changelog"
-            onClick={() => setOpen(false)}
-          >
-            Changelog
-          </Link>
           <div className="nav-mobile-footer">
             <NavDiscord />
             <NavStars />

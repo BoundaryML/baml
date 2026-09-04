@@ -21,20 +21,8 @@ impl BamlClassBigint for PackageBamlImpl {
         }
     }
 
-    fn min(bigint: Arc<BigInt>, other: Arc<BigInt>) -> Arc<BigInt> {
-        if bigint <= other { bigint } else { other }
-    }
-
-    fn max(bigint: Arc<BigInt>, other: Arc<BigInt>) -> Arc<BigInt> {
-        if bigint >= other { bigint } else { other }
-    }
-
-    fn clamp(bigint: Arc<BigInt>, min: Arc<BigInt>, max: Arc<BigInt>) -> Arc<BigInt> {
-        // Two-step clamp: first cap at max, then floor at min.
-        // Matches int.clamp's behaviour when min > max (lower-clamp wins).
-        let v = if bigint <= max { bigint } else { max };
-        if v >= min { v } else { min }
-    }
+    // No `min` / `max` / `clamp` here: `bigint` gets them from
+    // `baml.ops.Compare`. See the note in `bigint.baml`.
 
     fn isqrt(bigint: Arc<BigInt>) -> Result<Arc<BigInt>, VmRustFnError> {
         if bigint.sign() == Sign::Minus {

@@ -7603,7 +7603,7 @@ fn ordering_on_same_concrete_primitive_is_ok() {
 #[test]
 fn ordering_on_user_class_implementing_compare_is_ok() {
     // Guards against over-rejection: a class implementing `Compare` may be
-    // ordered. Only the required `lt` is defined — `<=`/`>`/`>=` reach the
+    // ordered. Only the required `cmp` is defined — `<`/`<=`/`>`/`>=` reach the
     // interface's defaults.
     assert_no_compile_errors(
         r#"
@@ -7613,7 +7613,9 @@ fn ordering_on_user_class_implementing_compare_is_ok() {
                 function eq(self, other: Self) -> bool throws never { self.cents == other.cents }
             }
             implements baml.ops.Compare {
-                function lt(self, other: Self) -> bool throws never { self.cents < other.cents }
+                function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+                    self.cents.cmp(other.cents)
+                }
             }
         }
         function f(a: Money, b: Money) -> bool throws never {
@@ -7675,16 +7677,17 @@ fn ordering_on_interface_existential_type_argument_is_rejected() {
 
 #[test]
 fn compare_without_equals_is_rejected() {
-    // `Compare requires Equals`, and the inherited `le` default is literally
-    // `self.lt(other) || self.eq(other)`. If a type could implement `Compare`
-    // without `Equals`, `a <= b` would lower to a virtual call whose `eq` has no
-    // impl to resolve — an uncatchable internal error. E0125 is what prevents it.
+    // `Compare requires Equals`: a total order has to agree with an equality
+    // (`cmp` is `Ordering.Equal` exactly when `eq`), so a `Compare` impl without
+    // one has nothing to be consistent with. E0125 is what prevents it.
     assert_compile_error_code(
         r#"
         class NoEq {
             v: int
             implements baml.ops.Compare {
-                function lt(self, other: Self) -> bool throws never { self.v < other.v }
+                function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+                    self.v.cmp(other.v)
+                }
             }
         }
         "#,

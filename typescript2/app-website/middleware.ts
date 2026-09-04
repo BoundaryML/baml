@@ -9,8 +9,6 @@ const ROUTES = new Map<string, { alternate: string; slug: string }>([
   ['/explore.md', { alternate: '/explore.md', slug: 'explore' }],
   ['/pricing', { alternate: '/pricing.md', slug: 'pricing' }],
   ['/pricing.md', { alternate: '/pricing.md', slug: 'pricing' }],
-  ['/changelog', { alternate: '/changelog.md', slug: 'changelog' }],
-  ['/changelog.md', { alternate: '/changelog.md', slug: 'changelog' }],
 ]);
 
 function acceptsMarkdown(request: NextRequest) {

@@ -602,6 +602,20 @@ fn lookup_impl_member<'db>(
         let lookup = lookup_impl_member(db, facts, &probe, name);
         return substitute_lookup_class_args(lookup, &frame, args);
     }
+    // A literal receiver resolves against its base primitive's impls, the
+    // same widening `receiver_class` applies on the class-inherent rung
+    // above ("literals defer to their base primitive's class") and
+    // `impls_for_type` applies to the enumeration. `Self` widens with it:
+    // bound to the literal, `cmp(self, other: Self)` on `"a"` would demand
+    // a second `"a"` rather than any `string`.
+    let widened;
+    let receiver = match receiver.kind() {
+        InferTy::Literal(literal, _, attr) => {
+            widened = Ty::intern(crate::infer::literal_base(literal, attr.clone()));
+            &widened
+        }
+        _ => receiver,
+    };
     let mut providers: Vec<(InferInterface, InterfaceMember<'db>)> = Vec::new();
     for resolved in impls_for_receiver(db, receiver) {
         if !env_discharges_rigid_bounds(db, facts, &resolved) {

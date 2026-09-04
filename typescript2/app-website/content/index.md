@@ -55,7 +55,6 @@ baml run main
 - [Quickstart](https://boundaryml.com/quickstart.md) — install BAML, configure an editor, and run a project
 - [Explore BAML](https://boundaryml.com/explore.md) — language design, agent tooling, examples, and tradeoffs
 - [Pricing](https://boundaryml.com/pricing.md) — open-source and cloud pricing information
-- [Changelog](https://boundaryml.com/changelog.md) — current releases
 - [Source code](https://github.com/boundaryml/baml)
 - [Demo projects](https://github.com/boundaryml/baml-demos)
 - [Community Discord](https://boundaryml.com/discord)

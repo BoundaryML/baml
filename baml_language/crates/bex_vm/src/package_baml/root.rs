@@ -11,12 +11,12 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use super::{
-    BamlPackageBaml, Continuation, NativeCallResult, PackageBamlImpl, PassThroughContinuation,
+    BamlPackageBaml, Continuation, NativeCallResult, PackageBamlImpl,
     array::{
         NaturalDomain, compare_natural_values, is_primitive_array_values,
         validate_natural_order_with_vm,
     },
-    make_compare_callee, make_to_string_callee,
+    make_to_string_callee,
 };
 use crate::{
     BexVm, VmPanic,
@@ -27,18 +27,6 @@ impl BamlPackageBaml for PackageBamlImpl {
     fn deep_copy(vm: &mut BexVm, value: &Value) -> Value {
         let mut copied_objects = HashMap::new();
         deep_copy_value_recursive(vm, *value, &mut copied_objects)
-    }
-
-    /// `baml._float_total_cmp(a, b)` — bit-exact `f64::total_cmp` three-way
-    /// comparison backing `Comparable for float`. Kept in lockstep with the
-    /// float domain of `compare_natural_values` (the `_rust_sort` fast path)
-    /// so the two sort paths can never disagree on a float ordering.
-    fn _float_total_cmp(a: f64, b: f64) -> i64 {
-        match a.total_cmp(&b) {
-            std::cmp::Ordering::Less => -1,
-            std::cmp::Ordering::Equal => 0,
-            std::cmp::Ordering::Greater => 1,
-        }
     }
 
     /// `baml._is_primitive_array(arr)` — `Sortable.sort`'s dispatch guard:
@@ -52,7 +40,8 @@ impl BamlPackageBaml for PackageBamlImpl {
     /// Stable natural-order sort of a homogeneous primitive array, in place
     /// (the receiver's backing `Vec` is sorted or replaced; the returned value
     /// IS the receiver). The comparator is pure Rust — no per-pair yield to
-    /// BAML — and the float domain uses `f64::total_cmp`, so no domain throws.
+    /// BAML — and the float domain uses BAML's total float order, so no domain
+    /// throws.
     /// The validation rejections are defensive only: the `_is_primitive_array`
     /// guard plus `T[]` homogeneity make them unreachable from `Sortable.sort`.
     fn _rust_sort(vm: &mut BexVm, arr: &Value) -> NativeCallResult {
@@ -101,25 +90,6 @@ impl BamlPackageBaml for PackageBamlImpl {
             Err(e) => return NativeCallResult::Error(e.into()),
         }
         NativeCallResult::Done(*arr)
-    }
-
-    /// `baml._compare_shim(a, b)` — the dispatch shim for the `Sortable`
-    /// blanket `sort`'s comparator path. Resolves `Comparable.compare` on
-    /// `a`'s runtime class and yields to it with `b`; the comparison's `int`
-    /// result (or thrown error) is returned straight through. See
-    /// `make_compare_callee` for why the sort cannot dispatch `compare`
-    /// itself.
-    fn _compare_shim(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
-        let callee = match make_compare_callee(vm, *a) {
-            Ok(ptr) => ptr,
-            Err(e) => return NativeCallResult::Error(e),
-        };
-        NativeCallResult::YieldToCall {
-            callee,
-            args: vec![*b],
-            type_args: vec![],
-            continuation: Box::new(PassThroughContinuation),
-        }
     }
 
     /// `baml._to_string_default(value)` renders `value` for `string.from`,
@@ -224,9 +194,9 @@ impl BamlPackageBaml for PackageBamlImpl {
 
     /// `baml._median_float(values)` — native backing for `float[].median()`.
     ///
-    /// Sorts a copy with `f64::total_cmp` (BAML's total float ordering, matching
-    /// `float[].sort()`) so the caller's array is left untouched. Throws
-    /// `InvalidArgument` when `values` is empty.
+    /// Sorts a copy in BAML's total float order (matching `float[].sort()`) so
+    /// the caller's array is left untouched. Throws `InvalidArgument` when
+    /// `values` is empty.
     fn _median_float(vm: &BexVm, values: &[Value]) -> Result<f64, VmRustFnError> {
         if values.is_empty() {
             return Err(VmBamlError::InvalidArgument {
@@ -239,7 +209,7 @@ impl BamlPackageBaml for PackageBamlImpl {
             .enumerate()
             .map(|(index, value)| expect_float(vm, *value, "_median_float", index))
             .collect();
-        sorted.sort_by(f64::total_cmp);
+        sorted.sort_by(|a, b| bex_vm_types::float_order::cmp(*a, *b));
         let mid = sorted.len() / 2;
         if sorted.len() % 2 == 1 {
             Ok(sorted[mid])

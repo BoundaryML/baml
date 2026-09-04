@@ -122,10 +122,9 @@ function _to_json_default<T>(value: T) -> baml.json.json throws baml.json.Serial
 /// user-defined override.
 ///
 /// `baml.json.from` routes through this rather than a static
-/// `match (value) { baml.ToJson => value.to_json() }`, for the same reason
-/// `string.from` uses [`_to_string_shim`]: static interface dispatch from this
-/// (stdlib) package can only see implementors visible here, not downstream user
-/// classes. Resolving on the receiver's runtime class picks up a user
+/// `match (value) { baml.ToJson => value.to_json() }`: static interface
+/// dispatch from this (stdlib) package can only see implementors visible here,
+/// not downstream user classes. Resolving on the receiver's runtime class picks up a user
 /// `implements baml.ToJson { function to_json ... }` override; a class that
 /// inherits the structural default body falls back to [`_to_json_default`].
 ///

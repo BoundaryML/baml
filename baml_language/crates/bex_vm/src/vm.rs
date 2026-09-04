@@ -7468,7 +7468,7 @@ impl BexVm {
         let right = self.stack.ensure_pop();
         let left = self.stack.ensure_pop();
 
-        #[allow(clippy::cast_precision_loss, clippy::float_cmp)]
+        #[allow(clippy::cast_precision_loss)]
         let result = if let (Some(l), Some(r)) = (left.as_int(), right.as_int()) {
             Value::bool(match op {
                 CmpOp::Eq => l == r,
@@ -7487,14 +7487,12 @@ impl BexVm {
                 .map(|i| i as f64)
                 .or_else(|| value_as_float(right)),
         ) {
-            Value::bool(match op {
-                CmpOp::Eq => l == r,
-                CmpOp::NotEq => l != r,
-                CmpOp::Lt => l < r,
-                CmpOp::LtEq => l <= r,
-                CmpOp::Gt => l > r,
-                CmpOp::GtEq => l >= r,
-            })
+            // Float/float that emit could not specialize, or a mixed
+            // `int`/float pair whose float side was statically erased. Both
+            // route through `float_order`, the same definition the specialized
+            // `CmpFloat*` opcodes use, so an erased operand never changes an
+            // answer — including against NaN, which this arm can see.
+            Value::bool(bex_vm_types::float_order::apply(op, l, r))
         } else if let (Some(l), Some(r)) = (
             self.value_as_bigint_cow(left),
             self.value_as_bigint_cow(right),
@@ -7952,7 +7950,9 @@ impl BexVm {
         // (see `Value::tagged_int_add_checked` for the encoding rationale; the
         // shift-left-by-1 preserves signed ordering between operands that
         // share the same tag bit). Float comparisons unwrap two heap-boxed
-        // floats and apply the operator; both pops are guaranteed Float by
+        // floats and apply the operator through `float_order` — BAML's total
+        // float order, so these stay identical to the `exec_cmpop` fallback and
+        // to `baml.ops.Compare for float`. Both pops are guaranteed Float by
         // the bytecode encoder, so the `else` arms are unreachable.
         macro_rules! cmp_int_op {
             ($op:tt) => {{
@@ -7963,14 +7963,15 @@ impl BexVm {
             }};
         }
         macro_rules! cmp_float_op {
-            ($op:tt) => {{
+            ($op:expr) => {{
                 let Some(r) = value_as_float(self.stack.ensure_pop()) else {
                     std::hint::unreachable_unchecked()
                 };
                 let Some(l) = value_as_float(self.stack.ensure_pop()) else {
                     std::hint::unreachable_unchecked()
                 };
-                self.stack.push(Value::bool(l $op r));
+                self.stack
+                    .push(Value::bool(bex_vm_types::float_order::apply($op, l, r)));
             }};
         }
 
@@ -10142,14 +10143,12 @@ impl BexVm {
                 OpCode::CmpIntGtEq => cmp_int_op!(>=),
 
                 // ── Specialized float comparison (skip type dispatch) ─────────
-                #[allow(clippy::float_cmp)]
-                OpCode::CmpFloatEq => cmp_float_op!(==),
-                #[allow(clippy::float_cmp)]
-                OpCode::CmpFloatNotEq => cmp_float_op!(!=),
-                OpCode::CmpFloatLt => cmp_float_op!(<),
-                OpCode::CmpFloatLtEq => cmp_float_op!(<=),
-                OpCode::CmpFloatGt => cmp_float_op!(>),
-                OpCode::CmpFloatGtEq => cmp_float_op!(>=),
+                OpCode::CmpFloatEq => cmp_float_op!(CmpOp::Eq),
+                OpCode::CmpFloatNotEq => cmp_float_op!(CmpOp::NotEq),
+                OpCode::CmpFloatLt => cmp_float_op!(CmpOp::Lt),
+                OpCode::CmpFloatLtEq => cmp_float_op!(CmpOp::LtEq),
+                OpCode::CmpFloatGt => cmp_float_op!(CmpOp::Gt),
+                OpCode::CmpFloatGtEq => cmp_float_op!(CmpOp::GtEq),
 
                 // ── Specialized bigint comparison (skip type dispatch) ────────
                 OpCode::CmpBigintEq => {

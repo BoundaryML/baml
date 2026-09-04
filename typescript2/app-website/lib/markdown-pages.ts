@@ -3,17 +3,15 @@ export const markdownPageSlugs = [
   'quickstart',
   'explore',
   'pricing',
-  'changelog',
 ] as const;
 
 export type MarkdownPageSlug = (typeof markdownPageSlugs)[number];
 
 export const markdownCanonicalPaths: Record<MarkdownPageSlug, string> = {
-  index: '/',
-  quickstart: '/quickstart',
   explore: '/explore',
+  index: '/',
   pricing: '/pricing',
-  changelog: '/changelog',
+  quickstart: '/quickstart',
 };
 
 export function isMarkdownPageSlug(value: string): value is MarkdownPageSlug {
