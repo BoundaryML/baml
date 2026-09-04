@@ -248,10 +248,13 @@ mod tests {
                 let image = python
                     .container
                     .expect("musl must override maturin's GHCR default");
-                assert!(image.starts_with(&format!(
-                    "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/rust-musl-cross:{}-musl@sha256:",
-                    target.arch
-                )));
+                assert_eq!(
+                    image,
+                    format!(
+                        "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/rust-musl-cross:{}-musl",
+                        target.arch
+                    )
+                );
             } else {
                 assert!(
                     python.container.is_none(),
@@ -276,7 +279,7 @@ mod tests {
         assert_eq!(
             arm.container.as_deref(),
             Some(
-                "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/manylinux_2_28-cross:aarch64@sha256:ca53fa07ecf1c3e6408c51fbca64c036d9d29af832d3f8bb954910e89097f275"
+                "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/manylinux_2_28-cross:aarch64"
             )
         );
         assert!(arm.cross_image.is_none());

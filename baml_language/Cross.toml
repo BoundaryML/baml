@@ -11,29 +11,29 @@
 # flags must be listed here explicitly or they never reach the compilers.
 #
 # Preserve cross 0.2.5's default images, but pull through our public GCP cache.
-# Pin index digests to keep upstream tag updates out of release builds.
+# Follow the upstream tags without pinning image digests.
 # Toolchain/wrapper jobs select their own images through CROSS_CONFIG.
-# See docs/ci-infra-gcp.md for setup, updates, and rollback.
+# See docs/ci-infra-gcp.md for the registry setup.
 [target.x86_64-unknown-linux-gnu]
-image = "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/cross-rs/x86_64-unknown-linux-gnu:0.2.5@sha256:9e5b39c09874bc1816c675ed11afca2c2ed6cee0c4ed2b3c1d5763c346c9ae3f"
+image = "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/cross-rs/x86_64-unknown-linux-gnu:0.2.5"
 
 [target.x86_64-unknown-linux-gnu.env]
 passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
 
 [target.aarch64-unknown-linux-gnu]
-image = "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/cross-rs/aarch64-unknown-linux-gnu:0.2.5@sha256:7f8308a8734d9fcd2ebbe9a3e4bdea74af293f0799d80c3cc341e340cda49a4c"
+image = "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/cross-rs/aarch64-unknown-linux-gnu:0.2.5"
 
 [target.aarch64-unknown-linux-gnu.env]
 passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
 
 [target.x86_64-unknown-linux-musl]
-image = "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/cross-rs/x86_64-unknown-linux-musl:0.2.5@sha256:77db671d8356a64ae72a3e1415e63f547f26d374fbe3c4762c1cd36c7eac7b99"
+image = "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/cross-rs/x86_64-unknown-linux-musl:0.2.5"
 
 [target.x86_64-unknown-linux-musl.env]
 passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
 
 [target.aarch64-unknown-linux-musl]
-image = "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/cross-rs/aarch64-unknown-linux-musl:0.2.5@sha256:702154f52b2d8091671aa2c84d5582d849f949977228c735ff8462f93cc0e1e4"
+image = "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/cross-rs/aarch64-unknown-linux-musl:0.2.5"
 
 [target.aarch64-unknown-linux-musl.env]
 passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
