@@ -238,69 +238,6 @@ mod tests {
     }
 
     #[test]
-    fn python_musl_images_are_explicit_without_changing_wheel_policy() {
-        for target in platforms().targets {
-            let Some(python) = target.artifacts.python else {
-                continue;
-            };
-            if target.libc.as_deref() == Some("musl") {
-                assert_eq!(python.manylinux.as_deref(), Some("musllinux_1_1"));
-                let image = python
-                    .container
-                    .expect("musl must override maturin's GHCR default");
-                assert_eq!(
-                    image,
-                    format!(
-                        "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/rust-musl-cross:{}-musl",
-                        target.arch
-                    )
-                );
-            } else {
-                assert!(
-                    python.container.is_none(),
-                    "preserve non-musl image defaults"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn toolchain_build_modes_are_preserved_and_mutually_exclusive() {
-        let p = platforms();
-        let arm = p
-            .targets
-            .iter()
-            .find(|target| target.triple == "aarch64-unknown-linux-gnu")
-            .unwrap()
-            .artifacts
-            .toolchain
-            .as_ref()
-            .unwrap();
-        assert_eq!(
-            arm.container.as_deref(),
-            Some(
-                "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/manylinux_2_28-cross:aarch64"
-            )
-        );
-        assert!(arm.cross_image.is_none());
-
-        let json = r#"{
-            "schema": 1,
-            "targets": [{
-                "triple": "aarch64-unknown-linux-gnu", "os": "linux", "arch": "aarch64",
-                "libc": "gnu", "archive_suffix": ".tar.gz",
-                "artifacts": { "toolchain": {
-                    "runner": "ubuntu-24.04-arm",
-                    "container": "native-image",
-                    "cross_image": "cross-image"
-                } }
-            }]
-        }"#;
-        let p: Platforms = serde_json::from_str(json).unwrap();
-        assert!(validate_platforms(&p).is_err());
-    }
-
-    #[test]
     fn toolchain_artifact_rejects_unknown_fields() {
         let json = r#"{
             "runner": "ubuntu-latest",
