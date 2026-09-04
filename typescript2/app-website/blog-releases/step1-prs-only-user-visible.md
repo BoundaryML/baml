@@ -1,0 +1,96 @@
+# Step 1: PRs with user-visible effects in `baml-language-0.17.0..baml-language-0.18.0`
+
+Scope: commits returned by `git log --reverse --format='%h %s' baml-language-0.17.0..baml-language-0.18.0 -- baml_language/` after fetching `origin` tags.
+
+- [#4453](https://github.com/BoundaryML/baml/pull/4453) — Precompile the standard-library prefix for runtime package compilation.
+- [#4458](https://github.com/BoundaryML/baml/pull/4458) — Memoize canonical compiler inference facts.
+- [#4460](https://github.com/BoundaryML/baml/pull/4460) — Harden runtime compilation boundaries and reject unsupported runtime-checked indirect calls.
+- [#4461](https://github.com/BoundaryML/baml/pull/4461) — Reuse compiler inference caches.
+- [#4463](https://github.com/BoundaryML/baml/pull/4463) — Restore alias memoization during implementation scans.
+- [#4408](https://github.com/BoundaryML/baml/pull/4408) — Log when CLI shutdown waits for active futures.
+- [#4409](https://github.com/BoundaryML/baml/pull/4409) — Surface log events from `baml run` and `baml test`.
+- [#4466](https://github.com/BoundaryML/baml/pull/4466) — Restore diagnostics for member access on `unknown` values.
+- [#4478](https://github.com/BoundaryML/baml/pull/4478) — Make literal patterns use membership semantics.
+- [#4489](https://github.com/BoundaryML/baml/pull/4489) — Remove redundant same-precedence parentheses in formatted code.
+- [#4467](https://github.com/BoundaryML/baml/pull/4467) — Preserve mutable object identity across calls inside loops.
+- [#4470](https://github.com/BoundaryML/baml/pull/4470) — Reject non-data LLM output schemas with diagnostics.
+- [#4473](https://github.com/BoundaryML/baml/pull/4473) — Diagnose unspecialized reflected generic functions.
+- [#4491](https://github.com/BoundaryML/baml/pull/4491) — Add read-only `AnyClass` reflection.
+- [#4493](https://github.com/BoundaryML/baml/pull/4493) — Refine the `AnyClass` API and related reflection behavior.
+- [#4490](https://github.com/BoundaryML/baml/pull/4490) — Prevent compiler aborts for joined collection arms and generic iterables.
+- [#4495](https://github.com/BoundaryML/baml/pull/4495) — Preserve type arguments through optional-chained calls.
+- [#4501](https://github.com/BoundaryML/baml/pull/4501) — Preserve runtime type definitions through dispatch and nested views.
+- [#4498](https://github.com/BoundaryML/baml/pull/4498) — Add truthiness in condition positions.
+- [#4518](https://github.com/BoundaryML/baml/pull/4518) — Diagnose inline `unreflect` type arguments that escape their call.
+- [#4516](https://github.com/BoundaryML/baml/pull/4516) — Preserve minted type identity through interface dispatch.
+- [#4519](https://github.com/BoundaryML/baml/pull/4519) — Add generic function listing and specialization to reflection.
+- [#4529](https://github.com/BoundaryML/baml/pull/4529) — Make global `let` bindings behave like ordinary bindings.
+- [#4531](https://github.com/BoundaryML/baml/pull/4531) — Type-check session assignments against their bindings.
+- [#4530](https://github.com/BoundaryML/baml/pull/4530) — Extend runtime-type escape checks to throws and optional chains.
+- [#4441](https://github.com/BoundaryML/baml/pull/4441) — Add first-class `UnknownError` wrapping.
+- [#4535](https://github.com/BoundaryML/baml/pull/4535) — Generate C# clients under `baml_sdk`.
+- [#4459](https://github.com/BoundaryML/baml/pull/4459) — Add Python SDK migration primitives for BAML v0 compatibility.
+- [#4526](https://github.com/BoundaryML/baml/pull/4526) — Return a normal error for unsupported `naming_convention = "language"` SDK generation.
+- [#4510](https://github.com/BoundaryML/baml/pull/4510) — Add lazy iterator bounding adapters.
+- [#4536](https://github.com/BoundaryML/baml/pull/4536) — Preserve compiled package type identity through interface dispatch.
+- [#4500](https://github.com/BoundaryML/baml/pull/4500) — Add interface member projections.
+- [#4508](https://github.com/BoundaryML/baml/pull/4508) — Materialize reassigned short-circuit locals correctly.
+- [#4544](https://github.com/BoundaryML/baml/pull/4544) — Prove stack-carried locals using predecessor coverage.
+- [#4522](https://github.com/BoundaryML/baml/pull/4522) — Generate `baml_sdk` next to `baml.toml` by default.
+- [#4547](https://github.com/BoundaryML/baml/pull/4547) — Preserve array type ascriptions in match coverage.
+- [#4548](https://github.com/BoundaryML/baml/pull/4548) — Add the segmented local profiling backend.
+- [#4541](https://github.com/BoundaryML/baml/pull/4541) — Remove redundant receiver parentheses and prevent an `unreflect` compiler crash.
+- [#4543](https://github.com/BoundaryML/baml/pull/4543) — Move reflection to the root `reflect` package.
+- [#4560](https://github.com/BoundaryML/baml/pull/4560) — Give runtime types stable heap-backed identity.
+- [#4565](https://github.com/BoundaryML/baml/pull/4565) — Reject legacy hash-delimited string literals.
+- [#4566](https://github.com/BoundaryML/baml/pull/4566) — Preserve diagnostic ownership and source locations for type references.
+- [#4135](https://github.com/BoundaryML/baml/pull/4135) — Add optional RNG parameters to primitive random methods.
+- [#4580](https://github.com/BoundaryML/baml/pull/4580) — Stop treating type views as subtypes of `reflect.Type`.
+- [#4570](https://github.com/BoundaryML/baml/pull/4570) — Add unified `on_event` handling to agents, direct calls, and streams.
+- [#4563](https://github.com/BoundaryML/baml/pull/4563) — Add `baml query` for SQL queries over local profiles.
+- [#4578](https://github.com/BoundaryML/baml/pull/4578) — Add a playground Telemetry tab backed by the local profile store.
+- [#4573](https://github.com/BoundaryML/baml/pull/4573) — Diagnose untyped empty arrays and maps.
+- [#4567](https://github.com/BoundaryML/baml/pull/4567) — Restore `ctx.output_format` options through a callable API.
+- [#4581](https://github.com/BoundaryML/baml/pull/4581) — Ship the new language server and IDE analysis layer.
+- [#4568](https://github.com/BoundaryML/baml/pull/4568) — Version and checksum compiler artifacts.
+- [#4571](https://github.com/BoundaryML/baml/pull/4571) — Make reflection compilation and session states explicit and recoverable.
+- [#4577](https://github.com/BoundaryML/baml/pull/4577) — Preserve runtime type identity across reflection boundaries.
+- [#4574](https://github.com/BoundaryML/baml/pull/4574) — Allow `unreflect` in any type position.
+- [#4583](https://github.com/BoundaryML/baml/pull/4583) — Preserve runtime diagnostics and reflected schemas.
+- [#4601](https://github.com/BoundaryML/baml/pull/4601) — Make JSON serialization work through `unknown` and simplify its API.
+- [#4600](https://github.com/BoundaryML/baml/pull/4600) — Validate `reflect.call_any` return values.
+- [#4603](https://github.com/BoundaryML/baml/pull/4603) — Stop invalid types from degrading into `unknown`.
+- [#4602](https://github.com/BoundaryML/baml/pull/4602) — Remove legacy test declarations.
+- [#4604](https://github.com/BoundaryML/baml/pull/4604) — Stabilize `Runner`, add async-iterable Python streams, and batch stream deltas.
+- [#4606](https://github.com/BoundaryML/baml/pull/4606) — Add `baml.io.Read` and `baml.io.Write` interfaces.
+- [#4599](https://github.com/BoundaryML/baml/pull/4599) — Infer stored lambda parameters from later uses.
+- [#4609](https://github.com/BoundaryML/baml/pull/4609) — Restore HTTP support in `baml run` and the playground.
+- [#4612](https://github.com/BoundaryML/baml/pull/4612) — Preserve optional classes whose fields are omitted in LLM output.
+- [#4619](https://github.com/BoundaryML/baml/pull/4619) — Reject class values that omit required fields.
+- [#4621](https://github.com/BoundaryML/baml/pull/4621) — Reject stored generic function values that have not been specialized.
+- [#4593](https://github.com/BoundaryML/baml/pull/4593) — Reject imprecise `throws unknown` declarations.
+
+## Excluded commits
+
+- [#4455](https://github.com/BoundaryML/baml/pull/4455) — Documentation-only update to the previous release's changelog.
+- [#4462](https://github.com/BoundaryML/baml/pull/4462) — CI-only fixture serialization.
+- [#4464](https://github.com/BoundaryML/baml/pull/4464) — Public reflection surface added and then reverted within this release range.
+- [#4469](https://github.com/BoundaryML/baml/pull/4469) — Revert of #4464, leaving no net public change.
+- [#4456](https://github.com/BoundaryML/baml/pull/4456) — Release automation and changelog cleanup.
+- [#4472](https://github.com/BoundaryML/baml/pull/4472) — Release verification policy only.
+- [#4378](https://github.com/BoundaryML/baml/pull/4378) — Private Ruby bridge prerequisite without a released user-facing Ruby SDK surface.
+- [#4465](https://github.com/BoundaryML/baml/pull/4465) — Binary size baseline refresh only.
+- [#4499](https://github.com/BoundaryML/baml/pull/4499) — Test timing and hermeticity only.
+- [#4517](https://github.com/BoundaryML/baml/pull/4517) — Test cleanup only.
+- [#4481](https://github.com/BoundaryML/baml/pull/4481) — CI performance changes only.
+- [#4533](https://github.com/BoundaryML/baml/pull/4533) — Python bridge test setup performance only.
+- [#4554](https://github.com/BoundaryML/baml/pull/4554) — Binary size baseline refresh only.
+- [#4562](https://github.com/BoundaryML/baml/pull/4562) — Internal bytecode snapshot rendering only.
+- [#4564](https://github.com/BoundaryML/baml/pull/4564) — Release verification fixes only.
+- [#4569](https://github.com/BoundaryML/baml/pull/4569) — Removal of an already-unused playground message protocol.
+- [#4572](https://github.com/BoundaryML/baml/pull/4572) — Test fixture cleanup only.
+- [#4575](https://github.com/BoundaryML/baml/pull/4575) — C# release verification refactor only.
+- [#4582](https://github.com/BoundaryML/baml/pull/4582) — CI cache and parallelism changes only.
+- [#4626](https://github.com/BoundaryML/baml/pull/4626) — Deterministic LSP test assertion only.
+- [#4628](https://github.com/BoundaryML/baml/pull/4628) — Changelog-only release documentation.
+- [#4629](https://github.com/BoundaryML/baml/pull/4629) — Release version stamping only.
