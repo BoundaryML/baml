@@ -1,5 +1,7 @@
-# The runner image needs baml.toml, baml_src and deploy/entrypoint.sh; nothing else.
+# Only the package and the three startup scripts belong in the runner image.
 *
 !baml.toml
 !baml_src
 !deploy/entrypoint.sh
+!deploy/bootstrap.sh
+!deploy/build-cli.sh

@@ -43,6 +43,11 @@ jobs:
         with:
           persist-credentials: false
       - run: docker build -f tools/atb2/deploy/Dockerfile -t atb2-runner:ci tools/atb2
+      - name: Verify builder cannot read the runtime login
+        run: >-
+          docker run --rm --network none --entrypoint bash
+          --mount type=bind,src="${{ github.workspace }}/tools/atb2/deploy/test_build_isolation.sh",dst=/test-build-isolation.sh,readonly
+          atb2-runner:ci /test-build-isolation.sh
 
   # On canary only: deploy. A manual run from any other ref is refused, so
   # the deploy token never runs against unreviewed code.

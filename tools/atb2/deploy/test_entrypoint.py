@@ -1,4 +1,4 @@
-"""Offline boot checks. Run with python3 tools/atb2/deploy/test_entrypoint.py."""
+"""Offline compiler-cache checks. Run with python3 tools/atb2/deploy/test_entrypoint.py."""
 
 import os
 from pathlib import Path
@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 
-ENTRYPOINT = Path(__file__).with_name("entrypoint.sh")
+ENTRYPOINT = Path(__file__).with_name("build-cli.sh")
 PIN = "a" * 40
 
 
@@ -36,8 +36,6 @@ class EntrypointTests(unittest.TestCase):
                     "esac\n"
                 ),
                 "cargo": f'echo cargo >> "{log}"\n',
-                # Stop at the phase-two boundary, without secrets or a live run.
-                "infisical": f'echo infisical >> "{log}"\n',
             }
             for name, script in scripts.items():
                 path = commands / name
@@ -60,29 +58,29 @@ class EntrypointTests(unittest.TestCase):
     def test_matching_pin_boots_without_network(self):
         result, calls, _ = self.boot()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls, "infisical\n")
+        self.assertEqual(calls, "")
 
     def test_mismatched_pin_requires_fetch(self):
         result, calls, _ = self.boot(cached="b" * 40)
         self.assertEqual(result.returncode, 42)
-        self.assertNotIn("infisical", calls)
+        self.assertEqual(calls, "git fetch -q origin canary\n")
 
     def test_nonexecutable_cache_requires_fetch(self):
         result, calls, _ = self.boot(executable=False)
         self.assertEqual(result.returncode, 42)
-        self.assertNotIn("infisical", calls)
+        self.assertEqual(calls, "git fetch -q origin canary\n")
 
     def test_tracking_canary_requires_fetch(self):
         result, calls, _ = self.boot(pin=None)
         self.assertEqual(result.returncode, 42)
-        self.assertNotIn("infisical", calls)
+        self.assertEqual(calls, "git fetch -q origin canary\n")
 
     def test_stale_pin_rebuilds_after_fetch(self):
         result, calls, revision = self.boot(cached="b" * 40, fetch_ok=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("git fetch -q origin canary\n", calls)
         self.assertIn("git checkout -q --detach " + PIN + "\n", calls)
-        self.assertIn("cargo\ninfisical\n", calls)
+        self.assertIn("cargo\n", calls)
         self.assertEqual(revision, PIN)
 
 

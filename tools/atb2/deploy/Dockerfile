@@ -4,8 +4,8 @@
 # Claude Code CLI (the agent). canary's baml-cli itself is built on the
 # volume at first boot (entrypoint).
 #
-# State lives on the volume at /data (ATB2_HOME): the cached canary clone,
-# the shared cargo target, worktrees, run dirs. First boot builds canary's
+# State lives on the volume at /data (ATB2_HOME): the isolated bootstrap cache,
+# runtime cargo target, worktrees, run dirs. First boot builds canary's
 # baml-cli there (minutes); later boots are warm.
 #
 # Build context is tools/atb2 (the repo root's .dockerignore keeps everything
@@ -16,7 +16,7 @@ FROM rust:1-bookworm
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl git jq openssh-client pkg-config libssl-dev \
-      python3 clang lld cmake \
+      python3 clang lld cmake util-linux \
     && rm -rf /var/lib/apt/lists/*
 
 # gh
@@ -34,21 +34,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code @infisical/cli@0.43.128
 
-RUN useradd -m -u 1000 -s /bin/bash atb2 && mkdir -p /data && chown atb2:atb2 /data
+RUN useradd -m -u 1000 -s /bin/bash atb2 \
+    && useradd -m -u 1001 -s /bin/bash builder \
+    && mkdir -p /data \
+    && chmod -R go-w /usr/local/cargo /usr/local/rustup
 ENV ATB2_HOME=/data \
     HOME=/home/atb2 \
     PATH=/home/atb2/.local/bin:/data/target/debug:/usr/local/cargo/bin:$PATH \
-    CARGO_HOME=/usr/local/cargo \
-    RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/data/cargo \
+    RUSTUP_HOME=/data/rustup \
     GIT_TERMINAL_PROMPT=0
 
 WORKDIR /app
 COPY baml.toml ./
 COPY baml_src ./baml_src
 COPY deploy/entrypoint.sh /usr/local/bin/atb2-entrypoint
-RUN chmod +x /usr/local/bin/atb2-entrypoint && chown -R atb2:atb2 /app
+COPY deploy/build-cli.sh /usr/local/bin/atb2-build-cli
+COPY deploy/bootstrap.sh /usr/local/bin/atb2-bootstrap
+RUN chmod 755 /usr/local/bin/atb2-entrypoint /usr/local/bin/atb2-build-cli /usr/local/bin/atb2-bootstrap
 
-USER atb2
-ENTRYPOINT ["atb2-entrypoint"]
+USER root
+ENTRYPOINT ["atb2-bootstrap"]
 # fly.toml picks the expression; runner_loop() serves requests and runs the pipeline
 CMD ["runner_loop()"]

@@ -86,6 +86,23 @@ carries cargo, gh, node and the Claude Code CLI; the volume at `/data` holds
 the cached canary clone, the cargo target and the run dirs, and the first
 boot builds canary's `baml-cli` there.
 
+The image starts a root bootstrap that prepares volume permissions, then runs
+compiler builds as `builder` (UID 1001) with a private home and cache under
+`/data/bootstrap`. `/data/home` is mode 0700 and owned by `atb2` (UID 1000),
+so build scripts cannot read the persistent Claude login. The builder receives
+an allowlisted environment and no capabilities. Bootstrap copies the binary
+using unprivileged readers/writers, then permanently drops to `atb2` before
+loading Infisical secrets and starting the pipeline. The runtime has its own
+Cargo cache under `/data/cargo`. Each user has a private Rustup installation
+seeded from the image, so canary's required toolchains and components can be
+installed independently. Shared tools and application files remain root-owned
+and are not writable by either user.
+
+Existing volumes keep their login and runtime state. The first boot after
+this change builds a fresh compiler in the isolated cache, even if the old
+runtime cache already contains one. This isolates startup builds; it does
+not isolate the runtime agent's Bash from the runtime user's files.
+
 Set `ATB2_CANARY_REV` to a commit SHA to pin the runner's compiler. If the
 cached executable's recorded revision matches that pin, startup skips the
 GitHub fetch and can proceed while GitHub is unavailable. Unpinned boots
@@ -104,7 +121,8 @@ boundary-tools `prod`, so the machine holds a single Fly secret,
 `INFISICAL_TOKEN`, and a rotation in Infisical takes effect on the next
 restart. The runner's GitHub identity is `ATB_GITHUB_TOKEN` (or `GH_TOKEN` when set),
 already in that project. The agent's Claude Code CLI runs on its own login,
-made once on the machine (`fly ssh console -a atb2-runner`, then `claude`)
+made once on the machine (`fly ssh console -a atb2-runner`, then
+`runuser -u atb2 -- env HOME=/data/home claude`)
 and kept under HOME on the volume; no Claude credential is stored anywhere
 or passed by atb2, on the runner or on a laptop. None of it goes to CI.
 
