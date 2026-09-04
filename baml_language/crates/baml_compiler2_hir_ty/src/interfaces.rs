@@ -809,34 +809,6 @@ pub fn realize_associated_default(
     baml_type::unify::substitute_ty(default, &bindings)
 }
 
-/// The realized type of a *defaulted* associated `member` for an interface existential
-/// `Ty::Interface(qtn, args, …)`, or `None` when `member` is not a defaulted associated
-/// type of that interface. A *bound* never fills a default this way — its implementor may
-/// override it — which is why this is keyed on the interface-existential base.
-pub fn existential_associated_default(
-    db: &dyn baml_compiler2_ppir::Db,
-    res_ctx: &crate::package_interface::PackageResolutionContext<'_>,
-    qtn: &QualifiedTypeName,
-    args: &[Ty],
-    self_ty: &Ty,
-    member: &Name,
-) -> Option<Ty> {
-    let items = res_ctx.items_for_package(db, qtn.package())?;
-    let Definition::Interface(iface_loc) = items.lookup_type(qtn.namespace(), qtn.name())? else {
-        return None;
-    };
-    let (default, _diagnostics) = interface_associated_type_default(db, iface_loc, member.clone())?;
-    let self_param = interface_self_param(db, iface_loc);
-    let iface_params = crate::lower::interface_declared_params(db, iface_loc);
-    Some(realize_associated_default(
-        &default,
-        &iface_params,
-        args,
-        &self_param,
-        self_ty,
-    ))
-}
-
 fn lower_interface_type_associated_bindings(
     ctx: &InterfaceTypeAssocLowering<'_, '_>,
     diagnostics: &mut Vec<TirTypeError>,

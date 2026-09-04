@@ -1719,43 +1719,6 @@ pub fn type_implements_interface<'db>(
     false
 }
 
-/// Symbolic counterpart of [`get_implements_block`]: unlike membership, the
-/// caller reads the match's realized associated-type pins, so a UNIQUE
-/// matching block is required: several distinct matches return `None`.
-pub fn get_implements_block_symbolic<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg_id: PackageId<'db>,
-    concrete: &Ty,
-    interface: &baml_type::Interface,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-    mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
-) -> Option<ResolvedImpl<'db>> {
-    let mut packages = vec![pkg_id];
-    packages.extend(baml_compiler2_hir::package::package_dependency_closure(
-        db, pkg_id,
-    ));
-    let mut found: Option<ResolvedImpl<'db>> = None;
-    for pkg in packages {
-        for &impl_loc in package_impl_locs(db, pkg) {
-            let Ok(data) = impl_data(db, impl_loc).as_ref() else {
-                continue;
-            };
-            let Some(bindings) = match_impl_head(db, data, concrete, interface, aliases) else {
-                continue;
-            };
-            if !impl_bounds_hold_symbolic(data, &bindings, &mut is_subtype) {
-                continue;
-            }
-            if found.is_some() {
-                // Coherence guarantees uniqueness only for realized inputs.
-                return None;
-            }
-            found = Some(ResolvedImpl { impl_loc, bindings });
-        }
-    }
-    found
-}
-
 /// [`get_implements_block`] with an explicit recursion budget.
 fn get_implements_block_within_depth<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
