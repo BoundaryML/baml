@@ -65,3 +65,44 @@ test "$(stat -c %a /data/home)" = 700
 setpriv --reuid=1001 --regid=1001 --clear-groups git -C /data/bootstrap/repo remote remove origin
 /usr/local/bin/atb2-bootstrap
 echo 'PASS: real build isolation, existing login preserved, cached offline boot'
+
+# Failed artifact reads must not publish an empty binary over a working one.
+before=$(sha256sum /data/target/debug/baml-cli)
+chmod 111 /data/bootstrap/target/debug/baml-cli
+if /usr/local/bin/atb2-bootstrap; then
+  echo 'FAIL: unreadable artifact accepted' >&2
+  exit 1
+fi
+test "$before" = "$(sha256sum /data/target/debug/baml-cli)"
+chmod 700 /data/bootstrap/target/debug/baml-cli
+# Nor may a cached empty artifact replace the runtime executable.
+cp /data/bootstrap/target/debug/baml-cli /data/bootstrap/saved-cli
+: > /data/bootstrap/target/debug/baml-cli
+if /usr/local/bin/atb2-bootstrap; then
+  echo 'FAIL: empty artifact accepted' >&2
+  exit 1
+fi
+test "$before" = "$(sha256sum /data/target/debug/baml-cli)"
+cat /data/bootstrap/saved-cli > /data/bootstrap/target/debug/baml-cli
+
+# A pre-existing volume symlink must never redirect root's ownership changes.
+mkdir -p /protected-test
+chmod 755 /protected-test
+mv /data/home /data/saved-home
+ln -s /protected-test /data/home
+if /usr/local/bin/atb2-bootstrap; then
+  echo 'FAIL: volume symlink accepted' >&2
+  exit 1
+fi
+test "$(stat -c '%u:%a' /protected-test)" = 0:755
+unlink /data/home
+mv /data/saved-home /data/home
+
+# Wrong UID and a nonstandard data root fail before doing startup work.
+if setpriv --reuid=1000 --regid=1000 --clear-groups /usr/local/bin/atb2-bootstrap; then
+  exit 1
+fi
+if ATB2_HOME=/tmp /usr/local/bin/atb2-bootstrap; then
+  exit 1
+fi
+echo 'PASS: failed/empty copies preserve cache; symlinks and invalid startup identity rejected'

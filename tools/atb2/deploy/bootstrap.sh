@@ -54,15 +54,29 @@ as_runtime=(setpriv --reuid=1000 --regid=1000 --clear-groups
 # Read the artifact as the builder, not root: a malicious artifact symlink
 # cannot trick root into copying a credential. Write it as the runtime user.
 # shellcheck disable=SC2016
-"${as_builder[@]}" cat /data/bootstrap/target/debug/baml-cli |
-  "${as_runtime[@]}" env -i PATH="$PATH" sh -eu -c '
+artifact=$("${as_runtime[@]}" env -i PATH="$PATH" sh -eu -c '
     mkdir -p /data/target/debug
-    artifact=$(mktemp /data/target/debug/.baml-cli.XXXXXX)
-    trap '\''rm -f "$artifact"'\'' EXIT
-    cat > "$artifact"
-    chmod 700 "$artifact"
-    mv -f "$artifact" /data/target/debug/baml-cli
-  '
+    mktemp /data/target/debug/.baml-cli.XXXXXX
+  ')
+# Only publish after BOTH the reader and writer succeed. pipefail alone is
+# insufficient if the writer replaces the working binary before the reader exits.
+# shellcheck disable=SC2016
+if "${as_builder[@]}" cat /data/bootstrap/target/debug/baml-cli |
+  "${as_runtime[@]}" env -i PATH="$PATH" sh -eu -c 'cat > "$1"' atb2 "$artifact"; then
+  # shellcheck disable=SC2016
+  if "${as_runtime[@]}" env -i PATH="$PATH" sh -eu -c '
+      test -s "$1"
+      chmod 700 "$1"
+      mv -fT "$1" /data/target/debug/baml-cli
+    ' atb2 "$artifact"; then
+    artifact=""
+  fi
+fi
+if [ -n "$artifact" ]; then
+  "${as_runtime[@]}" rm -f -- "$artifact"
+  echo 'atb2: compiler installation failed; previous runtime binary preserved' >&2
+  exit 1
+fi
 unset ATB2_SECRETS_LOADED
 export HOME=/data/home USER=atb2 LOGNAME=atb2
 export CARGO_HOME=/data/cargo RUSTUP_HOME=/data/rustup

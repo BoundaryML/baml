@@ -12,7 +12,7 @@ PIN = "a" * 40
 
 
 class EntrypointTests(unittest.TestCase):
-    def boot(self, *, pin=PIN, cached=PIN, executable=True, fetch_ok=False):
+    def boot(self, *, pin=PIN, cached=PIN, executable=True, fetch_ok=False, cargo_ok=True):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             commands = root / "bin"
@@ -35,7 +35,7 @@ class EntrypointTests(unittest.TestCase):
                     f"rev-parse) echo {PIN} ;;\n"
                     "esac\n"
                 ),
-                "cargo": f'echo cargo >> "{log}"\n',
+                "cargo": f'echo cargo >> "{log}"\nexit {0 if cargo_ok else 43}\n',
             }
             for name, script in scripts.items():
                 path = commands / name
@@ -53,7 +53,8 @@ class EntrypointTests(unittest.TestCase):
                 ["bash", str(ENTRYPOINT)], env=env, capture_output=True, text=True
             )
             calls = log.read_text() if log.exists() else ""
-            return result, calls, (target / ".baml-cli-rev").read_text().strip()
+            marker = target / ".baml-cli-rev"
+            return result, calls, marker.read_text().strip() if marker.exists() else ""
 
     def test_matching_pin_boots_without_network(self):
         result, calls, _ = self.boot()
@@ -82,6 +83,12 @@ class EntrypointTests(unittest.TestCase):
         self.assertIn("git checkout -q --detach " + PIN + "\n", calls)
         self.assertIn("cargo\n", calls)
         self.assertEqual(revision, PIN)
+
+    def test_failed_rebuild_invalidates_old_revision(self):
+        result, calls, revision = self.boot(cached="b" * 40, fetch_ok=True, cargo_ok=False)
+        self.assertEqual(result.returncode, 43)
+        self.assertIn("cargo\n", calls)
+        self.assertEqual(revision, "")
 
 
 if __name__ == "__main__":

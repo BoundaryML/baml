@@ -22,6 +22,9 @@ if [ -z "$want" ] || [ ! -x "$cli" ] || [ "$have" != "$want" ]; then
 fi
 if [ ! -x "$cli" ] || [ "$have" != "$want" ]; then
   echo "atb2: building baml-cli at $want into $runner_home/target (had: ${have:-none})"
+  # A failed build may already have changed the artifact. It must not retain
+  # the old revision marker and pass a later pinned-cache check.
+  rm -f -- "$built"
   (cd "$repo" && git checkout -q --detach "$want")
   # an explicit environment: nothing from this process reaches cargo
   (cd "$repo/baml_language" && env -i \
