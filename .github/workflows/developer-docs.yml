@@ -57,6 +57,7 @@ jobs:
 
       - name: Build static preview artifact
         env:
+          GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
           VERCEL_ENV: preview
         run: pnpm --filter app-developer-docs build
         working-directory: typescript2

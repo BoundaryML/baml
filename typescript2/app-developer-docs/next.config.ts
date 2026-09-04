@@ -14,6 +14,11 @@ export default function createNextConfig(phase: string): NextConfig {
     // Keep production on Next's default directory so static exports still
     // land in `out/`; only the long-running dev server needs isolation.
     distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next',
+    experimental: {
+      // Generated routes share one immutable build-time database snapshot.
+      // A single exporter worker keeps that read load within branch limits.
+      cpus: 1,
+    },
     images: {
       unoptimized: true,
     },
