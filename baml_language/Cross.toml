@@ -1,4 +1,4 @@
-# `cross` configuration for the `bridge_cffi` cdylib build.
+# `cross` configuration for the CFFI and Java cdylib builds.
 #
 # `.github/workflows/build2-bridge-cffi.reusable.yaml` runs `cross` for the
 # linux targets. Every leg receives deterministic `--remap-path-prefix` flags.
@@ -9,14 +9,31 @@
 # `cross` runs the build inside a container and forwards only a curated set of
 # environment variables, so the source fingerprint and Rust/native remapping
 # flags must be listed here explicitly or they never reach the compilers.
+#
+# Preserve cross 0.2.5's default images, but pull through our public GCP cache.
+# Follow the upstream tags without pinning image digests.
+# Toolchain/wrapper jobs select their own images through CROSS_CONFIG.
+# See docs/ci-infra-gcp.md for the registry setup.
+[target.x86_64-unknown-linux-gnu]
+image = "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/cross-rs/x86_64-unknown-linux-gnu:0.2.5"
+
 [target.x86_64-unknown-linux-gnu.env]
 passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
+
+[target.aarch64-unknown-linux-gnu]
+image = "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/cross-rs/aarch64-unknown-linux-gnu:0.2.5"
 
 [target.aarch64-unknown-linux-gnu.env]
 passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
 
+[target.x86_64-unknown-linux-musl]
+image = "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/cross-rs/x86_64-unknown-linux-musl:0.2.5"
+
 [target.x86_64-unknown-linux-musl.env]
 passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
+
+[target.aarch64-unknown-linux-musl]
+image = "us-central1-docker.pkg.dev/baml-infra/ghcr-cache/cross-rs/aarch64-unknown-linux-musl:0.2.5"
 
 [target.aarch64-unknown-linux-musl.env]
 passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
