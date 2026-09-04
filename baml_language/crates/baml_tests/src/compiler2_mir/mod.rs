@@ -34,7 +34,7 @@ fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
 
     for func_loc in functions {
         let mir = lower_function(db, func_loc, OptLevel::Two);
-        writeln!(output, "{}", display_function(&mir)).unwrap();
+        writeln!(output, "{}", display_function(mir)).unwrap();
     }
 
     output
@@ -140,7 +140,7 @@ function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
             .iter()
             .any(|block| matches!(block.terminator, Some(Terminator::Call { .. }))),
         "untrusted mounted builtin did not lower as an ordinary call: {}",
-        display_function(&mir)
+        display_function(mir)
     );
     assert!(
         !body
@@ -148,7 +148,7 @@ function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
             .iter()
             .any(|block| matches!(block.terminator, Some(Terminator::AwaitAny { .. }))),
         "untrusted mounted await-any marker selected compiler-owned lowering: {}",
-        display_function(&mir)
+        display_function(mir)
     );
 }
 
@@ -241,7 +241,7 @@ function main() -> reflect.Type {
         call_count,
         2,
         "forged intrinsics did not lower as ordinary calls: {}",
-        display_function(&mir)
+        display_function(mir)
     );
     assert!(
         !body
@@ -250,12 +250,12 @@ function main() -> reflect.Type {
             .flat_map(|block| &block.statements)
             .any(|statement| { matches!(&statement.kind, StatementKind::Intrinsic { .. }) }),
         "forged intrinsic metadata selected compiler-owned lowering: {}",
-        display_function(&mir)
+        display_function(mir)
     );
 }
 
 #[test]
-fn explicit_local_id_reaches_indirect_optional_virtual_and_union_calls() {
+fn explicit_local_id_reaches_indirect_optional_and_virtual_calls() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -271,7 +271,9 @@ class Dog {
 }
 
 class Cat {
-  function speak(self) -> int { 2 }
+  implements Speaker {
+    function speak(self) -> int { 2 }
+  }
 }
 
 function indirect(callback: (int) -> int throws never, id: boundary.LocalId) -> int {
@@ -313,7 +315,7 @@ function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
                 })
             )),
             "{name} dropped its runtime ID: {}",
-            display_function(&mir)
+            display_function(mir)
         );
     }
 
@@ -330,39 +332,60 @@ function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
             })
         )),
         "virtual call dropped its runtime ID: {}",
-        display_function(&virtual_mir)
+        display_function(virtual_mir)
     );
 
+    // A union receiver dispatches only through the members' shared interface,
+    // and the virtual call must still carry the runtime ID.
     let union_mir = lower_named("union_dispatch");
     let MirFunctionKind::Bytecode(union_body) = &union_mir.kind else {
         panic!("union_dispatch must lower to bytecode")
     };
-    let union_calls = union_body
+    let union_virtual_calls = union_body
         .blocks
         .iter()
         .filter_map(|block| match block.terminator.as_ref() {
-            Some(Terminator::Call { runtime_id, .. }) => Some(runtime_id),
+            Some(Terminator::VirtualCall { runtime_id, .. }) => Some(runtime_id),
             _ => None,
         })
         .collect::<Vec<_>>();
     assert!(
-        union_calls.len() >= 2,
-        "expected one direct call per heterogeneous union member: {}",
-        display_function(&union_mir)
+        !union_virtual_calls.is_empty(),
+        "union dispatch lowers through the shared interface's virtual call: {}",
+        display_function(union_mir)
     );
     assert!(
-        !union_body
-            .blocks
+        union_virtual_calls
             .iter()
-            .any(|block| matches!(block.terminator, Some(Terminator::VirtualCall { .. }))),
-        "heterogeneous union dispatch must not use the first member's interface: {}",
-        display_function(&union_mir)
+            .all(|runtime_id| runtime_id.is_some()),
+        "the union dispatch dropped its runtime ID: {}",
+        display_function(union_mir)
     );
-    assert!(
-        union_calls.iter().all(|runtime_id| runtime_id.is_some()),
-        "a union dispatch branch dropped its runtime ID: {}",
-        display_function(&union_mir)
+}
+
+#[test]
+fn narrowed_union_field_access_recovers_shared_interface_view() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+interface HasValue { value string }
+class Ok { value string implements HasValue {} }
+class Warn { value string implements HasValue {} }
+class Err { message string }
+
+function f(result: Ok | Warn | Err) -> string {
+    if let value: Ok | Warn = result {
+        value.value
+    } else {
+        result.message
+    }
+}
+"#,
     );
+    assert_no_diagnostic_errors(&db);
+    let output = render_mir(&db, file);
+    assert!(output.contains(".value#0 as HasValue"), "{output}");
 }
 
 macro_rules! mir_snapshot {
@@ -631,32 +654,6 @@ fn match_or_mixed_array_class_binding_uses_branch_local_rest_type() {
         "match_or_mixed_array_class_binding_uses_branch_local_rest_type",
         render_mir(&db, file)
     );
-}
-
-#[test]
-fn match_or_class_union_field_access_uses_runtime_dispatch() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-        class A { field int }
-        class B { field int }
-        class C { field int }
-        class D { field int }
-        class E { field string }
-
-        function f(v: A | B | C | D | E) -> int {
-            match (v) {
-                A { field: int } | B { field: int } | C { field: int } | D { field: int } => v.field,
-                _ => 0
-            }
-        }
-        "#,
-    );
-    let output = render_mir(&db, file);
-    assert!(output.contains("type_tag"), "{output}");
-    assert!(output.contains("A:") && output.contains("B:"), "{output}");
-    assert!(output.contains("C:") && output.contains("D:"), "{output}");
 }
 
 #[test]

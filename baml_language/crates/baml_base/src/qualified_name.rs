@@ -27,6 +27,9 @@ pub const BAML_JSON_JSON: &str = "baml.json.json";
 /// independent string literals.
 pub const AI_STREAM_STREAM: &str = "ai.stream.Stream";
 
+/// Canonical bound LLM function specification capability.
+pub const AI_FUNCTION_SPEC: &str = "ai.FunctionSpec";
+
 /// Canonical nominal end-of-stream marker used by AI streams.
 pub const AI_STREAM_DONE: &str = "ai.stream.Done";
 

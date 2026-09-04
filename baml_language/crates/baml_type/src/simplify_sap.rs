@@ -392,7 +392,7 @@ fn simplify_impl<N: crate::Head>(
 // ---------------------------------------------------------------------------
 
 fn simplify_union<N: crate::Head>(
-    variants: Vec<RuntimeTy<N>>,
+    variants: Box<[RuntimeTy<N>]>,
     attr: TyAttr,
     aliases: &HashMap<N, RuntimeTy<N>>,
     recursive: &HashSet<N>,
@@ -434,7 +434,7 @@ fn simplify_union<N: crate::Head>(
         let merged = merge_attr_nested(v.attr(), &attr);
         v.with_attr(merged)
     } else {
-        RuntimeTy::Union(variants, attr)
+        RuntimeTy::Union(variants.into(), attr)
     }
 }
 

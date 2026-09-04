@@ -129,6 +129,83 @@ static void TestOwnedBufferMove() {
   std::printf("owned buffer move ok\n");
 }
 
+static void TestPortableValuesTranscodeWithoutHandles() {
+  baml::detail::pb::BamlOutboundValue media;
+  media.mutable_media_value()->set_media(
+      baml::detail::pb::MediaTypeEnum::IMAGE);
+  media.mutable_media_value()->set_url("https://example.test/cat.png");
+  baml::detail::pb::InboundValue inbound_media;
+  baml::detail::transcode_outbound_to_inbound(inbound_media, media);
+  Require(inbound_media.has_media_value(),
+          "media did not use the portable inbound arm");
+  Require(inbound_media.media_value().url() == "https://example.test/cat.png",
+          "portable media payload changed");
+  Require(!inbound_media.has_handle(), "portable media became a handle");
+
+  baml::detail::pb::BamlOutboundValue prompt;
+  prompt.mutable_prompt_ast_value()->mutable_simple()->set_string("hello");
+  baml::detail::pb::InboundValue inbound_prompt;
+  baml::detail::transcode_outbound_to_inbound(inbound_prompt, prompt);
+  Require(inbound_prompt.has_prompt_ast_value(),
+          "prompt did not use the portable inbound arm");
+  Require(inbound_prompt.prompt_ast_value().simple().string() == "hello",
+          "portable prompt payload changed");
+  Require(!inbound_prompt.has_handle(), "portable prompt became a handle");
+}
+
+static void TestTypedSpecStreamAndPortableValueCodecs() {
+  using Spec = baml::function_spec<std::string>;
+  using Stream = baml::stream<std::optional<std::string>, std::string>;
+
+  const auto spec_ty = baml::codec<Spec>::baml_ty();
+  Require(spec_ty.class_ty().name() == "ai.FunctionSpec",
+          "FunctionSpec codec lost nominal identity");
+  Require(spec_ty.class_ty().type_args_size() == 1,
+          "FunctionSpec codec lost its output type argument");
+
+  const auto stream_ty = baml::codec<Stream>::baml_ty();
+  Require(stream_ty.class_ty().name() == "ai.stream.Stream",
+          "Stream codec lost nominal identity");
+  Require(stream_ty.class_ty().type_args_size() == 2,
+          "Stream codec lost Partial/Final type arguments");
+
+  baml::detail::pb::BamlOutboundValue done;
+  done.mutable_class_value()->set_name("ai.stream.Done");
+  const auto finished =
+      baml::codec<baml::stream_item<std::optional<std::string>>>::decode(done);
+  Require(finished.done(), "stream Done decoded as a partial");
+
+  baml::detail::pb::BamlOutboundValue null_partial;
+  null_partial.mutable_null_value();
+  const auto partial =
+      baml::codec<baml::stream_item<std::optional<std::string>>>::decode(
+          null_partial);
+  Require(!partial.done() && !partial.value().has_value(),
+          "nullable partial was confused with stream Done");
+
+  baml::detail::pb::BamlOutboundValue prompt_value;
+  prompt_value.mutable_prompt_ast_value()->mutable_simple()->set_string(
+      "portable");
+  const baml::prompt prompt = baml::codec<baml::prompt>::decode(prompt_value);
+  const baml::prompt equal_prompt =
+      baml::codec<baml::prompt>::decode(prompt_value);
+  Require(prompt == equal_prompt, "Prompt equality was not structural");
+  baml::detail::pb::InboundValue encoded_prompt;
+  baml::codec<baml::prompt>::encode(encoded_prompt, prompt);
+  Require(encoded_prompt.has_prompt_ast_value() &&
+              encoded_prompt.prompt_ast_value().simple().string() == "portable",
+          "Prompt codec did not preserve portable data");
+
+  const baml::image image = baml::image::from_url(
+      "https://example.test/cat.png", std::string("image/png"));
+  baml::detail::pb::InboundValue encoded_image;
+  baml::codec<baml::image>::encode(encoded_image, image);
+  Require(
+      encoded_image.has_media_value() &&
+          encoded_image.media_value().url() == "https://example.test/cat.png",
+      "Media codec did not preserve portable data");
+}
+
 static void TestUnhandledSpawnErrorUsesHostDefault() {
   bool threw = false;
   try {
@@ -184,6 +261,10 @@ int main() {
   RunTest("call registry", TestCallRegistryRoundTrip);
   RunTest("argument states", TestArgTwoState);
   RunTest("owned buffer move", TestOwnedBufferMove);
+  RunTest("portable prompt and media",
+          TestPortableValuesTranscodeWithoutHandles);
+  RunTest("typed spec, stream, prompt, and media codecs",
+          TestTypedSpecStreamAndPortableValueCodecs);
   RunTest("unhandled_spawn_error_uses_host_default",
           TestUnhandledSpawnErrorUsesHostDefault);
   RunTest("ty_def_reports_unsupported_reflection",

@@ -23,7 +23,7 @@ expression: outcome.dump
 816..817 'e': user.CfNet | user.CfParse
 843..857 'let net: CfNet': user.CfNet
 852..857 'CfNet': user.CfNet
-861..879 'net.me...length': (self: baml.String) -> int throws never
+861..879 'net.me...length': (self: string) -> int throws never
 861..881 'net.me...ngth()': int
 893..894 'n': int
 1016..1024 'cf_shout': throws never

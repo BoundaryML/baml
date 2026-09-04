@@ -1,3 +1,16 @@
+/// Creates a test runner that runs the body `n` times and passes when at
+/// least `m` of those runs passed.
+///
+/// Every one of the `n` runs happens, even once `m` passes are in hand.
+///
+/// # Parameters
+///
+/// - `n`: how many times to run the body. Must be positive.
+/// - `m`: how many of those runs must pass. Must be in `[0, n]`.
+///
+/// # Panics
+///
+/// - `baml.panics.UserPanic` if `n <= 0`, or `m` is outside `[0, n]`.
 function Quorum(n: int, m: int) -> TestRunner {
     if (n <= 0) {
         baml.sys.panic("testing.Quorum requires n > 0")
@@ -32,6 +45,8 @@ function Quorum(n: int, m: int) -> TestRunner {
     };
 }
 
+/// Creates a test runner that retries a test up to `max_attempts` times.
+/// Tests fail if there are no passes after `max_attempts` attempts.
 function Retry(max_attempts: int) -> TestRunner {
     if (max_attempts <= 0) {
         baml.sys.panic("testing.Retry requires max_attempts > 0")
@@ -66,6 +81,7 @@ function Retry(max_attempts: int) -> TestRunner {
     };
 }
 
+/// Creates a test runner that requires a pass rate of at least `threshold` to pass.
 function PassRate(threshold: float) -> TestSetRunner {
     if (threshold < 0.0 || threshold > 1.0) {
         baml.sys.panic("testing.PassRate requires 0.0 <= threshold <= 1.0")
@@ -76,10 +92,10 @@ function PassRate(threshold: float) -> TestSetRunner {
     return (children) -> TestSetReport {
         // Runner middleware runs outside the CLI's shared pool (the closure
         // cannot capture it); a local fallback pool still bounds the fan-out.
-        let report = root.run_children_parallel(children, root.test_pool(0));
+        let report = root._run_children_parallel(children, root._test_pool(0));
         let outcome: Outcome = if (report.total == 0) {
             "pass"
-        } else if (root._int_to_float(report.passed) / root._int_to_float(report.total) >= threshold) {
+        } else if ((report.passed + 0.0) / (report.total + 0.0) >= threshold) {
             "pass"
         } else {
             "fail"
@@ -96,38 +112,39 @@ function PassRate(threshold: float) -> TestSetRunner {
     };
 }
 
+/// Creates a testset runner that runs children one at a time, in
+/// registration order, instead of in parallel.
 function Sequential() -> TestSetRunner {
     return (children) -> TestSetReport {
-        root.run_children_sequential(children, false)
+        root._run_children_sequential(children, false)
     };
 }
 
+/// Creates a testset runner that runs children in registration order and
+/// abandons the testset at the first child that does not pass.
+///
+/// The children after it are never run, so they appear in no report.
 function FailFast() -> TestSetRunner {
     return (children) -> TestSetReport {
-        root.run_children_sequential(children, true)
+        root._run_children_sequential(children, true)
     };
 }
 
-function run_children_sequential(children: TestSetChild[], fail_fast: bool) -> TestSetReport {
-    let named_results: NamedChildReport[] = [];
+/// (internal)
+function _run_children_sequential(children: TestSetChild[], fail_fast: bool) -> TestSetReport {
+    let named_results: _NamedChildReport[] = [];
     for (let child in children) {
         let report = child.run();
-        named_results.push(NamedChildReport { name: child.name, report: report });
+        named_results.push(_NamedChildReport { name: child.name, report: report });
         let outcome = match (report) {
             let r: TestReport => r.outcome,
             let r: TestSetReport => r.outcome,
         };
         if (fail_fast && outcome != "pass") {
-            return root.aggregate_reports(named_results);
+            return root._aggregate_reports(named_results);
         } else {
             null
         }
     }
-    root.aggregate_reports(named_results)
-}
-
-function _int_to_float(value: int) -> float {
-    float.parse(string.from(value)) catch_all (e) {
-        _ => baml.sys.panic("failed to convert int to float")
-    }
+    root._aggregate_reports(named_results)
 }

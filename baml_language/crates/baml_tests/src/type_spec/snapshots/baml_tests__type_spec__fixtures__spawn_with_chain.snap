@@ -2,37 +2,37 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-449..457 'swc_work': throws never
-480..489 '{\n    1\n}': 1
-486..487 '1': 1
-500..507 'chained': throws never
-530..696 '{\n   ...t t\n}': int
-536..541 'let g': baml.spawn.TaskGroup
-544..568 'baml.s...up.new': (limit: int, name?: string | null) -> baml.spawn.TaskGroup throws never
-544..571 'baml.s...new(2)': baml.spawn.TaskGroup
-569..570 '2': 2
-577..582 'let t': baml.future.Future<int, never>
-585..640 'spawn ...rk() }': baml.future.Future<int, never>
-596..614 'baml.s...ptions': (group?: baml.spawn.TaskGroup | null, cancel?: baml.spawn.CancelToken | null, detach?: bool | null) -> ((baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<int, never> throws never) throws never
-596..625 'baml.s...p = g)': (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<int, never> throws never
-623..624 'g': baml.spawn.TaskGroup
-626..640 '{ swc_work() }': () -> int throws never
-626..640 '{ swc_work() }': int
-628..636 'swc_work': () -> int throws never
-628..638 'swc_work()': int
-687..694 'await t': int
-693..694 't': baml.future.Future<int, never>
-707..718 'with_cancel': throws never
-768..911 '{\n   ...t t\n}': int
-774..779 'let t': baml.future.Future<int, never>
-782..855 'spawn ...rk() }': baml.future.Future<int, never>
-793..811 'baml.s...ptions': (group?: baml.spawn.TaskGroup | null, cancel?: baml.spawn.CancelToken | null, detach?: bool | null) -> ((baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<int, never> throws never) throws never
-793..840 'baml.s... true)': (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<int, never> throws never
-821..824 'tok': baml.spawn.CancelToken
-835..839 'true': true
-841..855 '{ swc_work() }': () -> int throws never
-841..855 '{ swc_work() }': int
-843..851 'swc_work': () -> int throws never
-843..853 'swc_work()': int
-902..909 'await t': int
-908..909 't': baml.future.Future<int, never>
+444..452 'swc_work': throws never
+475..484 '{\n    1\n}': 1
+481..482 '1': 1
+495..502 'chained': throws never
+525..691 '{\n   ...t t\n}': int
+531..536 'let g': baml.spawn.TaskGroup
+539..563 'baml.s...up.new': (limit: int, name?: string | null) -> baml.spawn.TaskGroup throws never
+539..566 'baml.s...new(2)': baml.spawn.TaskGroup
+564..565 '2': 2
+572..577 'let t': baml.future.Future<int, never>
+580..635 'spawn ...rk() }': baml.future.Future<int, never>
+591..609 'baml.s...ptions': (group?: baml.spawn.TaskGroup | null, cancel?: baml.spawn.CancelToken | null, detach?: bool | null) -> ((baml.spawn.Params<int, never>) -> baml.spawn.Params<int, never> throws never) throws never
+591..620 'baml.s...p = g)': (baml.spawn.Params<int, never>) -> baml.spawn.Params<int, never> throws never
+618..619 'g': baml.spawn.TaskGroup
+621..635 '{ swc_work() }': () -> int throws never
+621..635 '{ swc_work() }': int
+623..631 'swc_work': () -> int throws never
+623..633 'swc_work()': int
+682..689 'await t': int
+688..689 't': baml.future.Future<int, never>
+702..713 'with_cancel': throws never
+763..906 '{\n   ...t t\n}': int
+769..774 'let t': baml.future.Future<int, never>
+777..850 'spawn ...rk() }': baml.future.Future<int, never>
+788..806 'baml.s...ptions': (group?: baml.spawn.TaskGroup | null, cancel?: baml.spawn.CancelToken | null, detach?: bool | null) -> ((baml.spawn.Params<int, never>) -> baml.spawn.Params<int, never> throws never) throws never
+788..835 'baml.s... true)': (baml.spawn.Params<int, never>) -> baml.spawn.Params<int, never> throws never
+816..819 'tok': baml.spawn.CancelToken
+830..834 'true': true
+836..850 '{ swc_work() }': () -> int throws never
+836..850 '{ swc_work() }': int
+838..846 'swc_work': () -> int throws never
+838..848 'swc_work()': int
+897..904 'await t': int
+903..904 't': baml.future.Future<int, never>

@@ -1,17 +1,17 @@
-// The OpenAI image-generation client: POST {base_url}/images/generations.
-//
-// `client "openai-images/gpt-image-1"` in an LLM function constructs this
-// class. Its output type is media — `-> image`, `-> image[]`, `-> image?`,
-// `-> string | image` — which the runner builds from the turn's media blocks
-// (ai/runner.baml) instead of parsing text.
-//
-//     function DrawLamp(subject: string) -> image {
-//         client "openai-images/gpt-image-1"
-//         prompt `A studio photograph of ${subject}.`
-//     }
-//
-// The endpoint takes a text prompt only: media inputs are rejected (image
-// editing is a different, multipart endpoint) and tools are not supported.
+/// The OpenAI image-generation client: POST {base_url}/images/generations.
+///
+/// `client "openai-images/gpt-image-1"` in an LLM function constructs this
+/// class. Its output type is media — `-> image`, `-> image[]`, `-> image?`,
+/// `-> string | image` — which the runner builds from the turn's media blocks
+/// (ai/runner.baml) instead of parsing text.
+///
+///     function DrawLamp(subject: string) -> image {
+///         client "openai-images/gpt-image-1"
+///         prompt `A studio photograph of ${subject}.`
+///     }
+///
+/// The endpoint takes a text prompt only: media inputs are rejected (image
+/// editing is a different, multipart endpoint) and tools are not supported.
 class ImageClient {
     model: string,
     // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
@@ -73,6 +73,9 @@ class ImageClient {
     // flag only gates the bodies.
     capture_wire: bool,
 
+    /// Creates a client. Construction reads no environment variable, so
+    /// declaring one is always safe; credentials and endpoints resolve when a
+    /// request is built.
     function new(
         model: string = "gpt-image-1",
         api_key: ai.Credential? = null,
@@ -113,10 +116,10 @@ class ImageClient {
         }
     }
 
-    // The request-time credential: an explicit value, else the provider's
-    // canonical one. A missing credential is a catchable
-    // ai.errors.InvalidRequest rather than a panic, so the caller's
-    // `catch_all` can fall back to another client.
+    /// The request-time credential: an explicit value, else the provider's
+    /// canonical one. A missing credential is a catchable
+    /// ai.errors.InvalidRequest rather than a panic, so the caller's
+    /// `catch_all` can fall back to another client.
     function resolved_api_key(self) -> string {
         if let key: string = ai.wire.resolve_credential(self.api_key, "OPENAI_API_KEY") {
             return key;
@@ -129,7 +132,7 @@ class ImageClient {
         }
     }
 
-    // The request-time base URL, or null for the provider default.
+    /// The request-time base URL, or null for the provider default.
     function resolved_base_url(self) -> string? {
         ai.wire.resolve_credential(self.base_url, null)
     }
@@ -153,7 +156,7 @@ class ImageClient {
     }
 
     // No ai.stream.StreamingClient: the endpoint's streaming mode emits
-    // partially rendered image previews, which ai.stream.StreamEvent (text
+    // partially rendered image previews, which ai.stream.Event (text
     // deltas plus turn metadata) cannot carry. `ai.stream.from_spec` reports
     // that as ai.errors.StreamingUnsupported.
 }

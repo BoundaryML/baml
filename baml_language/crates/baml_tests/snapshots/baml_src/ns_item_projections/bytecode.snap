@@ -153,7 +153,7 @@ function item_projections.$init_test_ns_item_projections_item_projections(regist
     return
 }
 
-function item_projections.Bin.Buildable.build(seed: int) -> item_projections.Bin<#0> {
+function item_projections.<(user.item_projections.Bin<#0> as user.item_projections.Buildable)>.build(seed: int) -> item_projections.Bin<#0> {
     load_type int
     load_var seed
     call baml.String.from
@@ -166,23 +166,23 @@ function item_projections.Bin.Buildable.build(seed: int) -> item_projections.Bin
     return
 }
 
-function item_projections.Bin.Buildable.describe(self: item_projections.Bin<#0>) -> string {
+function item_projections.<(user.item_projections.Bin<#0> as user.item_projections.Buildable)>.describe(self: item_projections.Bin<#0>) -> string {
     load_var self
     load_field .label
     return
 }
 
-function item_projections.Dual.Marked<int>.mark(self: item_projections.Dual) -> int {
+function item_projections.<(user.item_projections.Dual as user.item_projections.Marked<int>)>.mark(self: item_projections.Dual) -> int {
     load_const 1
     return
 }
 
-function item_projections.Dual.Marked<string>.mark(self: item_projections.Dual) -> string {
+function item_projections.<(user.item_projections.Dual as user.item_projections.Marked<string>)>.mark(self: item_projections.Dual) -> string {
     load_const "two"
     return
 }
 
-function item_projections.Gadget.Buildable.build(seed: int) -> item_projections.Gadget {
+function item_projections.<(user.item_projections.Gadget as user.item_projections.Buildable)>.build(seed: int) -> item_projections.Gadget {
     load_var seed
     load_const 10
     mul_int
@@ -190,7 +190,7 @@ function item_projections.Gadget.Buildable.build(seed: int) -> item_projections.
     return
 }
 
-function item_projections.Gadget.Buildable.describe(self: item_projections.Gadget) -> string {
+function item_projections.<(user.item_projections.Gadget as user.item_projections.Buildable)>.describe(self: item_projections.Gadget) -> string {
     load_type int
     load_var self
     load_field .g
@@ -202,29 +202,26 @@ function item_projections.Gadget.Buildable.describe(self: item_projections.Gadge
     return
 }
 
-function item_projections.Keyed2.Keyworded.extends(self: item_projections.Keyed2) -> int {
+function item_projections.<(user.item_projections.Keyed2 as user.item_projections.Keyworded)>.extends(self: item_projections.Keyed2) -> int {
     load_const 2
     return
 }
 
-function item_projections.Keyed2.Keyworded.implements(self: item_projections.Keyed2) -> int {
+function item_projections.<(user.item_projections.Keyed2 as user.item_projections.Keyworded)>.implements(self: item_projections.Keyed2) -> int {
     load_const 1
     return
 }
 
-function item_projections.Label.label(self: item_projections.Label<#1>) -> string {
-    load_const "ok"
-    return
-}
-
-function item_projections.Loud.Sayer.say(self: item_projections.Loud) -> string {
+function item_projections.<(user.item_projections.Loud as user.item_projections.Sayer)>.say(self: item_projections.Loud) -> string {
     load_const "LOUD"
     return
 }
 
-function item_projections.Plate.Embosser.emboss(u: #1) -> string {
+function item_projections.<(user.item_projections.Plate<#0> as user.item_projections.Embosser)>.emboss(u: #1) -> string {
     load_type #1
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _2
     load_const "emboss "
     load_var _2
@@ -232,7 +229,7 @@ function item_projections.Plate.Embosser.emboss(u: #1) -> string {
     return
 }
 
-function item_projections.Plate.Embosser.fresh(seed: int) -> item_projections.Plate<#0> {
+function item_projections.<(user.item_projections.Plate<#0> as user.item_projections.Embosser)>.fresh(seed: int) -> item_projections.Plate<#0> {
     load_type int
     load_var seed
     call baml.String.from
@@ -241,7 +238,7 @@ function item_projections.Plate.Embosser.fresh(seed: int) -> item_projections.Pl
     return
 }
 
-function item_projections.Plate.Embosser.label(self: item_projections.Plate<#0>) -> string {
+function item_projections.<(user.item_projections.Plate<#0> as user.item_projections.Embosser)>.label(self: item_projections.Plate<#0>) -> string {
     load_const "plate "
     load_var self
     load_field .tag
@@ -249,7 +246,7 @@ function item_projections.Plate.Embosser.label(self: item_projections.Plate<#0>)
     return
 }
 
-function item_projections.Poly.Convert<int>.conv(self: item_projections.Poly, other: item_projections.Poly) -> int {
+function item_projections.<(user.item_projections.Poly as user.item_projections.Convert<int>)>.conv(self: item_projections.Poly, other: item_projections.Poly) -> int {
     load_var self
     load_field .n
     load_var other
@@ -258,14 +255,16 @@ function item_projections.Poly.Convert<int>.conv(self: item_projections.Poly, ot
     return
 }
 
-function item_projections.Poly.Convert<string>.conv(self: item_projections.Poly, other: item_projections.Poly) -> string {
+function item_projections.<(user.item_projections.Poly as user.item_projections.Convert<string>)>.conv(self: item_projections.Poly, other: item_projections.Poly) -> string {
     load_const "poly"
     return
 }
 
-function item_projections.Press.Stamper.emboss(u: #0) -> string {
+function item_projections.<(user.item_projections.Press as user.item_projections.Stamper)>.emboss(u: #0) -> string {
     load_type #0
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _2
     load_const "emboss "
     load_var _2
@@ -273,9 +272,11 @@ function item_projections.Press.Stamper.emboss(u: #0) -> string {
     return
 }
 
-function item_projections.Press.Stamper.stamp(self: item_projections.Press, u: #0) -> string {
+function item_projections.<(user.item_projections.Press as user.item_projections.Stamper)>.stamp(self: item_projections.Press, u: #0) -> string {
     load_type #0
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _3
     load_const "stamp "
     load_var _3
@@ -283,18 +284,13 @@ function item_projections.Press.Stamper.stamp(self: item_projections.Press, u: #
     return
 }
 
-function item_projections.Row.Keyed.key(self: item_projections.Row) -> int {
+function item_projections.<(user.item_projections.Row as user.item_projections.Keyed)>.key(self: item_projections.Row) -> int {
     load_var self
     load_field .id
     return
 }
 
-function item_projections.Sayer.say(self: item_projections.Sayer) -> string {
-    load_const "default"
-    return
-}
-
-function item_projections.Sized.Sizer.pick(self: item_projections.Sized, other: item_projections.Sized) -> item_projections.Sized {
+function item_projections.<(user.item_projections.Sized as user.item_projections.Sizer)>.pick(self: item_projections.Sized, other: item_projections.Sized) -> item_projections.Sized {
     load_var self
     load_field .s
     load_var other
@@ -314,35 +310,25 @@ function item_projections.Sized.Sizer.pick(self: item_projections.Sized, other: 
     return
 }
 
-function item_projections.Sizer.grow(self: item_projections.Sizer) -> #0 {
-    load_var2 1 1
-    load_type item_projections.Sizer
-    load_const "pick"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
-    return
-}
-
-function item_projections.Twin.Alpha.tag(self: item_projections.Twin, other: item_projections.Twin) -> int {
+function item_projections.<(user.item_projections.Twin as user.item_projections.Alpha)>.tag(self: item_projections.Twin, other: item_projections.Twin) -> int {
     load_var self
     load_field .n
     return
 }
 
-function item_projections.Twin.Beta.tag(self: item_projections.Twin, other: item_projections.Twin) -> int {
+function item_projections.<(user.item_projections.Twin as user.item_projections.Beta)>.tag(self: item_projections.Twin, other: item_projections.Twin) -> int {
     load_var other
     load_field .n
     return
 }
 
-function item_projections.Widget.Buildable.build(seed: int) -> item_projections.Widget {
+function item_projections.<(user.item_projections.Widget as user.item_projections.Buildable)>.build(seed: int) -> item_projections.Widget {
     load_var seed
     init_instance user.item_projections.Widget .w
     return
 }
 
-function item_projections.Widget.Buildable.describe(self: item_projections.Widget) -> string {
+function item_projections.<(user.item_projections.Widget as user.item_projections.Buildable)>.describe(self: item_projections.Widget) -> string {
     load_type int
     load_var self
     load_field .w
@@ -351,6 +337,26 @@ function item_projections.Widget.Buildable.describe(self: item_projections.Widge
     load_const "widget "
     load_var _2
     bin_op +
+    return
+}
+
+function item_projections.Label.label(self: item_projections.Label<#1>) -> string {
+    load_const "ok"
+    return
+}
+
+function item_projections.Sayer.say(self: item_projections.Sayer) -> string {
+    load_const "default"
+    return
+}
+
+function item_projections.Sizer.grow(self: item_projections.Sizer) -> #0 {
+    load_var2 1 1
+    load_type item_projections.Sizer
+    load_const "pick"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 

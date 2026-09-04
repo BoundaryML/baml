@@ -1,6 +1,6 @@
 // feedback -> minimal repro -> already fixed? -> stop | issue (repro + more repros)
 //
-// Repros are checked with baml.reflect.Package.compile, in-process. No
+// Repros are checked with reflect.Package.compile, in-process. No
 // subprocess, no VM shellout; the LLM-authored command is never executed.
 
 client Triage = claude_code.ClaudeCodeClient.new(model = "sonnet", timeout_ms = 600000);
@@ -8,13 +8,18 @@ client Triage = claude_code.ClaudeCodeClient.new(model = "sonnet", timeout_ms = 
 // ==================== Pipeline ====================
 
 function create_issue(fb: Feedback) -> Issue? {
+    //# 1. distill the feedback into a minimal repro (LLM)
     let repro = create_repro(fb);
+    //# 2. run the repro in-process against this toolchain
     let run = run_repro(repro);
     log.info({ "feedback": fb.id, "verdict": run.verdict.to_string(), "observed": run.observed });
+    //# already fixed on this toolchain: stop, no ticket
     if (run.verdict == Verdict.Fixed) {
         return null;
     };
+    //# 3. write the ticket + more repros (LLM)
     let draft = write_issue(fb, repro, run);
+    //# assemble the issue
     Issue {
         id: "ISSUE-" + baml.id.new(),
         title: draft.title,
@@ -31,6 +36,7 @@ function create_issue(fb: Feedback) -> Issue? {
         comments: [],
         resolution_plan: draft.resolution_plan,
         difficulty: null,
+        design_doc: null,
     }
 }
 
@@ -119,7 +125,7 @@ function create_repro(fb: Feedback) -> Repro {
         Comment chain:
         ${format_comments(fb.comments)}
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
@@ -141,7 +147,7 @@ class ReproRun {
 }
 
 class CompileAttempt {
-    pkg: baml.reflect.Package?,
+    pkg: reflect.Package?,
     /// Compiler diagnostics when the sources were rejected.
     error: string?,
     /// Why the check could not run at all (repro needs a human, command is
@@ -156,7 +162,7 @@ function blocked(reason: string) -> CompileAttempt {
 
 function try_compile(files: map<string, string>) -> CompileAttempt {
     compile_ok(files) catch (e) {
-        baml.reflect.errors.CompilationError => {
+        reflect.errors.CompilationError => {
             CompileAttempt { pkg: null, error: e.message, blocked: null }
         },
         baml.errors.Unsupported => {
@@ -167,8 +173,8 @@ function try_compile(files: map<string, string>) -> CompileAttempt {
     }
 }
 
-function compile_ok(files: map<string, string>) -> CompileAttempt throws unknown {
-    let pkg = baml.reflect.Package.compile(files);
+function compile_ok(files: map<string, string>) -> CompileAttempt {
+    let pkg = reflect.Package.compile(files);
     CompileAttempt { pkg: pkg, error: null, blocked: null }
 }
 
@@ -207,7 +213,7 @@ function attempt_repro(repro: Repro) -> CompileAttempt {
 
 type ReproMain = () -> json throws unknown;
 
-function repro_main_output(pkg: baml.reflect.Package) -> string {
+function repro_main_output(pkg: reflect.Package) -> string {
     let f = pkg.get_function<ReproMain>("repro_main") catch (_) {
         _ => null,
     };
@@ -223,10 +229,13 @@ function repro_main_output(pkg: baml.reflect.Package) -> string {
 
 /// Run a repro against the toolchain executing this program.
 function run_repro(repro: Repro) -> ReproRun {
+    //# compile the repro, unless something rules the check out
     let attempt = attempt_repro(repro);
+    //# blocked: inspection needed / uncovered command / no compiler
     if (attempt.blocked != null) {
         return ReproRun { verdict: Verdict.Inconclusive, observed: attempt.blocked ?? "" };
     };
+    //# compare the outcome with the expectation
     match (repro.expectation) {
         let e: ShouldCompile => match (attempt.error) {
             null => ReproRun { verdict: Verdict.Fixed, observed: "compiles cleanly" },
@@ -260,7 +269,7 @@ function run_repro(repro: Repro) -> ReproRun {
                     observed: "repro no longer compiles: " + (attempt.error ?? "unknown error"),
                 }
             },
-            let pkg: baml.reflect.Package => {
+            let pkg: reflect.Package => {
                 let observed = repro_main_output(pkg);
                 let expected = baml.json.stringify(e.expected);
                 if (observed == expected) {
@@ -333,7 +342,7 @@ function write_issue(fb: Feedback, repro: Repro, run: ReproRun) -> IssueDraft {
         Checker verdict on the current toolchain: ${run.verdict.to_string()}
         Observed: ${run.observed}
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
@@ -396,6 +405,11 @@ class ReferenceIssue {
     repros: Repro[],
     /// How much work the fix is, as a maintainer would gauge it.
     difficulty: Difficulty,
+    /// handle_issue eval: seconds the agent gets to land a fix (Easy 1800,
+    /// Medium 3600); null for Hard issues.
+    time_budget_s: int?,
+    /// Hard only: the reference suggested fix + design doc.
+    design_doc: string?,
 }
 
 /// A row of triage_issues.
@@ -486,14 +500,16 @@ function load_feedback() -> FeedbackRow[] {
 /// Fraction of `keywords` present in `ours` (case-insensitive; "baml-cli"
 /// and "baml" name the same binary). 0.0 when there are no keywords.
 function keyword_recall(ours: string, keywords: string[]) -> float {
+    //# normalise: lowercase, one spelling of the cli
     let hay = ours.to_lower_case().replace("baml-cli ", "baml ");
+    //# count the keywords present
     let hit = keywords.filter((k: string) -> bool {
         hay.includes(k.to_lower_case().replace("baml-cli ", "baml "))
     });
     if (keywords.length() == 0) {
         0.0
     } else {
-        (1.0 * hit.length()) / (1.0 * keywords.length())
+        1.0 * hit.length() / (1.0 * keywords.length())
     }
 }
 
@@ -536,7 +552,7 @@ function judge_issue(ours: string, reference: string) -> IssueJudgment {
         OURS:
         ${ours}
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
@@ -627,6 +643,7 @@ function reference_as_issue(number: int, r: ReferenceIssue) -> Issue {
         comments: [],
         resolution_plan: r.resolution_plan,
         difficulty: null,
+        design_doc: null,
     }
 }
 
@@ -658,7 +675,7 @@ testset "difficulty_estimate" with testing.PassRate(0.8) {
 
 testset "feedback" {
     test "parses and picks the strongest identity" {
-        let raw = #"
+        let raw = `
             {
               "id": "FB-1",
               "title": "match on enum broken",
@@ -670,13 +687,13 @@ testset "feedback" {
               "comments": [],
               "issue_ids": []
             }
-        "#;
+        `;
         let fb = baml.json.from_string<Feedback>(raw);
         assert.equal(author_identity(fb.author), "octocat");
     }
 
     test "a report without a toolchain still parses and reads as unknown" {
-        let raw = #"
+        let raw = `
             {
               "id": "FB-3",
               "title": "t",
@@ -688,7 +705,7 @@ testset "feedback" {
               "comments": [],
               "issue_ids": []
             }
-        "#;
+        `;
         let fb = baml.json.from_string<Feedback>(raw);
         assert.equal(reporter_toolchain(fb), "unknown");
     }
@@ -743,15 +760,15 @@ testset "run_repro" {
 
 testset "llm_parsing" {
     test "create_repro reply parses into a typed Repro" {
-        let raw = #"
+        let raw = `
             {
               "files": { "main.baml": "function repro_main() -> json { [1,2].at(5) ?? -1 }" },
               "command": "baml run -e repro_main()",
               "setup": null,
               "expectation": { "check": "should_evaluate_to", "expected": -1 }
             }
-        "#;
-        let repro = create_repro$parse(raw);
+        `;
+        let repro = create_repro@parse(raw);
         assert.is_true(repro.files.has("main.baml"));
         match (repro.expectation) {
             let e: ShouldEvaluateTo => assert.equal(baml.json.stringify(e.expected), "-1"),
@@ -760,7 +777,7 @@ testset "llm_parsing" {
     }
 
     test "write_issue reply parses with more repros" {
-        let raw = #"
+        let raw = `
             {
               "title": "Array.at returns wrong element",
               "description": "…",
@@ -775,8 +792,8 @@ testset "llm_parsing" {
                 }
               ]
             }
-        "#;
-        let draft = write_issue$parse(raw);
+        `;
+        let draft = write_issue@parse(raw);
         assert.equal(draft.subsystem, Subsystem.StdLibrary);
         assert.equal(draft.more_repros.length(), 1);
     }
@@ -784,7 +801,7 @@ testset "llm_parsing" {
 
 testset "judge_parsing" {
     test "judge_issue reply parses" {
-        let j = judge_issue$parse(#"{ "similarity": 0.8, "missing": null }"#);
+        let j = judge_issue@parse(`{ "similarity": 0.8, "missing": null }`);
         assert.equal(j.similarity, 0.8);
     }
 }

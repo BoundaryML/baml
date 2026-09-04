@@ -155,7 +155,7 @@ pub enum TypeExprKind {
     /// The wildcard `_` — an inference hole. Valid only where the type at this
     /// slot can be inferred from context (a generic type argument whose binding
     /// is fixed by an initializer, or a `throws`-clause member). Lowered to
-    /// `Ty::Infer` and filled during TIR checking.
+    /// an inference hole and filled during TIR checking.
     Infer {
         attrs: Vec<RawAttribute>,
     },
@@ -1807,7 +1807,7 @@ pub struct LlmPromptSpans {
 pub struct LlmBodyDef {
     pub client: Option<Name>,
     /// Pre-lowered companion bodies keyed by target name. The single-path
-    /// world stashes exactly one: `"spec"` — the `<Fn>$spec` body, built in
+    /// world stashes exactly one: `"spec"` — the `<Fn>@spec` body, built in
     /// `lower_cst` while the CST backtick is still in hand (the AST must stay
     /// CST-free for Salsa: a rowan node is `!Send`), and read back by
     /// `companions::llm_spec`. Absent when the prompt or client is unusable

@@ -61,7 +61,7 @@ function probe(pkg: reflect.Package) -> bool {
 async fn package_type_finders_and_enumerators_are_precise_by_kind() {
     let output = baml_test!(
         r###"
-function main() -> bool throws unknown {
+function main() -> bool {
   let source = `
 class C { value string }
 enum E { A }
@@ -111,7 +111,7 @@ async fn package_class_enumeration_preserves_declaration_order() {
 class PurchaseOrder { id string }
 class OrderedItem { sku string }
 
-function main() -> string throws unknown {
+function main() -> string {
   let current = reflect.Package.current().classes().keys().join("|")
   let compiled = reflect.Package.compile({ "types.baml": `
 class PurchaseOrder { id string }

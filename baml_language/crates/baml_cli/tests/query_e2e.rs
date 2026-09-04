@@ -25,6 +25,7 @@ fn run_baml_cli(built: &Path, dir: &Path, args: &[&str]) -> Output {
     // outlives the test.
     cmd.env("BAML_PROFILE", "1");
     cmd.env("BAML_OUTPUT_PRESET", "human");
+    cmd.env("BAML_AGENT_SKILL_CHECK", "off");
     cmd.env("BAML_HOME", &home);
     cmd.env_remove("BAML_LOG");
     cmd.env("BAML_CACHE_DIR", common::shared_cache_dir());

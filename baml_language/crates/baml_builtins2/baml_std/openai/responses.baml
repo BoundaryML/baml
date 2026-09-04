@@ -1,27 +1,27 @@
-// The OpenAI Responses API client (POST {base_url}/responses).
-//
-// Options come in three groups:
-//   * credentials/endpoint — `api_key`/`base_url` (or the `*_env` names read at
-//     request time);
-//   * first-class typed request parameters — `temperature`, `top_p`,
-//     `max_output_tokens`, `reasoning_effort`, `reasoning_summary`,
-//     `verbosity`, `parallel_tool_calls`, `store`. Each one is lowered into the
-//     typed request class only when it is non-null (PLAN §1.5);
-//   * passthrough — `request_body` (deep-merged over the serialized typed
-//     request as the LAST step, `null` deletes a key), `headers` and
-//     `query_params`.
-//
-// Structured output stays SAP-based: the schema rides in the prompt text and
-// `text.format` is deliberately never set (research report G15). A caller who
-// wants native JSON-schema output sets it through `request_body`.
-//
-// Knowingly dropped, on top of PLAN §6's list: the engine's
-// `finish_reason_allow_list` / `finish_reason_deny_list` (research row G10).
-// There is no config surface for them here and none is planned — the typed
-// `ai.content.StopReason` plus the runner's Refused / MaxTokens enforcement
-// covers what the lists were used for, and a caller who wants a stricter policy
-// writes it over the returned turn (or wraps the client) rather than
-// configuring a string list of provider finish reasons.
+/// The OpenAI Responses API client (POST {base_url}/responses).
+///
+/// Options come in three groups:
+///   * credentials/endpoint — `api_key`/`base_url` (or the `*_env` names read at
+///     request time);
+///   * first-class typed request parameters — `temperature`, `top_p`,
+///     `max_output_tokens`, `reasoning_effort`, `reasoning_summary`,
+///     `verbosity`, `parallel_tool_calls`, `store`. Each one is lowered into the
+///     typed request class only when it is non-null;
+///   * passthrough — `request_body` (deep-merged over the serialized typed
+///     request as the LAST step, `null` deletes a key), `headers` and
+///     `query_params`.
+///
+/// Structured output stays SAP-based: the schema rides in the prompt text and
+/// `text.format` is deliberately never set. A caller who
+/// wants native JSON-schema output sets it through `request_body`.
+///
+/// Deliberately not provided: the engine's `finish_reason_allow_list` and
+/// `finish_reason_deny_list`. There is no config surface for them here and
+/// none is planned — the typed
+/// `ai.content.StopReason` plus the runner's Refused / MaxTokens enforcement
+/// covers what the lists were used for, and a caller who wants a stricter policy
+/// writes it over the returned turn (or wraps the client) rather than
+/// configuring a string list of provider finish reasons.
 class ResponsesClient {
     model: string,
     // A literal string, `env.NAME` (a late-bound `baml.env.Ref`, read at
@@ -68,6 +68,9 @@ class ResponsesClient {
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
 
+    /// Creates a client. Construction reads no environment variable, so
+    /// declaring one is always safe; credentials and endpoints resolve when a
+    /// request is built.
     function new(
         model: string = "gpt-4o-mini",
         api_key: ai.Credential? = null,
@@ -108,14 +111,14 @@ class ResponsesClient {
         }
     }
 
-    // The request-time credential: an explicit value (a literal, or the value
-    // of the variable an `env.NAME` ref points at), else the provider's
-    // canonical one. Nothing here runs before the request.
-    //
-    // A missing key is a CATCHABLE configuration error, not a panic:
-    // `baml.env.get_or_panic` unwinds past the `catch_all` +
-    // `ai.errors.normalize` wrapper below, so an unset variable would take the
-    // process down instead of surfacing as an `ai.errors.Failure`.
+    /// The request-time credential: an explicit value (a literal, or the value
+    /// of the variable an `env.NAME` ref points at), else the provider's
+    /// canonical one. Nothing here runs before the request.
+    ///
+    /// A missing key is a CATCHABLE configuration error, not a panic:
+    /// `baml.env.get_or_panic` unwinds past the `catch_all` +
+    /// `ai.errors.normalize` wrapper below, so an unset variable would take the
+    /// process down instead of surfacing as an `ai.errors.Failure`.
     function resolved_api_key(self) -> string {
         if let k: string = ai.wire.resolve_credential(self.api_key, "OPENAI_API_KEY") {
             return k;
@@ -128,7 +131,7 @@ class ResponsesClient {
         }
     }
 
-    // The request-time base URL, or null for the provider default.
+    /// The request-time base URL, or null for the provider default.
     function resolved_base_url(self) -> string? {
         ai.wire.resolve_credential(self.base_url, null)
     }
@@ -139,7 +142,7 @@ class ResponsesClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            openai.internal.openai_preview(self, input) catch_all (e) {
+            openai.internal.preview(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

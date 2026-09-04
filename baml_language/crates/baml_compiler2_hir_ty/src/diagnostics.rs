@@ -198,7 +198,7 @@ pub enum TirTypeError {
     VoidFunctionResultUsed,
     /// A `spawn ... with` clause expression is not a middleware transformer
     /// (BEP-034: each `with` expression must be a function
-    /// `(baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<U, F>`).
+    /// `(baml.spawn.Params<T, E>) -> baml.spawn.Params<U, F>`).
     SpawnWithNotATransformer { expected_input: Ty, got: Ty },
     /// Expression is not callable (e.g. `42(1)` or `Foo(1)` where Foo is a class).
     NotCallable { ty: Ty },
@@ -278,7 +278,7 @@ pub enum TirTypeError {
     /// A type-inference placeholder `_` (a `TypeExprKind::Infer` wildcard) could not have its
     /// type inferred — inference for `_` is unavailable, so the type must be written explicitly.
     /// Lowered to `Ty::Error` so it never reaches the canonical normalizer, which treats
-    /// `Ty::Infer` as `unreachable!`.
+    /// the inference hole as `unreachable!`.
     CannotInferType,
     /// An ordinary inference variable remained unresolved at writeback.
     TypeMustBeKnown { full_type: Ty },
@@ -398,6 +398,9 @@ pub enum TirTypeError {
     },
     /// Declared throws contains extra types that never escape.
     ExtraneousThrowsDeclaration { extra_types: Vec<String> },
+    /// An `unknown`-containing throws contract without an escaping value typed
+    /// `unknown`.
+    ImpreciseUnknownThrows { inferred_types: Vec<String> },
     /// A type parameter could not be inferred at a call site.
     CannotInferTypeParameter { name: Name },
     /// A method's generic type parameter shadows a type-level parameter (generic
@@ -1159,7 +1162,7 @@ impl fmt::Display for TirTypeError {
             } => {
                 write!(
                     f,
-                    "`spawn ... with` takes middleware transformer functions: this link receives `{}` and must return a `baml.spawn.SpawnParams`, got `{}`",
+                    "`spawn ... with` takes middleware transformer functions: this link receives `{}` and must return a `baml.spawn.Params`, got `{}`",
                     expected_input.render_user_facing(),
                     got.render_user_facing()
                 )
@@ -1524,6 +1527,20 @@ impl fmt::Display for TirTypeError {
                     "extraneous throws declaration: {}",
                     extra_types.join(", ")
                 )
+            }
+            TirTypeError::ImpreciseUnknownThrows { inferred_types } => {
+                if inferred_types.is_empty() {
+                    write!(
+                        f,
+                        "`throws unknown` is unnecessary: BAML infers thrown types automatically, and this function does not throw. Remove the declaration; write an explicit `throws` type only to bound what may escape"
+                    )
+                } else {
+                    let inferred = inferred_types.join(" | ");
+                    write!(
+                        f,
+                        "`throws unknown` is imprecise: this function only throws `{inferred}`. BAML infers thrown types automatically, so remove the declaration; write `throws {inferred}` only to explicitly bound what may escape"
+                    )
+                }
             }
             TirTypeError::CannotInferTypeParameter { name } => {
                 write!(f, "cannot infer type parameter `{name}`")

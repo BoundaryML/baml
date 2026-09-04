@@ -28,11 +28,11 @@ function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.
     store_var _7
     load_type #0
     load_var input
-    call user.fixtures.anyfunction_reflect.RuntimeClassify$spec
+    call user.fixtures.anyfunction_reflect.RuntimeClassify@spec
     store_var _9
     load_type #0
     load_var2 5 6
-    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
     store_var _6
@@ -41,7 +41,7 @@ function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.
     return
 }
 
-function fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.anyfunction_reflect.RuntimeClassify@build_request(input: string, client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -52,7 +52,7 @@ function fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: strin
   L0:
     load_type #0
     load_var input
-    call user.fixtures.anyfunction_reflect.RuntimeClassify$spec
+    call user.fixtures.anyfunction_reflect.RuntimeClassify@spec
     store_var _4
     load_type #0
     load_var2 3 2
@@ -60,17 +60,17 @@ function fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: strin
     return
 }
 
-function fixtures.anyfunction_reflect.RuntimeClassify$parse(json: string) -> #0 {
+function fixtures.anyfunction_reflect.RuntimeClassify@parse(json: string) -> #0 {
     load_type #0
     load_var json
     call baml.sap.parse
     return
 }
 
-function fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: string) -> ai.Prompt {
+function fixtures.anyfunction_reflect.RuntimeClassify@render_prompt(input: string) -> ai.Prompt {
     load_type #0
     load_var input
-    call user.fixtures.anyfunction_reflect.RuntimeClassify$spec
+    call user.fixtures.anyfunction_reflect.RuntimeClassify@spec
     store_var _2
     load_type #0
     load_var _2
@@ -78,7 +78,7 @@ function fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: strin
     return
 }
 
-function fixtures.anyfunction_reflect.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<#0> {
+function fixtures.anyfunction_reflect.RuntimeClassify@spec(input: string) -> ai.FunctionSpec<#0> {
     load_var ?1
     make_cell
     store_var ?1
@@ -97,14 +97,14 @@ function fixtures.anyfunction_reflect.RuntimeClassify$spec(input: string) -> ai.
     alloc_map 1
     load_type #0
     load_var input
-    make_closure .<lambda(RuntimeClassify$spec, 0)>, captures=1, ntypeargs=1
+    make_closure .<lambda(RuntimeClassify@spec, 0)>, captures=1, ntypeargs=1
     load_var2 2 3
     load_type #0
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<#0 | null, #0> {
+function fixtures.anyfunction_reflect.RuntimeClassify@stream(input: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<#0 | null, #0> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -123,7 +123,7 @@ function fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, clie
   L1:
     load_type #0
     load_var input
-    call user.fixtures.anyfunction_reflect.RuntimeClassify$spec
+    call user.fixtures.anyfunction_reflect.RuntimeClassify@spec
     store_var _6
     load_type #0 | null
     load_type #0
@@ -173,12 +173,12 @@ function fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> s
     store_var category
     load_var category
     load_const "sample"
-    call user.fixtures.anyfunction_reflect.RuntimeClassify$render_prompt
+    call user.fixtures.anyfunction_reflect.RuntimeClassify@render_prompt
     call ai.Prompt.text
     store_var prompt
     load_var category
     load_const "\"k7\""
-    call user.fixtures.anyfunction_reflect.RuntimeClassify$parse
+    call user.fixtures.anyfunction_reflect.RuntimeClassify@parse
     call reflect.enum.get_value
     store_var _10
     load_var2 3 4
@@ -192,11 +192,15 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     store_var sig
     load_var sig
     load_field .returns
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _5
     load_var sig
     load_field .errors
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _7
     load_var sig
     load_field .args
@@ -238,7 +242,9 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     store_var _19
     load_var arg
     load_field .type
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _22
     load_var2 11 12
     bin_op +
@@ -287,7 +293,9 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     store_var _41
     load_var opt
     load_field .1
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _44
     load_var2 17 18
     bin_op +

@@ -539,7 +539,7 @@ mod tests {
             interface_head: interface,
             for_ty_pattern: bex_vm_types::TyTemplate::Class(
                 class,
-                Vec::new(),
+                Box::new([]),
                 baml_type::TyAttr::default(),
             ),
             generic_param_bounds: Vec::new(),

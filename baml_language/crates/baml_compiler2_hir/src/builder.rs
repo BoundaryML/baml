@@ -1519,13 +1519,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_diagnostics(seen);
 
         // Walk class methods — inside class scope, so methods won't be
-        // contributed as top-level symbols. We collapse class-level methods
-        // and all `implements I { ... }` method overrides into a single id
-        // list so downstream code (which queries `Class::methods`) sees them
-        // uniformly. Disambiguation of which interface a method satisfies
-        // happens in TIR via `class.implements`.
+        // contributed as top-level symbols. `Class::methods` carries ONLY the
+        // class-level methods: an in-body `implements I { … }` method belongs
+        // to its impl block (the compiler sees no distinction between the
+        // in-class and out-of-body spellings beyond syntax), so those ids
+        // live on the `ImplBlock` and resolve through the impl tier.
         self.class_depth += 1;
-        let mut method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
+        let method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
         for impl_block in &c.implements {
             let mut block_method_ids = Vec::new();
             for m in &impl_block.methods {
@@ -1556,14 +1556,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                     .map(InterfaceFieldLink::from_ast)
                     .collect(),
                 associated_type_bindings: impl_block.associated_type_bindings.clone(),
-                methods: block_method_ids.clone(),
+                methods: block_method_ids,
                 span: impl_block.span,
                 // In-body `implements` blocks don't carry a docstring today —
                 // the AST `ImplementsBlock` has no field for one.
                 docstring: None,
             };
             self.item_tree.alloc_impl(&iface_head, &c.name, block);
-            method_ids.extend(block_method_ids);
         }
         self.class_depth -= 1;
 
@@ -2375,8 +2374,8 @@ impl<'db> SemanticIndexBuilder<'db> {
             } => {
                 // Allow `baml.errors.*`, `root.errors.*`, `baml.json.*`, and
                 // BEP-066's `reflect.errors.*` (fully qualified).
-                // `baml.json.JsonParseError` / `baml.json.JsonDecodeError` /
-                // `baml.json.JsonSerializationError` are stdlib error types just like
+                // `baml.json.ParseError` / `baml.json.DecodeError` /
+                // `baml.json.SerializationError` are stdlib error types just like
                 // `baml.errors.*` ones; they need the same exemption.
                 let is_core_builtin_error = segments.len() >= 3
                     && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
@@ -2385,11 +2384,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                     && segments[0].as_str() == "reflect"
                     && segments[1].as_str() == "errors";
                 let is_builtin_error = is_core_builtin_error || is_reflection_error;
-                // Allow single-segment class names (e.g. `JsonParseError`) in
+                // Allow single-segment class names (e.g. `ParseError`) in
                 // builtin files — the class is resolvable in the current namespace
                 // and TIR will type-check it.  This allows builtin functions to
                 // declare `throws` for classes defined in the same stdlib namespace
-                // without requiring the full `baml.json.JsonParseError` path.
+                // without requiring the full `baml.json.ParseError` path.
                 let is_builtin_class_ref = segments.len() == 1
                     && generic_args.is_empty()
                     && segments[0]
@@ -2404,13 +2403,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                         .iter()
                         .any(|name| name == &segments[0]);
                 // A projection off one of the function's own generic params —
-                // e.g. `T.CompareError` for `<T extends Comparable>`, which parses
-                // as a dotted path at this phase. The concrete error is the
+                // e.g. `T.Error` for `<T extends Iface>`, which parses as a
+                // dotted path at this phase. The concrete error is the
                 // implementor's associated type, resolved at the call site; the
                 // host fn just propagates whatever the dispatched method throws
-                // (the declared `throws` is erased for builtins). Lets
-                // `_compare_shim` declare `throws T.CompareError` instead of an
-                // unconstrained error param that call sites cannot pin.
+                // (the declared `throws` is erased for builtins). Lets a builtin
+                // declare `throws T.Error` instead of an unconstrained error
+                // param that call sites cannot pin.
                 let is_generic_param_projection = segments.len() >= 2
                     && generic_args.is_empty()
                     && allowed_generic_params
@@ -2430,12 +2429,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             // A projection off one of the function's own generic params — e.g.
-            // `T.CompareError` for `<T extends Comparable>`. The concrete error is
-            // the implementor's associated type, resolved at the call site; the
-            // host fn just propagates whatever the dispatched method throws (the
-            // declared `throws` is erased for builtins), so this is sound. Lets
-            // `_compare_shim` declare `throws T.CompareError` rather than an
-            // unconstrained error param that call sites cannot pin.
+            // `T.Error` for `<T extends Iface>`. The concrete error is the
+            // implementor's associated type, resolved at the call site; the host
+            // fn just propagates whatever the dispatched method throws (the
+            // declared `throws` is erased for builtins), so this is sound. Lets a
+            // builtin declare `throws T.Error` rather than an unconstrained error
+            // param that call sites cannot pin.
             ast::TypeExprKind::AssociatedTypeProjection { base, .. }
                 if matches!(
                     &base.kind,

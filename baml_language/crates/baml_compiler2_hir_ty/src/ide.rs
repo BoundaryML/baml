@@ -144,10 +144,14 @@ fn find_lambda_by_span<'a>(
 pub fn members_for_receiver<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     owner: BodyOwnerId<'db>,
-    receiver: &baml_type::interned::Ty,
+    receiver: &baml_type::Ty,
 ) -> Vec<crate::method_resolution::MemberCandidate<'db>> {
-    let facts = crate::facts::Facts::with_bounds(db, crate::infer::owner_bounds(db, owner));
-    crate::method_resolution::member_candidates(db, &facts, receiver)
+    let facts =
+        crate::facts::Facts::with_bounds(db, crate::infer::owner_declared_bounds(db, owner));
+    // Total: a plain receiver has no inference variables to begin with, so
+    // the proof is constructed, never checked.
+    let receiver = baml_type::interned::ClosedTy::from_plain(receiver);
+    crate::method_resolution::member_candidates(db, &facts, &receiver)
 }
 
 /// The members a TYPE qualifier reaches: `int.parse`, `Range.new`,

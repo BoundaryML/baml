@@ -83,9 +83,9 @@ fn user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Ret
     let _3: string // parts
     let _4: string
     let _5: string
-    let _6: (reflect.Type) -> string throws never
+    let _6: reflect.Type
     let _7: string
-    let _8: (reflect.Type) -> string throws never
+    let _8: reflect.Type
     let _9: string
     let _10: int
     let _11: (reflect.Arg[]) -> int throws never
@@ -100,7 +100,7 @@ fn user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Ret
     let _20: string
     let _21: string
     let _22: string
-    let _23: (reflect.Type) -> string throws never
+    let _23: reflect.Type
     let _24: string[]
     let _25: (map<string, reflect.Arg>) -> string[] throws never
     let _26: reflect.Type
@@ -122,7 +122,7 @@ fn user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Ret
     let _42: string
     let _43: string
     let _44: string
-    let _45: (reflect.Type) -> string throws never
+    let _45: reflect.Type
 
     bb0: {
         _2 = call const fn reflect.signature(copy _1) -> [bb1];
@@ -130,12 +130,12 @@ fn user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Ret
 
     bb1: {
         _6 = copy _2.3;
-        _5 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _6) -> [bb2];
+        _5 = virtual_call to_string as baml.ToString(copy _6) -> [bb2];
     }
 
     bb2: {
         _8 = copy _2.4;
-        _7 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _8) -> [bb3];
+        _7 = virtual_call to_string as baml.ToString(copy _8) -> [bb3];
     }
 
     bb3: {
@@ -173,7 +173,7 @@ fn user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Ret
         _21 = copy _18.0;
         _19 = copy _20 + copy _21;
         _23 = copy _18.1;
-        _22 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _23) -> [bb9];
+        _22 = virtual_call to_string as baml.ToString(copy _23) -> [bb9];
     }
 
     bb9: {
@@ -227,7 +227,7 @@ fn user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Ret
         _43 = copy _32;
         _41 = copy _42 + copy _43;
         _45 = copy _33.1;
-        _44 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _45) -> [bb18];
+        _44 = virtual_call to_string as baml.ToString(copy _45) -> [bb18];
     }
 
     bb18: {
@@ -388,12 +388,12 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null
 
     bb5: {
         _10 = load_type(#0);
-        _9 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _10>(copy _1) -> [bb6];
+        _9 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec<copy _10>(copy _1) -> [bb6];
     }
 
     bb6: {
         _11 = load_type(#0);
-        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _11>(copy _7, copy _9) -> [bb7];
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure><copy _11>(copy _7, copy _9) -> [bb7];
     }
 
     bb7: {
@@ -406,7 +406,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: string, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify@build_request(input: string, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // input // param
@@ -428,7 +428,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: string
 
     bb2: {
         _5 = load_type(#0);
-        _4 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _5>(copy _1) -> [bb3];
+        _4 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec<copy _5>(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -441,7 +441,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: string
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify$parse(json: string) -> T {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify@parse(json: string) -> T {
     // Locals:
     let _0: T // _0 // return
     let _1: string // json // param
@@ -457,7 +457,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$parse(json: string) -> T {
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: string) -> ai.Prompt {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify@render_prompt(input: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // input // param
@@ -467,7 +467,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: string
 
     bb0: {
         _3 = load_type(#0);
-        _2 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _3>(copy _1) -> [bb1];
+        _2 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec<copy _3>(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -480,7 +480,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: string
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<T> {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec(input: string) -> ai.FunctionSpec<T> {
     // Locals:
     let _0: ai.FunctionSpec<T> // _0 // return
     let _1: string // input // param [captured]
@@ -512,7 +512,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec(input: string) -> ai.F
 }
 
 // lambda[0]
-fn .<lambda(RuntimeClassify$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(RuntimeClassify@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -625,7 +625,7 @@ fn .<lambda(RuntimeClassify$spec, 0)>( __spec_output_format: ai.OutputFormat) ->
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<null | T, T> {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify@stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<null | T, T> {
     // Locals:
     let _0: ai.stream.Stream<null | T, T> // _0 // return
     let _1: string // input // param
@@ -660,7 +660,7 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, clien
 
     bb4: {
         _7 = load_type(#0);
-        _6 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _7>(copy _1) -> [bb5];
+        _6 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec<copy _7>(copy _1) -> [bb5];
     }
 
     bb5: {
@@ -700,7 +700,7 @@ fn user.fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> st
 
     bb2: {
         _6 = copy _1;
-        _5 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$render_prompt<copy _6>(const "sample"; runtime_type_check) -> [bb3];
+        _5 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@render_prompt<copy _6>(const "sample"; runtime_type_check) -> [bb3];
     }
 
     bb3: {
@@ -709,7 +709,7 @@ fn user.fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> st
 
     bb4: {
         _8 = copy _1;
-        _7 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$parse<copy _8>(const "\"k7\""; runtime_type_check) -> [bb5];
+        _7 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify@parse<copy _8>(const "\"k7\""; runtime_type_check) -> [bb5];
     }
 
     bb5: {

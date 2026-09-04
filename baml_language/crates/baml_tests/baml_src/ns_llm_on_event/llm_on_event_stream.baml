@@ -4,7 +4,7 @@
 // token counts are deterministic on both drain paths.
 
 class StreamScript {
-    events: (ai.stream.StreamEvent | ai.stream.Done)[],
+    events: (ai.stream.Event | ai.stream.Done)[],
     cursor: int,
 
     implements ai.Client {
@@ -30,7 +30,7 @@ class StreamScript {
                 let e = self.events.at(self.cursor);
                 self.cursor += 1;
                 match (e) {
-                    let ev: ai.stream.StreamEvent => ev,
+                    let ev: ai.stream.Event => ev,
                     let d: ai.stream.Done => d,
                     null => ai.stream.Done {  },
                 }
@@ -56,7 +56,7 @@ test "stream drained via next delivers settle events exactly once" {
     let cb = (e: ai.events.Event) -> void {
         probe.labels.push(label_of(e));
     };
-    let s = Greet$stream("world", client = make_script(), on_event = cb);
+    let s = Greet@stream("world", client = make_script(), on_event = cb);
     while (true) {
         match (s.next()) {
             let d: ai.stream.Done => {
@@ -84,7 +84,7 @@ test "stream drained via final recovers streamed usage" {
             },
         };
     };
-    let s = Greet$stream("world", client = make_script(), on_event = cb);
+    let s = Greet@stream("world", client = make_script(), on_event = cb);
     let f = s.final();
     assert.equal(f.message, "hi");
     assert.equal(probe.labels, ["RunStarted", "AssistantMessage", "Usage:7/11"])
@@ -94,7 +94,7 @@ test "throwing listener does not alter the stream result" {
     let cb = (e: ai.events.Event) -> void {
         throw baml.errors.InvalidArgument { message: "listener boom" }
     };
-    let s = Greet$stream("world", client = make_script(), on_event = cb);
+    let s = Greet@stream("world", client = make_script(), on_event = cb);
     let f = s.final();
     assert.equal(f.message, "hi")
 }

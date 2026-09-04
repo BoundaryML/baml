@@ -146,15 +146,13 @@ function mr_concrete(d: Dog) -> string throws never {
         resolutions.contains(&("n.describe".into(), "InterfaceVirtualMethod".into())),
         "existential method call is a virtual slot: {resolutions:?}"
     );
-    // The item tree hoists implements-block methods into the class's
-    // method list, so the class-inherent road resolves the concrete
-    // call and the record is BoundMethod carrying the impl method's
-    // FunctionLoc (the callable MIR must emit). TIR spells this
-    // InterfaceConcreteMethod with the impl block; whether MIR needs
-    // that distinction surfaces at the differential gate.
+    // An implements-block method is Impl-owned (never a class-inherent
+    // method), so a concrete receiver resolves through the impl tier and
+    // the record is InterfaceConcreteMethod carrying the impl block, the
+    // resolved body, and the carried owner frame.
     assert!(
-        resolutions.contains(&("d.describe".into(), "BoundMethod".into())),
-        "concrete receiver resolves through the hoisted class method: {resolutions:?}"
+        resolutions.contains(&("d.describe".into(), "InterfaceConcreteMethod".into())),
+        "concrete receiver resolves through the matched impl: {resolutions:?}"
     );
 }
 
@@ -212,7 +210,7 @@ function mr_chain(p: Person) -> string throws never {
                 .segments
                 .iter()
                 .map(|segment| {
-                    let ty = segment.ty.to_plain().render_canonical();
+                    let ty = segment.ty.render_canonical();
                     match &segment.resolution {
                         Some(resolution) => format!("{ty}/{}", kind(resolution)),
                         None => ty,
@@ -269,7 +267,7 @@ function cp_use() -> int throws never {
             let type_args: Vec<String> = plan
                 .type_args
                 .iter()
-                .map(|ty| ty.to_plain().render_canonical())
+                .map(|ty| ty.render_canonical())
                 .collect();
             let bindings: Vec<String> = plan
                 .bindings
@@ -346,12 +344,12 @@ function rt_owner_use() -> RtBox<int> throws never {
             assert!(matches!(
                 plan.slots.as_slice(),
                 [CallTypeArgPlan::Static { ty, .. }]
-                    if ty.to_plain().render_canonical() == "int"
+                    if ty.render_canonical() == "int"
             ));
             assert_eq!(
                 plan.type_args
                     .iter()
-                    .map(|ty| ty.to_plain().render_canonical())
+                    .map(|ty| ty.render_canonical())
                     .collect::<Vec<_>>(),
                 vec!["int"]
             );
@@ -386,8 +384,11 @@ function rt_use(runtime_t: reflect.Type, good: RtGood) -> RtAnchor throws never 
                 .type_of_expr
                 .values()
                 .chain(result.call_plans.values().flat_map(|plan| &plan.type_args))
-                .all(|ty| !ty.has_infer()),
-            "final inference tables must be ground"
+                // Groundness itself is type-enforced now (the plain artifact
+                // has no variable variant); what remains checkable is that
+                // finalize did not leak whole-table error residue.
+                .any(|ty| !matches!(ty, baml_type::Ty::Error { .. })),
+            "final inference tables must not be all-error"
         );
         for (&call, plan) in &result.call_plans {
             if &source[source_map.expr_span(call)]
@@ -400,18 +401,18 @@ function rt_use(runtime_t: reflect.Type, good: RtGood) -> RtAnchor throws never 
             assert!(matches!(
                 &plan.slots[0],
                 CallTypeArgPlan::Runtime { occurrence_ty, parameter, .. }
-                    if occurrence_ty.to_plain().render_canonical() == "user.RtAnchor"
+                    if occurrence_ty.render_canonical() == "user.RtAnchor"
                         && parameter.name().as_str() == "A"
             ));
             assert!(matches!(
                 &plan.slots[1],
                 CallTypeArgPlan::Static { ty, .. }
-                    if ty.to_plain().render_canonical() == "user.RtGood"
+                    if ty.render_canonical() == "user.RtGood"
             ));
             assert_eq!(
                 plan.type_args
                     .iter()
-                    .map(|ty| ty.to_plain().render_canonical())
+                    .map(|ty| ty.render_canonical())
                     .collect::<Vec<_>>(),
                 vec!["user.RtAnchor", "user.RtGood"]
             );
@@ -459,11 +460,11 @@ function sc_stream(runtime_t: reflect.Type) -> int throws never {
 function sc_ordinary_contract() -> null throws never {
     sc_contract<(string) -> string>()
 }
-function sc_extract(pkg: reflect.Package) -> null throws unknown {
+function sc_extract(pkg: reflect.Package) -> null {
     let extracted = pkg.get_function<(string) -> string>("root.Target");
     null
 }
-function sc_session(session: reflect.Session) -> null throws unknown {
+function sc_session(session: reflect.Session) -> null {
     let value = session.eval("1");
     null
 }
@@ -490,10 +491,8 @@ function sc_companion() -> baml.Map<string, int> throws never {
             let snippet = &source[source_map.expr_span(call)];
             if snippet.starts_with("pkg.get_function") {
                 extraction_throws = plan.slots.first().and_then(|slot| match slot {
-                    CallTypeArgPlan::Static { ty, .. } => match ty.kind() {
-                        baml_type::interned::TyKind::Function { throws, .. } => {
-                            Some(throws.to_plain().render_canonical())
-                        }
+                    CallTypeArgPlan::Static { ty, .. } => match ty {
+                        baml_type::Ty::Function { throws, .. } => Some(throws.render_canonical()),
                         _ => None,
                     },
                     CallTypeArgPlan::Runtime { .. } => None,
@@ -503,7 +502,7 @@ function sc_companion() -> baml.Map<string, int> throws never {
                 session_args = Some(
                     plan.type_args
                         .iter()
-                        .map(|ty| ty.to_plain().render_canonical())
+                        .map(|ty| ty.render_canonical())
                         .collect::<Vec<_>>(),
                 );
             }
@@ -610,8 +609,8 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                     check,
                     baml_compiler2_hir_ty::infer::RuntimeCheck::Argument { expected, .. }
                         if matches!(
-                            expected.kind(),
-                            baml_type::interned::TyKind::TypeVar(param, _)
+                            expected,
+                            baml_type::Ty::TypeVar(param, _)
                                 if param.index() & 0x8000_0000 != 0
                         )
                 ),
@@ -646,7 +645,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                 assert!(binding.parameter.index() & 0x8000_0000 != 0);
                 assert!(matches!(
                     plan.type_args.as_slice(),
-                    [ty] if matches!(ty.kind(), baml_type::interned::TyKind::TypeVar(param, _)
+                    [ty] if matches!(ty, baml_type::Ty::TypeVar(param, _)
                         if param == &binding.parameter)
                 ));
             }
@@ -655,7 +654,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                 saw_branch = true;
                 assert!(matches!(
                     plan.type_args.as_slice(),
-                    [ty] if matches!(ty.kind(), baml_type::interned::TyKind::TypeVar(param, _)
+                    [ty] if matches!(ty, baml_type::Ty::TypeVar(param, _)
                         if param == &binding.parameter)
                 ));
             }
@@ -663,7 +662,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                 saw_outer = true;
                 assert!(matches!(
                     plan.type_args.as_slice(),
-                    [ty] if ty.to_plain().render_canonical() == "user.ScopeT"
+                    [ty] if ty.render_canonical() == "user.ScopeT"
                 ));
             }
         }
@@ -681,7 +680,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
         binding_blocks.sort_by_key(|(len, _)| *len);
         if let Some((_, ty)) = binding_blocks.first() {
             saw_erased_block = true;
-            assert_eq!(ty.to_plain().render_canonical(), "unknown");
+            assert_eq!(ty.render_canonical(), "unknown");
         }
 
         let mut lambda_binding_blocks: Vec<_> = result
@@ -698,9 +697,9 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
         if let Some((_, ty)) = lambda_binding_blocks.first() {
             saw_lambda_erasure = true;
             assert!(matches!(
-                ty.kind(),
-                baml_type::interned::TyKind::Function { ret, .. }
-                    if ret.to_plain().render_canonical() == "unknown"
+                &**ty,
+                baml_type::Ty::Function { ret, .. }
+                    if ret.render_canonical() == "unknown"
             ));
         }
     }
@@ -777,7 +776,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
             baml_compiler2_hir::body::BodyOwnerId::Let(_) => "<let>",
         };
         if owner_name == "pat_catch" {
-            saw_catch_effect = result.throws.to_plain().render_canonical() == "user.ScopeEffect";
+            saw_catch_effect = result.throws.render_canonical() == "user.ScopeEffect";
         }
         non_exhaustive += result
             .diagnostics
@@ -805,7 +804,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
             ) {
                 pattern_types += 1;
                 assert!(
-                    matches!(ty.to_plain().render_canonical().as_str(), "int" | "1"),
+                    matches!(ty.render_canonical().as_str(), "int" | "1"),
                     "runtime pattern did not preserve its scrutinee type: {ty:?}"
                 );
             }
@@ -813,15 +812,14 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
         for (&expr, ty) in &result.type_of_expr {
             let snippet = &source[source_map.expr_span(expr)];
             if snippet == "x is unreflect(scope_effect_type())" {
-                saw_direct_effect |=
-                    result.throws.to_plain().render_canonical() == "user.ScopeEffect";
+                saw_direct_effect |= result.throws.render_canonical() == "user.ScopeEffect";
             }
             if snippet.starts_with("(x: int) ->") {
                 saw_lambda_effect |= matches!(
-                    ty.kind(),
-                    baml_type::interned::TyKind::Function { throws, .. }
-                        if throws.to_plain().render_canonical() == "user.ScopeEffect"
-                ) && result.throws.to_plain().render_canonical() == "never";
+                    ty,
+                    baml_type::Ty::Function { throws, .. }
+                        if throws.render_canonical() == "user.ScopeEffect"
+                ) && result.throws.render_canonical() == "never";
             }
         }
     }
@@ -837,8 +835,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
         .expect("pat_default function");
     let default_owner = baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(default_function);
     let default_result = infer_body(&db, default_owner);
-    let saw_default_effect =
-        default_result.throws.to_plain().render_canonical() == "user.ScopeEffect";
+    let saw_default_effect = default_result.throws.render_canonical() == "user.ScopeEffect";
     let default_body = baml_compiler2_ppir::body(&db, default_owner);
     let default_body = default_body.expr_body().expect("default expression body");
     for (pat, ty) in &default_result.type_of_pat {
@@ -847,7 +844,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
             baml_compiler2_ast::Pattern::Unreflect(_)
         ) {
             pattern_types += 1;
-            assert_eq!(ty.to_plain().render_canonical(), "1");
+            assert_eq!(ty.render_canonical(), "1");
         }
     }
     assert_eq!(non_exhaustive, 1, "runtime patterns do not prove coverage");
@@ -874,8 +871,39 @@ function ea_flex(a: int, b: int = 2) -> int throws never {
 function ea_take(f: (x: int, y: int = 9) -> int throws never) -> int throws never {
     f(1)
 }
+function ea_wide(x: int, a: int = 10, b: int = 100) -> int throws never {
+    x + a + b
+}
+type EaTarget = (x: int, b?: int) -> int throws never
+function ea_take_union(f: string | EaTarget) -> int throws never {
+    0
+}
+function ea_string(value: string) -> string throws never {
+    value
+}
+type EaIncompatible = (value: int, extra?: int) -> int throws never
+function ea_take_erased(f: reflect.AnyFunction | EaIncompatible) -> int throws never {
+    0
+}
+function ea_ambiguous(x: int, b: int = 10, c: int = 100) -> int throws never {
+    x + b + c
+}
+type EaWithB = (x: int, b?: int) -> int throws never
+type EaWithC = (x: int, c?: int) -> int throws never
+function ea_take_ambiguous(f: EaWithB | EaWithC) -> int throws never {
+    0
+}
 function ea_use() -> int throws never {
     ea_take(ea_flex)
+}
+function ea_use_union() -> int throws never {
+    ea_take_union(ea_wide)
+}
+function ea_use_erased() -> int throws never {
+    ea_take_erased(ea_string)
+}
+function ea_use_ambiguous() -> int throws never {
+    ea_take_ambiguous(ea_ambiguous)
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
@@ -894,8 +922,8 @@ function ea_use() -> int throws never {
     adjustments.sort();
     assert_eq!(
         adjustments,
-        vec![("ea_flex".to_string(), 1)],
-        "optional-param name drift records a FunctionAdapter at the checked expr"
+        vec![("ea_flex".to_string(), 1), ("ea_wide".to_string(), 1)],
+        "runtime-incompatible functions record a FunctionAdapter for direct and union callback slots"
     );
 }
 
@@ -923,7 +951,7 @@ function pd_take(a: int, tag: string = "t", n: int = 1 + 2, bad: int = "x") -> i
             let ty = result
                 .type_of_expr
                 .get(&expr)
-                .map(|ty| ty.to_plain().render_canonical())
+                .map(|ty| ty.render_canonical())
                 .unwrap_or_else(|| "<missing>".into());
             let mismatch = if result.type_mismatches.contains_key(&expr) {
                 " MISMATCH"
@@ -978,7 +1006,7 @@ function de_probe() -> bool throws never {
             let args: Vec<String> = plan
                 .type_args
                 .iter()
-                .map(|ty| ty.to_plain().render_canonical())
+                .map(|ty| ty.render_canonical())
                 .collect();
             plans.push(format!(
                 "{} -> {args:?}",
@@ -1005,7 +1033,7 @@ fn call_plan_effect_solves_from_deferred_lambda() {
     // lower rides a deferred sub - draining goals first lands the lower
     // before E commits, so E = never, not the minimum-upper unknown.
     let source = r#"
-function ir_probe() -> int throws unknown {
+function ir_probe() -> int {
     let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
     it.reduce((a: int, x: int) -> int { a + x }, 0)
 }
@@ -1026,7 +1054,7 @@ function ir_probe() -> int throws unknown {
             plans.push(
                 plan.type_args[plan.own_offset..]
                     .iter()
-                    .map(|ty| ty.to_plain().render_canonical())
+                    .map(|ty| ty.render_canonical())
                     .collect::<Vec<_>>(),
             );
         }
@@ -1128,7 +1156,7 @@ function pa_probe() -> int {
             if snippet.starts_with("let arr")
                 && let Some(ty) = result.type_of_pat.get(&pat_id)
             {
-                renders.push(ty.to_plain().render_canonical());
+                renders.push(ty.render_canonical());
             }
         }
     }

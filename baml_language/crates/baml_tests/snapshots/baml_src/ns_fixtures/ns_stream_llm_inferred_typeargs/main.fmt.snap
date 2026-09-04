@@ -16,5 +16,5 @@ function TestFunc(input: string) -> string {
 }
 
 function call_stream_inferred() -> ai.stream.Stream<string | null, string> {
-    ai.stream.from_spec(TestFunc$spec("world"))
+    ai.stream.from_spec(TestFunc@spec("world"))
 }

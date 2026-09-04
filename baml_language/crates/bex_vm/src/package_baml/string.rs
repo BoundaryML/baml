@@ -17,11 +17,6 @@ fn char_substrings(string: &BexStr) -> Vec<BexStr> {
 
 impl BamlClassString for PackageBamlImpl {
     #[expect(clippy::cast_possible_wrap)]
-    fn length(string: &BexStr) -> i64 {
-        string.char_count() as i64
-    }
-
-    #[expect(clippy::cast_possible_wrap)]
     fn char_count(string: &BexStr) -> i64 {
         string.char_count() as i64
     }

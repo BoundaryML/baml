@@ -222,7 +222,7 @@ func Test_host_supplied_json_supports_typed_narrowing(t *testing.T) {
 
 	_, err = baml_sdk.GoJsonTestsJsonPathString(ctx, object, ".absent")
 	if err == nil || !strings.Contains(err.Error(), "missing field") {
-		t.Fatalf("json_path_string(.absent) error = %v; want missing-field JsonPathError", err)
+		t.Fatalf("json_path_string(.absent) error = %v; want missing-field PathError", err)
 	}
 }
 

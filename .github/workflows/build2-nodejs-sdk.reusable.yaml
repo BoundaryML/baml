@@ -103,7 +103,7 @@ jobs:
     runs-on: ${{ matrix._.host }}
     container: ${{ matrix._.container }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -143,7 +143,7 @@ jobs:
         # npm on PATH here, but pnpm/action-setup shells out to npm. Provide a real
         # node/npm first (this is what the setup-node composite did in the original
         # all-green run).
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 

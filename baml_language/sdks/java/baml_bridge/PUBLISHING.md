@@ -60,7 +60,7 @@ working against a locally built cdylib uses step 1 or 2.
 Build the release cdylib first (from the repo root):
 
 ```
-rustup run 1.93.0 cargo build -p bridge_java --release
+cargo build -p bridge_java --release
 # → target/release/libbridge_java.so
 ```
 

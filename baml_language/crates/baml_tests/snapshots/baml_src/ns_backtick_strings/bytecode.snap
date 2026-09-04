@@ -573,7 +573,7 @@ function backtick_strings.$init_test_ns_backtick_strings_backtick_strings(regist
     return
 }
 
-function backtick_strings.Person.baml.ToString.to_string(self: backtick_strings.Person) -> string {
+function backtick_strings.<(user.backtick_strings.Person as baml.ToString)>.to_string(self: backtick_strings.Person) -> string {
     load_var self
     load_field .name
     return

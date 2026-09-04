@@ -2,49 +2,49 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-580..588 'uc_field': throws never
-630..677 '{\n   ...  v\n}': string
-636..641 'let v': string
-644..651 'r.value': string
-674..675 'v': string
-688..696 'uc_iflet': throws never
-744..831 '{\n   ...  }\n}': string
-750..829 'if let...n    }': string
-753..773 'let s:...UcWarn': user.UcOk | user.UcWarn
-760..764 'UcOk': user.UcOk
-760..773 'UcOk | UcWarn': user.UcOk | user.UcWarn
-767..773 'UcWarn': user.UcWarn
-776..777 'r': int | user.UcOk | user.UcWarn
-778..801 '{\n   ...n    }': string
-788..795 's.value': string
-807..829 '{\n   ...n    }': "none"
-817..823 '"none"': "none"
-842..851 'oc_member': throws never
-898..953 '{\n   ...  n\n}': string | null
-904..909 'let n': string | null
-912..913 'x': user.UcOk | null
-912..920 'x?.value': string
-912..920 'x?.value': string | null
-950..951 'n': string | null
-964..971 'oc_call': throws never
-1010..1065 '{\n   ...  n\n}': int
-1016..1021 'let n': int
-1024..1026 'xs': int[] | null
-1024..1034 'xs?.length': (self: int[]) -> int throws never
-1024..1036 'xs?.length()': int
-1024..1036 'xs?.length()': int | null
-1024..1042 'xs?.le... ?? -1': int
-1040..1042 '-1': -1
-1041..1042 '1': 1
-1062..1063 'n': int
-1076..1087 'oc_two_step': throws never
-1124..1183 '{\n   ...  n\n}': int
-1130..1135 'let n': int
-1138..1139 'x': user.UcOk | null
-1138..1146 'x?.value': string
-1138..1153 'x?.value.length': (self: baml.String) -> int throws never
-1138..1155 'x?.val...ngth()': int
-1138..1155 'x?.val...ngth()': int | null
-1138..1160 'x?.val...) ?? 0': int
-1159..1160 '0': 0
-1180..1181 'n': int
+510..518 'uc_field': throws never
+560..607 '{\n   ...  v\n}': string
+566..571 'let v': string
+574..581 'r.value': string
+604..605 'v': string
+618..626 'uc_iflet': throws never
+674..761 '{\n   ...  }\n}': string
+680..759 'if let...n    }': string
+683..703 'let s:...UcWarn': user.UcOk | user.UcWarn
+690..694 'UcOk': user.UcOk
+690..703 'UcOk | UcWarn': user.UcOk | user.UcWarn
+697..703 'UcWarn': user.UcWarn
+706..707 'r': int | user.UcOk | user.UcWarn
+708..731 '{\n   ...n    }': string
+718..725 's.value': string
+737..759 '{\n   ...n    }': "none"
+747..753 '"none"': "none"
+772..781 'oc_member': throws never
+828..883 '{\n   ...  n\n}': string | null
+834..839 'let n': string | null
+842..843 'x': user.UcOk | null
+842..850 'x?.value': string
+842..850 'x?.value': string | null
+880..881 'n': string | null
+894..901 'oc_call': throws never
+940..995 '{\n   ...  n\n}': int
+946..951 'let n': int
+954..956 'xs': int[] | null
+954..964 'xs?.length': (self: int[]) -> int throws never
+954..966 'xs?.length()': int
+954..966 'xs?.length()': int | null
+954..972 'xs?.le... ?? -1': int
+970..972 '-1': -1
+971..972 '1': 1
+992..993 'n': int
+1006..1017 'oc_two_step': throws never
+1054..1113 '{\n   ...  n\n}': int
+1060..1065 'let n': int
+1068..1069 'x': user.UcOk | null
+1068..1076 'x?.value': string
+1068..1083 'x?.value.length': (self: string) -> int throws never
+1068..1085 'x?.val...ngth()': int
+1068..1085 'x?.val...ngth()': int | null
+1068..1090 'x?.val...) ?? 0': int
+1089..1090 '0': 0
+1110..1111 'n': int

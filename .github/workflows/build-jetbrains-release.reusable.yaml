@@ -46,12 +46,12 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Java
         uses: ./.github/actions/setup-java
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
 
       # Set environment variables
       - name: Export Properties
@@ -88,18 +88,18 @@ jobs:
 
   #     # Check out the current repository
   #     - name: Fetch Sources
-  #       uses: actions/checkout@v6
+  #       uses: actions/checkout@v7
 
   #     # Set up Java environment for the next steps
   #     - name: Setup Java
-  #       uses: actions/setup-java@v4
+  #       uses: actions/setup-java@v6
   #       with:
   #         distribution: zulu
   #         java-version: 21
 
   #     # Setup Gradle
   #     - name: Setup Gradle
-  #       uses: gradle/actions/setup-gradle@v4
+  #       uses: gradle/actions/setup-gradle@v5
 
   #     # Run tests
   #     - name: Run Tests
@@ -115,7 +115,7 @@ jobs:
 
   #     # Upload the Kover report to CodeCov
   #     - name: Upload Code Coverage Report
-  #       uses: codecov/codecov-action@v5
+  #       uses: codecov/codecov-action@v7
   #       with:
   #         files: ./build/reports/kover/report.xml
 
@@ -130,13 +130,13 @@ jobs:
   #     pull-requests: write
   #   steps:
   #     # Check out the current repository
-  #     - uses: actions/checkout@v6
+  #     - uses: actions/checkout@v7
   #       with:
   #         ref: ${{ github.event.pull_request.head.sha }}  # to check out the actual pull request commit, not the merge commit
   #         fetch-depth: 0  # a full history is required for pull request analysis
 
   #     # Set up Java environment for the next steps
-  #     - uses: actions/setup-java@v4
+  #     - uses: actions/setup-java@v6
   #       with:
   #         distribution: temurin
   #         java-version: 23
@@ -155,16 +155,16 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Java
         uses: ./.github/actions/setup-java
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Cache Plugin Verifier IDEs
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ${{ needs.build.outputs.pluginVerifierHomeDir }}/ides
           key: jetbrains-plugin-verifier-${{ runner.os }}-${{ hashFiles('jetbrains/gradle.properties') }}

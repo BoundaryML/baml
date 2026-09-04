@@ -27,11 +27,11 @@ function fixtures.backtick_decl_slots.Greet(name: string, client: ai.Client | nu
     call ai.Agent.new
     store_var _7
     load_var name
-    call user.fixtures.backtick_decl_slots.Greet$spec
+    call user.fixtures.backtick_decl_slots.Greet@spec
     store_var _9
     load_type string
     load_var2 5 6
-    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
     store_var _6
@@ -40,7 +40,7 @@ function fixtures.backtick_decl_slots.Greet(name: string, client: ai.Client | nu
     return
 }
 
-function fixtures.backtick_decl_slots.Greet$build_request(name: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.backtick_decl_slots.Greet@build_request(name: string, client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -50,7 +50,7 @@ function fixtures.backtick_decl_slots.Greet$build_request(name: string, client: 
 
   L0:
     load_var name
-    call user.fixtures.backtick_decl_slots.Greet$spec
+    call user.fixtures.backtick_decl_slots.Greet@spec
     store_var _4
     load_type string
     load_var2 3 2
@@ -58,16 +58,16 @@ function fixtures.backtick_decl_slots.Greet$build_request(name: string, client: 
     return
 }
 
-function fixtures.backtick_decl_slots.Greet$parse(json: string) -> string {
+function fixtures.backtick_decl_slots.Greet@parse(json: string) -> string {
     load_type string
     load_var json
     call baml.sap.parse
     return
 }
 
-function fixtures.backtick_decl_slots.Greet$render_prompt(name: string) -> ai.Prompt {
+function fixtures.backtick_decl_slots.Greet@render_prompt(name: string) -> ai.Prompt {
     load_var name
-    call user.fixtures.backtick_decl_slots.Greet$spec
+    call user.fixtures.backtick_decl_slots.Greet@spec
     store_var _2
     load_type string
     load_var _2
@@ -75,7 +75,7 @@ function fixtures.backtick_decl_slots.Greet$render_prompt(name: string) -> ai.Pr
     return
 }
 
-function fixtures.backtick_decl_slots.Greet$spec(name: string) -> ai.FunctionSpec<string> {
+function fixtures.backtick_decl_slots.Greet@spec(name: string) -> ai.FunctionSpec<string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -93,14 +93,14 @@ function fixtures.backtick_decl_slots.Greet$spec(name: string) -> ai.FunctionSpe
     load_type unknown
     alloc_map 1
     load_var name
-    make_closure .<lambda(Greet$spec, 0)>, 1
+    make_closure .<lambda(Greet@spec, 0)>, 1
     load_var2 2 3
     load_type string
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function fixtures.backtick_decl_slots.Greet$stream(name: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function fixtures.backtick_decl_slots.Greet@stream(name: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -118,7 +118,7 @@ function fixtures.backtick_decl_slots.Greet$stream(name: string, client: ai.stre
 
   L1:
     load_var name
-    call user.fixtures.backtick_decl_slots.Greet$spec
+    call user.fixtures.backtick_decl_slots.Greet@spec
     store_var _6
     load_type string | null
     load_type string

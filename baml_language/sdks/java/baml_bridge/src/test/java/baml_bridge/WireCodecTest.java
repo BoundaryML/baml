@@ -340,6 +340,16 @@ class WireCodecTest {
     }
 
     @Test
+    void inbound_prompt_reuses_portable_prompt_ast_payload() {
+        byte[] promptAst = {0x0a, 0x01, 0x78};
+        byte[] got = ProtoWriter.encodeInboundValue(BamlPrompt.fromWire(promptAst));
+
+        WireWriter expected = new WireWriter();
+        expected.writeMessage(16, promptAst); // InboundValue.prompt_ast_value
+        assertArrayEquals(expected.toByteArray(), got);
+    }
+
+    @Test
     void inbound_unsupported_type_throws() {
         // A direct encodeInboundValue call has no owning argument to name, so it
         // surfaces the bare "unsupported Java type <class>" IllegalArgumentException.

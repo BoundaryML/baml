@@ -1,4 +1,4 @@
-/// Gemini on Vertex AI: the same models as `google.GoogleClient`, reached
+/// Gemini on Vertex AI: the same models as `google.GeminiClient`, reached
 /// through a Google Cloud project with Google Cloud credentials.
 ///
 /// Three ways to authenticate, in the order the client tries them:
@@ -63,6 +63,9 @@ class VertexClient {
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
 
+    /// Creates a client. Construction reads no environment variable, so
+    /// declaring one is always safe; credentials and endpoints resolve when a
+    /// request is built.
     function new(
         model: string = "gemini-2.5-flash",
         project_id: ai.Credential? = null,
@@ -109,13 +112,13 @@ class VertexClient {
         }
     }
 
-    // The express-mode key, or null for OAuth2. Unlike the other providers
-    // this may legitimately be absent: credentials are the normal path.
+    /// The express-mode key, or null for OAuth2. Unlike the other providers
+    /// this may legitimately be absent: credentials are the normal path.
     function resolved_api_key(self) -> string? {
         ai.wire.resolve_credential(self.api_key, null)
     }
 
-    // The request-time base URL, or null to build one from project + location.
+    /// The request-time base URL, or null to build one from project + location.
     function resolved_base_url(self) -> string? {
         ai.wire.resolve_credential(self.base_url, null)
     }

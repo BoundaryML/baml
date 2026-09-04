@@ -91,6 +91,8 @@ use ::bex_heap::{HeapPermit as _, Tlab};
 use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
+#[cfg(target_arch = "wasm32")]
+pub use bex_events::ids::configure_workerd_runtime;
 use bex_events::prof::backend::{ExecutionEndStatus, ProfilerSession, RootProfiler};
 #[cfg(not(target_arch = "wasm32"))]
 use bex_events::prof::backend::{ExecutionHandle, RootAdmission, ValueLossReason, ValueRole};
@@ -1376,7 +1378,7 @@ pub(crate) fn op_error_to_throw_value(
     }
 }
 
-/// Decoded `baml.spawn.SpawnParams` fields (BEP-034 middleware) — see
+/// Decoded `baml.spawn.Params` fields (BEP-034 middleware) — see
 /// [`BexEngine::read_spawn_params`].
 struct SpawnParamsData {
     body: HeapPtr,
@@ -1891,17 +1893,12 @@ impl BexEngine {
             semantic_lanes: None,
         });
 
-        // Conservative content identity (streams spec §2.3): byte-identical
-        // builds share a program_id (so ContextKeys aggregate across
-        // executions of one build); a host that provides no hash falls back
-        // to random, which over-splits — the safe direction.
-        let (program_id, source_snapshot_id) = match program.source_content_hash {
-            Some(hash) => (
-                ProgramId(hash[..16].try_into().expect("fixed-width slice")),
-                Some(bex_events::ids::SourceSnapshotId(hash)),
-            ),
-            None => (ProgramId::new_random(), None),
-        };
+        // Preserve a supplied source hash as snapshot metadata without allowing
+        // that path to mint ProgramId differently from other constructions.
+        let program_id = ProgramId::new_random();
+        let source_snapshot_id = program
+            .source_content_hash
+            .map(bex_events::ids::SourceSnapshotId);
         ProgramMetadata {
             program_id,
             source_snapshot_id,
@@ -2101,6 +2098,17 @@ impl BexEngine {
             compile_time_objects,
             &bytecode.packages,
         );
+        // Interface bodies are absent from the image-symbol tables. A runtime
+        // compilation still consumes static impl methods — their SIGNATURES
+        // (possibly subtype refinements of the interface's) through the
+        // package-interface blob, and their bodies through the virtual road,
+        // whose rule tables carry body POINTERS (`MethodImpl::fqn`, bound at
+        // load) with adopted defaults on the interface's `default_fn`. No
+        // current lowering emits a name-addressed reference to a static body:
+        // mount stubs are class/enum skeletons (no impl blocks), so a mounted
+        // impl method has no source lane and every call to one is virtual. A
+        // future devirtualized direct call must reference the body
+        // rule-relatively, never through a revived name entry here.
         let image_objects = bytecode
             .resolved_function_names
             .iter()
@@ -3582,6 +3590,11 @@ impl BexEngine {
         let declared_param_types: Vec<RuntimeTy> =
             params.iter().map(|(_, ty, _)| (*ty).clone()).collect();
 
+        // Tagged capabilities are live engine values. Acquire the heap permit
+        // before generic inference so their type arguments come from the
+        // rooted object, never from host-echoed descriptive metadata.
+        let mut thread = self.new_root_thread(cancel.clone()).await;
+
         // `type_args` is the unified `TypeVar -> concrete` binding map for a
         // generic call (01pt3). It already holds the host's explicit `_types=`
         // bindings (source (b)); fold in source (a): class type args recovered
@@ -3602,13 +3615,28 @@ impl BexEngine {
         // self-receiver / inference sources mutate `type_args`.
         let caller_specified_types = !type_args.is_empty();
         let mut type_args = type_args;
+        let mut live_type_args = IndexMap::new();
         if let (Some(self_declared), Some(BexCallArg::Provided(self_value))) =
             (declared_param_types.first(), args.first())
         {
-            if let Some(self_actual) = crate::conversion::tagged_handle_runtime_ty(self_value) {
+            if let BexExternalValue::Adt(bex_external_types::BexExternalAdt::TaggedHeapHandle {
+                heap_handle,
+                ..
+            }) = self_value.as_ref()
+                && let Some(receiver_ptr) = self.resolve_handle(thread.proof(), heap_handle)
+                && let Some(self_actual) =
+                    value_runtime_baml_ty(Value::object(receiver_ptr), thread.proof())
+            {
+                crate::conversion::collect_live_type_var_bindings(
+                    self_declared,
+                    &self_actual,
+                    &mut live_type_args,
+                );
+                let projected_actual =
+                    crate::conversion::overlay_wire_ty_under_permit(&self_actual, thread.proof());
                 crate::conversion::collect_type_var_bindings(
                     self_declared,
-                    self_actual,
+                    &projected_actual,
                     &mut type_args,
                 );
             }
@@ -3667,20 +3695,35 @@ impl BexEngine {
             // conflicting variances — contravariant function params, invariant
             // container/class args — has no consistent binding and is rejected
             // here rather than fabricated into an unsound union.
-            let pairs: Vec<(RuntimeTy, RuntimeTy)> = args
-                .iter()
-                .enumerate()
-                .filter_map(|(idx, arg)| match (declared_param_types.get(idx), arg) {
-                    (Some(declared), BexCallArg::Provided(value)) => {
-                        // Formal-aware: a forcing generic-class formal recovers an
-                        // unbound instance's args from its fields (03b G1); every
-                        // other value synthesizes from the value alone.
-                        let actual = self.synth_inference_actual(declared, value);
-                        Some((declared.clone(), actual))
-                    }
+            let mut pairs: Vec<(RuntimeTy, RuntimeTy)> = Vec::new();
+            for (idx, arg) in args.iter().enumerate() {
+                let (Some(declared), BexCallArg::Provided(value)) =
+                    (declared_param_types.get(idx), arg)
+                else {
+                    continue;
+                };
+                let live_actual = match value.as_ref() {
+                    BexExternalValue::Adt(
+                        bex_external_types::BexExternalAdt::TaggedHeapHandle {
+                            heap_handle, ..
+                        },
+                    ) => self
+                        .resolve_handle(thread.proof(), heap_handle)
+                        .and_then(|ptr| value_runtime_baml_ty(Value::object(ptr), thread.proof())),
                     _ => None,
-                })
-                .collect();
+                };
+                let actual = if let Some(live_actual) = live_actual {
+                    crate::conversion::collect_live_type_var_bindings(
+                        declared,
+                        &live_actual,
+                        &mut live_type_args,
+                    );
+                    crate::conversion::overlay_wire_ty_under_permit(&live_actual, thread.proof())
+                } else {
+                    self.synth_inference_actual(declared, value)
+                };
+                pairs.push((declared.clone(), actual));
+            }
             let inferred =
                 crate::conversion::infer_bindings_runtime_checked(&pairs).map_err(|detail| {
                     EngineError::TypeMismatch {
@@ -3726,7 +3769,6 @@ impl BexEngine {
         // Every call materializes fresh declarations, and the exact
         // `TypeValue`s stay attached to the entry frame so `LoadType<T>`
         // preserves that arrival's definition overlay.
-        let mut thread = self.new_root_thread(cancel.clone()).await;
         let mut type_values = IndexMap::new();
         for (name, definition) in type_defs {
             let type_value = thread
@@ -3888,6 +3930,7 @@ impl BexEngine {
             vm_args,
             type_args,
             type_values,
+            live_type_args,
             return_type,
             throws_type,
             host_call_id,
@@ -3959,6 +4002,7 @@ impl BexEngine {
         vm_args: Vec<Value>,
         type_args: indexmap::IndexMap<String, RuntimeTy>,
         type_values: indexmap::IndexMap<String, bex_vm_types::types::TypeValue>,
+        live_type_args: indexmap::IndexMap<String, bex_vm_types::RuntimeTy>,
         return_type: RuntimeTy,
         throws_type: Option<RuntimeTy>,
         host_call_id: CallId,
@@ -3984,8 +4028,12 @@ impl BexEngine {
         }
         let dynamic_classes = indexmap::IndexMap::new();
         let dynamic_enums = indexmap::IndexMap::new();
-        let type_args = type_args
+        // Live capability receivers supply exact heap-owned types. Their wire
+        // spellings are useful for structural checks above, but may name a
+        // runtime-only declaration and must not be re-anchored by name here.
+        let mut type_args = type_args
             .into_iter()
+            .filter(|(name, _)| !live_type_args.contains_key(name))
             .map(|(name, ty)| {
                 let anchored = self.anchor_wire_ty_with_runtime(
                     &thread.vm,
@@ -4009,6 +4057,16 @@ impl BexEngine {
                 }
             })
             .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
+        for (name, ty) in live_type_args {
+            let realized = bex_vm_types::RealizedTy::try_from(&ty).map_err(|error| {
+                EngineError::VmInternalError(bex_vm::errors::VmInternalError::TypeSubstitution {
+                    message: format!(
+                        "live receiver type argument `{name}` is not realized: {error}"
+                    ),
+                })
+            })?;
+            type_args.insert(name, realized);
+        }
         let root_thread_ref = ThreadRef {
             process_euid: self.process_euid,
             engine_id: self.engine_id,
@@ -4600,28 +4658,25 @@ impl BexEngine {
         // them into the `RuntimeTy` the host `type_args` channel carries. They are
         // re-narrowed to `RealizedTy` at the `set_entry_point_with_type_args`
         // boundary inside `run_entry_point`.
-        let seed_type_args: indexmap::IndexMap<String, RuntimeTy> = seed_type_args
-            .into_iter()
-            .enumerate()
-            .map(|(i, ty)| {
-                (
-                    generic_param_names
-                        .get(i)
-                        .cloned()
-                        .unwrap_or_else(|| i.to_string()),
-                    crate::conversion::overlay_wire_ty_under_permit(
-                        &bex_vm_types::RuntimeTy::from(ty),
-                        thread.proof(),
-                    ),
-                )
-            })
-            .collect();
+        let mut seed_wire_type_args = indexmap::IndexMap::new();
+        let mut seed_live_type_args = indexmap::IndexMap::new();
+        for (i, ty) in seed_type_args.into_iter().enumerate() {
+            let name = generic_param_names
+                .get(i)
+                .cloned()
+                .unwrap_or_else(|| i.to_string());
+            let live_ty = bex_vm_types::RuntimeTy::from(ty);
+            let wire_ty = crate::conversion::overlay_wire_ty_under_permit(&live_ty, thread.proof());
+            seed_wire_type_args.insert(name.clone(), wire_ty);
+            seed_live_type_args.insert(name, live_ty);
+        }
         self.run_entry_point(
             thread,
             entry,
             vm_args,
-            seed_type_args,
+            seed_wire_type_args,
             IndexMap::new(),
+            seed_live_type_args,
             return_type,
             throws_type,
             host_call_id,
@@ -5527,12 +5582,12 @@ impl BexEngine {
         }
     }
 
-    /// Read the spawn parameters out of a `baml.spawn.SpawnParams` instance
+    /// Read the spawn parameters out of a `baml.spawn.Params` instance
     /// (BEP-034 middleware: the value a `spawn ... with` transformer pipeline
     /// produced). Fields are read BY INDEX in declaration order — body=0,
     /// name=1, group=2, cancel=3, detach=4 — keep in sync with
     /// `ns_spawn/spawn.baml`. Returns `None` when the value is not a
-    /// well-formed `SpawnParams` (caller falls back to the spawn operands).
+    /// well-formed `Params` (caller falls back to the spawn operands).
     ///
     /// Safe to deref the pointers because the caller holds the active heap
     /// permit and `params` is rooted by the `UnscheduledFuture` being handled.
@@ -6498,7 +6553,7 @@ impl BexEngine {
                             _ => None,
                         });
                     // BEP-034 middleware: a `spawn ... with` lowers its final
-                    // transformed `baml.spawn.SpawnParams` into the config
+                    // transformed `baml.spawn.Params` into the config
                     // operand. The params override the spawn operands — a
                     // transformer may have wrapped/replaced the body or set a
                     // name — and carry the options: `cancel` links into the
@@ -7152,8 +7207,8 @@ impl BexEngine {
                         Ok((
                             baml_type::Interface::new(
                                 interface_name,
-                                interface_args,
-                                associated_types,
+                                interface_args.into(),
+                                associated_types.into(),
                             ),
                             field_links,
                         ))
@@ -7440,9 +7495,13 @@ impl BexEngine {
         let compiler = self.runtime_compiler.clone();
         SysOpResult::Async(Box::pin(async move {
             let Some(compiler) = compiler else {
+                // `reflect.*._compile` declares only `CompilationError`
+                // (and `SessionBusy`), so an absent compiler is not an error
+                // value either can carry: it is a missing host facility.
                 return Err(OpError::new(
                     operation,
-                    bex_vm_types::errors::VmBamlError::Unsupported {
+                    bex_vm_types::errors::VmPanic::HostUnavailable {
+                        resource: "runtime-compiler".to_string(),
                         message: "runtime compiler was not installed by the host".to_string(),
                     },
                 ));
@@ -7688,7 +7747,7 @@ mod type_identity_tests {
         let definition = bex_vm_types::types::PortableTypeDef {
             root: baml_type::RuntimeTy::Class(
                 baml_type::QualifiedTypeName::from_dotted_path("user.Foo"),
-                Vec::new(),
+                Box::new([]),
                 baml_type::TyAttr::default(),
             ),
             classes: vec![bex_vm_types::types::PortableClassDef {

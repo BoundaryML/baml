@@ -3,14 +3,14 @@ class AqBox {
     y: int
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             AqBox { y: 99 }
         }
     }
 }
 type AqInner = AqBox
 type AqOuter = AqInner
-function aq_from_json() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function aq_from_json() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j = baml.json.parse("{}")
     let b = AqOuter.from_json(j)
      // ^ user.AqBox

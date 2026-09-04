@@ -1419,16 +1419,16 @@ mod catch_format_tests {
     fn test_catch_arm_bodies_indent_inside_enclosing_block() {
         let source = r#"function demo(s: string) -> int {
     baml.json.from_string<int>(s) catch (e) {
-    baml.json.JsonParseError => 0,
-    baml.json.JsonDecodeError => 0,
+    baml.json.ParseError => 0,
+    baml.json.DecodeError => 0,
   };
     42
 }
 "#;
         let expected = r#"function demo(s: string) -> int {
     baml.json.from_string<int>(s) catch (e) {
-        baml.json.JsonParseError => 0,
-        baml.json.JsonDecodeError => 0,
+        baml.json.ParseError => 0,
+        baml.json.DecodeError => 0,
     };
     42
 }
@@ -2004,7 +2004,7 @@ mod over_split_regression_tests {
         // A braceless `=> throw …,` catch arm that fits the budget must not be
         // wrapped into a `=> { throw … }` block. `throw` is an unmodeled node, so
         // it used to report itself as multi-line and force the block wrap.
-        let source = "function f(s: string) -> int throws Boom {\n    baml.json.from_string<int>(s) catch (e) {\n        baml.json.JsonParseError => throw Boom {},\n        baml.json.JsonDecodeError => 0,\n    }\n}\n\nclass Boom {\n}\n";
+        let source = "function f(s: string) -> int throws Boom {\n    baml.json.from_string<int>(s) catch (e) {\n        baml.json.ParseError => throw Boom {},\n        baml.json.DecodeError => 0,\n    }\n}\n\nclass Boom {\n}\n";
         assert_formats_to(source, source);
     }
 }
@@ -2143,8 +2143,8 @@ mod member_chain_layout_tests {
     /// receiver line; only the final call's arguments wrap.
     #[test]
     fn test_namespace_chain_stays_glued_only_args_wrap() {
-        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(plan_trip_spec(\"plan a weekend trip to yosemite with plenty of hiking\", root.anthropic.AnthropicClient.new()));\n    result\n}\n";
-        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(\n        plan_trip_spec(\n            \"plan a weekend trip to yosemite with plenty of hiking\",\n            root.anthropic.AnthropicClient.new(),\n        ),\n    );\n    result\n}\n";
+        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(plan_trip_spec(\"plan a weekend trip to yosemite with plenty of hiking and rest\", root.anthropic.Client.new()));\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(\n        plan_trip_spec(\n            \"plan a weekend trip to yosemite with plenty of hiking and rest\",\n            root.anthropic.Client.new(),\n        ),\n    );\n    result\n}\n";
         assert_formats_to(source, expected);
     }
 
@@ -2152,8 +2152,8 @@ mod member_chain_layout_tests {
     /// to the glued layout.
     #[test]
     fn test_exploded_chain_collapses() {
-        let source = "function f() -> int {\n    let result = root\n        .ai\n        .Agent<Itinerary>\n        .new()\n        .run(\n            plan_trip_spec(\n                \"plan a weekend trip to yosemite with plenty of hiking\",\n                root.anthropic.AnthropicClient.new(),\n            ),\n        );\n    result\n}\n";
-        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(\n        plan_trip_spec(\n            \"plan a weekend trip to yosemite with plenty of hiking\",\n            root.anthropic.AnthropicClient.new(),\n        ),\n    );\n    result\n}\n";
+        let source = "function f() -> int {\n    let result = root\n        .ai\n        .Agent<Itinerary>\n        .new()\n        .run(\n            plan_trip_spec(\n                \"plan a weekend trip to yosemite with plenty of hiking and rest\",\n                root.anthropic.Client.new(),\n            ),\n        );\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().run(\n        plan_trip_spec(\n            \"plan a weekend trip to yosemite with plenty of hiking and rest\",\n            root.anthropic.Client.new(),\n        ),\n    );\n    result\n}\n";
         assert_formats_to(source, expected);
     }
 
@@ -2171,8 +2171,8 @@ mod member_chain_layout_tests {
     /// call (`.new()`) stays attached to the path because it fits.
     #[test]
     fn test_long_chain_breaks_at_calls_only() {
-        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().with_client(root.anthropic.AnthropicClient.new()).with_options(the_default_options).run(the_spec_value);\n    result\n}\n";
-        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new()\n        .with_client(root.anthropic.AnthropicClient.new())\n        .with_options(the_default_options)\n        .run(the_spec_value);\n    result\n}\n";
+        let source = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new().with_client(root.anthropic.Client.new()).with_options(the_default_options).run(the_spec_value);\n    result\n}\n";
+        let expected = "function f() -> int {\n    let result = root.ai.Agent<Itinerary>.new()\n        .with_client(root.anthropic.Client.new())\n        .with_options(the_default_options)\n        .run(the_spec_value);\n    result\n}\n";
         assert_formats_to(source, expected);
     }
 

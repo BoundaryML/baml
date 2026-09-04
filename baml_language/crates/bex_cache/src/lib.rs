@@ -90,7 +90,23 @@ use sha2::{Digest, Sha256};
 /// sentinel (29). The slots are tombstoned rather than reused, so a 9 image
 /// carrying one in a persisted throw fact would now fail to decode instead of
 /// silently landing on whatever occupies the slot later.
-pub const FORMAT_VERSION: u32 = 10;
+///
+/// Version 11: the interface-dispatch rework, described as one net change
+/// against the format canary shipped (a bump only matters against that;
+/// intermediate shapes that never left the branch are not versions).
+/// Interface bodies became anonymous-but-slotted: `Function` gained
+/// `is_interface_body` + `native_key` (wire fields), and `function_indices` /
+/// `function_global_indices` stopped carrying impl-block methods and
+/// interface default bodies. Impl-rule method tables became PROVIDED-ONLY
+/// (an adopted interface default resolves at dispatch through the
+/// interface's `default_fn`, never through a baked row), rule fragments
+/// moved onto their declaring unit, and `ProgramMethodImplFrag` carries the
+/// body's code-bucket offset in that unit rather than a name. A body has no
+/// name-keyed coordinates on the PROGRAM wire — its spelling survives only
+/// as the `CompilationUnit`'s link-internal export/import key; compile
+/// boundaries read coordinates from the declaration-keyed placement
+/// registry, with a Pass-1 slot replay only at the stdlib-splice boundary.
+pub const FORMAT_VERSION: u32 = 11;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -1264,7 +1280,7 @@ impl BytecodeCache {
 mod remote_tests {
     use std::{
         collections::HashMap,
-        io::{BufRead, BufReader, Read as _, Write as _},
+        io::{BufRead, BufReader},
         net::TcpListener,
         sync::{Arc, Mutex},
     };

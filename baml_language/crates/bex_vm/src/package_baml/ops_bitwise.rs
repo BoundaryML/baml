@@ -9,9 +9,10 @@
 //! the canonical result the specialized bytecode matches:
 //! - `int` `& | ^` are plain i63 bitwise ops (a result of two in-range
 //!   operands is always in range) - never panic, like the tagged fast path.
-//! - `int << int` is validated like the `Shl` opcode: a negative count throws
-//!   the catchable `baml.panics.NegativeBitShift`, an out-of-i63 result throws
-//!   `baml.panics.IntegerOverflow`.
+//! - `int << int` shares `Int63`'s implementation with the `Shl` opcode, so it
+//!   truncates rather than overflowing: bits past the i63 width are discarded
+//!   (`1 << 62` is `int.min_value()`, `1 << 63` is `0`) and only a negative
+//!   count raises the catchable `baml.panics.NegativeBitShift`.
 //! - `int >> int` is arithmetic; negative counts throw `NegativeBitShift`, a
 //!   count past every bit saturates to the sign (`min(63)`).
 //! - `bigint` `& | ^` delegate to `num-bigint` (results never grow past their
@@ -28,7 +29,8 @@
 
 use std::sync::Arc;
 
-use bex_vm_types::{Value, errors::VmPanic};
+use baml_type::{Int63, IntShiftError};
+use bex_vm_types::errors::VmPanic;
 use num_bigint::BigInt;
 
 use super::{
@@ -57,30 +59,41 @@ fn negative_bit_shift(count: impl std::fmt::Display) -> VmRustFnError {
     .into()
 }
 
-/// `int << r`, validated exactly like the `Shl` opcode's `int_shl`.
+/// `int << r`, sharing `Int63`'s semantics with the `Shl` opcode.
+///
+/// Truncating, never overflowing: bits shifted past the i63 width are
+/// discarded, so `1 << 62` is `int.min_value()` and any count at or above 63
+/// yields `0`. Delegating to `Int63` is what keeps the operator and this
+/// interface impl from drifting apart — they were previously separate
+/// implementations that disagreed on every truncating input.
 fn int_shl(l: i64, r: i64) -> Result<i64, VmRustFnError> {
-    let Ok(shift) = u32::try_from(r) else {
-        return Err(negative_bit_shift(r));
-    };
-    match l
-        .checked_shl(shift)
-        .filter(|&v| Value::try_int(v).is_some())
-    {
-        Some(v) => Ok(v),
-        None => Err(VmPanic::IntegerOverflow {
-            message: format!("{l} << {r} overflows int"),
+    let Some(value) = Int63::new(l) else {
+        return Err(VmPanic::IntegerOverflow {
+            message: format!("{l} is outside the int range"),
         }
-        .into()),
+        .into());
+    };
+    match value.shift_left(r) {
+        Ok(shifted) => Ok(shifted.get()),
+        Err(IntShiftError::NegativeCount(count)) => Err(negative_bit_shift(count)),
     }
 }
 
-/// `int >> r` (arithmetic), validated exactly like the `Shr` opcode's
-/// `int_shr`: the count saturates at 63 (magnitude only shrinks).
+/// `int >> r` (arithmetic), sharing `Int63`'s semantics with the `Shr` opcode.
+///
+/// A count at or above the i63 width saturates to the sign: `0` for a
+/// non-negative receiver, `-1` for a negative one.
 fn int_shr(l: i64, r: i64) -> Result<i64, VmRustFnError> {
-    let Ok(shift) = u32::try_from(r) else {
-        return Err(negative_bit_shift(r));
+    let Some(value) = Int63::new(l) else {
+        return Err(VmPanic::IntegerOverflow {
+            message: format!("{l} is outside the int range"),
+        }
+        .into());
     };
-    Ok(l >> shift.min(63))
+    match value.shift_right(r) {
+        Ok(shifted) => Ok(shifted.get()),
+        Err(IntShiftError::NegativeCount(count)) => Err(negative_bit_shift(count)),
+    }
 }
 
 /// Resolve a `bigint <<` count: negative throws, too-large-for-`usize` is an

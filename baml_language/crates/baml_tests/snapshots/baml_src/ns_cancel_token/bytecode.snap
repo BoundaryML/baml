@@ -51,7 +51,7 @@ function cancel_token.await_token_cancelled_catches() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _5
     call_indirect
     store_var _9
@@ -99,7 +99,7 @@ function cancel_token.detached_spawn_completes() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _4
     call_indirect
     store_var _7
@@ -150,7 +150,7 @@ function cancel_token.uncancelled_token_completes() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _5
     call_indirect
     store_var _9

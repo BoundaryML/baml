@@ -85,7 +85,7 @@ test "cancel_after_gc_relocation_still_settles" {
 // `waiter` does NOT cascade to its sibling `slow` (cancelling an awaiter does
 // not cancel the awaited future), so `slow`'s 60s sleep would keep the process
 // alive at shutdown. Tear it down explicitly after capturing `waiter`'s state.
-function cancelled_child_future_state_is_cancelled() -> baml.future.FutureState {
+function cancelled_child_future_state_is_cancelled() -> baml.future.State {
     let slow = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
     let waiter = spawn { await slow };
     let _ = waiter.cancel();
@@ -95,5 +95,5 @@ function cancelled_child_future_state_is_cancelled() -> baml.future.FutureState 
 }
 
 test "cancelled_child_future_state_is_cancelled" {
-    assert.equal(cancelled_child_future_state_is_cancelled(), baml.future.FutureState.Cancelled)
+    assert.equal(cancelled_child_future_state_is_cancelled(), baml.future.State.Cancelled)
 }

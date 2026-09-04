@@ -537,12 +537,12 @@ mod tests {
         aliases.insert(
             qn("List"),
             Ty::Union(
-                vec![
+                Box::new([
                     Ty::Null {
                         attr: TyAttr::default(),
                     },
                     type_alias("List"),
-                ],
+                ]),
                 TyAttr::default(),
             ),
         );
@@ -580,7 +580,7 @@ mod tests {
         let mut aliases = HashMap::new();
         aliases.insert(
             qn("A"),
-            Ty::Class(qn("Box"), vec![type_alias("A")], TyAttr::default()),
+            Ty::Class(qn("Box"), Box::new([type_alias("A")]), TyAttr::default()),
         );
 
         assert!(
@@ -600,8 +600,8 @@ mod tests {
             qn("A"),
             Ty::Interface(
                 qn("BoxLike"),
-                vec![type_alias("A")],
-                vec![],
+                Box::new([type_alias("A")]),
+                Box::new([]),
                 TyAttr::default(),
             ),
         );

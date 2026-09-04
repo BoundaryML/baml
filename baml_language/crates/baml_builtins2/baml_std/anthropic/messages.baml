@@ -14,11 +14,13 @@ class ThinkingConfig {
     type: string,
     budget_tokens: int?,
 
+    /// Turns extended thinking on, with `budget_tokens` reserved for it.
     function enabled(budget_tokens: int) -> ThinkingConfig {
         let budget = budget_tokens;
         ThinkingConfig { type: "enabled", budget_tokens: budget }
     }
 
+    /// Turns extended thinking off.
     function disabled() -> ThinkingConfig {
         let kind = "disabled";
         ThinkingConfig { type: kind, budget_tokens: null }
@@ -63,7 +65,12 @@ class ToolChoice {
     }
 }
 
-class AnthropicClient {
+/// One model turn against Anthropic's Messages API
+/// (`POST https://api.anthropic.com/v1/messages`).
+///
+/// Construction reads no environment variable, so declaring a client is
+/// always safe; the credential resolves when a request is built.
+class Client {
     model: string,
     // A literal string, `env.NAME` (a late-bound `baml.env.Ref` read at request
     // time), or null to resolve ANTHROPIC_API_KEY at request time. Construction
@@ -105,13 +112,13 @@ class AnthropicClient {
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
 
-    // NOTE: the task spec named "claude-3-5-haiku-latest" as the default, but
-    // that model was retired (the API 404s on it); claude-haiku-4-5 is the
-    // current Haiku.
-    //
-    // max_tokens defaults to 8192, not the engine's 4096 (PLAN §5): every
-    // model this client can address supports at least that, and 4096 silently
-    // truncates ordinary structured answers.
+    /// NOTE: the task spec named "claude-3-5-haiku-latest" as the default, but
+    /// that model was retired (the API 404s on it); claude-haiku-4-5 is the
+    /// current Haiku.
+    ///
+    /// max_tokens defaults to 8192, not the engine's 4096 (PLAN §5): every
+    /// model this client can address supports at least that, and 4096 silently
+    /// truncates ordinary structured answers.
     function new(
         model: string = "claude-haiku-4-5",
         api_key: ai.Credential? = null,
@@ -129,8 +136,8 @@ class AnthropicClient {
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
         capture_wire: bool = true,
-    ) -> AnthropicClient {
-        AnthropicClient {
+    ) -> Client {
+        Client {
             model: model,
             api_key: api_key,
             base_url: base_url,
@@ -150,14 +157,14 @@ class AnthropicClient {
         }
     }
 
-    // The request-time credential: an explicit value, else the provider's
-    // canonical one.
-    //
-    // A missing credential is a CATCHABLE configuration error, thrown the same
-    // way the chat family reports one (`_chat_headers`): `baml.env.get_or_panic`
-    // used to raise an uncatchable panic that escaped `catch_all` — so it
-    // bypassed this client's own `invoke` normalize wrapper and turned the one
-    // misconfiguration every deployment hits first into a process-level failure.
+    /// The request-time credential: an explicit value, else the provider's
+    /// canonical one.
+    ///
+    /// A missing credential is a CATCHABLE configuration error, thrown the same
+    /// way the chat family reports one (`_chat_headers`): `baml.env.get_or_panic`
+    /// used to raise an uncatchable panic that escaped `catch_all` — so it
+    /// bypassed this client's own `invoke` normalize wrapper and turned the one
+    /// misconfiguration every deployment hits first into a process-level failure.
     function resolved_api_key(self) -> string {
         if let k: string = ai.wire.resolve_credential(self.api_key, "ANTHROPIC_API_KEY") {
             return k;
@@ -167,7 +174,7 @@ class AnthropicClient {
         )
     }
 
-    // The request-time base URL, or null for the provider default.
+    /// The request-time base URL, or null for the provider default.
     function resolved_base_url(self) -> string? {
         ai.wire.resolve_credential(self.base_url, null)
     }
@@ -178,7 +185,7 @@ class AnthropicClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            anthropic.internal.anthropic_preview(self, input) catch_all (e) {
+            anthropic.internal.preview(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

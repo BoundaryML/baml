@@ -324,7 +324,9 @@ function type_value_narrowing.optional_type_absent() -> string {
     call baml.String.from
     store_var _7
     load_var t
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _11
     load_type string
     load_var _11
@@ -381,7 +383,9 @@ function type_value_narrowing.optional_type_present() -> string {
     call baml.String.from
     store_var _7
     load_var t
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _11
     load_type string
     load_var _11
@@ -441,7 +445,9 @@ function type_value_narrowing.render_mixed_list() -> string {
 
   L3:
     load_var _12
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _14
     load_type string
     load_var2 1 6
@@ -653,7 +659,9 @@ function type_value_narrowing.type_to_string_after_narrowing() -> string {
 
   L1:
     load_var _2
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
 
   L2:
     return
@@ -769,7 +777,9 @@ function type_value_narrowing.union_if_let_int() -> string {
 
   L1:
     load_var _2
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _5
     load_type string
     load_var _5
@@ -797,7 +807,9 @@ function type_value_narrowing.union_if_let_type() -> string {
 
   L1:
     load_var _2
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _5
     load_type string
     load_var _5
@@ -821,7 +833,9 @@ function type_value_narrowing.union_match_int_first(v: reflect.Type | int) -> st
 
   L0:
     load_var v
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _9
     load_type string
     load_var _9
@@ -865,7 +879,9 @@ function type_value_narrowing.union_match_type_first(v: reflect.Type | int) -> s
 
   L1:
     load_var _2
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _5
     load_type string
     load_var _5
@@ -917,7 +933,9 @@ function type_value_narrowing.union_three_way(v: reflect.Type | int | string) ->
 
   L3:
     load_var _2
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var _5
     load_type string
     load_var _5

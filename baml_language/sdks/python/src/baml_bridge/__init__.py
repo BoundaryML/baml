@@ -44,6 +44,8 @@ from .errors import (
     make_sdk_panic,
 )
 from ._stream import BamlStream
+from ._function_spec import BamlFunctionSpec
+from ._runtime_value import BamlRuntimeValue
 from .ctx_manager import CtxManager as BamlCtxManager
 from .proto import (
     BamlType,
@@ -79,7 +81,7 @@ def _handle_unhandled_spawn_error(error_bytes: bytes, cancelled: bool) -> None:
 
 register_unhandled_spawn_error_callback(_handle_unhandled_spawn_error)
 
-__version__ = "0.17.0"
+__version__ = "0.18.0"
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +217,9 @@ def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None, _ct
     return FunctionResult(decode_call_result(result_bytes))
 
 
-async def call_function(rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None):
+async def call_function(
+    rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None
+):
     call_id = new_function_call()
     args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
     _attach_call_ctx(_ctx, call_id)
@@ -256,6 +260,7 @@ def _build_kwargs(
     kwargs: Dict[str, Any],
     required_param_names: List[str],
     optional_param_names: List[str],
+    param_aliases: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Zip positional args with required names, then merge
     caller-supplied kwargs on top. Extra positional args error loudly
@@ -268,15 +273,17 @@ def _build_kwargs(
             f"{positional_limit} positional parameter names "
             f"({required_param_names!r})"
         )
+    aliases = param_aliases or {}
     built: Dict[str, Any] = {}
     for name, value in zip(required_param_names, args):
-        built[name] = value
+        built[aliases.get(name, name)] = value
     for k, v in kwargs.items():
         if v is UNSET:
             continue
-        if k in built:
+        wire_name = aliases.get(k, k)
+        if wire_name in built:
             raise TypeError(f"multiple values for argument {k!r}")
-        built[k] = v
+        built[wire_name] = v
     return built
 
 
@@ -350,7 +357,12 @@ def _build_type_args(
     if class_args:
         for i, name in enumerate(class_type_params):
             arg = class_args[i] if i < len(class_args) else None
-            wire.append((name, arg if isinstance(arg, BamlType) else python_type_to_wire_ty(arg)))
+            wire.append(
+                (
+                    name,
+                    arg if isinstance(arg, BamlType) else python_type_to_wire_ty(arg),
+                )
+            )
 
     resolved = _resolve_types_kwarg(types_kwarg, type_params)
     # Send only the *explicitly* bound params (non-`None`); the rest are inferred
@@ -401,6 +413,9 @@ class _GenericCallable(staticmethod):
     def __init__(self, call: Callable[..., Any], type_param_names: List[str]) -> None:
         super().__init__(call)
         self._type_param_names = type_param_names
+        for attr in functools.WRAPPER_ASSIGNMENTS:
+            if hasattr(call, attr):
+                setattr(self, attr, getattr(call, attr))
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.__func__(*args, **kwargs)
@@ -421,9 +436,12 @@ class _GenericCallable(staticmethod):
         # forms both forward `self` like an ordinary bound method.
         if obj is None:
             return self
-        return _GenericCallable(
+        bound = _GenericCallable(
             functools.partial(self.__func__, obj), self._type_param_names
         )
+        for attr in ("__name__", "__qualname__", "__module__", "__doc__"):
+            setattr(bound, attr, getattr(self, attr))
+        return bound
 
 
 def _maybe_generic_callable(
@@ -446,6 +464,10 @@ def define_function(
     *,
     type_params: Optional[List[str]] = None,
     class_type_params: Optional[List[str]] = None,
+    param_aliases: Optional[Dict[str, str]] = None,
+    binding_name: Optional[str] = None,
+    binding_qualname: Optional[str] = None,
+    binding_module: Optional[str] = None,
 ) -> Callable[..., Any]:
     """Factory for a BAML callable (free function, static method, or
     instance method). Captures the call contract by closure; returns a
@@ -473,15 +495,36 @@ def define_function(
     optional_names = list(optional_param_names or [])
     type_param_names = list(type_params or [])
     class_type_param_names = list(class_type_params or [])
+    host_to_wire_param_names = dict(param_aliases or {})
     is_generic = bool(type_param_names or class_type_param_names)
+
+    def _set_binding_metadata(call: Callable[..., Any]) -> None:
+        if binding_name is not None:
+            call.__name__ = binding_name
+        if binding_qualname is not None:
+            call.__qualname__ = binding_qualname
+        if binding_module is not None:
+            call.__module__ = binding_module
+
     if mode == "sync":
+
         def _sync(*args: Any, **kwargs: Any) -> Any:
             call_ctx = kwargs.pop("_ctx", None)
             types_kwarg = kwargs.pop("_types", None)
-            merged = _build_kwargs(args, kwargs, required_names, optional_names)
+            merged = _build_kwargs(
+                args,
+                kwargs,
+                required_names,
+                optional_names,
+                host_to_wire_param_names,
+            )
+            call_kwargs = merged
             type_args = (
                 _build_type_args(
-                    merged, types_kwarg, type_param_names, class_type_param_names
+                    call_kwargs,
+                    types_kwarg,
+                    type_param_names,
+                    class_type_param_names,
                 )
                 if is_generic
                 else None
@@ -489,7 +532,7 @@ def define_function(
             rt = get_runtime()
             call_id = new_function_call()
             args_proto = encode_call_args(
-                merged,
+                call_kwargs,
                 call_id,
                 type_args,
                 function_name=baml_fqn,
@@ -500,15 +543,28 @@ def define_function(
             finally:
                 _detach_call_ctx(call_ctx, call_id)
             return decode_call_result(result_bytes)
+
+        _set_binding_metadata(_sync)
         return _maybe_generic_callable(_sync, type_param_names)
     elif mode == "async":
+
         async def _async(*args: Any, **kwargs: Any) -> Any:
             call_ctx = kwargs.pop("_ctx", None)
             types_kwarg = kwargs.pop("_types", None)
-            merged = _build_kwargs(args, kwargs, required_names, optional_names)
+            merged = _build_kwargs(
+                args,
+                kwargs,
+                required_names,
+                optional_names,
+                host_to_wire_param_names,
+            )
+            call_kwargs = merged
             type_args = (
                 _build_type_args(
-                    merged, types_kwarg, type_param_names, class_type_param_names
+                    call_kwargs,
+                    types_kwarg,
+                    type_param_names,
+                    class_type_param_names,
                 )
                 if is_generic
                 else None
@@ -516,7 +572,7 @@ def define_function(
             rt = get_runtime()
             call_id = new_function_call()
             args_proto = encode_call_args(
-                merged,
+                call_kwargs,
                 call_id,
                 type_args,
                 function_name=baml_fqn,
@@ -531,6 +587,8 @@ def define_function(
             finally:
                 _detach_call_ctx(call_ctx, call_id)
             return _decode_call_result_async(result_bytes)
+
+        _set_binding_metadata(_async)
         return _maybe_generic_callable(_async, type_param_names)
     else:
         raise ValueError(f"mode must be 'sync' or 'async', got {mode!r}")
@@ -542,6 +600,8 @@ __all__ = [
     "BamlRuntime",
     "BamlType",
     "BamlStream",
+    "BamlFunctionSpec",
+    "BamlRuntimeValue",
     "Collector",
     "FunctionLog",
     "FunctionResult",

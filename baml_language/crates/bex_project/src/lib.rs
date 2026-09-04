@@ -16,6 +16,8 @@ pub use bex::{Bex, BexCallTraceResult};
 // playground runtimes): the blessed seam stays this crate rather than a
 // direct `bex_engine`/`bex_vm_types` dependency.
 pub use bex_engine::BexCallResult;
+#[cfg(target_arch = "wasm32")]
+pub use bex_engine::configure_workerd_runtime;
 pub use bex_engine::{
     BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
     InboundUnionAmbiguityPolicy, UnhandledSpawnError, UnhandledSpawnErrorHandler,
@@ -26,11 +28,11 @@ pub use bex_engine::{
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, DynWitnessDef, Handle, HostReleaseFn, HostReturnTypeError,
     HostValueArc, HostValueKind, MediaKind, PortableClassDef, PortableClassFieldDef,
-    PortableEnumDef, PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeTy, TyAttr,
-    TypeDefRef, host_release_dispatch, runtime_ty_structurally_equal, selected_arm_equal,
-    try_convert_rust_data, validate_host_return,
+    PortableEnumDef, PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeTy,
+    TaggedHeapHandleKind, TyAttr, TypeDefRef, WeakHeapRef, host_release_dispatch,
+    runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
-pub use bex_vm_types::Program;
+pub use bex_vm_types::{HeapPtr, Program};
 use indexmap::IndexMap;
 pub use sys_ops::SysOps;
 pub use sys_types::{CallId, CancellationToken};

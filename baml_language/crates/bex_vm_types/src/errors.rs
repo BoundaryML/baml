@@ -131,14 +131,8 @@ pub enum VmBamlError {
     #[error("render prompt: {message}")]
     RenderPrompt { message: String },
 
-    #[error("not implemented: {message}")]
-    NotImplemented { message: String },
-
     #[error("LLM client error: {message}")]
     LlmClient { message: String },
-
-    #[error("developer error: {message}")]
-    DevOther { message: String },
 
     /// An error value from the host language that has no direct BAML
     /// representation. The `handle` is the load-bearing field — it
@@ -185,9 +179,7 @@ impl VmBamlError {
             Self::Unsupported { .. } => SysOpErrorCategory::Unsupported,
             Self::AccessError { .. } => SysOpErrorCategory::AccessError,
             Self::RenderPrompt { .. } => SysOpErrorCategory::RenderPrompt,
-            Self::NotImplemented { .. } => SysOpErrorCategory::NotImplemented,
             Self::LlmClient { .. } => SysOpErrorCategory::LlmClient,
-            Self::DevOther { .. } => SysOpErrorCategory::DevOther,
             Self::HostCallable { .. } => SysOpErrorCategory::HostCallable,
         }
     }
@@ -246,6 +238,14 @@ pub enum VmInternalError {
     /// post-init `StoreGlobal` violates that invariant.
     #[error("StoreGlobal executed outside of $init (globals are frozen post-init)")]
     StoreGlobalAfterInit,
+
+    /// A native resource handle (SSE stream, WebSocket stream, …) did not
+    /// resolve in the registry that owns it. The sysop holds a live
+    /// `ResourceHandle` for the whole call and the registry entry is removed
+    /// only when the last handle drops, so a missing entry is a registry
+    /// invariant violation rather than anything user code can provoke.
+    #[error("resource handle {key} of kind `{kind}` did not resolve in its registry")]
+    UnresolvedResourceHandle { kind: &'static str, key: usize },
 
     /// A bridge-layer fault that prevented a host operation from
     /// proceeding — e.g. `external_to_outbound` could not serialize a
@@ -420,7 +420,7 @@ pub enum VmRustFnError {
     /// A pre-built exception `Value` to throw directly as a catchable error.
     ///
     /// Used by native functions that need to throw user-defined class instances
-    /// (e.g. `baml.json.JsonParseError`) without going through the
+    /// (e.g. `baml.json.ParseError`) without going through the
     /// `VmPanic` / `VmBamlError` enumeration machinery.
     #[error("thrown value")]
     Thrown {
@@ -447,14 +447,33 @@ impl VmRustFnError {
     }
 }
 
+/// Project-relative path prefix carried by every standard-library source
+/// file. User files never start with it, so it is the one test for "is this
+/// frame / unit part of the stdlib".
+pub const BUILTIN_SOURCE_PREFIX: &str = "<builtin>/";
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct StackFrame {
     pub function_name: String,
-    /// Filesystem path of the source file containing this function.
-    /// Empty string for builtins and synthesized functions.
+    /// Project-relative path of the source file containing this function:
+    /// `<builtin>/…` for standard-library functions, empty for synthesized
+    /// functions with no source at all.
     pub file_path: String,
     pub function_span: baml_type::Span,
     pub error_line: usize,
+}
+
+impl StackFrame {
+    /// Whether this frame executes standard-library code.
+    ///
+    /// A user-facing traceback omits these frames: a `<builtin>/…` line is
+    /// nothing the caller can act on, and it is exactly what a native builtin
+    /// (which pushes no frame at all) never showed. A builtin whose body is
+    /// written in BAML rather than Rust therefore presents identically.
+    #[must_use]
+    pub fn is_builtin(&self) -> bool {
+        self.file_path.starts_with(BUILTIN_SOURCE_PREFIX)
+    }
 }
 
 fn format_internal_error(err: &VmInternalError, trace: &[StackFrame]) -> String {

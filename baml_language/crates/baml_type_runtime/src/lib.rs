@@ -530,7 +530,7 @@ fn nullable_non_null_part(ty: &Ty) -> Option<Ty> {
     match non_null.as_slice() {
         [] => None,
         [single] => Some(single.clone()),
-        _ => Some(Ty::Union(non_null, attr.clone())),
+        _ => Some(Ty::Union(non_null.into(), attr.clone())),
     }
 }
 
@@ -558,10 +558,10 @@ fn heads_correspond(formal: &Ty, actual: &Ty) -> bool {
 /// its members (one level); anything else is a single atom. Used by the
 /// union-with-`TypeVar`-member inference arm to subtract concrete siblings atom
 /// by atom.
-fn union_atoms(actual: &Ty) -> Vec<Ty> {
+fn union_atoms(actual: &Ty) -> Box<[Ty]> {
     match actual {
         Ty::Union(members, _) => members.clone(),
-        other => vec![other.clone()],
+        other => Box::new([other.clone()]),
     }
 }
 
@@ -816,7 +816,7 @@ mod tests {
     #[test]
     fn union_with_concrete_sibling_routes_actual_to_typevar() {
         // `T | string | null` vs `int` ⇒ T = int (G5 reversal).
-        let formal = Ty::Union(vec![tv("T"), string(), null()], a());
+        let formal = Ty::Union(Box::new([tv("T"), string(), null()]), a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &int(), &mut b);
         assert_eq!(b.get(&param("T")), Some(&int()));
@@ -825,7 +825,7 @@ mod tests {
     #[test]
     fn union_concrete_sibling_absorbs_actual_leaves_typevar_unbound() {
         // `T | string | null` vs `string` ⇒ the string sibling absorbs it; T unbound.
-        let formal = Ty::Union(vec![tv("T"), string(), null()], a());
+        let formal = Ty::Union(Box::new([tv("T"), string(), null()]), a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &string(), &mut b);
         assert!(!b.contains_key(&param("T")));
@@ -834,7 +834,7 @@ mod tests {
     #[test]
     fn union_null_actual_binds_typevar_to_null() {
         // `T | string | null` vs `null` ⇒ T = null (null not absorbed by string sibling).
-        let formal = Ty::Union(vec![tv("T"), string(), null()], a());
+        let formal = Ty::Union(Box::new([tv("T"), string(), null()]), a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &null(), &mut b);
         assert_eq!(b.get(&param("T")), Some(&null()));
@@ -843,7 +843,7 @@ mod tests {
     #[test]
     fn multi_typevar_union_is_ambiguous_binds_nothing() {
         // `T | U | string` vs `int` ⇒ no principled split ⇒ both unbound.
-        let formal = Ty::Union(vec![tv("T"), tv("U"), string()], a());
+        let formal = Ty::Union(Box::new([tv("T"), tv("U"), string()]), a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &int(), &mut b);
         assert!(!b.contains_key(&param("T")));
@@ -859,8 +859,8 @@ mod tests {
         // Regression: `T | int` vs `int | string` (both len 2). The equal-length
         // positional-zip arm must NOT fire (it would bind T = int by member
         // ordering). The residual arm routes the unmatched `string` to T.
-        let formal = Ty::Union(vec![tv("T"), int()], a());
-        let actual = Ty::Union(vec![int(), string()], a());
+        let formal = Ty::Union(Box::new([tv("T"), int()]), a());
+        let actual = Ty::Union(Box::new([int(), string()]), a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
         assert_eq!(b.get(&param("T")), Some(&string()));
@@ -871,8 +871,8 @@ mod tests {
         // Regression: `T | int | null` vs `int | string`. After the nullable arm
         // peels `null`, the recursion lands on `T | int` vs `int | string` and
         // must route `string` to T, not positionally bind T = int.
-        let formal = Ty::Union(vec![tv("T"), int(), null()], a());
-        let actual = Ty::Union(vec![int(), string()], a());
+        let formal = Ty::Union(Box::new([tv("T"), int(), null()]), a());
+        let actual = Ty::Union(Box::new([int(), string()]), a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
         assert_eq!(b.get(&param("T")), Some(&string()));
@@ -883,8 +883,8 @@ mod tests {
         // Regression: `T | U | int` vs `int | string | bool` (both len 3). The
         // equal-length zip must not pre-empt the multi-TypeVar ambiguity guard;
         // >1 TypeVar member has no principled split ⇒ both stay unbound.
-        let formal = Ty::Union(vec![tv("T"), tv("U"), int()], a());
-        let actual = Ty::Union(vec![int(), string(), boolt()], a());
+        let formal = Ty::Union(Box::new([tv("T"), tv("U"), int()]), a());
+        let actual = Ty::Union(Box::new([int(), string(), boolt()]), a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
         assert!(!b.contains_key(&param("T")));
@@ -899,19 +899,27 @@ mod tests {
         // arm T would stay unbound).
         let list_tv = Ty::List(Box::new(tv("T")), a());
         let list_int = Ty::List(Box::new(int()), a());
-        let formal = Ty::Union(vec![list_tv, int()], a());
-        let actual = Ty::Union(vec![list_int, int()], a());
+        let formal = Ty::Union(Box::new([list_tv, int()]), a());
+        let actual = Ty::Union(Box::new([list_int, int()]), a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
         assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
     fn opt_of(arg: Ty) -> Ty {
-        Ty::Class(baml_type::TypeName::local(Name::new("Opt")), vec![arg], a())
+        Ty::Class(
+            baml_type::TypeName::local(Name::new("Opt")),
+            Box::new([arg]),
+            a(),
+        )
     }
 
     fn non() -> Ty {
-        Ty::Class(baml_type::TypeName::local(Name::new("Non")), vec![], a())
+        Ty::Class(
+            baml_type::TypeName::local(Name::new("Non")),
+            Box::new([]),
+            a(),
+        )
     }
 
     #[test]
@@ -920,13 +928,13 @@ mod tests {
         // reordered actual spelling exactly as from the declaration-ordered
         // one. Positional zip paired `Opt<T>` with `Non` and bound nothing —
         // the R15 order-sensitivity a canonically sorted binding type exposed.
-        let formal = Ty::Union(vec![opt_of(tv("T")), non()], a());
-        let reordered = Ty::Union(vec![non(), opt_of(int())], a());
+        let formal = Ty::Union(Box::new([opt_of(tv("T")), non()]), a());
+        let reordered = Ty::Union(Box::new([non(), opt_of(int())]), a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &reordered, &mut b);
         assert_eq!(b.get(&param("T")), Some(&int()));
 
-        let declared = Ty::Union(vec![opt_of(int()), non()], a());
+        let declared = Ty::Union(Box::new([opt_of(int()), non()]), a());
         let mut b2 = FxHashMap::default();
         infer_bindings(&formal, &declared, &mut b2);
         assert_eq!(b2.get(&param("T")), Some(&int()));
@@ -936,8 +944,8 @@ mod tests {
     fn union_member_with_ambiguous_head_correspondent_binds_nothing() {
         // Two same-head actual members have no principled pairing for one
         // formal member — bind nothing rather than guess by order.
-        let formal = Ty::Union(vec![opt_of(tv("T")), non()], a());
-        let actual = Ty::Union(vec![opt_of(int()), opt_of(string())], a());
+        let formal = Ty::Union(Box::new([opt_of(tv("T")), non()]), a());
+        let actual = Ty::Union(Box::new([opt_of(int()), opt_of(string())]), a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
         assert!(!b.contains_key(&param("T")));
@@ -947,7 +955,7 @@ mod tests {
     fn float_sibling_does_not_absorb_int_actual() {
         // Coercion-free: `int` is NOT covered by a `float` sibling, so T = int.
         let float = Ty::Float { attr: a() };
-        let formal = Ty::Union(vec![tv("T"), float], a());
+        let formal = Ty::Union(Box::new([tv("T"), float]), a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &int(), &mut b);
         assert_eq!(b.get(&param("T")), Some(&int()));
@@ -975,13 +983,13 @@ mod tests {
     }
 
     fn boxed(t: Ty) -> Ty {
-        Ty::Class(TypeName::local(Name::new("GenericBox")), vec![t], a())
+        Ty::Class(TypeName::local(Name::new("GenericBox")), Box::new([t]), a())
     }
 
     fn pair_cls(first: Ty, second: Ty) -> Ty {
         Ty::Class(
             TypeName::local(Name::new("GenericPair")),
-            vec![first, second],
+            Box::new([first, second]),
             a(),
         )
     }
@@ -992,7 +1000,7 @@ mod tests {
 
     fn func0(ret: Ty) -> Ty {
         Ty::Function {
-            params: vec![],
+            params: Box::new([]),
             ret: Box::new(ret),
             throws: Box::new(null()),
             attr: a(),
@@ -1001,7 +1009,7 @@ mod tests {
 
     fn func1(param: Ty, ret: Ty) -> Ty {
         Ty::Function {
-            params: vec![FunctionParamTy::required(None, param)],
+            params: Box::new([FunctionParamTy::required(None, param)]),
             ret: Box::new(ret),
             throws: Box::new(null()),
             attr: a(),

@@ -132,11 +132,31 @@ function projection_patterns.$init_test_ns_projection_patterns_projection_patter
     return
 }
 
+function projection_patterns.<(user.projection_patterns.IntHolder as user.projection_patterns.Holder)>.get(self: projection_patterns.IntHolder) -> int {
+    load_const 7
+    return
+}
+
+function projection_patterns.<(user.projection_patterns.Pinned as user.projection_patterns.Labeled)>.id(self: projection_patterns.Pinned) -> int {
+    load_const 2
+    return
+}
+
+function projection_patterns.<(user.projection_patterns.Plain as user.projection_patterns.Labeled)>.id(self: projection_patterns.Plain) -> int {
+    load_const 1
+    return
+}
+
+function projection_patterns.<(user.projection_patterns.StrHolder as user.projection_patterns.Holder)>.get(self: projection_patterns.StrHolder) -> string {
+    load_const "s"
+    return
+}
+
 function projection_patterns.Holder.classify(self: projection_patterns.Holder, v: unknown) -> string {
     load_var v
     store_var _3
     load_var _3
-    narrow_bind #1, slot=3
+    narrow_bind (#0 as projection_patterns.Holder).Item, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -153,7 +173,7 @@ function projection_patterns.Holder.classify(self: projection_patterns.Holder, v
 
 function projection_patterns.Holder.is_item(self: projection_patterns.Holder, v: unknown) -> bool {
     load_var v
-    is_type #1
+    is_type (#0 as projection_patterns.Holder).Item
     pop_jump_if_false L0
     jump L1
 
@@ -168,14 +188,9 @@ function projection_patterns.Holder.is_item(self: projection_patterns.Holder, v:
     return
 }
 
-function projection_patterns.IntHolder.Holder.get(self: projection_patterns.IntHolder) -> int {
-    load_const 7
-    return
-}
-
 function projection_patterns.Labeled.is_label(self: projection_patterns.Labeled, v: unknown) -> bool {
     load_var v
-    is_type #1
+    is_type (#0 as projection_patterns.Labeled).Label
     pop_jump_if_false L0
     jump L1
 
@@ -191,23 +206,12 @@ function projection_patterns.Labeled.is_label(self: projection_patterns.Labeled,
 }
 
 function projection_patterns.Labeled.label_name(self: projection_patterns.Labeled) -> string {
-    load_type #1
-    call baml.root.ToString$for$reflect.Type.to_string
-    return
-}
-
-function projection_patterns.Pinned.Labeled.id(self: projection_patterns.Pinned) -> int {
-    load_const 2
-    return
-}
-
-function projection_patterns.Plain.Labeled.id(self: projection_patterns.Plain) -> int {
-    load_const 1
-    return
-}
-
-function projection_patterns.StrHolder.Holder.get(self: projection_patterns.StrHolder) -> string {
-    load_const "s"
+    load_type (#0 as projection_patterns.Labeled).Label
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 

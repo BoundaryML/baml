@@ -11,12 +11,12 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use super::{
-    BamlPackageBaml, Continuation, NativeCallResult, PackageBamlImpl, PassThroughContinuation,
+    BamlPackageBaml, Continuation, NativeCallResult, PackageBamlImpl,
     array::{
         NaturalDomain, compare_natural_values, is_primitive_array_values,
         validate_natural_order_with_vm,
     },
-    make_compare_callee, make_to_string_callee,
+    make_to_string_callee,
 };
 use crate::{
     BexVm, VmPanic,
@@ -27,18 +27,6 @@ impl BamlPackageBaml for PackageBamlImpl {
     fn deep_copy(vm: &mut BexVm, value: &Value) -> Value {
         let mut copied_objects = HashMap::new();
         deep_copy_value_recursive(vm, *value, &mut copied_objects)
-    }
-
-    /// `baml._float_total_cmp(a, b)` — bit-exact `f64::total_cmp` three-way
-    /// comparison backing `Comparable for float`. Kept in lockstep with the
-    /// float domain of `compare_natural_values` (the `_rust_sort` fast path)
-    /// so the two sort paths can never disagree on a float ordering.
-    fn _float_total_cmp(a: f64, b: f64) -> i64 {
-        match a.total_cmp(&b) {
-            std::cmp::Ordering::Less => -1,
-            std::cmp::Ordering::Equal => 0,
-            std::cmp::Ordering::Greater => 1,
-        }
     }
 
     /// `baml._is_primitive_array(arr)` — `Sortable.sort`'s dispatch guard:
@@ -52,7 +40,8 @@ impl BamlPackageBaml for PackageBamlImpl {
     /// Stable natural-order sort of a homogeneous primitive array, in place
     /// (the receiver's backing `Vec` is sorted or replaced; the returned value
     /// IS the receiver). The comparator is pure Rust — no per-pair yield to
-    /// BAML — and the float domain uses `f64::total_cmp`, so no domain throws.
+    /// BAML — and the float domain uses BAML's total float order, so no domain
+    /// throws.
     /// The validation rejections are defensive only: the `_is_primitive_array`
     /// guard plus `T[]` homogeneity make them unreachable from `Sortable.sort`.
     fn _rust_sort(vm: &mut BexVm, arr: &Value) -> NativeCallResult {
@@ -103,53 +92,28 @@ impl BamlPackageBaml for PackageBamlImpl {
         NativeCallResult::Done(*arr)
     }
 
-    /// `baml._compare_shim(a, b)` — the dispatch shim for the `Sortable`
-    /// blanket `sort`'s comparator path. Resolves `Comparable.compare` on
-    /// `a`'s runtime class and yields to it with `b`; the comparison's `int`
-    /// result (or thrown error) is returned straight through. See
-    /// `make_compare_callee` for why the sort cannot dispatch `compare`
-    /// itself.
-    fn _compare_shim(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
-        let callee = match make_compare_callee(vm, *a) {
-            Ok(ptr) => ptr,
-            Err(e) => return NativeCallResult::Error(e),
-        };
-        NativeCallResult::YieldToCall {
-            callee,
-            args: vec![*b],
-            type_args: vec![],
-            continuation: Box::new(PassThroughContinuation),
-        }
-    }
-
-    /// `baml._to_string_default(value)` and `baml._to_string_shim(value)` both
-    /// render `value` for `string.from`, honoring `baml.ToString` overrides at
-    /// every depth: `value`'s own override (if any) wins, and any *nested* value
+    /// `baml._to_string_default(value)` renders `value` for `string.from`,
+    /// honoring `baml.ToString` overrides at every depth: `value`'s own override (if any) wins, and any *nested* value
     /// whose runtime class overrides `to_string` is rendered via that override
     /// rather than structurally. Everything else renders structurally (primitives
     /// naturally; containers/instances as `[a, b]` / `Class { f: v }`, with nested
     /// strings quoted). Total — `string.from` is `throws never`.
     ///
     /// `_to_string_default` is the `baml.ToString` interface's default body and
-    /// the structural fallback; `_to_string_shim` backs `string.from`. They are
-    /// identical: the walker already applies `value`'s own override when present,
-    /// so an empty `implements baml.ToString {}` (whose runtime class carries no
-    /// in-body override) still serializes structurally with nested overrides
-    /// honored.
+    /// the structural fallback: the walker already applies `value`'s own
+    /// override when present, so an empty `implements baml.ToString {}` (whose
+    /// runtime class carries no in-body override) still serializes
+    /// structurally with nested overrides honored.
     fn _to_string_default(vm: &mut BexVm, value: &Value) -> NativeCallResult {
-        render_to_string_honoring_overrides(vm, *value)
-    }
-
-    fn _to_string_shim(vm: &mut BexVm, value: &Value) -> NativeCallResult {
         render_to_string_honoring_overrides(vm, *value)
     }
 
     /// `baml._to_json_default(value)` and `baml._to_json_shim(value)` both render
     /// `value` to a `json` value for `baml.json.from`, honoring `baml.ToJson`
-    /// overrides at every depth. The json analog of `_to_string_default` /
-    /// `_to_string_shim`; both delegate to the override-honoring walker in
-    /// `json.rs`. Unlike the string shims, this can throw `JsonSerializationError`
-    /// for values with no json representation.
+    /// overrides at every depth. The json analog of `_to_string_default`; both
+    /// delegate to the override-honoring walker in `json.rs`. Unlike the string
+    /// renderer, this can throw `SerializationError` for values with no json
+    /// representation.
     fn _to_json_default(vm: &mut BexVm, value: &Value) -> NativeCallResult {
         super::json::render_to_json_honoring_overrides(vm, *value)
     }
@@ -228,26 +192,11 @@ impl BamlPackageBaml for PackageBamlImpl {
             .sum()
     }
 
-    /// `baml._mean_float(values)` — native backing for `float[].mean()`.
-    ///
-    /// Throws `InvalidArgument` when `values` is empty.
-    #[allow(clippy::cast_precision_loss)]
-    fn _mean_float(vm: &BexVm, values: &[Value]) -> Result<f64, VmRustFnError> {
-        if values.is_empty() {
-            return Err(VmBamlError::InvalidArgument {
-                message: "float[].mean: cannot take the mean of an empty array".to_string(),
-            }
-            .into());
-        }
-        let n = values.len() as f64;
-        Ok(Self::_sum_float(vm, values) / n)
-    }
-
     /// `baml._median_float(values)` — native backing for `float[].median()`.
     ///
-    /// Sorts a copy with `f64::total_cmp` (BAML's total float ordering, matching
-    /// `float[].sort()`) so the caller's array is left untouched. Throws
-    /// `InvalidArgument` when `values` is empty.
+    /// Sorts a copy in BAML's total float order (matching `float[].sort()`) so
+    /// the caller's array is left untouched. Throws `InvalidArgument` when
+    /// `values` is empty.
     fn _median_float(vm: &BexVm, values: &[Value]) -> Result<f64, VmRustFnError> {
         if values.is_empty() {
             return Err(VmBamlError::InvalidArgument {
@@ -260,7 +209,7 @@ impl BamlPackageBaml for PackageBamlImpl {
             .enumerate()
             .map(|(index, value)| expect_float(vm, *value, "_median_float", index))
             .collect();
-        sorted.sort_by(f64::total_cmp);
+        sorted.sort_by(|a, b| bex_vm_types::float_order::cmp(*a, *b));
         let mid = sorted.len() / 2;
         if sorted.len() % 2 == 1 {
             Ok(sorted[mid])
@@ -278,15 +227,21 @@ impl BamlPackageBaml for PackageBamlImpl {
     }
 }
 
-/// Whether `value`'s runtime class carries an in-body `baml.ToString` override.
-/// Shares `make_to_string_callee`'s resolution (so the two agree on every value
-/// kind, including the non-instance `type` / `uint8array` implementors) but
-/// allocates nothing on the VM heap, so it is safe to call during the
-/// allocation-free pre-order collection pass.
-fn has_to_string_override(vm: &BexVm, value: Value) -> bool {
-    super::to_string_override_fn_name(vm, value)
-        .and_then(|name| vm.find_function_by_name(&name))
-        .is_some()
+/// Whether `value`'s runtime type carries a `baml.ToString` override.
+/// Shares `make_to_string_callee`'s rule resolution (so the two agree on every
+/// value kind) but allocates nothing on the VM heap, so it is safe to call
+/// during the allocation-free pre-order collection pass. A resolver error
+/// PROPAGATES (`shim_rule_method`'s own contract: never a silent structural
+/// fallback) — swallowing it here would let the collection pass disagree
+/// with the dispatch pass.
+fn has_to_string_override(
+    vm: &BexVm,
+    value: Value,
+) -> Result<bool, crate::errors::VmInternalError> {
+    Ok(matches!(
+        super::shim_rule_method(vm, value, "ToString", "to_string")?,
+        Some(resolved) if !resolved.is_default
+    ))
 }
 
 /// Pre-order DFS collecting, by heap pointer and in render order, every
@@ -297,13 +252,17 @@ fn has_to_string_override(vm: &BexVm, value: Value) -> bool {
 /// the two stay index-aligned. (Like the structural renderer, this does not
 /// guard against reference cycles — recursive *data* would already loop in the
 /// pre-existing walker; recursive *types* such as trees are acyclic.)
-pub(super) fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>) {
+pub(super) fn collect_to_string_overrides(
+    vm: &BexVm,
+    value: Value,
+    out: &mut Vec<HeapPtr>,
+) -> Result<(), crate::errors::VmInternalError> {
     let ValueKind::Object(ptr) = value.kind() else {
-        return;
+        return Ok(());
     };
-    if has_to_string_override(vm, value) {
+    if has_to_string_override(vm, value)? {
         out.push(ptr);
-        return;
+        return Ok(());
     }
     // Snapshot children (owned), dropping the heap borrow / container lock before
     // recursing - same discipline as `render_to_sink`'s `DisplaySnap`. The
@@ -316,11 +275,12 @@ pub(super) fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Ve
         _ => Vec::new(),
     };
     for v in children {
-        collect_to_string_overrides(vm, v, out);
+        collect_to_string_overrides(vm, v, out)?;
     }
+    Ok(())
 }
 
-/// Entry point shared by `_to_string_default` and `_to_string_shim`. Collects the
+/// Entry point for `_to_string_default`. Collects the
 /// override-bearing sub-values (pass 1, sync), dispatches `to_string` on each in
 /// order (pass 2, one `YieldToCall` per override via [`ToStringWalkContinuation`]),
 /// then renders structurally splicing in the override results (pass 3). When the
@@ -330,13 +290,16 @@ pub(crate) fn render_to_string_honoring_overrides(
     value: Value,
 ) -> NativeCallResult {
     let mut pending: Vec<HeapPtr> = Vec::new();
-    collect_to_string_overrides(vm, value, &mut pending);
+    if let Err(e) = collect_to_string_overrides(vm, value, &mut pending) {
+        return NativeCallResult::Error(e.into());
+    }
 
     let Some(&first_ptr) = pending.first() else {
         return render_done(vm, value, &pending, &[]);
     };
     match make_to_string_callee(vm, Value::object(first_ptr)) {
-        Some(callee) => NativeCallResult::YieldToCall {
+        Err(e) => NativeCallResult::Error(e.into()),
+        Ok(Some(callee)) => NativeCallResult::YieldToCall {
             callee,
             args: vec![],
             type_args: vec![],
@@ -346,7 +309,7 @@ pub(crate) fn render_to_string_honoring_overrides(
                 results: Vec::new(),
             }),
         },
-        None => render_done(vm, value, &pending, &[]),
+        Ok(None) => render_done(vm, value, &pending, &[]),
     }
 }
 
@@ -386,15 +349,19 @@ impl Continuation for ToStringWalkContinuation {
         );
 
         // Dispatch the next override, if any (and resolvable); otherwise render.
-        if let Some(&next_ptr) = self.pending.get(self.results.len())
-            && let Some(callee) = make_to_string_callee(vm, Value::object(next_ptr))
-        {
-            return NativeCallResult::YieldToCall {
-                callee,
-                args: vec![],
-                type_args: vec![],
-                continuation: self,
-            };
+        if let Some(&next_ptr) = self.pending.get(self.results.len()) {
+            match make_to_string_callee(vm, Value::object(next_ptr)) {
+                Err(e) => return NativeCallResult::Error(e.into()),
+                Ok(Some(callee)) => {
+                    return NativeCallResult::YieldToCall {
+                        callee,
+                        args: vec![],
+                        type_args: vec![],
+                        continuation: self,
+                    };
+                }
+                Ok(None) => {}
+            }
         }
         render_done(vm, self.root, &self.pending, &self.results)
     }

@@ -1,7 +1,6 @@
 ---
 source: crates/baml_ide/src/describe.rs
-assertion_line: 2054
 expression: "project.format_description(&descs[0])"
 ---
-function deep_copy  (baml.deep_copy)  core.baml:3
+function deep_copy  (baml.deep_copy)  core.baml:10
 shape: function deep_copy(value: T) -> T throws never

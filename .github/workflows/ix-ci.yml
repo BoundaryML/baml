@@ -13,10 +13,12 @@ name: CI on ix (preview)
 permissions:
   contents: read
 
+# Temporarily disabled for push and pull_request events. The ix runner pool has
+# not assigned a job since 2026-08-28, leaving jobs queued until GitHub's 24-hour
+# runner-acquisition limit or until a newer workflow supersedes them. Keep a
+# manual entry point for an explicitly authorized smoke test after the runner
+# pool is healthy again.
 on:
-  push:
-    branches: [canary]
-  pull_request:
   workflow_dispatch:
 
 concurrency:
@@ -43,7 +45,7 @@ jobs:
       code: ${{ steps.check_code.outputs.changed }}
       webview: ${{ steps.check_webview.outputs.changed }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -111,10 +113,8 @@ jobs:
     name: "Cargo Tests"
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/canary'
-    # Match ci.yaml's Blacksmith gating lane: same-repository PRs receive the
-    # existing R2 credentials, while GitHub withholds repository secrets from
-    # fork and Dependabot PRs. Both lanes execute the same checked-out code.
     uses: ./.github/workflows/ix-cargo-tests.reusable.yaml
+    # Map repository Actions secrets into the reusable-workflow contract.
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
@@ -124,6 +124,7 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/ix-size-gate.reusable.yaml
+    # Structural mapping only; see cargo-tests above.
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}

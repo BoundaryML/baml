@@ -45,6 +45,7 @@ fn forced_color_malformed_diagnostic_fragment_falls_back_and_reports() {
         .env("BAML_HOME", home)
         .env("BAML_NO_BYTECODE_CACHE", "1")
         .env("BAML_OUTPUT_PRESET", "human")
+        .env("BAML_AGENT_SKILL_CHECK", "off")
         .output()
         .expect("run baml check");
     let stderr = String::from_utf8_lossy(&output.stderr);

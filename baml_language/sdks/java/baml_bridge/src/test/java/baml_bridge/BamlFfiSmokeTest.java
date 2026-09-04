@@ -1,15 +1,21 @@
 package baml_bridge;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import baml_bridge.internal.ProtoReader;
 import baml_bridge.internal.ProtoWriter;
 import baml_bridge.internal.WireReader;
+import baml_bridge.internal.WireWriter;
+import baml_sdk.baml.media.Audio;
 import baml_sdk.baml.media.Image;
+import baml_sdk.baml.media.Pdf;
+import baml_sdk.baml.media.Video;
 
 import java.io.File;
 import java.util.concurrent.CompletableFuture;
@@ -144,93 +150,99 @@ class BamlFfiSmokeTest {
         assertEquals("", img.base64()); // no base64 payload for a bare URL
     }
 
-    /**
-     * Encoding a media value produces {@code class_value(baml.media.Image, {_data:
-     * handle})} with a <em>freshly cloned</em> wire key — the original handle
-     * survives the encode so the Java object stays usable after the call.
-     */
+    /** Encoding a native-backed media wrapper copies its portable payload onto field 15. */
     @Test
-    void media_encodes_as_class_value_with_cloned_data_handle() {
-        Image img = Image.from_url("https://example.com/asset", null);
+    void media_encodes_as_portable_value() {
+        Image img = Image.from_url("https://example.com/asset", "image/png");
         long originalKey = img.bamlHandle().key();
 
-        byte[] encoded = ProtoWriter.encodeInboundValue(img);
+        assertPortableMedia(img, 1, 3, "https://example.com/asset", "image/png");
+        assertPortableMedia(Audio.from_base64("YXVkaW8=", "audio/mpeg"),
+                2, 4, "YXVkaW8=", "audio/mpeg");
+        assertPortableMedia(Pdf.from_file("document.pdf"),
+                3, 5, "document.pdf", null);
+        assertPortableMedia(Video.from_url("https://example.com/video", "video/mp4"),
+                4, 3, "https://example.com/video", "video/mp4");
 
-        // InboundValue.class_value = 8.
-        byte[] classBytes = subMessage(new WireReader(encoded), 8);
-        assertNotNull(classBytes, "expected InboundValue.class_value (field 8)");
-
-        byte[] valueType = subMessage(new WireReader(encoded), 1);
-        assertNotNull(valueType, "expected InboundValue.value_type (field 1)");
-        byte[] mediaType = subMessage(new WireReader(valueType), 11);
-        assertNotNull(mediaType, "expected BamlTy.media (field 11)");
-        int mediaKind = 0;
-        WireReader ty = new WireReader(mediaType);
-        while (ty.hasRemaining()) {
-            int tag = ty.readTag();
-            if (WireReader.fieldOf(tag) == 1) {
-                mediaKind = (int) ty.readVarint();
-            } else {
-                ty.skipField(WireReader.wireOf(tag));
-            }
-        }
-
-        // InboundClassValue: fields = 2 (repeated InboundMapEntry).
-        WireReader cv = new WireReader(classBytes);
-        String dataKey = null;
-        byte[] dataValueBytes = null;
-        while (cv.hasRemaining()) {
-            int tag = cv.readTag();
-            int f = WireReader.fieldOf(tag);
-            int wt = WireReader.wireOf(tag);
-            if (f == 2) {
-                WireReader entry = cv.readMessage();
-                while (entry.hasRemaining()) {
-                    int et = entry.readTag();
-                    int ef = WireReader.fieldOf(et);
-                    if (ef == 1) {
-                        dataKey = entry.readString(); // InboundMapEntry.string_key
-                    } else if (ef == 6) {
-                        dataValueBytes = entry.readBytes(); // InboundMapEntry.value
-                    } else {
-                        entry.skipField(WireReader.wireOf(et));
-                    }
-                }
-            } else {
-                cv.skipField(wt);
-            }
-        }
-        assertEquals(1, mediaKind); // BAML_TY_MEDIA_KIND_IMAGE
-        assertEquals("_data", dataKey);
-        assertNotNull(dataValueBytes, "expected a _data field value");
-
-        // _data InboundValue.handle = 10 → BamlHandle { key = 1, handle_type = 2 }.
-        byte[] handleBytes = subMessage(new WireReader(dataValueBytes), 10);
-        assertNotNull(handleBytes, "expected InboundValue.handle (field 10)");
-        WireReader hb = new WireReader(handleBytes);
-        long wireKey = 0;
-        int handleType = 0;
-        while (hb.hasRemaining()) {
-            int tag = hb.readTag();
-            int f = WireReader.fieldOf(tag);
-            if (f == 1) {
-                wireKey = hb.readVarint();
-            } else if (f == 2) {
-                handleType = (int) hb.readVarint();
-            } else {
-                hb.skipField(WireReader.wireOf(tag));
-            }
-        }
-        assertEquals(BamlHandle.ADT_MEDIA_IMAGE, handleType);
-        assertNotEquals(0L, wireKey);
-        assertNotEquals(originalKey, wireKey, "wire key must be a fresh clone");
-
-        // The original handle survived the clone: its accessors still resolve.
+        // Portable serialization neither clones nor drains the source handle.
+        assertEquals(originalKey, img.bamlHandle().key());
         assertEquals("https://example.com/asset", img.url());
+    }
 
-        // The engine would drain the wire key on decode; we never sent it, so
-        // release it here to avoid leaking the row.
-        BamlFfi.nativeHandleRelease(wireKey);
+    private static void assertPortableMedia(
+            BamlMedia value, int expectedKind, int expectedSource, String expectedValue,
+            String expectedMimeType) {
+        byte[] encoded = ProtoWriter.encodeInboundValue(value);
+        assertNull(subMessage(new WireReader(encoded), 1), "media needs no value_type");
+        assertNull(subMessage(new WireReader(encoded), 8), "media is not a class_value");
+        byte[] mediaBytes = subMessage(new WireReader(encoded), 15);
+        assertNotNull(mediaBytes, "expected InboundValue.media_value (field 15)");
+
+        WireReader media = new WireReader(mediaBytes);
+        int kind = 0;
+        String mimeType = null;
+        int source = 0;
+        String payload = null;
+        while (media.hasRemaining()) {
+            int tag = media.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            switch (field) {
+                case 1 -> kind = (int) media.readVarint();
+                case 2 -> mimeType = media.readString();
+                case 3, 4, 5 -> {
+                    source = field;
+                    payload = media.readString();
+                }
+                default -> media.skipField(wire);
+            }
+        }
+        assertEquals(expectedKind, kind);
+        assertEquals(expectedMimeType, mimeType);
+        assertEquals(expectedSource, source);
+        assertEquals(expectedValue, payload);
+    }
+
+    /** Portable outbound media reifies all four Java wrappers and all three source arms. */
+    @Test
+    void portable_media_decode_reifies_kind_and_source() {
+        Image image = assertInstanceOf(
+                Image.class,
+                decodePortableMedia(1, 3, "https://example.com/image", "image/png"));
+        assertEquals("https://example.com/image", image.url());
+        assertEquals("image/png", image.mime_type());
+
+        Audio audio = assertInstanceOf(
+                Audio.class, decodePortableMedia(2, 4, "YXVkaW8=", "audio/mpeg"));
+        assertEquals("YXVkaW8=", audio.base64());
+        assertEquals("audio/mpeg", audio.mime_type());
+
+        Pdf pdf = assertInstanceOf(
+                Pdf.class, decodePortableMedia(3, 5, "document.pdf", null));
+        assertEquals("document.pdf", pdf.file());
+        assertNull(pdf.mime_type());
+
+        Video video = assertInstanceOf(
+                Video.class,
+                decodePortableMedia(4, 3, "https://example.com/video", "video/mp4"));
+        assertEquals("https://example.com/video", video.url());
+        assertEquals("video/mp4", video.mime_type());
+    }
+
+    private static Object decodePortableMedia(
+            int kind, int sourceField, String value, String mimeType) {
+        WireWriter media = new WireWriter();
+        media.writeInt64(1, kind); // BamlValueMedia.media
+        if (mimeType != null) {
+            media.writeString(2, mimeType); // BamlValueMedia.mime_type
+        }
+        media.writeString(sourceField, value); // BamlValueMedia.value oneof
+
+        WireWriter outbound = new WireWriter();
+        outbound.writeMessage(17, media.toByteArray()); // BamlOutboundValue.media_value
+        WireWriter result = new WireWriter();
+        result.writeMessage(1, outbound.toByteArray()); // BamlOutboundResult.ok
+        return ProtoReader.decodeOutboundResult(result.toByteArray());
     }
 
     /** Read the first length-delimited sub-message payload for {@code wantField}. */

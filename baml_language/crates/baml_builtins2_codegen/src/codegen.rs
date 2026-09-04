@@ -14,7 +14,7 @@
 use std::{collections::BTreeMap, fmt::Write};
 
 use crate::{
-    rust_ident::{rust_field_ident, rust_field_value_ident},
+    rust_ident::{rust_class_type_ident, rust_field_ident, rust_field_value_ident},
     types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage},
 };
 
@@ -151,11 +151,15 @@ fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin], package: &str) -> Nam
         let segments: Vec<&str> = rest.split('.').collect();
         let last_idx = segments.len() - 1;
 
-        // The class is the first uppercase segment before the final method
-        // segment (if any). Everything after the class is the dispatch key:
-        // a method declared inside an `implements I { ... }` block keeps the
-        // interface segment in its runtime path (`...{Class}.I.method`), so the
-        // class dispatch must match on `I.method`. The Rust method name comes
+        // The class is the first uppercase-initial segment before the final
+        // method segment (if any). An implements-block method's segment is
+        // `{Iface}$for${Class}` — for a DOTTED written interface
+        // (`root.io.Read$for$File`) the interface's path components parse
+        // as namespace segments here, which lands correctly only because
+        // namespace segments are lowercase and the `$for$` segment starts
+        // with the interface's uppercase name. Contingent, not designed —
+        // the structural `namespace`/`class_segment` fields are the honest
+        // route if this lane ever misparses. The Rust method name comes
         // from the final segment alone so it stays a valid identifier.
         let class_idx = segments[..last_idx]
             .iter()
@@ -546,9 +550,13 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     let inner = "    ".repeat(depth + 1);
     let inner2 = "    ".repeat(depth + 2);
 
+    // The BAML `_` internal marker has no Rust meaning; strip it so the
+    // generated type matches the rest of the generated surface.
+    let class_ident = rust_class_type_ident(class_name);
+
     // Struct definition with owned fields
     writeln!(out, "{indent}/// Generated from `{}`", def.source_file).unwrap();
-    writeln!(out, "{indent}pub struct {class_name} {{").unwrap();
+    writeln!(out, "{indent}pub struct {class_ident} {{").unwrap();
     for field in &def.fields {
         let rust_type = copy_field_type(&field.field_type);
         writeln!(
@@ -562,7 +570,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
 
     // Impl with to_value()
     let fqn = format!("{}.{}", def.namespace_prefix, def.name);
-    writeln!(out, "{indent}impl {class_name} {{").unwrap();
+    writeln!(out, "{indent}impl {class_ident} {{").unwrap();
     writeln!(
         out,
         "{inner}pub fn to_value(self, vm: &mut BexVm) -> bex_vm_types::Value {{"

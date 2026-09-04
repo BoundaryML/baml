@@ -133,14 +133,14 @@ async fn runtime_constructed_openai_client_defaults_api_key_from_env() {
             }
 
             function main() -> map<string, string> {
-                let spec = EnvPrompt$spec();
+                let spec = EnvPrompt@spec();
                 let input = ai.ModelTurnInput {
                     prompt: spec.prompt_template,
                     journal: ai.Journal { log: [] },
                     toolbox: ai.tools.Toolbox.new([]),
                     output_type: reflect.Type.of<string>(),
                 };
-                openai.internal.openai_render(
+                openai.internal.render(
                     openai.ResponsesClient.new(model = "gpt-4o"),
                     input,
                 ).headers
@@ -167,15 +167,15 @@ async fn anthropic_clients_default_api_key_from_env_at_runtime() {
             }
 
             function main() -> map<string, string> {
-                let spec = EnvPrompt$spec();
+                let spec = EnvPrompt@spec();
                 let input = ai.ModelTurnInput {
                     prompt: spec.prompt_template,
                     journal: ai.Journal { log: [] },
                     toolbox: ai.tools.Toolbox.new([]),
                     output_type: reflect.Type.of<string>(),
                 };
-                let runtime = anthropic.internal._anthropic_request(
-                    anthropic.AnthropicClient.new(model = "claude-sonnet-4-20250514"),
+                let runtime = anthropic.internal._request(
+                    anthropic.Client.new(model = "claude-sonnet-4-20250514"),
                     input,
                     false,
                 ).headers.get("x-api-key") ?? "missing";

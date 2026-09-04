@@ -6,31 +6,20 @@
 # nothing about how the original runs. Promote or delete after the
 # trial; do not evolve both copies.
 #
-# sccache strategy
-# ================
-#
-# These jobs compile the same release artifacts the cargo tests do, so they
-# share the sccache + Swatinem/rust-cache setup documented at the top of
-# cargo-tests.reusable.yaml: sccache holds the compiled `target/` tree (R2
-# backend), while rust-cache keeps the registry/git state (`cache-all-crates:
-# true`, `cache-targets: false`). They are read-only consumers of the shared
-# rust-cache entries written by canary in cargo-tests.reusable.yaml, and read
-# the same sccache R2 cache via .envrc.
-#
-# Secretless runs (e.g. fork PRs) still install sccache, but .envrc sees no R2
-# credentials and falls back to the runner-local cache.
+# Size-gate jobs share cargo tests' R2 sccache. This preview relies on ix seed
+# disks rather than writing rust-cache entries. Secretless fork PRs use local cache.
 name: Size Gate (Reusable)
 
 on:
   workflow_call:
+    # Optional so secretless fork PRs can use the local cache.
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID:
         required: false
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
         required: false
 
-# Read-only: these jobs run PR-controlled code and only upload artifacts,
-# so they must not inherit whatever the caller grants.
+# Jobs run PR-controlled code with read-only repository access.
 permissions:
   contents: read
 
@@ -39,9 +28,7 @@ defaults:
     shell: bash
 
 env:
-  # Inputs read by .envrc; everything else (RUSTC_WRAPPER, SCCACHE_*) is set by
-  # .envrc itself so it stays the single source of truth across CI and local.
-  # The R2 credentials .envrc maps to AWS_* for sccache.
+  # .envrc supplies the remaining sccache configuration.
   BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
   BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
@@ -49,12 +36,7 @@ env:
   CARGO_TERM_COLOR: always
   RUSTUP_MAX_RETRIES: 10
 
-# Individual measure-baml-size jobs are intentionally never allowed to fail.
-# Each platform job has `continue-on-error: true` so a violation, runner
-# death, or build hiccup does not fail the calling workflow. The
-# enforce-baml-size job aggregates all available reports and is the one
-# place where a real failure (policy violation or a missing platform
-# report) can block CI.
+# Measure jobs collect reports without failing early; the report job enforces policy.
 
 jobs:
   size-gate-linux:
@@ -64,7 +46,7 @@ jobs:
     timeout-minutes: 20
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Keep the warm seed's ignored files (target/, node_modules);
@@ -153,7 +135,7 @@ jobs:
     timeout-minutes: 25
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Keep the warm seed's ignored files (target/, node_modules);
@@ -246,7 +228,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Keep the warm seed's ignored files (target/, node_modules);

@@ -158,8 +158,8 @@ pub(crate) fn collect_hir_ty_error_channel(
         for (&expr_id, (expected, actual)) in &result.type_mismatches {
             let rendered = format!(
                 "expected {}, got {}",
-                expected.to_plain().render_canonical(),
-                actual.to_plain().render_canonical()
+                expected.render_canonical(),
+                actual.render_canonical()
             );
             let entry = mismatches
                 .entry(range_key(source_map.expr_span(expr_id)))
@@ -553,10 +553,7 @@ pub(crate) fn collect_hir_ty_nodes(
             nodes.push(TypedNode {
                 range: name_span,
                 kind: NodeKind::Expr,
-                ty: format!(
-                    "throws {}",
-                    owner.result.throws.to_plain().render_canonical()
-                ),
+                ty: format!("throws {}", owner.result.throws.render_canonical()),
             });
         }
     }
@@ -568,7 +565,7 @@ pub(crate) fn collect_hir_ty_nodes(
             nodes.push(TypedNode {
                 range: owner.source_map.expr_span(expr_id),
                 kind: NodeKind::Expr,
-                ty: ty.to_plain().render_canonical(),
+                ty: ty.render_canonical(),
             });
         }
         let Some(body) = owner.body.expr_body() else {
@@ -582,7 +579,7 @@ pub(crate) fn collect_hir_ty_nodes(
                 nodes.push(TypedNode {
                     range: owner.source_map.pattern_span(pat_id),
                     kind: NodeKind::Pattern,
-                    ty: ty.to_plain().render_canonical(),
+                    ty: ty.render_canonical(),
                 });
             }
         }
@@ -606,7 +603,7 @@ pub(crate) fn collect_hir_ty_nodes(
                 nodes.push(TypedNode {
                     range: binding_name_range(fixture, binding),
                     kind: NodeKind::BindingName,
-                    ty: ty.to_plain().render_canonical(),
+                    ty: ty.render_canonical(),
                 });
             }
         }

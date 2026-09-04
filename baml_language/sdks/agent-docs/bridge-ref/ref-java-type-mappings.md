@@ -246,7 +246,7 @@ Per-row deviation flags:
   `Arm0..Arm{n-1}`, **one per positional arm in BAML declaration order** (post-normalization, null
   arm stripped), arms boxed (translate_ty.rs:226–230). Java 21+ consumers get exhaustive `switch`
   with record patterns; Java 17 uses `instanceof`. Verified:
-  `baml_bridge.Union2<baml_sdk.baml.csv.CsvRecord, baml_sdk.baml.iter.Done>`.
+  `baml_bridge.Union2<baml_sdk.baml.csv.Record, baml_sdk.baml.iter.Done>`.
 - **Arm selection is type-directed at decode time**, matching the wire value against the *declared*
   arm list in source order — the wire's `value_option_name` / arm order is never trusted. So **no
   nominal type is minted** for anonymous unions and the `UnionSink` stays empty (it is vestigial,

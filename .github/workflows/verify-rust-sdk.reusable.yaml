@@ -57,7 +57,7 @@ jobs:
     outputs:
       matrix: ${{ steps.derive.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -70,7 +70,7 @@ jobs:
                      and .libc != "musl"
                      and .artifacts.toolchain != null
                      and .artifacts.cffi != null)
-            | {target: .triple, os: .artifacts.toolchain.runner}]
+            | {target: .triple, os: (.artifacts.toolchain.verify_runner // .artifacts.toolchain.runner)}]
             + [{target: "x86_64-unknown-linux-gnu",
                 os: (.targets[]
                      | select(.triple == "x86_64-unknown-linux-gnu")
@@ -90,7 +90,7 @@ jobs:
     env:
       TARGET: ${{ matrix.target }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -120,11 +120,11 @@ jobs:
         with:
           # Default mirrors the setup-rust action default; the MSRV leg pins the
           # crate's minimum supported Rust instead.
-          toolchain: ${{ matrix.toolchain || '1.93.0' }}
+          toolchain: ${{ matrix.toolchain || '1.98.0' }}
           enable-cache: false
 
       - name: Download release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 

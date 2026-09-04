@@ -367,10 +367,7 @@ pub fn receiver_at_dot<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     file: SourceFile,
     dot: TextSize,
-) -> Option<(
-    baml_compiler2_hir::body::BodyOwnerId<'db>,
-    baml_type::interned::Ty,
-)> {
+) -> Option<(baml_compiler2_hir::body::BodyOwnerId<'db>, baml_type::Ty)> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
     let text = file.text(db);
     // A receiver "reaches" the dot when only trivia separates them, so a
@@ -387,7 +384,7 @@ pub fn receiver_at_dot<'db>(
     // nested in an argument list claims over the call that encloses it.
     let mut best: Option<(
         baml_compiler2_hir::body::BodyOwnerId<'db>,
-        baml_type::interned::Ty,
+        baml_type::Ty,
         TextRange,
     )> = None;
     for scope_id in scope_candidates_at(db, file, index, dot) {
@@ -430,14 +427,10 @@ pub fn receiver_at_dot<'db>(
                 Expr::OptionalMemberAccess { base, .. } => {
                     reaches(source_map.expr_span(*base).end())
                         .then(|| {
-                            inference.type_of_expr.get(base).map(|ty| {
-                                (
-                                    baml_type::interned::Ty::from_plain(
-                                        &ty.to_plain().strip_null(),
-                                    ),
-                                    source_map.expr_span(*base),
-                                )
-                            })
+                            inference
+                                .type_of_expr
+                                .get(base)
+                                .map(|ty| (ty.strip_null(), source_map.expr_span(*base)))
                         })
                         .flatten()
                 }
@@ -466,7 +459,7 @@ pub fn receiver_at_dot<'db>(
     // package qualifier, and inference records the error sentinel for the
     // `baml` it could not read as a value. Reporting that as a receiver
     // would answer "no members" for a dot that has plenty.
-    best.filter(|(_, ty, _)| !matches!(ty.kind(), baml_type::interned::TyKind::Error { .. }))
+    best.filter(|(_, ty, _)| !matches!(ty, baml_type::Ty::Error { .. }))
         .map(|(owner, ty, _)| (owner, ty))
 }
 
@@ -511,7 +504,7 @@ pub fn type_qualifier_at<'db>(
 pub struct CallPosition {
     /// The callee's type, which carries the parameter names and which of
     /// them are optional (and therefore named-only).
-    pub callee: baml_type::interned::Ty,
+    pub callee: baml_type::Ty,
     /// Labels already written in this call — a name is offered once.
     pub written: Vec<Name>,
 }
@@ -587,11 +580,7 @@ pub fn object_literal_at<'db>(
             if !(span.contains(offset) || span.end() == offset) {
                 continue;
             }
-            let Some(baml_type::interned::TyKind::Class(qtn, ..)) = inference
-                .type_of_expr
-                .get(&expr_id)
-                .map(baml_type::interned::Ty::kind)
-            else {
+            let Some(baml_type::Ty::Class(qtn, ..)) = inference.type_of_expr.get(&expr_id) else {
                 continue;
             };
             let facts = baml_compiler2_hir_ty::facts::Facts::new(db);
@@ -927,7 +916,7 @@ pub(crate) fn template_position_at(
     }
     // No `Expr::Template` at the cursor: check the SPEC-LOWERED prompt form.
     // An llm function's `prompt:` never becomes a template expression — the
-    // backtick flattens straight into the `$spec` companion ("both lower
+    // backtick flattens straight into the `@spec` companion ("both lower
     // through the same prompt`…` tagged template", lower_cst) — but the
     // synthesized prompt lambda opens a scope MARKED `is_template_body`
     // whose range is exactly the literal. Inside it, code regions are the
@@ -1034,7 +1023,7 @@ pub(crate) fn template_driver_at(
 
 /// The spec-lowered llm-prompt arm of [`template_position_at`]: an llm
 /// function's `prompt:` never becomes a template expression (the backtick
-/// flattens straight into the `$spec` companion, whose spans alias the
+/// flattens straight into the `@spec` companion, whose spans alias the
 /// literal), so prose-vs-code comes from the RECORDED prompt geometry
 /// (`llm_prompt_spans`, captured at CST lowering). Prose addresses the
 /// `ai.prompt` driver — the documented lowering contract ("both lower
@@ -1172,10 +1161,8 @@ fn operator_target_at(
                     narrower(span, dispatch, *operand, None);
                 }
             }
-            Expr::Index { base, index } => {
-                if !inside(*base) && !inside(*index) {
-                    narrower(span, ops::INDEX_DISPATCH, *base, Some(*index));
-                }
+            Expr::Index { base, index } if !inside(*base) && !inside(*index) => {
+                narrower(span, ops::INDEX_DISPATCH, *base, Some(*index));
             }
             _ => {}
         }
@@ -1193,9 +1180,11 @@ fn operator_target_at(
 
     let (_, dispatch, lhs, rhs) = claim?;
     let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
-    let lhs_ty = inference.type_of_expr.get(&lhs)?;
-    let rhs_ty = rhs.and_then(|rhs| inference.type_of_expr.get(&rhs));
-    let func = ops::operator_method(db, dispatch, lhs_ty, rhs_ty)?;
+    let lhs_ty = baml_type::interned::Ty::from_plain(inference.type_of_expr.get(&lhs)?);
+    let rhs_ty = rhs
+        .and_then(|rhs| inference.type_of_expr.get(&rhs))
+        .map(baml_type::interned::Ty::from_plain);
+    let func = ops::operator_method(db, dispatch, &lhs_ty, rhs_ty.as_ref())?;
     Some(SymbolTarget::Method { func })
 }
 
@@ -1257,7 +1246,7 @@ fn declaration_name_at(
             .position(|binding| hit(binding.name_span))?;
         let data = item_data::impl_block_data(db, *block);
         let bound_name = &data.associated_type_bindings.get(binding_index)?.name;
-        let facts = baml_compiler2_hir_ty::impls::impl_facts(db, *block).as_ref()?;
+        let facts = baml_compiler2_hir_ty::impls::impl_facts(db, *block).resolved()?;
         let interface = &facts.interface.name;
         let package = baml_compiler2_hir::package::PackageId::new(db, interface.package().clone());
         let Some(Definition::Interface(iface)) = baml_compiler2_ppir::package_items(db, package)
@@ -1454,7 +1443,7 @@ fn constructor_field_at<'db>(
             name_span.contains(offset) || name_span.end() == offset
         })?;
 
-        let obj_ty = inference.type_of_expr.get(&expr_id)?.to_plain();
+        let obj_ty = inference.type_of_expr.get(&expr_id)?.clone();
         let Ty::Class(ref qtn, _, _) = obj_ty else {
             return None;
         };

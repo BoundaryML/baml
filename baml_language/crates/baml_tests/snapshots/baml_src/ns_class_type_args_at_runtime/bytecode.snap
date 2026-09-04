@@ -78,7 +78,11 @@ function class_type_args_at_runtime.$init_test_ns_class_type_args_at_runtime_cla
 
 function class_type_args_at_runtime.Box.describe(self: class_type_args_at_runtime.Box<#0>) -> string {
     load_type #0
-    call baml.root.ToString$for$reflect.Type.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 

@@ -647,14 +647,14 @@ mod tests {
     fn multi_arm_unions_synthesize_an_enum_with_from_and_into_params() {
         let n = name("user", &[], "f");
         let union = Ty::Union(
-            vec![
+            Box::new([
                 Ty::Int {
                     attr: baml_base::TyAttr::EMPTY,
                 },
                 Ty::String {
                     attr: baml_base::TyAttr::EMPTY,
                 },
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let pool = SymbolPool::from([(
@@ -679,7 +679,7 @@ mod tests {
     fn nullable_multi_arm_unions_wrap_the_enum_in_option() {
         let n = name("user", &[], "f");
         let union = Ty::Union(
-            vec![
+            Box::new([
                 Ty::Int {
                     attr: baml_base::TyAttr::EMPTY,
                 },
@@ -689,7 +689,7 @@ mod tests {
                 Ty::Null {
                     attr: baml_base::TyAttr::EMPTY,
                 },
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let pool = SymbolPool::from([(
@@ -709,7 +709,7 @@ mod tests {
     fn string_arm_with_string_literal_arm_skips_fail_closed() {
         let n = name("user", &[], "f");
         let union = Ty::Union(
-            vec![
+            Box::new([
                 Ty::String {
                     attr: baml_base::TyAttr::EMPTY,
                 },
@@ -718,7 +718,7 @@ mod tests {
                     baml_codegen_types::Freshness::Regular,
                     baml_base::TyAttr::EMPTY,
                 ),
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let pool = SymbolPool::from([(
@@ -744,12 +744,12 @@ mod tests {
     fn recursion_through_a_union_boxes_the_enum_reference() {
         let a = name("user", &[], "A");
         let union_field = Ty::Union(
-            vec![
-                Ty::Class(a.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+            Box::new([
+                Ty::Class(a.clone(), Box::new([]), baml_base::TyAttr::EMPTY),
                 Ty::Int {
                     attr: baml_base::TyAttr::EMPTY,
                 },
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let pool = SymbolPool::from([(
@@ -846,6 +846,33 @@ mod tests {
     }
 
     #[test]
+    fn stream_with_options_counts_options_for_the_clippy_lint() {
+        let n = name("user", &[], "wide_function@stream");
+        let mut function = nullary_string_fn(&n);
+        function.arguments = (0..7)
+            .map(|index| baml_codegen_types::FunctionArgument {
+                injected: false,
+                name: baml_base::Name::new(format!("arg_{index}")),
+                docstring: None,
+                ty: Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                default: None,
+            })
+            .collect();
+        let pool = SymbolPool::from([(n, Symbol::Function(function))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        assert_eq!(
+            lib.matches("#[allow(clippy::too_many_arguments)]").count(),
+            4,
+            "the sync/async stream bindings and their options variants need the allowance:\n{lib}"
+        );
+    }
+
+    #[test]
     fn functions_with_arguments_carry_the_by_value_note() {
         let with_args = name("user", &[], "takes_one");
         let mut function = nullary_string_fn(&with_args);
@@ -902,7 +929,7 @@ mod tests {
                 attr: baml_base::TyAttr::EMPTY,
             },
         )];
-        function.throws = Some(Ty::Class(e.clone(), Vec::new(), baml_base::TyAttr::EMPTY));
+        function.throws = Some(Ty::Class(e.clone(), Box::new([]), baml_base::TyAttr::EMPTY));
         let pool = SymbolPool::from([
             (e.clone(), generic_class(&e, &[], vec![])),
             (f, Symbol::Function(function)),
@@ -1010,7 +1037,7 @@ mod tests {
         f.arguments = vec![arg(
             "x",
             Ty::Union(
-                vec![
+                Box::new([
                     typevar(0, "T"),
                     Ty::String {
                         attr: baml_base::TyAttr::EMPTY,
@@ -1018,7 +1045,7 @@ mod tests {
                     Ty::Null {
                         attr: baml_base::TyAttr::EMPTY,
                     },
-                ],
+                ]),
                 baml_base::TyAttr::EMPTY,
             ),
         )];
@@ -1059,7 +1086,7 @@ mod tests {
         // `T`.
         let c = name("user", &[], "ContainerShapes");
         let mixed = Ty::Union(
-            vec![
+            Box::new([
                 typevar(0, "T"),
                 Ty::String {
                     attr: baml_base::TyAttr::EMPTY,
@@ -1067,7 +1094,7 @@ mod tests {
                 Ty::Null {
                     attr: baml_base::TyAttr::EMPTY,
                 },
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let pool =
@@ -1101,13 +1128,13 @@ mod tests {
         f.arguments = vec![arg(
             "x",
             Ty::Union(
-                vec![
+                Box::new([
                     typevar(0, "T"),
                     typevar(1, "U"),
                     Ty::Int {
                         attr: baml_base::TyAttr::EMPTY,
                     },
-                ],
+                ]),
                 baml_base::TyAttr::EMPTY,
             ),
         )];
@@ -1178,12 +1205,16 @@ mod tests {
         // GenericRecursive<T> { value: T, next: GenericRecursive<T>? }
         let r = name("user", &[], "GenericRecursive");
         let next_ty = Ty::Union(
-            vec![
-                Ty::Class(r.clone(), vec![typevar(0, "T")], baml_base::TyAttr::EMPTY),
+            Box::new([
+                Ty::Class(
+                    r.clone(),
+                    Box::new([typevar(0, "T")]),
+                    baml_base::TyAttr::EMPTY,
+                ),
                 Ty::Null {
                     attr: baml_base::TyAttr::EMPTY,
                 },
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let pool = SymbolPool::from([(
@@ -1219,15 +1250,19 @@ mod tests {
         let mut wrap = nullary_string_fn(&name("user", &[], "wrap"));
         wrap.generic_params = vec![baml_base::Name::new("T")];
         wrap.arguments = vec![arg("x", typevar(0, "T"))];
-        wrap.return_type = Ty::Class(b.clone(), vec![typevar(0, "T")], baml_base::TyAttr::EMPTY);
+        wrap.return_type = Ty::Class(
+            b.clone(),
+            Box::new([typevar(0, "T")]),
+            baml_base::TyAttr::EMPTY,
+        );
         let mut consume = nullary_string_fn(&name("user", &[], "consume"));
         consume.arguments = vec![arg(
             "x",
             Ty::Class(
                 b.clone(),
-                vec![Ty::Int {
+                Box::new([Ty::Int {
                     attr: baml_base::TyAttr::EMPTY,
-                }],
+                }]),
                 baml_base::TyAttr::EMPTY,
             ),
         )];
@@ -1325,7 +1360,11 @@ mod tests {
             let mut m = nullary_string_fn(&name("user", &[], "make_box"));
             m.generic_params = vec![baml_base::Name::new("V")];
             m.arguments = vec![arg("value", typevar(0, "V"))];
-            m.return_type = Ty::Class(b.clone(), vec![typevar(0, "V")], baml_base::TyAttr::EMPTY);
+            m.return_type = Ty::Class(
+                b.clone(),
+                Box::new([typevar(0, "V")]),
+                baml_base::TyAttr::EMPTY,
+            );
             m
         });
         let pool = SymbolPool::from([(b, Symbol::Class(class))]);
@@ -1390,7 +1429,7 @@ mod tests {
         let children = Ty::List(
             Box::new(Ty::Class(
                 g.clone(),
-                vec![typevar(0, "T")],
+                Box::new([typevar(0, "T")]),
                 baml_base::TyAttr::EMPTY,
             )),
             baml_base::TyAttr::EMPTY,
@@ -1428,7 +1467,7 @@ mod tests {
             },
             default: None,
         });
-        create.return_type = Ty::Class(g.clone(), Vec::new(), baml_base::TyAttr::EMPTY);
+        create.return_type = Ty::Class(g.clone(), Box::new([]), baml_base::TyAttr::EMPTY);
         let who = nullary_string_fn(&name("user", &[], "who"));
         let mut greet = nullary_string_fn(&name("user", &[], "greet"));
         greet.arguments.push(baml_codegen_types::FunctionArgument {
@@ -1536,16 +1575,16 @@ mod tests {
     fn method_signatures_do_not_box_recursive_class_references() {
         let node = name("user", &[], "Node");
         let next_field = Ty::Union(
-            vec![
-                Ty::Class(node.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+            Box::new([
+                Ty::Class(node.clone(), Box::new([]), baml_base::TyAttr::EMPTY),
                 Ty::Null {
                     attr: baml_base::TyAttr::EMPTY,
                 },
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let mut next_or_self = nullary_string_fn(&name("user", &[], "next_or_self"));
-        next_or_self.return_type = Ty::Class(node.clone(), Vec::new(), baml_base::TyAttr::EMPTY);
+        next_or_self.return_type = Ty::Class(node.clone(), Box::new([]), baml_base::TyAttr::EMPTY);
         let pool = SymbolPool::from([(
             node.clone(),
             class_symbol(
@@ -1578,14 +1617,14 @@ mod tests {
     fn method_union_signatures_register_in_the_leaf_registry() {
         let h = name("user", &[], "Holder");
         let union = Ty::Union(
-            vec![
+            Box::new([
                 Ty::Int {
                     attr: baml_base::TyAttr::EMPTY,
                 },
                 Ty::String {
                     attr: baml_base::TyAttr::EMPTY,
                 },
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let mut pick = nullary_string_fn(&name("user", &[], "pick"));

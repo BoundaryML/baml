@@ -35,7 +35,8 @@ use baml_compiler2_hir::{
 };
 use baml_type::{
     FunctionParamTy, Interface, Literal, Name, ParamTy, RealizedTy, Ty, TyAttr, TypeName,
-    interned::InterfaceRef, normalize::TypeContext,
+    interned::{ClosedInterface, ClosedTy, InferInterface},
+    normalize::TypeContext,
 };
 use rustc_hash::FxHashMap;
 
@@ -272,7 +273,7 @@ fn normalize_union(members: Vec<Ty>, attr: TyAttr, enum_variants: EnumVariants) 
         1 => flat
             .pop()
             .unwrap_or_else(|| unreachable!("a length-1 vec has an element")),
-        _ => Ty::Union(flat, attr),
+        _ => Ty::Union(flat.into(), attr),
     }
 }
 
@@ -352,7 +353,7 @@ fn collect_package_aliases<'db>(
             if let Definition::TypeAlias(loc) = def {
                 let qualified = TypeName::new(items.package.clone(), ns_path.clone(), name.clone());
                 out.entry(qualified)
-                    .or_insert_with(|| crate::lower::type_alias_value(db, *loc).to_plain());
+                    .or_insert_with(|| crate::lower::type_alias_value(db, *loc));
             }
         }
     }
@@ -1134,7 +1135,7 @@ fn package_impls<'db>(
 ) -> Vec<(ImplLoc<'db>, &'db ImplFacts<'db>)> {
     package_impl_locs(db, pkg)
         .iter()
-        .filter_map(|&loc| impl_facts(db, loc).as_ref().map(|facts| (loc, facts)))
+        .filter_map(|&loc| impl_facts(db, loc).resolved().map(|facts| (loc, facts)))
         .collect()
 }
 
@@ -1148,11 +1149,16 @@ fn impl_sort_key(db: &dyn baml_compiler2_ppir::Db, loc: ImplLoc<'_>) -> (String,
 
 /// True iff two impls of the SAME interface conflict. Distinct interfaces
 /// never conflict; a duplicate in-body block is a degenerate overlap
-/// (rustc's conflicting-implementations error for exact duplicates). An
-/// impl whose alias-expanded for-target is not a valid implementor (the
-/// E0138 concreteness gate's subjects) contributes no overlap - it
-/// carries its own rejection, and stacking a spurious overlap on top
-/// would double-report.
+/// (rustc's conflicting-implementations error for exact duplicates).
+///
+/// There is deliberately NO concreteness gate here: an impl whose
+/// for-target is not an implementor never produces
+/// [`ImplFacts`] at all
+/// ([`ImplHeaderResolution::NotImplementor`](crate::impls::ImplHeaderResolution)),
+/// so it cannot reach this function. Re-deriving that judgment locally is
+/// what opened the E0132 hole: this gate judged the RAW head while E0138
+/// judged the normalized one, so a `true | false` subject was invalid here
+/// and valid there, and the pair escaped both.
 pub fn impls_conflict(
     db: &dyn baml_compiler2_ppir::Db,
     a: &ImplFacts<'_>,
@@ -1160,11 +1166,6 @@ pub fn impls_conflict(
     aliases: &FxHashMap<TypeName, Ty>,
 ) -> Overlap {
     if a.interface.name != b.interface.name {
-        return Overlap::No;
-    }
-    if !expand_alias_head(&a.for_ty_pattern.to_plain(), aliases).is_valid_impl_subject()
-        || !expand_alias_head(&b.for_ty_pattern.to_plain(), aliases).is_valid_impl_subject()
-    {
         return Overlap::No;
     }
     impls_overlap(db, a, b, aliases)
@@ -1181,8 +1182,8 @@ pub fn source_mounted_impl_conflict(
     mounted: &crate::package_interface::ExportedImpl,
 ) -> Overlap {
     let mounted_facts = ImplFacts {
-        interface: InterfaceRef::from_constraint(&mounted.interface),
-        for_ty_pattern: baml_type::interned::Ty::from_plain(&mounted.for_ty_pattern),
+        interface: ClosedInterface::from_constraint(&mounted.interface),
+        for_ty_pattern: ClosedTy::from_plain(&mounted.for_ty_pattern),
         generic_params: mounted
             .generic_params
             .iter()
@@ -1195,7 +1196,7 @@ pub fn source_mounted_impl_conflict(
                         .get(index)
                         .into_iter()
                         .flatten()
-                        .map(InterfaceRef::from_constraint)
+                        .map(ClosedInterface::from_constraint)
                         .collect(),
                 )
             })
@@ -1203,7 +1204,7 @@ pub fn source_mounted_impl_conflict(
         associated_types: mounted
             .associated_types
             .iter()
-            .map(|(name, ty)| (name.clone(), baml_type::interned::Ty::from_plain(ty)))
+            .map(|(name, ty)| (name.clone(), ClosedTy::from_plain(ty)))
             .collect(),
         methods: Vec::new(),
     };
@@ -1308,12 +1309,14 @@ fn bounds_hold_at_common_instance(
             continue;
         }
         for bound in bounds {
-            let bound = plain_bound(bound).map_tys(|t| substitute_plain(t, &param_witnesses));
+            let bound = bound
+                .to_plain()
+                .map_tys(|t| substitute_plain(t, &param_witnesses));
             if bound.tys().all(|t| RealizedTy::try_from(t).is_ok())
                 && crate::impls::resolve_impl(
                     db,
                     &crate::impls::interned_ty(witness),
-                    &InterfaceRef::from_constraint(&bound),
+                    &InferInterface::from_constraint(&bound),
                 )
                 .is_none()
             {
@@ -1322,23 +1325,6 @@ fn bounds_hold_at_common_instance(
         }
     }
     true
-}
-
-/// An interned bound target as a plain constraint.
-fn plain_bound(target: &InterfaceRef) -> Interface {
-    Interface::new(
-        target.name.clone(),
-        target
-            .generics
-            .iter()
-            .map(baml_type::interned::Ty::to_plain)
-            .collect(),
-        target
-            .associated_types
-            .iter()
-            .map(|(name, ty)| (name.clone(), ty.to_plain()))
-            .collect(),
-    )
 }
 
 /// Fresh unification param for side `prefix`'s `idx`-th generic param.
@@ -1375,9 +1361,10 @@ fn renamed_subject(
     );
     let args = rule
         .interface
+        .to_plain()
         .generics
         .iter()
-        .map(|arg| nf(&substitute_plain(&arg.to_plain(), &rename), enum_variants))
+        .map(|arg| nf(&substitute_plain(arg, &rename), enum_variants))
         .collect();
     (for_ty, args)
 }
@@ -1430,12 +1417,7 @@ pub fn package_orphan_violations<'db>(
     let mut violations = Vec::new();
     for (loc, facts) in package_impls(db, pkg) {
         let for_ty = facts.for_ty_pattern.to_plain();
-        let args: Vec<Ty> = facts
-            .interface
-            .generics
-            .iter()
-            .map(baml_type::interned::Ty::to_plain)
-            .collect();
+        let args: Vec<Ty> = facts.interface.to_plain().generics.to_vec();
         match orphan_check(&current_package, &facts.interface.name, &for_ty, &args) {
             OrphanOutcome::Ok => {}
             OrphanOutcome::UncoveredParam(name) => violations.push(OrphanViolation {
@@ -1495,8 +1477,8 @@ mod tests {
     fn interface(name: &str, args: Vec<Ty>) -> Ty {
         Ty::Interface(
             TypeName::local(Name::new(name)),
-            args,
-            vec![],
+            args.into(),
+            Box::new([]),
             TyAttr::default(),
         )
     }
@@ -1504,7 +1486,7 @@ mod tests {
     fn interface_with_assoc(name: &str, assoc: Vec<(&str, Ty)>) -> Ty {
         Ty::Interface(
             TypeName::local(Name::new(name)),
-            vec![],
+            Box::new([]),
             assoc
                 .into_iter()
                 .map(|(name, ty)| (Name::new(name), ty))
@@ -1549,11 +1531,11 @@ mod tests {
     fn contains_bound_typevar_checks_interface_associated_bindings() {
         let ty = Ty::Interface(
             TypeName::local(Name::new("Source")),
-            vec![],
-            vec![(
+            Box::new([]),
+            Box::new([(
                 Name::new("Item"),
                 Ty::List(Box::new(Ty::type_var("T")), TyAttr::default()),
-            )],
+            )]),
             TyAttr::default(),
         );
 
@@ -1826,7 +1808,7 @@ mod tests {
     fn var_bearing_function_arg_unifies_not_disjoint() {
         fn func(param: Ty) -> Ty {
             Ty::Function {
-                params: vec![FunctionParamTy::required(None, param)],
+                params: Box::new([FunctionParamTy::required(None, param)]),
                 ret: Box::new(Ty::int()),
                 throws: Box::new(never()),
                 attr: TyAttr::default(),
@@ -2122,7 +2104,7 @@ mod tests {
     fn local_class(package: &str, name: &str) -> Ty {
         Ty::Class(
             TypeName::new(Name::new(package), Vec::new(), Name::new(name)),
-            Vec::new(),
+            Box::new([]),
             TyAttr::default(),
         )
     }

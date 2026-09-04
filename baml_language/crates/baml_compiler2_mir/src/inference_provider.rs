@@ -71,6 +71,14 @@ pub(crate) enum MemberResolution<'db> {
     InterfaceConcreteMethod {
         impl_loc: ImplLoc<'db>,
         func_loc: FunctionLoc<'db>,
+        /// The callee's OWNER frame, carried from resolution: the impl's
+        /// generic bindings (declaration order) for an override,
+        /// `[Self = receiver, iface args..]` for an adopted default. The
+        /// call site emits these ahead of the method's own type args per the
+        /// `[owner ++ own]` frame invariant — never re-derived by name.
+        frame_type_args: Vec<Tir2Ty>,
+        /// `true` when `func_loc` is the interface's default body.
+        from_interface_default: bool,
     },
     /// A VIRTUAL interface-field access through the realized declaring view.
     InterfaceVirtualField {
@@ -180,8 +188,8 @@ pub(crate) enum ParamBinding {
 /// adapter MIR emits (source shape from the value, target from the slot).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct FunctionCoercion {
-    pub(crate) source_params: Vec<baml_type::FunctionParamTy>,
-    pub(crate) target_params: Vec<baml_type::FunctionParamTy>,
+    pub(crate) source_params: Box<[baml_type::FunctionParamTy]>,
+    pub(crate) target_params: Box<[baml_type::FunctionParamTy]>,
     pub(crate) target_return: Tir2Ty,
 }
 
@@ -340,21 +348,21 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         if result.desugared_callees.contains(&expr) {
             continue;
         }
-        out.expr_types.insert(expr, ty.to_plain());
+        out.expr_types.insert(expr, ty.clone());
     }
     for (&pat, ty) in &result.type_of_pat {
-        out.pat_types.insert(pat, ty.to_plain());
+        out.pat_types.insert(pat, ty.clone());
     }
     for (&expr, resolution) in &result.member_resolutions {
         out.resolutions.insert(expr, convert_resolution(resolution));
     }
     for (&expr, path) in &result.path_resolutions {
         if let Some(root) = path.segments.first() {
-            out.path_root_types.insert(expr, root.ty.to_plain());
+            out.path_root_types.insert(expr, root.ty.clone());
         }
         for (index, segment) in path.segments.iter().enumerate() {
             out.path_segment_types
-                .insert((expr, index), segment.ty.to_plain());
+                .insert((expr, index), segment.ty.clone());
         }
         // TIR's vec holds one entry per MEMBER segment (the suffix after
         // the root); a ladder with an unresolved member records no vec -
@@ -390,11 +398,7 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                         },
                     })
                     .collect(),
-                type_args: plan
-                    .type_args
-                    .iter()
-                    .map(baml_type::interned::Ty::to_plain)
-                    .collect(),
+                type_args: plan.type_args.iter().map(baml_type::Ty::clone).collect(),
                 own_offset: plan.own_offset,
                 explicit: plan.explicit,
                 slots: plan
@@ -406,8 +410,8 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                             emission_ty,
                             runtime_bindings,
                         } => CallTypeArgPlan::Static {
-                            ty: ty.to_plain(),
-                            emission_ty: emission_ty.to_plain(),
+                            ty: ty.clone(),
+                            emission_ty: emission_ty.clone(),
                             runtime_bindings: runtime_bindings
                                 .iter()
                                 .map(convert_scoped_type_binding)
@@ -419,7 +423,7 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                             parameter,
                         } => CallTypeArgPlan::Runtime {
                             operand: *operand,
-                            occurrence_ty: occurrence_ty.to_plain(),
+                            occurrence_ty: occurrence_ty.clone(),
                             parameter: parameter.clone(),
                         },
                     })
@@ -486,11 +490,8 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                     ..
                 },
             ) = (
-                result
-                    .type_of_expr
-                    .get(&expr)
-                    .map(baml_type::interned::Ty::to_plain),
-                adjustment.target.to_plain(),
+                result.type_of_expr.get(&expr).cloned(),
+                adjustment.target.clone(),
             )
             else {
                 continue;
@@ -516,11 +517,8 @@ fn convert_scoped_type_binding(binding: &hir_infer::ScopedTypeBinding) -> Scoped
         name: binding.name.clone(),
         parameter: binding.parameter.clone(),
         operand: binding.operand,
-        template_ty: binding
-            .template_ty
-            .as_ref()
-            .map(baml_type::interned::Ty::to_plain),
-        occurrence_ty: binding.occurrence_ty.to_plain(),
+        template_ty: binding.template_ty.clone(),
+        occurrence_ty: binding.occurrence_ty.clone(),
     }
 }
 
@@ -528,15 +526,11 @@ fn convert_runtime_check(check: &hir_infer::RuntimeCheck) -> RuntimeCheck {
     match check {
         hir_infer::RuntimeCheck::Argument { arg, expected } => RuntimeCheck::Argument {
             arg: *arg,
-            expected: expected.to_plain(),
+            expected: expected.clone(),
         },
         hir_infer::RuntimeCheck::Bound { argument, bound } => RuntimeCheck::Bound {
-            argument: argument.to_plain(),
-            bound: bound
-                .existential()
-                .to_plain()
-                .as_interface()
-                .expect("an interned interface reference materializes as an interface"),
+            argument: argument.clone(),
+            bound: bound.clone(),
         },
     }
 }
@@ -568,12 +562,17 @@ fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> Mem
                 method: method.clone(),
             }
         }
-        hir_infer::MemberResolution::InterfaceConcreteMethod { impl_block, func } => {
-            MemberResolution::InterfaceConcreteMethod {
-                impl_loc: *impl_block,
-                func_loc: *func,
-            }
-        }
+        hir_infer::MemberResolution::InterfaceConcreteMethod {
+            impl_block,
+            func,
+            frame_type_args,
+            from_interface_default,
+        } => MemberResolution::InterfaceConcreteMethod {
+            impl_loc: *impl_block,
+            func_loc: *func,
+            frame_type_args: frame_type_args.clone(),
+            from_interface_default: *from_interface_default,
+        },
         hir_infer::MemberResolution::InterfaceVirtualField {
             interface,
             view,
@@ -581,7 +580,7 @@ fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> Mem
             field,
         } => MemberResolution::InterfaceVirtualField {
             iface_loc: *interface,
-            interface: view.to_plain(),
+            interface: view.clone(),
             field_index: *field_index,
             field: field.clone(),
         },
@@ -607,7 +606,7 @@ fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> Mem
             field,
         } => MemberResolution::ExternalInterfaceVirtualField {
             interface_name: interface.clone(),
-            interface: view.to_plain(),
+            interface: view.clone(),
             field_index: *field_index,
             field: field.clone(),
         },

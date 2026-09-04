@@ -13,7 +13,13 @@ export const metadata = createMetadata({
   title: 'Blog',
 });
 
-export default async function BlogPage() {
+interface BlogPageProps {
+  searchParams: Promise<{ tags?: string | string[] }>;
+}
+
+export default async function BlogPage({ searchParams }: BlogPageProps) {
+  const { tags } = await searchParams;
+  const selectedType = tags === 'article' || tags === 'release' ? tags : 'all';
   const posts = await getPosts();
 
   return (
@@ -29,7 +35,7 @@ export default async function BlogPage() {
     >
       <Navbar />
       <main>
-        <BlogContent initialPosts={posts} />
+        <BlogContent initialPosts={posts} selectedType={selectedType} />
         <FooterSection />
       </main>
     </div>

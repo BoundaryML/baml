@@ -108,6 +108,10 @@ Global options:
       --diagnostic-format <FORMAT>
           Select the diagnostic format [possible values: human, agent, concise]
 
+      --agent-skill-check <MODE>
+          Control BAML agent skill validation [default: auto] [possible values: auto, require, warn,
+          off]
+
   -h, --help
           Display concise help for this command
 

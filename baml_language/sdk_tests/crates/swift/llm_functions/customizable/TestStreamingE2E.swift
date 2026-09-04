@@ -2,7 +2,7 @@
 // python_pydantic2's `test_streaming_e2e.py`. Every case runs against
 // checked-in SSE recordings; no LLM keys.
 //
-// `stream_e2e_extract_stream` is the generated `$stream` companion:
+// `stream_e2e_extract_stream` is the flat SDK streaming projection:
 // an ordinary function returning `BamlStream<Partial, Final>`. `next()`
 // yields `.value(partial)` until the engine's `ai.stream.Done` sentinel
 // surfaces as `.finished` (a partial can legitimately be nil, hence

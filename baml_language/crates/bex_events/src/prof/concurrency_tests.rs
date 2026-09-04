@@ -34,8 +34,8 @@ fn rec(seq: u64) -> [u8; 8] {
 
 fn collect_seqs(bytes: &[u8], out: &mut Vec<u64>) {
     assert_eq!(bytes.len() % 8, 0, "drained range split a record");
-    for chunk in bytes.chunks_exact(8) {
-        out.push(u64::from_le_bytes(chunk.try_into().unwrap()));
+    for chunk in bytes.as_chunks::<8>().0 {
+        out.push(u64::from_le_bytes(*chunk));
     }
 }
 

@@ -83,9 +83,8 @@ pub fn file_throw_facts(
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let func_ns = pkg_info.namespace_path;
 
-    // Class methods (including `implements`-block methods, which
-    // `class_data.methods` flattens in) and interface default methods are
-    // not top-level solver entries under their own names.
+    // Class methods, interface default methods, and `implements`-block
+    // methods are not top-level solver entries under their own names.
     let mut member_ids = std::collections::HashSet::new();
     for class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
         let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
@@ -95,11 +94,10 @@ pub fn file_throw_facts(
         let iface_data = baml_compiler2_ppir::item_data::interface_data(db, *iface_loc);
         member_ids.extend(iface_data.default_methods.iter().copied());
     }
-    // Out-of-body `implement<…> I for Y { … }` blocks: their methods dispatch
-    // through the interface registry and were never solver nodes under their
-    // bare names. (In-body `implements` methods are already covered above —
-    // `class_data.methods` flattens them in.)
-    for impl_loc in baml_compiler2_ppir::item_data::file_free_impls(db, file) {
+    // ALL `implements` blocks, in-body and out-of-body alike: their methods
+    // are Impl-owned (never in `class_data.methods`) and dispatch through the
+    // interface registry, so none is a solver node under its bare name.
+    for impl_loc in baml_compiler2_ppir::item_data::file_impls(db, file) {
         let block = baml_compiler2_ppir::item_data::impl_block_data(db, *impl_loc);
         member_ids.extend(block.methods.iter().copied());
     }
@@ -222,7 +220,7 @@ fn extract_direct_and_declared<'db>(
         let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
         let id = builder.lower(te);
         let (store, _spans) = builder.finish();
-        let lowered = scope_ctx().lower_type_ref(&store, id).to_plain();
+        let lowered = crate::lower::reject_holes(&scope_ctx().lower_type_ref(&store, id));
         flatten_declared_ty_to_facts(&lowered)
     });
 
@@ -309,7 +307,7 @@ fn lower_param_types(
         .iter()
         .filter_map(|param| {
             let type_ref = param.type_ref?;
-            let ty = ctx.lower_type_ref(type_refs, type_ref).to_plain();
+            let ty = crate::lower::reject_holes(&ctx.lower_type_ref(type_refs, type_ref));
             Some((param.name.clone(), ty))
         })
         .collect()
@@ -461,7 +459,7 @@ fn resolve_path_to_ty<'db>(
     match def {
         Definition::Class(_) => Some(Ty::Class(
             qualify_def(db, def, name),
-            vec![],
+            Box::new([]),
             TyAttr::default(),
         )),
         Definition::Enum(_) => Some(Ty::Enum(qualify_def(db, def, name), TyAttr::default())),

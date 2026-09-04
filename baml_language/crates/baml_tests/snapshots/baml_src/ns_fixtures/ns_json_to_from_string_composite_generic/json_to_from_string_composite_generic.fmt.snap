@@ -15,6 +15,6 @@ class Container<T> {
 
 function decode_container(
     s: string,
-) -> Container<User> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+) -> Container<User> throws baml.json.ParseError | baml.json.DecodeError {
     baml.json.from_string<Container<User>>(s)
 }

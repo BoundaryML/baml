@@ -716,7 +716,7 @@ function chat_azure_config_error_survives_normalize() -> string {
 }
 
 function chat_anthropic_config_error_survives_normalize() -> string {
-    anthropic.AnthropicClient.new(
+    anthropic.Client.new(
         model = "claude-haiku-4-5",
         api_key = env.BAML_TEST_UNSET_ANTHROPIC_KEY,
     ).resolved_api_key() catch_all (e) { _ => _config_failure_class(e) }
@@ -1125,7 +1125,7 @@ test "chat_generic_stream_time_to_first_token_timeout_ms" {
 }
 
 // Streamed tool calls arrive as id/name once and argument fragments after.
-// `ai.stream.StreamEvent` cannot carry them to the runner yet (PLAN §6), so they
+// `ai.stream.Event` cannot carry them to the runner yet (PLAN §6), so they
 // are buffered in the decoder and readable when the turn ends — this drives the
 // decoder over a real SSE connection and asserts the assembled call.
 function chat_sse_assembles_tool_calls() -> string {

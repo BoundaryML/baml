@@ -26,11 +26,11 @@ function fixtures.json_llm_return_type.ExtractAny(client: ai.Client | null, on_e
     load_var on_event
     call ai.Agent.new
     store_var _6
-    call user.fixtures.json_llm_return_type.ExtractAny$spec
+    call user.fixtures.json_llm_return_type.ExtractAny@spec
     store_var _8
     load_type baml.json.json
     load_var2 4 5
-    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
     store_var _5
@@ -39,7 +39,7 @@ function fixtures.json_llm_return_type.ExtractAny(client: ai.Client | null, on_e
     return
 }
 
-function fixtures.json_llm_return_type.ExtractAny$build_request(client: ai.Client | null) -> baml.http.Request {
+function fixtures.json_llm_return_type.ExtractAny@build_request(client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -48,7 +48,7 @@ function fixtures.json_llm_return_type.ExtractAny$build_request(client: ai.Clien
     store_var client
 
   L0:
-    call user.fixtures.json_llm_return_type.ExtractAny$spec
+    call user.fixtures.json_llm_return_type.ExtractAny@spec
     store_var _3
     load_type baml.json.json
     load_var2 2 1
@@ -56,15 +56,15 @@ function fixtures.json_llm_return_type.ExtractAny$build_request(client: ai.Clien
     return
 }
 
-function fixtures.json_llm_return_type.ExtractAny$parse(json: string) -> baml.json.json {
+function fixtures.json_llm_return_type.ExtractAny@parse(json: string) -> baml.json.json {
     load_type baml.json.json
     load_var json
     call baml.sap.parse
     return
 }
 
-function fixtures.json_llm_return_type.ExtractAny$render_prompt() -> ai.Prompt {
-    call user.fixtures.json_llm_return_type.ExtractAny$spec
+function fixtures.json_llm_return_type.ExtractAny@render_prompt() -> ai.Prompt {
+    call user.fixtures.json_llm_return_type.ExtractAny@spec
     store_var _1
     load_type baml.json.json
     load_var _1
@@ -72,7 +72,7 @@ function fixtures.json_llm_return_type.ExtractAny$render_prompt() -> ai.Prompt {
     return
 }
 
-function fixtures.json_llm_return_type.ExtractAny$spec() -> ai.FunctionSpec<baml.json.json> {
+function fixtures.json_llm_return_type.ExtractAny@spec() -> ai.FunctionSpec<baml.json.json> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -84,14 +84,14 @@ function fixtures.json_llm_return_type.ExtractAny$spec() -> ai.FunctionSpec<baml
     load_type string
     load_type unknown
     alloc_map 0
-    make_closure .<lambda(ExtractAny$spec, 0)>, 0
+    make_closure .<lambda(ExtractAny@spec, 0)>, 0
     load_var2 1 2
     load_type baml.json.json
     init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
     return
 }
 
-function fixtures.json_llm_return_type.ExtractAny$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<baml.json.json$stream | null, baml.json.json> {
+function fixtures.json_llm_return_type.ExtractAny@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<baml.json.json$stream | null, baml.json.json> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -108,7 +108,7 @@ function fixtures.json_llm_return_type.ExtractAny$stream(client: ai.stream.Strea
     store_var on_event
 
   L1:
-    call user.fixtures.json_llm_return_type.ExtractAny$spec
+    call user.fixtures.json_llm_return_type.ExtractAny@spec
     store_var _5
     load_type baml.json.json$stream | null
     load_type baml.json.json

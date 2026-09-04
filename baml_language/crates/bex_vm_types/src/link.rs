@@ -129,10 +129,12 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
         }
 
         // Package fragments also carry symbolic object references (not bytecode
-        // operands): most point at the unit's own exports, but an impl of a
-        // mounted interface or an inherited mounted default points directly at
-        // the live dependency. Feed those names into the same synthetic-prefix
-        // plan so fragment resolution and code relocation see one alias table.
+        // operands): most point at the unit's own exports, but an impl OF a
+        // mounted interface names the live dependency's interface object
+        // directly (adopted defaults resolve at dispatch through that
+        // object's bound `default_fn`, never through a fragment reference).
+        // Feed those names into the same synthetic-prefix plan so fragment
+        // resolution and code relocation see one alias table.
         let fragment = &unit.package_fragment;
         for (_, fq_name) in &fragment.classes {
             consider_object(&Symbol {
@@ -168,19 +170,15 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
                 fq_name: interface.clone(),
                 generic: None,
             });
+            // Rule method tables are provided-only and their bodies live in
+            // the declaring unit's own `code` bucket — never imports. Adopted
+            // defaults resolve at dispatch through the interface object.
             for rule in rules {
                 consider_object(&Symbol {
                     kind: SymbolKind::Interface,
                     fq_name: rule.interface_head.clone(),
                     generic: None,
                 });
-                for (_, method) in &rule.methods {
-                    consider_object(&Symbol {
-                        kind: SymbolKind::Function,
-                        fq_name: method.fqn.clone(),
-                        generic: None,
-                    });
-                }
             }
         }
         if let Some(test_init) = &fragment.test_init {
@@ -438,7 +436,8 @@ impl std::error::Error for LinkError {}
 /// Is this unit part of the builtin (stdlib) group? Builtin source files carry a
 /// `<builtin>/…` project-relative path; user files never do.
 fn is_builtin_unit(unit: &CompilationUnit) -> bool {
-    unit.source_file.starts_with("<builtin>/")
+    unit.source_file
+        .starts_with(crate::errors::BUILTIN_SOURCE_PREFIX)
 }
 
 /// Per-unit placement layout: the absolute base of each object bucket and the
@@ -1112,20 +1111,57 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     }
 
     // ---- Package merge (design §3b step 5) ----------------------------------
-    // Each package's fragment is carried by exactly one unit (its first unit).
-    // Merge every fragment into the image's `packages`, resolving each symbolic
-    // fully-qualified name to an absolute object index, then canonicalize the
-    // implementation-rule tables exactly as `build_packages` does.
-    for unit in units {
+    // Package-level maps ride one carrier unit per package; impl rules ride
+    // their DECLARING unit (each rule's provided-method bodies are that unit's
+    // own `code` objects). Merge every fragment into the image's `packages`,
+    // resolving each symbolic fully-qualified name to an absolute object index
+    // and each rule body through the declaring unit's code placement, then
+    // canonicalize the implementation-rule tables exactly as `build_packages`
+    // does.
+    for (u, unit) in units.iter().enumerate() {
         merge_package_fragment(
             &mut program,
             &unit.package,
             &unit.package_fragment,
             &obj_by_name,
+            &code_abs[u],
         )?;
     }
     sort_packages(&mut program);
 
+    // ---- Interface-body scrub ----------------------------------------------------------
+    // Unit symbols address interface bodies by fq name exactly like named
+    // functions (link-internal strings), and every resolution pass above ran
+    // against the merged maps. The *output* image must not expose bodies at
+    // all — an interface body is not a table-addressable item — so scrub
+    // them from the
+    // name maps now that the pooled objects (which carry
+    // `Function::is_interface_body`) are placed. Slot assignment predates
+    // placement, which is why this cannot happen inline in step 1.
+    let interface_body_names: Vec<String> = program
+        .function_indices
+        .iter()
+        .filter(|&(_, &abs)| {
+            matches!(
+                program.objects.get(abs),
+                Some(Object::Function(f)) if f.is_interface_body
+            )
+        })
+        .map(|(name, _)| name.clone())
+        .collect();
+    for name in interface_body_names {
+        program
+            .function_indices
+            .remove(&name)
+            .unwrap_or_else(|| unreachable!("scrubbed name came from this map"));
+        // Same invariant as the sibling: a name in `function_indices` is in
+        // `function_global_indices` — an internal inconsistency, never an
+        // unresolved IMPORT.
+        program
+            .function_global_indices
+            .remove(&name)
+            .unwrap_or_else(|| unreachable!("scrubbed name came from this map"));
+    }
     Ok(program)
 }
 
@@ -1136,6 +1172,7 @@ fn merge_package_fragment(
     package: &Name,
     frag: &ProgramPackageFrag,
     obj_by_name: &HashMap<String, usize>,
+    code_abs: &[usize],
 ) -> Result<(), LinkError> {
     if frag.exported_names.is_empty()
         && frag.classes.is_empty()
@@ -1196,10 +1233,33 @@ fn merge_package_fragment(
             let head = resolve(&rule.interface_head)?;
             let mut methods = indexmap::IndexMap::new();
             for (name, method) in &rule.methods {
+                // A provided body lives in the DECLARING unit's own `code`
+                // bucket; its absolute index is that bucket's placement
+                // (shadow-aware, like a `Code` export).
+                let abs = *code_abs.get(method.code_offset as usize).ok_or_else(|| {
+                    LinkError::InvalidUnit(format!(
+                        "impl rule for `{iface_fq}` references code offset {} outside its \
+                         declaring unit",
+                        method.code_offset
+                    ))
+                })?;
+                // The shadow-aware placement is only as trustworthy as the
+                // unit: require the target to actually BE a function object,
+                // so a corrupt unit fails the link instead of confusing the
+                // VM at dispatch.
+                if !matches!(
+                    program.objects.get(abs),
+                    Some(crate::types::Object::Function(_))
+                ) {
+                    return Err(LinkError::InvalidUnit(format!(
+                        "impl rule for `{iface_fq}` method `{name}` resolves to a \
+                         non-function object"
+                    )));
+                }
                 methods.insert(
                     name.clone(),
                     ProgramMethodImpl {
-                        fqn: resolve(&method.fqn)?,
+                        fqn: ObjectIndex::from_raw(abs),
                         frame: method.frame.clone(),
                     },
                 );
@@ -1273,6 +1333,8 @@ mod tests {
                 attr: baml_type::TyAttr::default(),
             },
             origin: FunctionOrigin::UserDefined,
+            is_interface_body: false,
+            native_key: None,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0,
