@@ -76,6 +76,12 @@ const implementationSchema = z
 type ExportedMember = z.output<typeof memberSchema>;
 type ExportedSignature = z.output<typeof signatureSchema>;
 
+export interface ReferenceChildLink {
+  page_kind: ReferencePageData['page_kind'];
+  qualified_name: string;
+  route_path: string;
+}
+
 function Docstring({ value }: { value: string }) {
   return <ReactMarkdown>{value}</ReactMarkdown>;
 }
@@ -147,10 +153,7 @@ function ChildLinks({
   items,
   routeVersion,
 }: {
-  items: Extract<
-    ReferencePageData,
-    { page_kind: 'package' | 'namespace' }
-  >['children'];
+  items: ReferenceChildLink[];
   routeVersion: string;
 }) {
   return (
@@ -169,6 +172,7 @@ function ChildLinks({
 
 export function referencePageTableOfContents(
   page: ReferencePageData,
+  namespacedChildren: readonly ReferenceChildLink[] = [],
 ): { href: string; label: string }[] {
   if (page.page_kind === 'package' || page.page_kind === 'namespace') {
     return [{ href: '#contents', label: 'Contents' }];
@@ -184,13 +188,18 @@ export function referencePageTableOfContents(
     ...(page.cross_references.length > 0
       ? [{ href: '#related', label: 'Related definitions' }]
       : []),
+    ...(namespacedChildren.length > 0
+      ? [{ href: '#namespaced-definitions', label: 'Namespaced definitions' }]
+      : []),
   ];
 }
 
 export function GeneratedReferenceContent({
+  namespacedChildren = [],
   page,
   routeVersion,
 }: {
+  namespacedChildren?: ReferenceChildLink[];
   page: ReferencePageData;
   routeVersion: string;
 }) {
@@ -331,6 +340,16 @@ export function GeneratedReferenceContent({
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+      {namespacedChildren.length > 0 ? (
+        <section>
+          <h2 id="namespaced-definitions">Namespaced definitions</h2>
+          <p>
+            These definitions use this declaration name as their namespace
+            prefix.
+          </p>
+          <ChildLinks items={namespacedChildren} routeVersion={routeVersion} />
         </section>
       ) : null}
     </>

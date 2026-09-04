@@ -2,16 +2,40 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { DocsShell } from '@/components/docs-shell';
+import { GeneratedVersionSwitcher } from '@/components/generated-version-switcher';
 import {
+  isPrereleaseVersion,
   listGeneratedReleaseRouteVersions,
   loadGeneratedReleaseSnapshot,
 } from '@/lib/generated-content/build-content';
+import { listGeneratedVersionOptions } from '@/lib/generated-content/discovery';
+import { documentationMetadata } from '@/lib/metadata';
 
 export const dynamicParams = false;
 
 export async function generateStaticParams() {
   const versions = await listGeneratedReleaseRouteVersions();
   return versions.map((version) => ({ version }));
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ version: string }>;
+}) {
+  const { version } = await params;
+  const snapshot = await loadGeneratedReleaseSnapshot(version);
+  if (!snapshot) return {};
+  const channelLabel = snapshot.channels.length
+    ? ` (${snapshot.channels.join(', ')})`
+    : '';
+  const description = `Immutable package reference generated from BAML ${snapshot.release.version}${channelLabel}.`;
+  return documentationMetadata({
+    description,
+    index: !isPrereleaseVersion(snapshot.release.version),
+    path: `/baml/packages/${version}`,
+    title: `Standard packages ${version}`,
+  });
 }
 
 export default async function PackageVersionPage({
@@ -28,6 +52,9 @@ export default async function PackageVersionPage({
   const channelLabel = snapshot.channels.length
     ? ` (${snapshot.channels.join(', ')})`
     : '';
+  const versionOptions = await listGeneratedVersionOptions({
+    kind: 'package',
+  });
 
   return (
     <DocsShell
@@ -43,6 +70,7 @@ export default async function PackageVersionPage({
         { href: '#release', label: 'Release provenance' },
       ]}
     >
+      <GeneratedVersionSwitcher options={versionOptions} />
       <h2 id="packages">Packages</h2>
       <ul>
         {packagePages.map((page) => (

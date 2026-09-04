@@ -47,6 +47,17 @@ export function deriveParentQualifiedName(
   return segments.length === 1 ? null : segments.slice(0, -1).join('.');
 }
 
+export function directRouteChildren<T extends { route_path: string }>(
+  routePath: string,
+  pages: readonly T[],
+): T[] {
+  const prefix = `${routePath}/`;
+  return pages.filter((candidate) => {
+    if (!candidate.route_path.startsWith(prefix)) return false;
+    return !candidate.route_path.slice(prefix.length).includes('/');
+  });
+}
+
 export function qualifyExportedName(
   packageName: string,
   namespace: readonly string[],

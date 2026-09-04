@@ -11,6 +11,17 @@ import {
 } from 'react';
 
 import { searchablePages } from '@/lib/navigation';
+import {
+  type GeneratedSearchIndex,
+  generatedSearchIndexSchema,
+  type SearchEntry,
+} from '@/lib/search';
+
+const authoredEntries: SearchEntry[] = searchablePages.map((page) => ({
+  ...page,
+  current: true,
+}));
+const MAX_RESULTS = 100;
 
 function isEditableTarget(target: EventTarget | null) {
   return (
@@ -25,18 +36,32 @@ export function SearchMenu() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [generatedIndex, setGeneratedIndex] =
+    useState<GeneratedSearchIndex | null>(null);
+  const [generatedIndexError, setGeneratedIndexError] = useState(false);
+  const [versionFilter, setVersionFilter] = useState('current');
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  const results = useMemo(() => {
+  const matchingResults = useMemo(() => {
+    const entries = [
+      ...authoredEntries,
+      ...(generatedIndex?.entries ?? []),
+    ].filter((page) => {
+      if (!page.version) return true;
+      if (versionFilter === 'all') return true;
+      if (versionFilter === 'current') return page.current;
+      return page.version === versionFilter;
+    });
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return searchablePages;
-    return searchablePages.filter((page) =>
-      `${page.label} ${page.group} ${page.href}`
+    if (!normalized) return entries;
+    return entries.filter((page) =>
+      `${page.label} ${page.group} ${page.href} ${page.keywords ?? ''}`
         .toLowerCase()
         .includes(normalized),
     );
-  }, [query]);
+  }, [generatedIndex, query, versionFilter]);
+  const results = matchingResults.slice(0, MAX_RESULTS);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -60,6 +85,17 @@ export function SearchMenu() {
     const frame = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(frame);
   }, [open]);
+
+  useEffect(() => {
+    if (!open || generatedIndex || generatedIndexError) return;
+    void fetch('/search-index.json')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Unable to load search index.');
+        return generatedSearchIndexSchema.parse(await response.json());
+      })
+      .then(setGeneratedIndex)
+      .catch(() => setGeneratedIndexError(true));
+  }, [generatedIndex, generatedIndexError, open]);
 
   const visit = (href: string) => {
     setOpen(false);
@@ -134,30 +170,68 @@ export function SearchMenu() {
               className="scrollbar-none min-h-80 max-h-[22rem] overflow-y-auto scroll-py-1.5 py-1.5"
               id="search-results"
             >
-              {results.length ? (
-                results.map((page, index) => (
-                  <button
-                    className="flex h-9 w-full items-center gap-3 rounded-md border border-transparent px-3 text-left text-sm font-medium outline-none data-[selected=true]:border-input data-[selected=true]:bg-input/50 hover:bg-input/40"
-                    data-selected={index === selectedIndex}
-                    id={`search-result-${index}`}
-                    key={page.href}
-                    onClick={() => visit(page.href)}
-                    onMouseEnter={() => setSelectedIndex(index)}
-                    type="button"
+              {generatedIndex?.versions.length ? (
+                <label className="mb-1 flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground">
+                  Reference version
+                  <select
+                    className="ml-auto rounded border border-input bg-background px-2 py-1 text-foreground"
+                    onChange={(event) => {
+                      setVersionFilter(event.target.value);
+                      setSelectedIndex(0);
+                    }}
+                    value={versionFilter}
                   >
-                    <ArrowRight
-                      aria-hidden="true"
-                      className="size-4 text-muted-foreground"
-                    />
-                    <span>{page.label}</span>
-                    <span className="ml-auto text-xs font-normal text-muted-foreground">
-                      {page.group}
-                    </span>
-                  </button>
-                ))
+                    <option value="current">Current channels</option>
+                    {generatedIndex.versions.map((version) => (
+                      <option
+                        key={version.routeVersion}
+                        value={version.routeVersion}
+                      >
+                        {version.routeVersion}
+                        {version.channels.length
+                          ? ` (${version.channels.join(', ')})`
+                          : ''}
+                      </option>
+                    ))}
+                    <option value="all">All versions</option>
+                  </select>
+                </label>
+              ) : null}
+              {results.length ? (
+                <>
+                  {results.map((page, index) => (
+                    <button
+                      className="flex min-h-9 w-full items-center gap-3 rounded-md border border-transparent px-3 py-2 text-left text-sm font-medium outline-none data-[selected=true]:border-input data-[selected=true]:bg-input/50 hover:bg-input/40"
+                      data-selected={index === selectedIndex}
+                      id={`search-result-${index}`}
+                      key={`${page.href}-${page.label}`}
+                      onClick={() => visit(page.href)}
+                      onMouseEnter={() => setSelectedIndex(index)}
+                      type="button"
+                    >
+                      <ArrowRight
+                        aria-hidden="true"
+                        className="size-4 shrink-0 text-muted-foreground"
+                      />
+                      <span className="min-w-0 truncate">{page.label}</span>
+                      <span className="ml-auto max-w-44 shrink-0 truncate text-xs font-normal text-muted-foreground">
+                        {page.group}
+                      </span>
+                    </button>
+                  ))}
+                  {matchingResults.length > MAX_RESULTS ? (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">
+                      Showing the first {MAX_RESULTS} of{' '}
+                      {matchingResults.length} results. Refine your search to
+                      narrow the list.
+                    </p>
+                  ) : null}
+                </>
               ) : (
                 <p className="py-12 text-center text-sm text-muted-foreground">
-                  No results found.
+                  {generatedIndexError
+                    ? 'Generated reference search is unavailable. Authored pages remain searchable.'
+                    : 'No results found.'}
                 </p>
               )}
             </div>

@@ -1,27 +1,27 @@
+import Link from 'next/link';
+
 import { DocsShell } from '@/components/docs-shell';
+import { GeneratedReleaseCatalog } from '@/components/generated-release-catalog';
+import {
+  listGeneratedReleaseSummaries,
+  loadGeneratedReleaseSnapshot,
+  selectFeaturedGeneratedRelease,
+} from '@/lib/generated-content/build-content';
+import { documentationMetadata } from '@/lib/metadata';
 
-export const metadata = {
+export const metadata = documentationMetadata({
   description: 'Versioned reference for BAML standard packages.',
+  path: '/baml/packages',
   title: 'Standard packages',
-};
+});
 
-const packages = [
-  'baml',
-  'reflect',
-  'boundary',
-  'testing',
-  'assert',
-  'log',
-  'ai',
-  'openai',
-  'anthropic',
-  'google',
-  'aws',
-  'vercel',
-  'claude_code',
-];
+export default async function PackagesPage() {
+  const releases = await listGeneratedReleaseSummaries();
+  const featuredRelease = selectFeaturedGeneratedRelease(releases);
+  const featured = featuredRelease
+    ? await loadGeneratedReleaseSnapshot(featuredRelease.routeVersion)
+    : null;
 
-export default function PackagesPage() {
   return (
     <DocsShell
       breadcrumbs={[
@@ -30,26 +30,23 @@ export default function PackagesPage() {
       ]}
       description="Versioned package reference generated from the exact compiled BAML toolchain."
       title="Standard packages"
-      toc={[
-        { href: '#published', label: 'Published versions' },
-        { href: '#packages', label: 'Package catalog' },
-      ]}
+      toc={[{ href: '#published', label: 'Published reference' }]}
     >
-      <h2 id="published">Published versions</h2>
+      <h2 id="published">Published reference</h2>
       <p>
-        Exact-version pages will appear after their complete immutable package
-        and CLI records are published. Canary and nightly snapshots will be
-        labeled explicitly and will never be presented as stable.
+        Choose a published release to browse reference generated from that exact
+        BAML toolchain. Exact-version URLs never move or silently fall forward
+        to another release.
       </p>
-      <h2 id="packages">Package catalog</h2>
-      <p>The initial publication allowlist contains:</p>
-      <ul className="columns-2 sm:columns-3">
-        {packages.map((packageName) => (
-          <li key={packageName}>
-            <code>{packageName}</code>
-          </li>
-        ))}
-      </ul>
+      <GeneratedReleaseCatalog
+        featured={featured}
+        product="packages"
+        releases={releases}
+      />
+      <p>
+        Use the <Link href="/changelog">changelog</Link> to review language,
+        toolchain, and package changes between releases.
+      </p>
     </DocsShell>
   );
 }

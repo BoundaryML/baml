@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { DocsShell } from '@/components/docs-shell';
 import { CliCommandContent } from '@/components/generated-cli';
+import { GeneratedVersionSwitcher } from '@/components/generated-version-switcher';
 import {
+  isPrereleaseVersion,
   listGeneratedReleaseRouteVersions,
   loadGeneratedReleaseSnapshot,
 } from '@/lib/generated-content/build-content';
@@ -10,6 +12,8 @@ import {
   findCliCommand,
   flattenCliCommands,
 } from '@/lib/generated-content/cli-routes';
+import { listGeneratedVersionOptions } from '@/lib/generated-content/discovery';
+import { documentationMetadata } from '@/lib/metadata';
 
 export const dynamicParams = false;
 
@@ -43,11 +47,15 @@ export async function generateMetadata({
   const { command, version } = await params;
   const commandNode = await loadCommand(version, command);
   if (!commandNode) return {};
-  return {
-    description:
-      commandNode.description ?? `Reference for baml ${command.join(' ')}.`,
+  const snapshot = await loadGeneratedReleaseSnapshot(version);
+  const description =
+    commandNode.description ?? `Reference for baml ${command.join(' ')}.`;
+  return documentationMetadata({
+    description,
+    index: snapshot !== null && !isPrereleaseVersion(snapshot.release.version),
+    path: `/cli/${version}/commands/${command.join('/')}`,
     title: `baml ${command.join(' ')} — ${version}`,
-  };
+  });
 }
 
 export default async function CliCommandPage({
@@ -58,6 +66,10 @@ export default async function CliCommandPage({
   const { command, version } = await params;
   const commandNode = await loadCommand(version, command);
   if (!commandNode) notFound();
+  const versionOptions = await listGeneratedVersionOptions({
+    commandPath: command,
+    kind: 'cli-command',
+  });
   const breadcrumbs = [
     { href: '/cli', label: 'BAML CLI' },
     { href: `/cli/${version}`, label: version },
@@ -92,6 +104,7 @@ export default async function CliCommandPage({
       title={`baml ${command.join(' ')}`}
       toc={toc}
     >
+      <GeneratedVersionSwitcher options={versionOptions} />
       <CliCommandContent command={commandNode} routeVersion={version} />
     </DocsShell>
   );
