@@ -1,13 +1,14 @@
-# The atb2 runner on Fly. Two processes on one image:
-#   requests  serves "@bammy babysit <PR>" requests from the store (merge_issue_loop)
-#   pipeline  runs the feedback pipeline every five minutes
+# The atb2 runner on Fly: one machine, one process (runner_loop) that serves
+# "@bammy babysit <PR>" requests from the store and runs the feedback
+# pipeline every five minutes, sharing the volume (cached clone, cargo
+# target, run dirs). One machine on purpose: a Fly volume attaches to one
+# machine, and the pipeline and the requests share the same build cache.
 #
 #   fly deploy tools/atb2 --config tools/atb2/deploy/fly.toml
 #   (from the repo root; the build context is tools/atb2; CI does this on
 #    every push to canary touching tools/atb2)
 #
-# One machine per process; both mount the same volume for the cached clone
-# and cargo target, so create the volume once:
+# Create the volume once:
 #   fly volumes create atb2_data --size 80 --region sjc -a atb2-runner
 # Secrets: the machine holds one, INFISICAL_TOKEN; the entrypoint pulls the
 # rest from Infisical (boundary-tools, prod) at start with `infisical run`:
@@ -31,19 +32,23 @@ primary_region = "sjc"
   INFISICAL_ENV = "prod"
 
 [processes]
-  requests = "merge_issue_loop()"
-  pipeline = "pipeline_loop(every_s = 300)"
+  runner = "runner_loop(every_s = 300)"
+
+# a panic ends the process; Fly restarts it and the loops resume from the store
+[[restart]]
+  policy = "always"
+  processes = ["runner"]
 
 [[mounts]]
   source = "atb2_data"
   destination = "/data"
-  processes = ["requests", "pipeline"]
+  processes = ["runner"]
 
 # the gate runs cargo builds and nextest: give it room
 [[vm]]
   size = "performance-8x"
   memory = "32gb"
-  processes = ["requests", "pipeline"]
+  processes = ["runner"]
 
 [checks]
   # no http surface; liveness is the process itself

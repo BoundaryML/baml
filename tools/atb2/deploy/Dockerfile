@@ -1,5 +1,5 @@
-# The atb2 runner: one machine that serves "@bammy babysit" requests and runs
-# the feedback pipeline on a timer. Everything the pipeline shells out to is
+# The atb2 runner: one machine, one process, that serves "@bammy babysit"
+# requests and runs the feedback pipeline on a timer. Everything the pipeline shells out to is
 # here: git + gh (PRs), cargo (the gate, canary's own baml-cli), node + the
 # Claude Code CLI (the agent). canary's baml-cli itself is built on the
 # volume at first boot (entrypoint).
@@ -50,5 +50,5 @@ RUN chmod +x /usr/local/bin/atb2-entrypoint && chown -R atb2:atb2 /app
 
 USER atb2
 ENTRYPOINT ["atb2-entrypoint"]
-# fly.toml picks the process: merge_issue_loop() or pipeline_loop()
-CMD ["merge_issue_loop()"]
+# fly.toml picks the expression; runner_loop() serves requests and runs the pipeline
+CMD ["runner_loop()"]

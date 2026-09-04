@@ -576,10 +576,16 @@ function sandbox_env(with_gh: bool) -> map<string, string> {
         env.set("GIT_CONFIG_SYSTEM", "/dev/null");
         env.set("GIT_CONFIG_NOSYSTEM", "1");
         env.set("GIT_TERMINAL_PROMPT", "0");
-        // the CLI's own credential on a headless host: one, never both
+        // the CLI's own credential on a headless host: one, never both, and
+        // the CLI scrubs it (and every other credential it knows) from the
+        // env of the Bash commands the agent runs
         match (agent_credential()) {
             null => null,
-            let c: string[] => env.set(c.at(0) ?? "", c.at(1) ?? ""),
+            let c: string[] => {
+                env.set(c.at(0) ?? "", c.at(1) ?? "");
+                env.set("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB", "1");
+                null
+            },
         };
     }
     if (with_gh) {
@@ -2169,6 +2175,8 @@ testset "handle_issue" {
                 && baml.env.get("ANTHROPIC_API_KEY") == null
         ) {
             assert.is_true(!env.has("ANTHROPIC_API_KEY") && !env.has("CLAUDE_CODE_OAUTH_TOKEN"));
+        } else {
+            assert.equal(env.get("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB") ?? "", "1");
         };
         // no ambient git credentials or ssh agent for the agent, and the host
         // git config (osxkeychain helper, planted hooks) is neutralized

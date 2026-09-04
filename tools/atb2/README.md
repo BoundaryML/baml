@@ -67,9 +67,12 @@ The DDL is applied in the Supabase dashboard and is not in the repo.
 
 ## Deploy
 
-`tools/atb2/deploy` is the runner: a Fly app (`atb2-runner`) with two
-processes on one image, `requests` (serves `@bammy babysit <PR>` requests from
-the store) and `pipeline` (runs `run_pipeline` every five minutes). The image
+`tools/atb2/deploy` is the runner: a Fly app (`atb2-runner`), one machine
+and one process, `runner_loop`, which serves `@bammy babysit <PR>` requests
+from the store in the background and runs `run_pipeline` every five minutes.
+One machine on purpose: a Fly volume attaches to one machine, and both loops
+share the cached clone and cargo target on it. A panic ends the process and
+Fly restarts it; every stage is idempotent against the store. The image
 carries cargo, gh, node and the Claude Code CLI; the volume at `/data` holds
 the cached canary clone, the cargo target and the run dirs, and the first
 boot builds canary's `baml-cli` there.
@@ -91,7 +94,7 @@ to CI.
 By hand, from the repo root:
 
 ```sh
-fly apps create atb2-runner                                            # once
+fly apps create atb2-runner                                            # once (exists)
 fly volumes create atb2_data --size 80 --region sjc -a atb2-runner     # once
 fly secrets set -a atb2-runner INFISICAL_TOKEN=...                     # once
 fly deploy tools/atb2 --config tools/atb2/deploy/fly.toml

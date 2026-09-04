@@ -207,6 +207,8 @@ def test_parse_babysit_finds_the_pr_url():
     assert ing.parse_babysit("babysit <https://github.com/BoundaryML/baml/pull/4715/files>") == \
         "https://github.com/BoundaryML/baml/pull/4715"
     assert ing.parse_babysit("babysit https://github.com/BoundaryML/baml/issues/4715") is None
+    # only the runner's own repository
+    assert ing.parse_babysit("babysit https://github.com/someone/else/pull/1") is None
     assert ing.parse_babysit("fix the thing at https://github.com/BoundaryML/baml/pull/4715") is None
 
 

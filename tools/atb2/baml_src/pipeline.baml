@@ -106,8 +106,10 @@ function run_pipeline(
     report
 }
 
-/// run_pipeline forever, `every_s` apart: what the Fly runner's `pipeline`
-/// process runs. A run that panics is logged and the loop goes on.
+/// run_pipeline forever, `every_s` apart: what the Fly runner runs. A store
+/// or gh failure inside a run panics, which ends the process; the Fly
+/// machine's restart policy (deploy/fly.toml) brings it back, and every
+/// stage is idempotent against the store, so nothing is lost or repeated.
 //#pipeline_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null
 function pipeline_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null {
     while (true) {
@@ -127,6 +129,14 @@ function pipeline_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -
         };
     }
     null
+}
+
+/// The Fly runner's one process: the request loop in the background, the
+/// pipeline loop in the foreground, one machine and one volume between them.
+//#runner_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null
+function runner_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null {
+    spawn { merge_issue_loop(mode = mode) };
+    pipeline_loop(every_s = every_s, mode = mode)
 }
 
 // ==================== ingest ====================
@@ -236,7 +246,7 @@ function handle_one(issue: Issue, mode: HandleMode) -> HandleOutcome? {
             _ => null,
         };
     };
-    let after = handle_issue(issue, mode = mode);
+    let after = handle_issue(issue, mode = mode, thread = issue_thread(issue.id));
     let o = read_outcome(issue);
     match (o) {
         null => null,

@@ -351,7 +351,7 @@ function slack_feedback(oldest: string?) -> SlackFeedback {
         return SlackFeedback { feedback: [], newest_ts: oldest };
     };
     let ch = channel ?? "";
-    let query = "channel="
+    let base = "channel="
         + ch
         + "&limit=200"
         + (
@@ -360,8 +360,28 @@ function slack_feedback(oldest: string?) -> SlackFeedback {
                 let o: string => "&oldest=" + o,
             }
         );
-    let out = slack_api("conversations.history", null, query);
-    let messages = baml.json.path_or<json[]>(out, ".messages", []);
+    // every page (Slack pages with response_metadata.next_cursor), at most
+    // ten per run so a flood cannot pin the loop; the rest waits a run
+    let messages: json[] = [];
+    let cursor: string? = null;
+    let pages = 0;
+    while (pages < 10) {
+        let query = base
+            + (
+                match (cursor) {
+                    null => "",
+                    let c: string => "&cursor=" + url_encode(c),
+                }
+            );
+        let out = slack_api("conversations.history", null, query);
+        messages = messages.concat(baml.json.path_or<json[]>(out, ".messages", []));
+        let next = baml.json.path_or<string>(out, ".response_metadata.next_cursor", "");
+        pages += 1;
+        if (next.length() == 0) {
+            break;
+        };
+        cursor = next;
+    }
     let newest = oldest;
     let feedback: Feedback[] = [];
     // Slack returns newest first

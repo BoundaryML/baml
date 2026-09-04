@@ -53,7 +53,19 @@ function merge_issue(
     mention: string? = null,
 ) -> MergeResult {
     let started = baml.time.Instant.now();
-    let first = pr_snapshot(pr);
+    //# only this repository's PRs: the sandbox and the push know origin only
+    if (!pr.starts_with("https://github.com/" + repo_slug() + "/pull/")) {
+        log.warn({ "pr": pr, "refused": "not a " + repo_slug() + " pull request" });
+        tell_thread(thread, ":no_entry: " + pr + " is not a " + repo_slug() + " pull request");
+        return MergeResult { kind: "round_failed", pr: pr, rounds: 0 };
+    };
+    let first = match (pr_snapshot(pr)) {
+        null => {
+            tell_thread(thread, ":x: could not read " + pr + " (gh pr view failed)");
+            return MergeResult { kind: "round_failed", pr: pr, rounds: 0 };
+        },
+        let s: PrSnapshot => s,
+    };
     let state = read_merge_state(first.branch);
     let done = (
         kind: "merged"
@@ -95,7 +107,12 @@ function merge_issue(
     };
     //# poll the PR until it merges, closes, or something needs fixing
     while (true) {
-        let snap = pr_snapshot(pr);
+        let snap = match (pr_snapshot(pr)) {
+            null => {
+                return done("round_failed");
+            },
+            let s: PrSnapshot => s,
+        };
         if (snap.merged) {
             //## merged: done
             return done("merged");
@@ -275,7 +292,7 @@ function wait_poll() -> null {
 function wait_for_new_head(pr: string, old_head: string, started: baml.time.Instant) -> null {
     while (true) {
         wait_poll();
-        let head = pr_snapshot(pr).head;
+        let head = pr_snapshot(pr)?.head ?? old_head;
         if (head != old_head) {
             return wait_poll();
         };
@@ -381,11 +398,14 @@ function gh_view(url: string) -> CmdResult {
     baml.sys.panic("unreachable")
 }
 
-function pr_snapshot(url: string) -> PrSnapshot {
+/// The PR as gh sees it, or null when gh cannot read it after retries: the
+/// caller ends the run as round_failed instead of taking the process down.
+function pr_snapshot(url: string) -> PrSnapshot? {
     //# title, body, branch, head, state
     let view = gh_view(url);
     if (!view.ok) {
-        baml.sys.panic("gh pr view failed: " + tail(view.stderr, 3));
+        log.error({ "pr": url, "gh_pr_view": tail(view.stderr, 3) });
+        return null;
     };
     let v = baml.json.parse(view.stdout);
     let number = baml.json.path_or<int>(v, ".number", 0);
@@ -713,7 +733,9 @@ function request_merge(pr: string, thread: SlackRef? = null) -> int {
 function claim_merge_request(runner: string) -> MergeRequest? {
     let rows = select(
         "babysit_requests",
-        "select=id,pr,channel,thread_ts,requested_by,status&status=eq.queued&order=created_at&limit=1",
+        "select=id,pr,channel,thread_ts,requested_by,status&status=eq.queued&dataset="
+            + eq(dataset())
+            + "&order=created_at&limit=1",
     );
     let r = match (rows.at(0)) {
         null => {
@@ -747,12 +769,27 @@ function request_from_row(j: json) -> MergeRequest {
     }
 }
 
-function finish_merge_request(id: int, status: string, result: json) -> null {
-    update(
-        "babysit_requests",
-        "id=eq." + id.to_string(),
-        { "status": status, "result": result, "finished_at": "now()" }.to_json(),
+/// Marks a request finished, but only while this runner still owns it: a
+/// request reclaimed by another runner after a stale lease is theirs now,
+/// and this result is dropped with a warning rather than overwriting.
+function finish_merge_request(id: int, runner: string, status: string, result: json) -> null {
+    let rows = rows_of(
+        supabase_send(
+            "PATCH",
+            "babysit_requests?id=eq."
+                + id.to_string()
+                + "&claimed_by="
+                + eq(runner)
+                + "&status=eq.running",
+            baml.json.stringify(
+                { "status": status, "result": result, "finished_at": "now()" }.to_json(),
+            ),
+            "return=representation",
+        ),
     );
+    if (rows.length() == 0) {
+        log.warn({ "request": id, "runner": runner, "warning": "no longer ours; result dropped" });
+    };
     null
 }
 
@@ -761,12 +798,20 @@ function finish_merge_request(id: int, status: string, result: json) -> null {
 function reclaim_stale_requests(after_s: int) -> int {
     let stale = select(
         "babysit_requests",
-        "select=id&status=eq.running&claimed_at=lt." + url_encode(iso_seconds_ago(after_s)),
+        "select=id,claimed_by&status=eq.running&dataset="
+            + eq(dataset())
+            + "&claimed_at=lt."
+            + url_encode(iso_seconds_ago(after_s)),
     );
     for (let r in stale) {
+        // the requeue names the stale owner, so a runner that finished in
+        // the meantime (status no longer running) is left alone
         update(
             "babysit_requests",
-            "id=eq." + baml.json.path_or<int>(r, ".id", 0).to_string(),
+            "id=eq."
+                + baml.json.path_or<int>(r, ".id", 0).to_string()
+                + "&status=eq.running&claimed_by="
+                + eq(baml.json.path_or<string>(r, ".claimed_by", "")),
             { "status": "queued", "claimed_by": null, "claimed_at": null }.to_json(),
         );
     }
@@ -825,6 +870,7 @@ function merge_issue_loop(
                 let result = merge_issue(r.pr, mode = mode, thread = merge_request_thread(r), mention = r.requested_by);
                 finish_merge_request(
                     r.id,
+                    runner,
                     if (result.kind == "round_failed") {
                         "failed"
                     } else {

@@ -1,6 +1,8 @@
 # Redeploys the atb2 runner (tools/atb2/deploy) on every push to canary that
 # touches tools/atb2; on a pull request touching the deploy files it only
-# checks that the image builds. One secret: FLY_API_TOKEN, a deploy token scoped to the
+# checks that the image builds. The Fly app, its volume and its secret must
+# exist before FLY_API_TOKEN is set (tools/atb2/README.md, Deploy); the deploy
+# step refuses to run against a missing app. Actions are pinned to commits. One secret: FLY_API_TOKEN, a deploy token scoped to the
 # atb2-runner app. The runner's own secrets are set on Fly by hand (see
 # tools/atb2/deploy/fly.toml); CI never handles them. The job skips itself
 # until the token exists.
@@ -36,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       - run: docker build -f tools/atb2/deploy/Dockerfile -t atb2-runner:ci tools/atb2
@@ -50,7 +52,7 @@ jobs:
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
@@ -58,9 +60,11 @@ jobs:
         if: env.FLY_API_TOKEN == ''
         run: echo "FLY_API_TOKEN is not set; skipping the runner deploy"
 
-      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # 1.5
         if: env.FLY_API_TOKEN != ''
 
       - name: Deploy
         if: env.FLY_API_TOKEN != ''
-        run: flyctl deploy tools/atb2 --config tools/atb2/deploy/fly.toml --remote-only --ha=false
+        run: |
+          flyctl apps list --json | grep -q '"atb2-runner"' || { echo "the Fly app atb2-runner does not exist yet; see tools/atb2/README.md"; exit 1; }
+          flyctl deploy tools/atb2 --config tools/atb2/deploy/fly.toml --remote-only --ha=false

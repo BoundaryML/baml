@@ -32,7 +32,12 @@ function dataset() -> string {
 /// supabase_get: a store that is configured but broken must not be
 /// silently skipped.
 function supabase_send(method: string, path: string, body: string, prefer: string) -> string {
-    let url = (baml.env.get("FEEDBACK_SUPABASE_URL") ?? "") + "/rest/v1/" + path;
+    let base = baml.env.get("FEEDBACK_SUPABASE_URL") ?? "";
+    if (!base.starts_with("https://")) {
+        // the service key rides in two headers: never over plain http
+        baml.sys.panic("supabase: FEEDBACK_SUPABASE_URL must be https");
+    };
+    let url = base + "/rest/v1/" + path;
     let key = baml.env.get("FEEDBACK_SUPABASE_KEY") ?? "";
     let headers: map<string, string> = {
         "apikey": key,
@@ -67,7 +72,10 @@ function supabase_send(method: string, path: string, body: string, prefer: strin
     text
 }
 
-/// Insert-or-update on the primary key. `rows` is a JSON array.
+/// Insert-or-update on the primary key. `rows` is a JSON array. Ids never
+/// collide across datasets by construction (live ids are ISSUE-/PH-/SL-,
+/// eval ids are the reference GH- numbers) and every read filters on
+/// dataset, so an eval run cannot touch a live row.
 function upsert(table: string, rows: json) -> null {
     supabase_send(
         "POST",
@@ -290,7 +298,7 @@ function known_feedback_ids() -> string[] {
     if (!db_configured()) {
         return [];
     };
-    rows_field(select("feedback", "select=id&order=received_at"), "id")
+    rows_field(select("feedback", "select=id&dataset=" + eq(dataset()) + "&order=received_at"), "id")
 }
 
 function save_issue(issue: Issue) -> null {
@@ -305,7 +313,7 @@ function load_issue(id: string) -> Issue? {
     if (!db_configured()) {
         return null;
     };
-    let rows = select("issues", "select=*&id=" + eq(id) + "&limit=1");
+    let rows = select("issues", "select=*&id=" + eq(id) + "&dataset=" + eq(dataset()) + "&limit=1");
     match (rows.at(0)) {
         null => null,
         let r: json => issue_from_row(r),
@@ -415,11 +423,16 @@ class SlackRef {
     ts: string,
 }
 
+/// Cursors are per dataset: an eval run never moves the live intakes.
+function cursor_name(name: string) -> string {
+    dataset() + ":" + name
+}
+
 function get_cursor(name: string) -> string? {
     if (!db_configured()) {
         return null;
     };
-    let rows = select("cursors", "select=value&name=" + eq(name) + "&limit=1");
+    let rows = select("cursors", "select=value&name=" + eq(cursor_name(name)) + "&limit=1");
     match (rows.at(0)) {
         null => null,
         let r: json => baml.json.path_or<string?>(r, ".value", null),
@@ -433,7 +446,7 @@ function set_cursor(name: string, value: string) -> null {
     supabase_send(
         "POST",
         "cursors?on_conflict=name",
-        baml.json.stringify([{ "name": name, "value": value }].to_json()),
+        baml.json.stringify([{ "name": cursor_name(name), "value": value }].to_json()),
         "resolution=merge-duplicates,return=minimal",
     );
     null

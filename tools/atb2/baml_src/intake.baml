@@ -25,8 +25,12 @@ function posthog_env(name: string) -> string? {
     baml.env.get("ATB2_POSTHOG_" + name) ?? baml.env.get("ATB_POSTHOG_" + name)
 }
 
+/// The API host; https only, since the key goes in a bearer header.
 function posthog_host() -> string {
     let h = (posthog_env("HOST") ?? "https://us.posthog.com").trim();
+    if (!h.starts_with("https://")) {
+        baml.sys.panic("posthog: ATB2_POSTHOG_HOST must be https, got " + h);
+    };
     if (h.ends_with("/")) {
         h.slice(0, h.length() - 1)
     } else {
@@ -41,14 +45,17 @@ class PosthogFeedback {
 }
 
 /// `baml_feedback` events after `after` (ISO timestamp, or null for the
-/// last 100), as Feedback, oldest first.
-function posthog_feedback(after: string?) -> PosthogFeedback {
+/// last 100), as Feedback, oldest first. Follows PostHog's `next` links so
+/// a burst larger than one page is not skipped past when the cursor moves;
+/// a run takes at most `max_pages` pages and leaves the rest for the next.
+function posthog_feedback(after: string?, max_pages: int = 10) -> PosthogFeedback {
     if (!posthog_configured()) {
         return PosthogFeedback { feedback: [], newest: after };
     };
     let key = posthog_env("API_KEY") ?? "";
     let project = posthog_env("PROJECT_ID") ?? "";
-    let url = posthog_host()
+    let host = posthog_host();
+    let url: string? = host
         + "/api/projects/"
         + project
         + "/events/?event=baml_feedback&limit=100"
@@ -58,6 +65,36 @@ function posthog_feedback(after: string?) -> PosthogFeedback {
                 let a: string => "&after=" + url_encode(a),
             }
         );
+    let events: json[] = [];
+    let pages = 0;
+    while (url != null && pages < max_pages) {
+        let out = posthog_get(url ?? "", key, host);
+        events = events.concat(baml.json.path_or<json[]>(out, ".results", []));
+        url = baml.json.path_or<string?>(out, ".next", null);
+        pages += 1;
+    }
+    let newest = after;
+    let feedback: Feedback[] = [];
+    // PostHog returns newest first
+    for (let ev in events.reverse()) {
+        let ts = baml.json.path_or<string>(ev, ".timestamp", "");
+        if (ts.length() > 0 && (newest == null || ts > (newest ?? ""))) {
+            newest = ts;
+        };
+        match (feedback_from_posthog(ev)) {
+            null => null,
+            let fb: Feedback => feedback.push(fb),
+        };
+    }
+    PosthogFeedback { feedback: feedback, newest: newest }
+}
+
+/// One page of the events API. Only the configured host is ever called:
+/// a `next` link that points elsewhere is refused.
+function posthog_get(url: string, key: string, host: string) -> json {
+    if (!url.starts_with(host + "/")) {
+        baml.sys.panic("posthog: refusing to follow a link off " + host);
+    };
     let res = baml.http.send(
         baml.http.Request {
             method: "GET",
@@ -75,24 +112,9 @@ function posthog_feedback(after: string?) -> PosthogFeedback {
     if (!res.ok()) {
         baml.sys.panic("posthog: " + res.status_code.to_string() + ": " + tail(text, 2));
     };
-    let out = baml.json.parse(text) catch (_) {
+    baml.json.parse(text) catch (_) {
         _ => baml.json.parse("{}"),
-    };
-    let events = baml.json.path_or<json[]>(out, ".results", []);
-    let newest = after;
-    let feedback: Feedback[] = [];
-    // PostHog returns newest first
-    for (let ev in events.reverse()) {
-        let ts = baml.json.path_or<string>(ev, ".timestamp", "");
-        if (ts.length() > 0 && (newest == null || ts > (newest ?? ""))) {
-            newest = ts;
-        };
-        match (feedback_from_posthog(ev)) {
-            null => null,
-            let fb: Feedback => feedback.push(fb),
-        };
     }
-    PosthogFeedback { feedback: feedback, newest: newest }
 }
 
 /// One `baml_feedback` event as a report, or null when it has no text.

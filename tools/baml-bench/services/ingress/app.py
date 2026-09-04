@@ -47,8 +47,18 @@ _MENTION = re.compile(r"^\s*<@[^>]+>\s*")
 # the atb2 store; a runner with the toolchain serves it. Both settings are
 # optional: without them a babysit mention is an ordinary task.
 FEEDBACK_SUPABASE_URL = os.environ.get("FEEDBACK_SUPABASE_URL", "").rstrip("/")
+if FEEDBACK_SUPABASE_URL and not FEEDBACK_SUPABASE_URL.startswith("https://"):
+    # the service key rides in two headers: never over plain http
+    log.error("FEEDBACK_SUPABASE_URL must be https; babysit routing disabled")
+    FEEDBACK_SUPABASE_URL = ""
 FEEDBACK_SUPABASE_KEY = os.environ.get("FEEDBACK_SUPABASE_KEY", "")
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
+# live | eval, the same marker the runner writes (tools/atb2/README.md)
+ATB2_DATASET = "eval" if os.environ.get("ATB2_DATASET", "live").strip().lower() == "eval" else "live"
+# the one repository the runner can push to; a PR anywhere else is refused here too
+ATB2_REPO = os.environ.get("ATB2_REPO", "BoundaryML/baml")
+# optional: Slack user ids allowed to queue babysit work; empty = any workspace member
+ATB2_BABYSIT_USERS = {u.strip() for u in os.environ.get("ATB2_BABYSIT_USERS", "").split(",") if u.strip()}
 _BABYSIT = re.compile(r"^\s*babysit\b", re.IGNORECASE)
 # a GitHub PR url, bare or Slack-wrapped (<url> / <url|label>), trailing path or punctuation allowed
 _PR_URL = re.compile(r"<?(https://github\.com/[\w.-]+/[\w.-]+/pull/\d+)")
@@ -66,7 +76,12 @@ def parse_babysit(text: str) -> Optional[str]:
     if not _BABYSIT.search(text):
         return None
     m = _PR_URL.search(text)
-    return m.group(1) if m else None
+    if not m:
+        return None
+    url = m.group(1)
+    if not url.startswith(f"https://github.com/{ATB2_REPO}/pull/"):
+        return None
+    return url
 
 
 def _is_duplicate(event_id: Optional[str]) -> bool:
@@ -141,12 +156,18 @@ async def _enqueue_babysit(event: dict[str, Any], pr: str, eid: Optional[str]) -
     """
     channel = event.get("channel") or ""
     thread_ts = event.get("thread_ts") or event.get("ts") or ""
+    user = event.get("user") or ""
+    if ATB2_BABYSIT_USERS and user not in ATB2_BABYSIT_USERS:
+        log.warning("slack: babysit refused for user=%s event_id=%s", user, eid)
+        await _ack(channel, thread_ts, ":no_entry: you are not on the list of people who can queue babysit work")
+        return
     row = {
         "pr": pr,
         "channel": channel,
         "thread_ts": thread_ts,
-        "requested_by": event.get("user"),
+        "requested_by": user,
         "event_id": eid,
+        "dataset": ATB2_DATASET,
     }
     try:
         async with httpx.AsyncClient(timeout=10.0) as c:
@@ -175,6 +196,15 @@ async def _enqueue_babysit(event: dict[str, Any], pr: str, eid: Optional[str]) -
         log.info("slack: queued babysit event_id=%s pr=%s", eid, pr)
     except Exception:  # noqa: BLE001
         log.exception("slack: failed to queue babysit for event_id=%s", eid)
+        await _ack(channel, thread_ts, f":x: could not queue {pr}; the request was not saved")
+
+
+async def _ack(channel: str, thread_ts: str, text: str) -> None:
+    """Best-effort thread reply; a Slack failure is logged, never raised."""
+    try:
+        await slack_client.post_message(SLACK_BOT_TOKEN, channel, text, thread_ts=thread_ts)
+    except Exception:  # noqa: BLE001
+        log.exception("slack: ack failed channel=%s ts=%s", channel, thread_ts)
 
 
 @app.post("/slack/events")
