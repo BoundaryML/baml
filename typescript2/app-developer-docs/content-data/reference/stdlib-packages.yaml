@@ -1,0 +1,14 @@
+packages:
+  - baml
+  - reflect
+  - boundary
+  - testing
+  - assert
+  - log
+  - ai
+  - openai
+  - anthropic
+  - google
+  - aws
+  - vercel
+  - claude_code

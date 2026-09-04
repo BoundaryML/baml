@@ -1,0 +1,66 @@
+name: Developer Docs
+
+on:
+  pull_request:
+    paths:
+      - "typescript2/app-developer-docs/**"
+      - "typescript2/pkg-grammar/**"
+      - "typescript2/package.json"
+      - "typescript2/pnpm-lock.yaml"
+      - "typescript2/pnpm-workspace.yaml"
+      - ".github/actions/setup-node2/**"
+      - ".github/workflows/developer-docs.yml"
+  push:
+    branches: [main, canary]
+    paths:
+      - "typescript2/app-developer-docs/**"
+      - "typescript2/pkg-grammar/**"
+      - "typescript2/package.json"
+      - "typescript2/pnpm-lock.yaml"
+      - "typescript2/pnpm-workspace.yaml"
+      - ".github/actions/setup-node2/**"
+      - ".github/workflows/developer-docs.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  portal:
+    name: Lint, test, type-check, and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node2
+
+      - name: Lint
+        run: pnpm --filter app-developer-docs lint
+        working-directory: typescript2
+
+      - name: Test
+        run: pnpm --filter app-developer-docs test
+        working-directory: typescript2
+
+      - name: Type-check
+        run: pnpm --filter app-developer-docs typecheck
+        working-directory: typescript2
+
+      - name: Build static preview artifact
+        env:
+          VERCEL_ENV: preview
+        run: pnpm --filter app-developer-docs build
+        working-directory: typescript2
+
+      - name: Verify preview is noindex
+        run: 'grep -q "Disallow: /" app-developer-docs/out/robots.txt'
+        working-directory: typescript2
