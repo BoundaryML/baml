@@ -345,10 +345,10 @@ function slack_intake_channel() -> string? {
 /// Reports posted in the intake channel after `oldest` (a Slack ts, or
 /// null for the last 200 messages), as Feedback, oldest first. Thread
 /// replies and bot messages are not reports.
-function slack_feedback(oldest: string?) -> SlackFeedback {
+function slack_feedback(oldest: string?, resume: string? = null) -> SlackFeedback {
     let channel = slack_intake_channel();
     if (channel == null || slack_token() == null) {
-        return SlackFeedback { feedback: [], newest_ts: oldest };
+        return SlackFeedback { feedback: [], newest_ts: oldest, resume: null };
     };
     let ch = channel ?? "";
     let base = "channel="
@@ -363,7 +363,7 @@ function slack_feedback(oldest: string?) -> SlackFeedback {
     // every page (Slack pages with response_metadata.next_cursor), at most
     // ten per run so a flood cannot pin the loop; the rest waits a run
     let messages: json[] = [];
-    let cursor: string? = null;
+    let cursor: string? = resume;
     let pages = 0;
     while (pages < 10) {
         let query = base
@@ -378,6 +378,7 @@ function slack_feedback(oldest: string?) -> SlackFeedback {
         let next = baml.json.path_or<string>(out, ".response_metadata.next_cursor", "");
         pages += 1;
         if (next.length() == 0) {
+            cursor = null;
             break;
         };
         cursor = next;
@@ -395,13 +396,17 @@ function slack_feedback(oldest: string?) -> SlackFeedback {
             let fb: Feedback => feedback.push(fb),
         };
     }
-    SlackFeedback { feedback: feedback, newest_ts: newest }
+    SlackFeedback { feedback: feedback, newest_ts: newest, resume: cursor }
 }
 
 class SlackFeedback {
     feedback: Feedback[],
-    /// The cursor for the next call.
+    /// The newest message ts seen; the `oldest` cursor once the scan is
+    /// complete (see `resume`).
     newest_ts: string?,
+    /// Set when the page cap stopped the scan: Slack's next_cursor to
+    /// continue from. Until it is null, `oldest` must not move.
+    resume: string?,
 }
 
 /// One Slack message as a report, or null when it is not one (a bot, a

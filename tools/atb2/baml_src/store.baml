@@ -435,7 +435,15 @@ function get_cursor(name: string) -> string? {
     let rows = select("cursors", "select=value&name=" + eq(cursor_name(name)) + "&limit=1");
     match (rows.at(0)) {
         null => null,
-        let r: json => baml.json.path_or<string?>(r, ".value", null),
+        let r: json => {
+            // an empty value is a cleared cursor
+            let v = baml.json.path_or<string>(r, ".value", "");
+            if (v.length() == 0) {
+                null
+            } else {
+                v
+            }
+        },
     }
 }
 

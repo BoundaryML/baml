@@ -24,13 +24,18 @@ draft PR, the PR gets to green. Written in BAML against canary's toolchain
 
 ## Run
 
+Every run needs the store, Slack and GitHub variables, which live in
+Infisical (boundary-tools, prod): run `baml-cli` under `infisical run`, or
+open a shell with them first.
+
 ```sh
 cd tools/atb2
-baml-cli run -e 'run_pipeline()'                                   # everything, Live
-baml-cli run -e 'run_pipeline(mode = HandleMode.DryRun)'           # no push, no PR
-baml-cli run -e 'run_pipeline(stages = "ingest,triage")'           # a subset
-baml-cli run -e 'handle_issue(load_issue("ISSUE-…") ?? baml.sys.panic("no such issue"))'
-baml-cli run -e 'merge_issue("https://github.com/BoundaryML/baml/pull/4634")'
+alias atb2='infisical run --projectId bdd280e2-259c-4750-9b16-a8597a67214c --env prod -- ~/.atb2/target/debug/baml-cli'
+atb2 run -e 'run_pipeline()'                                   # everything, Live
+atb2 run -e 'run_pipeline(mode = HandleMode.DryRun)'           # no push, no PR
+atb2 run -e 'run_pipeline(stages = "ingest,triage")'           # a subset
+atb2 run -e 'handle_issue(load_issue("ISSUE-…") ?? baml.sys.panic("no such issue"))'
+atb2 run -e 'merge_issue("https://github.com/BoundaryML/baml/pull/4634")'
 ```
 
 Every stage is idempotent against the store; the intakes resume from a

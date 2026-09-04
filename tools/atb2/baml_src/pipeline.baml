@@ -146,30 +146,24 @@ function runner_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> 
 function ingest_feedback() -> Feedback[] {
     let known = known_feedback_ids();
     let fresh: Feedback[] = [];
-    //# PostHog: baml feedback events since the cursor
-    let ph = posthog_feedback(get_cursor("posthog_after"));
+    //# PostHog: baml feedback events since the cursor (or the resumed scan)
+    let ph = posthog_feedback(get_cursor("posthog_after"), resume = get_cursor("posthog_resume"));
     for (let fb in ph.feedback) {
         if (!known.includes(fb.id)) {
             save_feedback(fb, origin_of(fb));
             fresh.push(fb);
         };
     }
-    match (ph.newest) {
-        null => null,
-        let n: string => set_cursor("posthog_after", n),
-    };
-    //# Slack: intake channel messages since the cursor
-    let sl = slack_feedback(get_cursor("slack_oldest"));
+    advance_cursor("posthog", ph.newest, ph.resume);
+    //# Slack: intake channel messages since the cursor (or the resumed scan)
+    let sl = slack_feedback(get_cursor("slack_oldest"), resume = get_cursor("slack_resume"));
     for (let fb in sl.feedback) {
         if (!known.includes(fb.id)) {
             save_feedback(fb, origin_of(fb));
             fresh.push(fb);
         };
     }
-    match (sl.newest_ts) {
-        null => null,
-        let n: string => set_cursor("slack_oldest", n),
-    };
+    advance_cursor("slack", sl.newest_ts, sl.resume);
     log.info(
         {
             "ingested": fresh.length(),
@@ -178,6 +172,53 @@ function ingest_feedback() -> Feedback[] {
         },
     );
     fresh
+}
+
+/// Moves an intake's cursor only once its scan is complete. While a scan
+/// is cut short by the page cap, the continuation and the newest timestamp
+/// seen so far are kept instead, and the next run picks up where it left
+/// off; the timestamp cursor moves when the last page is in. Both intakes
+/// return newest first, so moving it early would skip the older pages.
+function advance_cursor(intake: string, newest: string?, resume: string?) -> null {
+    let pending = get_cursor(intake + "_pending");
+    let high = match (newest) {
+        null => pending,
+        let n: string => {
+            if (pending == null || n > (pending ?? "")) {
+                n
+            } else {
+                pending
+            }
+        },
+    };
+    match (resume) {
+        let r: string => {
+            set_cursor(intake + "_resume", r);
+            match (high) {
+                null => null,
+                let h: string => set_cursor(intake + "_pending", h),
+            };
+            log.info({ "intake": intake, "scan": "continues next run" });
+        },
+        null => {
+            match (high) {
+                null => null,
+                let h: string => {
+                    set_cursor(
+                        if (intake == "slack") {
+                            "slack_oldest"
+                        } else {
+                            "posthog_after"
+                        },
+                        h,
+                    )
+                },
+            };
+            set_cursor(intake + "_resume", "");
+            set_cursor(intake + "_pending", "");
+        },
+    };
+    null
 }
 
 /// Where a report came from, from its id: PH-<report_id> or SL-<ts>.

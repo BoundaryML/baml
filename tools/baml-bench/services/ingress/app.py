@@ -53,8 +53,12 @@ if FEEDBACK_SUPABASE_URL and not FEEDBACK_SUPABASE_URL.startswith("https://"):
     FEEDBACK_SUPABASE_URL = ""
 FEEDBACK_SUPABASE_KEY = os.environ.get("FEEDBACK_SUPABASE_KEY", "")
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
-# live | eval, the same marker the runner writes (tools/atb2/README.md)
-ATB2_DATASET = "eval" if os.environ.get("ATB2_DATASET", "live").strip().lower() == "eval" else "live"
+# live | eval, the same marker the runner writes (tools/atb2/README.md); any
+# other value disables babysit routing rather than guessing a queue
+ATB2_DATASET = os.environ.get("ATB2_DATASET", "live").strip().lower()
+if ATB2_DATASET not in ("live", "eval"):
+    log.error("ATB2_DATASET must be live or eval, got %r; babysit routing disabled", ATB2_DATASET)
+    FEEDBACK_SUPABASE_URL = ""
 # the one repository the runner can push to; a PR anywhere else is refused here too
 ATB2_REPO = os.environ.get("ATB2_REPO", "BoundaryML/baml")
 # optional: Slack user ids allowed to queue babysit work; empty = any workspace member

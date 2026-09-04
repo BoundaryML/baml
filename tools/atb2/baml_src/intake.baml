@@ -40,30 +40,43 @@ function posthog_host() -> string {
 
 class PosthogFeedback {
     feedback: Feedback[],
-    /// The cursor for the next call: the newest event timestamp seen.
+    /// The newest event timestamp seen; the `after` cursor once the scan is
+    /// complete (see `resume`).
     newest: string?,
+    /// Set when the page cap stopped the scan: the `next` link to continue
+    /// from on the next call. Until it is null, `after` must not move, or
+    /// the unvisited (older) events would be skipped for good.
+    resume: string?,
 }
 
 /// `baml_feedback` events after `after` (ISO timestamp, or null for the
 /// last 100), as Feedback, oldest first. Follows PostHog's `next` links so
 /// a burst larger than one page is not skipped past when the cursor moves;
 /// a run takes at most `max_pages` pages and leaves the rest for the next.
-function posthog_feedback(after: string?, max_pages: int = 10) -> PosthogFeedback {
+function posthog_feedback(
+    after: string?,
+    resume: string? = null,
+    max_pages: int = 10,
+) -> PosthogFeedback {
     if (!posthog_configured()) {
-        return PosthogFeedback { feedback: [], newest: after };
+        return PosthogFeedback { feedback: [], newest: after, resume: null };
     };
     let key = posthog_env("API_KEY") ?? "";
     let project = posthog_env("PROJECT_ID") ?? "";
     let host = posthog_host();
-    let url: string? = host
-        + "/api/projects/"
-        + project
-        + "/events/?event=baml_feedback&limit=100"
-        + (
-            match (after) {
-                null => "",
-                let a: string => "&after=" + url_encode(a),
-            }
+    //# continue an interrupted scan, or start after the cursor
+    let url: string? = resume
+        ?? (
+            host
+                + "/api/projects/"
+                + project
+                + "/events/?event=baml_feedback&limit=100"
+                + (
+                    match (after) {
+                        null => "",
+                        let a: string => "&after=" + url_encode(a),
+                    }
+                )
         );
     let events: json[] = [];
     let pages = 0;
@@ -86,7 +99,7 @@ function posthog_feedback(after: string?, max_pages: int = 10) -> PosthogFeedbac
             let fb: Feedback => feedback.push(fb),
         };
     }
-    PosthogFeedback { feedback: feedback, newest: newest }
+    PosthogFeedback { feedback: feedback, newest: newest, resume: url }
 }
 
 /// One page of the events API. Only the configured host is ever called:
@@ -229,6 +242,8 @@ testset "intake" {
     test "intakes are off without their variables" {
         assert.equal(posthog_configured(), false);
         assert.equal(posthog_feedback(null).feedback.length(), 0);
+        assert.equal(posthog_feedback(null).resume == null, true);
         assert.equal(slack_feedback(null).feedback.length(), 0);
+        assert.equal(slack_feedback(null).resume == null, true);
     }
 }
