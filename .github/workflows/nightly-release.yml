@@ -114,10 +114,15 @@ jobs:
           echo "::group::100 most recent canary commits"
           jq . "$commits"
           echo "::endgroup::"
-          # GitHub's status=success filter has returned stale/incomplete HTTP
-          # 200 responses. Fetch all states and filter locally, with extra room
-          # for duplicate runs across the 100-commit ancestry window.
+          # Fetch the latest GitHub workflow runs, but cross-check the results
+          # against the 100 most recent commits on canary before selecting a
+          # release source. The output of `gh run list` is highly unreliable,
+          # especially with server-side success filtering: requests can succeed
+          # while returning stale or incomplete runs, even without that filter.
           # See https://github.com/orgs/community/discussions/24626
+          # Fetch all states and filter for success locally. The Python selector
+          # below hard-fails if any commit older than 10 minutes lacks a run.
+          # Allow 1,000 runs so duplicates do not crowd out the 100 commits.
           gh run list --workflow ci.yaml --branch canary --event push \
             --limit 1000 \
             --json headSha,databaseId,conclusion,createdAt > "$runs"
