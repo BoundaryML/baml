@@ -1,6 +1,6 @@
 //! `BexExternalValue` -> `BamlOutboundValue` conversion.
 
-use bex_project::{BexExternalAdt, BexExternalValue, RuntimeTy, selected_arm_equal};
+use bex_external_types::{BexExternalAdt, BexExternalValue, RuntimeTy, selected_arm_equal};
 use indexmap::IndexMap;
 
 use crate::{
@@ -132,7 +132,7 @@ pub fn external_to_outbound(
             Some(BamlValueVariant::Uint8arrayValue(bytes.clone()))
         }
         BexExternalValue::RustData(arc) => {
-            if let Some(converted) = bex_project::try_convert_rust_data(arc) {
+            if let Some(converted) = bex_external_types::try_convert_rust_data(arc) {
                 return external_to_outbound(&converted, options);
             }
             let table_value = CffiHandleTableEntry::RustData(BexRustData(arc.clone()));
@@ -151,8 +151,10 @@ pub fn external_to_outbound(
         BexExternalValue::HostValue(arc) => {
             use crate::baml_bridge::cffi::BamlHandleType;
             let ht = match arc.kind {
-                bex_project::HostValueKind::Callable => BamlHandleType::HostValueCallable as i32,
-                bex_project::HostValueKind::Opaque => BamlHandleType::HostValueOpaque as i32,
+                bex_external_types::HostValueKind::Callable => {
+                    BamlHandleType::HostValueCallable as i32
+                }
+                bex_external_types::HostValueKind::Opaque => BamlHandleType::HostValueOpaque as i32,
             };
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key: arc.key,
@@ -326,7 +328,7 @@ pub(crate) fn artifact_safe_external_to_outbound(
             Some(BamlValueVariant::Uint8arrayValue(bytes.clone()))
         }
         BexExternalValue::RustData(arc) => {
-            if let Some(converted) = bex_project::try_convert_rust_data(arc) {
+            if let Some(converted) = bex_external_types::try_convert_rust_data(arc) {
                 return artifact_safe_external_to_outbound(&converted);
             }
             Some(artifact_safe_omission(
@@ -360,8 +362,8 @@ pub(crate) fn artifact_safe_external_to_outbound(
         BexExternalValue::HostValue(arc) => Some(artifact_safe_omission(
             "hostOwnedValue",
             match arc.kind {
-                bex_project::HostValueKind::Callable => "host-owned callable",
-                bex_project::HostValueKind::Opaque => "host-owned opaque value",
+                bex_external_types::HostValueKind::Callable => "host-owned callable",
+                bex_external_types::HostValueKind::Opaque => "host-owned opaque value",
             },
         )),
         BexExternalValue::Handle(_)
@@ -427,20 +429,20 @@ fn selected_union_option_index(
 }
 
 fn media_kind_to_proto_enum(
-    kind: bex_project::MediaKind,
+    kind: bex_external_types::MediaKind,
 ) -> crate::baml_bridge::cffi::MediaTypeEnum {
     use crate::baml_bridge::cffi::MediaTypeEnum as E;
     match kind {
-        bex_project::MediaKind::Image => E::Image,
-        bex_project::MediaKind::Audio => E::Audio,
-        bex_project::MediaKind::Video => E::Video,
-        bex_project::MediaKind::Pdf => E::Pdf,
-        bex_project::MediaKind::Generic => E::Other,
+        bex_external_types::MediaKind::Image => E::Image,
+        bex_external_types::MediaKind::Audio => E::Audio,
+        bex_external_types::MediaKind::Video => E::Video,
+        bex_external_types::MediaKind::Pdf => E::Pdf,
+        bex_external_types::MediaKind::Generic => E::Other,
     }
 }
 
 fn bex_media_to_proto_media(
-    media: &bex_project::MediaValue,
+    media: &baml_builtins2::MediaValue,
 ) -> crate::baml_bridge::cffi::BamlValueMedia {
     use crate::baml_bridge::cffi::{
         BamlValueMedia, baml_value_media::Value as BamlValueMediaValue,
@@ -449,31 +451,33 @@ fn bex_media_to_proto_media(
         media: media_kind_to_proto_enum(media.kind).into(),
         mime_type: media.mime_type(),
         value: Some(media.read_content(|content| match content {
-            bex_project::MediaContent::Url { url, .. } => BamlValueMediaValue::Url(url.clone()),
-            bex_project::MediaContent::Base64 { base64_data } => {
+            baml_builtins2::MediaContent::Url { url, .. } => BamlValueMediaValue::Url(url.clone()),
+            baml_builtins2::MediaContent::Base64 { base64_data } => {
                 BamlValueMediaValue::Base64(base64_data.clone())
             }
-            bex_project::MediaContent::File { file, .. } => BamlValueMediaValue::File(file.clone()),
+            baml_builtins2::MediaContent::File { file, .. } => {
+                BamlValueMediaValue::File(file.clone())
+            }
         })),
     }
 }
 
 /// Adapter so we can use `.map(arc_prompt_ast_to_proto)` instead of a closure (PR review).
 fn arc_prompt_ast_to_proto(
-    p: &std::sync::Arc<bex_project::PromptAst>,
+    p: &std::sync::Arc<baml_builtins2::PromptAst>,
 ) -> crate::baml_bridge::cffi::BamlValuePromptAst {
     bex_prompt_ast_to_proto_prompt_ast(p.as_ref())
 }
 
 /// Adapter so we can use `.map(arc_prompt_ast_simple_to_proto)` instead of a closure (PR review).
 fn arc_prompt_ast_simple_to_proto(
-    s: &std::sync::Arc<bex_project::PromptAstSimple>,
+    s: &std::sync::Arc<baml_builtins2::PromptAstSimple>,
 ) -> crate::baml_bridge::cffi::BamlValuePromptAstSimple {
     bex_prompt_ast_simple_to_proto_prompt_ast_simple(s.as_ref())
 }
 
 fn bex_prompt_ast_to_proto_prompt_ast(
-    prompt_ast: &bex_project::PromptAst,
+    prompt_ast: &baml_builtins2::PromptAst,
 ) -> crate::baml_bridge::cffi::BamlValuePromptAst {
     use crate::baml_bridge::cffi::{
         BamlValuePromptAst, BamlValuePromptAstMessage, BamlValuePromptAstMultiple,
@@ -481,10 +485,10 @@ fn bex_prompt_ast_to_proto_prompt_ast(
     };
     BamlValuePromptAst {
         value: Some(match prompt_ast {
-            bex_project::PromptAst::Simple(simple) => BamlValuePromptAstValue::Simple(
+            baml_builtins2::PromptAst::Simple(simple) => BamlValuePromptAstValue::Simple(
                 bex_prompt_ast_simple_to_proto_prompt_ast_simple(simple),
             ),
-            bex_project::PromptAst::Message {
+            baml_builtins2::PromptAst::Message {
                 role,
                 content,
                 metadata,
@@ -493,7 +497,7 @@ fn bex_prompt_ast_to_proto_prompt_ast(
                 content: Some(bex_prompt_ast_simple_to_proto_prompt_ast_simple(content)),
                 metadata_as_json: metadata.to_string(),
             }),
-            bex_project::PromptAst::Vec(vec) => {
+            baml_builtins2::PromptAst::Vec(vec) => {
                 BamlValuePromptAstValue::Multiple(BamlValuePromptAstMultiple {
                     items: vec.iter().map(arc_prompt_ast_to_proto).collect(),
                 })
@@ -503,22 +507,22 @@ fn bex_prompt_ast_to_proto_prompt_ast(
 }
 
 fn bex_prompt_ast_simple_to_proto_prompt_ast_simple(
-    simple_prompt_ast: &bex_project::PromptAstSimple,
+    simple_prompt_ast: &baml_builtins2::PromptAstSimple,
 ) -> crate::baml_bridge::cffi::BamlValuePromptAstSimple {
     use crate::baml_bridge::cffi::{
         BamlValuePromptAstSimple, BamlValuePromptAstSimpleMultiple,
         baml_value_prompt_ast_simple::Value as BamlValuePromptAstSimpleValue,
     };
     match simple_prompt_ast {
-        bex_project::PromptAstSimple::String(s) => BamlValuePromptAstSimple {
+        baml_builtins2::PromptAstSimple::String(s) => BamlValuePromptAstSimple {
             value: Some(BamlValuePromptAstSimpleValue::String(s.clone())),
         },
-        bex_project::PromptAstSimple::Media(media) => BamlValuePromptAstSimple {
+        baml_builtins2::PromptAstSimple::Media(media) => BamlValuePromptAstSimple {
             value: Some(BamlValuePromptAstSimpleValue::Media(
                 bex_media_to_proto_media(media),
             )),
         },
-        bex_project::PromptAstSimple::Multiple(multiple) => BamlValuePromptAstSimple {
+        baml_builtins2::PromptAstSimple::Multiple(multiple) => BamlValuePromptAstSimple {
             value: Some(BamlValuePromptAstSimpleValue::Multiple(
                 BamlValuePromptAstSimpleMultiple {
                     items: multiple
@@ -568,11 +572,9 @@ pub fn build_to_host_call(
 mod tests {
     use std::sync::Arc;
 
+    use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
     use baml_type::{Freshness, Literal, Name, TyAttr, TypeName};
-    use bex_project::{
-        BexExternalAdt, BexExternalValue, HostValueArc, HostValueKind, MediaContent, MediaValue,
-        PromptAst, PromptAstSimple,
-    };
+    use bex_external_types::{BexExternalAdt, BexExternalValue, HostValueArc, HostValueKind};
 
     use super::*;
     use crate::baml_bridge::cffi::{
@@ -738,7 +740,7 @@ mod tests {
     #[test]
     fn rust_data_media_value_converts_to_handle() {
         let media = Arc::new(MediaValue::new(
-            bex_project::MediaKind::Image,
+            bex_external_types::MediaKind::Image,
             MediaContent::Url {
                 url: "https://example.com/img.png".to_string(),
                 base64_data: None,
@@ -842,7 +844,7 @@ mod tests {
     #[test]
     fn artifact_safe_media_stays_durable_data() {
         let media = MediaValue::new(
-            bex_project::MediaKind::Image,
+            bex_external_types::MediaKind::Image,
             MediaContent::Url {
                 url: "https://example.com/img.png".to_string(),
                 base64_data: None,
@@ -862,7 +864,7 @@ mod tests {
     #[test]
     fn portable_boundary_never_boxes_media_or_prompt_as_handles() {
         let media = Arc::new(MediaValue::new(
-            bex_project::MediaKind::Image,
+            bex_external_types::MediaKind::Image,
             MediaContent::Base64 {
                 base64_data: "aW1hZ2U=".to_string(),
             },

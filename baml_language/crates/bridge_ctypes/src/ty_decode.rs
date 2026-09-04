@@ -14,7 +14,7 @@ use baml_type::{
     Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, RuntimeFunctionParamTy,
     RuntimeInterface, RuntimeTy, TyAttr, TypeName,
 };
-use bex_project::{BexExternalAdt, BexExternalValue, TypeDefRef};
+use bex_external_types::{BexExternalAdt, BexExternalValue, TypeDefRef};
 use indexmap::IndexMap;
 
 use crate::{
@@ -29,7 +29,7 @@ use crate::{
 #[derive(Debug, Default)]
 pub struct DecodedTypeArgs {
     pub type_args: IndexMap<String, RuntimeTy>,
-    pub type_defs: IndexMap<String, bex_project::PortableTypeDef>,
+    pub type_defs: IndexMap<String, bex_external_types::PortableTypeDef>,
 }
 
 /// Decode `CallFunctionArgs.type_args` (a list of named `BamlTyArg`s) into a
@@ -61,8 +61,8 @@ pub fn proto_ty_args_to_named(type_args: &[BamlTyArg]) -> Result<DecodedTypeArgs
 
 pub fn proto_ty_def_to_portable(
     definition: &BamlTyDef,
-) -> Result<bex_project::PortableTypeDef, CtypesError> {
-    use bex_project::{
+) -> Result<bex_external_types::PortableTypeDef, CtypesError> {
+    use bex_external_types::{
         DynWitnessDef, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
         PortableEnumVariantDef, PortableMetadata, PortableTypeDef,
     };
@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn portable_type_definition_round_trips_without_identity() {
-        use bex_project::{
+        use bex_external_types::{
             PortableClassDef, PortableClassFieldDef, PortableMetadata, PortableTypeDef,
         };
         let name = TypeName::local(Name::new("Row"));
@@ -483,7 +483,7 @@ mod tests {
                 generic_param_count: 0,
             }],
             enums: Vec::new(),
-            witnesses: vec![bex_project::DynWitnessDef {
+            witnesses: vec![bex_external_types::DynWitnessDef {
                 interface: TypeName::from_dotted_path("user.RowLike"),
                 interface_args: vec![baml_type::RealizedTy::string()],
                 associated_types: vec![(Name::new("Item"), baml_type::RealizedTy::int())],

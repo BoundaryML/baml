@@ -8,7 +8,7 @@ use std::{
     },
 };
 
-use bex_project::{BexExternalAdt, BexExternalValue, Handle, MediaKind};
+use bex_external_types::{BexExternalAdt, BexExternalValue, Handle, MediaKind};
 
 use crate::baml_bridge::cffi::BamlHandleType;
 
@@ -82,14 +82,16 @@ impl CffiHandleTableEntry {
                     MediaKind::Generic => BamlHandleType::AdtMediaGeneric,
                 },
                 BexExternalAdt::TaggedHeapHandle { kind, .. } => match kind {
-                    bex_project::TaggedHeapHandleKind::Callable => BamlHandleType::FunctionRef,
-                    bex_project::TaggedHeapHandleKind::Stream => {
+                    bex_external_types::TaggedHeapHandleKind::Callable => {
+                        BamlHandleType::FunctionRef
+                    }
+                    bex_external_types::TaggedHeapHandleKind::Stream => {
                         BamlHandleType::AdtTaggedHeapHandle
                     }
-                    bex_project::TaggedHeapHandleKind::FunctionSpec => {
+                    bex_external_types::TaggedHeapHandleKind::FunctionSpec => {
                         BamlHandleType::AdtFunctionSpec
                     }
-                    bex_project::TaggedHeapHandleKind::RuntimeValue => {
+                    bex_external_types::TaggedHeapHandleKind::RuntimeValue => {
                         BamlHandleType::AdtRuntimeValue
                     }
                 },
@@ -325,7 +327,7 @@ pub static HANDLE_TABLE: LazyLock<CffiHandleTable> = LazyLock::new(CffiHandleTab
 
 #[cfg(test)]
 mod tests {
-    use bex_project::{BexExternalValue, HostValueArc, HostValueKind};
+    use bex_external_types::{BexExternalValue, HostValueArc, HostValueKind};
 
     use super::*;
     use crate::{baml_bridge::cffi::baml_outbound_value::Value as BamlValueVariant, value_encode};
@@ -482,15 +484,15 @@ mod tests {
     /// A no-op heap for constructing real `Handle`s in-table without a VM.
     struct StubHeap;
 
-    impl bex_project::WeakHeapRef for StubHeap {
+    impl bex_external_types::WeakHeapRef for StubHeap {
         fn release_handle(&self, _slab_key: usize) {}
 
-        fn resolve_handle_ptr(&self, _slab_key: usize) -> Option<bex_project::HeapPtr> {
+        fn resolve_handle_ptr(&self, _slab_key: usize) -> Option<bex_vm_types::HeapPtr> {
             None
         }
     }
 
-    fn stub_heap() -> Arc<dyn bex_project::WeakHeapRef> {
+    fn stub_heap() -> Arc<dyn bex_external_types::WeakHeapRef> {
         Arc::new(StubHeap)
     }
 
@@ -498,7 +500,7 @@ mod tests {
     fn same_heap_handle_dedups_to_one_refcounted_key() {
         let table = CffiHandleTable::new();
         let heap = stub_heap();
-        let handle = bex_project::Handle::new(7, heap);
+        let handle = bex_external_types::Handle::new(7, heap);
 
         let key1 = table.insert(CffiHandleTableEntry::BexHeapHandle(handle.clone()));
         let key2 = table.insert(CffiHandleTableEntry::BexHeapHandle(handle.clone()));
@@ -522,14 +524,14 @@ mod tests {
         let table = CffiHandleTable::new();
         let heap = stub_heap();
         let key_a = table.insert(CffiHandleTableEntry::BexHeapHandle(
-            bex_project::Handle::new(1, heap.clone()),
+            bex_external_types::Handle::new(1, heap.clone()),
         ));
         let key_b = table.insert(CffiHandleTableEntry::BexHeapHandle(
-            bex_project::Handle::new(2, heap),
+            bex_external_types::Handle::new(2, heap),
         ));
         // Same slab key issued by a different heap is a different object.
         let key_c = table.insert(CffiHandleTableEntry::BexHeapHandle(
-            bex_project::Handle::new(1, stub_heap()),
+            bex_external_types::Handle::new(1, stub_heap()),
         ));
         assert_ne!(key_a, key_b);
         assert_ne!(key_a, key_c);
@@ -542,7 +544,7 @@ mod tests {
     #[test]
     fn clone_handle_identity_arm_keeps_its_key() {
         let table = CffiHandleTable::new();
-        let handle = bex_project::Handle::new(7, stub_heap());
+        let handle = bex_external_types::Handle::new(7, stub_heap());
         let key = table.insert(CffiHandleTableEntry::BexHeapHandle(handle));
         assert_eq!(table.clone_handle(key), Some(key));
         assert!(table.release(key));
@@ -560,11 +562,11 @@ mod tests {
         assert_ne!(key1, key2, "RustData carries no identity");
 
         // An ADT holding a heap handle is still identity-free at this layer.
-        let handle = bex_project::Handle::new(7, stub_heap());
-        let adt = |h: &bex_project::Handle| {
-            CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
-                kind: bex_project::TaggedHeapHandleKind::RuntimeValue,
-                ty: bex_project::RuntimeTy::int(),
+        let handle = bex_external_types::Handle::new(7, stub_heap());
+        let adt = |h: &bex_external_types::Handle| {
+            CffiHandleTableEntry::Adt(bex_external_types::BexExternalAdt::TaggedHeapHandle {
+                kind: bex_external_types::TaggedHeapHandleKind::RuntimeValue,
+                ty: bex_external_types::RuntimeTy::int(),
                 heap_handle: h.clone(),
             })
         };
@@ -579,7 +581,7 @@ mod tests {
     #[test]
     fn drain_consumes_one_ownership() {
         let table = CffiHandleTable::new();
-        let handle = bex_project::Handle::new(7, stub_heap());
+        let handle = bex_external_types::Handle::new(7, stub_heap());
         let key = table.insert(CffiHandleTableEntry::BexHeapHandle(handle.clone()));
         assert_eq!(
             table.insert(CffiHandleTableEntry::BexHeapHandle(handle)),

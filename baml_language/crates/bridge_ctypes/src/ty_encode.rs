@@ -32,8 +32,8 @@ use crate::baml_bridge::cffi::{
     baml_ty_literal::Literal as TyLiteralVariant,
 };
 
-pub fn portable_type_def_to_proto(definition: &bex_project::PortableTypeDef) -> BamlTyDef {
-    let metadata = |value: &bex_project::PortableMetadata| BamlTyMetadata {
+pub fn portable_type_def_to_proto(definition: &bex_external_types::PortableTypeDef) -> BamlTyDef {
+    let metadata = |value: &bex_external_types::PortableMetadata| BamlTyMetadata {
         description: value.description.clone(),
         alias: value.alias.clone(),
         docstring: value.docstring.clone(),

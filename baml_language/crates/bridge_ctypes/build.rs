@@ -25,21 +25,15 @@ fn main() -> std::io::Result<()> {
     let protoc =
         protoc_bin_vendored::protoc_bin_path().expect("failed to locate vendored protoc binary");
 
-    #[allow(unsafe_code)]
-    unsafe {
-        std::env::set_var(
-            "PROTOC",
-            protoc.to_str().expect("protoc path contains invalid UTF-8"),
-        );
-    }
-
     // Generate Rust (prost).
     let proto_strs: Vec<&str> = protos
         .iter()
         .map(|p| p.strip_prefix(&manifest_dir).unwrap())
         .map(|p| p.to_str().unwrap())
         .collect();
-    prost_build::compile_protos(&proto_strs, &["types"])?;
+    prost_build::Config::new()
+        .protoc_executable(&protoc)
+        .compile_protos(&proto_strs, &["types"])?;
 
     // Vendor the same prost output into baml_bridge (the published Rust
     // SDK runtime): it ships committed generated code so consumers need
@@ -49,7 +43,9 @@ fn main() -> std::io::Result<()> {
     let rust_vendor_out = manifest_dir.join("../../sdks/rust/bridge_rust/src/wire");
     std::fs::create_dir_all(&rust_vendor_out)?;
     let mut vendor_config = prost_build::Config::new();
-    vendor_config.out_dir(&rust_vendor_out);
+    vendor_config
+        .out_dir(&rust_vendor_out)
+        .protoc_executable(&protoc);
     // Do NOT run rustfmt on the committed vendored copy. This file is written
     // back into the source tree on every build, so its content must be
     // deterministic — but rustfmt's output for a given input varies by

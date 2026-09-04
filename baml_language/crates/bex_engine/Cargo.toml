@@ -16,6 +16,7 @@ bex_heap = { workspace = true }
 bex_str = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
+bridge_ctypes = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }
@@ -41,7 +42,6 @@ wasm-bindgen-futures = { workspace = true }
 [dev-dependencies]
 baml_db = { workspace = true }
 bex_resource_types = { workspace = true }
-bridge_ctypes = { workspace = true }
 sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
 anyhow = { workspace = true }
 indexmap = { workspace = true }
