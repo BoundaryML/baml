@@ -101,6 +101,8 @@ static uint64_t probe_new_call(void) {
   return 1;
 }
 
+static void probe_release_call(uint64_t id) { (void)id; }
+
 static int32_t probe_cancel(uint64_t id) {
   return id == 0 ? 1 : 0;
 }
@@ -279,6 +281,7 @@ static const BamlApiV1 default_api = {
     .unregister_runtime = probe_unregister_runtime,
     .call_function_for_runtime = probe_call_keyed,
     .program_key = probe_program_key,
+    .release_function_call = probe_release_call,
 };
 
 static BamlApiV1 probe_api;
@@ -321,6 +324,7 @@ static void null_requested_field(const char *field) {
   NULL_FIELD(unregister_runtime)
   NULL_FIELD(call_function_for_runtime)
   NULL_FIELD(program_key)
+  NULL_FIELD(release_function_call)
 }
 
 BAML_CFFI_API const BamlApiV1 *baml_get_api_v1(void) {

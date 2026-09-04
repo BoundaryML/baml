@@ -591,7 +591,6 @@ impl Drop for FunctionCallReservation {
 }
 
 /// Release a call ID that will never be dispatched. Safe after completion too.
-#[unsafe(no_mangle)]
 pub extern "C" fn release_function_call(id: u64) {
     release_function_call_id(id);
 }
