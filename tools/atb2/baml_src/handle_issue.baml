@@ -539,7 +539,10 @@ class CmdResult {
 /// The environment every child gets. It REPLACES the environment, so this
 /// is an allowlist of environment variables: none from this process leaks
 /// unless named here. The agent runs with `with_gh = false` and never sees
-/// GH_TOKEN, FEEDBACK_SUPABASE_KEY, ANTHROPIC_API_KEY or anything else.
+/// GH_TOKEN, FEEDBACK_SUPABASE_KEY or anything else, except the one
+/// credential the Claude Code CLI itself needs on a host with no keychain
+/// login (a headless runner): CLAUDE_CODE_OAUTH_TOKEN, else
+/// ANTHROPIC_API_KEY. On a laptop neither is set and the CLI uses its login.
 ///
 /// This guards the environment only. HOME is the host's, because the
 /// Claude Code CLI reads its login from there, so files under it
@@ -573,14 +576,39 @@ function sandbox_env(with_gh: bool) -> map<string, string> {
         env.set("GIT_CONFIG_SYSTEM", "/dev/null");
         env.set("GIT_CONFIG_NOSYSTEM", "1");
         env.set("GIT_TERMINAL_PROMPT", "0");
+        // the CLI's own credential on a headless host: one, never both
+        match (agent_credential()) {
+            null => null,
+            let c: string[] => env.set(c.at(0) ?? "", c.at(1) ?? ""),
+        };
     }
     if (with_gh) {
-        let tok = baml.env.get("GH_TOKEN") ?? baml.env.get("GITHUB_TOKEN");
-        if (tok != null) {
-            env.set("GH_TOKEN", tok ?? "");
+        match (github_token()) {
+            null => null,
+            let t: string => env.set("GH_TOKEN", t),
         };
     }
     env
+}
+
+/// The token gh and git push with: GH_TOKEN, GITHUB_TOKEN, or the old
+/// bot's ATB_GITHUB_TOKEN (Infisical boundary-tools).
+function github_token() -> string? {
+    baml.env.get("GH_TOKEN") ?? baml.env.get("GITHUB_TOKEN") ?? baml.env.get("ATB_GITHUB_TOKEN")
+}
+
+/// [name, value] of the credential the Claude Code CLI runs with when the
+/// host has no keychain login: CLAUDE_CODE_OAUTH_TOKEN first (the CLI's own
+/// identity, from `claude setup-token`), else ANTHROPIC_API_KEY. Null on a
+/// laptop with neither set, where the CLI uses its login.
+function agent_credential() -> string[]? {
+    match (baml.env.get("CLAUDE_CODE_OAUTH_TOKEN")) {
+        let t: string => ["CLAUDE_CODE_OAUTH_TOKEN", t],
+        null => match (baml.env.get("ANTHROPIC_API_KEY")) {
+            let k: string => ["ANTHROPIC_API_KEY", k],
+            null => null,
+        },
+    }
 }
 
 /// Runs every sandbox process under `caffeinate -i` on macOS: a laptop that
@@ -2134,11 +2162,14 @@ testset "handle_issue" {
         let env = sandbox_env(false);
         assert.is_true(env.has("PATH") && env.has("HOME"));
         assert.equal(env.get("CARGO_INCREMENTAL") ?? "", "0");
-        assert.is_true(
-            !env.has("GH_TOKEN")
-                && !env.has("FEEDBACK_SUPABASE_KEY")
-                && !env.has("ANTHROPIC_API_KEY"),
-        );
+        assert.is_true(!env.has("GH_TOKEN") && !env.has("FEEDBACK_SUPABASE_KEY"));
+        // the CLI's credential reaches the agent only when the host has one set
+        if (
+            baml.env.get("CLAUDE_CODE_OAUTH_TOKEN") == null
+                && baml.env.get("ANTHROPIC_API_KEY") == null
+        ) {
+            assert.is_true(!env.has("ANTHROPIC_API_KEY") && !env.has("CLAUDE_CODE_OAUTH_TOKEN"));
+        };
         // no ambient git credentials or ssh agent for the agent, and the host
         // git config (osxkeychain helper, planted hooks) is neutralized
         assert.is_true(!env.has("SSH_AUTH_SOCK"));

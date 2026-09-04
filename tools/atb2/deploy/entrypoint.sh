@@ -30,6 +30,8 @@ cli="$home/target/debug/baml-cli"
 
 # gh + git use the token the way handle_issue expects (sandbox_env passes GH_TOKEN
 # to gh; git pushes go through gh's credential helper)
+# the old bot's token serves as GH_TOKEN when no GH_TOKEN is set
+export GH_TOKEN="${GH_TOKEN:-${ATB_GITHUB_TOKEN:-}}"
 if [ -n "${GH_TOKEN:-}" ]; then
   git config --global credential.helper '!gh auth git-credential'
   git config --global user.name "${ATB2_GIT_USER:-atb2}"

@@ -12,10 +12,10 @@
 # Secrets: the machine holds one, INFISICAL_TOKEN; the entrypoint pulls the
 # rest from Infisical (boundary-tools, prod) at start with `infisical run`:
 #   fly secrets set -a atb2-runner INFISICAL_TOKEN=...   # once
-# What the pipeline reads must be in that project: FEEDBACK_SUPABASE_URL/_KEY,
-# ATB_SLACK_BOT_TOKEN, ATB_SLACK_FIX_CHANNEL, ATB_POSTHOG_* (there already),
-# plus GH_TOKEN and CLAUDE_CODE_OAUTH_TOKEN for the runner. CI never sees any
-# of them; it only holds a Fly deploy token.
+# Everything the pipeline reads is in that project already: FEEDBACK_SUPABASE_URL/_KEY,
+# ATB_SLACK_BOT_TOKEN, ATB_SLACK_FIX_CHANNEL, ATB_POSTHOG_*, ATB_GITHUB_TOKEN (used as
+# GH_TOKEN) and ANTHROPIC_API_KEY (the agent's credential; CLAUDE_CODE_OAUTH_TOKEN
+# takes precedence when set). CI never sees any of them; it only holds a Fly deploy token.
 app = "atb2-runner"
 primary_region = "sjc"
 

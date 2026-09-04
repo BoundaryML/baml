@@ -83,10 +83,10 @@ The runner's secrets come from Infisical at start: the image carries the
 Infisical CLI and the entrypoint wraps the process in `infisical run` against
 boundary-tools `prod`, so the machine holds a single Fly secret,
 `INFISICAL_TOKEN`, and a rotation in Infisical takes effect on the next
-restart. Two more values must be in that project for the runner: `GH_TOKEN`
-(push branches, open PRs, comment) and `CLAUDE_CODE_OAUTH_TOKEN` (the agent,
-since no one can log the CLI in on a headless machine). None of it goes to
-CI.
+restart. The runner's GitHub identity is `ATB_GITHUB_TOKEN` (or `GH_TOKEN` when set)
+and the agent's credential is `CLAUDE_CODE_OAUTH_TOKEN` when set, else
+`ANTHROPIC_API_KEY`; all three are in that project already. None of it goes
+to CI.
 
 By hand, from the repo root:
 
