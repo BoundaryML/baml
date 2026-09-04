@@ -1252,9 +1252,8 @@ impl io::IoPackageBaml for DefaultIoOps {}
 
 /// Builder for composing an [`io::SysOps`] table by overriding namespaces.
 ///
-/// Starts with every operation panicking with `baml.panics.HostUnavailable`
-/// (except LLM, which uses the blanket implementation), and allows selectively
-/// overriding namespaces:
+/// Starts with built-in operations and unsupported platform fallbacks,
+/// then allows overriding namespaces:
 ///
 /// ```ignore
 /// let ops = IoSysOpsBuilder::new()
@@ -1267,29 +1266,17 @@ pub struct IoSysOpsBuilder {
 }
 
 impl IoSysOpsBuilder {
-    /// Create a new builder with all operations defaulting to a
-    /// `baml.panics.HostUnavailable` panic, except LLM ops which use the real
-    /// blanket implementation.
+    /// Use built-in operations and unsupported platform fallbacks.
     ///
-    /// Every operation not overridden afterwards panics — including ones a
-    /// host may never think about (`baml.time.Instant.now`, `random`, the
-    /// per-class `fs::File`/`http::Response` readers). A host that wants a
-    /// working platform with a few operations *intercepted* wants
-    /// [`IoSysOpsBuilder::from_ops`] instead.
+    /// To preserve an existing platform's implementations while overriding
+    /// selected operations, start with [`Self::from_ops`].
     pub fn new() -> Self {
         Self {
             inner: io::SysOps::from_impl(DefaultIoOps),
         }
     }
 
-    /// Start from an existing table — typically `SysOps::native()` — and
-    /// override individual namespaces on top of it.
-    ///
-    /// This is the right base for an *interposing* host (the playground
-    /// intercepts HTTP, env and IO to route them through its UI, and wants
-    /// the platform's real behavior for everything else): the set of
-    /// operations it must not break is open-ended and grows with the
-    /// standard library, so it cannot be enumerated at the call site.
+    /// Start from an existing table, preserving operations that are not overridden.
     #[must_use]
     pub fn from_ops(ops: io::SysOps) -> Self {
         Self { inner: ops }
@@ -1330,7 +1317,7 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override only `baml.fs.read`, leaving every other filesystem operation unsupported.
+    /// Override only `baml.fs.read`, leaving other filesystem operations unchanged.
     #[must_use]
     pub fn with_fs_read_instance(
         mut self,
@@ -1374,7 +1361,7 @@ impl IoSysOpsBuilder {
     /// Override the non-streaming HTTP client operations only.
     ///
     /// Installs `_fetch`, `_send`, `Response.text`, and `Response.bytes` while
-    /// leaving SSE, server, TLS, and response-construction slots unsupported.
+    /// leaving SSE, server, TLS, and response-construction slots unchanged.
     #[must_use]
     pub fn with_http_fetch_instance(
         mut self,
@@ -1497,10 +1484,6 @@ use ::sys_types::{
 pub use io::SysOps;
 
 /// Builder for composing a [`SysOps`] table by overriding namespaces.
-///
-/// Starts with the built-in prompt/SAP implementations and otherwise panics
-/// with `baml.panics.HostUnavailable`, then allows selectively overriding
-/// namespaces.
 pub type SysOpsBuilder = IoSysOpsBuilder;
 
 #[cfg(test)]
