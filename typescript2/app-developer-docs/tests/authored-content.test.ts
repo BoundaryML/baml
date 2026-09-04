@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
-import { access, readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 import test from 'node:test';
-import {
-  changelogVersionId,
-  loadCanonicalChangelog,
-} from '../lib/changelog/loader.ts';
 import { bridgeDataSchema, loadBridgeData } from '../lib/content/bridges.ts';
 
 const expectedAuthoredRoutes = [
@@ -64,19 +60,6 @@ test('structured bridge data is strict, complete, and path confined', async () =
     false,
   );
   await assert.rejects(loadBridgeData('../typescript'), /Invalid bridge ID/);
-});
-
-test('the changelog is loaded directly from the canonical language source', async () => {
-  const changelog = await loadCanonicalChangelog();
-  assert.match(changelog.sourcePath, /baml_language\/CHANGELOG\.md$/);
-  assert.equal(changelog.entries[0]?.version, '0.18.0');
-  assert.equal(changelog.entries[0]?.id, 'v0-18-0');
-  assert.equal(changelogVersionId('1.2.3'), 'v1-2-3');
-  assert.match(changelog.markdown, /^## \[0\.18\.0\]/);
-  assert.doesNotMatch(changelog.markdown, /^# BAML Language changelog/m);
-  await assert.rejects(
-    access(resolve(process.cwd(), 'content', 'changelog.md')),
-  );
 });
 
 test('authored MDX never embeds a second BAML source block', async () => {

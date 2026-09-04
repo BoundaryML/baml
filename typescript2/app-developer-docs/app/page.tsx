@@ -50,9 +50,9 @@ const sections = [
   {
     description:
       'Follow language, toolchain, and package changes across releases.',
-    href: '/changelog',
+    href: 'https://boundaryml.com/blog?tags=release',
     icon: History,
-    title: 'Changelog',
+    title: 'Release notes',
   },
 ];
 
@@ -79,9 +79,9 @@ export default function HomePage() {
         eyebrow={
           <Link
             className="inline-flex items-center gap-2 rounded-full border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-            href="/changelog"
+            href="https://boundaryml.com/blog?tags=release"
           >
-            BAML developer documentation
+            Latest BAML releases
             <ArrowRight aria-hidden="true" className="size-3.5" />
           </Link>
         }

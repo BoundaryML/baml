@@ -54,6 +54,11 @@ const nextConfig = {
         permanent: true,
       },
       {
+        source: '/changelog.md',
+        destination: '/blog?tags=release',
+        permanent: true,
+      },
+      {
         source: '/what-is-baml',
         destination: '/',
         permanent: false,

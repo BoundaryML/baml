@@ -1,5 +1,3 @@
-import Link from 'next/link';
-
 export function SiteFooter() {
   return (
     <footer className="bg-transparent">
@@ -17,9 +15,12 @@ export function SiteFooter() {
               GitHub
             </a>
             .{' '}
-            <Link className="hover:text-foreground" href="/changelog">
-              View the changelog
-            </Link>
+            <a
+              className="hover:text-foreground"
+              href="https://boundaryml.com/blog?tags=release"
+            >
+              View release notes
+            </a>
           </div>
         </div>
       </div>

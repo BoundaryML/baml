@@ -38,9 +38,12 @@ export default function NotFoundPage() {
             <Link className="hover:text-foreground" href="/tutorials">
               Tutorials
             </Link>
-            <Link className="hover:text-foreground" href="/changelog">
-              Changelog
-            </Link>
+            <a
+              className="hover:text-foreground"
+              href="https://boundaryml.com/blog?tags=release"
+            >
+              Release notes
+            </a>
           </nav>
         </section>
       </div>
