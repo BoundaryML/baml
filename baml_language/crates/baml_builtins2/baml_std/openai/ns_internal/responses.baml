@@ -555,7 +555,7 @@ function _openai_apply_message_metadata(
 // ai.Journal -> Responses API input items. Only promptable events lower;
 // ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are
 // journal-only. Callers pass the SANITIZED journal (see _openai_request).
-function openai_lower_journal(j: ai.Journal) -> OaInputItem[] {
+function openai_lower_journal(j: ai.Journal, preview: bool = false) -> OaInputItem[] {
     let items: OaInputItem[] = [];
     for (let e in j.entries()) {
         match (e) {
@@ -566,6 +566,20 @@ function openai_lower_journal(j: ai.Journal) -> OaInputItem[] {
                         content: [OaInputText { type: "input_text", text: u.content }],
                     },
                 );
+                null
+            },
+            // A parts-bearing user turn lowers through the same helper as a
+            // rendered prompt message, so a mid-run screenshot takes exactly
+            // the wire shape the template's media would.
+            let u: ai.events.UserContent => {
+                let content = _openai_prompt_content(
+                    ai.wire.user_content_message(u),
+                    "user",
+                    preview = preview,
+                );
+                if (content.length() > 0) {
+                    items.push(OaMessageItem { role: "user", content: content });
+                }
                 null
             },
             let a: ai.events.AssistantMessage => {
@@ -753,7 +767,7 @@ function _openai_request(
     // sanitize BEFORE lowering: foreign reasoning, empty turns and orphaned
     // tool calls are everyone's problem, fixed once in ai.wire.
     let journal = ai.wire.sanitize_for_client(input.journal, c.id());
-    for (let item in openai_lower_journal(journal)) {
+    for (let item in openai_lower_journal(journal, preview = preview)) {
         items.push(item);
     }
     let wants_image = _openai_wants_image(input.output_type);

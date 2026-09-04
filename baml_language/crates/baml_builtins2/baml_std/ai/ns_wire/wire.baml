@@ -418,6 +418,41 @@ function merge_request_body(base: baml.json.json, overrides: baml.json.json?) ->
 // model switch inside one provider counts as a different client, exactly like
 // pi's provider+api+model comparison.
 
+/// The `root.PromptMessage` a `root.events.UserContent` event stands for: a
+/// `user` message whose `parts` are the event's parts verbatim, so a client
+/// hands it to the SAME helper that lowers rendered prompt messages and media
+/// takes the same wire shape whether it came from the template or the journal.
+/// `content` is the text rendering the CLI-style clients want: text parts as
+/// written, media parts as a readable placeholder.
+function user_content_message(event: root.events.UserContent) -> root.PromptMessage {
+    let text: string[] = [];
+    for (let part in event.parts) {
+        match (part) {
+            let s: string => {
+                text.push(s);
+                null
+            },
+            let image: baml.media.Image => {
+                text.push("[image]");
+                null
+            },
+            let audio: baml.media.Audio => {
+                text.push("[audio]");
+                null
+            },
+            let video: baml.media.Video => {
+                text.push("[video]");
+                null
+            },
+            let pdf: baml.media.Pdf => {
+                text.push("[pdf]");
+                null
+            },
+        };
+    }
+    root.PromptMessage { role: "user", content: text.join(""), parts: event.parts, metadata: {} }
+}
+
 /// Make one run's journal safe to replay to `client_id`, and return the
 /// sanitized copy. Every client should lower
 /// `ai.wire.sanitize_for_client(input.journal, self.id())` instead of
@@ -433,7 +468,8 @@ function merge_request_body(base: baml.json.json, overrides: baml.json.json?) ->
 ///     Anthropic 400, and the same shape an aborted turn leaves behind.
 ///     Such a turn never has tool calls, so nothing is orphaned by dropping it.
 ///  4. A tool call with no `ToolCompleted`/`ToolFailed` before the next
-///     assistant or user message (or before the end of the journal) gets a
+///     assistant or user turn (`UserMessage` or `UserContent`; or before the
+///     end of the journal) gets a
 ///     synthesized `ToolFailed { message: "No result provided" }`, because
 ///     most APIs reject a tool call that was never answered.
 ///
@@ -471,6 +507,11 @@ function sanitize_for_client(j: root.Journal, client_id: string) -> root.Journal
             let user: root.events.UserMessage => {
                 root.internal._flush_orphaned_calls(out, pending);
                 out.push(user);
+                null
+            },
+            let content: root.events.UserContent => {
+                root.internal._flush_orphaned_calls(out, pending);
+                out.push(content);
                 null
             },
             let completed: root.events.ToolCompleted => {

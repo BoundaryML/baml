@@ -10,6 +10,11 @@ function transcript_text(j: ai.Journal) -> string {
             let u: ai.events.UserMessage => {
                 lines.push(`user: ${u.content}`);
             },
+            // The CLI takes text only: text parts as written, media as the
+            // readable placeholder `ai.wire.user_content_message` renders.
+            let u: ai.events.UserContent => {
+                lines.push(`user: ${ai.wire.user_content_message(u).content}`);
+            },
             let a: ai.events.AssistantMessage => {
                 for (let b in a.content) {
                     match (b) {

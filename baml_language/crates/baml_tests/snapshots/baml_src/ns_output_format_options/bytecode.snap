@@ -27,7 +27,7 @@ function output_format_options.$init_test_ns_output_format_options_output_format
     return
 }
 
-function output_format_options.OfAllLegacyOptions(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> output_format_options.OfOptionResult {
+function output_format_options.OfAllLegacyOptions(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> output_format_options.OfOptionResult {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -133,7 +133,7 @@ function output_format_options.OfAllLegacyOptions@spec() -> ai.FunctionSpec<outp
     return
 }
 
-function output_format_options.OfAllLegacyOptions@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<output_format_options.OfOptionResult$stream | null, output_format_options.OfOptionResult> {
+function output_format_options.OfAllLegacyOptions@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<output_format_options.OfOptionResult$stream | null, output_format_options.OfOptionResult> {
     load_var client
     load_const <omitted>
     cmp_op ==

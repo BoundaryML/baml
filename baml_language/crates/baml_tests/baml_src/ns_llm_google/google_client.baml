@@ -1127,3 +1127,90 @@ testset "live" with testing.Sequential() {
         )
     }
 }
+
+// ─── journal UserContent: media after a tool result ──────────────────────────
+//
+// A runner that screenshots after every tool call appends an
+// `ai.events.UserContent` carrying the image AFTER the tool result. It lowers
+// to a `user` content at that position — after the flushed functionResponse —
+// with its text and inlineData parts in order, on both backends.
+
+function _google_journal_with_screenshot() -> ai.Journal {
+    let args: map<string, unknown> = { "city": "NYC" };
+    ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [ai.content.ToolUse { id: "call_1", name: "weather_lookup", args: args }],
+                client_id: "google/gemini-2.5-flash",
+            },
+            ai.events.ToolCompleted { id: "call_1", output: "sunny in NYC" },
+            ai.events.UserContent.new(
+                [
+                    "Screenshot after the tool ran:",
+                    baml.media.Image.from_base64("SGVsbG8=", "image/png"),
+                ],
+            ),
+        ],
+    }
+}
+
+function _google_user_content_shape(body: json) -> string {
+    [
+        baml.json.path<string>(body, ".contents[1].role"),
+        baml.json.path<string>(body, ".contents[1].parts[0].functionCall.name"),
+        baml.json.path<string>(body, ".contents[2].role"),
+        baml.json.path<string>(body, ".contents[2].parts[0].functionResponse.name"),
+        baml.json.path<string>(body, ".contents[3].role"),
+        baml.json.path<string>(body, ".contents[3].parts[0].text"),
+        baml.json.path<string>(body, ".contents[3].parts[1].inlineData.mimeType"),
+        baml.json.path<string>(body, ".contents[3].parts[1].inlineData.data"),
+        baml.json.path_or<string>(body, ".contents[4].role", "absent"),
+    ].join("|")
+}
+
+function google_user_content_after_tool_result() -> string {
+    let spec = GoogleToolEcho@spec("Weather in NYC?");
+    let input = ai.ModelTurnInput {
+        prompt: spec.prompt_template,
+        journal: _google_journal_with_screenshot(),
+        toolbox: spec.tools(),
+        output_type: spec.output_type(),
+    };
+    let cl = google.GoogleClient.new(
+        model = "gemini-2.5-flash",
+        api_key = "test-key",
+        base_url = "https://example.test",
+    );
+    _google_user_content_shape(baml.json.parse(google.internal.google_render(cl, input).body))
+}
+
+test "google_user_content_after_tool_result" {
+    assert.equal(
+        google_user_content_after_tool_result(),
+        "model|weather_lookup|user|weather_lookup|user|Screenshot after the tool ran:|image/png|SGVsbG8=|absent",
+    )
+}
+
+function vertex_user_content_after_tool_result() -> string {
+    let spec = GoogleToolEcho@spec("Weather in NYC?");
+    let input = ai.ModelTurnInput {
+        prompt: spec.prompt_template,
+        journal: _google_journal_with_screenshot(),
+        toolbox: spec.tools(),
+        output_type: spec.output_type(),
+    };
+    let cl = google.VertexClient.new(
+        model = "gemini-2.5-flash",
+        project_id = "my-project",
+        location = "us-central1",
+        api_key = "express-key",
+    );
+    _google_user_content_shape(baml.json.parse(google.internal.vertex_render(cl, input).body))
+}
+
+test "vertex_user_content_after_tool_result" {
+    assert.equal(
+        vertex_user_content_after_tool_result(),
+        "model|weather_lookup|user|weather_lookup|user|Screenshot after the tool ran:|image/png|SGVsbG8=|absent",
+    )
+}

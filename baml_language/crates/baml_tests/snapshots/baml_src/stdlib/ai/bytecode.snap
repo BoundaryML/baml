@@ -162,7 +162,7 @@ function ai.<(ai.Agent as ai.Runner)>.run(self: ai.Agent, spec: ai.FunctionSpec<
     load_deref ?6
     load_var _125
     init_instance ai.events.FinalProduced .value_json
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     alloc_array 1
     call ai.Journal.append_all
     pop 1
@@ -231,7 +231,7 @@ function ai.<(ai.Agent as ai.Runner)>.run(self: ai.Agent, spec: ai.FunctionSpec<
     load_var2 19 20
     cmp_int_op <
     pop_jump_if_false L1
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     load_var2 17 18
     call baml.Array.at
     store_var _55
@@ -439,7 +439,7 @@ function ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionS
     store_var _38
     load_var2 20 21
     init_instance ai.events.AssistantMessage .content, .client_id
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     alloc_array 1
     store_var batch
     load_var turn
@@ -461,7 +461,7 @@ function ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionS
     jump L6
 
   L5:
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     load_var2 19 23
     call baml.Array.push
     pop 1
@@ -489,7 +489,7 @@ function ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionS
   L8:
     load_var _50
     store_var u
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     load_var2 19 26
     load_field .id
     load_var u
@@ -508,7 +508,7 @@ function ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionS
     load_var _61
     narrow_bind ai.events.Usage, slot=27
     pop_jump_if_false L10
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     load_var2 19 27
     call baml.Array.push
     pop 1
@@ -592,7 +592,7 @@ function ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionS
     throw
 
   L20:
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     load_var batch
     load_const "The reply did not match the required schema. Answer again with only the corrected value."
     init_instance ai.events.UserMessage .content
@@ -670,7 +670,7 @@ function ai.Agent._emit_from(self: ai.Agent, j: ai.Journal, seen: int) -> int {
     load_field .on_event
     store_var _6
     load_var _6
-    narrow_bind (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never, slot=5
+    narrow_bind (ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never, slot=5
     pop_jump_if_false L1
     load_var _6
     store_var cb
@@ -694,68 +694,74 @@ function ai.Agent._emit_from(self: ai.Agent, j: ai.Journal, seen: int) -> int {
     return
 
   L2:
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     load_var2 4 7
     call baml.Array.at
     store_var _15
     load_var _15
     narrow_bind ai.events.RunStarted, slot=10
     pop_jump_if_false L3
-    jump L11
+    jump L12
 
   L3:
     load_var _15
     narrow_bind ai.events.UserMessage, slot=10
     pop_jump_if_false L4
-    jump L11
+    jump L12
 
   L4:
     load_var _15
-    narrow_bind ai.events.AssistantMessage, slot=10
+    narrow_bind ai.events.UserContent, slot=10
     pop_jump_if_false L5
-    jump L11
+    jump L12
 
   L5:
     load_var _15
-    narrow_bind ai.events.ToolRequested, slot=10
+    narrow_bind ai.events.AssistantMessage, slot=10
     pop_jump_if_false L6
-    jump L11
+    jump L12
 
   L6:
     load_var _15
-    narrow_bind ai.events.ToolCompleted, slot=10
+    narrow_bind ai.events.ToolRequested, slot=10
     pop_jump_if_false L7
-    jump L11
+    jump L12
 
   L7:
     load_var _15
-    narrow_bind ai.events.ToolFailed, slot=10
+    narrow_bind ai.events.ToolCompleted, slot=10
     pop_jump_if_false L8
-    jump L11
+    jump L12
 
   L8:
     load_var _15
-    narrow_bind ai.events.Usage, slot=10
+    narrow_bind ai.events.ToolFailed, slot=10
     pop_jump_if_false L9
-    jump L11
+    jump L12
 
   L9:
     load_var _15
-    narrow_bind ai.events.LLMCall, slot=10
+    narrow_bind ai.events.Usage, slot=10
     pop_jump_if_false L10
-    jump L11
+    jump L12
 
   L10:
     load_var _15
-    narrow_bind ai.events.FinalProduced, slot=10
-    pop_jump_if_false L12
+    narrow_bind ai.events.LLMCall, slot=10
+    pop_jump_if_false L11
+    jump L12
 
   L11:
+    load_var _15
+    narrow_bind ai.events.FinalProduced, slot=10
+    pop_jump_if_false L13
+
+  L12:
     load_var2 10 6
     call_indirect
     pop 1
 
-  L12:
+  L13:
     load_var i
     load_const 1
     add_int
@@ -1238,7 +1244,7 @@ function ai.Agent._run_one_tool(self: ai.Agent, tb: ai.tools.Toolbox, call: ai.c
     load_var _44
     bin_op +
     init_instance ai.events.ToolFailed .id, .message
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     alloc_array 1
     call ai.Journal.append_all
     pop 1
@@ -1264,7 +1270,7 @@ function ai.Agent._run_one_tool(self: ai.Agent, tb: ai.tools.Toolbox, call: ai.c
     load_var2 4 8
     load_var _16
     init_instance ai.events.ToolFailed .id, .message
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     alloc_array 1
     call ai.Journal.append_all
     pop 1
@@ -1332,7 +1338,7 @@ function ai.Agent._run_one_tool(self: ai.Agent, tb: ai.tools.Toolbox, call: ai.c
     load_field .id
     load_var _32
     init_instance ai.events.ToolCompleted .id, .output
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     alloc_array 1
     call ai.Journal.append_all
     pop 1
@@ -1363,7 +1369,7 @@ function ai.Agent._validated_schema_attempts(self: ai.Agent) -> int {
     throw
 }
 
-function ai.Agent.new(max_steps: int, schema_attempts: int, client: ai.Client | null, tool_errors: ai.tools.ErrorMode, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.Agent {
+function ai.Agent.new(max_steps: int, schema_attempts: int, client: ai.Client | null, tool_errors: ai.tools.ErrorMode, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.Agent {
     load_var max_steps
     load_const <omitted>
     cmp_op ==
@@ -1575,7 +1581,7 @@ function ai.FunctionSpec.build_request(self: ai.FunctionSpec<#0>, client: ai.Cli
     return
 }
 
-function ai.FunctionSpec.call(self: ai.FunctionSpec<#0>, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> #0 {
+function ai.FunctionSpec.call(self: ai.FunctionSpec<#0>, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> #0 {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1664,16 +1670,16 @@ function ai.FunctionSpec.tools(self: ai.FunctionSpec<#0>) -> ai.tools.Toolbox {
     return
 }
 
-function ai.Journal.append_all(self: ai.Journal, events: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced)[]) -> void {
+function ai.Journal.append_all(self: ai.Journal, events: (ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced)[]) -> void {
     load_var events
-    load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
+    load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    load_type baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
+    load_type baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -1683,7 +1689,7 @@ function ai.Journal.append_all(self: ai.Journal, events: (ai.events.RunStarted |
     jump L2
 
   L1:
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     load_var self
     load_field .log
     load_var _4
@@ -1696,7 +1702,7 @@ function ai.Journal.append_all(self: ai.Journal, events: (ai.events.RunStarted |
     return
 }
 
-function ai.Journal.entries(self: ai.Journal) -> (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced)[] {
+function ai.Journal.entries(self: ai.Journal) -> (ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced)[] {
     load_var self
     load_field .log
     return
@@ -1713,7 +1719,7 @@ function ai.Journal.new(spec: ai.FunctionSpec<#0>) -> ai.Journal {
     store_var _6
     load_var2 2 3
     init_instance ai.events.RunStarted .spec_name, .arguments
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     alloc_array 1
     init_instance ai.Journal .log
     return
@@ -3668,50 +3674,8 @@ function ai.content.Media.new(value: image | audio | video | pdf, provider_id: s
 
   L1:
     load_var value
-    call baml.json.to_json
-    store_var envelope
-    jump L2
-    load_var e
-    throw_if_panic
-    load_type baml.json.JsonSerializationError
-    load_var e
-    call baml.String.from
-    store_var _11
-    load_type string
-    load_var _11
-    call baml.String.from
-    store_var _10
-    load_const "media output could not be encoded: "
-    load_var _10
-    bin_op +
-    init_instance baml.errors.InvalidArgument .message
-    throw
-
-  L2:
-    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
-    load_var envelope
-    call baml.json.from_json
-    store_var part
-    jump L3
-    load_var e
-    throw_if_panic
-    load_type baml.json.JsonDecodeError
-    load_var e
-    call baml.String.from
-    store_var _21
-    load_type string
-    load_var _21
-    call baml.String.from
-    store_var _20
-    load_const "media output could not be decoded: "
-    load_var _20
-    bin_op +
-    init_instance baml.errors.InvalidArgument .message
-    throw
-
-  L3:
-    load_var2 8 2
-    load_var revised_prompt
+    call ai.internal.media_part
+    load_var2 2 3
     init_instance ai.content.Media .media, .provider_id, .revised_prompt
     return
 }
@@ -4051,14 +4015,68 @@ function ai.errors.normalize_invoke(error: ai.errors.Failure | baml.errors.Timeo
     return
 }
 
-function ai.events.guard(listener: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws #0) | null) -> ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null {
+function ai.events.UserContent.new(parts: (string | image | audio | video | pdf)[]) -> ai.events.UserContent {
+    load_type string | baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    alloc_array 0
+    store_var out
+    load_var parts
+    load_type baml.iter.Iterable<Error = never, Item = string | image | audio | video | pdf>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = string | image | audio | video | pdf>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _4
+    store_var part
+    load_var part
+    store_var _8
+    load_var _8
+    narrow_bind string, slot=6
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var part
+    call ai.internal.media_part
+    store_var _14
+    load_type string | baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    load_var2 2 7
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L3:
+    load_type string | baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    load_var2 2 6
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L4:
+    load_var out
+    init_instance ai.events.UserContent .parts
+    return
+}
+
+function ai.events.guard(listener: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws #0) | null) -> ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null {
     load_var ?3
     make_cell
     store_var ?3
     load_var listener
     store_var _2
     load_var _2
-    narrow_bind (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws #0, slot=2
+    narrow_bind (ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws #0, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -4195,7 +4213,7 @@ function ai.internal._configured(value: string) -> string | null {
     return
 }
 
-function ai.internal._flush_orphaned_calls(out: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced)[], pending: string[]) -> void {
+function ai.internal._flush_orphaned_calls(out: (ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced)[], pending: string[]) -> void {
     load_var pending
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
@@ -4214,7 +4232,7 @@ function ai.internal._flush_orphaned_calls(out: (ai.events.RunStarted | ai.event
     jump L2
 
   L1:
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     load_var2 1 4
     load_const "No result provided"
     init_instance ai.events.ToolFailed .id, .message
@@ -6610,6 +6628,52 @@ function ai.internal.make_role(name: string) -> ai.Role {
     return
 }
 
+function ai.internal.media_part(value: image | audio | video | pdf) -> baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf {
+    load_var value
+    call baml.json.to_json
+    store_var envelope
+    jump L0
+    load_var e
+    throw_if_panic
+    load_type baml.json.JsonSerializationError
+    load_var e
+    call baml.String.from
+    store_var _7
+    load_type string
+    load_var _7
+    call baml.String.from
+    store_var _6
+    load_const "media value could not be encoded: "
+    load_var _6
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L0:
+    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
+    load_var envelope
+    call baml.json.from_json
+    jump L1
+    load_var e
+    throw_if_panic
+    load_type baml.json.JsonDecodeError
+    load_var e
+    call baml.String.from
+    store_var _16
+    load_type string
+    load_var _16
+    call baml.String.from
+    store_var _15
+    load_const "media value could not be decoded: "
+    load_var _15
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
+
+  L1:
+    return
+}
+
 function ai.internal.render_output_format(return_type: reflect.Type) -> string {
 }
 
@@ -8035,7 +8099,7 @@ function ai.stream.decode_sse_batch(batch: string) -> ai.stream.SseEvent[] {
     return
 }
 
-function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<#0, #1> {
+function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<#0, #1> {
     load_var ?10
     make_cell
     store_var ?10
@@ -8124,7 +8188,7 @@ function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.Stream
     load_deref ?11
     store_var _31
     load_var _31
-    narrow_bind (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never, slot=13
+    narrow_bind (ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never, slot=13
     pop_jump_if_false L8
     load_var _31
     store_var _34
@@ -9211,7 +9275,7 @@ function ai.wire.resolve_media_preview(media: baml.media.Image | baml.media.Audi
 }
 
 function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Journal {
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     alloc_array 0
     store_var out
     load_type string
@@ -9219,21 +9283,21 @@ function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Jou
     store_var pending
     load_var j
     call ai.Journal.entries
-    load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
+    load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
 
   L0:
     load_var _6
-    load_type baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
+    load_type baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
     load_var _7
     is_type baml.iter.Done
     pop_jump_if_false L1
-    jump L12
+    jump L14
 
   L1:
     load_var _7
@@ -9243,7 +9307,7 @@ function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Jou
     load_var _11
     narrow_bind ai.events.AssistantMessage, slot=8
     pop_jump_if_false L2
-    jump L9
+    jump L11
 
   L2:
     load_var event
@@ -9251,70 +9315,90 @@ function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Jou
     load_var _38
     narrow_bind ai.events.UserMessage, slot=15
     pop_jump_if_false L3
-    jump L8
+    jump L10
 
   L3:
     load_var event
     store_var _46
     load_var _46
-    narrow_bind ai.events.ToolCompleted, slot=17
+    narrow_bind ai.events.UserContent, slot=17
     pop_jump_if_false L4
-    jump L7
+    jump L9
 
   L4:
     load_var event
     store_var _54
     load_var _54
-    narrow_bind ai.events.ToolFailed, slot=19
+    narrow_bind ai.events.ToolCompleted, slot=19
     pop_jump_if_false L5
-    jump L6
+    jump L8
 
   L5:
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_var event
+    store_var _62
+    load_var _62
+    narrow_bind ai.events.ToolFailed, slot=21
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     load_var2 3 7
     call baml.Array.push
     pop 1
     jump L0
 
-  L6:
-    load_var _54
-    store_var failed
-    load_var2 4 20
-    load_field .id
-    call ai.internal._resolve_pending_call
-    pop 1
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
-    load_var2 3 20
-    call baml.Array.push
-    pop 1
-    jump L0
-
   L7:
-    load_var _46
-    store_var completed
-    load_var2 4 18
+    load_var _62
+    store_var failed
+    load_var2 4 22
     load_field .id
     call ai.internal._resolve_pending_call
     pop 1
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
-    load_var2 3 18
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_var2 3 22
     call baml.Array.push
     pop 1
     jump L0
 
   L8:
-    load_var _38
-    store_var user
-    load_var2 3 4
-    call ai.internal._flush_orphaned_calls
+    load_var _54
+    store_var completed
+    load_var2 4 20
+    load_field .id
+    call ai.internal._resolve_pending_call
     pop 1
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
-    load_var2 3 16
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_var2 3 20
     call baml.Array.push
     pop 1
     jump L0
 
   L9:
+    load_var _46
+    store_var content
+    load_var2 3 4
+    call ai.internal._flush_orphaned_calls
+    pop 1
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_var2 3 18
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L10:
+    load_var _38
+    store_var user
+    load_var2 3 4
+    call ai.internal._flush_orphaned_calls
+    pop 1
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_var2 3 16
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L11:
     load_var _11
     store_var assistant
     load_var2 3 4
@@ -9335,7 +9419,7 @@ function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Jou
     load_const 0
     cmp_int_op >
     pop_jump_if_false L0
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     load_var2 3 10
     load_var assistant
     load_field .client_id
@@ -9348,7 +9432,7 @@ function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Jou
     virtual_call nargs=1 ntypeargs=0
     store_var _28
 
-  L10:
+  L12:
     load_var _28
     load_type baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>
     load_const "next"
@@ -9356,23 +9440,23 @@ function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Jou
     store_var _29
     load_var _29
     is_type baml.iter.Done
-    pop_jump_if_false L11
+    pop_jump_if_false L13
     jump L0
 
-  L11:
+  L13:
     load_var _29
     store_var _33
     load_var _33
     narrow_bind ai.content.ToolUse, slot=14
-    pop_jump_if_false L10
+    pop_jump_if_false L12
     load_type string
     load_var2 4 14
     load_field .id
     call baml.Array.push
     pop 1
-    jump L10
+    jump L12
 
-  L12:
+  L14:
     load_var2 3 4
     call ai.internal._flush_orphaned_calls
     pop 1
@@ -9698,4 +9782,115 @@ function ai.wire.send_as_with_wire(req: baml.http.Request, provider: string, cli
     load_field .headers
     call ai.errors.classify_http
     throw
+}
+
+function ai.wire.user_content_message(event: ai.events.UserContent) -> ai.PromptMessage {
+    load_type string
+    alloc_array 0
+    store_var text
+    load_var event
+    load_field .parts
+    load_type baml.iter.Iterable<Error = never, Item = string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Error = never, Item = string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L10
+
+  L1:
+    load_var _5
+    store_var part
+    load_var part
+    store_var _9
+    load_var _9
+    narrow_bind string, slot=6
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var part
+    store_var _14
+    load_var _14
+    narrow_bind baml.media.Image, slot=7
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var part
+    store_var _17
+    load_var _17
+    narrow_bind baml.media.Audio, slot=8
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var part
+    store_var _20
+    load_var _20
+    narrow_bind baml.media.Video, slot=9
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_type string
+    load_var text
+    load_const "[pdf]"
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L6:
+    load_type string
+    load_var text
+    load_const "[video]"
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L7:
+    load_type string
+    load_var text
+    load_const "[audio]"
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L8:
+    load_type string
+    load_var text
+    load_const "[image]"
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L9:
+    load_type string
+    load_var2 2 6
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L10:
+    load_type string
+    load_var text
+    load_const ""
+    call baml.Array.join
+    store_var _25
+    load_const "user"
+    load_var2 10 1
+    load_field .parts
+    load_type string
+    load_type baml.json.json
+    alloc_map 0
+    init_instance ai.PromptMessage .role, .content, .parts, .metadata
+    return
 }

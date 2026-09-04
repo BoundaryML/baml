@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> image {
+function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> image {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -116,7 +116,7 @@ function fixtures.llm_image_outputs.GenerateImage@spec(prompt: string) -> ai.Fun
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImage@stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<image, image> {
+function fixtures.llm_image_outputs.GenerateImage@stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<image, image> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -144,7 +144,7 @@ function fixtures.llm_image_outputs.GenerateImage@stream(prompt: string, client:
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> image[] {
+function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> image[] {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -259,7 +259,7 @@ function fixtures.llm_image_outputs.GenerateImageSet@spec(prompt: string) -> ai.
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet@stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<image[], image[]> {
+function fixtures.llm_image_outputs.GenerateImageSet@stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<image[], image[]> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -287,7 +287,7 @@ function fixtures.llm_image_outputs.GenerateImageSet@stream(prompt: string, clie
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> (image | string)[] {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> (image | string)[] {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -402,7 +402,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(prompt: str
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative@stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<(image | string)[], (image | string)[]> {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative@stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<(image | string)[], (image | string)[]> {
     load_var client
     load_const <omitted>
     cmp_op ==

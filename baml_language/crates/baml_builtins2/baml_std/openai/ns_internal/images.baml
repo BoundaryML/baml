@@ -172,6 +172,31 @@ function _oai_images_prompt_text(prompt: ai.Prompt, journal: ai.Journal) -> stri
                 parts.push(trimmed);
             }
         }
+        if let content: ai.events.UserContent = event {
+            for (let part in content.parts) {
+                match (part) {
+                    let text: string => {
+                        let trimmed = text.trim();
+                        if (trimmed != "") {
+                            parts.push(trimmed);
+                        }
+                        null
+                    },
+                    let image: baml.media.Image => {
+                        throw _oai_images_media_rejected("image")
+                    },
+                    let audio: baml.media.Audio => {
+                        throw _oai_images_media_rejected("audio")
+                    },
+                    let video: baml.media.Video => {
+                        throw _oai_images_media_rejected("video")
+                    },
+                    let pdf: baml.media.Pdf => {
+                        throw _oai_images_media_rejected("pdf")
+                    },
+                };
+            }
+        }
     }
     let joined = parts.join("\n\n");
     if (joined == "") {

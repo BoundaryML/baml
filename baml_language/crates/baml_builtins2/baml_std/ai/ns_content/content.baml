@@ -46,25 +46,17 @@ class Media {
     // `baml.media.Image.from_base64` and its siblings return the `image` /
     // `audio` / `video` / `pdf` primitives, which are distinct static types
     // from the `baml.media.*` wrapper classes `MediaPart` is a union of, so
-    // the value bridges through its BEP-038 `{kind, source, value, mime}`
-    // envelope. The decode discriminates on the envelope's `kind`, so the
-    // union lands on the wrapper for the value's own media kind.
+    // the value bridges through `root.internal.media_part`.
     function new(
         value: image | audio | video | pdf,
         provider_id: string? = null,
         revised_prompt: string? = null,
     ) -> Media {
-        let envelope = baml.json.to_json(value) catch_all (e) {
-            _ => {
-                throw baml.errors.InvalidArgument { message: `media output could not be encoded: ${e.to_string()}` }
-            },
-        };
-        let part: root.MediaPart = baml.json.from_json<root.MediaPart>(envelope) catch_all (e) {
-            _ => {
-                throw baml.errors.InvalidArgument { message: `media output could not be decoded: ${e.to_string()}` }
-            },
-        };
-        Media { media: part, provider_id: provider_id, revised_prompt: revised_prompt }
+        Media {
+            media: root.internal.media_part(value),
+            provider_id: provider_id,
+            revised_prompt: revised_prompt,
+        }
     }
 }
 

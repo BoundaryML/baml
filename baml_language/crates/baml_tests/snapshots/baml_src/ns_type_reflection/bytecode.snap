@@ -48,7 +48,7 @@ function type_reflection.$init_test_ns_type_reflection_type_reflection(registry:
     return
 }
 
-function type_reflection.GetBar(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> type_reflection.Bar {
+function type_reflection.GetBar(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> type_reflection.Bar {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -138,7 +138,7 @@ function type_reflection.GetBar@spec() -> ai.FunctionSpec<type_reflection.Bar> {
     return
 }
 
-function type_reflection.GetBar@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
+function type_reflection.GetBar@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -165,7 +165,7 @@ function type_reflection.GetBar@stream(client: ai.stream.StreamingClient | null,
     return
 }
 
-function type_reflection.GetFoo(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> type_reflection.Foo {
+function type_reflection.GetFoo(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> type_reflection.Foo {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -255,7 +255,7 @@ function type_reflection.GetFoo@spec() -> ai.FunctionSpec<type_reflection.Foo> {
     return
 }
 
-function type_reflection.GetFoo@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
+function type_reflection.GetFoo@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
     load_var client
     load_const <omitted>
     cmp_op ==

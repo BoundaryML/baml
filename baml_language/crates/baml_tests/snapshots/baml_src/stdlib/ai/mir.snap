@@ -128,9 +128,9 @@ fn ai.Context.output_format(self: ai.Context, prefix: string | null | ai.interna
     }
 }
 
-fn ai.Journal.entries(self: ai.Journal) -> (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] {
+fn ai.Journal.entries(self: ai.Journal) -> (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[] {
     // Locals:
-    let _0: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] // _0 // return
+    let _0: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[] // _0 // return
     let _1: ai.Journal // self // param
 
     bb0: {
@@ -147,7 +147,7 @@ fn ai.Journal.new(spec: ai.FunctionSpec<Out>) -> ai.Journal {
     // Locals:
     let _0: ai.Journal // _0 // return
     let _1: ai.FunctionSpec<Out> // spec // param
-    let _2: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _2: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
     let _3: ai.events.RunStarted
     let _4: string
     let _5: reflect.Type
@@ -166,7 +166,7 @@ fn ai.Journal.new(spec: ai.FunctionSpec<Out>) -> ai.Journal {
 
     bb2: {
         _3 = ai.events.RunStarted { copy _4, copy _6 };
-        _2 = [copy _3]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
+        _2 = [copy _3]: ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
         _0 = ai.Journal { copy _2 };
         goto -> bb3;
     }
@@ -176,27 +176,27 @@ fn ai.Journal.new(spec: ai.FunctionSpec<Out>) -> ai.Journal {
     }
 }
 
-fn ai.Journal.append_all(self: ai.Journal, events: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]) -> void {
+fn ai.Journal.append_all(self: ai.Journal, events: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: ai.Journal // self // param
-    let _2: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] // events // param
-    let _3: baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
+    let _2: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[] // events // param
+    let _3: baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage>
     let _4: unknown
     let _5: bool
-    let _6: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
-    let _7: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage // e
+    let _6: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage
+    let _7: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage // e
     let _8: int
-    let _9: ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[], ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> int throws never
-    let _10: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _9: ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[], ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> int throws never
+    let _10: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage
     let _11: reflect.Type
 
     bb0: {
-        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>(copy _2) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage>(copy _2) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -210,7 +210,7 @@ fn ai.Journal.append_all(self: ai.Journal, events: (ai.events.AssistantMessage |
         _7 = copy _6;
         _9 = copy _1.0;
         _10 = copy _7;
-        _11 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _11 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
         _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1];
     }
 
@@ -2747,25 +2747,7 @@ fn ai.content.Media.new(value: image | audio | video | pdf, provider_id: string 
     let _3: string | null // revised_prompt // param
     let _4: bool
     let _5: bool
-    let _6: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // envelope
-    let _7: unknown // e
-    let _8: baml.errors.InvalidArgument
-    let _9: string
-    let _10: string
-    let _11: string
-    let _12: reflect.Type
-    let _13: reflect.Type
-    let _14: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video // part
-    let _15: unknown // e
-    let _16: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _17: reflect.Type
-    let _18: baml.errors.InvalidArgument
-    let _19: string
-    let _20: string
-    let _21: string
-    let _22: reflect.Type
-    let _23: reflect.Type
-    let _24: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _6: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -2788,63 +2770,16 @@ fn ai.content.Media.new(value: image | audio | video | pdf, provider_id: string 
     }
 
     bb4: {
-        _6 = call const fn baml.json.to_json(copy _1) -> [bb5, unwind: bb8];
+        _6 = call const fn ai.internal.media_part(copy _1) -> [bb5];
     }
 
     bb5: {
-        _16 = copy _6;
-        _17 = load_type(baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf);
-        _14 = call const fn baml.json.from_json<copy _17>(copy _16) -> [bb6, unwind: bb12];
+        _0 = ai.content.Media { copy _6, copy _2, copy _3 };
+        goto -> bb6;
     }
 
     bb6: {
-        _24 = copy _14;
-        _0 = ai.content.Media { copy _24, copy _2, copy _3 };
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
-    }
-
-    bb8: {
-        throw_if_panic copy _7 -> bb9;
-    }
-
-    bb9: {
-        _12 = load_type(baml.json.JsonSerializationError);
-        _11 = call const fn baml.String.from<copy _12>(copy _7) -> [bb10];
-    }
-
-    bb10: {
-        _13 = load_type(string);
-        _10 = call const fn baml.String.from<copy _13>(copy _11) -> [bb11];
-    }
-
-    bb11: {
-        _9 = const "media output could not be encoded: " + copy _10;
-        _8 = baml.errors.InvalidArgument { copy _9 };
-        throw copy _8;
-    }
-
-    bb12: {
-        throw_if_panic copy _15 -> bb13;
-    }
-
-    bb13: {
-        _22 = load_type(baml.json.JsonDecodeError);
-        _21 = call const fn baml.String.from<copy _22>(copy _15) -> [bb14];
-    }
-
-    bb14: {
-        _23 = load_type(string);
-        _20 = call const fn baml.String.from<copy _23>(copy _21) -> [bb15];
-    }
-
-    bb15: {
-        _19 = const "media output could not be decoded: " + copy _20;
-        _18 = baml.errors.InvalidArgument { copy _19 };
-        throw copy _18;
     }
 }
 
@@ -3313,16 +3248,87 @@ fn ai.errors.classify_http(provider: string, status_code: int, body: string, hea
     }
 }
 
-fn ai.events.guard(listener: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws E)) -> null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) {
+fn ai.events.UserContent.new(parts: (string | image | audio | video | pdf)[]) -> ai.events.UserContent {
     // Locals:
-    let _0: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // _0 // return
-    let _1: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws E) // listener // param
-    let _2: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws E)
-    let _3: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws E // cb [captured]
+    let _0: ai.events.UserContent // _0 // return
+    let _1: (string | image | audio | video | pdf)[] // parts // param
+    let _2: (string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video)[] // out
+    let _3: baml.iter.Iterator<Error = never, Item = string | image | audio | video | pdf>
+    let _4: unknown
+    let _5: bool
+    let _6: string | image | audio | video | pdf
+    let _7: string | image | audio | video | pdf // part
+    let _8: string | image | audio | video | pdf
+    let _9: string // text
+    let _10: int
+    let _11: string
+    let _12: reflect.Type
+    let _13: int
+    let _14: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _15: image | audio | video | pdf
+    let _16: reflect.Type
+    let _17: (string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video)[]
+
+    bb0: {
+        _2 = []: string | baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf[];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string | image | audio | video | pdf>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = string | image | audio | video | pdf>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _5 = is_type(copy _4, baml.iter.Done);
+        branch copy _5 -> [bb7, bb3];
+    }
+
+    bb3: {
+        _6 = copy _4;
+        fresh_cell(_7);
+        _7 = copy _6;
+        _8 = copy _7;
+        _8 = narrow_bind copy _8 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb6, bb4];
+    }
+
+    bb4: {
+        _15 = copy _7;
+        _14 = call const fn ai.internal.media_part(copy _15) -> [bb5];
+    }
+
+    bb5: {
+        _16 = load_type(string | baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf);
+        _13 = call const fn baml.Array.push<copy _16>(copy _2, copy _14) -> [bb1];
+    }
+
+    bb6: {
+        _9 = copy _8;
+        _11 = copy _9;
+        _12 = load_type(string | baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf);
+        _10 = call const fn baml.Array.push<copy _12>(copy _2, copy _11) -> [bb1];
+    }
+
+    bb7: {
+        _17 = copy _2;
+        _0 = ai.events.UserContent { copy _17 };
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+fn ai.events.guard(listener: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws E)) -> null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never) {
+    // Locals:
+    let _0: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never) // _0 // return
+    let _1: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws E) // listener // param
+    let _2: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws E)
+    let _3: (ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws E // cb [captured]
 
     bb0: {
         _2 = copy _1;
-        _2 = narrow_bind copy _2 as Function { params: [TyTemplateFunctionParamTy { name: None, ty: Union([Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "LLMCall" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), mode: Required }], ret: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, throws: TypeArgRef(0), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb1];
+        _2 = narrow_bind copy _2 as Function { params: [TyTemplateFunctionParamTy { name: None, ty: Union([Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserContent" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "LLMCall" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), mode: Required }], ret: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, throws: TypeArgRef(0), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb1];
     }
 
     bb1: {
@@ -3342,12 +3348,12 @@ fn ai.events.guard(listener: null | ((ai.events.AssistantMessage | ai.events.Fin
 }
 
 // lambda[0]
-fn .<lambda(guard, 0)>(e: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void {
+fn .<lambda(guard, 0)>(e: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage // e // param
+    let _1: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage // e // param
     let _2: unknown // err
-    let _3: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws E
+    let _3: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws E
 
     bb0: {
         _3 = copy capture[0];
@@ -6023,6 +6029,83 @@ fn ai.internal._resolve_media_preview_content(url: string | null, file: string |
     }
 }
 
+fn ai.internal.media_part(value: image | audio | video | pdf) -> baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video {
+    // Locals:
+    let _0: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video // _0 // return
+    let _1: image | audio | video | pdf // value // param
+    let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // envelope
+    let _3: unknown // e
+    let _4: baml.errors.InvalidArgument
+    let _5: string
+    let _6: string
+    let _7: string
+    let _8: reflect.Type
+    let _9: reflect.Type
+    let _10: unknown // e
+    let _11: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _12: reflect.Type
+    let _13: baml.errors.InvalidArgument
+    let _14: string
+    let _15: string
+    let _16: string
+    let _17: reflect.Type
+    let _18: reflect.Type
+
+    bb0: {
+        _2 = call const fn baml.json.to_json(copy _1) -> [bb1, unwind: bb3];
+    }
+
+    bb1: {
+        _11 = copy _2;
+        _12 = load_type(baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf);
+        _0 = call const fn baml.json.from_json<copy _12>(copy _11) -> [bb2, unwind: bb7];
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw_if_panic copy _3 -> bb4;
+    }
+
+    bb4: {
+        _8 = load_type(baml.json.JsonSerializationError);
+        _7 = call const fn baml.String.from<copy _8>(copy _3) -> [bb5];
+    }
+
+    bb5: {
+        _9 = load_type(string);
+        _6 = call const fn baml.String.from<copy _9>(copy _7) -> [bb6];
+    }
+
+    bb6: {
+        _5 = const "media value could not be encoded: " + copy _6;
+        _4 = baml.errors.InvalidArgument { copy _5 };
+        throw copy _4;
+    }
+
+    bb7: {
+        throw_if_panic copy _10 -> bb8;
+    }
+
+    bb8: {
+        _17 = load_type(baml.json.JsonDecodeError);
+        _16 = call const fn baml.String.from<copy _17>(copy _10) -> [bb9];
+    }
+
+    bb9: {
+        _18 = load_type(string);
+        _15 = call const fn baml.String.from<copy _18>(copy _16) -> [bb10];
+    }
+
+    bb10: {
+        _14 = const "media value could not be decoded: " + copy _15;
+        _13 = baml.errors.InvalidArgument { copy _14 };
+        throw copy _13;
+    }
+}
+
 fn ai.internal.validate_output_type(return_type: reflect.Type) -> void {
     // Locals:
     let _0: void // _0 // return
@@ -6609,10 +6692,10 @@ fn ai.internal._wire_blocks(content: (ai.content.Media | ai.content.Reasoning | 
     }
 }
 
-fn ai.internal._flush_orphaned_calls(out: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[], pending: string[]) -> void {
+fn ai.internal._flush_orphaned_calls(out: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[], pending: string[]) -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] // out // param
+    let _1: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[] // out // param
     let _2: string[] // pending // param
     let _3: baml.iter.Iterator<Error = never, Item = string>
     let _4: unknown
@@ -6645,7 +6728,7 @@ fn ai.internal._flush_orphaned_calls(out: (ai.events.AssistantMessage | ai.event
         _7 = copy _6;
         _10 = copy _7;
         _9 = ai.events.ToolFailed { copy _10, const "No result provided" };
-        _11 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _11 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
         _8 = call const fn baml.Array.push<copy _11>(copy _1, copy _9) -> [bb1];
     }
 
@@ -8753,12 +8836,12 @@ fn ai.stream.Stream.final(self: ai.stream.Stream) -> TFinal {
     }
 }
 
-fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<TStream, TFinal> {
+fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<TStream, TFinal> {
     // Locals:
     let _0: ai.stream.Stream<TStream, TFinal> // _0 // return
     let _1: ai.FunctionSpec<TFinal> // spec // param
     let _2: null | ai.stream.StreamingClient // client // param
-    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: bool
@@ -8783,13 +8866,13 @@ fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.S
     let _25: ai.Client
     let _26: string // provider [captured]
     let _27: ai.Client // c
-    let _28: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // emit [captured]
+    let _28: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never) // emit [captured]
     let _29: reflect.Type
     let _30: bool // settled [captured]
-    let _31: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)
-    let _32: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never // cb
+    let _31: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never)
+    let _32: (ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never // cb
     let _33: void
-    let _34: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never
+    let _34: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never
     let _35: ai.events.RunStarted
     let _36: string
     let _37: reflect.Type
@@ -8889,7 +8972,7 @@ fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.S
     bb15: {
         _30 = const false;
         _31 = copy _28;
-        _31 = narrow_bind copy _31 as Function { params: [TyTemplateFunctionParamTy { name: None, ty: Union([Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "LLMCall" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), mode: Required }], ret: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, throws: Never { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb16, bb19];
+        _31 = narrow_bind copy _31 as Function { params: [TyTemplateFunctionParamTy { name: None, ty: Union([Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserContent" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "LLMCall" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), mode: Required }], ret: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, throws: Never { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb16, bb19];
     }
 
     bb16: {
@@ -8973,12 +9056,12 @@ fn .<lambda(from_spec, 0)>() -> string | null {
     let _3: ai.stream.Done | string[]
     let _4: bool
     let _5: bool
-    let _6: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)
-    let _7: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)
-    let _8: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never // cb
+    let _6: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never)
+    let _7: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never)
+    let _8: (ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never // cb
     let _9: ai.ModelTurn // turn
     let _10: void
-    let _11: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never
+    let _11: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never
     let _12: ai.events.AssistantMessage
     let _13: (ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse)[]
     let _14: string
@@ -8986,7 +9069,7 @@ fn .<lambda(from_spec, 0)>() -> string | null {
     let _16: null | ai.events.Usage
     let _17: ai.events.Usage // u
     let _18: void
-    let _19: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never
+    let _19: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never
     let _20: ai.events.Usage
     let _21: ai.events.LLMCall[]
     let _22: baml.iter.Iterator<Error = never, Item = ai.events.LLMCall>
@@ -8995,7 +9078,7 @@ fn .<lambda(from_spec, 0)>() -> string | null {
     let _25: ai.events.LLMCall
     let _26: ai.events.LLMCall // call
     let _27: void
-    let _28: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never
+    let _28: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never
     let _29: ai.events.LLMCall
     let _30: string[] // batch
     let _31: reflect.Type
@@ -9027,7 +9110,7 @@ fn .<lambda(from_spec, 0)>() -> string | null {
         capture[1] = const true;
         _6 = copy capture[2];
         _7 = copy _6;
-        _7 = narrow_bind copy _7 as Function { params: [TyTemplateFunctionParamTy { name: None, ty: Union([Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "LLMCall" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), mode: Required }], ret: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, throws: Never { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb5, bb13];
+        _7 = narrow_bind copy _7 as Function { params: [TyTemplateFunctionParamTy { name: None, ty: Union([Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserContent" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "LLMCall" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), mode: Required }], ret: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, throws: Never { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb5, bb13];
     }
 
     bb5: {
@@ -11032,23 +11115,137 @@ fn ai.wire.merge_request_body(base: int | float | string | bool | null | baml.js
     }
 }
 
+fn ai.wire.user_content_message(event: ai.events.UserContent) -> ai.PromptMessage {
+    // Locals:
+    let _0: ai.PromptMessage // _0 // return
+    let _1: ai.events.UserContent // event // param
+    let _2: string[] // text
+    let _3: (string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video)[]
+    let _4: baml.iter.Iterator<Error = never, Item = string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video>
+    let _5: unknown
+    let _6: bool
+    let _7: string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _8: string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video // part
+    let _9: string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _10: string // s
+    let _11: int
+    let _12: string
+    let _13: reflect.Type
+    let _14: string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _15: int
+    let _16: reflect.Type
+    let _17: string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _18: int
+    let _19: reflect.Type
+    let _20: string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _21: int
+    let _22: reflect.Type
+    let _23: int
+    let _24: reflect.Type
+    let _25: string
+    let _26: reflect.Type
+    let _27: (string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video)[]
+    let _28: map<string, baml.json.json>
+
+    bb0: {
+        _2 = []: string[];
+        _3 = copy _1.0;
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video>(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = string | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video>(copy _4) -> [bb2];
+    }
+
+    bb2: {
+        _6 = is_type(copy _5, baml.iter.Done);
+        branch copy _6 -> [bb12, bb3];
+    }
+
+    bb3: {
+        _7 = copy _5;
+        fresh_cell(_8);
+        _8 = copy _7;
+        _9 = copy _8;
+        _9 = narrow_bind copy _9 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb11, bb4];
+    }
+
+    bb4: {
+        _14 = copy _8;
+        _14 = narrow_bind copy _14 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Image" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb10, bb5];
+    }
+
+    bb5: {
+        _17 = copy _8;
+        _17 = narrow_bind copy _17 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Audio" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb9, bb6];
+    }
+
+    bb6: {
+        _20 = copy _8;
+        _20 = narrow_bind copy _20 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Video" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb8, bb7];
+    }
+
+    bb7: {
+        _24 = load_type(string);
+        _23 = call const fn baml.Array.push<copy _24>(copy _2, const "[pdf]") -> [bb1];
+    }
+
+    bb8: {
+        _22 = load_type(string);
+        _21 = call const fn baml.Array.push<copy _22>(copy _2, const "[video]") -> [bb1];
+    }
+
+    bb9: {
+        _19 = load_type(string);
+        _18 = call const fn baml.Array.push<copy _19>(copy _2, const "[audio]") -> [bb1];
+    }
+
+    bb10: {
+        _16 = load_type(string);
+        _15 = call const fn baml.Array.push<copy _16>(copy _2, const "[image]") -> [bb1];
+    }
+
+    bb11: {
+        _10 = copy _9;
+        _12 = copy _10;
+        _13 = load_type(string);
+        _11 = call const fn baml.Array.push<copy _13>(copy _2, copy _12) -> [bb1];
+    }
+
+    bb12: {
+        _26 = load_type(string);
+        _25 = call const fn baml.Array.join<copy _26>(copy _2, const "") -> [bb13];
+    }
+
+    bb13: {
+        _27 = copy _1.0;
+        _28 = {  }: map<string, baml.json.json>;
+        _0 = ai.PromptMessage { const "user", copy _25, copy _27, copy _28 };
+        goto -> bb14;
+    }
+
+    bb14: {
+        return;
+    }
+}
+
 fn ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Journal {
     // Locals:
     let _0: ai.Journal // _0 // return
     let _1: ai.Journal // j // param
     let _2: string // client_id // param
-    let _3: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] // out
+    let _3: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[] // out
     let _4: string[] // pending
-    let _5: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
-    let _6: baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
+    let _5: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
+    let _6: baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage>
     let _7: unknown
     let _8: bool
-    let _9: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
-    let _10: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage // event
-    let _11: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _9: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage
+    let _10: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage // event
+    let _11: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage
     let _12: ai.events.AssistantMessage // assistant
     let _13: void
-    let _14: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _14: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
     let _15: string[]
     let _16: (ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse)[] // blocks
     let _17: (ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse)[]
@@ -11072,55 +11269,63 @@ fn ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Journal {
     let _35: int
     let _36: string
     let _37: reflect.Type
-    let _38: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _38: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage
     let _39: ai.events.UserMessage // user
     let _40: void
-    let _41: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _41: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
     let _42: string[]
     let _43: int
     let _44: ai.events.UserMessage
     let _45: reflect.Type
-    let _46: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
-    let _47: ai.events.ToolCompleted // completed
+    let _46: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage
+    let _47: ai.events.UserContent // content
     let _48: void
-    let _49: string[]
-    let _50: string
+    let _49: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
+    let _50: string[]
     let _51: int
-    let _52: ai.events.ToolCompleted
+    let _52: ai.events.UserContent
     let _53: reflect.Type
-    let _54: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
-    let _55: ai.events.ToolFailed // failed
+    let _54: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage
+    let _55: ai.events.ToolCompleted // completed
     let _56: void
     let _57: string[]
     let _58: string
     let _59: int
-    let _60: ai.events.ToolFailed
+    let _60: ai.events.ToolCompleted
     let _61: reflect.Type
-    let _62: int
-    let _63: ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolRequested | ai.events.Usage
-    let _64: reflect.Type
-    let _65: void
-    let _66: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
-    let _67: string[]
-    let _68: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _62: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage
+    let _63: ai.events.ToolFailed // failed
+    let _64: void
+    let _65: string[]
+    let _66: string
+    let _67: int
+    let _68: ai.events.ToolFailed
+    let _69: reflect.Type
+    let _70: int
+    let _71: ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolRequested | ai.events.Usage
+    let _72: reflect.Type
+    let _73: void
+    let _74: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
+    let _75: string[]
+    let _76: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
 
     bb0: {
-        _3 = []: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
+        _3 = []: ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
         _4 = []: string[];
         _5 = call const fn ai.Journal.entries(copy _1) -> [bb1];
     }
 
     bb1: {
-        _6 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>(copy _5) -> [bb2];
+        _6 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage>(copy _5) -> [bb2];
     }
 
     bb2: {
-        _7 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>(copy _6) -> [bb3];
+        _7 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage>(copy _6) -> [bb3];
     }
 
     bb3: {
         _8 = is_type(copy _7, baml.iter.Done);
-        branch copy _8 -> [bb25, bb4];
+        branch copy _8 -> [bb28, bb4];
     }
 
     bb4: {
@@ -11128,143 +11333,161 @@ fn ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Journal {
         fresh_cell(_10);
         _10 = copy _9;
         _11 = copy _10;
-        _11 = narrow_bind copy _11 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb15, bb5];
+        _11 = narrow_bind copy _11 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb5];
     }
 
     bb5: {
         _38 = copy _10;
-        _38 = narrow_bind copy _38 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb13, bb6];
+        _38 = narrow_bind copy _38 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb16, bb6];
     }
 
     bb6: {
         _46 = copy _10;
-        _46 = narrow_bind copy _46 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb11, bb7];
+        _46 = narrow_bind copy _46 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserContent" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb14, bb7];
     }
 
     bb7: {
         _54 = copy _10;
-        _54 = narrow_bind copy _54 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb9, bb8];
+        _54 = narrow_bind copy _54 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb12, bb8];
     }
 
     bb8: {
-        _63 = copy _10;
-        _64 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
-        _62 = call const fn baml.Array.push<copy _64>(copy _3, copy _63) -> [bb2];
+        _62 = copy _10;
+        _62 = narrow_bind copy _62 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb10, bb9];
     }
 
     bb9: {
-        _55 = copy _54;
-        _57 = copy _4;
-        _58 = copy _55.0;
-        _56 = call const fn ai.internal._resolve_pending_call(copy _57, copy _58) -> [bb10];
+        _71 = copy _10;
+        _72 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _70 = call const fn baml.Array.push<copy _72>(copy _3, copy _71) -> [bb2];
     }
 
     bb10: {
-        _60 = copy _55;
-        _61 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
-        _59 = call const fn baml.Array.push<copy _61>(copy _3, copy _60) -> [bb2];
+        _63 = copy _62;
+        _65 = copy _4;
+        _66 = copy _63.0;
+        _64 = call const fn ai.internal._resolve_pending_call(copy _65, copy _66) -> [bb11];
     }
 
     bb11: {
-        _47 = copy _46;
-        _49 = copy _4;
-        _50 = copy _47.0;
-        _48 = call const fn ai.internal._resolve_pending_call(copy _49, copy _50) -> [bb12];
+        _68 = copy _63;
+        _69 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _67 = call const fn baml.Array.push<copy _69>(copy _3, copy _68) -> [bb2];
     }
 
     bb12: {
-        _52 = copy _47;
-        _53 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
-        _51 = call const fn baml.Array.push<copy _53>(copy _3, copy _52) -> [bb2];
+        _55 = copy _54;
+        _57 = copy _4;
+        _58 = copy _55.0;
+        _56 = call const fn ai.internal._resolve_pending_call(copy _57, copy _58) -> [bb13];
     }
 
     bb13: {
-        _39 = copy _38;
-        _41 = copy _3;
-        _42 = copy _4;
-        _40 = call const fn ai.internal._flush_orphaned_calls(copy _41, copy _42) -> [bb14];
+        _60 = copy _55;
+        _61 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _59 = call const fn baml.Array.push<copy _61>(copy _3, copy _60) -> [bb2];
     }
 
     bb14: {
-        _44 = copy _39;
-        _45 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
-        _43 = call const fn baml.Array.push<copy _45>(copy _3, copy _44) -> [bb2];
+        _47 = copy _46;
+        _49 = copy _3;
+        _50 = copy _4;
+        _48 = call const fn ai.internal._flush_orphaned_calls(copy _49, copy _50) -> [bb15];
     }
 
     bb15: {
-        _12 = copy _11;
-        _14 = copy _3;
-        _15 = copy _4;
-        _13 = call const fn ai.internal._flush_orphaned_calls(copy _14, copy _15) -> [bb16];
+        _52 = copy _47;
+        _53 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _51 = call const fn baml.Array.push<copy _53>(copy _3, copy _52) -> [bb2];
     }
 
     bb16: {
-        _17 = copy _12.0;
-        _19 = copy _12.1;
-        _18 = copy _19 == copy _2;
-        _16 = call const fn ai.internal._wire_blocks(copy _17, copy _18) -> [bb17];
+        _39 = copy _38;
+        _41 = copy _3;
+        _42 = copy _4;
+        _40 = call const fn ai.internal._flush_orphaned_calls(copy _41, copy _42) -> [bb17];
     }
 
     bb17: {
-        _21 = len(_16);
-        goto -> bb18;
+        _44 = copy _39;
+        _45 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _43 = call const fn baml.Array.push<copy _45>(copy _3, copy _44) -> [bb2];
     }
 
     bb18: {
-        _20 = copy _21 > const 0_i64;
-        branch copy _20 -> [bb19, bb2];
+        _12 = copy _11;
+        _14 = copy _3;
+        _15 = copy _4;
+        _13 = call const fn ai.internal._flush_orphaned_calls(copy _14, copy _15) -> [bb19];
     }
 
     bb19: {
-        _24 = copy _16;
-        _25 = copy _12.1;
-        _23 = ai.events.AssistantMessage { copy _24, copy _25 };
-        _26 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
-        _22 = call const fn baml.Array.push<copy _26>(copy _3, copy _23) -> [bb20];
+        _17 = copy _12.0;
+        _19 = copy _12.1;
+        _18 = copy _19 == copy _2;
+        _16 = call const fn ai.internal._wire_blocks(copy _17, copy _18) -> [bb20];
     }
 
     bb20: {
-        _27 = copy _16;
-        _28 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>(copy _27) -> [bb21];
+        _21 = len(_16);
+        goto -> bb21;
     }
 
     bb21: {
-        _29 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>(copy _28) -> [bb22];
+        _20 = copy _21 > const 0_i64;
+        branch copy _20 -> [bb22, bb2];
     }
 
     bb22: {
-        _30 = is_type(copy _29, baml.iter.Done);
-        branch copy _30 -> [bb2, bb23];
+        _24 = copy _16;
+        _25 = copy _12.1;
+        _23 = ai.events.AssistantMessage { copy _24, copy _25 };
+        _26 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _22 = call const fn baml.Array.push<copy _26>(copy _3, copy _23) -> [bb23];
     }
 
     bb23: {
+        _27 = copy _16;
+        _28 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>(copy _27) -> [bb24];
+    }
+
+    bb24: {
+        _29 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse>(copy _28) -> [bb25];
+    }
+
+    bb25: {
+        _30 = is_type(copy _29, baml.iter.Done);
+        branch copy _30 -> [bb2, bb26];
+    }
+
+    bb26: {
         _31 = copy _29;
         fresh_cell(_32);
         _32 = copy _31;
         _33 = copy _32;
-        _33 = narrow_bind copy _33 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["content"], name: "ToolUse" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb24, bb21];
-    }
-
-    bb24: {
-        _34 = copy _33;
-        _36 = copy _34.0;
-        _37 = load_type(string);
-        _35 = call const fn baml.Array.push<copy _37>(copy _4, copy _36) -> [bb21];
-    }
-
-    bb25: {
-        _66 = copy _3;
-        _67 = copy _4;
-        _65 = call const fn ai.internal._flush_orphaned_calls(copy _66, copy _67) -> [bb26];
-    }
-
-    bb26: {
-        _68 = copy _3;
-        _0 = ai.Journal { copy _68 };
-        goto -> bb27;
+        _33 = narrow_bind copy _33 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["content"], name: "ToolUse" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb27, bb24];
     }
 
     bb27: {
+        _34 = copy _33;
+        _36 = copy _34.0;
+        _37 = load_type(string);
+        _35 = call const fn baml.Array.push<copy _37>(copy _4, copy _36) -> [bb24];
+    }
+
+    bb28: {
+        _74 = copy _3;
+        _75 = copy _4;
+        _73 = call const fn ai.internal._flush_orphaned_calls(copy _74, copy _75) -> [bb29];
+    }
+
+    bb29: {
+        _76 = copy _3;
+        _0 = ai.Journal { copy _76 };
+        goto -> bb30;
+    }
+
+    bb30: {
         return;
     }
 }
@@ -11280,14 +11503,14 @@ fn ai.Runner.run(_1: void, _2: void) -> void {
     }
 }
 
-fn ai.Agent.new(max_steps: int, schema_attempts: int, client: null | ai.Client, tool_errors: ai.tools.ErrorMode, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.Agent {
+fn ai.Agent.new(max_steps: int, schema_attempts: int, client: null | ai.Client, tool_errors: ai.tools.ErrorMode, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never)) -> ai.Agent {
     // Locals:
     let _0: ai.Agent // _0 // return
     let _1: int // max_steps // param
     let _2: int // schema_attempts // param
     let _3: null | ai.Client // client // param
     let _4: ai.tools.ErrorMode // tool_errors // param
-    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never) // on_event // param
     let _6: bool
     let _7: bool
     let _8: bool
@@ -11295,7 +11518,7 @@ fn ai.Agent.new(max_steps: int, schema_attempts: int, client: null | ai.Client, 
     let _10: bool
     let _11: bool
     let _12: baml.errors.InvalidArgument
-    let _13: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)
+    let _13: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never)
     let _14: reflect.Type
 
     bb0: {
@@ -11417,7 +11640,7 @@ fn ai.Agent._run_one_tool(self: ai.Agent, tb: ai.tools.Toolbox, call: ai.content
     let _10: unknown // e
     let _11: map<string, unknown>
     let _12: void
-    let _13: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _13: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
     let _14: ai.events.ToolFailed
     let _15: string
     let _16: string
@@ -11439,12 +11662,12 @@ fn ai.Agent._run_one_tool(self: ai.Agent, tb: ai.tools.Toolbox, call: ai.content
     let _32: string | null
     let _33: string // output
     let _34: void
-    let _35: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _35: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
     let _36: ai.events.ToolCompleted
     let _37: string
     let _38: string
     let _39: void
-    let _40: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _40: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
     let _41: ai.events.ToolFailed
     let _42: string
     let _43: string
@@ -11472,7 +11695,7 @@ fn ai.Agent._run_one_tool(self: ai.Agent, tb: ai.tools.Toolbox, call: ai.content
     bb3: {
         _43 = const "tool is not in the active toolbox: " + copy _44;
         _41 = ai.events.ToolFailed { copy _42, copy _43 };
-        _40 = [copy _41]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
+        _40 = [copy _41]: ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
         _39 = call const fn ai.Journal.append_all(copy _4, copy _40) -> [bb4];
     }
 
@@ -11499,7 +11722,7 @@ fn ai.Agent._run_one_tool(self: ai.Agent, tb: ai.tools.Toolbox, call: ai.content
 
     bb8: {
         _14 = ai.events.ToolFailed { copy _15, copy _16 };
-        _13 = [copy _14]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
+        _13 = [copy _14]: ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
         _12 = call const fn ai.Journal.append_all(copy _4, copy _13) -> [bb9];
     }
 
@@ -11539,7 +11762,7 @@ fn ai.Agent._run_one_tool(self: ai.Agent, tb: ai.tools.Toolbox, call: ai.content
         _37 = copy _3.0;
         _38 = copy _33;
         _36 = ai.events.ToolCompleted { copy _37, copy _38 };
-        _35 = [copy _36]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
+        _35 = [copy _36]: ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
         _34 = call const fn ai.Journal.append_all(copy _4, copy _35) -> [bb16];
     }
 
@@ -12293,7 +12516,7 @@ fn ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionSpec<Ou
     let _32: int | null
     let _33: bool
     let _34: int
-    let _35: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] // batch
+    let _35: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[] // batch
     let _36: ai.events.AssistantMessage
     let _37: (ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse)[]
     let _38: string
@@ -12341,7 +12564,7 @@ fn ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionSpec<Ou
     let _80: reflect.Type
     let _81: bool
     let _82: void
-    let _83: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _83: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
     let _84: ai.content.StopReason
     let _85: int
     let _86: ai.errors.FinishReasonError
@@ -12355,11 +12578,11 @@ fn ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionSpec<Ou
     let _94: ai.events.UserMessage
     let _95: reflect.Type
     let _96: void
-    let _97: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _97: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
     let _98: int
     let _99: reflect.Type
     let _100: void
-    let _101: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _101: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
     let _102: ai.errors.ParseFailed
     let _103: string
     let _104: string
@@ -12450,7 +12673,7 @@ fn ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionSpec<Ou
 
     bb13: {
         _36 = ai.events.AssistantMessage { copy _37, copy _38 };
-        _35 = [copy _36]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
+        _35 = [copy _36]: ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
         _39 = copy _7.3;
         _40 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.events.LLMCall>(copy _39) -> [bb14];
     }
@@ -12469,7 +12692,7 @@ fn ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionSpec<Ou
         fresh_cell(_44);
         _44 = copy _43;
         _46 = copy _44;
-        _47 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _47 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
         _45 = call const fn baml.Array.push<copy _47>(copy _35, copy _46) -> [bb14];
     }
 
@@ -12498,7 +12721,7 @@ fn ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionSpec<Ou
         _57 = copy _53.1;
         _58 = copy _53.2;
         _55 = ai.events.ToolRequested { copy _56, copy _57, copy _58 };
-        _59 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _59 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
         _54 = call const fn baml.Array.push<copy _59>(copy _35, copy _55) -> [bb19];
     }
 
@@ -12511,7 +12734,7 @@ fn ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionSpec<Ou
     bb23: {
         _62 = copy _61;
         _64 = copy _62;
-        _65 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _65 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
         _63 = call const fn baml.Array.push<copy _65>(copy _35, copy _64) -> [bb24];
     }
 
@@ -12597,7 +12820,7 @@ fn ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionSpec<Ou
 
     bb40: {
         _94 = ai.events.UserMessage { const "The reply did not match the required schema. Answer again with only the corrected value." };
-        _95 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _95 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
         _93 = call const fn baml.Array.push<copy _95>(copy _35, copy _94) -> [bb41];
     }
 
@@ -12659,22 +12882,22 @@ fn ai.Agent._emit_from(self: ai.Agent, j: ai.Journal, seen: int) -> int {
     let _1: ai.Agent // self // param
     let _2: ai.Journal // j // param
     let _3: int // seen // param
-    let _4: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] // entries
-    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)
-    let _6: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)
-    let _7: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never // cb
+    let _4: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[] // entries
+    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never)
+    let _6: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never)
+    let _7: (ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never // cb
     let _8: int // i
     let _9: bool
     let _10: int
     let _11: int
-    let _12: null | ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _12: null | ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage
     let _13: int
     let _14: reflect.Type
-    let _15: null | ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
-    let _16: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced // e
+    let _15: null | ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage
+    let _16: ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced // e
     let _17: void
-    let _18: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never
-    let _19: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _18: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never
+    let _19: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage
     let _20: int
 
     bb0: {
@@ -12684,7 +12907,7 @@ fn ai.Agent._emit_from(self: ai.Agent, j: ai.Journal, seen: int) -> int {
     bb1: {
         _5 = copy _1.4;
         _6 = copy _5;
-        _6 = narrow_bind copy _6 as Function { params: [TyTemplateFunctionParamTy { name: None, ty: Union([Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "LLMCall" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), mode: Required }], ret: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, throws: Never { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb5];
+        _6 = narrow_bind copy _6 as Function { params: [TyTemplateFunctionParamTy { name: None, ty: Union([Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserContent" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "LLMCall" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), mode: Required }], ret: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, throws: Never { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb5];
     }
 
     bb2: {
@@ -12715,55 +12938,59 @@ fn ai.Agent._emit_from(self: ai.Agent, j: ai.Journal, seen: int) -> int {
 
     bb7: {
         _13 = copy _8;
-        _14 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _14 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
         _12 = call const fn baml.Array.at<copy _14>(copy _4, copy _13) -> [bb8];
     }
 
     bb8: {
         _15 = copy _12;
-        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb9];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb9];
     }
 
     bb9: {
-        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb10];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb10];
     }
 
     bb10: {
-        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb11];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserContent" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb11];
     }
 
     bb11: {
-        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb12];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb12];
     }
 
     bb12: {
-        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb13];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb13];
     }
 
     bb13: {
-        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb14];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb14];
     }
 
     bb14: {
-        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb15];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb15];
     }
 
     bb15: {
-        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "LLMCall" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb16];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb16];
     }
 
     bb16: {
-        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb18];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "LLMCall" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb17];
     }
 
     bb17: {
-        _16 = copy _15;
-        _18 = copy _7;
-        _19 = copy _16;
-        _17 = call copy _18(copy _19) -> [bb18];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb19];
     }
 
     bb18: {
+        _16 = copy _15;
+        _18 = copy _7;
+        _19 = copy _16;
+        _17 = call copy _18(copy _19) -> [bb19];
+    }
+
+    bb19: {
         _20 = copy _8;
         _8 = copy _20 + const 1_i64;
         goto -> bb3;
@@ -12803,7 +13030,7 @@ fn ai.<(ai.Agent as ai.Runner)>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) 
     let _28: bool
     let _29: int
     let _30: int // before
-    let _31: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _31: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
     let _32: baml.future.Future<void, ai.errors.ToolFailedError>[] // futures
     let _33: (ai.content.ToolUse) -> baml.future.Future<void, ai.errors.ToolFailedError> throws never
     let _34: reflect.Type
@@ -12819,15 +13046,15 @@ fn ai.<(ai.Agent as ai.Runner)>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) 
     let _44: int
     let _45: ai.Journal
     let _46: int
-    let _47: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] // entries
+    let _47: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[] // entries
     let _48: int // i
     let _49: bool
     let _50: int
     let _51: int
-    let _52: null | ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _52: null | ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage
     let _53: int
     let _54: reflect.Type
-    let _55: null | ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _55: null | ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage
     let _56: ai.events.ToolFailed // f [captured]
     let _57: null | ai.content.ToolUse // failed_call
     let _58: (ai.content.ToolUse) -> bool throws never
@@ -12895,7 +13122,7 @@ fn ai.<(ai.Agent as ai.Runner)>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) 
     let _120: baml.json.JsonSerializationError
     let _121: reflect.Type
     let _122: void
-    let _123: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _123: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage)[]
     let _124: ai.events.FinalProduced
     let _125: string
     let _126: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
@@ -13039,7 +13266,7 @@ fn ai.<(ai.Agent as ai.Runner)>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) 
 
     bb23: {
         _124 = ai.events.FinalProduced { copy _125 };
-        _123 = [copy _124]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
+        _123 = [copy _124]: ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
         _122 = call const fn ai.Journal.append_all(copy _8, copy _123) -> [bb24];
     }
 
@@ -13117,7 +13344,7 @@ fn ai.<(ai.Agent as ai.Runner)>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) 
 
     bb37: {
         _53 = copy _48;
-        _54 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
+        _54 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced);
         _52 = call const fn baml.Array.at<copy _54>(copy _47, copy _53) -> [bb38];
     }
 
@@ -13401,12 +13628,12 @@ fn .<lambda(prompt, 0)>(ctx: ai.Context) -> ai.Prompt {
     }
 }
 
-fn ai.FunctionSpec.call(self: ai.FunctionSpec, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> Out {
+fn ai.FunctionSpec.call(self: ai.FunctionSpec, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never)) -> Out {
     // Locals:
     let _0: Out // _0 // return
     let _1: ai.FunctionSpec // self // param
     let _2: null | ai.Client // client // param
-    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: ai.RunResult<Out>

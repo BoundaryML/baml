@@ -46,6 +46,7 @@ function label_of(e: ai.events.Event) -> string {
     match (e) {
         let x: ai.events.RunStarted => "RunStarted",
         let x: ai.events.UserMessage => "UserMessage",
+        let x: ai.events.UserContent => "UserContent",
         let x: ai.events.AssistantMessage => "AssistantMessage",
         let x: ai.events.ToolRequested => "ToolRequested",
         let x: ai.events.ToolCompleted => "ToolCompleted",
@@ -84,4 +85,32 @@ test "explicit Agent accepts and swallows a throwing listener" {
     let out = agent.run(Greet@spec("world"));
     assert.equal(out.value.message, "hi");
     assert.equal(probe.labels, ["RunStarted", "AssistantMessage", "Usage", "FinalProduced"])
+}
+
+// The Claude Code CLI folds the journal into one text prompt: a UserContent
+// turn renders its text parts as written and its media as a readable
+// placeholder, in order, after the tool result it follows.
+function claude_code_transcript_with_user_content() -> string {
+    let args: map<string, unknown> = { };
+    let journal = ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [ai.content.ToolUse { id: "c1", name: "look", args: args }],
+                client_id: "claude-code/opus",
+            },
+            ai.events.ToolCompleted { id: "c1", output: "done" },
+            ai.events.UserContent.new(
+                [
+                    "Screenshot after the tool ran: ",
+                    baml.media.Image.from_base64("SGVsbG8=", "image/png"),
+                ],
+            ),
+        ],
+    };
+    claude_code.internal.transcript_text(journal)
+}
+
+test "claude_code_transcript_with_user_content" {
+    let got = claude_code_transcript_with_user_content();
+    assert.contains(got, "tool result id=c1 is_error=false: done\nuser: Screenshot after the tool ran: [image]")
 }

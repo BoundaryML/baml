@@ -1780,3 +1780,68 @@ testset "live" with testing.Sequential() {
         log.warn("live::openrouter not registered: OPENROUTER_API_KEY is unset")
     }
 }
+
+// ─── journal UserContent: media after a tool result ──────────────────────────
+
+// `_chat_input_with_history` plus the screenshot a runner appends after the
+// tool result: an `ai.events.UserContent` with a text part and a base64 image.
+function _chat_input_with_screenshot() -> ai.ModelTurnInput {
+    let spec = ChatEcho@spec("and tomorrow?");
+    let args: map<string, unknown> = { "city": "SF" };
+    let journal = ai.Journal {
+        log: [
+            ai.events.UserMessage { content: "weather in SF?" },
+            ai.events.AssistantMessage {
+                content: [
+                    ai.content.Text { text: "checking" },
+                    ai.content.ToolUse { id: "call_1", name: "chat_get_weather", args: args },
+                ],
+                client_id: "openai-chat/gpt-4o-mini",
+            },
+            ai.events.ToolCompleted { id: "call_1", output: "sunny in SF" },
+            ai.events.UserContent.new(
+                [
+                    "Screenshot after the tool ran:",
+                    baml.media.Image.from_base64("SGVsbG8=", "image/png"),
+                ],
+            ),
+        ],
+    };
+    ai.ModelTurnInput {
+        prompt: spec.prompt_template,
+        journal: journal,
+        toolbox: ai.tools.Toolbox.new([ai.tools.tool(chat_get_weather)]),
+        output_type: spec.output_type(),
+    }
+}
+
+// The screenshot lowers to a `user` message AFTER the `tool` message, with a
+// text part and an `image_url` data-URL part — the same shape prompt media
+// takes (`_chat_prompt_parts`).
+function chat_user_content_after_tool_result() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_chat_ok_body())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
+            let _ = cl.invoke(_chat_input_with_screenshot());
+            let body = mock.last_request().json();
+            [
+                baml.json.path<string>(body, ".messages[4].role"),
+                baml.json.path<string>(body, ".messages[4].tool_call_id"),
+                baml.json.path<string>(body, ".messages[5].role"),
+                baml.json.path<string>(body, ".messages[5].content[0].type"),
+                baml.json.path<string>(body, ".messages[5].content[0].text"),
+                baml.json.path<string>(body, ".messages[5].content[1].type"),
+                baml.json.path<string>(body, ".messages[5].content[1].image_url.url"),
+                baml.json.path_or<string>(body, ".messages[6].role", "absent"),
+            ].join("|")
+        },
+    )
+}
+
+test "chat_user_content_after_tool_result" {
+    assert.equal(
+        chat_user_content_after_tool_result(),
+        "tool|call_1|user|text|Screenshot after the tool ran:|image_url|data:image/png;base64,SGVsbG8=|absent",
+    )
+}

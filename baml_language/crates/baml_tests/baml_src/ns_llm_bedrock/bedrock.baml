@@ -1267,3 +1267,48 @@ testset "live" with testing.Sequential() {
         log.warn("live::bedrock not registered: AWS_PROFILE is unset (local SSO session required)")
     }
 }
+
+// ─── journal UserContent: media after a tool result ──────────────────────────
+
+// A runner that screenshots after every tool call appends an
+// `ai.events.UserContent` AFTER the tool result. Converse wants the toolResult
+// blocks in the user message that follows the toolUse, and two user messages
+// back to back are rejected, so the parts-bearing turn merges into that same
+// message after the result: [toolResult, text, image] — the image lowered
+// exactly as prompt media is (`_prompt_content`).
+function bedrock_user_content_after_tool_result() -> string {
+    let args: map<string, unknown> = { "city": "SF" };
+    let log: ai.events.Event[] = [
+        ai.events.AssistantMessage {
+            content: [ai.content.ToolUse { id: "tu_1", name: "get_weather", args: args }],
+            client_id: `bedrock/${_model()}`,
+        },
+        ai.events.ToolCompleted { id: "tu_1", output: "sunny" },
+        ai.events.UserContent.new(
+                [
+                    "Screenshot after the tool ran:",
+                    baml.media.Image.from_base64("SGVsbG8=", "image/png"),
+                ],
+            ),
+    ];
+    let journal = ai.Journal { log: log };
+    let body = _body(_client(null), _turn_input(BedrockUserOnly@spec("go"), journal, _weather_tools()));
+    [
+        baml.json.path<string>(body, ".messages[1].role"),
+        baml.json.path<string>(body, ".messages[1].content[0].toolUse.toolUseId"),
+        baml.json.path<string>(body, ".messages[2].role"),
+        baml.json.path<string>(body, ".messages[2].content[0].toolResult.toolUseId"),
+        baml.json.path<string>(body, ".messages[2].content[1].text"),
+        baml.json.path<string>(body, ".messages[2].content[2].image.format"),
+        baml.json.path<string>(body, ".messages[2].content[2].image.source.bytes"),
+        _array_len(body, ".messages").to_string(),
+        _array_len(body, ".messages[2].content").to_string(),
+    ].join("|")
+}
+
+test "bedrock_user_content_after_tool_result" {
+    assert.equal(
+        bedrock_user_content_after_tool_result(),
+        "assistant|tu_1|user|tu_1|Screenshot after the tool ran:|png|SGVsbG8=|3|3",
+    )
+}

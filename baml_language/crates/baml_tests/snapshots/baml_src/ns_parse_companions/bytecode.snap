@@ -20,7 +20,7 @@ function parse_companions.$init_test_ns_parse_companions_parse_companions(regist
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> parse_companions.ParseCompanionsAliasPayload {
+function parse_companions.ParseCompanionsParseAliasPayload(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> parse_companions.ParseCompanionsAliasPayload {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -110,7 +110,7 @@ function parse_companions.ParseCompanionsParseAliasPayload@spec() -> ai.Function
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<parse_companions.ParseCompanionsAliasPayload$stream | null, parse_companions.ParseCompanionsAliasPayload> {
+function parse_companions.ParseCompanionsParseAliasPayload@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<parse_companions.ParseCompanionsAliasPayload$stream | null, parse_companions.ParseCompanionsAliasPayload> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -137,7 +137,7 @@ function parse_companions.ParseCompanionsParseAliasPayload@stream(client: ai.str
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> parse_companions.ParseCompanionsOptPayload {
+function parse_companions.ParseCompanionsParseOptPayload(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> parse_companions.ParseCompanionsOptPayload {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -227,7 +227,7 @@ function parse_companions.ParseCompanionsParseOptPayload@spec() -> ai.FunctionSp
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<parse_companions.ParseCompanionsOptPayload$stream | null, parse_companions.ParseCompanionsOptPayload> {
+function parse_companions.ParseCompanionsParseOptPayload@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<parse_companions.ParseCompanionsOptPayload$stream | null, parse_companions.ParseCompanionsOptPayload> {
     load_var client
     load_const <omitted>
     cmp_op ==

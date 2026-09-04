@@ -155,7 +155,7 @@ function env_ref_clients.$init_test_ns_env_ref_clients_env_ref_clients(registry:
     return
 }
 
-function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -265,7 +265,7 @@ function env_ref_clients.EnvRefDynamicEcho@spec(question: string) -> ai.Function
     return
 }
 
-function env_ref_clients.EnvRefDynamicEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefDynamicEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -293,7 +293,7 @@ function env_ref_clients.EnvRefDynamicEcho@stream(question: string, client: ai.s
     return
 }
 
-function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -408,7 +408,7 @@ function env_ref_clients.EnvRefEcho@spec(question: string) -> ai.FunctionSpec<st
     return
 }
 
-function env_ref_clients.EnvRefEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -436,7 +436,7 @@ function env_ref_clients.EnvRefEcho@stream(question: string, client: ai.stream.S
     return
 }
 
-function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -536,7 +536,7 @@ function env_ref_clients.EnvRefResolvedEcho@spec(question: string) -> ai.Functio
     return
 }
 
-function env_ref_clients.EnvRefResolvedEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefResolvedEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -564,7 +564,7 @@ function env_ref_clients.EnvRefResolvedEcho@stream(question: string, client: ai.
     return
 }
 
-function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -663,7 +663,7 @@ function env_ref_clients.LiveEnvRefEcho@spec(question: string) -> ai.FunctionSpe
     return
 }
 
-function env_ref_clients.LiveEnvRefEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.LiveEnvRefEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -691,7 +691,7 @@ function env_ref_clients.LiveEnvRefEcho@stream(question: string, client: ai.stre
     return
 }
 
-function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -801,7 +801,7 @@ function env_ref_clients.LiveEnvRefFallbackEcho@spec(question: string) -> ai.Fun
     return
 }
 
-function env_ref_clients.LiveEnvRefFallbackEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.LiveEnvRefFallbackEcho@stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==

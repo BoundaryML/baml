@@ -485,7 +485,7 @@ function _anthropic_push_tool_result(
 
 // ai.RunStarted/ai.ToolRequested/ai.Usage/ai.FinalProduced are not promptable and skip;
 // skipped events never close an open tool_result group.
-function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
+function _anthropic_lower_journal(j: ai.Journal, preview: bool = false) -> AnthropicMessage[] {
     let msgs: AnthropicMessage[] = [];
     for (let e in j.entries()) {
         match (e) {
@@ -497,6 +497,20 @@ function _anthropic_lower_journal(j: ai.Journal) -> AnthropicMessage[] {
                         blocks: [AnthTextBlock { type: "text", text: m.content, cache_control: null }],
                     },
                 );
+                null
+            },
+            // A parts-bearing user turn lowers through the same helper as a
+            // rendered prompt message, so a mid-run screenshot takes exactly
+            // the wire shape the template's media would.
+            let m: ai.events.UserContent => {
+                let blocks = _anthropic_prompt_blocks(
+                    ai.wire.user_content_message(m),
+                    "user",
+                    preview = preview,
+                );
+                if (blocks.length() > 0) {
+                    msgs.push(AnthropicMessage { role: "user", tool_results: false, blocks: blocks });
+                }
                 null
             },
             let m: ai.events.AssistantMessage => {
@@ -639,7 +653,10 @@ function anthropic_messages_request(
     // Sanitize BEFORE lowering: foreign-client reasoning, empty turns and
     // orphaned tool calls are repaired once, in ai.wire, for every provider.
     for (
-        let message in _anthropic_lower_journal(ai.wire.sanitize_for_client(input.journal, params.client_id))
+        let message in _anthropic_lower_journal(
+            ai.wire.sanitize_for_client(input.journal, params.client_id),
+            preview = preview,
+        )
     ) {
         lowered.push(message);
     }

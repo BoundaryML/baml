@@ -1160,3 +1160,94 @@ testset "live" with testing.Sequential() {
         log.warn("live::anthropic not registered: ANTHROPIC_API_KEY is unset")
     }
 }
+
+// ─── journal UserContent: media after a tool result ──────────────────────────
+
+// A runner that screenshots after every tool call appends an
+// `ai.events.UserContent` carrying the image AFTER the tool result. Anthropic
+// wants the tool_result blocks first in the user turn that answers a tool_use,
+// so the parts-bearing user turn merges into that same message, after the
+// results: [tool_result, text, image] — the image lowered exactly as prompt
+// media is (`_anthropic_prompt_blocks`).
+function anthropic_user_content_after_tool_result() -> string {
+    let cl = anthropic.AnthropicClient.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let journal = ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [
+                    ai.content.ToolUse { id: "toolu_a", name: "anth_weather", args: { "city": "SF" } },
+                ],
+                client_id: "anthropic/claude-haiku-4-5",
+            },
+            ai.events.ToolCompleted { id: "toolu_a", output: "sunny in SF" },
+            ai.events.UserContent.new(
+                [
+                    "Screenshot after the tool ran:",
+                    baml.media.Image.from_base64("SGVsbG8=", "image/png"),
+                ],
+            ),
+        ],
+    };
+    let body = anth_render_body(cl, AnthMockTools@spec("weather?"), journal);
+    [
+        `role1=${baml.json.path_or<string>(body, ".messages[1].role", "-")}`,
+        `use0=${baml.json.path_or<string>(body, ".messages[1].content[0].type", "-")}`,
+        `role2=${baml.json.path_or<string>(body, ".messages[2].role", "-")}`,
+        `res0=${baml.json.path_or<string>(body, ".messages[2].content[0].type", "-")}`,
+        `id0=${baml.json.path_or<string>(body, ".messages[2].content[0].tool_use_id", "-")}`,
+        `type1=${baml.json.path_or<string>(body, ".messages[2].content[1].type", "-")}`,
+        `text1=${baml.json.path_or<string>(body, ".messages[2].content[1].text", "-")}`,
+        `type2=${baml.json.path_or<string>(body, ".messages[2].content[2].type", "-")}`,
+        `mime2=${baml.json.path_or<string>(body, ".messages[2].content[2].source.media_type", "-")}`,
+        `data2=${baml.json.path_or<string>(body, ".messages[2].content[2].source.data", "-")}`,
+        `role3=${baml.json.path_or<string>(body, ".messages[3].role", "-")}`,
+    ].join("|")
+}
+
+test "anthropic_user_content_after_tool_result" {
+    let got = anthropic_user_content_after_tool_result();
+    assert.contains(got, "role1=assistant|");
+    assert.contains(got, "use0=tool_use|");
+    assert.contains(got, "role2=user|");
+    assert.contains(got, "res0=tool_result|");
+    assert.contains(got, "id0=toolu_a|");
+    assert.contains(got, "type1=text|");
+    assert.contains(got, "text1=Screenshot after the tool ran:|");
+    assert.contains(got, "type2=image|");
+    assert.contains(got, "mime2=image/png|");
+    assert.contains(got, "data2=SGVsbG8=|");
+    // the screenshot rode in the tool-result user turn: no fourth message
+    assert.contains(got, "role3=-")
+}
+
+// `ai.wire.sanitize_for_client` treats a UserContent turn like a UserMessage:
+// a tool call still unanswered when it arrives is closed first.
+function anthropic_orphaned_tool_call_closed_before_user_content() -> string {
+    let cl = anthropic.AnthropicClient.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let journal = ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [
+                    ai.content.ToolUse { id: "t1", name: "anth_weather", args: { "city": "SF" } },
+                ],
+                client_id: "anthropic/claude-haiku-4-5",
+            },
+            ai.events.UserContent.new(["never mind, look at this instead"]),
+        ],
+    };
+    let body = anth_render_body(cl, AnthMockPlain@spec(), journal);
+    [
+        `type=${baml.json.path_or<string>(body, ".messages[2].content[0].type", "-")}`,
+        `id=${baml.json.path_or<string>(body, ".messages[2].content[0].tool_use_id", "-")}`,
+        `is_error=${baml.json.path_or<bool>(body, ".messages[2].content[0].is_error", false)}`,
+        `text=${baml.json.path_or<string>(body, ".messages[2].content[1].text", "-")}`,
+    ].join("|")
+}
+
+test "anthropic_orphaned_tool_call_closed_before_user_content" {
+    let got = anthropic_orphaned_tool_call_closed_before_user_content();
+    assert.contains(got, "type=tool_result|");
+    assert.contains(got, "id=t1|");
+    assert.contains(got, "is_error=true|");
+    assert.contains(got, "text=never mind, look at this instead")
+}

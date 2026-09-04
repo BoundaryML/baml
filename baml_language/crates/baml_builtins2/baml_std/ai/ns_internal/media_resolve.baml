@@ -202,3 +202,25 @@ function _resolve_media_preview_content(
         detail: "request preview received media without inline data, a file, or a URL",
     }
 }
+
+/// A primitive media value as the `root.MediaPart` wrapper for its kind.
+///
+/// `baml.media.Image.from_base64` and its siblings return the `image` /
+/// `audio` / `video` / `pdf` primitives, which are distinct static types from
+/// the `baml.media.*` wrapper classes `MediaPart` is a union of, so the value
+/// bridges through its BEP-038 `{kind, source, value, mime}` envelope. The
+/// decode discriminates on the envelope's `kind`, so the union lands on the
+/// wrapper for the value's own media kind. Shared by `root.content.Media.new`
+/// and `root.events.UserContent.new`.
+function media_part(value: image | audio | video | pdf) -> root.MediaPart {
+    let envelope = baml.json.to_json(value) catch_all (e) {
+        _ => {
+            throw baml.errors.InvalidArgument { message: `media value could not be encoded: ${e.to_string()}` }
+        },
+    };
+    baml.json.from_json<root.MediaPart>(envelope) catch_all (e) {
+        _ => {
+            throw baml.errors.InvalidArgument { message: `media value could not be decoded: ${e.to_string()}` }
+        },
+    }
+}

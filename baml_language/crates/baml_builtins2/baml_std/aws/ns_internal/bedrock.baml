@@ -785,7 +785,11 @@ function _push_tool_result(
 
 // `ai.RunStarted` / `ai.ToolRequested` / `ai.Usage` / `ai.FinalProduced` are
 // journal-only and skip; skipping never closes an open tool-result group.
-function _lower_journal(journal: ai.Journal, with_status: bool) -> Message[] {
+function _lower_journal(
+    journal: ai.Journal,
+    with_status: bool,
+    preview: bool = false,
+) -> Message[] {
     let pending: PendingMessage[] = [];
     for (let event in journal.entries()) {
         match (event) {
@@ -799,6 +803,21 @@ function _lower_journal(journal: ai.Journal, with_status: bool) -> Message[] {
                         tool_results: false,
                     },
                 );
+                null
+            },
+            // A parts-bearing user turn lowers through the same helper as a
+            // rendered prompt message, so a mid-run screenshot takes exactly
+            // the wire shape the template's media would.
+            let user: ai.events.UserContent => {
+                let blocks = _prompt_content(ai.wire.user_content_message(user), preview = preview);
+                if (blocks.length() > 0) {
+                    pending.push(
+                        PendingMessage {
+                            message: Message { role: "user", content: blocks },
+                            tool_results: false,
+                        },
+                    );
+                }
                 null
             },
             let assistant: ai.events.AssistantMessage => {
@@ -987,6 +1006,7 @@ function converse_request(
     let journal_messages = _lower_journal(
         ai.wire.sanitize_for_client(input.journal, client.id()),
         _supports_tool_result_status(client.model),
+        preview = preview,
     );
     for (let message in journal_messages) {
         messages.push(message);

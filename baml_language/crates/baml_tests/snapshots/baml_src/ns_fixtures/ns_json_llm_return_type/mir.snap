@@ -2,11 +2,11 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 === MIR2 ===
-fn user.fixtures.json_llm_return_type.ExtractAny(client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+fn user.fixtures.json_llm_return_type.ExtractAny(client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never)) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: null | ai.Client // client // param
-    let _2: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _2: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never) // on_event // param
     let _3: bool
     let _4: bool
     let _5: ai.RunResult<baml.json.json>
@@ -247,11 +247,11 @@ fn .<lambda(ExtractAny@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.P
     }
 }
 
-fn user.fixtures.json_llm_return_type.ExtractAny@stream(client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<baml.json.json, baml.json.json> {
+fn user.fixtures.json_llm_return_type.ExtractAny@stream(client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<baml.json.json, baml.json.json> {
     // Locals:
     let _0: ai.stream.Stream<baml.json.json, baml.json.json> // _0 // return
     let _1: null | ai.stream.StreamingClient // client // param
-    let _2: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _2: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserContent | ai.events.UserMessage) -> void throws never) // on_event // param
     let _3: bool
     let _4: bool
     let _5: ai.FunctionSpec<baml.json.json>

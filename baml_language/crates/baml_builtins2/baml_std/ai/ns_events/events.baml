@@ -1,7 +1,5 @@
 // The event catalog: the typed things that can appear in a root.Journal.
 // Only the runner produces events — clients and tools never append.
-//
-// Mirrors _planv2/pages/04_reference/02_events.md.
 
 class RunStarted {
     spec_name: string,
@@ -10,6 +8,34 @@ class RunStarted {
 
 class UserMessage {
     content: string,
+}
+
+/// A user turn carrying prompt parts: text and media, in order. A runner
+/// appends it imperatively mid-run — a screenshot after a tool ran, a
+/// document the host attaches — and every client lowers it to a user
+/// message at its position in the journal. `UserMessage` stays text-only.
+class UserContent {
+    parts: root.PromptPart[],
+
+    /// Build a turn from ordinary values: text, and the `image` / `audio` /
+    /// `video` / `pdf` primitives `baml.media.*.from_base64` and friends
+    /// return. Those primitives are distinct static types from the
+    /// `baml.media.*` wrapper classes `root.PromptPart` is a union of, so a
+    /// media value bridges through `root.internal.media_part` (exactly as
+    /// `root.content.Media.new` does); text passes straight through. Parts
+    /// that are already `root.PromptPart` — a rendered prompt's, a
+    /// `root.content.Media`'s — go in the plain constructor instead.
+    function new(parts: (string | image | audio | video | pdf)[]) -> UserContent {
+        let out: root.PromptPart[] = [];
+        for (let part in parts) {
+            if let text: string = part {
+                out.push(text);
+            } else {
+                out.push(root.internal.media_part(part));
+            }
+        }
+        UserContent { parts: out }
+    }
 }
 
 class AssistantMessage {
@@ -93,6 +119,7 @@ class LLMCall {
 
 type Event = RunStarted
     | UserMessage
+    | UserContent
     | AssistantMessage
     | ToolRequested
     | ToolCompleted

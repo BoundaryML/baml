@@ -757,7 +757,11 @@ function chat_lower_prompt(
 ///
 /// Callers pass the journal through `ai.wire.sanitize_for_client` first, so
 /// foreign reasoning, empty turns and unanswered tool calls are already handled.
-function chat_lower_journal(j: ai.Journal) -> ChatMessage[] {
+function chat_lower_journal(
+    j: ai.Journal,
+    compat: ChatCompat,
+    preview: bool = false,
+) -> ChatMessage[] {
     let out: ChatMessage[] = [];
     for (let event in j.entries()) {
         match (event) {
@@ -770,6 +774,27 @@ function chat_lower_journal(j: ai.Journal) -> ChatMessage[] {
                         tool_call_id: null,
                     },
                 );
+                null
+            },
+            // A parts-bearing user turn lowers through the same helper as a
+            // rendered prompt message, so a mid-run screenshot takes exactly
+            // the wire shape the template's media would.
+            let user: ai.events.UserContent => {
+                let parts = _chat_prompt_parts(
+                    ai.wire.user_content_message(user),
+                    compat,
+                    preview = preview,
+                );
+                if (parts.length() > 0) {
+                    out.push(
+                        ChatMessage {
+                            role: "user",
+                            content: _chat_content(parts, compat.collapse_text_content),
+                            tool_calls: null,
+                            tool_call_id: null,
+                        },
+                    );
+                }
                 null
             },
             let assistant: ai.events.AssistantMessage => {
@@ -1060,7 +1085,7 @@ function chat_build_request(
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
     let messages = chat_lower_prompt(prompt, compat, preview = preview);
     let journal = ai.wire.sanitize_for_client(input.journal, chat_client_id(compat, params));
-    for (let message in chat_lower_journal(journal)) {
+    for (let message in chat_lower_journal(journal, compat, preview = preview)) {
         messages.push(message);
     }
 

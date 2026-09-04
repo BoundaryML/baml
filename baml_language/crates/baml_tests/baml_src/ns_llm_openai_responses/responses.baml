@@ -1113,3 +1113,61 @@ testset "live" with testing.Sequential() {
         log.warn("live::openai_responses not registered: OPENAI_API_KEY is unset")
     }
 }
+
+// ─── journal UserContent: media after a tool result ──────────────────────────
+
+// A runner that screenshots after every tool call appends an
+// `ai.events.UserContent` AFTER the tool result. It lowers to a user message
+// item right after the `function_call_output`, its text and image as the same
+// typed parts prompt media takes (`_openai_prompt_content`).
+function oai_user_content_after_tool_result() -> string {
+    let spec = OaiEcho@spec("Say pong.");
+    let properties: map<string, unknown> = { };
+    let required: string[] = [];
+    let schema: map<string, unknown> = {
+        "type": "object",
+        "properties": properties,
+        "required": required,
+    };
+    let toolbox = ai.tools.Toolbox.new(
+        [
+            ai.tools.raw_tool(
+                "lookup",
+                "Look something up",
+                schema,
+                (args: map<string, unknown>) -> {
+                    let out = "ok";
+                    out
+                },
+            ),
+        ],
+    );
+    let args: map<string, unknown> = { };
+    let journal = ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [ai.content.ToolUse { id: "call_1", name: "lookup", args: args }],
+                client_id: "openai/gpt-4o-mini",
+            },
+            ai.events.ToolCompleted { id: "call_1", output: "ok" },
+            ai.events.UserContent.new(
+                [
+                    "Screenshot after the tool ran:",
+                    baml.media.Image.from_base64("SGVsbG8=", "image/png"),
+                ],
+            ),
+        ],
+    };
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let req = openai.internal.openai_render(cl, _oai_input(spec, journal, toolbox));
+    req.body
+}
+
+test "oai_user_content_after_tool_result" {
+    let got = oai_user_content_after_tool_result();
+    // the user turn with the image sits immediately after the tool result
+    assert.contains(
+        got,
+        `{"type":"function_call_output","call_id":"call_1","output":"ok"},{"role":"user","content":[{"type":"input_text","text":"Screenshot after the tool ran:"},{"type":"input_image","image_url":"data:image/png;base64,SGVsbG8=","detail":"auto"}]}`,
+    )
+}

@@ -608,7 +608,11 @@ function _gm_tool_name_for(j: ai.Journal, id: string) -> string {
 // ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are journal-only.
 // Consecutive tool results merge into ONE user content of functionResponse
 // parts, matching how Gemini expects results for a multi-call turn.
-function google_lower_journal(j: ai.Journal) -> GmContent[] {
+function google_lower_journal(
+    j: ai.Journal,
+    fetch_url: bool = true,
+    preview: bool = false,
+) -> GmContent[] {
     let contents: GmContent[] = [];
     let pending: GmPart[] = []; // functionResponse parts awaiting flush
     for (let e in j.entries()) {
@@ -622,6 +626,27 @@ function google_lower_journal(j: ai.Journal) -> GmContent[] {
                     null
                 };
                 contents.push(GmContent { role: "user", parts: [GmPart.of_text(u.content)] });
+                null
+            },
+            // A parts-bearing user turn lowers through the same helper as a
+            // rendered prompt message, so a mid-run screenshot takes exactly
+            // the wire shape the template's media would.
+            let u: ai.events.UserContent => {
+                if (pending.length() > 0) {
+                    contents.push(GmContent { role: "user", parts: pending });
+                    pending = [];
+                    null
+                } else {
+                    null
+                };
+                let parts = _gm_prompt_parts(
+                    ai.wire.user_content_message(u),
+                    fetch_url = fetch_url,
+                    preview = preview,
+                );
+                if (parts.length() > 0) {
+                    contents.push(GmContent { role: "user", parts: parts });
+                }
                 null
             },
             let a: ai.events.AssistantMessage => {
@@ -722,7 +747,7 @@ function gemini_build_body(
     let lowered = google_lower_prompt(prompt, fetch_url = fetch_url, preview = preview);
     let contents = lowered.contents;
     let journal = ai.wire.sanitize_for_client(input.journal, client_id);
-    for (let item in google_lower_journal(journal)) {
+    for (let item in google_lower_journal(journal, fetch_url = fetch_url, preview = preview)) {
         contents.push(item);
     }
 

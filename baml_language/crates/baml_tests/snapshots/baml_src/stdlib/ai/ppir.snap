@@ -250,7 +250,7 @@ function ai.content.kind(self: ?) -> string  [expr] {
   {  } match (self.media) { image: baml.media.Image => "image", audio: baml.media.Audio => "audio", video: baml.media.Video => "video", pdf: baml.media.Pdf => "pdf" }
 }
 function ai.content.new(value: image | audio | video | pdf, provider_id: string? = null, revised_prompt: string? = null) -> ai.content.Media  [expr] {
-  { let envelope = baml.json.to_json(value) catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } }; let part: root.MediaPart = baml.json.from_json(envelope) catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } } } ai.content.Media { media: part, provider_id: provider_id, revised_prompt: revised_prompt }
+  {  } ai.content.Media { media: root.internal.media_part(value), provider_id: provider_id, revised_prompt: revised_prompt }
 }
 
 --- <builtin>/ai/ns_errors/errors.baml ---
@@ -518,16 +518,25 @@ class ai.events.Usage$stream {
   cached_input_tokens: int | null
   reasoning_tokens: int | null
 }
+class ai.events.UserContent {
+  parts: root.PromptPart[]
+}
+class ai.events.UserContent$stream {
+  parts: root.PromptPart$stream[]
+}
 class ai.events.UserMessage {
   content: string
 }
 class ai.events.UserMessage$stream {
   content: string | null
 }
-type ai.events.Event = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
-type ai.events.Event$stream = ai.events.RunStarted$stream | ai.events.UserMessage$stream | ai.events.AssistantMessage$stream | ai.events.ToolRequested$stream | ai.events.ToolCompleted$stream | ai.events.ToolFailed$stream | ai.events.Usage$stream | ai.events.LLMCall$stream | ai.events.FinalProduced$stream
+type ai.events.Event = ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
+type ai.events.Event$stream = ai.events.RunStarted$stream | ai.events.UserMessage$stream | ai.events.UserContent$stream | ai.events.AssistantMessage$stream | ai.events.ToolRequested$stream | ai.events.ToolCompleted$stream | ai.events.ToolFailed$stream | ai.events.Usage$stream | ai.events.LLMCall$stream | ai.events.FinalProduced$stream
 function ai.events.guard(listener: (ai.events.Event) -> void throws E?) -> (ai.events.Event) -> void throws never?  [expr] {
   {  } if let cb: (ai.events.Event) -> void throws E = listener {  } (e: ai.events.Event) -> void { {  } cb(e) catch_all (err) { _ => {  } } } else {  } null
+}
+function ai.events.new(parts: string | image | audio | video | pdf[]) -> ai.events.UserContent  [expr] {
+  { let out: root.PromptPart[] = []; for part in parts {  } if let text: string = part { out.push(text) } else { out.push(root.internal.media_part(part)) } } ai.events.UserContent { parts: out }
 }
 
 --- captures ---
@@ -617,6 +626,9 @@ function ai.internal._resolve_media_content(url: string?, file: string?, inline:
 }
 function ai.internal._resolve_media_preview_content(url: string?, file: string?, inline: string, mime: string) -> root.wire.ResolvedMedia  [expr] {
   { if let path: string = file { throw ai.errors.PreviewUnsupported { provider: "media-preview", detail: `...` } }; if (inline Ne "") { return root.wire.ResolvedMedia { url: null, base64: inline, mime_type: mime } }; if let media_url: string = url { if (media_url.starts_with("data:")) { if let separator: int = media_url.index_of(";base64,") { return root.wire.ResolvedMedia { url: null, base64: media_url.slice(separator Add 8, media_url.length()), mime_type: media_url.slice(5, separator) } }; throw ai.errors.PreviewUnsupported { provider: "media-preview", detail: "request preview c..." } }; return root.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime } }; throw ai.errors.PreviewUnsupported { provider: "media-preview", detail: "request preview r..." } }
+}
+function ai.internal.media_part(value: image | audio | video | pdf) -> root.MediaPart  [expr] {
+  { let envelope = baml.json.to_json(value) catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } } } baml.json.from_json(envelope) catch_all (e) { _ => { throw baml.errors.InvalidArgument { message: `...` } } }
 }
 
 --- <builtin>/ai/ns_internal/prompt.baml ---
@@ -926,13 +938,16 @@ function ai.wire.resolve_media_preview(media: ai.MediaPart) -> ai.wire.ResolvedM
   {  } match (media) { image: baml.media.Image => { let source = image.file() NullCoalesce image.url() NullCoalesce "" } root.internal._resolve_media_preview_content(image.url(), image.file(), image.base64(), root.internal._media_mime_type(image.mime_type(), source, "image")), audio: baml.media.Audio => { let source = audio.file() NullCoalesce audio.url() NullCoalesce "" } root.internal._resolve_media_preview_content(audio.url(), audio.file(), audio.base64(), root.internal._media_mime_type(audio.mime_type(), source, "audio")), video: baml.media.Video => { let source = video.file() NullCoalesce video.url() NullCoalesce "" } root.internal._resolve_media_preview_content(video.url(), video.file(), video.base64(), root.internal._media_mime_type(video.mime_type(), source, "video")), pdf: baml.media.Pdf => { let source = pdf.file() NullCoalesce pdf.url() NullCoalesce "" } root.internal._resolve_media_preview_content(pdf.url(), pdf.file(), pdf.base64(), root.internal._media_mime_type(pdf.mime_type(), source, "pdf")) }
 }
 function ai.wire.sanitize_for_client(j: root.Journal, client_id: string) -> root.Journal  [expr] {
-  { let out: root.events.Event[] = []; let pending: string[] = []; for event in j.entries() { match (event) { assistant: root.events.AssistantMessage => { root.internal._flush_orphaned_calls(out, pending); let blocks = root.internal._wire_blocks(assistant.content, assistant.client_id Eq client_id); if (blocks.length() Gt 0) { out.push(root.events.AssistantMessage { content: blocks, client_id: assistant.client_id }); for block in blocks {  } if let use: root.content.ToolUse = block { pending.push(use.id) } } null else {  } null } null, user: root.events.UserMessage => { root.internal._flush_orphaned_calls(out, pending); out.push(user) } null, completed: root.events.ToolCompleted => { root.internal._resolve_pending_call(pending, completed.id); out.push(completed) } null, failed: root.events.ToolFailed => { root.internal._resolve_pending_call(pending, failed.id); out.push(failed) } null, _ => { out.push(event) } null } }; root.internal._flush_orphaned_calls(out, pending) } root.Journal { log: out }
+  { let out: root.events.Event[] = []; let pending: string[] = []; for event in j.entries() { match (event) { assistant: root.events.AssistantMessage => { root.internal._flush_orphaned_calls(out, pending); let blocks = root.internal._wire_blocks(assistant.content, assistant.client_id Eq client_id); if (blocks.length() Gt 0) { out.push(root.events.AssistantMessage { content: blocks, client_id: assistant.client_id }); for block in blocks {  } if let use: root.content.ToolUse = block { pending.push(use.id) } } null else {  } null } null, user: root.events.UserMessage => { root.internal._flush_orphaned_calls(out, pending); out.push(user) } null, content: root.events.UserContent => { root.internal._flush_orphaned_calls(out, pending); out.push(content) } null, completed: root.events.ToolCompleted => { root.internal._resolve_pending_call(pending, completed.id); out.push(completed) } null, failed: root.events.ToolFailed => { root.internal._resolve_pending_call(pending, failed.id); out.push(failed) } null, _ => { out.push(event) } null } }; root.internal._flush_orphaned_calls(out, pending) } root.Journal { log: out }
 }
 function ai.wire.send_as(req: baml.http.Request, provider: string, request_timeout_ms: int? = null) -> T  [expr] {
   { let timeout = match (request_timeout_ms) { milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds), null => null }; let resp = baml.http.send(req, timeout = timeout) catch_all (e) { timeout: baml.errors.Timeout => throw timeout, _ => { throw root.errors.NetworkFailure { status_code: null, provider: provider, detail: `...`, raw_body: null } } }; let text = resp.text() catch_all (e) { timeout: baml.errors.Timeout => throw timeout, _ => { throw root.errors.NetworkFailure { status_code: null, provider: provider, detail: "the response body...", raw_body: null } } }; if (Not resp.ok()) { throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers) } } baml.json.from_string(text) catch_all (e) { _ => throw root.errors.ParseFailed { provider: provider, raw_output: text } }
 }
 function ai.wire.send_as_with_wire(req: baml.http.Request, provider: string, client_name: string, capture_wire: bool = true, request_timeout_ms: int? = null) -> ai.wire.SentAs<T>  [expr] {
   { let started = baml.time.Instant.now(); let timeout = match (request_timeout_ms) { milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds), null => null }; let resp = baml.http.send(req, timeout = timeout) catch_all (e) { timeout: baml.errors.Timeout => throw timeout, _ => { throw root.errors.NetworkFailure { status_code: null, provider: provider, detail: `...`, raw_body: null } } }; let text = resp.text() catch_all (e) { timeout: baml.errors.Timeout => throw timeout, _ => { throw root.errors.NetworkFailure { status_code: null, provider: provider, detail: "the response body...", raw_body: null } } }; if (Not resp.ok()) { throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers) }; let value = baml.json.from_string(text) catch_all (e) { _ => throw root.errors.ParseFailed { provider: provider, raw_output: text } }; let call = root.events.LLMCall { client_name: client_name, provider: provider, timing: root.events.Timing { start_time_utc_ms: started.to_timestamp_milliseconds(), duration_ms: started.elapsed().to_milliseconds(), ttft_ms: null }, http_request: if (capture_wire) {  } baml.http.Request { method: req.method, url: redact_url_secrets(req.url), headers: redact_request_headers(req.headers), body: req.body } else {  } null, http_response: root.events.HttpResponse { status: resp.status_code, headers: resp.headers, body: if (capture_wire) {  } redact_url_secrets(text) else {  } null }, usage: null, selected: true, sse_responses: null } } ai.wire.SentAs { value: value, call: call }
+}
+function ai.wire.user_content_message(event: root.events.UserContent) -> root.PromptMessage  [expr] {
+  { let text: string[] = []; for part in event.parts { match (part) { s: string => { text.push(s) } null, image: baml.media.Image => { text.push("[image]") } null, audio: baml.media.Audio => { text.push("[audio]") } null, video: baml.media.Video => { text.push("[video]") } null, pdf: baml.media.Pdf => { text.push("[pdf]") } null } } } root.PromptMessage { role: "user", content: text.join(""), parts: event.parts, metadata: map {  } }
 }
 
 --- <builtin>/ai/runner.baml ---

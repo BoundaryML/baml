@@ -140,7 +140,7 @@ function prompt_tag_runtime.<(user.prompt_tag_runtime.RedactedMedia as baml.ToSt
     return
 }
 
-function prompt_tag_runtime.PtRenderPerson(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> prompt_tag_runtime.Person {
+function prompt_tag_runtime.PtRenderPerson(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> prompt_tag_runtime.Person {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -246,7 +246,7 @@ function prompt_tag_runtime.PtRenderPerson@spec() -> ai.FunctionSpec<prompt_tag_
     return
 }
 
-function prompt_tag_runtime.PtRenderPerson@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<prompt_tag_runtime.Person$stream | null, prompt_tag_runtime.Person> {
+function prompt_tag_runtime.PtRenderPerson@stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<prompt_tag_runtime.Person$stream | null, prompt_tag_runtime.Person> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -273,7 +273,7 @@ function prompt_tag_runtime.PtRenderPerson@stream(client: ai.stream.StreamingCli
     return
 }
 
-function prompt_tag_runtime.PtStructuredGreeting(name: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function prompt_tag_runtime.PtStructuredGreeting(name: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -388,7 +388,7 @@ function prompt_tag_runtime.PtStructuredGreeting@spec(name: string) -> ai.Functi
     return
 }
 
-function prompt_tag_runtime.PtStructuredGreeting@stream(name: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function prompt_tag_runtime.PtStructuredGreeting@stream(name: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -416,7 +416,7 @@ function prompt_tag_runtime.PtStructuredGreeting@stream(name: string, client: ai
     return
 }
 
-function prompt_tag_runtime.PtStructuredImage(photo: image, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function prompt_tag_runtime.PtStructuredImage(photo: image, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -531,7 +531,7 @@ function prompt_tag_runtime.PtStructuredImage@spec(photo: image) -> ai.FunctionS
     return
 }
 
-function prompt_tag_runtime.PtStructuredImage@stream(photo: image, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function prompt_tag_runtime.PtStructuredImage@stream(photo: image, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.UserContent | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
