@@ -1541,57 +1541,11 @@ struct PackageLoweringData {
     interface_method_names: FxHashSet<Name>,
 }
 
-/// # Safety
-///
-/// Mirrors [`baml_compiler2_hir::package::PackageItems`]'s impl. The contained
-/// maps hold no Salsa-interned (`'db`) data, so storing them by value is sound;
-/// `maybe_update` uses `PartialEq` for proper Salsa early-cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for PackageLoweringData {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
 /// Project-wide class → runtime type-tag map. See
 /// [`class_type_tags_for_project`].
 #[derive(Debug, PartialEq)]
 struct ProjectClassTypeTags {
     tags: IndexMap<TypeName, i64>,
-}
-
-/// Mirrors [`PackageLoweringData`]'s impl: the map holds no Salsa-interned
-/// (`'db`) data, so storing it by value is sound; `maybe_update` uses
-/// `PartialEq` for proper Salsa early-cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for ProjectClassTypeTags {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
 }
 
 /// Build `class_type_tags` for every class in the project, once, memoized by

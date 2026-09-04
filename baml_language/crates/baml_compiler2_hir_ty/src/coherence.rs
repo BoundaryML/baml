@@ -1031,7 +1031,7 @@ fn substitute_plain(ty: &Ty, bindings: &TypeBindings) -> Ty {
 /// overlap, or could not be proven disjoint. With no specialization,
 /// either is a hard error; `indeterminate` words the diagnostic.
 /// Location-keyed (span-free): S17 maps to source ranges at render time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, salsa::Update)]
 pub struct CoherenceViolation<'db> {
     /// The offending impl - always owned by the package being checked,
     /// so the diagnostic lands on a file the user can edit.
@@ -1045,25 +1045,8 @@ pub struct CoherenceViolation<'db> {
 
 /// Wrapper for the manual `salsa::Update` impl (the `ImplFacts`
 /// precedent).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, salsa::Update)]
 pub struct CoherenceReport<'db>(pub Vec<CoherenceViolation<'db>>);
-
-// SAFETY: PartialEq-driven overwrite, the ImplFacts precedent.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for CoherenceReport<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
 
 /// Per-package coherence: overlapping implementations across the package
 /// and its dependency closure - rustc's per-crate coherence plus
@@ -1374,7 +1357,7 @@ fn renamed_subject(
 /// An orphan-rule violation on one impl: a foreign interface implemented
 /// with no local type covering the impl (or an uncovered generic param
 /// appearing before the first local type).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct OrphanViolation<'db> {
     pub block: ImplLoc<'db>,
     pub interface: TypeName,
@@ -1384,25 +1367,8 @@ pub struct OrphanViolation<'db> {
 }
 
 /// Wrapper for the manual `salsa::Update` impl.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, salsa::Update)]
 pub struct OrphanReport<'db>(pub Vec<OrphanViolation<'db>>);
-
-// SAFETY: PartialEq-driven overwrite, the ImplFacts precedent.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for OrphanReport<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
 
 /// Per-package orphan check: every impl must implement a local interface
 /// or cover a local type (RFC-2451: the first local class/enum in the

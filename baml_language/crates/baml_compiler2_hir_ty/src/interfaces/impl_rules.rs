@@ -24,7 +24,7 @@ use crate::{diagnostics::TirTypeError, lower::qualify_def};
 /// here: an in-body `implements I {…}` inside `class C<T>` resolves exactly as
 /// `implement<T> I for C<T>`. The in-body/out-of-body distinction survives only
 /// as `origin`, which is diagnostic metadata and MUST NOT drive resolution.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct ImplData<'db> {
     /// The implemented interface's resolved head identity.
     pub interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
@@ -46,30 +46,6 @@ pub struct ImplData<'db> {
     pub field_links: Vec<(Name, Name)>,
     /// In-body vs out-of-body provenance. Diagnostic metadata ONLY.
     pub origin: InterfaceImplOrigin,
-}
-
-/// # Safety
-///
-/// `ImplData<'db>` holds Salsa interned locs with a db-tied lifetime, so it
-/// can't auto-derive `salsa::Update`; `maybe_update` uses `PartialEq` for
-/// proper early-cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for ImplData<'_> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
 }
 
 /// Where in an `implements` block a diagnostic originated. Span-free

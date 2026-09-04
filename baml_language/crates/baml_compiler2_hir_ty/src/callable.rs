@@ -82,27 +82,6 @@ impl ExternalCallable {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CallableThrows(pub baml_type::Ty);
 
-// SAFETY: `maybe_update` transfers ownership of `new_value` into
-// `old_pointer` and reports change via `PartialEq` for early cutoff -
-// the `ResolvedTypeAlias`/`ScopeInference` precedent.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for CallableThrows {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid and initialized, per the trait
-        // contract.
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
-
 fn callable_throws_cycle_initial<'db>(
     _db: &'db dyn baml_compiler2_ppir::Db,
     _id: salsa::Id,
@@ -193,27 +172,6 @@ pub struct FunctionSignatureTy {
     pub generic_params: Vec<baml_type::ParamTy>,
     /// `Some` for builtin-bodied functions.
     pub builtin_kind: Option<baml_compiler2_ast::BuiltinKind>,
-}
-
-// SAFETY: `maybe_update` transfers ownership of `new_value` into
-// `old_pointer` and reports change via `PartialEq` for early cutoff -
-// the `CallableThrows` precedent.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for FunctionSignatureTy {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid and initialized, per the trait
-        // contract.
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
 }
 
 /// The enclosing type's generic-frame prefix length for a method's frame;

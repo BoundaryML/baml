@@ -99,7 +99,7 @@ fn subject_head_is_implementor(db: &dyn baml_compiler2_ppir::Db, ty: &baml_type:
 /// free through `Deref`; the cold plain consumers (coherence, export, IDE)
 /// convert with a TOTAL `to_plain()`, so no boundary re-derives the
 /// closedness with an `unreachable!`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, salsa::Update)]
 pub struct ImplFacts<'db> {
     pub interface: baml_type::interned::ClosedInterface,
     pub for_ty_pattern: baml_type::interned::ClosedTy,
@@ -110,40 +110,11 @@ pub struct ImplFacts<'db> {
     pub methods: Vec<baml_compiler2_hir::loc::FunctionLoc<'db>>,
 }
 
-/// A PartialEq-driven whole-value `salsa::Update` for a `'db`-carrying
-/// type. Salsa's own `update_fallback` has these exact semantics but is
-/// `'static`-gated, and the field-wise derive requires every field type to
-/// implement `Update` — `baml_type`'s types don't (it has no salsa
-/// dependency) — so compare-and-overwrite of the whole value is the
-/// correct impl, written once.
-macro_rules! partial_eq_salsa_update {
-    ($ty:ident) => {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned;
-        // `PartialEq` decides whether consumers see a change.
-        #[allow(unsafe_code)]
-        unsafe impl salsa::Update for $ty<'_> {
-            unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-                #[allow(unsafe_code)]
-                unsafe {
-                    let changed = *old_pointer != new_value;
-                    if changed {
-                        std::ptr::drop_in_place(old_pointer);
-                        std::ptr::write(old_pointer, new_value);
-                    }
-                    changed
-                }
-            }
-        }
-    };
-}
-
-partial_eq_salsa_update!(ImplFacts);
-
 /// One impl block's header resolution — THE single decision point for
 /// header validity. The resolution substrate reads it through
 /// [`Self::resolved`]; the E0135 diagnostic renders [`Self::Poisoned`]'s
 /// very list — so the two can never drift.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, salsa::Update)]
 pub enum ImplHeaderResolution<'db> {
     /// The header does not resolve to an interface (S17's diagnostic).
     Unresolved,
@@ -208,8 +179,6 @@ impl<'db> ImplHeaderResolution<'db> {
         }
     }
 }
-
-partial_eq_salsa_update!(ImplHeaderResolution);
 
 /// The resolution-relevant facts of one impl block, behind the header's
 /// validity decision ([`ImplHeaderResolution`]).
@@ -558,25 +527,6 @@ pub struct MountedImplFacts {
     pub associated_types: Vec<(Name, baml_type::interned::ClosedTy)>,
 }
 
-// SAFETY: mounted/precompiled facts are fully owned interned values and
-// collections. PartialEq therefore completely determines whether Salsa may
-// retain the old allocation.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for MountedImplFacts {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
-
 #[derive(Clone, PartialEq)]
 pub enum ResolvedImplFacts<'db> {
     Source(&'db ImplFacts<'db>),
@@ -659,7 +609,7 @@ pub enum ProvidedMethod<'db, 'a> {
     Mounted(&'a crate::package_interface::ExportedFunction),
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, salsa::Update)]
 enum CachedResolvedImplOrigin<'db> {
     /// Deliberately fact-free: source facts are Salsa-derived and must be
     /// re-hydrated by `impls_for_type` so the caller records their live query
@@ -675,29 +625,10 @@ enum CachedResolvedImplOrigin<'db> {
     Precompiled { package: PackageId<'db>, row: u32 },
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, salsa::Update)]
 struct CachedResolvedImpl<'db> {
     origin: CachedResolvedImplOrigin<'db>,
     bindings: FxHashMap<ParamTy, Ty>,
-}
-
-// SAFETY: cached rows contain no `db` borrows: only owned collections and
-// Copy/interned handles. PartialEq therefore completely determines whether the
-// old allocation can be retained, matching Salsa's update contract.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for CachedResolvedImpl<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
 }
 
 impl ResolvedImpl<'_> {

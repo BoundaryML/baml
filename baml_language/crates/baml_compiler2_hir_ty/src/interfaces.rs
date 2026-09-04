@@ -684,26 +684,6 @@ pub struct ResolvedInterfaceFields {
     pub diagnostics: Vec<(TirTypeError, text_size::TextRange)>,
 }
 
-// Safety: contains `Ty` (which has `Name`, a Salsa interned type). Manual
-// `Update` impl uses `PartialEq` for early-cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for ResolvedInterfaceFields {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
 /// Resolve an interface's declared field types in its own scope.
 #[salsa::tracked(returns(ref))]
 pub fn resolve_interface_fields<'db>(
@@ -756,26 +736,6 @@ pub struct ResolvedInterfaceMethod {
     /// Span-free lowering diagnostics; the declaration checker surfaces its
     /// own copies, these travel with the surface for completeness.
     pub diagnostics: Vec<TirTypeError>,
-}
-
-// Safety: contains `Ty` (which has `Name`, a Salsa interned type). Manual
-// `Update` impl uses `PartialEq` for early-cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for ResolvedInterfaceMethod {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
 }
 
 /// Resolve every *required* method signature of an interface at its

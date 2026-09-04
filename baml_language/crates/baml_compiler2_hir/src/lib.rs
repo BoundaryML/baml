@@ -155,28 +155,6 @@ pub struct FileAst {
     pub env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
 
-// Safety: `FileAst` holds only plain (non-`'db`) data, so storing it by value
-// in a Salsa slot is sound. This manual `Update` impl uses `PartialEq` so the
-// query gets early-cutoff (dependents skip re-running when the AST is
-// unchanged) rather than the always-`true` behavior of a no-eq value.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for FileAst {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
 /// CST → AST lowering for one file, computed once and shared.
 ///
 /// Salsa-tracked because several different consumers need a file's AST items:
