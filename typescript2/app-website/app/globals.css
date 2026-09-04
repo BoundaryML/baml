@@ -527,6 +527,7 @@
   --border: #d8cfbd;
   --input: #d8cfbd;
   --ring: #6d28d9;
+
   color: var(--vsc-text);
   color-scheme: light;
 
@@ -582,6 +583,7 @@
   --border: #333333;
   --input: #3c3c3c;
   --ring: #8b5cf6;
+
   color: var(--vsc-text);
   color-scheme: dark;
 
@@ -699,7 +701,7 @@ pre > code {
   font-size: 0.86em;
   font-weight: inherit;
   color: inherit;
-  background: rgba(0, 0, 0, 0.06);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
   border-radius: 4px;
 }
 
