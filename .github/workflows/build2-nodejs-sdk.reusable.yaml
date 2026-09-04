@@ -29,6 +29,9 @@ on:
       # Node build matrix can be exercised on a branch before release.
       - sam/publish-nodejs
 
+permissions:
+  contents: read
+
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
   group: ${{ github.workflow }}-${{ github.ref }}-build-nodejs-sdk
