@@ -151,7 +151,7 @@ jobs:
             fi
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v10.0.1
 
       - name: Test LICENSE packaging
         if: matrix._.license_test != 'skip'

@@ -34,7 +34,7 @@ jobs:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.301
 
@@ -129,7 +129,7 @@ jobs:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.301
 
@@ -189,7 +189,7 @@ jobs:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         if: matrix.libc != 'musl'
         with:
           dotnet-version: 10.0.301

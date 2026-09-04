@@ -51,7 +51,7 @@ jobs:
       - name: Setup Java
         uses: ./.github/actions/setup-java
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       # Set environment variables
       - name: Export Properties
@@ -99,7 +99,7 @@ jobs:
 
   #     # Setup Gradle
   #     - name: Setup Gradle
-  #       uses: gradle/actions/setup-gradle@v5
+  #       uses: gradle/actions/setup-gradle@v6
 
   #     # Run tests
   #     - name: Run Tests
@@ -161,7 +161,7 @@ jobs:
         uses: ./.github/actions/setup-java
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Cache Plugin Verifier IDEs
         uses: actions/cache@v6

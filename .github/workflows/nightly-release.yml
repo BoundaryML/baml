@@ -94,7 +94,7 @@ jobs:
 
       - name: Check out the nightly selection script
         if: ${{ steps.clock.outputs.proceed == 'true' }}
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
         with:
           path: nightly-dispatch-tools
           sparse-checkout: scripts/baml_nightly_select.py
@@ -237,7 +237,7 @@ jobs:
 
       - name: Check out the nightly release source
         if: ${{ steps.decide.outputs.dispatch == 'true' }}
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
         with:
           # Compute the requested version from the exact source the release
           # workflow will independently plan and verify.
@@ -301,7 +301,7 @@ jobs:
       actions: read
       contents: read
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7
         with:
           sparse-checkout: |
             .github/actions/setup-mise
