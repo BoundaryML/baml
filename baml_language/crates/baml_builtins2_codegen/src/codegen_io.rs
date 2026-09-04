@@ -1001,6 +1001,7 @@ pub fn generate_io_traits(
     let ns_traits = emit_namespace_traits(&tree, &class_ns_map, &paths);
     let root_trait = emit_root_trait(&tree);
     let sys_ops = emit_sys_ops_struct(io_builtins);
+    let error_methods = emit_io_error_methods(&tree, &class_ns_map, &paths);
 
     let tokens = quote! {
         #struct_mods
@@ -1008,6 +1009,7 @@ pub fn generate_io_traits(
         #ns_traits
         #root_trait
         #sys_ops
+        #error_methods
     };
 
     crate::format_tokens(&tokens)
@@ -1401,6 +1403,95 @@ fn fn_only_generic_count(builtin: &NativeBuiltin) -> usize {
     builtin.generics.len()
 }
 
+fn io_method_signature(
+    builtin: &NativeBuiltin,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    let method = format_ident!("{}", io_method_name(builtin));
+    let ret_ty = clean_rust_type(&builtin.return_type, class_ns_map, paths);
+    let receiver = builtin
+        .receiver
+        .as_ref()
+        .filter(|r| receiver_is_extracted(r))
+        .map(|r| {
+            let owned = &paths.owned;
+            let ns = if builtin.namespace.is_empty() {
+                io_ns_key(io_package_name(builtin), "")
+            } else {
+                builtin.namespace.clone()
+            };
+            let ns = format_ident!("{}", ns);
+            let class = rust_class_type_ident(&r.class_name);
+            let name = format_ident!("{}", r.class_name.to_lowercase());
+            quote! { #name: #owned::#ns::#class, }
+        });
+    let params = builtin.params.iter().map(|p| {
+        let name = format_ident!("{}", p.name);
+        let ty = clean_param_type(&p.ty, class_ns_map, paths);
+        quote! { #name: #ty, }
+    });
+    let type_args = (0..fn_only_generic_count(builtin)).map(|i| {
+        let name = format_ident!("type_arg_{}", i);
+        quote! { #name: baml_type::RuntimeTy<baml_type::TaggedTypeName>, }
+    });
+    quote! {
+        fn #method(
+            &self,
+            heap: &std::sync::Arc<BexHeap>,
+            call_id: CallId,
+            #receiver
+            #(#params)*
+            #(#type_args)*
+            ctx: &SysOpContext,
+        ) -> SysOpOutput<#ret_ty>
+    }
+}
+
+/// Generate required trait methods that all return the supplied error.
+/// Keep the signatures shared with the traits so new builtins cannot leave a
+/// host's unsupported-operation implementation out of date.
+fn emit_io_error_methods(
+    tree: &BTreeMap<String, IoNamespaceNode<'_>>,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    let arms = tree.iter().flat_map(|(key, node)| {
+        std::iter::once((ns_trait_ident(key), &node.free_fns))
+            .chain(
+                node.classes
+                    .iter()
+                    .map(|(class, methods)| (class_trait_ident(key, class), methods)),
+            )
+            .map(|(name, methods)| {
+                let method_names = methods
+                    .iter()
+                    .map(|builtin| format_ident!("{}", io_method_name(builtin)))
+                    .collect::<Vec<_>>();
+                let definitions: Vec<_> = methods
+                    .iter()
+                    .map(|builtin| {
+                        let signature = io_method_signature(builtin, class_ns_map, paths);
+                        quote! {
+                            #[allow(unused_variables)]
+                            #signature { SysOpOutput::err($error) }
+                        }
+                    })
+                    .collect();
+                quote! {
+                    (#name, $error:expr) => {
+                        #(#definitions)*
+                    };
+                    #((#name::#method_names, $error:expr) => { #definitions };)*
+                }
+            })
+    });
+    quote! {
+        macro_rules! io_error_methods { #(#arms)* }
+        pub(crate) use io_error_methods;
+    }
+}
+
 fn emit_one_class_trait(
     ns_key: &str,
     ns: &str,
@@ -1417,63 +1508,10 @@ fn emit_one_class_trait(
         .map(|m| format!("Generated from `{}`", m.source_file))
         .unwrap_or_default();
 
-    // Clean methods
-    let clean_methods: Vec<TokenStream> = methods
-        .iter()
-        .map(|m| {
-            let method_ident = format_ident!("{}", io_method_name(m));
-            let ret_ty = clean_rust_type(&m.return_type, class_ns_map, paths);
-            let owned = &paths.owned;
-            let ns_ident = format_ident!("{}", ns);
-            let class_ident = rust_class_type_ident(class_name);
-            let Some(receiver) = &m.receiver else {
-                return quote! {
-                    compile_error!(concat!("missing receiver for method ", stringify!(#method_ident)));
-                };
-            };
-            let receiver_param = if receiver_is_extracted(receiver) {
-                let receiver_param_ident = format_ident!("{}", class_name.to_lowercase());
-                let receiver_ty = quote! { #owned::#ns_ident::#class_ident };
-                Some(quote! { #receiver_param_ident: #receiver_ty,})
-            } else {
-                None
-            };
-
-            let extra_params: Vec<TokenStream> = m
-                .params
-                .iter()
-                .map(|p| {
-                    let p_ident = format_ident!("{}", p.name);
-                    let p_ty = clean_param_type(&p.ty, class_ns_map, paths);
-                    quote! { #p_ident: #p_ty }
-                })
-                .collect();
-
-            // Synthetic type-arg params appended after value params.
-            // Only function-level generics (those NOT from the enclosing
-            // class) generate type-arg slots — class-level generics are
-            // part of the instance type and are not threaded as stack args.
-            let fn_type_arg_count = fn_only_generic_count(m);
-            let type_arg_params: Vec<TokenStream> = (0..fn_type_arg_count)
-                .map(|i| {
-                    let p_ident = format_ident!("type_arg_{}", i);
-                    quote! { #p_ident: baml_type::RuntimeTy<baml_type::TaggedTypeName> }
-                })
-                .collect();
-
-            quote! {
-                fn #method_ident(
-                    &self,
-                    heap: &std::sync::Arc<BexHeap>,
-                    call_id: CallId,
-                    #receiver_param
-                    #(#extra_params,)*
-                    #(#type_arg_params,)*
-                    ctx: &SysOpContext,
-                ) -> SysOpOutput<#ret_ty>;
-            }
-        })
-        .collect();
+    let clean_methods = methods.iter().map(|m| {
+        let signature = io_method_signature(m, class_ns_map, paths);
+        quote! { #signature; }
+    });
 
     // Glue methods
     let glue_methods: Vec<TokenStream> = methods
@@ -1745,47 +1783,10 @@ fn emit_one_namespace_trait(
         quote! { : #(#class_trait_idents)+* }
     };
 
-    // Clean methods for free functions
-    let free_fn_clean: Vec<TokenStream> = node
-        .free_fns
-        .iter()
-        .map(|f| {
-            let fn_ident = format_ident!("{}", io_method_name(f));
-            let ret_ty = clean_rust_type(&f.return_type, class_ns_map, paths);
-
-            let extra_params: Vec<TokenStream> = f
-                .params
-                .iter()
-                .map(|p| {
-                    let p_ident = format_ident!("{}", p.name);
-                    let p_ty = clean_param_type(&p.ty, class_ns_map, paths);
-                    quote! { #p_ident: #p_ty }
-                })
-                .collect();
-
-            // Synthetic type-arg params appended after value params.
-            let type_arg_params: Vec<TokenStream> = f
-                .generics
-                .iter()
-                .enumerate()
-                .map(|(i, _)| {
-                    let p_ident = format_ident!("type_arg_{}", i);
-                    quote! { #p_ident: baml_type::RuntimeTy<baml_type::TaggedTypeName> }
-                })
-                .collect();
-
-            quote! {
-                fn #fn_ident(
-                    &self,
-                    heap: &std::sync::Arc<BexHeap>,
-                    call_id: CallId,
-                    #(#extra_params,)*
-                    #(#type_arg_params,)*
-                    ctx: &SysOpContext,
-                ) -> SysOpOutput<#ret_ty>;
-            }
-        })
-        .collect();
+    let free_fn_clean = node.free_fns.iter().map(|f| {
+        let signature = io_method_signature(f, class_ns_map, paths);
+        quote! { #signature; }
+    });
 
     // Glue methods for free functions
     let free_fn_glues: Vec<TokenStream> = node
@@ -2223,6 +2224,37 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
         })
         .collect();
 
+    let namespace_setters = build_io_namespace_tree(io_builtins).into_iter().map(|(key, node)| {
+        let method = format_ident!("set_{}", key);
+        let trait_name = ns_trait_ident(&key);
+        let mut builtins = node.free_fns.iter().chain(node.classes.values().flatten()).peekable();
+        let mut assignments = Vec::new();
+        while let Some(builtin) = builtins.next() {
+            let field = format_ident!("{}", builtin.fn_name);
+            let glue = format_ident!("__glue_{}", builtin.fn_name);
+            let instance = if builtins.peek().is_some() {
+                quote! { std::sync::Arc::clone(&instance) }
+            } else {
+                quote! { instance }
+            };
+            assignments.push(quote! {
+                self.#field = {
+                    let instance = #instance;
+                    std::sync::Arc::new(move |heap, permit, args, ctx, call_id| {
+                        instance.#glue(heap, permit, args, ctx, call_id)
+                    })
+                };
+            });
+        }
+        let doc = format!("Replace all operations in the `{key}` namespace, including class methods.");
+        quote! {
+            #[doc = #doc]
+            pub fn #method(&mut self, instance: std::sync::Arc<dyn #trait_name + Send + Sync + 'static>) {
+                #(#assignments)*
+            }
+        }
+    });
+
     quote! {
         #[derive(Clone)]
         pub struct SysOps {
@@ -2230,6 +2262,8 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
         }
 
         impl SysOps {
+            #(#namespace_setters)*
+
             pub fn get(&self, op: SysOp) -> &SysOpFn {
                 match op {
                     #(SysOp::#variant_idents => &self.#field_idents,)*
