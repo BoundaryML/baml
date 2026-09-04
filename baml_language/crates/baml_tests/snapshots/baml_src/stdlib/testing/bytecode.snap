@@ -508,6 +508,9 @@ function testing.TestRegistry._expand_testset_registry(self: testing.TestRegistr
     rethrow
 
   L2:
+    load_var _
+    load_field .0
+    pop 1
     load_const "testing: expansion duration: "
     load_var _
     load_field .0

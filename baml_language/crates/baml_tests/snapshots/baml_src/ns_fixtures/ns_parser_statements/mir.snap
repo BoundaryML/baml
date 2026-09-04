@@ -231,15 +231,18 @@ fn user.fixtures.parser_statements.edge_call_then_index(foo: () -> int[] throws 
     // Locals:
     let _0: int // _0 // return
     let _1: () -> int[] throws never // foo // param
-    let _2: int[]
-    let _3: 0
+    let _2: int
+    let _3: int[]
+    let _4: 0
 
     bb0: {
-        _2 = call copy _1() -> [bb1];
+        _3 = call copy _1() -> [bb1];
     }
 
     bb1: {
-        _3 = const 0_i64;
+        _4 = const 0_i64;
+        _2 = copy _3[_4];
+        drop(_2);
         _0 = const 1_i64;
         goto -> bb2;
     }
@@ -294,12 +297,15 @@ fn user.fixtures.parser_statements.edge_semicolon_forces_boundary(bar: () -> int
     let _0: int // _0 // return
     let _1: () -> int[] throws never // bar // param
     let _2: int[]
+    let _3: int[]
 
     bb0: {
         _2 = call copy _1() -> [bb1];
     }
 
     bb1: {
+        _3 = [const 0_i64]: int[];
+        drop(_3);
         _0 = const 1_i64;
         goto -> bb2;
     }
@@ -695,15 +701,18 @@ fn user.fixtures.parser_statements.ConditionalLogic(age: int) -> string {
 fn user.fixtures.parser_statements.let_statements() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: fixtures.parser_statements.Point // point
-    let _2: int
+    let _1: int[] // z
+    let _2: fixtures.parser_statements.Point // point
     let _3: int
+    let _4: int
 
     bb0: {
-        _1 = user.fixtures.parser_statements.Point { const 1_i64, const 2_i64 };
-        _2 = copy _1.0;
-        _3 = copy _1.1;
-        _0 = copy _2 + copy _3;
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
+        drop(_1);
+        _2 = user.fixtures.parser_statements.Point { const 1_i64, const 2_i64 };
+        _3 = copy _2.0;
+        _4 = copy _2.1;
+        _0 = copy _3 + copy _4;
         goto -> bb1;
     }
 

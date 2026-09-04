@@ -142,6 +142,9 @@ function fixtures.llm_parse_catchable_parse_error.TryExtract(json: string) -> fi
     rethrow
 
   L1:
+    load_var _
+    load_field .0
+    pop 1
     load_const null
 
   L2:

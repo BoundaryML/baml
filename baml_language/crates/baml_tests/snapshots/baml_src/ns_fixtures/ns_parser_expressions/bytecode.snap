@@ -20,9 +20,23 @@ function fixtures.parser_expressions.Calculate() -> int {
 
 function fixtures.parser_expressions.FieldAccess(user: fixtures.parser_expressions.User) -> string {
     load_var user
+    load_field .name
+    pop 1
+    load_var user
+    load_field .profile
+    load_field .bio
+    pop 1
+    load_var user
     load_field .profile
     load_field .settings
     load_field .theme
+    store_var theme
+    load_var user
+    load_field .tags
+    load_const 0
+    load_array_element
+    pop 1
+    load_var theme
     return
 }
 
@@ -30,7 +44,24 @@ function fixtures.parser_expressions.IndexAccess(users: fixtures.parser_expressi
     load_var users
     load_const 0
     load_array_element
+    pop 1
+    load_var users
+    load_const 1
+    load_array_element
+    pop 1
+    load_var users
+    load_const 0
+    load_array_element
     load_field .name
+    store_var firstName
+    load_var users
+    load_const 0
+    load_array_element
+    load_field .tags
+    load_const 0
+    load_array_element
+    pop 1
+    load_var firstName
     return
 }
 

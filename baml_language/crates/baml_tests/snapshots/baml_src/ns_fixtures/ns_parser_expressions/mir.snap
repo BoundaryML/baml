@@ -42,15 +42,24 @@ fn user.fixtures.parser_expressions.FieldAccess(user: fixtures.parser_expression
     // Locals:
     let _0: string // _0 // return
     let _1: fixtures.parser_expressions.User // user // param
-    let _2: string // theme
-    let _3: string[]
-    let _4: 0
+    let _2: string // name
+    let _3: string // bio
+    let _4: string // theme
+    let _5: string // firstTag
+    let _6: string[]
+    let _7: 0
 
     bb0: {
-        _2 = copy _1.1.1.0;
-        _3 = copy _1.2;
-        _4 = const 0_i64;
-        _0 = copy _2;
+        _2 = copy _1.0;
+        drop(_2);
+        _3 = copy _1.1.0;
+        drop(_3);
+        _4 = copy _1.1.1.0;
+        _6 = copy _1.2;
+        _7 = const 0_i64;
+        _5 = copy _6[_7];
+        drop(_5);
+        _0 = copy _4;
         goto -> bb1;
     }
 
@@ -63,37 +72,46 @@ fn user.fixtures.parser_expressions.IndexAccess(users: fixtures.parser_expressio
     // Locals:
     let _0: string // _0 // return
     let _1: fixtures.parser_expressions.IndexUser[] // users // param
-    let _2: fixtures.parser_expressions.IndexUser[]
-    let _3: 0
-    let _4: int // idx
-    let _5: fixtures.parser_expressions.IndexUser[]
-    let _6: int
-    let _7: string // firstName
-    let _8: fixtures.parser_expressions.IndexUser
-    let _9: fixtures.parser_expressions.IndexUser[]
-    let _10: 0
-    let _11: string[]
-    let _12: fixtures.parser_expressions.IndexUser
-    let _13: fixtures.parser_expressions.IndexUser[]
-    let _14: 0
-    let _15: 0
+    let _2: fixtures.parser_expressions.IndexUser // first
+    let _3: fixtures.parser_expressions.IndexUser[]
+    let _4: 0
+    let _5: int // idx
+    let _6: fixtures.parser_expressions.IndexUser // second
+    let _7: fixtures.parser_expressions.IndexUser[]
+    let _8: int
+    let _9: string // firstName
+    let _10: fixtures.parser_expressions.IndexUser
+    let _11: fixtures.parser_expressions.IndexUser[]
+    let _12: 0
+    let _13: string // tag
+    let _14: string[]
+    let _15: fixtures.parser_expressions.IndexUser
+    let _16: fixtures.parser_expressions.IndexUser[]
+    let _17: 0
+    let _18: 0
 
     bb0: {
-        _2 = copy _1;
-        _3 = const 0_i64;
-        _4 = const 1_i64;
-        _5 = copy _1;
-        _6 = copy _4;
-        _9 = copy _1;
-        _10 = const 0_i64;
-        _8 = copy _9[_10];
-        _7 = copy _8.0;
-        _13 = copy _1;
-        _14 = const 0_i64;
-        _12 = copy _13[_14];
-        _11 = copy _12.2;
-        _15 = const 0_i64;
-        _0 = copy _7;
+        _3 = copy _1;
+        _4 = const 0_i64;
+        _2 = copy _3[_4];
+        drop(_2);
+        _5 = const 1_i64;
+        _7 = copy _1;
+        _8 = copy _5;
+        _6 = copy _7[_8];
+        drop(_6);
+        _11 = copy _1;
+        _12 = const 0_i64;
+        _10 = copy _11[_12];
+        _9 = copy _10.0;
+        _16 = copy _1;
+        _17 = const 0_i64;
+        _15 = copy _16[_17];
+        _14 = copy _15.2;
+        _18 = const 0_i64;
+        _13 = copy _14[_18];
+        drop(_13);
+        _0 = copy _9;
         goto -> bb1;
     }
 

@@ -51,6 +51,9 @@ function fixtures.patterns_class_destructure_namespaces.DestructureNamespaceQual
     jump L2
 
   L1:
+    load_var response
+    load_field .score
+    pop 1
     load_const 0
 
   L2:
@@ -84,6 +87,9 @@ function fixtures.patterns_class_destructure_namespaces.DestructureQualifiedMatc
     jump L2
 
   L1:
+    load_var response
+    load_field .score
+    pop 1
     load_const 0
 
   L2:

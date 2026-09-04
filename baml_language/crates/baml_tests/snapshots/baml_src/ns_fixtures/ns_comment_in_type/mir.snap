@@ -171,45 +171,48 @@ fn .<lambda(FunctionWithComments@spec, 0)>( __spec_output_format: ai.OutputForma
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
     let _2: unknown //  __prompt_render_err
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: string
-    let _8: int
-    let _9: string[]
-    let _10: string
-    let _11: reflect.Type
-    let _12: string[]
-    let _13: unknown[]
-    let _14: string[]
-    let _15: baml.TaggedString
-    let _16: unknown[]
-    let _17: baml.TaggedString
-    let _18: ai.errors.PromptRenderError
-    let _19: never
+    let _3: ai.internal.SpecCtx // ctx
+    let _4: baml.TaggedString //  __spec_tagged_prompt
+    let _5: string[] //  __tt_parts
+    let _6: unknown[] //  __tt_values
+    let _7: string //  __tt_cur
+    let _8: string
+    let _9: int
+    let _10: string[]
+    let _11: string
+    let _12: reflect.Type
+    let _13: string[]
+    let _14: unknown[]
+    let _15: string[]
+    let _16: baml.TaggedString
+    let _17: unknown[]
+    let _18: baml.TaggedString
+    let _19: ai.errors.PromptRenderError
+    let _20: never
 
     bb0: {
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _7 = copy _6;
-        _6 = copy _7 + const "test";
-        _9 = copy _4;
-        _10 = copy _6;
-        _11 = load_type(string);
-        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1, unwind: bb3];
+        _3 = ai.internal.SpecCtx { copy _1 };
+        drop(_3);
+        _5 = []: string[];
+        _6 = []: unknown[];
+        _7 = const "";
+        _8 = copy _7;
+        _7 = copy _8 + const "test";
+        _10 = copy _5;
+        _11 = copy _7;
+        _12 = load_type(string);
+        _9 = call const fn baml.Array.push<copy _12>(copy _10, copy _11) -> [bb1, unwind: bb3];
     }
 
     bb1: {
-        _12 = copy _4;
         _13 = copy _5;
-        _3 = baml.TaggedString { copy _12, copy _13 };
-        _15 = copy _3;
-        _14 = copy _15.0;
-        _17 = copy _3;
-        _16 = copy _17.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _14, copy _16) -> [bb2, unwind: bb3];
+        _14 = copy _6;
+        _4 = baml.TaggedString { copy _13, copy _14 };
+        _16 = copy _4;
+        _15 = copy _16.0;
+        _18 = copy _4;
+        _17 = copy _18.1;
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _15, copy _17) -> [bb2, unwind: bb3];
     }
 
     bb2: {
@@ -221,9 +224,9 @@ fn .<lambda(FunctionWithComments@spec, 0)>( __spec_output_format: ai.OutputForma
     }
 
     bb4: {
-        _19 = copy _2;
-        _18 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _19 };
-        throw copy _18;
+        _20 = copy _2;
+        _19 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _20 };
+        throw copy _19;
     }
 }
 
@@ -436,45 +439,48 @@ fn .<lambda(CommentAfterArrow@spec, 0)>( __spec_output_format: ai.OutputFormat) 
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
     let _2: unknown //  __prompt_render_err
-    let _3: baml.TaggedString //  __spec_tagged_prompt
-    let _4: string[] //  __tt_parts
-    let _5: unknown[] //  __tt_values
-    let _6: string //  __tt_cur
-    let _7: string
-    let _8: int
-    let _9: string[]
-    let _10: string
-    let _11: reflect.Type
-    let _12: string[]
-    let _13: unknown[]
-    let _14: string[]
-    let _15: baml.TaggedString
-    let _16: unknown[]
-    let _17: baml.TaggedString
-    let _18: ai.errors.PromptRenderError
-    let _19: never
+    let _3: ai.internal.SpecCtx // ctx
+    let _4: baml.TaggedString //  __spec_tagged_prompt
+    let _5: string[] //  __tt_parts
+    let _6: unknown[] //  __tt_values
+    let _7: string //  __tt_cur
+    let _8: string
+    let _9: int
+    let _10: string[]
+    let _11: string
+    let _12: reflect.Type
+    let _13: string[]
+    let _14: unknown[]
+    let _15: string[]
+    let _16: baml.TaggedString
+    let _17: unknown[]
+    let _18: baml.TaggedString
+    let _19: ai.errors.PromptRenderError
+    let _20: never
 
     bb0: {
-        _4 = []: string[];
-        _5 = []: unknown[];
-        _6 = const "";
-        _7 = copy _6;
-        _6 = copy _7 + const "test";
-        _9 = copy _4;
-        _10 = copy _6;
-        _11 = load_type(string);
-        _8 = call const fn baml.Array.push<copy _11>(copy _9, copy _10) -> [bb1, unwind: bb3];
+        _3 = ai.internal.SpecCtx { copy _1 };
+        drop(_3);
+        _5 = []: string[];
+        _6 = []: unknown[];
+        _7 = const "";
+        _8 = copy _7;
+        _7 = copy _8 + const "test";
+        _10 = copy _5;
+        _11 = copy _7;
+        _12 = load_type(string);
+        _9 = call const fn baml.Array.push<copy _12>(copy _10, copy _11) -> [bb1, unwind: bb3];
     }
 
     bb1: {
-        _12 = copy _4;
         _13 = copy _5;
-        _3 = baml.TaggedString { copy _12, copy _13 };
-        _15 = copy _3;
-        _14 = copy _15.0;
-        _17 = copy _3;
-        _16 = copy _17.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _14, copy _16) -> [bb2, unwind: bb3];
+        _14 = copy _6;
+        _4 = baml.TaggedString { copy _13, copy _14 };
+        _16 = copy _4;
+        _15 = copy _16.0;
+        _18 = copy _4;
+        _17 = copy _18.1;
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _15, copy _17) -> [bb2, unwind: bb3];
     }
 
     bb2: {
@@ -486,9 +492,9 @@ fn .<lambda(CommentAfterArrow@spec, 0)>( __spec_output_format: ai.OutputFormat) 
     }
 
     bb4: {
-        _19 = copy _2;
-        _18 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _19 };
-        throw copy _18;
+        _20 = copy _2;
+        _19 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _20 };
+        throw copy _19;
     }
 }
 

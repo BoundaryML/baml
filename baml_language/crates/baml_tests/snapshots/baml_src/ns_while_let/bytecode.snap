@@ -483,6 +483,9 @@ function while_let.drain(start: int) -> int {
   L2:
     load_var cur
     load_field .0
+    pop 1
+    load_var cur
+    load_field .0
     store_var value
     load_var2 3 4
     add_int
@@ -536,6 +539,10 @@ function while_let.drain_array() -> int {
     return
 
   L2:
+    load_var xs
+    load_const 0
+    load_array_element
+    pop 1
     load_var2 2 1
     load_const 0
     load_array_element
@@ -562,6 +569,7 @@ function while_let.drain_nested() -> int {
     pop_jump_if_false L1
     load_var cur
     load_field .0
+    store_var_load_var _5
     is_type while_let.WlInner
     pop_jump_if_false L1
     jump L2
@@ -571,11 +579,14 @@ function while_let.drain_nested() -> int {
     return
 
   L2:
+    load_var _5
+    load_field .value
+    pop 1
     load_var cur
     load_field .0
     load_field .value
     store_var value
-    load_var2 2 3
+    load_var2 2 4
     add_int
     store_var total
     load_var value

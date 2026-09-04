@@ -430,15 +430,21 @@ function errorcontext.ec_hazard_b_main() -> string {
     jump L2
     load_var e
     throw_if_panic
+    load_const 3
+    load_const 3
+    mul_int
+    load_const 3
+    add_int
+    pop 1
     call user.errorcontext.ec_hazard_b_fail_inner
     jump L2
     load_var e2
     throw_if_panic
-    load_var _10
+    load_var _11
     call baml.errors.Context.root_cause
     load_field .error
-    store_var _13
-    load_var _13
+    store_var _14
+    load_var _14
     narrow_bind string, slot=5
     pop_jump_if_false L0
     jump L1
@@ -448,7 +454,7 @@ function errorcontext.ec_hazard_b_main() -> string {
     jump L2
 
   L1:
-    load_var _13
+    load_var _14
 
   L2:
     return

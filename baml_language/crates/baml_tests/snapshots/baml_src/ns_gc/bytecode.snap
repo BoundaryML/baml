@@ -94,6 +94,15 @@ function gc.gc_map_survives_pressure() -> int {
     return
 
   L2:
+    load_var2 2 2
+    load_const 1
+    add_int
+    load_var i
+    load_const 2
+    add_int
+    load_type int
+    alloc_array 3
+    pop 1
     load_var i
     load_const 1
     add_int

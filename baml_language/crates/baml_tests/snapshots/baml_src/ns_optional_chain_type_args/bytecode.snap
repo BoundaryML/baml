@@ -1019,6 +1019,9 @@ function optional_chain_type_args.reflected_field_wrong_type_arg_fn() -> string 
     rethrow
 
   L4:
+    load_var e
+    load_field .0
+    pop 1
     load_const "type-mismatch"
     jump L8
 
@@ -1026,15 +1029,15 @@ function optional_chain_type_args.reflected_field_wrong_type_arg_fn() -> string 
     load_const null
 
   L6:
-    store_var_load_var _12
+    store_var_load_var _13
     load_const null
     cmp_op ==
     pop_jump_if_false L7
     load_const "null"
-    store_var _12
+    store_var _13
 
   L7:
-    load_var _12
+    load_var _13
 
   L8:
     return

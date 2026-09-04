@@ -685,6 +685,10 @@ function interfaces_associated_types.rdf_score(source: interfaces_associated_typ
     load_var source
     load_type interfaces_associated_types.RdfSource<Item = int>
     virtual_load_field .value
+    pop 1
+    load_var source
+    load_type interfaces_associated_types.RdfSource<Item = int>
+    virtual_load_field .value
 
   L2:
     return

@@ -488,6 +488,9 @@ function reflect.class.Field.value(self: reflect.class.Field) -> #0 | null {
   L3:
     load_var e
     load_field .0
+    pop 1
+    load_var e
+    load_field .0
     init_instance reflect.errors.TypeMismatch .message
     throw
 

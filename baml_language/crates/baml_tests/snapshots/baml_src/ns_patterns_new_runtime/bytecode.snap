@@ -798,6 +798,9 @@ function patterns_new_runtime.classify_box_union_by_field(box: patterns_new_runt
     jump L2
 
   L1:
+    load_var box
+    load_field .0
+    pop 1
     load_var _4
 
   L2:
@@ -924,21 +927,49 @@ function patterns_new_runtime.exact_length(xs: int[]) -> int {
     pop_jump_if_false L2
     load_var xs
     container_len
-    store_var_load_var _11
+    store_var_load_var _13
     load_const 2
     cmp_int_op ==
     pop_jump_if_false L2
     jump L3
 
   L2:
+    load_var xs
+    load_const 0
+    load_array_element
+    pop 1
     load_const 3
     jump L6
 
   L3:
+    load_var xs
+    load_const 0
+    load_array_element
+    pop 1
+    load_var xs
+    load_const 1
+    load_array_element
+    pop 1
+    load_var xs
+    load_const 0
+    load_array_element
+    pop 1
+    load_var xs
+    load_const 1
+    load_array_element
+    pop 1
     load_const 2
     jump L6
 
   L4:
+    load_var xs
+    load_const 0
+    load_array_element
+    pop 1
+    load_var xs
+    load_const 0
+    load_array_element
+    pop 1
     load_const 1
     jump L6
 
@@ -998,6 +1029,9 @@ function patterns_new_runtime.from_optional_box(box: patterns_new_runtime.BoxT<i
     jump L2
 
   L1:
+    load_var box
+    load_field .0
+    pop 1
     load_var _4
 
   L2:
@@ -1021,6 +1055,9 @@ function patterns_new_runtime.from_union_box(box: patterns_new_runtime.BoxT<int>
     jump L2
 
   L1:
+    load_var box
+    load_field .0
+    pop 1
     load_var _4
 
   L2:
@@ -1048,10 +1085,16 @@ function patterns_new_runtime.match_box_union(b: patterns_new_runtime.BoxUnion) 
     jump L1
 
   L0:
+    load_var b
+    load_field .value
+    pop 1
     load_const 2
     jump L2
 
   L1:
+    load_var b
+    load_field .value
+    pop 1
     load_const 1
 
   L2:
@@ -1097,6 +1140,12 @@ function patterns_new_runtime.match_coord_user() -> int {
     jump L2
 
   L1:
+    load_var _1
+    load_field .profile
+    load_field .address
+    load_field .coordinate
+    load_field .zip
+    pop 1
     load_const 1
 
   L2:
@@ -1119,6 +1168,9 @@ function patterns_new_runtime.match_person_as(p: patterns_new_runtime.PersonAS) 
     jump L2
 
   L1:
+    load_var p
+    load_field .age
+    pop 1
     load_const 70
 
   L2:
@@ -1162,21 +1214,21 @@ function patterns_new_runtime.or_deep_class() -> int {
     pop_jump_if_false L1
     load_var _1
     load_field .address
-    store_var_load_var _17
+    store_var_load_var _19
     is_type patterns_new_runtime.Address3
     pop_jump_if_false L1
-    load_var _17
+    load_var _19
     load_field .coordinate
-    store_var_load_var _19
+    store_var_load_var _21
     is_type patterns_new_runtime.Coordinate3
     pop_jump_if_false L1
-    load_var _19
+    load_var _21
     load_field .zip
-    store_var _22
-    load_var _22
-    narrow_bind int, slot=7
+    store_var _24
+    load_var _24
+    narrow_bind int, slot=9
     pop_jump_if_false L1
-    load_var _19
+    load_var _21
     load_field .plus4
     is_type 2
     pop_jump_if_false L1
@@ -1187,11 +1239,33 @@ function patterns_new_runtime.or_deep_class() -> int {
     jump L4
 
   L2:
-    load_var _22
+    load_var _1
+    load_field .address
+    load_field .coordinate
+    store_var_load_var _28
+    load_field .zip
+    pop 1
+    load_var _24
+    store_var zip
+    load_var _28
+    load_field .plus4
+    pop 1
+    load_var zip
     jump L4
 
   L3:
+    load_var _1
+    load_field .address
+    load_field .coordinate
+    store_var_load_var _14
+    load_field .zip
+    pop 1
     load_var _10
+    store_var zip
+    load_var _14
+    load_field .plus4
+    pop 1
+    load_var zip
 
   L4:
     return
@@ -1213,19 +1287,23 @@ function patterns_new_runtime.pick_grid(g: patterns_new_runtime.Grid1) -> int {
     cmp_int_op >=
     pop_jump_if_false L0
     load_var _3
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _3
     load_const 1
     load_array_element
-    store_var_load_var _9
+    store_var_load_var _10
     is_type patterns_new_runtime.Cell1
     pop_jump_if_false L0
-    load_var _9
+    load_var _10
     load_field .row
-    store_var_load_var _11
+    store_var_load_var _12
     is_type int[]
     pop_jump_if_false L0
-    load_var _11
+    load_var _12
     container_len
-    store_var_load_var _13
+    store_var_load_var _14
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
@@ -1237,33 +1315,33 @@ function patterns_new_runtime.pick_grid(g: patterns_new_runtime.Grid1) -> int {
     pop_jump_if_false L1
     load_var g
     load_field .cells
-    store_var_load_var _27
+    store_var_load_var _32
     is_type patterns_new_runtime.Cell1[]
     pop_jump_if_false L1
-    load_var _27
+    load_var _32
     container_len
-    store_var_load_var _29
+    store_var_load_var _34
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
-    load_var _27
+    load_var _32
     container_len
-    store_var _31
-    load_var2 7 9
+    store_var _36
+    load_var2 9 11
     load_const 1
     sub_int
     load_array_element
-    store_var_load_var _33
+    store_var_load_var _38
     is_type patterns_new_runtime.Cell1
     pop_jump_if_false L1
-    load_var _33
+    load_var _38
     load_field .row
-    store_var_load_var _35
+    store_var_load_var _40
     is_type int[]
     pop_jump_if_false L1
-    load_var _35
+    load_var _40
     container_len
-    store_var_load_var _37
+    store_var_load_var _42
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L1
@@ -1274,42 +1352,77 @@ function patterns_new_runtime.pick_grid(g: patterns_new_runtime.Grid1) -> int {
     jump L4
 
   L2:
-    load_var _35
-    container_len
-    store_var _39
-    load_var _35
-    container_len
-    store_var _41
-    load_var g
-    load_field .cells
-    store_var _43
-    load_var _43
+    load_var _40
     container_len
     store_var _44
-    load_var2 15 16
-    load_const 1
-    sub_int
-    load_array_element
-    load_field .row
-    store_var _47
-    load_var _47
-    container_len
-    store_var _48
-    load_var _47
-    container_len
-    store_var _52
-    load_var2 17 18
+    load_var2 13 15
     load_const 2
     sub_int
     load_array_element
+    pop 1
+    load_var _40
+    container_len
+    store_var _47
+    load_var2 13 16
+    load_const 1
+    sub_int
+    load_array_element
+    pop 1
+    load_var g
+    load_field .cells
+    store_var _50
+    load_var _50
+    container_len
+    store_var _51
+    load_var2 17 18
+    load_const 1
+    sub_int
+    load_array_element
+    load_field .row
+    store_var _54
+    load_var _54
+    container_len
+    store_var _55
+    load_var2 19 20
+    load_const 2
+    sub_int
+    load_array_element
+    store_var x
+    load_var _54
+    container_len
+    store_var _59
+    load_var2 19 22
+    load_const 1
+    sub_int
+    load_array_element
+    pop 1
+    load_var x
     jump L4
 
   L3:
+    load_var _12
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _12
+    load_const 1
+    load_array_element
+    pop 1
     load_var g
     load_field .cells
+    store_var_load_var _20
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _20
     load_const 1
     load_array_element
     load_field .row
+    store_var_load_var _25
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _25
     load_const 1
     load_array_element
 
@@ -1338,10 +1451,14 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     cmp_int_op >=
     pop_jump_if_false L0
     load_var _5
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _5
     load_const 1
     load_array_element
-    store_var _12
-    load_var _12
+    store_var _13
+    load_var _13
     narrow_bind int, slot=5
     pop_jump_if_false L0
     jump L7
@@ -1351,22 +1468,33 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     is_type patterns_new_runtime.Pair1
     pop_jump_if_false L1
     load_var p
+    load_field .0
+    pop 1
+    load_var p
     load_field .1
-    store_var_load_var _19
+    store_var_load_var _25
     is_type int[]
     pop_jump_if_false L1
-    load_var _19
+    load_var _25
     container_len
-    store_var_load_var _21
+    store_var_load_var _27
     load_const 3
     cmp_int_op >=
     pop_jump_if_false L1
-    load_var _19
+    load_var _25
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _25
+    load_const 1
+    load_array_element
+    pop 1
+    load_var _25
     load_const 2
     load_array_element
-    store_var _27
-    load_var _27
-    narrow_bind int, slot=8
+    store_var _35
+    load_var _35
+    narrow_bind int, slot=10
     pop_jump_if_false L1
     jump L6
 
@@ -1376,25 +1504,25 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     pop_jump_if_false L2
     load_var p
     load_field .0
-    store_var_load_var _34
+    store_var_load_var _46
     is_type int[]
     pop_jump_if_false L2
-    load_var _34
+    load_var _46
     container_len
-    store_var_load_var _36
+    store_var_load_var _48
     load_const 3
     cmp_int_op >=
     pop_jump_if_false L2
-    load_var _34
+    load_var _46
     container_len
-    store_var _38
-    load_var2 9 11
+    store_var _50
+    load_var2 12 14
     load_const 3
     sub_int
     load_array_element
-    store_var _41
-    load_var _41
-    narrow_bind int, slot=12
+    store_var _53
+    load_var _53
+    narrow_bind int, slot=15
     pop_jump_if_false L2
     jump L5
 
@@ -1404,32 +1532,36 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     pop_jump_if_false L3
     load_var p
     container_len
-    store_var_load_var _55
+    store_var_load_var _72
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L3
     load_var p
+    load_const 0
+    load_array_element
+    pop 1
+    load_var p
     load_const 1
     load_array_element
-    store_var_load_var _59
+    store_var_load_var _77
     is_type int[]
     pop_jump_if_false L3
-    load_var _59
+    load_var _77
     container_len
-    store_var_load_var _61
+    store_var_load_var _79
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L3
-    load_var _59
+    load_var _77
     container_len
-    store_var _63
-    load_var2 20 22
+    store_var _81
+    load_var2 24 26
     load_const 1
     sub_int
     load_array_element
-    store_var _66
-    load_var _66
-    narrow_bind int, slot=23
+    store_var _84
+    load_var _84
+    narrow_bind int, slot=27
     pop_jump_if_false L3
     jump L4
 
@@ -1439,41 +1571,115 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
 
   L4:
     load_var p
+    load_const 0
+    load_array_element
+    pop 1
+    load_var p
     load_const 1
     load_array_element
+    store_var _88
+    load_var _88
     container_len
-    store_var _70
-    load_var _66
+    store_var _89
+    load_var2 28 29
+    load_const 1
+    sub_int
+    load_array_element
+    pop 1
+    load_var _84
     jump L8
 
   L5:
-    load_var _34
+    load_var _46
     container_len
-    store_var _42
-    load_var _34
+    store_var _54
+    load_var2 12 16
+    load_const 2
+    sub_int
+    load_array_element
+    pop 1
+    load_var _46
     container_len
-    store_var _44
+    store_var _57
+    load_var2 12 17
+    load_const 1
+    sub_int
+    load_array_element
+    pop 1
     load_var p
     load_field .0
-    store_var _46
-    load_var _46
+    store_var _60
+    load_var _60
     container_len
-    store_var _47
-    load_var _46
+    store_var _61
+    load_var2 18 19
+    load_const 3
+    sub_int
+    load_array_element
+    pop 1
+    load_var _53
+    store_var v
+    load_var _60
     container_len
-    store_var _50
-    load_var _46
+    store_var _65
+    load_var2 18 21
+    load_const 2
+    sub_int
+    load_array_element
+    pop 1
+    load_var _60
     container_len
-    store_var _52
-    load_var _41
+    store_var _68
+    load_var2 18 22
+    load_const 1
+    sub_int
+    load_array_element
+    pop 1
+    load_var v
     jump L8
 
   L6:
-    load_var _27
+    load_var p
+    load_field .0
+    pop 1
+    load_var p
+    load_field .1
+    store_var_load_var _37
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _37
+    load_const 1
+    load_array_element
+    pop 1
+    load_var _37
+    load_const 2
+    load_array_element
+    pop 1
+    load_var _35
     jump L8
 
   L7:
-    load_var _12
+    load_var p
+    load_field .1
+    pop 1
+    load_var p
+    load_field .0
+    load_field .inner
+    store_var_load_var _16
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _16
+    load_const 1
+    load_array_element
+    pop 1
+    load_var _13
+    store_var v
+    load_var p
+    load_field .1
+    pop 1
+    load_var v
 
   L8:
     return
@@ -1495,49 +1701,61 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
     cmp_int_op >=
     pop_jump_if_false L0
     load_var _3
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _3
     load_const 1
     load_array_element
-    store_var_load_var _9
+    store_var_load_var _10
     is_type patterns_new_runtime.Row1
     pop_jump_if_false L0
-    load_var _9
+    load_var _10
     load_field .slots
-    store_var_load_var _11
+    store_var_load_var _12
     is_type patterns_new_runtime.Slot1[]
     pop_jump_if_false L0
-    load_var _11
+    load_var _12
     container_len
-    store_var_load_var _13
+    store_var_load_var _14
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
-    load_var _11
+    load_var _12
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _12
     load_const 1
     load_array_element
-    store_var_load_var _17
+    store_var_load_var _19
     is_type patterns_new_runtime.Slot1
     pop_jump_if_false L0
-    load_var _17
+    load_var _19
     load_field .atoms
-    store_var_load_var _19
+    store_var_load_var _21
     is_type patterns_new_runtime.Atom1[]
     pop_jump_if_false L0
-    load_var _19
+    load_var _21
     container_len
-    store_var_load_var _21
+    store_var_load_var _23
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L0
-    load_var _19
+    load_var _21
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _21
     load_const 1
     load_array_element
-    store_var_load_var _25
+    store_var_load_var _28
     is_type patterns_new_runtime.Atom1
     pop_jump_if_false L0
-    load_var _25
-    load_field .value
-    store_var _28
     load_var _28
+    load_field .value
+    store_var _31
+    load_var _31
     narrow_bind int, slot=11
     pop_jump_if_false L0
     jump L3
@@ -1548,72 +1766,72 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
     pop_jump_if_false L1
     load_var s
     load_field .rows
-    store_var_load_var _43
+    store_var_load_var _50
     is_type patterns_new_runtime.Row1[]
     pop_jump_if_false L1
-    load_var _43
+    load_var _50
     container_len
-    store_var_load_var _45
+    store_var_load_var _52
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
-    load_var _43
+    load_var _50
     container_len
-    store_var _47
-    load_var2 12 14
+    store_var _54
+    load_var2 15 17
     load_const 1
     sub_int
     load_array_element
-    store_var_load_var _49
+    store_var_load_var _56
     is_type patterns_new_runtime.Row1
     pop_jump_if_false L1
-    load_var _49
+    load_var _56
     load_field .slots
-    store_var_load_var _51
+    store_var_load_var _58
     is_type patterns_new_runtime.Slot1[]
     pop_jump_if_false L1
-    load_var _51
+    load_var _58
     container_len
-    store_var_load_var _53
+    store_var_load_var _60
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
-    load_var _51
+    load_var _58
     container_len
-    store_var _55
-    load_var2 16 18
+    store_var _62
+    load_var2 19 21
     load_const 1
     sub_int
     load_array_element
-    store_var_load_var _57
+    store_var_load_var _64
     is_type patterns_new_runtime.Slot1
     pop_jump_if_false L1
-    load_var _57
+    load_var _64
     load_field .atoms
-    store_var_load_var _59
+    store_var_load_var _66
     is_type patterns_new_runtime.Atom1[]
     pop_jump_if_false L1
-    load_var _59
+    load_var _66
     container_len
-    store_var_load_var _61
+    store_var_load_var _68
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L1
-    load_var _59
+    load_var _66
     container_len
-    store_var _63
-    load_var2 20 22
+    store_var _70
+    load_var2 23 25
     load_const 2
     sub_int
     load_array_element
-    store_var_load_var _65
+    store_var_load_var _72
     is_type patterns_new_runtime.Atom1
     pop_jump_if_false L1
-    load_var _65
+    load_var _72
     load_field .value
-    store_var _68
-    load_var _68
-    narrow_bind int, slot=24
+    store_var _75
+    load_var _75
+    narrow_bind int, slot=27
     pop_jump_if_false L1
     jump L2
 
@@ -1622,41 +1840,86 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
     jump L4
 
   L2:
-    load_var _59
-    container_len
-    store_var _69
-    load_var s
-    load_field .rows
-    store_var _71
-    load_var _71
-    container_len
-    store_var _72
-    load_var2 26 27
-    load_const 1
-    sub_int
-    load_array_element
-    load_field .slots
-    store_var _75
-    load_var _75
+    load_var _66
     container_len
     store_var _76
-    load_var2 28 29
+    load_var2 23 28
     load_const 1
     sub_int
     load_array_element
-    load_field .atoms
+    pop 1
+    load_var s
+    load_field .rows
     store_var _79
     load_var _79
     container_len
     store_var _80
-    load_var _79
+    load_var2 29 30
+    load_const 1
+    sub_int
+    load_array_element
+    load_field .slots
+    store_var _83
+    load_var _83
     container_len
     store_var _84
-    load_var _68
+    load_var2 31 32
+    load_const 1
+    sub_int
+    load_array_element
+    load_field .atoms
+    store_var _87
+    load_var _87
+    container_len
+    store_var _88
+    load_var2 33 34
+    load_const 2
+    sub_int
+    load_array_element
+    load_field .value
+    pop 1
+    load_var _75
+    store_var x
+    load_var _87
+    container_len
+    store_var _93
+    load_var2 33 36
+    load_const 1
+    sub_int
+    load_array_element
+    pop 1
+    load_var x
     jump L4
 
   L3:
-    load_var _28
+    load_var s
+    load_field .rows
+    store_var_load_var _32
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _32
+    load_const 1
+    load_array_element
+    load_field .slots
+    store_var_load_var _37
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _37
+    load_const 1
+    load_array_element
+    load_field .atoms
+    store_var_load_var _42
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _42
+    load_const 1
+    load_array_element
+    load_field .value
+    pop 1
+    load_var _31
 
   L4:
     return
@@ -1679,6 +1942,14 @@ function patterns_new_runtime.prefix_length(xs: int[]) -> int {
     jump L2
 
   L1:
+    load_var xs
+    load_const 0
+    load_array_element
+    pop 1
+    load_var xs
+    load_const 0
+    load_array_element
+    pop 1
     load_const 1
 
   L2:
@@ -1741,11 +2012,17 @@ function patterns_new_runtime.score_abcde(v: patterns_new_runtime.ABCDE_A | patt
 
   L4:
     load_var v
+    load_field .0
+    pop 1
+    load_var v
     load_type patterns_new_runtime.HasIntField
     virtual_load_field .field
     jump L8
 
   L5:
+    load_var v
+    load_field .0
+    pop 1
     load_var v
     load_type patterns_new_runtime.HasIntField
     virtual_load_field .field
@@ -1753,11 +2030,17 @@ function patterns_new_runtime.score_abcde(v: patterns_new_runtime.ABCDE_A | patt
 
   L6:
     load_var v
+    load_field .0
+    pop 1
+    load_var v
     load_type patterns_new_runtime.HasIntField
     virtual_load_field .field
     jump L8
 
   L7:
+    load_var v
+    load_field .0
+    pop 1
     load_var v
     load_type patterns_new_runtime.HasIntField
     virtual_load_field .field
@@ -1789,13 +2072,13 @@ function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
     pop_jump_if_false L1
     load_var xs
     container_len
-    store_var_load_var _10
+    store_var_load_var _11
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
     load_var xs
     container_len
-    store_var _12
+    store_var _13
     load_var2 1 4
     load_const 1
     sub_int
@@ -1810,7 +2093,7 @@ function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
     pop_jump_if_false L2
     load_var xs
     container_len
-    store_var_load_var _19
+    store_var_load_var _21
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L2
@@ -1827,11 +2110,20 @@ function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
   L4:
     load_var xs
     container_len
-    store_var _16
+    store_var _17
+    load_var2 1 5
+    load_const 1
+    sub_int
+    load_array_element
+    pop 1
     load_const 2
     jump L6
 
   L5:
+    load_var xs
+    load_const 0
+    load_array_element
+    pop 1
     load_const 1
 
   L6:
@@ -1850,14 +2142,21 @@ function patterns_new_runtime.score_depth(v: patterns_new_runtime.DepthClass | p
     pop_jump_if_false L2
     load_var v
     load_field .0
+    store_var_load_var _7
     is_type patterns_new_runtime.DepthClass3
     pop_jump_if_false L2
+    load_var _7
+    load_field .field
+    pop 1
     load_var v
     load_field .0
     load_field .field
     jump L2
 
   L1:
+    load_var v
+    load_field .0
+    pop 1
     load_var v
     load_field .0
 
@@ -1912,7 +2211,7 @@ function patterns_new_runtime.score_exact_length_45() -> int {
     pop_jump_if_false L1
     load_var _1
     container_len
-    store_var_load_var _10
+    store_var_load_var _11
     load_const 2
     cmp_int_op ==
     pop_jump_if_false L1
@@ -1926,6 +2225,14 @@ function patterns_new_runtime.score_exact_length_45() -> int {
     load_var _1
     load_const 0
     load_array_element
+    pop 1
+    load_var _1
+    load_const 1
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 0
+    load_array_element
     load_const 10
     mul_int
     load_var _1
@@ -1935,6 +2242,10 @@ function patterns_new_runtime.score_exact_length_45() -> int {
     jump L4
 
   L3:
+    load_var _1
+    load_const 0
+    load_array_element
+    pop 1
     load_var _1
     load_const 0
     load_array_element
@@ -1988,18 +2299,42 @@ function patterns_new_runtime.score_foo3(f: patterns_new_runtime.Foo3) -> int {
     jump L3
 
   L2:
+    load_var f
+    load_field .first
+    pop 1
+    load_var f
+    load_field .second
+    pop 1
     load_const 4
     jump L6
 
   L3:
+    load_var f
+    load_field .first
+    pop 1
+    load_var f
+    load_field .second
+    pop 1
     load_const 3
     jump L6
 
   L4:
+    load_var f
+    load_field .first
+    pop 1
+    load_var f
+    load_field .second
+    pop 1
     load_const 2
     jump L6
 
   L5:
+    load_var f
+    load_field .first
+    pop 1
+    load_var f
+    load_field .second
+    pop 1
     load_const 1
 
   L6:
@@ -2027,14 +2362,23 @@ function patterns_new_runtime.score_foo_union(f: patterns_new_runtime.FooUnion) 
     jump L2
 
   L1:
+    load_var f
+    load_field .value
+    pop 1
     load_const 3
     jump L4
 
   L2:
+    load_var f
+    load_field .value
+    pop 1
     load_const 2
     jump L4
 
   L3:
+    load_var f
+    load_field .value
+    pop 1
     load_const 1
 
   L4:
@@ -2106,6 +2450,10 @@ function patterns_new_runtime.score_int_string_array(v: int[] | string[]) -> int
     load_var v
     load_const 0
     load_array_element
+    pop 1
+    load_var v
+    load_const 0
+    load_array_element
     load_var _7
     add_int
 
@@ -2141,7 +2489,7 @@ function patterns_new_runtime.score_ints(xs: int[]) -> int {
     pop_jump_if_false L1
     load_var xs
     container_len
-    store_var_load_var _14
+    store_var_load_var _16
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
@@ -2157,10 +2505,22 @@ function patterns_new_runtime.score_ints(xs: int[]) -> int {
     jump L4
 
   L2:
+    load_var xs
+    load_const 0
+    load_array_element
+    pop 1
     load_const 10
     jump L4
 
   L3:
+    load_var xs
+    load_const 0
+    load_array_element
+    pop 1
+    load_var xs
+    load_const 1
+    load_array_element
+    pop 1
     load_const 12
 
   L4:
@@ -2179,12 +2539,12 @@ function patterns_new_runtime.score_opat(input: patterns_new_runtime.OPat_A | pa
     pop_jump_if_false L1
     load_var input
     load_field .0
-    store_var_load_var _6
+    store_var_load_var _7
     is_type int[]
     pop_jump_if_false L1
-    load_var _6
+    load_var _7
     container_len
-    store_var_load_var _8
+    store_var_load_var _9
     load_const 2
     cmp_int_op ==
     pop_jump_if_false L1
@@ -2195,13 +2555,29 @@ function patterns_new_runtime.score_opat(input: patterns_new_runtime.OPat_A | pa
     jump L4
 
   L2:
+    load_var _7
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _7
+    load_const 1
+    load_array_element
+    pop 1
     load_var input
     load_field .0
+    store_var_load_var _15
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _15
     load_const 1
     load_array_element
     jump L4
 
   L3:
+    load_var input
+    load_field .0
+    pop 1
     load_var input
     load_field .0
 
@@ -2234,15 +2610,15 @@ function patterns_new_runtime.score_or_array_refine(v: int[] | string[]) -> int 
     pop_jump_if_false L1
     load_var v
     container_len
-    store_var_load_var _15
+    store_var_load_var _16
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
     load_var v
     load_const 0
     load_array_element
-    store_var _19
-    load_var _19
+    store_var _20
+    load_var _20
     narrow_bind int, slot=5
     pop_jump_if_false L1
     jump L2
@@ -2255,11 +2631,19 @@ function patterns_new_runtime.score_or_array_refine(v: int[] | string[]) -> int 
     load_var v
     load_const 0
     load_array_element
-    load_var _19
+    pop 1
+    load_var v
+    load_const 0
+    load_array_element
+    load_var _20
     add_int
     jump L4
 
   L3:
+    load_var v
+    load_const 0
+    load_array_element
+    pop 1
     load_var v
     load_const 0
     load_array_element
@@ -2300,19 +2684,19 @@ function patterns_new_runtime.score_or_nested_2d(rows: int[][]) -> int {
     pop_jump_if_false L1
     load_var rows
     container_len
-    store_var_load_var _17
+    store_var_load_var _18
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
     load_var rows
     load_const 0
     load_array_element
-    store_var_load_var _20
+    store_var_load_var _21
     is_type int[]
     pop_jump_if_false L1
-    load_var _20
+    load_var _21
     container_len
-    store_var_load_var _22
+    store_var_load_var _23
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
@@ -2323,6 +2707,10 @@ function patterns_new_runtime.score_or_nested_2d(rows: int[][]) -> int {
     jump L4
 
   L2:
+    load_var _21
+    load_const 0
+    load_array_element
+    pop 1
     load_var rows
     load_const 0
     load_array_element
@@ -2331,6 +2719,10 @@ function patterns_new_runtime.score_or_nested_2d(rows: int[][]) -> int {
     jump L4
 
   L3:
+    load_var _6
+    load_const 0
+    load_array_element
+    pop 1
     load_var rows
     load_const 0
     load_array_element
@@ -2359,7 +2751,7 @@ function patterns_new_runtime.score_or_share(xs: int[]) -> int {
     pop_jump_if_false L1
     load_var xs
     container_len
-    store_var_load_var _10
+    store_var_load_var _11
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
@@ -2373,9 +2765,17 @@ function patterns_new_runtime.score_or_share(xs: int[]) -> int {
     load_var xs
     load_const 0
     load_array_element
+    pop 1
+    load_var xs
+    load_const 0
+    load_array_element
     jump L4
 
   L3:
+    load_var xs
+    load_const 0
+    load_array_element
+    pop 1
     load_var xs
     load_const 0
     load_array_element
@@ -2407,19 +2807,29 @@ function patterns_new_runtime.score_outer_chain(xs: int[][]) -> int {
     load_var xs
     container_len
     store_var _6
+    load_var2 1 3
+    load_const 2
+    sub_int
+    load_array_element
+    pop 1
     load_var xs
     container_len
-    store_var _8
+    store_var _9
+    load_var2 1 4
+    load_const 1
+    sub_int
+    load_array_element
+    pop 1
     load_var xs
     container_len
-    store_var _10
+    store_var _12
     load_var xs
     container_len
-    store_var _14
+    store_var _16
     load_var xs
     container_len
-    store_var _21
-    load_var _21
+    store_var _23
+    load_var _23
     load_const 2
     sub_int
     load_const 100
@@ -2480,6 +2890,12 @@ function patterns_new_runtime.score_pair_or(p: patterns_new_runtime.PairAB) -> i
     jump L5
 
   L4:
+    load_var p
+    load_field .a
+    pop 1
+    load_var p
+    load_field .b
+    pop 1
     load_const 1
 
   L5:
@@ -2499,6 +2915,9 @@ function patterns_new_runtime.score_person_age(v: patterns_new_runtime.PersonAge
   L1:
     load_var v
     load_field .0
+    pop 1
+    load_var v
+    load_field .0
 
   L2:
     return
@@ -2516,9 +2935,15 @@ function patterns_new_runtime.score_personid(v: patterns_new_runtime.PersonIdA |
     pop_jump_if_false L2
     load_var v
     load_field .0
+    pop 1
+    load_var v
+    load_field .0
     jump L2
 
   L1:
+    load_var v
+    load_field .0
+    pop 1
     load_var v
     load_field .0
 
@@ -2544,17 +2969,31 @@ function patterns_new_runtime.score_prefix_two_suffix(xs: int[]) -> int {
 
   L1:
     load_var xs
-    container_len
-    store_var _6
+    load_const 0
+    load_array_element
+    pop 1
     load_var xs
     container_len
-    store_var _8
+    store_var _7
+    load_var2 1 3
+    load_const 2
+    sub_int
+    load_array_element
+    pop 1
     load_var xs
     container_len
-    store_var _13
+    store_var _10
+    load_var2 1 4
+    load_const 1
+    sub_int
+    load_array_element
+    pop 1
     load_var xs
     container_len
-    store_var _17
+    store_var _16
+    load_var xs
+    container_len
+    store_var _20
     load_var xs
     load_const 0
     load_array_element
@@ -2594,6 +3033,9 @@ function patterns_new_runtime.score_refine_a(v: patterns_new_runtime.RefineA | p
   L1:
     load_var v
     load_field .0
+    pop 1
+    load_var v
+    load_field .0
 
   L2:
     return
@@ -2619,12 +3061,16 @@ function patterns_new_runtime.score_rest_copy(xs: int[]) -> int {
     load_var xs
     load_const 0
     load_array_element
+    pop 1
+    load_var xs
+    load_const 0
+    load_array_element
     load_const 10
     mul_int
-    store_var _9
+    store_var _10
     load_var xs
     container_len
-    store_var _12
+    store_var _13
     load_var2 3 4
     load_const 1
     sub_int
@@ -2657,6 +3103,10 @@ function patterns_new_runtime.score_strings_len(xs: string[]) -> int {
 
   L1:
     load_var xs
+    load_const 0
+    load_array_element
+    pop 1
+    load_var xs
     container_len
 
   L2:
@@ -2683,13 +3133,18 @@ function patterns_new_runtime.score_suffix_rest(xs: int[]) -> int {
     load_var xs
     container_len
     store_var _5
+    load_var2 1 3
+    load_const 1
+    sub_int
+    load_array_element
+    pop 1
     load_var xs
     container_len
-    store_var _7
+    store_var _8
     load_var xs
     container_len
-    store_var _13
-    load_var _13
+    store_var _14
+    load_var _14
     load_const 1
     sub_int
     load_const 10
@@ -2739,24 +3194,24 @@ function patterns_new_runtime.score_team2(teams: patterns_new_runtime.Team2[]) -
     pop_jump_if_false L1
     load_var teams
     container_len
-    store_var_load_var _20
+    store_var_load_var _21
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
     load_var teams
     load_const 0
     load_array_element
-    store_var_load_var _23
+    store_var_load_var _24
     is_type patterns_new_runtime.Team2
     pop_jump_if_false L1
-    load_var _23
+    load_var _24
     load_field .scores
-    store_var_load_var _25
+    store_var_load_var _26
     is_type int[]
     pop_jump_if_false L1
-    load_var _25
+    load_var _26
     container_len
-    store_var_load_var _27
+    store_var_load_var _28
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L1
@@ -2767,15 +3222,32 @@ function patterns_new_runtime.score_team2(teams: patterns_new_runtime.Team2[]) -
     jump L4
 
   L2:
+    load_var _26
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _26
+    load_const 1
+    load_array_element
+    pop 1
     load_var teams
     load_const 0
     load_array_element
     load_field .scores
+    store_var_load_var _36
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _36
     load_const 1
     load_array_element
     jump L4
 
   L3:
+    load_var _8
+    load_const 0
+    load_array_element
+    pop 1
     load_var teams
     load_const 0
     load_array_element
@@ -2812,6 +3284,9 @@ function patterns_new_runtime.score_team3(team: patterns_new_runtime.Team3) -> i
     jump L2
 
   L1:
+    load_var team
+    load_field .scores
+    pop 1
     load_const 10
 
   L2:
@@ -2840,8 +3315,21 @@ function patterns_new_runtime.score_team4(team: patterns_new_runtime.Team4) -> i
     jump L2
 
   L1:
+    load_var _3
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _3
+    load_const 1
+    load_array_element
+    pop 1
     load_var team
     load_field .scores
+    store_var_load_var _11
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _11
     load_const 1
     load_array_element
 
@@ -2867,11 +3355,24 @@ function patterns_new_runtime.score_two_prefix(xs: int[]) -> int {
 
   L1:
     load_var xs
-    container_len
-    store_var _7
+    load_const 0
+    load_array_element
+    pop 1
+    load_var xs
+    load_const 1
+    load_array_element
+    pop 1
     load_var xs
     container_len
-    store_var _15
+    store_var _9
+    load_var2 1 3
+    load_const 1
+    sub_int
+    load_array_element
+    pop 1
+    load_var xs
+    container_len
+    store_var _18
     load_var xs
     load_const 0
     load_array_element
@@ -2947,6 +3448,18 @@ function patterns_new_runtime.score_wildcard_second(xs: int[]) -> int {
 
   L1:
     load_var xs
+    load_const 0
+    load_array_element
+    pop 1
+    load_var xs
+    load_const 1
+    load_array_element
+    pop 1
+    load_var xs
+    load_const 0
+    load_array_element
+    pop 1
+    load_var xs
     load_const 1
     load_array_element
 
@@ -2967,6 +3480,7 @@ function patterns_new_runtime.score_wildcard_user(users: patterns_new_runtime.Us
     load_var users
     load_const 0
     load_array_element
+    store_var_load_var _6
     is_type patterns_new_runtime.UserScore
     pop_jump_if_false L0
     jump L1
@@ -2976,9 +3490,19 @@ function patterns_new_runtime.score_wildcard_user(users: patterns_new_runtime.Us
     jump L2
 
   L1:
+    load_var _6
+    load_field .name
+    pop 1
+    load_var _6
+    load_field .score
+    pop 1
     load_var users
     load_const 0
     load_array_element
+    store_var_load_var _11
+    load_field .name
+    pop 1
+    load_var _11
     load_field .score
 
   L2:
@@ -3015,28 +3539,28 @@ function patterns_new_runtime.score_wrap2(v: int[][] | patterns_new_runtime.Wrap
     pop_jump_if_false L1
     load_var v
     load_field .0
-    store_var_load_var _17
+    store_var_load_var _18
     is_type int[][]
     pop_jump_if_false L1
-    load_var _17
+    load_var _18
     container_len
-    store_var_load_var _19
+    store_var_load_var _20
     load_const 1
     cmp_int_op >=
     pop_jump_if_false L1
-    load_var _17
+    load_var _18
     container_len
-    store_var _21
+    store_var _22
     load_var2 5 7
     load_const 1
     sub_int
     load_array_element
-    store_var_load_var _23
+    store_var_load_var _24
     is_type int[]
     pop_jump_if_false L1
-    load_var _23
+    load_var _24
     container_len
-    store_var_load_var _25
+    store_var_load_var _26
     load_const 2
     cmp_int_op >=
     pop_jump_if_false L1
@@ -3047,21 +3571,38 @@ function patterns_new_runtime.score_wrap2(v: int[][] | patterns_new_runtime.Wrap
     jump L4
 
   L2:
+    load_var _24
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _24
+    load_const 1
+    load_array_element
+    pop 1
     load_var v
     load_field .0
-    store_var _29
-    load_var _29
+    store_var _32
+    load_var _32
     container_len
-    store_var _30
+    store_var _33
     load_var2 10 11
     load_const 1
     sub_int
     load_array_element
+    store_var_load_var _35
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _35
     load_const 1
     load_array_element
     jump L4
 
   L3:
+    load_var _6
+    load_const 0
+    load_array_element
+    pop 1
     load_var v
     load_const 0
     load_array_element
@@ -3956,10 +4497,22 @@ function patterns_new_runtime.test_generic_backfills_wrapped() -> int {
 
 function patterns_new_runtime.test_let_array_rest_binds() -> int {
     load_const 3
+    load_const 4
+    load_const 5
+    load_type int
+    alloc_array 3
+    pop 1
+    load_const 3
     return
 }
 
 function patterns_new_runtime.test_let_array_rest_irrefutable() -> int {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    pop 1
     load_const 1
     return
 }
@@ -4107,6 +4660,110 @@ function patterns_new_runtime.test_match_alphabet() -> int {
     load_var _1
     load_const 0
     load_array_element
+    pop 1
+    load_var _1
+    load_const 1
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 2
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 3
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 4
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 5
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 6
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 7
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 8
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 9
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 10
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 11
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 12
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 13
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 14
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 15
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 16
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 17
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 18
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 19
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 20
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 21
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 22
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 23
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 24
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 25
+    load_array_element
+    pop 1
+    load_var _1
+    load_const 0
+    load_array_element
     load_var _1
     load_const 1
     load_array_element
@@ -4237,6 +4894,10 @@ function patterns_new_runtime.test_match_array_shadows_outer() -> int {
     load_var _3
     load_const 0
     load_array_element
+    pop 1
+    load_var _3
+    load_const 0
+    load_array_element
     store_var inner
 
   L2:
@@ -4330,6 +4991,16 @@ function patterns_new_runtime.test_match_chain_trailing_binding() -> int {
     load_array_element
     store_var _13
     load_var _3
+    store_var rows
+    load_var _3
+    load_const 0
+    load_array_element
+    pop 1
+    load_var _8
+    load_const 0
+    load_array_element
+    pop 1
+    load_var rows
     load_const 0
     load_array_element
     load_const 0
@@ -4377,6 +5048,11 @@ function patterns_new_runtime.test_match_class_binds_inner_zip() -> int {
     jump L2
 
   L1:
+    load_var _1
+    load_field .address
+    load_field .coordinate
+    load_field .zip
+    pop 1
     load_const 1
 
   L2:
@@ -4460,6 +5136,10 @@ function patterns_new_runtime.test_match_nested_array_projects_inner() -> int {
     jump L2
 
   L1:
+    load_var _7
+    load_const 0
+    load_array_element
+    pop 1
     load_var _1
     load_const 0
     load_array_element

@@ -32,7 +32,8 @@ fn user.fixtures.patterns_class_destructure_namespaces.DestructureQualifiedMatch
     let _3: int
     let _4: bool
     let _5: int
-    let _6: int // matched
+    let _6: int
+    let _7: int // matched
 
     bb0: {
         _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { const "ok", const 42_i64 };
@@ -47,13 +48,15 @@ fn user.fixtures.patterns_class_destructure_namespaces.DestructureQualifiedMatch
     }
 
     bb2: {
-        _5 = copy _1.1;
-        _6 = copy _5;
-        _0 = copy _6;
+        _6 = copy _1.1;
+        _7 = copy _6;
+        _0 = copy _7;
         goto -> bb4;
     }
 
     bb3: {
+        _5 = copy _1.1;
+        drop(_5);
         _0 = const 0_i64;
         goto -> bb4;
     }
@@ -93,7 +96,8 @@ fn user.fixtures.patterns_class_destructure_namespaces.DestructureNamespaceQuali
     let _3: int
     let _4: bool
     let _5: int
-    let _6: int // matched
+    let _6: int
+    let _7: int // matched
 
     bb0: {
         _1 = user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response { const "ok", const 46_i64 };
@@ -108,13 +112,15 @@ fn user.fixtures.patterns_class_destructure_namespaces.DestructureNamespaceQuali
     }
 
     bb2: {
-        _5 = copy _1.1;
-        _6 = copy _5;
-        _0 = copy _6;
+        _6 = copy _1.1;
+        _7 = copy _6;
+        _0 = copy _7;
         goto -> bb4;
     }
 
     bb3: {
+        _5 = copy _1.1;
+        drop(_5);
         _0 = const 0_i64;
         goto -> bb4;
     }

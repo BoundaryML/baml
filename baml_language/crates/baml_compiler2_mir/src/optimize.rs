@@ -1229,6 +1229,49 @@ fn apply_subst_to_terminator<'db>(
 fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
     let mut uses = count_local_uses(body);
 
+    for block in &mut body.blocks {
+        if let Some(Terminator::ShortCircuit {
+            operand,
+            is_and,
+            destination: Place::Local(local),
+            eval_rhs,
+            join,
+        }) = &block.terminator
+            && local.0 > arity
+            && uses[local.0] == 0
+        {
+            // Discard the result, not the conditional execution of the RHS.
+            block.terminator = Some(Terminator::Branch {
+                condition: operand.clone(),
+                then_block: if *is_and { *eval_rhs } else { *join },
+                else_block: if *is_and { *join } else { *eval_rhs },
+            });
+        }
+
+        let mut statements = Vec::with_capacity(block.statements.len());
+        for statement in std::mem::take(&mut block.statements) {
+            let discard = match &statement.kind {
+                crate::StatementKind::Assign {
+                    destination: Place::Local(local),
+                    value,
+                } if local.0 > arity && uses[local.0] == 0 && !value.can_discard() => Some(*local),
+                _ => None,
+            };
+            let span = statement.span;
+            statements.push(statement);
+            if let Some(local) = discard {
+                // Reuse the existing eval-and-drop representation. This read
+                // keeps the definition alive and pins evaluation to this point.
+                statements.push(crate::Statement {
+                    kind: crate::StatementKind::Drop(Place::Local(local)),
+                    span,
+                });
+                uses[local.0] += 1;
+            }
+        }
+        block.statements = statements;
+    }
+
     // Force-alive: terminator destination locals can't be removed because
     // the terminator has side effects (Call, Await, SysOp, Spawn).
     // Even if the destination local has 0 read-uses, we must keep it.
@@ -1269,10 +1312,8 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
         return;
     }
 
-    // Scrub dead Assign statements: remove assignments whose destination is
-    // a dead plain-Local. All Rvalue variants are pure (no side effects), so
-    // this is always safe. This prevents rewrite_locals_in_statement from
-    // encountering a dead local (old_to_new = None) and panicking.
+    // Potentially failing evaluations gained a Drop use above. The remaining
+    // dead assignments can be removed without losing effects.
     for block in &mut body.blocks {
         block.statements.retain(|stmt| {
             if let crate::StatementKind::Assign {
@@ -1285,22 +1326,6 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
                 true
             }
         });
-    }
-
-    // Replace ShortCircuit terminators whose destination is dead with Goto
-    // to the join block. The now-unreachable eval_rhs block will be cleaned
-    // up by eliminate_dead_blocks.
-    for block in &mut body.blocks {
-        if let Some(Terminator::ShortCircuit {
-            destination: Place::Local(l),
-            join,
-            ..
-        }) = &block.terminator
-        {
-            if old_to_new[l.0].is_none() {
-                block.terminator = Some(Terminator::Goto { target: *join });
-            }
-        }
     }
 
     // Rewrite all Local references

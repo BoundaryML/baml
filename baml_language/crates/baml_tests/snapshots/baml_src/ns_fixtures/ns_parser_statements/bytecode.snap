@@ -169,6 +169,8 @@ function fixtures.parser_statements.continue_with_locals() -> int {
 function fixtures.parser_statements.edge_call_then_index(foo: () -> int[] throws never) -> int {
     load_var foo
     call_indirect
+    load_const 0
+    load_array_element
     pop 1
     load_const 1
     return
@@ -197,6 +199,10 @@ function fixtures.parser_statements.edge_let_call_then_index(bar: () -> int[] th
 function fixtures.parser_statements.edge_semicolon_forces_boundary(bar: () -> int[] throws never) -> int {
     load_var bar
     call_indirect
+    pop 1
+    load_const 0
+    load_type int
+    alloc_array 1
     pop 1
     load_const 1
     return
@@ -263,6 +269,12 @@ function fixtures.parser_statements.let_no_semicolons() -> int {
 }
 
 function fixtures.parser_statements.let_statements() -> int {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    pop 1
     load_const 1
     load_const 2
     init_instance user.fixtures.parser_statements.Point .x, .y

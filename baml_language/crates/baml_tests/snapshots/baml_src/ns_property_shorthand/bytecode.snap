@@ -69,6 +69,12 @@ function property_shorthand.property_shorthand_catch() -> string {
 
   L1:
     load_var error
+    load_const "error"
+    load_type string
+    load_type property_shorthand.PropertyShorthandError
+    alloc_map 1
+    pop 1
+    load_var error
     load_field .message
 
   L2:

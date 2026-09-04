@@ -157,6 +157,15 @@ function class_type_args_at_runtime.closure_inside_method_survives_gc_fn() -> st
     return
 
   L2:
+    load_var2 2 2
+    load_const 1
+    add_int
+    load_var i
+    load_const 2
+    add_int
+    load_type int
+    alloc_array 3
+    pop 1
     load_var i
     load_const 1
     add_int

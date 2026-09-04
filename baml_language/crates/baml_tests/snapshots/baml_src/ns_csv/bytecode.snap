@@ -4715,6 +4715,9 @@ function csv.csv_smoke_record_error_resumes() -> string {
   L3:
     load_var _
     load_field .2
+    pop 1
+    load_var _
+    load_field .2
     store_var line
     load_var bad
     load_const 1
@@ -4729,16 +4732,16 @@ function csv.csv_smoke_record_error_resumes() -> string {
   L4:
     load_var line
     call baml.json.stringify
-    store_var _15
+    store_var _16
     jump L6
 
   L5:
     load_const "?"
-    store_var _15
+    store_var _16
 
   L6:
     load_const "err@"
-    load_var _15
+    load_var _16
     bin_op +
     store_var step
     jump L9
@@ -4772,10 +4775,10 @@ function csv.csv_smoke_record_error_resumes() -> string {
     load_var seen
     load_const "bad="
     bin_op +
-    store_var _24
+    store_var _25
     load_var bad
     call baml.json.stringify
-    store_var _26
+    store_var _27
     load_var2 9 10
     bin_op +
     return

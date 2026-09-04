@@ -1007,6 +1007,64 @@ pub enum Rvalue<'db> {
     CurrentPackage(String),
 }
 
+impl Rvalue<'_> {
+    /// Whether an unused evaluation can be erased, including its operand reads.
+    /// Non-mutating operations can still fail (arithmetic, indexing, allocation).
+    pub fn can_discard(&self) -> bool {
+        let operand = |op: &Operand<'_>| {
+            matches!(
+                op,
+                Operand::Constant(_)
+                    | Operand::Copy(Place::Local(_) | Place::Capture(_))
+                    | Operand::Move(Place::Local(_) | Place::Capture(_))
+            )
+        };
+        match self {
+            Self::Use(op) => operand(op),
+            Self::BinaryOp { op, left, right } => {
+                matches!(
+                    op,
+                    BinOp::Eq
+                        | BinOp::Ne
+                        | BinOp::Lt
+                        | BinOp::Le
+                        | BinOp::Gt
+                        | BinOp::Ge
+                        | BinOp::BitAnd
+                        | BinOp::BitOr
+                        | BinOp::BitXor
+                ) && operand(left)
+                    && operand(right)
+            }
+            Self::UnaryOp { op, operand: arg } => {
+                matches!(op, UnaryOp::Not | UnaryOp::Truthy) && operand(arg)
+            }
+            Self::IsType { operand: arg, .. } | Self::IsTypeTag { operand: arg, .. } => {
+                operand(arg)
+            }
+            Self::RuntimeIsType {
+                operand: arg,
+                type_value,
+            } => operand(arg) && operand(type_value),
+            Self::TypeTag(place) => matches!(place, Place::Local(_) | Place::Capture(_)),
+            Self::LoadType(_) | Self::CurrentPackage(_) => true,
+            Self::Array(..)
+            | Self::Uint8Array(_)
+            | Self::Map(..)
+            | Self::Aggregate { .. }
+            | Self::Discriminant(_)
+            | Self::Len(_)
+            | Self::MakeClosure { .. }
+            | Self::MakeBoundMethod { .. }
+            | Self::MakeVirtualBoundMethod { .. }
+            | Self::MakeVirtualFunction { .. }
+            | Self::VirtualFieldAccess { .. }
+            | Self::MakeGenericFunction { .. }
+            | Self::MakeGenericFunctionFromValue { .. } => false,
+        }
+    }
+}
+
 /// The kind of aggregate being constructed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggregateKind {

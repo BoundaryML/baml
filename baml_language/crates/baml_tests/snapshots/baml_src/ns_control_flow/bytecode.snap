@@ -436,6 +436,12 @@ function control_flow.greet_if_let(u: control_flow.User | control_flow.Admin) ->
   L1:
     load_var u
     load_field .0
+    pop 1
+    load_var u
+    load_field .1
+    pop 1
+    load_var u
+    load_field .0
 
   L2:
     return
@@ -452,6 +458,12 @@ function control_flow.greet_let_else(u: control_flow.User | control_flow.Admin) 
     jump L2
 
   L1:
+    load_var u
+    load_field .0
+    pop 1
+    load_var u
+    load_field .1
+    pop 1
     load_var u
     load_field .0
 

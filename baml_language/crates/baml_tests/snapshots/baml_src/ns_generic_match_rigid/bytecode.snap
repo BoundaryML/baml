@@ -563,10 +563,19 @@ function generic_match_rigid.rigid_cell_split(c: generic_match_rigid.RigidCell<i
     load_var c
     is_type generic_match_rigid.RigidCell<...>
     pop_jump_if_false L3
+    load_var c
+    load_field .v
+    pop 1
+    load_var c
+    load_field .v
+    pop 1
     load_const "concrete"
     jump L2
 
   L1:
+    load_var c
+    load_field .v
+    pop 1
     load_const "rigid-one"
 
   L2:
@@ -626,10 +635,22 @@ function generic_match_rigid.rigid_row_split(r: generic_match_rigid.RigidRow) ->
     jump L1
 
   L0:
+    load_var r
+    load_field .xs
+    pop 1
+    load_var r
+    load_field .n
+    pop 1
     load_const "slice"
     jump L2
 
   L1:
+    load_var r
+    load_field .xs
+    pop 1
+    load_var r
+    load_field .n
+    pop 1
     load_const "rigid-one"
 
   L2:

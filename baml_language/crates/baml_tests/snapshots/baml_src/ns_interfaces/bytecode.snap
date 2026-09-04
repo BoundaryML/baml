@@ -2602,6 +2602,14 @@ function interfaces.bgfb_same(x: #0) -> bool {
 }
 
 function interfaces.birr_main() -> bool {
+    load_const 1
+    load_type int
+    init_instance<1> user.interfaces.BirrContainer .value
+    pop 1
+    load_const "two"
+    load_type string
+    init_instance<1> user.interfaces.BirrContainer .value
+    pop 1
     load_type interfaces.BirrContainer<int>
     load_type interfaces.BirrPrintable<int>
     call reflect.Type.implements
@@ -3924,7 +3932,8 @@ function interfaces.gbr_first_name(items: #0[]) -> string {
 function interfaces.gbr_main() -> string {
     load_const "Rex"
     init_instance user.interfaces.GbrDog .name
-    store_var mydog
+    load_field .name
+    pop 1
     load_type interfaces.GbrDog
     load_const "Rex"
     init_instance user.interfaces.GbrDog .name
@@ -4377,11 +4386,20 @@ function interfaces.mdci_describe(a: interfaces.MdciAnimal) -> string {
   L2:
     load_var a
     load_field .0
+    pop 1
+    load_var a
+    load_field .0
     load_const " the cat"
     bin_op +
     jump L4
 
   L3:
+    load_var a
+    load_field .0
+    pop 1
+    load_var a
+    load_field .1
+    pop 1
     load_var a
     load_field .0
     load_const " the "
@@ -4461,10 +4479,18 @@ function interfaces.midr_describe(s: interfaces.MidrSwitch) -> string {
     jump L1
 
   L0:
+    load_var s
+    load_type interfaces.MidrSwitch
+    virtual_load_field .active
+    pop 1
     load_const "off"
     jump L2
 
   L1:
+    load_var s
+    load_type interfaces.MidrSwitch
+    virtual_load_field .active
+    pop 1
     load_const "on"
 
   L2:

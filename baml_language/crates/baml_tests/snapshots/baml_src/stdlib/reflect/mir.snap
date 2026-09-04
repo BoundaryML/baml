@@ -34,9 +34,10 @@ fn reflect.class.Field.value(self: reflect.class.Field) -> null | T {
     let _8: reflect.Type
     let _9: bool
     let _10: string
-    let _11: string // message
-    let _12: reflect.errors.TypeMismatch
-    let _13: string
+    let _11: string
+    let _12: string // message
+    let _13: reflect.errors.TypeMismatch
+    let _14: string
 
     bb0: {
         _2 = copy _1.3;
@@ -72,10 +73,16 @@ fn reflect.class.Field.value(self: reflect.class.Field) -> null | T {
 
     bb6: {
         _10 = copy _5.0;
-        _11 = copy _10;
-        _13 = copy _11;
-        _12 = reflect.errors.TypeMismatch { copy _13 };
-        throw copy _12;
+        drop(_10);
+        goto -> bb7;
+    }
+
+    bb7: {
+        _11 = copy _5.0;
+        _12 = copy _11;
+        _14 = copy _12;
+        _13 = reflect.errors.TypeMismatch { copy _14 };
+        throw copy _13;
     }
 }
 

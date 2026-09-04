@@ -3758,19 +3758,33 @@ function exceptions.s8_risky_6(mode: int) -> int {
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
-    jump L2
+    jump L4
 
   L0:
     load_var mode
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L1
+    jump L2
 
   L1:
+    load_const null
+    store_var _4
+    jump L3
+
+  L2:
+    load_const 1
+    load_const 0
+    div_int
+    store_var _4
+    load_var _4
+    pop 1
+
+  L3:
     load_const "fallback"
     throw
 
-  L2:
+  L4:
     load_const 500
     init_instance user.exceptions.AppError .code
     throw
@@ -3816,19 +3830,33 @@ function exceptions.s9_risky_10(mode: int) -> int {
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
-    jump L2
+    jump L4
 
   L0:
     load_var mode
     load_const 1
     cmp_int_op ==
     pop_jump_if_false L1
+    jump L2
 
   L1:
+    load_const null
+    store_var _4
+    jump L3
+
+  L2:
+    load_const 1
+    load_const 0
+    div_int
+    store_var _4
+    load_var _4
+    pop 1
+
+  L3:
     load_const "fallback"
     throw
 
-  L2:
+  L4:
     load_const 7
     init_instance user.exceptions.AppError .code
     throw
@@ -4022,8 +4050,22 @@ function exceptions.s9c_risky_21(mode: int) -> int {
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
+    jump L1
 
   L0:
+    load_const null
+    store_var _2
+    jump L2
+
+  L1:
+    load_const 1
+    load_const 0
+    div_int
+    store_var _2
+    load_var _2
+    pop 1
+
+  L2:
     load_const "fallback"
     throw
 }
