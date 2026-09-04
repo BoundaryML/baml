@@ -11,22 +11,22 @@
 
 /// What a `client:` position accepts: an already-built client, a
 /// `"provider/model"` shorthand string, or a `baml.env.Ref` naming a variable
-/// that holds one. `ai.clients.resolve` turns any of them into a `root.Client`.
-type ClientSelector = root.Client | string | baml.env.Ref;
+/// that holds one. `ai.clients.resolve` turns any of them into a `ai.Client`.
+type Selector = root.Client | string | baml.env.Ref;
 
-/// Resolve a `ClientSelector` to the client to call, at CALL time.
+/// Resolve a `Selector` to the client to call, at CALL time.
 ///
-///   * a `root.Client` is returned unchanged (identity);
+///   * a `ai.Client` is returned unchanged (identity);
 ///   * a string is the `"provider/model"` shorthand, constructed here — the
 ///     runtime twin of the compiler's literal-`client:` lowering. An unknown
-///     prefix throws `root.errors.InvalidRequest` listing the valid ones;
+///     prefix throws `ai.errors.InvalidRequest` listing the valid ones;
 ///   * a `baml.env.Ref` is read now and its value takes the string path. An
-///     UNSET variable is a typed `root.errors.InvalidRequest` naming it — not
+///     UNSET variable is a typed `ai.errors.InvalidRequest` naming it — not
 ///     a panic, so a `catch_all` at the call boundary can still fall back.
 ///
 /// This is what makes `client: env.MODEL.get() ?? "openai/gpt-4o-mini"` work:
 /// nothing about the selection is decided until the call happens.
-function resolve(selector: ClientSelector) -> root.Client {
+function resolve(selector: Selector) -> root.Client {
     match (selector) {
         let shorthand: string => root.internal._from_shorthand(shorthand),
         let named: baml.env.Ref => {
@@ -45,8 +45,8 @@ function resolve(selector: ClientSelector) -> root.Client {
     }
 }
 
-// The default judgment: a request the provider rejected does not become
-// valid by resending.
+/// The default judgment: a request the provider rejected does not become
+/// valid by resending.
 function default_retry_judgment(f: root.errors.Failure) -> bool {
     match (f) {
         let r: root.errors.Refused => false,
@@ -66,8 +66,8 @@ class Backoff {
         Backoff { initial_ms: initial_ms, multiplier: multiplier, max_ms: max_ms }
     }
 
-    // The delay before attempt N (first retry is attempt 1). A
-    // root.errors.RateLimited.retry_after_ms hint overrides the computed value.
+    /// The delay before attempt N (first retry is attempt 1). A
+    /// `ai.errors.RateLimited.retry_after_ms` hint overrides the computed value.
     function delay_ms(self, attempt: int, f: root.errors.Failure) -> int {
         let hinted = match (f) {
             let r: root.errors.RateLimited => r.retry_after_ms,
@@ -93,7 +93,7 @@ class Backoff {
 
 // Streaming retries use the same safety judgment and backoff as invoke, but a
 // new stream may be opened only before the first text delta is returned.
-/// Map a classified failure to a failed-leg wire record (`selected: false`).
+/// (internal) Map a classified failure to a failed-leg wire record (`selected: false`).
 /// Timing is best-effort: a failed leg's start was never measured, so it is
 /// null — never fabricated. `client_name` falls back to the failure's own
 /// provider when the wrapper does not know the member's id.
@@ -125,11 +125,7 @@ function _failed_leg_call(client_name: string?, f: root.errors.Failure) -> root.
     root.events.LLMCall {
         client_name: client_name ?? provider,
         provider: provider,
-        timing: root.events.Timing {
-            start_time_utc_ms: null,
-            duration_ms: null,
-            ttft_ms: null,
-        },
+        timing: root.events.Timing { start_time_utc_ms: null, duration_ms: null, ttft_ms: null },
         http_request: null,
         http_response: match (status) {
             let s: int => root.events.HttpResponse { status: s, headers: {}, body: raw },
@@ -196,8 +192,8 @@ class Retry {
             self.inner.id()
         }
 
-        // Rendering is a pure preview of the inner client. It deliberately
-        // does not apply retry policy or backoff because no request is sent.
+        /// Rendering is a pure preview of the inner client. It deliberately
+        /// does not apply retry policy or backoff because no request is sent.
         function render(self, input: root.ModelTurnInput) -> baml.http.Request {
             self.inner.render(input) catch_all (e) {
                 _ => throw root.errors.normalize(e),
@@ -271,12 +267,12 @@ class Retry {
     }
 }
 
-// Rotates invocations across members. Replaces the legacy round-robin
-// provider: distribution is a client-boundary concern, exactly like Retry
-// and Fallback. The counter mutates on the shared value, so every call
-// site holding this client participates in one rotation. A streaming call
-// selects and advances the counter exactly once; a failure from that selected
-// stream never rotates again within the same call.
+/// Rotates invocations across members. Replaces the legacy round-robin
+/// provider: distribution is a client-boundary concern, exactly like Retry
+/// and Fallback. The counter mutates on the shared value, so every call
+/// site holding this client participates in one rotation. A streaming call
+/// selects and advances the counter exactly once; a failure from that selected
+/// stream never rotates again within the same call.
 class RoundRobin {
     members: root.Client[],
     counter: int,
@@ -302,8 +298,8 @@ class RoundRobin {
             }
         }
 
-        // Rendering is deterministic and side-effect free: preview the first
-        // member rather than mutating the invocation rotation counter.
+        /// Rendering is deterministic and side-effect free: preview the first
+        /// member rather than mutating the invocation rotation counter.
         function render(self, input: root.ModelTurnInput) -> baml.http.Request {
             match (self.members.at(0)) {
                 let c: root.Client => c.render(input),
@@ -385,8 +381,8 @@ class RoundRobin {
     }
 }
 
-// Streaming fallback advances in member order only for a typed, safely
-// retryable failure that occurs before the first text delta is returned.
+/// Streaming fallback advances in member order only for a typed, safely
+/// retryable failure that occurs before the first text delta is returned.
 class Fallback {
     members: root.Client[],
 
@@ -435,8 +431,8 @@ class Fallback {
             }
         }
 
-        // Rendering previews the first fallback member. It never probes later
-        // members because request construction itself must remain pure.
+        /// Rendering previews the first fallback member. It never probes later
+        /// members because request construction itself must remain pure.
         function render(self, input: root.ModelTurnInput) -> baml.http.Request {
             match (self.members.at(0)) {
                 let c: root.Client => c.render(input),
@@ -515,11 +511,11 @@ class Fallback {
     }
 }
 
-// Pulls one selected stream through a reliability policy. A typed, safely
-// retryable failure may replace the selected stream only before the first text
-// delta has been returned. Once any delta is visible, every later failure is
-// terminal: replaying would duplicate a prefix and there is no resumable-stream
-// contract at the client boundary.
+/// Pulls one selected stream through a reliability policy. A typed, safely
+/// retryable failure may replace the selected stream only before the first text
+/// delta has been returned. Once any delta is visible, every later failure is
+/// terminal: replaying would duplicate a prefix and there is no resumable-stream
+/// contract at the client boundary.
 class StreamRelay {
     open: () -> root.stream.TurnStream throws root.errors.InvokeError,
     retry: (root.errors.Failure) -> bool throws root.errors.InvokeError,
@@ -530,7 +526,7 @@ class StreamRelay {
     // one TextDelta at a time so downstream granularity is preserved.
     pending_text: string[],
     pending_cursor: int,
-    terminal: root.stream.StreamEvent[],
+    terminal: root.stream.Event[],
     terminal_cursor: int,
     finished: bool,
     // Wire records, oldest first: failed legs pushed on retry, the selected
@@ -549,10 +545,6 @@ class StreamRelay {
             let timeout: baml.errors.Timeout => {
                 self.close_current();
                 throw timeout
-            },
-            let cancelled: baml.panics.Cancelled => {
-                self.close_current();
-                throw cancelled
             },
             let failure: root.errors.Failure => {
                 if (!self.emitted && self.retry(failure)) {
@@ -575,7 +567,7 @@ class StreamRelay {
         }
     }
 
-    function next_event(self) -> root.stream.StreamEvent | root.stream.Done {
+    function next_event(self) -> root.stream.Event | root.stream.Done {
         if (self.pending_cursor < self.pending_text.length()) {
             let text = self.pending_text.at(self.pending_cursor)
                 ?? baml.sys.panic("StreamRelay lost a pending delta");
@@ -613,8 +605,7 @@ class StreamRelay {
                     self.pending_text = batch;
                     self.pending_cursor = 1;
                     root.stream.TextDelta {
-                        text: batch.at(0)
-                            ?? baml.sys.panic("StreamRelay received an empty batch"),
+                        text: batch.at(0) ?? baml.sys.panic("StreamRelay received an empty batch"),
                     }
                 },
                 let done: root.stream.Done => {

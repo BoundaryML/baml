@@ -1,19 +1,21 @@
-// Union-receiver members + optional chains
+// Union-receiver interface members + optional chains
 //
-// (TIR types the bare param-union access and the two-step chain
-// `unknown` - the spec is ahead on both.)
-//
-// Member access on a UNION resolves the member on every member type
-// and JOINS the results (TS's rule; any member lacking it fails).
+// A union exposes a member only through an interface shared by every arm.
 // `?.` chains follow TS short-circuit semantics: each `?.` peels null
 // from its base and the enclosing OptionalChain boundary unions null
 // back into the result - intermediate links see the non-null type.
+interface UcValue {
+    value string
+}
+
 class UcOk {
     value string
+    implements UcValue {}
 }
 
 class UcWarn {
     value string
+    implements UcValue {}
 }
 
 function uc_field(r: UcOk | UcWarn) -> string throws never {

@@ -120,7 +120,9 @@ function shell.b251_concat_println_shell_fn() -> bool {
     load_const null
     sys_op baml.sys.shell
     load_field .stdout
-    call baml.Uint8Array.baml.ToString.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var out
     load_var out
     call baml.String.length
@@ -152,7 +154,9 @@ function shell.b251_multi_let_fn() -> bool {
     load_const null
     sys_op baml.sys.shell
     load_field .stdout
-    call baml.Uint8Array.baml.ToString.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var out
     load_var out
     call baml.String.length
@@ -189,7 +193,9 @@ function shell.b251_println_discarded_fn() -> bool {
     load_const null
     sys_op baml.sys.shell
     load_field .stdout
-    call baml.Uint8Array.baml.ToString.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var out
     load_var out
     call baml.String.length
@@ -226,7 +232,9 @@ function shell.b251_println_twice_fn() -> bool {
     load_const null
     sys_op baml.sys.shell
     load_field .stdout
-    call baml.Uint8Array.baml.ToString.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
     store_var out
     load_var out
     call baml.String.length
@@ -250,7 +258,11 @@ function shell.exec_echo_fn() -> bool {
     load_const null
     sys_op baml.sys.exec
     load_field .stdout
-    call baml.Uint8Array.baml.ToString.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _1
+    load_var _1
     load_const "Hello From Exec!"
     call baml.String.includes
     return
@@ -261,7 +273,11 @@ function shell.shell_echo_fn() -> bool {
     load_const null
     sys_op baml.sys.shell
     load_field .stdout
-    call baml.Uint8Array.baml.ToString.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _1
+    load_var _1
     load_const "hello_from_shell"
     call baml.String.includes
     return
@@ -306,7 +322,11 @@ function shell.shell_stdout_bytes_fn() -> bool {
     load_const null
     sys_op baml.sys.shell
     load_field .stdout
-    call baml.Uint8Array.baml.ToString.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _1
+    load_var _1
     load_const "hello"
     call baml.String.includes
     return
@@ -317,7 +337,11 @@ function shell.shell_with_variable_fn() -> bool {
     load_const null
     sys_op baml.sys.shell
     load_field .stdout
-    call baml.Uint8Array.baml.ToString.to_string
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _2
+    load_var _2
     load_const "dynamic_value"
     call baml.String.includes
     return

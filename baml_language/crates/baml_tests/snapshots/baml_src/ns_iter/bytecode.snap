@@ -447,12 +447,12 @@ function iter.$init_test_ns_iter_iter(registry: testing.TestCollector) -> null {
     return
 }
 
-function iter.FlakyIterator.baml.iter.Iterable.iter(self: iter.FlakyIterator) -> baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int> {
+function iter.<(user.iter.FlakyIterator as baml.iter.Iterable)>.iter(self: iter.FlakyIterator) -> baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int> {
     load_var self
     return
 }
 
-function iter.FlakyIterator.baml.iter.Iterator.next(self: iter.FlakyIterator) -> int | baml.iter.Done {
+function iter.<(user.iter.FlakyIterator as baml.iter.Iterator)>.next(self: iter.FlakyIterator) -> int | baml.iter.Done {
     load_var self
     load_field .pos
     load_var self
@@ -505,25 +505,12 @@ function iter.FlakyIterator.baml.iter.Iterator.next(self: iter.FlakyIterator) ->
     throw
 }
 
-function iter.FlakyIterator.new(values: int[], fail_at: int) -> iter.FlakyIterator {
-    load_var values
-    load_const 0
-    load_var fail_at
-    init_instance user.iter.FlakyIterator .values, .pos, .fail_at
-    return
-}
-
-function iter.IterShadow.iter(self: iter.IterShadow) -> string {
-    load_const "shadow"
-    return
-}
-
-function iter.ResumableIterator.baml.iter.Iterable.iter(self: iter.ResumableIterator) -> baml.iter.Iterator<Error = never, Item = int> {
+function iter.<(user.iter.ResumableIterator as baml.iter.Iterable)>.iter(self: iter.ResumableIterator) -> baml.iter.Iterator<Error = never, Item = int> {
     load_var self
     return
 }
 
-function iter.ResumableIterator.baml.iter.Iterator.next(self: iter.ResumableIterator) -> int | baml.iter.Done {
+function iter.<(user.iter.ResumableIterator as baml.iter.Iterator)>.next(self: iter.ResumableIterator) -> int | baml.iter.Done {
     load_var self
     load_field .pos
     load_var self
@@ -572,6 +559,19 @@ function iter.ResumableIterator.baml.iter.Iterator.next(self: iter.ResumableIter
     alloc_instance baml.iter.Done
 
   L4:
+    return
+}
+
+function iter.FlakyIterator.new(values: int[], fail_at: int) -> iter.FlakyIterator {
+    load_var values
+    load_const 0
+    load_var fail_at
+    init_instance user.iter.FlakyIterator .values, .pos, .fail_at
+    return
+}
+
+function iter.IterShadow.iter(self: iter.IterShadow) -> string {
+    load_const "shadow"
     return
 }
 

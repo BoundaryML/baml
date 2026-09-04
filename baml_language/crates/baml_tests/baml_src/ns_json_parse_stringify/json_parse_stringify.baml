@@ -9,7 +9,7 @@
 // `stringify_pretty_multiline`: The Rust test checks s.contains('\n'). BAML has
 // string.includes, so we call it directly on the stringify_pretty result.
 //
-// `parse_throws_on_garbage`: checks that parsing "{[" raises JsonParseError.
+// `parse_throws_on_garbage`: checks that parsing "{[" raises baml.json.ParseError.
 // `roundtrip_nested_object`: uses a string local, moved to helper to avoid boxing.
 
 // ─── 2.1 Parse an array of ints ──────────────────────────────────────────────
@@ -78,7 +78,7 @@ test "parse_throws_on_garbage" {
         baml.json.parse("{[");
         baml.sys.panic("expected parse to throw")
     } catch (e) {
-        baml.json.JsonParseError => null
+        baml.json.ParseError => null
     }
 }
 

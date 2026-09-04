@@ -26,7 +26,7 @@ use crate::AuthError;
 
 /// Everything the signer needs beyond the request itself.
 ///
-/// Mirrors the BAML-side `aws.internal.AwsSignOptions`.
+/// Mirrors the BAML-side `aws.internal.SignOptions`.
 #[derive(Debug, Clone, Default)]
 pub struct AwsSignOptions {
     pub region: Option<String>,

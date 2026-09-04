@@ -1612,7 +1612,7 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
         Some(match parts.len() {
             0 => Ty::Never { attr: attr() },
             1 => parts.pop().unwrap_or_else(|| unreachable!("len checked")),
-            _ => Ty::Union(parts, attr()),
+            _ => Ty::Union(parts.into(), attr()),
         })
     }
 
@@ -1637,7 +1637,7 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
                 for a in args {
                     out.push(self.render(a, path)?);
                 }
-                Ty::Class(auto.names.get(qn.0).clone(), out, attr())
+                Ty::Class(auto.names.get(qn.0).clone(), out.into(), attr())
             }
             Node::Interface(qn, args, bindings) => {
                 let (qn, args, bindings) = (*qn, args.clone(), bindings.clone());
@@ -1649,7 +1649,12 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
                 for (n, t) in bindings {
                     out_bindings.push((auto.strs.get(n.0).clone(), self.render(t, path)?));
                 }
-                Ty::Interface(auto.names.get(qn.0).clone(), out_args, out_bindings, attr())
+                Ty::Interface(
+                    auto.names.get(qn.0).clone(),
+                    out_args.into(),
+                    out_bindings.into(),
+                    attr(),
+                )
             }
             Node::List(inner) => {
                 let inner = *inner;
@@ -1713,7 +1718,7 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
                         return Some(match parts.len() {
                             0 => Ty::Never { attr: attr() },
                             1 => parts.pop().unwrap_or_else(|| unreachable!("len checked")),
-                            _ => Ty::Union(parts, attr()),
+                            _ => Ty::Union(parts.into(), attr()),
                         });
                     }
                     return self.cover_union(&covers, &extras, path);
@@ -1725,7 +1730,7 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
                 match parts.len() {
                     0 => Ty::Never { attr: attr() },
                     1 => parts.pop().unwrap_or_else(|| unreachable!("len checked")),
-                    _ => Ty::Union(parts, attr()),
+                    _ => Ty::Union(parts.into(), attr()),
                 }
             }
             Node::Function {
@@ -1743,7 +1748,7 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
                     });
                 }
                 Ty::Function {
-                    params: out_params,
+                    params: out_params.into(),
                     ret: Box::new(self.render(ret, path)?),
                     throws: Box::new(self.render(throws, path)?),
                     attr: attr(),
@@ -1768,8 +1773,8 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
                         }
                         crate::Interface {
                             name: auto.names.get(name.0).clone(),
-                            generics: out_args,
-                            associated_types: out_bindings,
+                            generics: out_args.into(),
+                            associated_types: out_bindings.into(),
                         }
                     }
                     _ => unreachable!("projection qualifier is an interface"),

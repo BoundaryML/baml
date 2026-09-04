@@ -92,7 +92,7 @@ function runtime_enum_llm_companions_compile() -> string {
         reflect.enum.value("RED", alias = "k7", description = "warm"),
         "BLUE",
     ])
-    let prompt = RuntimeClassify$render_prompt<unreflect(category)>("sample").text()
-    let parsed = RuntimeClassify$parse<unreflect(category)>(`"k7"`)
+    let prompt = RuntimeClassify@render_prompt<unreflect(category)>("sample").text()
+    let parsed = RuntimeClassify@parse<unreflect(category)>(`"k7"`)
     return prompt + reflect.enum.get_value(parsed)
 }

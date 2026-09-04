@@ -211,16 +211,16 @@ mod tests {
     #[test]
     fn class_type_args_are_invariant() {
         let tn = user_class("Foo");
-        let foo_int = TyTemplate::class(tn.clone(), vec![leaf(RealizedTy::int())]);
+        let foo_int = TyTemplate::class(tn.clone(), Box::new([leaf(RealizedTy::int())]));
         assert!(matches(
             &foo_int,
             &[],
-            &RuntimeTy::class_with_args(tn.clone(), vec![RuntimeTy::int()])
+            &RuntimeTy::class_with_args(tn.clone(), Box::new([RuntimeTy::int()]))
         ));
         assert!(!matches(
             &foo_int,
             &[],
-            &RuntimeTy::class_with_args(tn, vec![RuntimeTy::string()])
+            &RuntimeTy::class_with_args(tn, Box::new([RuntimeTy::string()]))
         ));
     }
 

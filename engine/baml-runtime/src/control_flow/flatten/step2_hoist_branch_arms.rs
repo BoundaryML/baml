@@ -57,7 +57,7 @@ pub fn hoist_branch_arms(viz: &ControlFlowVisualization) -> ControlFlowVisualiza
         })
         .collect();
 
-    groups.sort_by(|a, b| b.depth.cmp(&a.depth));
+    groups.sort_by_key(|a| std::cmp::Reverse(a.depth));
 
     for info in groups {
         // Step 2: move outgoing edges from the branch group onto each arm.

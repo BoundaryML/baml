@@ -463,10 +463,10 @@ jobs:
         with:
           # Temporarily omit Hawk while its CI check is disabled.
           # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv node clang-format"
-          install_args: "cargo:prek python uv node clang-format"
+          install_args: "sccache cargo:prek python uv node clang-format"
 
       - name: "Cache prek"
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -589,14 +589,20 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/cargo-tests.reusable.yaml
-    secrets: inherit
+    # Map repository Actions secrets into the reusable-workflow contract.
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
   size-gate:
     name: "Size Gate"
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/size-gate.reusable.yaml
-    secrets: inherit
+    # Structural mapping only; see cargo-tests above.
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     permissions:
       contents: read
       pull-requests: write
@@ -1005,7 +1011,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -1065,7 +1071,9 @@ jobs:
       # index + git checkouts, not the unpacked sources, so this keeps the
       # artifact (and the run job's download/untar) small.
       - name: "Pack cargo home for benchmarks-run"
-        run: tar -C "$HOME" --exclude='.cargo/registry/src' -cf cargo-home.tar .cargo/registry .cargo/git
+        run: |
+          mkdir -p "$HOME/.cargo/git"
+          tar -C "$HOME" --exclude='.cargo/registry/src' -cf cargo-home.tar .cargo/registry .cargo/git
       - name: "Upload cargo home"
         uses: actions/upload-artifact@v7
         with:
@@ -1085,7 +1093,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -1100,7 +1108,7 @@ jobs:
       # re-cloning git deps on the bare codspeed-macro runner (~24 min). Comes
       # via artifact, not cache — see the build job for why cache misses here.
       - name: "Download cargo home"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: codspeed-cargo-home
           path: /tmp/cargo-home
@@ -1113,7 +1121,7 @@ jobs:
           tool: cargo-codspeed@4.7.0
 
       - name: "Download prebuilt benchmark binaries"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: codspeed-walltime-benches
           path: baml_language/target/codspeed/walltime
@@ -1177,7 +1185,7 @@ jobs:
       pull-requests: write
     steps:
       - name: "Comment perf opt-in instructions"
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           RUN_PERF: ${{ needs.determine_changes.outputs.run_perf }}
         with:
@@ -1435,6 +1443,12 @@ jobs:
           RELEASE_WORKFLOW_REF: ${{ steps.release-workflow-ref.outputs.ref }}
         run: |
           set -euo pipefail
+          release_plan="$RUNNER_TEMP/canary-release-plan.json"
+          scripts/baml-language-version plan \
+            --channel canary \
+            --out "$release_plan"
+          release_version="$(jq -r .canonical_version "$release_plan")"
+          echo "Requested canary release version: $release_version"
           # Load the workflow definition from the same immutable commit that the
           # release checks out, even if canary advances while this CI run finishes.
           gh workflow run release-baml-language.yml \
@@ -1442,5 +1456,6 @@ jobs:
             --ref "$RELEASE_WORKFLOW_REF" \
             -f channel=canary \
             -f dry_run=false \
+            -f version="$release_version" \
             -f source_sha="$GITHUB_SHA" \
             -f source_ci_run_id="$GITHUB_RUN_ID"

@@ -39,14 +39,14 @@ class TestSetReport {
 /// A report for a single child — either a `TestReport` or a `TestSetReport`.
 type ChildReport = TestReport | TestSetReport;
 
-/// A named child report used internally when aggregating testset children.
-class NamedChildReport {
+/// (internal) A named child report used internally when aggregating testset children.
+class _NamedChildReport {
     name: string,
     report: ChildReport,
 }
 
-// Runner type aliases — lambda transformers.
-// TestRunner wraps "run test once" into a new execution lambda.
+/// Runner type aliases — lambda transformers.
+/// TestRunner wraps "run test once" into a new execution lambda.
 type TestBody = () -> void throws unknown;
 
 type TestSetBody = (TestCollector) -> void throws unknown;
@@ -71,7 +71,7 @@ class TestSetChild {
     is_container: bool,
 }
 
-// TestSetRunner receives lazy children and returns the aggregate report.
+/// TestSetRunner receives lazy children and returns the aggregate report.
 type TestSetRunner = (TestSetChild[]) -> TestSetReport throws never;
 
 // --- Flat report type for the CLI test runner ---

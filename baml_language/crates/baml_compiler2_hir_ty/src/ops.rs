@@ -8,7 +8,7 @@
 
 use baml_type::{
     Name, TypeName,
-    interned::{InterfaceRef, Ty, TyKind},
+    interned::{InferInterface, InferTy, Ty},
 };
 
 use crate::impls::{resolve_impl, resolved_pin};
@@ -113,8 +113,8 @@ pub fn operator_output(
 
 /// The impl goal an operator application poses: `baml.ops.<interface>` with
 /// the rhs operand filling the single generic slot when present.
-fn operator_goal(interface: &str, rhs: Option<&Ty>) -> InterfaceRef {
-    InterfaceRef::new(
+fn operator_goal(interface: &str, rhs: Option<&Ty>) -> InferInterface {
+    InferInterface::new(
         TypeName::new(
             Name::new("baml"),
             vec![Name::new("ops")],
@@ -124,15 +124,15 @@ fn operator_goal(interface: &str, rhs: Option<&Ty>) -> InterfaceRef {
             .into_iter()
             .collect::<Vec<_>>()
             .into_boxed_slice(),
-        Vec::new(),
+        Box::new([]),
     )
 }
 
 /// The method declaration an operator application dispatches to, for the
-/// reader: the matching source impl's override when the receiver resolves
-/// to one, else the `baml.ops` interface's own method declaration (the
-/// static truth when dispatch is dynamic — union/existential/unbound
-/// receivers — or when the impl inherits the default). Operand literals
+/// reader: the method the matching source impl provides when the receiver
+/// resolves to one, else the `baml.ops` interface's own method declaration
+/// (the static truth when dispatch is dynamic — union/existential/unbound
+/// receivers — or when the impl adopts the default). Operand literals
 /// widen here (`1 + 2` navigates like `int + int`); `None` only when the
 /// interface itself is not in the database.
 pub fn operator_method<'db>(
@@ -142,7 +142,7 @@ pub fn operator_method<'db>(
     rhs: Option<&Ty>,
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
     let widen = |ty: &Ty| match ty.kind() {
-        TyKind::Literal(literal, _, attr) => {
+        InferTy::Literal(literal, _, attr) => {
             Ty::intern(crate::infer::literal_base(literal, attr.clone()))
         }
         _ => ty.clone(),
@@ -152,7 +152,8 @@ pub fn operator_method<'db>(
     let method_name = Name::new(dispatch.method);
 
     if let Some(resolved) = resolve_impl(db, &lhs, &operator_goal(dispatch.interface, rhs.as_ref()))
-        && let Some((_, func)) = resolved.source_dispatch(db, &method_name)
+        && let Some(crate::impls::ProvidedMethod::Source { func, .. }) =
+            resolved.provided_method(db, &method_name)
     {
         return Some(func);
     }

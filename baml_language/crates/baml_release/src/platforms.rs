@@ -57,9 +57,16 @@ pub struct Artifacts {
 
 /// The CLI toolchain artifact (baml-cli + pack host, archived per target).
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ToolchainArtifact {
     /// GitHub Actions runner label (distinct from the target's `os` family).
     pub runner: String,
+    /// Native job container used for the entire build.
+    #[serde(default)]
+    pub container: Option<String>,
+    /// Container image invoked by `cross` for a cross-compiled build.
+    #[serde(default)]
+    pub cross_image: Option<String>,
     /// Built best-effort: a build failure must not block the release.
     #[serde(default)]
     pub experimental: bool,
@@ -157,6 +164,16 @@ pub fn platforms() -> Platforms {
 
 fn validate_platforms(platforms: &Platforms) -> Result<(), String> {
     for target in &platforms.targets {
+        if let Some(toolchain) = &target.artifacts.toolchain
+            && toolchain.container.is_some()
+            && toolchain.cross_image.is_some()
+        {
+            return Err(format!(
+                "{}: toolchain container and cross_image are mutually exclusive",
+                target.triple
+            ));
+        }
+
         let Some(csharp) = &target.artifacts.csharp else {
             continue;
         };
@@ -215,6 +232,49 @@ mod tests {
                 t.triple
             );
         }
+    }
+
+    #[test]
+    fn toolchain_build_modes_are_preserved_and_mutually_exclusive() {
+        let p = platforms();
+        let arm = p
+            .targets
+            .iter()
+            .find(|target| target.triple == "aarch64-unknown-linux-gnu")
+            .unwrap()
+            .artifacts
+            .toolchain
+            .as_ref()
+            .unwrap();
+        assert_eq!(
+            arm.container.as_deref(),
+            Some("ghcr.io/rust-cross/manylinux_2_28-cross:aarch64")
+        );
+        assert!(arm.cross_image.is_none());
+
+        let json = r#"{
+            "schema": 1,
+            "targets": [{
+                "triple": "aarch64-unknown-linux-gnu", "os": "linux", "arch": "aarch64",
+                "libc": "gnu", "archive_suffix": ".tar.gz",
+                "artifacts": { "toolchain": {
+                    "runner": "ubuntu-24.04-arm",
+                    "container": "native-image",
+                    "cross_image": "cross-image"
+                } }
+            }]
+        }"#;
+        let p: Platforms = serde_json::from_str(json).unwrap();
+        assert!(validate_platforms(&p).is_err());
+    }
+
+    #[test]
+    fn toolchain_artifact_rejects_unknown_fields() {
+        let json = r#"{
+            "runner": "ubuntu-latest",
+            "cross_iamge": "misspelled-image"
+        }"#;
+        assert!(serde_json::from_str::<ToolchainArtifact>(json).is_err());
     }
 
     #[test]

@@ -42,12 +42,12 @@ fn user.fixtures.retry_policy.UseRetryClient(input: string, client: null | ai.Cl
     }
 
     bb5: {
-        _9 = call const fn user.fixtures.retry_policy.UseRetryClient$spec(copy _1) -> [bb6];
+        _9 = call const fn user.fixtures.retry_policy.UseRetryClient@spec(copy _1) -> [bb6];
     }
 
     bb6: {
         _10 = load_type(string);
-        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _10>(copy _7, copy _9) -> [bb7];
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure><copy _10>(copy _7, copy _9) -> [bb7];
     }
 
     bb7: {
@@ -60,7 +60,7 @@ fn user.fixtures.retry_policy.UseRetryClient(input: string, client: null | ai.Cl
     }
 }
 
-fn user.fixtures.retry_policy.UseRetryClient$build_request(input: string, client: null | ai.Client) -> baml.http.Request {
+fn user.fixtures.retry_policy.UseRetryClient@build_request(input: string, client: null | ai.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // input // param
@@ -80,7 +80,7 @@ fn user.fixtures.retry_policy.UseRetryClient$build_request(input: string, client
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.retry_policy.UseRetryClient$spec(copy _1) -> [bb3];
+        _4 = call const fn user.fixtures.retry_policy.UseRetryClient@spec(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -93,7 +93,7 @@ fn user.fixtures.retry_policy.UseRetryClient$build_request(input: string, client
     }
 }
 
-fn user.fixtures.retry_policy.UseRetryClient$parse(json: string) -> string {
+fn user.fixtures.retry_policy.UseRetryClient@parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
@@ -109,7 +109,7 @@ fn user.fixtures.retry_policy.UseRetryClient$parse(json: string) -> string {
     }
 }
 
-fn user.fixtures.retry_policy.UseRetryClient$render_prompt(input: string) -> ai.Prompt {
+fn user.fixtures.retry_policy.UseRetryClient@render_prompt(input: string) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: string // input // param
@@ -117,7 +117,7 @@ fn user.fixtures.retry_policy.UseRetryClient$render_prompt(input: string) -> ai.
     let _3: reflect.Type
 
     bb0: {
-        _2 = call const fn user.fixtures.retry_policy.UseRetryClient$spec(copy _1) -> [bb1];
+        _2 = call const fn user.fixtures.retry_policy.UseRetryClient@spec(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -130,7 +130,7 @@ fn user.fixtures.retry_policy.UseRetryClient$render_prompt(input: string) -> ai.
     }
 }
 
-fn user.fixtures.retry_policy.UseRetryClient$spec(input: string) -> ai.FunctionSpec<string> {
+fn user.fixtures.retry_policy.UseRetryClient@spec(input: string) -> ai.FunctionSpec<string> {
     // Locals:
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // input // param [captured]
@@ -162,7 +162,7 @@ fn user.fixtures.retry_policy.UseRetryClient$spec(input: string) -> ai.FunctionS
 }
 
 // lambda[0]
-fn .<lambda(UseRetryClient$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+fn .<lambda(UseRetryClient@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.OutputFormat //  __spec_output_format // param
@@ -246,7 +246,7 @@ fn .<lambda(UseRetryClient$spec, 0)>( __spec_output_format: ai.OutputFormat) -> 
     }
 }
 
-fn user.fixtures.retry_policy.UseRetryClient$stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.retry_policy.UseRetryClient@stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: string // input // param
@@ -279,7 +279,7 @@ fn user.fixtures.retry_policy.UseRetryClient$stream(input: string, client: null 
     }
 
     bb4: {
-        _6 = call const fn user.fixtures.retry_policy.UseRetryClient$spec(copy _1) -> [bb5];
+        _6 = call const fn user.fixtures.retry_policy.UseRetryClient@spec(copy _1) -> [bb5];
     }
 
     bb5: {

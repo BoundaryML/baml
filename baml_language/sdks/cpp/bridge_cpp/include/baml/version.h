@@ -4,8 +4,8 @@
 namespace baml {
 
 inline constexpr const char* kBridgeRuntimeName = "BAML C++ bridge";
-inline constexpr const char* kToolchainVersion = "0.17.0";
-inline constexpr const char* kBridgeRuntimeVersion = "0.17.0";
+inline constexpr const char* kToolchainVersion = "0.18.0";
+inline constexpr const char* kBridgeRuntimeVersion = "0.18.0";
 
 inline constexpr const char* toolchain_version() { return kToolchainVersion; }
 inline constexpr const char* bridge_runtime_version() {

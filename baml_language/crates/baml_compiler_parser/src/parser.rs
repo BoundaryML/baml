@@ -3117,7 +3117,7 @@ impl<'a> Parser<'a> {
 
             // Consume dot-separated path segments (e.g., baml.http.Request).
             // `spawn`/`await` are reserved keywords but valid as namespace
-            // segments after a `.` (e.g. `baml.spawn.SpawnParams` in a type
+            // segments after a `.` (e.g. `baml.spawn.Params` in a type
             // annotation), mirroring `parse_path_or_ident`'s segment set.
             while self.at(TokenKind::Dot) {
                 self.bump(); // dot
@@ -5403,7 +5403,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Arrow
                 | TokenKind::FatArrow
                 // `spawn`/`await` are valid namespace segments inside type
-                // args (`foo<baml.spawn.SpawnParams<T, E>>(x)`), mirroring
+                // args (`foo<baml.spawn.Params<T, E>>(x)`), mirroring
                 // the type-path parser's segment set.
                 | TokenKind::Spawn
                 | TokenKind::Await
@@ -6277,15 +6277,18 @@ impl<'a> Parser<'a> {
                 }
             } else if op == TokenKind::At
                 && !self.has_newline_ahead()
-                && self
-                    .peek(1)
-                    .is_some_and(|t| t.kind == TokenKind::Word && t.text == "spec")
+                && self.peek(1).is_some_and(|t| {
+                    t.kind == TokenKind::Word
+                        && matches!(
+                            t.text.as_str(),
+                            "spec" | "stream" | "render_prompt" | "build_request" | "parse"
+                        )
+                })
             {
-                // Postfix `@spec` on an LLM function reference: `MyFunc@spec(...)`.
-                // Wraps the base expression in a SPEC_EXPR; AST lowering renames
-                // the path's last segment to the `<name>$spec` companion. The
-                // no-newline guard mirrors the tagged-template rule so an
-                // attribute at the start of the next line is never absorbed.
+                // Postfix companion reference, such as `MyFunc@spec(...)` or
+                // `MyFunc@parse(...)`. AST lowering turns it into the ordinary
+                // internal callable FQN. The no-newline guard mirrors the tagged
+                // template rule so a next-line attribute is never absorbed.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::SPEC_EXPR);
                 self.bump(); // @
@@ -7000,7 +7003,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Arrow
                 | TokenKind::FatArrow
                 // `spawn`/`await` are valid namespace segments inside type
-                // args (`foo<baml.spawn.SpawnParams<T, E>>(x)`), mirroring
+                // args (`foo<baml.spawn.Params<T, E>>(x)`), mirroring
                 // the type-path parser's segment set.
                 | TokenKind::Spawn
                 | TokenKind::Await

@@ -1,13 +1,21 @@
 // test_decode_call_result.test.ts — exercises the BamlOutboundResult decode
 // path directly, by hand-building wire holders. Covers two behaviors that the
 // engine-driven round-trip tests don't reach:
-//   1. inline media_value / prompt_ast_value are rejected (not silently null'd).
+//   1. inline media_value / prompt_ast_value reconstruct portable wrappers.
 //   2. error/panic arms surface a BamlError/BamlPanic carrying the decoded
 //      value, BAML trace, and class FQN — not just a formatted string.
 
 import { baml_bridge } from '../dist/proto/baml_cffi.js';
 import { decodeCallResult } from '../dist/index.js';
-import { BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic } from '../dist/index.js';
+import {
+    BamlClientError,
+    BamlError,
+    BamlFunctionSpec,
+    BamlInvalidArgumentError,
+    BamlPanic,
+    BamlPrompt,
+    _seedFunctionRefHandle,
+} from '../dist/index.js';
 
 const { BamlOutboundResult, BamlOutboundValue } = baml_bridge.cffi.v1;
 
@@ -15,19 +23,30 @@ function encodeResult(result: baml_bridge.cffi.v1.IBamlOutboundResult): Buffer {
     return Buffer.from(BamlOutboundResult.encode(BamlOutboundResult.create(result)).finish());
 }
 
-describe('decodeCallResult — inline media / prompt AST rejection', () => {
-    test('an ok envelope carrying media_value is rejected, not collapsed to null', () => {
-        const bytes = encodeResult({ ok: { mediaValue: { mimeType: 'image/png' } } });
-        expect(() => decodeCallResult(bytes)).toThrow(/media_value on the FFI path/);
-    });
-
-    test('an ok envelope carrying prompt_ast_value is rejected', () => {
-        const bytes = encodeResult({ ok: { promptAstValue: { simple: {} } } });
-        expect(() => decodeCallResult(bytes)).toThrow(/prompt_ast_value on the FFI path/);
+describe('decodeCallResult — portable prompt AST', () => {
+    test('an ok envelope carrying prompt_ast_value returns a portable wrapper', () => {
+        const bytes = encodeResult({ ok: { promptAstValue: { simple: { string: 'hello' } } } });
+        const prompt = decodeCallResult(bytes);
+        expect(prompt).toBeInstanceOf(BamlPrompt);
+        expect((prompt as BamlPrompt).toJSON()).toMatchObject({
+            simple: { string: 'hello' },
+        });
     });
 
     test('a genuinely empty ok envelope still decodes to null', () => {
         expect(decodeCallResult(encodeResult({ ok: {} }))).toBeNull();
+    });
+});
+
+describe('decodeCallResult — FunctionSpec capability', () => {
+    test('the dedicated handle tag decodes to BamlFunctionSpec', () => {
+        const [key] = _seedFunctionRefHandle(41);
+        const spec = decodeCallResult(encodeResult({
+            ok: { handleValue: { key, handleType: 17 } },
+        }));
+
+        expect(spec).toBeInstanceOf(BamlFunctionSpec);
+        expect((spec as BamlFunctionSpec<unknown>)._toHandle().handleType).toBe(17);
     });
 });
 

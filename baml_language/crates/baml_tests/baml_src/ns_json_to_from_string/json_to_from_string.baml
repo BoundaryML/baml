@@ -7,7 +7,7 @@
 // stored local throws `expected Instance, got Any`).
 //
 // decode_error_path_points_at_missing_field uses `assert.contains(err.path, ...)`
-// (the std `assert.contains` helper) to check the JsonDecodeError path.
+// (the std `assert.contains` helper) to check the baml.json.DecodeError path.
 
 // ─── Simple class round-trip ──────────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ test "composite_generic_roundtrip" {
 
 // ─── Generic forwarding (mirrors reflect_type_of_generic.rs) ─────────────────
 
-function fetch_as<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function fetch_as<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
     baml.json.from_string<T>(s)
 }
 
@@ -100,13 +100,13 @@ test "generic_forwarding_composite" {
 
 class UserSimple { name string }
 
-function level1<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function level1<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
     baml.json.from_string<T>(s)
 }
-function level2<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function level2<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
     level1<T>(s)
 }
-function level3<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function level3<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
     level2<T>(s)
 }
 
@@ -121,8 +121,8 @@ test "three_level_forwarding" {
 
 // ─── Closure captures type-arg ────────────────────────────────────────────────
 
-function make_decoder<T>() -> (string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-    return (s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError { baml.json.from_string<T>(s) }
+function make_decoder<T>() -> (string) -> T throws baml.json.ParseError | baml.json.DecodeError {
+    return (s: string) -> T throws baml.json.ParseError | baml.json.DecodeError { baml.json.from_string<T>(s) }
 }
 
 function closure_captures_type_arg_name() -> string {
@@ -207,7 +207,7 @@ test "parse_throws_on_bad_json" {
         let u: User = baml.json.from_string<User>("{[");
         baml.sys.panic("expected from_string to throw")
     } catch (e) {
-        baml.json.JsonParseError => null
+        baml.json.ParseError => null
     }
 }
 
@@ -216,7 +216,7 @@ test "decode_throws_on_missing_field" {
         let u: User = baml.json.from_string<User>("{}");
         baml.sys.panic("expected from_string to throw")
     } catch (e) {
-        baml.json.JsonDecodeError => null
+        baml.json.DecodeError => null
     }
 }
 
@@ -226,13 +226,13 @@ test "serialize_throws_uint8array" {
         baml.json.to_string(b);
         baml.sys.panic("expected to_string to throw")
     } catch (e) {
-        baml.json.JsonSerializationError => null
+        baml.json.SerializationError => null
     }
 }
 
 // Decode-error path includes the offending field's dotted path.  The check is
 // done inside a helper to avoid the test-block local-boxing bug when operating
-// on a caught error via a local.  JsonDecodeError carries a dedicated `path`
+// on a caught error via a local.  baml.json.DecodeError carries a dedicated `path`
 // field (separate from `message`) that holds the dotted field path.
 
 class Inner { value int }
@@ -243,7 +243,7 @@ function check_decode_error_path_contains_field() -> bool {
         let u: Outer = baml.json.from_string<Outer>("{\"inner\":{}}");
         false
     } catch (e) {
-        let err: baml.json.JsonDecodeError => {
+        let err: baml.json.DecodeError => {
             assert.contains(err.path, ".inner.value");
             true
         }

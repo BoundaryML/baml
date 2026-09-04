@@ -21,7 +21,7 @@ function TenantPersonType() -> reflect.class.Type {
   }, implementations = [anchor_impl])
 }
 
-function main() -> string throws unknown {
+function main() -> string {
   let person_t = TenantPersonType()
   let app = reflect.Package.current().with_types({ "AcmePerson": person_t })
   let exported = app.get_class("root.AcmePerson") ?? throw "missing mounted class"
@@ -50,7 +50,7 @@ function Run(document: string) -> app.AcmePerson {
 "####;
 
 const TYPE_BINDING_SOURCE: &str = r####"
-function main() -> bool throws unknown {
+function main() -> bool {
   let pkg = reflect.Package.compile({ "items.baml": `
 class Item { value string }
 function Items() -> Item[] { [Item { value: "bound" }] }
@@ -90,7 +90,7 @@ interface Labelled {
   label string
 }
 
-function main() -> bool throws unknown {
+function main() -> bool {
   let witness = reflect.interface.implementation<Labelled>()
     .field("label", class_field = "display_name")
   let person = reflect.class.new("InternalPerson", {
@@ -326,7 +326,7 @@ async fn with_types_rejects_collisions_with_existing_exports() {
 type ExistingAlias = string
 function ExistingFunction() -> null { null }
 
-function main() -> string throws unknown {
+function main() -> string {
   let dynamic_t = reflect.class.new("Dynamic", { "value": reflect.Type.of<string>() })
   let alias_collision = reflect.Package.current().with_types({ "ExistingAlias": dynamic_t }) catch (e) {
     reflect.errors.CompilationError => e.diagnostics[0].code
@@ -355,7 +355,7 @@ function main() -> string throws unknown {
 async fn with_types_rejects_non_identifier_keys() {
     let output = baml_test!(
         r#"
-function main() -> string throws unknown {
+function main() -> string {
   let dynamic_t = reflect.class.new("Dynamic", { "value": reflect.Type.of<string>() })
   let result = reflect.Package.current().with_types({ "not an identifier": dynamic_t }) catch (e) {
     reflect.errors.CompilationError => e.diagnostics[0].code
@@ -424,7 +424,7 @@ async fn interface_impl_methods_keep_runtime_type_definitions() {
             }
 
             implements Parser<T> {
-                function parse_it(self, text: string) -> T throws unknown {
+                function parse_it(self, text: string) -> T {
                     baml.sap.parse<T>(text)
                 }
 
@@ -434,7 +434,7 @@ async fn interface_impl_methods_keep_runtime_type_definitions() {
             }
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let output_type = reflect.class.new("RuntimeOutput", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
@@ -466,7 +466,7 @@ async fn agent_run_parses_a_reflected_output_type() {
             prompt: `${{ctx.output_format()}}`
         }}
 
-        function main() -> string throws unknown {{
+        function main() -> string {{
             let output_type = reflect.class.new("RuntimeOutput", {{
                 "name": reflect.Type.of<string>(),
             }}).as_type()
@@ -507,7 +507,7 @@ async fn agent_runner_renders_reflected_output_schemas_on_the_wire() {
             prompt: `${{ctx.output_format()}}`
         }}
 
-        function main() -> string throws unknown {{
+        function main() -> string {{
             let minted_class = reflect.class.new("MintedRecord", {{
                 "minted_field": reflect.Type.of<string>().meta(
                     docstring = "Minted runner field docs",
@@ -619,7 +619,7 @@ async fn minted_type_identity_survives_interface_dispatch() {
             }
 
             implements Relay<T> {
-                function relay(self, t: reflect.Type) -> bool throws unknown {
+                function relay(self, t: reflect.Type) -> bool {
                     // Two-hop: the second interface operand is materialized
                     // inside this frame, so it has to carry the identity on.
                     Holder<T>.new().same(t)
@@ -627,7 +627,7 @@ async fn minted_type_identity_survives_interface_dispatch() {
             }
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let output_type = reflect.class.new("RuntimeOutput", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
@@ -683,7 +683,7 @@ async fn interface_impl_methods_look_up_a_type_keyed_registry() {
             }
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let first_type = reflect.class.new("Shape", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
@@ -733,7 +733,7 @@ async fn dispatch_identity_separates_distinct_mints_and_leaves_static_generics_a
             }
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let mine = reflect.class.new("Shape", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
@@ -789,7 +789,7 @@ async fn runtime_package_declarations_keep_definitions_and_identity() {
             }
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let pkg = reflect.Package.compile({ "items.baml": `
 class Item { value string }
               ` })
@@ -839,7 +839,7 @@ async fn static_class_slots_are_not_answered_from_a_same_named_runtime_definitio
             }
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let pkg = reflect.Package.compile({ "items.baml": `
 class Item { value string }
               ` })
@@ -885,7 +885,7 @@ async fn same_named_declarations_from_two_packages_keep_separate_identities() {
             }
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let first = reflect.Package.compile({ "a.baml": `
 class Item { value string }
               ` })
@@ -936,7 +936,7 @@ async fn dispatch_identity_covers_owner_and_method_slots_together() {
             }
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let owner_type = reflect.class.new("Owner", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
@@ -978,7 +978,7 @@ async fn dispatch_identity_covers_a_runtime_enum_slot() {
             }
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type()
             let other = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type()
             type Choice = unreflect(choice)
@@ -1014,7 +1014,7 @@ async fn a_package_declarations_identity_never_reaches_rendered_output() {
             prompt: `${ctx.output_format()}`
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             // `next` makes `Item` recursive, which forces the LLM schema to
             // hoist it under a *name* rather than inline its shape.
             let pkg = reflect.Package.compile({ "items.baml": `
@@ -1034,7 +1034,7 @@ function Items() -> Item[] { [Item { value: "bound", next: null }] }
             // `~~` and not `|`: `to_baml()` and the LLM schema both spell a
             // union with `|`, so a `|` join could split *inside* a surface and
             // leave the assertions below silently comparing the wrong text.
-            let schema = Render$render_prompt<Item[]>()
+            let schema = Render@render_prompt<Item[]>()
             `${item_type.to_string()}~~${item_type.to_baml()}~~${schema}~~${diagnostic}`
         }
         "##
@@ -1083,7 +1083,7 @@ interface DocAnchor {
   value string
 }
 
-function main() -> string throws unknown {
+function main() -> string {
   let anchor = reflect.interface.implementation<DocAnchor>().field("value")
   let minted = reflect.class.new("Minted", {
     "value": reflect.Type.of<string>().meta(
@@ -1178,19 +1178,19 @@ const ORIGIN_CLASS_NEW: &str = r##"
 fn error_surfaces_source(origin: &str) -> String {
     format!(
         r##"
-        function main() -> string throws unknown {{
+        function main() -> string {{
             {origin}
             type Item = unreflect(item_type)
 
             let sap = baml.sap.parse<Item>("null") catch (e) {{
-                baml.errors.LlmClient => e.message,
-                _ => "not an LlmClient error",
+                baml.errors.ParseError => e.message,
+                _ => "not a ParseError",
             }}
             let sap_message = if sap is string {{ sap }} else {{ "sap accepted a null" }}
 
             let decoded = baml.json.from_string<Item>("[1, 2]") catch (e) {{
-                baml.json.JsonDecodeError => e.message,
-                _ => "not a JsonDecodeError",
+                baml.json.DecodeError => e.message,
+                _ => "not a DecodeError",
             }}
             let decode_message = if decoded is string {{ decoded }} else {{ "decode accepted a list" }}
 
@@ -1260,7 +1260,7 @@ async fn a_decode_error_names_a_runtime_class_as_its_source_spelled_it() {
 async fn a_runtime_compile_diagnostic_names_a_mounted_runtime_class() {
     let output = baml_test!(
         r##"
-        function main() -> string throws unknown {
+        function main() -> string {
             let item_type = reflect.class.new("Item", {
                 "value": reflect.Type.of<string>(),
             }).as_type()
@@ -1296,7 +1296,7 @@ function Run() -> int { app.Item { value: "x" } }
 async fn a_runtime_type_test_does_not_match_another_packages_same_named_class() {
     let output = baml_test!(
         r##"
-        function main() -> string throws unknown {
+        function main() -> string {
             let first = reflect.Package.compile({ "a.baml": `
 class Item { value string }
 function Make() -> Item { Item { value: "a" } }
@@ -1337,7 +1337,7 @@ async fn an_output_format_schema_describes_each_packages_own_class() {
             prompt: `${ctx.output_format()}`
         }
 
-        function main() -> string throws unknown {
+        function main() -> string {
             // `next` makes each `Item` recursive, which forces the schema to
             // hoist it under a name rather than inline its shape.
             let first = reflect.Package.compile({ "a.baml": `
@@ -1349,7 +1349,7 @@ class Item { beta int, next Item? }
             type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
             type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
 
-            `${Render$render_prompt<First[]>()}~${Render$render_prompt<Second[]>()}`
+            `${Render@render_prompt<First[]>()}~${Render@render_prompt<Second[]>()}`
         }
         "##
     );

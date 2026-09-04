@@ -168,7 +168,7 @@ fn backtick_llm_function_compiles_to_agent_loop() {
     // Single-path world: a backtick prompt in an LLM function desugars to the
     // ai Agent loop — the direct-call body runs
     // `ai.Agent<Out>.new(client = client).run(Greet@spec(...))` and the
-    // `Greet$spec` companion builds the bound `ai.FunctionSpec`. The `${name}`
+    // `Greet@spec` companion builds the bound `ai.FunctionSpec`. The `${name}`
     // interp captures the function param inside the spec's prompt closure.
     let mut db = make_db();
     let file = db.file(
@@ -188,7 +188,7 @@ function Greet(name: string) -> string {
         "backtick LLM function should compile clean, got:\n{tir}"
     );
     assert!(
-        tir.contains("Greet$spec") && tir.contains("FunctionSpec"),
+        tir.contains("Greet@spec") && tir.contains("FunctionSpec"),
         "the spec companion should build an ai.FunctionSpec, got:\n{tir}"
     );
 }
@@ -207,7 +207,7 @@ function Greet(name: string, suffix: string = "!") -> string {
 }
 
 function main() -> string {
-  Greet$render_prompt("Ada").text()
+  Greet@render_prompt("Ada").text()
 }
 "#,
     );
@@ -218,14 +218,14 @@ function main() -> string {
         "defaulted LLM companions should compile without diagnostics:\n{tir}"
     );
     assert!(
-        tir.contains("Greet$render_prompt(name: string, suffix: string = \"!\")")
-            && tir.contains("Greet$build_request(name: string, suffix: string = \"!\", client:")
+        tir.contains("Greet@render_prompt(name: string, suffix: string = \"!\")")
+            && tir.contains("Greet@build_request(name: string, suffix: string = \"!\", client:")
             && tir.contains("suffix = suffix"),
         "render-prompt/build-request companions must preserve the defaulted argument as named:\n{tir}"
     );
     assert!(
         tir.contains(
-            "ai.Agent.new(client = client, on_event = on_event).run(Greet$spec(name, suffix = suffix)).value"
+            "ai.Agent.new(client = client, on_event = on_event).run(Greet@spec(name, suffix = suffix)).value"
         ),
         "the direct-call companion must name the defaulted spec argument and thread on_event:\n{tir}"
     );
@@ -239,7 +239,7 @@ function main() -> string {
     let window = &stream_call[..stream_call.len().min(200)];
     assert!(
         window
-            .contains("(Greet$spec(name, suffix = suffix), client = client, on_event = on_event)"),
+            .contains("(Greet@spec(name, suffix = suffix), client = client, on_event = on_event)"),
         "the stream companion must pass spec, client, and on_event to from_spec:\n{tir}"
     );
 }
@@ -893,7 +893,7 @@ function f() -> string {
 fn llm_client_override_argument_is_callable_on_function() {
     // The compiler injects a `client: ai.Client? = null` override parameter on
     // every LLM function; a call site can pass any ai.Client value for it.
-    // The generated `$build_request` companion shares the client override with
+    // The generated `@build_request` companion shares the client override with
     // the parent LLM function.
     let mut db = make_db();
     let file = db.file(
@@ -1725,7 +1725,7 @@ fn match_catch_all() {
 // ── 3A-12. Union member field access ─────────────────────────────────────
 
 #[test]
-fn union_field_access_shared() {
+fn union_field_access_without_interface_is_rejected() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -1746,8 +1746,9 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
     }
     function user.f(x: user.Cat | user.Dog) -> string throws never {
       { : never
-        return x.name : string
+        return x.name : !error
       }
+      !! 114..120: type `Cat | Dog` has no member `name`: its members implement no common interface that declares `name`
     }
     class user.Cat$stream {
       name: string | null
@@ -1884,7 +1885,6 @@ fn union_field_access_different_types() {
 class B { value string }
 function f(x: A | B) -> string { return x.value; }"#,
     );
-    // Both have `value` but different types → union of field types
     insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       value: int
@@ -1894,9 +1894,9 @@ function f(x: A | B) -> string { return x.value; }"#,
     }
     function user.f(x: user.A | user.B) -> string throws never {
       { : never
-        return x.value : int | string
+        return x.value : !error
       }
-      !! 87..94: type mismatch: expected string, got int | string
+      !! 87..94: type `A | B` has no member `value`: its members implement no common interface that declares `value`
     }
     class user.A$stream {
       value: int | null
@@ -1905,6 +1905,27 @@ function f(x: A | B) -> string { return x.value; }"#,
       value: string | null
     }
     ");
+}
+
+#[test]
+fn union_field_assignment_without_interface_is_rejected() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"class A { value int }
+class B { value string }
+function f(x: A | B) -> int {
+  x.value = 1;
+  return 0;
+}"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "type `A | B` has no member `value`: its members implement no common interface that declares `value`"
+        ),
+        "{tir}"
+    );
 }
 
 #[test]
@@ -2109,6 +2130,99 @@ fn void_function_bare_return() {
       }
     }
     ");
+}
+
+#[test]
+fn non_void_lambda_bare_return_is_rejected() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        "function f() -> bool { let g = () -> int { return; }; true }",
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f() -> bool throws never {
+      { : true
+        let g = : () -> int throws never
+          () -> int { ... } : () -> int throws never
+            {
+              return
+            }
+        true : true
+      }
+      !! 43..50: type mismatch: expected int, got void
+    }
+    lambda user.f {
+    }
+    "#);
+}
+
+#[test]
+fn contextual_nested_generic_bare_return_is_rejected_after_inference() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Pair<A, B> {
+  first A
+  second B
+}
+
+function accept<T>(callback: () -> Pair<T, int>, value: T) -> bool { true }
+
+function f() -> bool {
+  accept(() -> { return; }, "later evidence")
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("type mismatch: expected Pair<string, int>, got void"),
+        "{tir}"
+    );
+}
+
+#[test]
+fn contextual_generic_bare_return_accepts_unit_after_inference() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+function accept<T>(callback: () -> T, value: T) -> bool { true }
+
+function f() -> bool {
+  accept(() -> { return; }, null)
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(!tir.contains("!!"), "{tir}");
+}
+
+#[test]
+fn lambda_return_mismatch_uses_lambda_contract() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"function f() -> bool {
+  let g = () -> int { return "wrong" }
+  true
+}"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f() -> bool throws never {
+      { : true
+        let g = : () -> int throws never
+          () -> int { ... } : () -> int throws never
+            {
+              return "wrong"
+            }
+        true : true
+      }
+      !! 52..59: type mismatch: expected int, got "wrong"
+    }
+    lambda user.f {
+    }
+    "#);
 }
 
 #[test]

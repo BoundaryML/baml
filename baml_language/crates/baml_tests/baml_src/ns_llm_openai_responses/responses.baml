@@ -97,7 +97,7 @@ function _oai_batch(payloads: string[]) -> string {
     baml.json.stringify(baml.json.to_json(events))
 }
 
-function _oai_first_text(events: ai.stream.StreamEvent[]) -> string {
+function _oai_first_text(events: ai.stream.Event[]) -> string {
     for (let e in events) {
         if let delta: ai.stream.TextDelta = e {
             return delta.text;
@@ -121,7 +121,7 @@ function _oai_error_name(error: unknown) -> string {
 // The rendered request body, as a plain call so a `catch_all` at the call site
 // is unambiguous.
 function _oai_render_body(cl: openai.ResponsesClient, input: ai.ModelTurnInput) -> string {
-    let req = openai.internal.openai_render(cl, input);
+    let req = openai.internal.render(cl, input);
     req.body
 }
 
@@ -306,7 +306,7 @@ function oai_tools_and_journal() -> string {
         ],
     };
     let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
-    let req = openai.internal.openai_render(cl, _oai_input(spec, journal, toolbox));
+    let req = openai.internal.render(cl, _oai_input(spec, journal, toolbox));
     req.body
 }
 
@@ -339,7 +339,7 @@ function oai_media_input() -> string {
     );
     let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
     let empty = ai.tools.Toolbox.new([]);
-    let req = openai.internal.openai_render(cl, _oai_input(spec, ai.Journal.new(spec), empty));
+    let req = openai.internal.render(cl, _oai_input(spec, ai.Journal.new(spec), empty));
     req.body
 }
 
@@ -430,7 +430,7 @@ function oai_tool_schema_keeps_nulls() -> string {
         ],
     );
     let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
-    let req = openai.internal.openai_render(cl, _oai_input(spec, ai.Journal.new(spec), toolbox));
+    let req = openai.internal.render(cl, _oai_input(spec, ai.Journal.new(spec), toolbox));
     req.body
 }
 
@@ -451,7 +451,7 @@ function oai_message_metadata_on_content_part() -> string {
     let spec = OaiMetaEcho@spec("Say pong.");
     let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
     let empty = ai.tools.Toolbox.new([]);
-    let req = openai.internal.openai_render(cl, _oai_input(spec, ai.Journal.new(spec), empty));
+    let req = openai.internal.render(cl, _oai_input(spec, ai.Journal.new(spec), empty));
     let body = baml.json.parse(req.body);
     [
         `system_role=${baml.json.path_or<string>(body, ".input[0].role", "-")}`,
@@ -516,7 +516,7 @@ test "oai_sparse_usage" {
 }
 
 // Malformed `arguments` on a function_call item is PROVIDER-malformed output:
-// it must arrive as ai.errors.ParseFailed, not as the raw baml JsonParseError
+// it must arrive as ai.errors.ParseFailed, not as the raw baml baml.json.ParseError
 // escaping through the client's catch_all as an untyped UnknownError.
 function _oai_invoke_text(cl: openai.ResponsesClient, input: ai.ModelTurnInput) -> string {
     cl.invoke(input).terminal_text() ?? ""
@@ -907,11 +907,11 @@ function oai_stream_decoder_buffers() -> string {
         "item_id": "msg_1",
         "text": "hello",
     };
-    let batch_one = openai.internal._openai_decode_batch(
+    let batch_one = openai.internal._decode_batch(
         _oai_batch([_oai_json(first), _oai_json(second)]),
         state,
     );
-    let batch_two = openai.internal._openai_decode_batch(_oai_batch([_oai_json(done)]), state);
+    let batch_two = openai.internal._decode_batch(_oai_batch([_oai_json(done)]), state);
     [
         state.call_arguments.get("fc_1") ?? "",
         batch_one.length().to_string(),
@@ -948,7 +948,7 @@ function oai_stream_content_index_parts() -> string {
         "content_index": 1,
         "text": "two",
     };
-    let events = openai.internal._openai_decode_batch(
+    let events = openai.internal._decode_batch(
         _oai_batch([_oai_json(delta), _oai_json(done_zero), _oai_json(done_one)]),
         state,
     );

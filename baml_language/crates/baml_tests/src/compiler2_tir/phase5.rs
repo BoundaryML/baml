@@ -26,7 +26,7 @@ fn lower_type_expr_hir_in(
     let (store, _spans) = builder.finish();
     let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file);
     let (ty, diagnostics) = ctx.lower_type_ref_with_diagnostics(&store, id);
-    (ty.to_plain(), diagnostics)
+    (baml_compiler2_hir_ty::lower::reject_holes(&ty), diagnostics)
 }
 
 fn lower_type_expr_hir(

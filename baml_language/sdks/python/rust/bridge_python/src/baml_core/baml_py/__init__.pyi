@@ -434,6 +434,17 @@ def _seed_generic_media_handle() -> tuple[builtins.int, builtins.int]:
     Test-only: seed an `Adt(Media(generic))` entry directly into `HANDLE_TABLE`.
     """
 
+def _release_wire_handle(key: builtins.int) -> None:
+    r"""
+    Release a handle cloned for wire ownership when encoding aborts before the
+    engine can consume it.
+    """
+
+def _live_handle_count() -> builtins.int:
+    r"""
+    Test-only: return the number of live ordinary HANDLE_TABLE keys.
+    """
+
 def flush_events() -> None:
     r"""
     Flush all buffered trace events to the JSONL file (if BAML_TRACE_FILE is set).

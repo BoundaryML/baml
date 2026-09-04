@@ -12,6 +12,7 @@
 
 pub mod bytecode;
 pub mod errors;
+pub mod float_order;
 pub mod head_walk;
 pub mod heap_ptr;
 pub mod identity;

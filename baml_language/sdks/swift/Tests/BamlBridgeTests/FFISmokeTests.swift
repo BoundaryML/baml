@@ -32,6 +32,23 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertTrue(decoded.kwargs.first?.value.hasValueType == true)
     }
 
+    func testPromptJSONRejectsDuplicateMapKeys() {
+        var value = BamlBridge_Cffi_V1_BamlOutboundValue()
+        value.stringValue = "value"
+        var first = BamlBridge_Cffi_V1_BamlOutboundMapEntry()
+        first.key = "duplicate"
+        first.value = value
+        var second = BamlBridge_Cffi_V1_BamlOutboundMapEntry()
+        second.key = "duplicate"
+        second.value = value
+        var map = BamlBridge_Cffi_V1_BamlValueMap()
+        map.entries = [first, second]
+        var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
+        raw.mapValue = map
+
+        XCTAssertThrowsError(try BamlPromptJSON._bamlDecode(BamlOutboundValue(raw)))
+    }
+
     func testStreamHandleRetainsCarriedClassIdentity() throws {
         var classType = BamlBridge_Cffi_V1_BamlTyClass()
         classType.name = "ai.stream.Stream"

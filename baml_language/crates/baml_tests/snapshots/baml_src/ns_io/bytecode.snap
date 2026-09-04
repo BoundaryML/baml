@@ -55,7 +55,7 @@ function io.$init_test_ns_io_io(registry: testing.TestCollector) -> null {
     return
 }
 
-function io.ChunkReader.baml.io.Read.read(self: io.ChunkReader, limit: int) -> uint8array | null {
+function io.<(user.io.ChunkReader as baml.io.Read)>.read(self: io.ChunkReader, limit: int) -> uint8array | null {
     load_var self
     load_field .cursor
     store_var _4
@@ -132,12 +132,12 @@ function io.ChunkReader.baml.io.Read.read(self: io.ChunkReader, limit: int) -> u
     return
 }
 
-function io.ChunkWriter.baml.io.Write.flush(self: io.ChunkWriter) -> void {
+function io.<(user.io.ChunkWriter as baml.io.Write)>.flush(self: io.ChunkWriter) -> void {
     load_const null
     return
 }
 
-function io.ChunkWriter.baml.io.Write.write_some(self: io.ChunkWriter, data: uint8array) -> int {
+function io.<(user.io.ChunkWriter as baml.io.Write)>.write_some(self: io.ChunkWriter, data: uint8array) -> int {
     load_var data
     container_len
     store_var _5
@@ -176,12 +176,12 @@ function io.ChunkWriter.baml.io.Write.write_some(self: io.ChunkWriter, data: uin
     return
 }
 
-function io.OversizedWriter.baml.io.Write.flush(self: io.OversizedWriter) -> void {
+function io.<(user.io.OversizedWriter as baml.io.Write)>.flush(self: io.OversizedWriter) -> void {
     load_const null
     return
 }
 
-function io.OversizedWriter.baml.io.Write.write_some(self: io.OversizedWriter, data: uint8array) -> int {
+function io.<(user.io.OversizedWriter as baml.io.Write)>.write_some(self: io.OversizedWriter, data: uint8array) -> int {
     load_var data
     container_len
     store_var _3
@@ -191,12 +191,12 @@ function io.OversizedWriter.baml.io.Write.write_some(self: io.OversizedWriter, d
     return
 }
 
-function io.ZeroWriter.baml.io.Write.flush(self: io.ZeroWriter) -> void {
+function io.<(user.io.ZeroWriter as baml.io.Write)>.flush(self: io.ZeroWriter) -> void {
     load_const null
     return
 }
 
-function io.ZeroWriter.baml.io.Write.write_some(self: io.ZeroWriter, data: uint8array) -> int {
+function io.<(user.io.ZeroWriter as baml.io.Write)>.write_some(self: io.ZeroWriter, data: uint8array) -> int {
     load_const 0
     return
 }

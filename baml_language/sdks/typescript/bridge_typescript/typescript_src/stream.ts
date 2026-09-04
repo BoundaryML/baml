@@ -9,10 +9,10 @@
 // The runtime exports this under its `BamlStream` name; codegen aliases it as
 // `Stream` on re-export (`export { BamlStream as Stream } from ...`).
 //
-// Spec note: at the codegen layer only async streaming is a real call
-// (`$stream_async`); the per-chunk `next`/`final` pulls here are unrelated to
-// that function-level distinction. The wrapper exposes both sync and async
-// pulls, as Python does.
+// The per-chunk `next`/`final` pulls here are independent of whether the host
+// obtained the stream through `Fn$stream` or `Fn$stream_async`. Those bindings
+// send the authored FQN with the Stream boundary operation; the engine resolves
+// PPIR's private `Fn@stream`. The wrapper exposes both sync and async pulls.
 
 import { BamlHandle, getRuntime, newFunctionCall as nativeNewFunctionCall } from './native.js';
 import { supportsSyncStreamPulls } from './platform.js';

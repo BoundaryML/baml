@@ -36,6 +36,7 @@ class WrapperTarget:
     archive_suffix: str
     runner: str
     variants: tuple[str, ...]
+    cross_image: str | None
 
     @property
     def executable_suffix(self) -> str:
@@ -55,7 +56,7 @@ class WrapperTarget:
 
     def matrix_entry(self) -> dict[str, Any]:
         """Return this target's GitHub Actions wrapper matrix entry."""
-        return {
+        entry = {
             "target": self.triple,
             "os": self.runner,
             "libc": self.libc,
@@ -63,6 +64,9 @@ class WrapperTarget:
             "executable_suffix": self.executable_suffix,
             "no_self_update": self.supports("no-self-update"),
         }
+        if self.cross_image is not None:
+            entry["cross_image"] = self.cross_image
+        return entry
 
 
 def load_wrapper_targets(
@@ -135,6 +139,12 @@ def load_wrapper_targets(
         if "self-update" not in variants:
             fail(f"{triple}: wrapper variants must include 'self-update'")
 
+        cross_image = wrapper.get("cross_image")
+        if libc == "gnu":
+            cross_image = require_string(cross_image, f"{triple}: wrapper.cross_image")
+        elif cross_image is not None:
+            fail(f"{triple}: wrapper.cross_image is only valid for GNU targets")
+
         targets.append(
             WrapperTarget(
                 triple=triple,
@@ -144,6 +154,7 @@ def load_wrapper_targets(
                 archive_suffix=archive_suffix,
                 runner=runner,
                 variants=variants,
+                cross_image=cross_image,
             )
         )
 

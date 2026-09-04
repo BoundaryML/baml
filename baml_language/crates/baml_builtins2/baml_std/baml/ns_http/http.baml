@@ -122,7 +122,7 @@ class SseStream {
     }
 }
 
-/// Converts an optional timeout into the nanosecond count carried across the
+/// (internal) Converts an optional timeout into the nanosecond count carried across the
 /// sys-op boundary. `null` (no deadline) becomes `0n`, which the native layer
 /// treats as unbounded. Modeled on Rust's `Option<Duration>`.
 function _timeout_nanos(timeout: root.time.Duration?) -> bigint throws never {
@@ -136,7 +136,7 @@ function _timeout_nanos(timeout: root.time.Duration?) -> bigint throws never {
 ///
 /// `timeout` is the total deadline for the request (connection + response
 /// headers + body). `null` (the default) imposes no deadline. On expiry this
-/// throws `root.errors.Timeout`.
+/// throws `baml.errors.Timeout`.
 function fetch(
     url: string,
     timeout: root.time.Duration? = null,
@@ -157,17 +157,23 @@ function _fetch(
 ///
 /// `timeout` is the total deadline for the request, as in `fetch`. `null` (the
 /// default) imposes no deadline.
+///
+/// # Throws
+///
+/// - `InvalidArgument` if `request.method` is not a valid HTTP method.
+/// - `Io` if the request cannot be sent or the response cannot be read.
+/// - `Timeout` if `timeout` elapses first.
 function send(
     request: Request,
     timeout: root.time.Duration? = null,
-) -> Response throws root.errors.Io | root.errors.Timeout {
+) -> Response throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
     _send(request, _timeout_nanos(timeout))
 }
 
 function _send(
     request: Request,
     timeout_nanos: bigint,
-) -> Response throws root.errors.Io | root.errors.Timeout {
+) -> Response throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
     $rust_io_function
 }
 
@@ -176,22 +182,24 @@ function _send(
 /// On native transports, `timeout` covers the request and streaming body.
 /// `first_event_timeout` starts after open and ends on the first parsed event.
 /// Null/non-positive is unbounded; browser/Wasm does not enforce these fields.
+///
+/// # Throws
+///
+/// - `InvalidArgument` if `request.method` is not a valid HTTP method.
+/// - `Io` if the request cannot be sent or the stream cannot be opened.
+/// - `Timeout` if `timeout` or `first_event_timeout` elapses first.
 function fetch_sse(
     request: Request,
     timeout: root.time.Duration? = null,
     first_event_timeout: root.time.Duration? = null,
-) -> SseStream throws root.errors.Io | root.errors.Timeout {
-    _fetch_sse(
-        request,
-        _timeout_nanos(timeout),
-        _timeout_nanos(first_event_timeout),
-    )
+) -> SseStream throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
+    _fetch_sse(request, _timeout_nanos(timeout), _timeout_nanos(first_event_timeout))
 }
 
 function _fetch_sse(
     request: Request,
     timeout_nanos: bigint,
     first_event_timeout_nanos: bigint,
-) -> SseStream throws root.errors.Io | root.errors.Timeout {
+) -> SseStream throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
     $rust_io_function
 }

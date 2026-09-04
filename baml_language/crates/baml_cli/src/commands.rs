@@ -197,8 +197,8 @@ pub(crate) enum Commands {
     Ide(crate::ide_command::IdeArgs),
 
     #[command(
-        about = "Install BAML agent skills for this project",
-        after_long_help = "Examples:\n  Install the latest skills:\n    baml agent install\n\n  Install in a specific project:\n    baml agent install --project ./my-project"
+        about = "Install the toolchain's BAML agent skill for this project",
+        after_long_help = "Examples:\n  Install the bundled skill:\n    baml agent install\n\n  Install in a specific project:\n    baml agent install --project ./my-project"
     )]
     Agent(crate::agent_command::AgentArgs),
 
@@ -350,6 +350,13 @@ impl RuntimeCli {
             return args.run(crate::output::policy().stdout.color);
         }
 
+        // Resolve every output dial once, before any subcommand writes.
+        crate::output::init(self.output);
+
+        if self.command.requires_agent_skill() {
+            crate::skill_check::check(self.command.agent_skill_project_path())?;
+        }
+
         // Fire anonymous, best-effort telemetry for this invocation. The
         // event is appended to an on-disk queue (one atomic write); on drop
         // of the guard (after the match below returns) the queue file is
@@ -358,21 +365,6 @@ impl RuntimeCli {
         let _telemetry = crate::telemetry::record_invocation(
             self.invoked_subcommand.as_deref().unwrap_or("unknown"),
         );
-
-        // Resolve every output dial once, before any subcommand writes.
-        crate::output::init(self.output);
-
-        // Passive skill warning + background freshness refresh, only on the
-        // core authoring commands (init, run, generate, pack) so the nag
-        // never bleeds into machine-facing or utility invocations. The
-        // guard's drop, after the match below returns, gives the background
-        // refresh the rest of its time budget.
-        let _skill_check = match &self.command {
-            Commands::Init(_) | Commands::Run(_) | Commands::Generate(_) | Commands::Pack(_) => {
-                crate::skill_check::SkillCheck::start()
-            }
-            _ => crate::skill_check::SkillCheck::skipped(),
-        };
 
         match &self.command {
             Commands::Init(args) => args.run(),
@@ -408,6 +400,41 @@ impl RuntimeCli {
 }
 
 impl Commands {
+    fn agent_skill_project_path(&self) -> Option<&Path> {
+        match self {
+            Self::Check(args) => args.from.as_deref(),
+            Self::Describe(args) => args.from.as_deref(),
+            Self::Query(args) => args.from.as_deref(),
+            Self::Format(args) => args.from.as_deref(),
+            Self::Generate(args) => match &args.command {
+                Some(crate::generate::GenerateCommand::Add(args)) => args.from.as_deref(),
+                None => args.from.as_deref(),
+            },
+            Self::Test(args) => args.from.as_deref(),
+            Self::Run(args) => args.from.as_deref(),
+            Self::Pack(args) => args.from.as_deref(),
+            Self::Playground(args) => args.from.as_deref(),
+            _ => None,
+        }
+    }
+
+    fn requires_agent_skill(&self) -> bool {
+        matches!(
+            self,
+            Self::Check(_)
+                | Self::Describe(_)
+                | Self::Query(_)
+                | Self::Format(_)
+                | Self::Generate(_)
+                | Self::Test(_)
+                | Self::Init(_)
+                | Self::New(_)
+                | Self::Run(_)
+                | Self::Pack(_)
+                | Self::Playground(_)
+        )
+    }
+
     fn has_legacy_project(&self) -> bool {
         match self {
             Self::Check(args) => args.from.is_some(),
@@ -661,6 +688,8 @@ mod tests {
             "always".into(),
             "--diagnostic-format".into(),
             "agent".into(),
+            "--agent-skill-check".into(),
+            "off".into(),
         ]);
 
         assert_eq!(cli.output.preset, crate::output::OutputPreset::Human);
@@ -673,6 +702,10 @@ mod tests {
             cli.output.diagnostic_format,
             Some(crate::output::DiagnosticFormatChoice::Agent)
         );
+        assert_eq!(
+            cli.output.agent_skill_check,
+            crate::output::AgentSkillCheckChoice::Off
+        );
     }
 
     #[test]
@@ -683,6 +716,7 @@ mod tests {
             ("color", "BAML_COLOR"),
             ("hyperlinks", "BAML_HYPERLINKS"),
             ("diagnostic_format", "BAML_DIAGNOSTIC_FORMAT"),
+            ("agent_skill_check", "BAML_AGENT_SKILL_CHECK"),
         ];
 
         for (id, env) in expected {
@@ -705,6 +739,7 @@ mod tests {
                     "--output-preset <PRESET>\n          Select output defaults [default: auto] [possible values: auto, human, agent]",
                     "--hyperlinks <WHEN>\n          Control terminal hyperlinks [possible values: auto, always, never]",
                     "--diagnostic-format <FORMAT>\n          Select the diagnostic format [possible values: human, agent, concise]",
+                    "--agent-skill-check <MODE>\n          Control BAML agent skill validation [default: auto] [possible values: auto, require, warn,\n          off]",
                 ],
             ),
             (
@@ -878,7 +913,6 @@ mod tests {
             &["baml", "ide", "install", "--output-dir", "./extensions"],
             &["baml", "agent", "install"],
             &["baml", "agent", "install", "--project", "./my-project"],
-            &["baml", "agent", "install", "--source", "./skills.tar.gz"],
             &["baml", "playground"],
             &[
                 "baml",
@@ -964,15 +998,13 @@ mod tests {
     }
 
     #[test]
-    fn agent_project_and_source_have_distinct_meanings() {
+    fn agent_project_selects_install_root() {
         let cli = RuntimeCli::parse_from_smart(vec![
             "baml".into(),
             "agent".into(),
             "install".into(),
             "--project".into(),
             "workspace".into(),
-            "--source".into(),
-            "skills.tar.gz".into(),
         ]);
         let Commands::Agent(crate::agent_command::AgentArgs {
             command: crate::agent_command::AgentCommand::Install(args),
@@ -981,6 +1013,5 @@ mod tests {
             panic!("expected agent install command");
         };
         assert_eq!(args.dir, Some(PathBuf::from("workspace")));
-        assert_eq!(args.source.as_deref(), Some("skills.tar.gz"));
     }
 }

@@ -1,11 +1,20 @@
-/// Returns a deep copy of `value` — all nested structures are recursively cloned.
+/// Returns a deep copy of `value`: nested arrays, maps, and class instances
+/// are cloned recursively.
+///
+/// Sharing and cycles survive the copy. Two references to the same nested
+/// object still point at one copied object afterward, rather than becoming
+/// independent copies. `Future` is the exception — a future is a handle onto
+/// live async state the runtime owns, not a value with contents to clone, so a
+/// future nested inside `value` is shared, not duplicated.
 //baml:mut_vm
 function deep_copy<T>(value: T) -> T throws never {
     $rust_function
 }
 
 /// Implemented by all concrete types.
-/// Can be used to check or bound a type to only include concrete types.
+///
+/// Use it to test whether a type is concrete, or as a bound restricting a type
+/// parameter to concrete types.
 interface Concrete {
 
 }
@@ -16,15 +25,17 @@ implement<T> Concrete for T {
 
 /// The structured value a tagged template literal produces.
 ///
-/// BEP-049 §10. A `tag` ` `…` ` call site lowers to `tag(body = () -> TaggedString { … })`;
-/// when `body()` runs it returns this struct. The invariant is
-/// `parts.length == values.length + 1` (literals and values alternate, starting and
-/// ending with a literal — empty strings fill the leading/trailing slot when the
-/// template begins or ends with an interpolation).
+/// A tagged call site `` tag`…` `` lowers to
+/// `tag(body = () -> TaggedString { … })`; running `body()` returns this
+/// struct. Literals and values alternate, beginning and ending with a literal,
+/// so `parts.length == values.length + 1` — an empty string fills the leading
+/// or trailing slot when the template starts or ends with an interpolation.
+/// See BEP-049 §10.
 class TaggedString {
     /// Literal text segments between interpolations, in source order.
     parts: string[],
-    /// Interpolated values, in source order. Heterogeneous: each entry has the
-    /// type of its `${expr}` site; tags inspect element types at runtime.
+    /// Interpolated values, in source order. Each entry has the type of its
+    /// `${expr}` site, so the array is heterogeneous; tags inspect element
+    /// types at runtime.
     values: unknown[],
 }

@@ -53,7 +53,7 @@ function task_group.caps_active_and_queues_rest() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _4
     call_indirect
     store_var _8
@@ -78,7 +78,7 @@ function task_group.caps_active_and_queues_rest() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _12
     call_indirect
     store_var _16
@@ -103,7 +103,7 @@ function task_group.caps_active_and_queues_rest() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _20
     call_indirect
     store_var _24
@@ -128,7 +128,7 @@ function task_group.caps_active_and_queues_rest() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _28
     call_indirect
     store_var _32
@@ -177,7 +177,7 @@ function task_group.group_cancel_cancels_member() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _5
     call_indirect
     store_var _9
@@ -231,7 +231,7 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _5
     call_indirect
     store_var _9
@@ -256,7 +256,7 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _14
     call_indirect
     store_var _18
@@ -281,7 +281,7 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _23
     call_indirect
     store_var _27
@@ -306,7 +306,7 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _32
     call_indirect
     store_var _36
@@ -331,7 +331,7 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_const null
     load_const null
     load_const false
-    init_instance baml.spawn.SpawnParams .body, .name, .group, .cancel, .detach
+    init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _41
     call_indirect
     store_var _45

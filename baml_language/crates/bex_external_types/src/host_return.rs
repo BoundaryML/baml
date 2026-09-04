@@ -719,7 +719,7 @@ mod tests {
     fn class_name_identity_is_enforced() {
         let user = RuntimeTy::Class(
             TypeName::local(Name::new("User")),
-            Vec::new(),
+            Box::new([]),
             TyAttr::default(),
         );
         assert!(
@@ -764,7 +764,7 @@ mod tests {
     fn sparse_class_annotation_is_checked_before_anonymous_payload_shape() {
         let user = RuntimeTy::Class(
             TypeName::from_dotted_path("user.callbacks.User"),
-            vec![RuntimeTy::int()],
+            Box::new([RuntimeTy::int()]),
             TyAttr::default(),
         );
         let anonymous_payload = BexExternalValue::Instance {
@@ -783,7 +783,7 @@ mod tests {
 
         let other = RuntimeTy::Class(
             TypeName::from_dotted_path("user.callbacks.Other"),
-            vec![RuntimeTy::int()],
+            Box::new([RuntimeTy::int()]),
             TyAttr::default(),
         );
         let error = validate_host_return(&BexExternalValue::typed(anonymous_payload, other), &user)
@@ -795,7 +795,7 @@ mod tests {
     #[test]
     fn function_type_accepts_only_callables() {
         let fn_ty = RuntimeTy::Function {
-            params: vec![RuntimeFunctionParamTy::required(None, RuntimeTy::int())],
+            params: Box::new([RuntimeFunctionParamTy::required(None, RuntimeTy::int())]),
             ret: Box::new(RuntimeTy::string()),
             throws: Box::new(RuntimeTy::null()),
             attr: TyAttr::default(),

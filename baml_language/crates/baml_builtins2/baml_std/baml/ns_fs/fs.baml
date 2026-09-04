@@ -7,23 +7,48 @@ class File {
     _handle: $rust_type,
 
     /// Reads the entire remaining file contents as a UTF-8 string.
+    ///
+    /// # Throws
+    ///
+    /// - `Io` if an I/O error occurs while reading (for example, the file is closed).
+    /// - `ParseError` if the remaining bytes are not valid UTF-8.
     function text(self) -> string throws root.errors.Io | root.errors.ParseError {
         self.as<root.io.Read>.text()
     }
 
     /// Reads the entire remaining file contents as raw bytes.
+    ///
+    /// # Throws
+    ///
+    /// - `Io` if an I/O error occurs while reading (for example, the file is closed).
     function bytes(self) -> uint8array throws root.errors.Io {
         self.as<root.io.Read>.bytes()
     }
 
     implements root.io.Read {
+        /// Reads up to `limit` bytes from the file.
+        /// Returns `null` if the end of the file has already been reached.
+        ///
+        /// # Throws
+        ///
+        /// - `Io` if an I/O error occurs while reading (for example, the file is closed).
         function read(self, limit: int) -> uint8array? throws root.errors.Io {
             $rust_io_function
         }
+
+        // // reimplemented for perf reasons
+        // function bytes(self) -> uint8array throws root.errors.Io {
+        //     $rust_io_function
+        // }
     }
 
     /// Closes the file handle, flushing any pending writes.
-    function close(self) -> null throws root.errors.Io | root.errors.InvalidArgument {
+    /// Closing is an idempotent operation: calling `close()` multiple times is safe.
+    ///
+    /// # Throws
+    ///
+    /// - `Io` if an I/O error occurs while closing.
+    function close(self) -> null throws root.errors.Io {
         $rust_io_function
     }
 
@@ -40,6 +65,15 @@ class File {
     }
 
     implements root.io.Write {
+        /// Writes as much of `data` as the handle accepts and settles it with
+        /// the OS before returning, so a rejected write is reported here
+        /// rather than deferred to a later call. An unbuffered file handle,
+        /// matching `std::fs::File` / `os.File` / `FileOutputStream`.
+        ///
+        /// # Throws
+        ///
+        /// - `Io` if the bytes cannot be written (for example, the file is
+        ///   closed or was opened read-only).
         function write_some(self, data: uint8array) -> int throws root.errors.Io {
             $rust_io_function
         }
@@ -51,6 +85,11 @@ class File {
 
     /// Writes all of `data` to the file at the current cursor position.
     /// Returns the encoded byte count.
+    ///
+    /// # Throws
+    ///
+    /// - `Io` if the data cannot be written (for example, the file is closed
+    ///   or was opened read-only).
     function write(self, data: string | uint8array) -> int throws root.errors.Io {
         self.as<root.io.Write>.write(data)
     }

@@ -19,11 +19,11 @@
 #
 # mise installs sccache and direnv, then each cargo job loads .envrc via
 # `direnv export gha` so CI uses the exact same sccache config as local shells:
-# .envrc is the single source of truth. The R2 credentials are passed through
-# GitHub Actions secrets using the same BAML_SCCACHE_R2_* names that the
-# RUSTC_WRAPPER maps to AWS_* before exec'ing sccache — the `tools/baml-sccache`
-# script on POSIX, and the native `tools_sccache` crate's binary on Windows
-# (built per-job; see the "Build native sccache wrapper" step).
+# .envrc is the single source of truth. The R2 credentials come from repository
+# Actions secrets using the same BAML_SCCACHE_R2_* names that the RUSTC_WRAPPER
+# maps to AWS_* before exec'ing sccache — the `tools/baml-sccache` script on
+# POSIX, and the native `tools_sccache` crate's binary on Windows (built per-job;
+# see the "Build native sccache wrapper" step).
 #
 # Secretless runs (e.g. fork PRs) still install sccache, but .envrc sees no R2
 # credentials and falls back to the runner-local cache.
@@ -31,14 +31,14 @@ name: Cargo Tests (Reusable)
 
 on:
   workflow_call:
+    # Optional so secretless fork PRs can use the local cache.
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID:
         required: false
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
         required: false
 
-# Read-only by design: these jobs run PR-controlled cargo build/test code, so
-# they should not need elevated repository permissions.
+# Jobs run PR-controlled code with read-only repository access.
 permissions:
   contents: read
 
@@ -47,10 +47,7 @@ defaults:
     shell: bash
 
 env:
-  # Inputs read by .envrc; everything else (RUSTC_WRAPPER, SCCACHE_*) is set by
-  # .envrc itself so it stays the single source of truth across CI and local.
-  # The R2 credentials .envrc maps to AWS_* for sccache (mapped to AWS_*).
-  # Native Cargo linker overrides live in baml_language/.cargo/config.toml.
+  # .envrc supplies the remaining sccache configuration.
   BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
   BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
@@ -286,7 +283,7 @@ jobs:
   #   runs-on: blacksmith-6vcpu-macos-latest
   #   timeout-minutes: 35
   #   steps:
-  #     - uses: actions/checkout@v6
+  #     - uses: actions/checkout@v7
   #       with:
   #         persist-credentials: false
 
@@ -387,7 +384,7 @@ jobs:
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -507,7 +504,7 @@ jobs:
     steps:
       - name: "Build matrix"
         id: matrix
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const baseMatrix = [
@@ -843,12 +840,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: sdk-test-matrix
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: "Assert every SDK directory has a matrix entry"
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           MATRIX_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.sdk-dirs }}
           TEMPORARILY_DISABLED_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.temporarily-disabled-sdk-dirs }}
@@ -921,7 +918,7 @@ jobs:
       EnableSourceLink: "false"
       IncludeSourceRevisionInInformationalVersion: "false"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -987,7 +984,7 @@ jobs:
       # under `if: always()`.
       - name: "Restore C# build cache"
         if: matrix.sdk-label == 'csharp'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.nuget/packages
@@ -1000,8 +997,8 @@ jobs:
           # fallback): the backdate step trusts the SDK's content because
           # dotnet-version pins it, so an SDK bump must start a cold cache
           # rather than lean on secondary invalidation signals.
-          key: csharp-msbuild-v1-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: csharp-msbuild-v1-${{ matrix.os-label }}-sdk10.0.301-
+          key: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-
 
       - name: "Backdate unchanged C# sources"
         if: matrix.sdk-label == 'csharp'
@@ -1166,7 +1163,7 @@ jobs:
       # collides with an existing entry.
       - name: "Save C# build cache"
         if: always() && matrix.sdk-label == 'csharp'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: |
             ~/.nuget/packages
@@ -1175,7 +1172,7 @@ jobs:
             baml_language/sdks/csharp/**/bin
             baml_language/sdk_tests/crates/csharp/*/obj
             baml_language/sdk_tests/crates/csharp/*/bin
-          key: csharp-msbuild-v1-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
+          key: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
 
       # The Rust bridge runtime crate (baml_bridge). Its tests load the engine
       # cdylib at run time, and its lib test binary mixes pure (loader/encode)
@@ -1615,7 +1612,7 @@ jobs:
       - snapshot-tests
     steps:
       - name: "Merge cargo timings artifacts"
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v7
         with:
           name: cargo-timings
           pattern: cargo-timings-*
@@ -1634,7 +1631,7 @@ jobs:
       - snapshot-tests
     steps:
       - name: "Merge sccache stats artifacts"
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v7
         with:
           name: sccache-stats
           pattern: sccache-stats-*

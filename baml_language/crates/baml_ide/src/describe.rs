@@ -823,12 +823,7 @@ fn describe_locals(
                     let type_str = match def_site {
                         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
                             pattern_from_owner_body(db, func_loc, stmt_id)
-                                .and_then(|pattern| {
-                                    inference?
-                                        .type_of_pat
-                                        .get(&pattern)
-                                        .map(baml_type::interned::Ty::to_plain)
-                                })
+                                .and_then(|pattern| inference?.type_of_pat.get(&pattern).cloned())
                                 .map(|ty| render::display_ty(&ty))
                                 .unwrap_or_else(|| "unknown".to_string())
                         }
@@ -838,12 +833,7 @@ fn describe_locals(
                         | baml_compiler2_hir::semantic_index::DefinitionSite::CatchBinding(
                             pat_id,
                         ) => inference
-                            .and_then(|inference| {
-                                inference
-                                    .type_of_pat
-                                    .get(&pat_id)
-                                    .map(baml_type::interned::Ty::to_plain)
-                            })
+                            .and_then(|inference| inference.type_of_pat.get(&pat_id).cloned())
                             .map(|ty| render::display_ty(&ty))
                             .unwrap_or_else(|| "unknown".to_string()),
                         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => {
@@ -1065,83 +1055,17 @@ fn build_shape<'db>(
 
 // ── Class methods ──────────────────────────────────────────────────────────────
 
-/// A method gathered from a class, before splitting into instance/static and
-/// projecting into the public [`MethodRef`] / `MethodSig` shapes.
-struct CollectedMethod {
-    name: String,
-    signature: String,
-    docstring: Option<String>,
-    file: SourceFile,
-    file_path: String,
-    item_range: TextRange,
-    is_instance: bool,
-}
-
-/// Collect a class's methods (resolved canonical signatures) in source order,
-/// skipping auto-derived plumbing (`to_json`/`from_json`, …). Shared spine for
-/// [`collect_class_methods`] (describe) and [`class_method_sigs`] (hover).
-fn collect_class_methods_impl(
-    db: &dyn baml_compiler2_ppir::Db,
-    class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
-) -> Vec<CollectedMethod> {
-    use baml_compiler2_hir_ty::package_interface::ExportedType;
-
-    let file = class_loc.file(db);
-    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-
-    // Resolved param/return/throws types come from the package interface, which
-    // lowers class methods 1:1 with `class_data.methods` (same order, including
-    // auto-derived entries), so positional indices line up.
-    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
-    let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
-    let exported = iface
-        .lookup_type(&pkg_info.namespace_path, &class_data.name)
-        .and_then(|t| match t {
-            ExportedType::Class { methods, .. } => Some(methods),
-            _ => None,
-        });
-
-    let file_path = file_path_string(db, file);
-    let mut out = Vec::new();
-    for (idx, &method_loc) in class_data.methods.iter().enumerate() {
-        let m = baml_compiler2_ppir::item_data::function_data(db, method_loc);
-        if m.metadata.is_language_internal {
-            continue;
-        }
-        let is_instance = m.params.first().is_some_and(|p| p.name.as_str() == "self");
-        let signature = crate::info::resolved_function_sig_parts(
-            db,
-            method_loc,
-            exported.and_then(|ms| crate::info::exported_method(ms, idx, &m.name)),
-        )
-        .render(db, file, crate::info::method_sig_style());
-        let docstring = m
-            .docstring
-            .as_ref()
-            .map(|d| d.lines().next().unwrap_or("").to_string());
-        out.push(CollectedMethod {
-            name: m.name.as_str().to_string(),
-            signature,
-            docstring,
-            file,
-            file_path: file_path.clone(),
-            item_range: baml_compiler2_ppir::item_data::function_source_map(db, method_loc).span,
-            is_instance,
-        });
-    }
-    out
-}
-
 /// Build `(instance_methods, static_methods)` for a class's describe output.
-/// Instance methods have a `self` first parameter; the rest are static.
+/// Instance methods have a `self` first parameter; the rest are static. The
+/// enumeration (inherent methods, then implements-block methods) is the
+/// shared spine [`crate::info::collect_class_methods_impl`].
 fn collect_class_methods(
     db: &dyn baml_compiler2_ppir::Db,
     class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
 ) -> (Vec<MethodRef>, Vec<MethodRef>) {
     let mut instance = Vec::new();
     let mut statics = Vec::new();
-    for m in collect_class_methods_impl(db, class_loc) {
+    for m in crate::info::collect_class_methods_impl(db, class_loc) {
         let bucket = if m.is_instance {
             &mut instance
         } else {
@@ -1275,7 +1199,7 @@ fn collect_interface_impls(
     baml_compiler2_hir_ty::impls::impls_naming_interface(db, iface_loc)
         .iter()
         .filter_map(|&block| {
-            let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).as_ref()?;
+            let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).resolved()?;
             let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
             let file = block.file(db);
             let source_map = baml_compiler2_ppir::item_data::impl_block_source_map(db, block);
@@ -1297,20 +1221,18 @@ fn collect_interface_impls(
 /// repeating the full path would be noise; the variation a reader scans for
 /// is the instantiation and the implementor.
 fn render_impl_row(facts: &baml_compiler2_hir_ty::impls::ImplFacts<'_>) -> String {
-    let iface = &facts.interface;
+    let iface = facts.interface.to_plain();
     let mut head = iface.name.name().as_str().to_string();
     let mut args: Vec<String> = iface
         .generics
         .iter()
-        .map(|generic| render::display_addressable_ty(&generic.to_plain()))
+        .map(render::display_addressable_ty)
         .collect();
-    args.extend(iface.associated_types.iter().map(|(name, ty)| {
-        format!(
-            "{} = {}",
-            name.as_str(),
-            render::display_addressable_ty(&ty.to_plain())
-        )
-    }));
+    args.extend(
+        iface.associated_types.iter().map(|(name, ty)| {
+            format!("{} = {}", name.as_str(), render::display_addressable_ty(ty))
+        }),
+    );
     if !args.is_empty() {
         head.push('<');
         head.push_str(&args.join(", "));
@@ -1464,25 +1386,45 @@ fn describe_class_method(
     let file = class_loc.file(db);
     let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
 
-    // Locate the (non-auto-derived) method by name.
-    let (idx, &method_loc) = class_data.methods.iter().enumerate().find(|(_, mid)| {
-        let m = baml_compiler2_ppir::item_data::function_data(db, **mid);
-        m.name.as_str() == member_name && !m.metadata.is_language_internal
-    })?;
+    // Locate the (non-auto-derived) method by name: the inherent tier first
+    // (paired positionally with the class's exported methods), then the
+    // implements-block tier (paired with the exported IMPL rows) — the same
+    // two tiers the enumeration lists.
+    let (method_loc, ef) = class_data
+        .methods
+        .iter()
+        .enumerate()
+        .find(|(_, mid)| {
+            let m = baml_compiler2_ppir::item_data::function_data(db, **mid);
+            m.name.as_str() == member_name && !m.metadata.is_language_internal
+        })
+        .map(|(idx, &method_loc)| {
+            let m = baml_compiler2_ppir::item_data::function_data(db, method_loc);
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+            let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+            let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
+            let ef = iface
+                .lookup_type(&pkg_info.namespace_path, &class_data.name)
+                .and_then(|t| match t {
+                    ExportedType::Class { methods, .. } => {
+                        crate::info::exported_method(methods, idx, &m.name)
+                    }
+                    _ => None,
+                });
+            (method_loc, ef)
+        })
+        .or_else(|| {
+            crate::info::class_impl_methods(db, class_loc)
+                .into_iter()
+                .find(|(method_loc, _)| {
+                    baml_compiler2_ppir::item_data::function_data(db, *method_loc)
+                        .name
+                        .as_str()
+                        == member_name
+                })
+        })?;
     let m = baml_compiler2_ppir::item_data::function_data(db, method_loc);
     let method_span = baml_compiler2_ppir::item_data::function_source_map(db, method_loc).span;
-
-    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
-    let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
-    let ef = iface
-        .lookup_type(&pkg_info.namespace_path, &class_data.name)
-        .and_then(|t| match t {
-            ExportedType::Class { methods, .. } => {
-                crate::info::exported_method(methods, idx, &m.name)
-            }
-            _ => None,
-        });
     let signature = crate::info::resolved_function_sig_parts(db, method_loc, ef).render(
         db,
         file,

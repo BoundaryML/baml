@@ -142,26 +142,181 @@ function interfaces_associated_types.$init_test_ns_interfaces_associated_types_i
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "own_generic_bound_after_associated_type_reaches_default_body"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "foreign_instantiation_projection_keeps_its_own_realization"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
 
-function interfaces_associated_types.AdbUser.AdbSummarizable.summary(self: interfaces_associated_types.AdbUser) -> string {
+function interfaces_associated_types.<(int as user.interfaces_associated_types.RltDebuggable)>.debug(self: int) -> string {
+    load_const "int"
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.AdbUser as user.interfaces_associated_types.AdbSummarizable)>.summary(self: interfaces_associated_types.AdbUser) -> string {
     load_var self
     load_field .name
     return
 }
 
-function interfaces_associated_types.AdbUserHolder.AdbHolder<AdbUser>.get(self: interfaces_associated_types.AdbUserHolder) -> interfaces_associated_types.AdbUser {
+function interfaces_associated_types.<(user.interfaces_associated_types.AdbUserHolder as user.interfaces_associated_types.AdbHolder<user.interfaces_associated_types.AdbUser>)>.get(self: interfaces_associated_types.AdbUserHolder) -> interfaces_associated_types.AdbUser {
     load_var self
     load_field .user
     return
 }
 
-function interfaces_associated_types.AlwaysFails.Fallible.value(self: interfaces_associated_types.AlwaysFails) -> int {
+function interfaces_associated_types.<(user.interfaces_associated_types.AlwaysFails as user.interfaces_associated_types.Fallible)>.value(self: interfaces_associated_types.AlwaysFails) -> int {
     load_const "boom"
     init_instance user.interfaces_associated_types.Boom .message
     throw
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.ApdWidget as user.interfaces_associated_types.ApdSomeInterface)>.label(self: interfaces_associated_types.ApdWidget) -> string {
+    load_var self
+    load_field .name
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.ApdWidgetHolder as user.interfaces_associated_types.ApdHolder)>.get(self: interfaces_associated_types.ApdWidgetHolder) -> interfaces_associated_types.ApdWidget {
+    load_var self
+    load_field .item
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.BcpTextSource as user.interfaces_associated_types.BcpSource)>.get(self: interfaces_associated_types.BcpTextSource) -> string {
+    load_var self
+    load_field .text
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.BcpWrapped<#0> as user.interfaces_associated_types.BcpWrapperView)>.output(self: interfaces_associated_types.BcpWrapped<#0>) -> (interfaces_associated_types.BcpWrapped<#0> as interfaces_associated_types.BcpWrapperView<Output = (#0 as interfaces_associated_types.BcpSource<Item = string>).Item>).Output {
+    load_var self
+    load_field .inner
+    load_type interfaces_associated_types.BcpSource<Item = string>
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.BspTextSource as user.interfaces_associated_types.BspSource)>.get(self: interfaces_associated_types.BspTextSource) -> string {
+    load_var self
+    load_field .text
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.BspWrapped<#0> as user.interfaces_associated_types.BspRenderable)>.render(self: interfaces_associated_types.BspWrapped<#0>) -> (interfaces_associated_types.BspWrapped<#0> as interfaces_associated_types.BspRenderable<Output = (#0 as interfaces_associated_types.BspSource<Item = string>).Item>).Output {
+    load_var self
+    load_field .inner
+    load_type interfaces_associated_types.BspSource<Item = string>
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.CaeIntDriver as user.interfaces_associated_types.CaeDriver<user.interfaces_associated_types.CaeTask<int>>)>.drive(self: interfaces_associated_types.CaeIntDriver, input: interfaces_associated_types.CaeTask<int>) -> int {
+    load_var input
+    load_field .value
+    init_instance user.interfaces_associated_types.CaeKaboom .data
+    throw
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.IngIntIterator as user.interfaces_associated_types.IngIterator)>.next(self: interfaces_associated_types.IngIntIterator) -> int | null {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.OgbCard as user.interfaces_associated_types.OgbTagged)>.tag_of(self: interfaces_associated_types.OgbCard) -> string {
+    load_const "card"
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.RdnBox<#0> as user.interfaces_associated_types.RdnSource)>.get(self: interfaces_associated_types.RdnBox<#0>) -> #0 {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.RdnOuterBox<#0> as user.interfaces_associated_types.RdnOuter)>.inner(self: interfaces_associated_types.RdnOuterBox<#0>) -> interfaces_associated_types.RdnSource<Item = #0> {
+    load_var self
+    load_field .source
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.RdsBox<#0> as user.interfaces_associated_types.RdsContainer)>.get(self: interfaces_associated_types.RdsBox<#0>) -> #0 {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.RevColor as user.interfaces_associated_types.RevNamed)>.name(self: interfaces_associated_types.RevColor) -> string {
+    load_const "color"
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.RmfIntSource as user.interfaces_associated_types.RmfSource)>.get(self: interfaces_associated_types.RmfIntSource) -> int {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.RmfStringSource as user.interfaces_associated_types.RmfSource)>.get(self: interfaces_associated_types.RmfStringSource) -> string {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.SrabLeaf as user.interfaces_associated_types.SrabNode)>.srab_tag(self: interfaces_associated_types.SrabLeaf) -> string {
+    load_var self
+    load_field .label
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.Ticket as user.interfaces_associated_types.Describable)>.value(self: interfaces_associated_types.Ticket) -> string {
+    load_var self
+    load_field .id
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.UpcEntityBox<#0> as user.interfaces_associated_types.UpcSummarizes)>.key(self: interfaces_associated_types.UpcEntityBox<#0>) -> (interfaces_associated_types.UpcEntityBox<#0> as interfaces_associated_types.UpcSummarizes<Key = string>).Key {
+    load_var self
+    load_field .value
+    load_type interfaces_associated_types.UpcHasKey<Key = string>
+    virtual_load_field .key
+    return
+}
+
+function interfaces_associated_types.<(user.interfaces_associated_types.UpcEntityBox<#0> as user.interfaces_associated_types.UpcSummarizes)>.summary(self: interfaces_associated_types.UpcEntityBox<#0>) -> string {
+    load_var self
+    load_type interfaces_associated_types.UpcSummarizes<Key = string>
+    load_const "key"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var self
+    load_field .value
+    load_type interfaces_associated_types.UpcNamed
+    virtual_load_field .name
+    load_const ":"
+    bin_op +
+    load_var _5
+    bin_op +
+    return
 }
 
 function interfaces_associated_types.ApdSomeInterface.same_label(self: interfaces_associated_types.ApdSomeInterface, other: #0) -> bool {
@@ -180,59 +335,6 @@ function interfaces_associated_types.ApdSomeInterface.same_label(self: interface
     return
 }
 
-function interfaces_associated_types.ApdWidget.ApdSomeInterface.label(self: interfaces_associated_types.ApdWidget) -> string {
-    load_var self
-    load_field .name
-    return
-}
-
-function interfaces_associated_types.ApdWidgetHolder.ApdHolder.get(self: interfaces_associated_types.ApdWidgetHolder) -> interfaces_associated_types.ApdWidget {
-    load_var self
-    load_field .item
-    return
-}
-
-function interfaces_associated_types.BcpTextSource.BcpSource.get(self: interfaces_associated_types.BcpTextSource) -> string {
-    load_var self
-    load_field .text
-    return
-}
-
-function interfaces_associated_types.BcpWrapperView$for$BcpWrapped<S>.output(self: interfaces_associated_types.BcpWrapped<#0>) -> (interfaces_associated_types.BcpWrapped<#0> as interfaces_associated_types.BcpWrapperView<Output = (#0 as interfaces_associated_types.BcpSource<Item = string>).Item>).Output {
-    load_var self
-    load_field .inner
-    load_type interfaces_associated_types.BcpSource<Item = string>
-    load_const "get"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
-    return
-}
-
-function interfaces_associated_types.BspRenderable$for$BspWrapped<T>.render(self: interfaces_associated_types.BspWrapped<#0>) -> (interfaces_associated_types.BspWrapped<#0> as interfaces_associated_types.BspRenderable<Output = (#0 as interfaces_associated_types.BspSource<Item = string>).Item>).Output {
-    load_var self
-    load_field .inner
-    load_type interfaces_associated_types.BspSource<Item = string>
-    load_const "get"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
-    return
-}
-
-function interfaces_associated_types.BspTextSource.BspSource.get(self: interfaces_associated_types.BspTextSource) -> string {
-    load_var self
-    load_field .text
-    return
-}
-
-function interfaces_associated_types.CaeIntDriver.CaeDriver<CaeTask<int>>.drive(self: interfaces_associated_types.CaeIntDriver, input: interfaces_associated_types.CaeTask<int>) -> int {
-    load_var input
-    load_field .value
-    init_instance user.interfaces_associated_types.CaeKaboom .data
-    throw
-}
-
 function interfaces_associated_types.CaeTask.drive(self: interfaces_associated_types.CaeTask<#0>, driver: #3) -> #1 {
     load_var2 2 1
     load_type interfaces_associated_types.CaeDriver<interfaces_associated_types.CaeTask<#0>, Error = #2, Output = #1>
@@ -243,9 +345,9 @@ function interfaces_associated_types.CaeTask.drive(self: interfaces_associated_t
     return
 }
 
-function interfaces_associated_types.Describable.describe(self: interfaces_associated_types.Describable) -> #1 {
+function interfaces_associated_types.Describable.describe(self: interfaces_associated_types.Describable) -> (#0 as interfaces_associated_types.Describable).Output {
     load_var self
-    load_type interfaces_associated_types.Describable<Output = #1>
+    load_type interfaces_associated_types.Describable
     load_const "value"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -255,7 +357,7 @@ function interfaces_associated_types.Describable.describe(self: interfaces_assoc
 
 function interfaces_associated_types.Fallible.value_plus_one(self: interfaces_associated_types.Fallible) -> int {
     load_var self
-    load_type interfaces_associated_types.Fallible<Error = #1>
+    load_type interfaces_associated_types.Fallible
     load_const "value"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -265,86 +367,13 @@ function interfaces_associated_types.Fallible.value_plus_one(self: interfaces_as
     return
 }
 
-function interfaces_associated_types.IngIntIterator.IngIterator.next(self: interfaces_associated_types.IngIntIterator) -> int | null {
-    load_var self
-    load_field .value
-    return
-}
-
-function interfaces_associated_types.RdnBox.RdnSource.get(self: interfaces_associated_types.RdnBox<#0>) -> #0 {
-    load_var self
-    load_field .value
-    return
-}
-
-function interfaces_associated_types.RdnOuterBox.RdnOuter.inner(self: interfaces_associated_types.RdnOuterBox<#0>) -> interfaces_associated_types.RdnSource<Item = #0> {
-    load_var self
-    load_field .source
-    return
-}
-
-function interfaces_associated_types.RdsBox.RdsContainer.get(self: interfaces_associated_types.RdsBox<#0>) -> #0 {
-    load_var self
-    load_field .value
-    return
-}
-
-function interfaces_associated_types.RevNamed$for$RevColor.name(self: interfaces_associated_types.RevColor) -> string {
-    load_const "color"
-    return
-}
-
-function interfaces_associated_types.RltDebuggable$for$int.debug(self: int) -> string {
-    load_const "int"
-    return
-}
-
-function interfaces_associated_types.RmfIntSource.RmfSource.get(self: interfaces_associated_types.RmfIntSource) -> int {
-    load_var self
-    load_field .value
-    return
-}
-
-function interfaces_associated_types.RmfStringSource.RmfSource.get(self: interfaces_associated_types.RmfStringSource) -> string {
-    load_var self
-    load_field .value
-    return
-}
-
-function interfaces_associated_types.SrabLeaf.SrabNode.srab_tag(self: interfaces_associated_types.SrabLeaf) -> string {
-    load_var self
-    load_field .label
-    return
-}
-
-function interfaces_associated_types.Ticket.Describable.value(self: interfaces_associated_types.Ticket) -> string {
-    load_var self
-    load_field .id
-    return
-}
-
-function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.key(self: interfaces_associated_types.UpcEntityBox<#0>) -> (interfaces_associated_types.UpcEntityBox<#0> as interfaces_associated_types.UpcSummarizes<Key = string>).Key {
-    load_var self
-    load_field .value
-    load_type interfaces_associated_types.UpcHasKey<Key = string>
-    virtual_load_field .key
-    return
-}
-
-function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.summary(self: interfaces_associated_types.UpcEntityBox<#0>) -> string {
-    load_var self
-    load_type interfaces_associated_types.UpcSummarizes<Key = string>
-    load_const "key"
+function interfaces_associated_types.OgbTallier.tally(self: interfaces_associated_types.OgbTallier, a: #1, extra: #2) -> string {
+    load_var a
+    load_type interfaces_associated_types.OgbTagged
+    load_const "tag_of"
     virtual_call nargs=1 ntypeargs=0
-    store_var _5
-    load_var self
-    load_field .value
-    load_type interfaces_associated_types.UpcNamed
-    virtual_load_field .name
-    load_const ":"
-    bin_op +
-    load_var _5
-    bin_op +
+    store_var _0
+    load_var _0
     return
 }
 
@@ -593,6 +622,11 @@ function interfaces_associated_types.dms_main() -> string {
     return
 }
 
+function interfaces_associated_types.fip_probe(x: string) -> string {
+    load_var x
+    return
+}
+
 function interfaces_associated_types.ing_main() -> string {
     load_const 7
     init_instance user.interfaces_associated_types.IngIntIterator .value
@@ -608,6 +642,19 @@ function interfaces_associated_types.ing_stringify_next(iter: interfaces_associa
     store_var _2
     load_var _2
     call baml.json.to_string
+    return
+}
+
+function interfaces_associated_types.ogb_main(s: interfaces_associated_types.OgbSums, c: interfaces_associated_types.OgbCard) -> string {
+    load_type interfaces_associated_types.OgbCard
+    load_type int
+    load_var2 1 2
+    load_const 1
+    load_type interfaces_associated_types.OgbTallier<Marker = int>
+    load_const "tally"
+    virtual_call nargs=3 ntypeargs=2
+    store_var _0
+    load_var _0
     return
 }
 

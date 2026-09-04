@@ -1,9 +1,13 @@
-// Spike tests for the `Comparable` / `Sortable` array-sort design
+// Spike tests for the `Sortable` array-sort design, now built on
+// `baml.ops.Compare`
 // (thoughts/sam-projects/array-sort/01b-option-5-tdd-plan.md and the
-// 02-native-sort-fast-path follow-up).
+// 02-native-sort-fast-path follow-up). The associated-error machinery the
+// original `Comparable` carried is exercised here by the throwaway `HasErr` /
+// `Wrap` interfaces below — `Compare.cmp` is `throws never`, so the stdlib has
+// no such binding of its own any more.
 //
 // Helper functions throughout are needed because test-block locals are boxed
-// (VM quirk; see ns_arrays/sort_comparable.baml's header note).
+// (VM quirk; see ns_arrays/sort_compare.baml's header note).
 //
 // Tests requiring compiler-diagnostics assertions (setup_test_db + collect_diagnostics,
 // checking specific compile errors or isolated-project compiles) cannot be
@@ -14,7 +18,6 @@
 //   - spike_1a_diagnostics_path_survives_non_qualifying_projection
 //   - spike_1b_non_qualifying_element_is_compile_error_at_callsite
 //   - spike_1c_interface_typed_values_cannot_call_two_self_method
-//   - phase2_user_class_missing_cmperror_binding_is_error
 //   - phase3_never_binding_callsite_normalizes_to_never
 //   - phase3_error_binding_callsite_throws_it
 //   - phase3_error_binding_unhandled_is_compile_error
@@ -25,7 +28,7 @@
 //   - phase5_optional_element_sort_is_compile_error
 //   - phase5_sort_by_key_nullable_key_is_compile_error
 //   - phase5_union_int_string_sort_is_compile_error
-//   - phase5_class_without_comparable_sort_is_compile_error
+//   - phase5_class_without_compare_sort_is_compile_error
 //   - match_dispatch_array_type_arms_do_not_discriminate
 //   - element_is_dispatch_compiles
 //   - element_is_dispatch_int_callsite_normalizes_to_never
@@ -41,10 +44,9 @@
 
 // ── 1a: projection-valued associated-type binding in a blanket impl ─────────
 //
-// The throwaway scaffolding mirrors the eventual `Comparable`/`Sortable`
-// shape: `HasErr` plays `Comparable` (associated error `E`), `Wrap` plays
-// `Sortable` (associated error `WE` bound per-impl to the *projection*
-// `(T as HasErr).E`).
+// The throwaway scaffolding mirrors a fallible-ordering shape: `HasErr` carries
+// an associated error `E`, and `Wrap` (playing `Sortable`) binds `WE` per-impl
+// to the *projection* `(T as HasErr).E`.
 
 interface HasErr {
     type E
@@ -194,7 +196,7 @@ test "spike_1b_blanket_interface_method_wins_over_array_class_method" {
 // ── 1c: two-`Self` method called through a bounded type variable ────────────
 
 // Both arguments are the same type variable `T`, so the `Self`s provably
-// match — exactly the shape of `a.compare(b)` inside the blanket `sort`.
+// match — exactly the shape of `a.cmp(b)` inside the blanket `sort`.
 interface Cmp {
     function compare(self, other: Self) -> int throws never
 }
@@ -220,39 +222,41 @@ test "spike_1c_two_self_method_through_bounded_typevar_runs" {
     assert.is_true(spike_1c_main())
 }
 
-// ── Phase 2 repro: user-class Comparable dispatch ────────────────────────────
+// ── Phase 2 repro: user-class Compare dispatch ───────────────────────────────
 
 class Score {
     points: int
-    implements baml.Comparable {
-        type CompareError = never
-        function compare(self, other: Self) -> int throws never {
-            if (self.points < other.points) { -1 }
-            else if (self.points > other.points) { 1 }
-            else { 0 }
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never { self.points == other.points }
+    }
+    implements baml.ops.Compare {
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            if (self.points < other.points) { baml.ops.Ordering.Less }
+            else if (self.points > other.points) { baml.ops.Ordering.Greater }
+            else { baml.ops.Ordering.Equal }
         }
     }
 }
 
-function phase2_compare_main() -> int throws never {
+function phase2_compare_main() -> baml.ops.Ordering throws never {
     let high = Score { points: 9 }
     let low = Score { points: 1 }
-    return high.compare(low)
+    return high.cmp(low)
 }
 
-function phase2_compare_explicit_binding_main() -> int throws never {
+function phase2_compare_explicit_binding_main() -> baml.ops.Ordering throws never {
     let high = Score { points: 9 }
     let low = Score { points: 1 }
-    let result = high.compare(low)
+    let result = high.cmp(low)
     return result
 }
 
 test "phase2_user_class_compare_direct_call_in_main" {
-    assert.equal(phase2_compare_main(), 1)
+    assert.is_true(phase2_compare_main() == baml.ops.Ordering.Greater)
 }
 
 test "phase2_user_class_compare_with_explicit_binding_in_main" {
-    assert.equal(phase2_compare_explicit_binding_main(), 1)
+    assert.is_true(phase2_compare_explicit_binding_main() == baml.ops.Ordering.Greater)
 }
 
 // ── Phase 3 runtime: actually execute the blanket `sort` ───────────────────
@@ -269,38 +273,40 @@ test "phase3_runtime_sort_ints" {
 
 // ── Phase 3 runtime gap-mapping: generic dispatch to primitive vs class ─────
 
-function cmp<T extends baml.Comparable>(a: T, b: T) -> int throws T.CompareError {
-    return a.compare(b)
+function three_way<T extends baml.ops.Compare>(a: T, b: T) -> baml.ops.Ordering throws never {
+    return a.cmp(b)
 }
 
-function phase3_generic_compare_primitive_main() -> int throws never {
+function phase3_generic_compare_primitive_main() -> baml.ops.Ordering throws never {
     let a: int = 3
     let b: int = 1
-    return cmp(a, b)
+    return three_way(a, b)
 }
 
 test "phase3_runtime_generic_compare_on_primitive" {
-    assert.equal(phase3_generic_compare_primitive_main(), 1)
+    assert.is_true(phase3_generic_compare_primitive_main() == baml.ops.Ordering.Greater)
 }
 
 // Named `ScorePts` (not `Score`) to avoid collision with phase2's `Score` above.
 // Shared definition for the three phase3 user-class tests.
 class ScorePts {
     points: int
-    implements baml.Comparable {
-        type CompareError = never
-        function compare(self, other: Self) -> int throws never {
-            return self.points.compare(other.points)
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never { self.points == other.points }
+    }
+    implements baml.ops.Compare {
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            return self.points.cmp(other.points)
         }
     }
 }
 
-function phase3_generic_compare_user_class_main() -> int throws never {
-    return cmp(ScorePts { points: 9 }, ScorePts { points: 1 })
+function phase3_generic_compare_user_class_main() -> baml.ops.Ordering throws never {
+    return three_way(ScorePts { points: 9 }, ScorePts { points: 1 })
 }
 
 test "phase3_runtime_generic_compare_on_user_class" {
-    assert.equal(phase3_generic_compare_user_class_main(), 1)
+    assert.is_true(phase3_generic_compare_user_class_main() == baml.ops.Ordering.Greater)
 }
 
 function phase3_sort_user_class_main() -> int throws never {
@@ -315,8 +321,8 @@ test "phase3_runtime_sort_user_class" {
 
 // Same body as the blanket `sort`, but as a plain generic function — isolates
 // whether a failure is the blanket-impl context or generic lambda dispatch.
-function gsort<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
-    return xs.sort_by((a: T, b: T) -> int throws T.CompareError { a.compare(b) })
+function gsort<T extends baml.ops.Compare>(xs: T[]) -> T[] throws never {
+    return xs.sort_by((a: T, b: T) -> baml.ops.Ordering throws never { a.cmp(b) })
 }
 
 function phase3_gsort_ints_main() -> int throws never {
@@ -329,10 +335,9 @@ test "phase3_runtime_generic_fn_sort_by_compare_ints" {
     assert.equal(phase3_gsort_ints_main(), 123)
 }
 
-// User-code generic `sort_by`-with-compare-lambda over a *user class*. Unlike
-// the stdlib `Sortable.sort` (which routes through `_compare_shim` because it
-// cannot see downstream impls), a user generic body sees its own `Comparable`
-// impl and dispatches `compare` statically.
+// User-code generic `sort_by`-with-`cmp`-lambda over a *user class*. Same shape
+// as the stdlib `Sortable.sort` fallback: `a.cmp(b)` on a bounded type variable
+// lowers to a virtual call resolved on the runtime type.
 function phase3_gsort_user_class_main() -> int throws never {
     let xs = [ScorePts { points: 3 }, ScorePts { points: 1 }, ScorePts { points: 2 }]
     let s = gsort(xs)
@@ -358,14 +363,16 @@ test "phase3_runtime_sort_param_receiver_in_function" {
     assert.equal(phase3_param_receiver_main(), 123)
 }
 
-// ── Phase 5: a class that DOES implement Comparable sorts fine ──────────────
+// ── Phase 5: a class that DOES implement Compare sorts fine ─────────────────
 
 class Resume {
     rank: int
-    implements baml.Comparable {
-        type CompareError = never
-        function compare(self, other: Self) -> int throws never {
-            return self.rank.compare(other.rank)
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never { self.rank == other.rank }
+    }
+    implements baml.ops.Compare {
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            return self.rank.cmp(other.rank)
         }
     }
 }
@@ -403,22 +410,22 @@ test "is_primitive_on_generic_value_tests_realized_type" {
 
 // The fallback dispatch shape: a boolean guard routing between two generic
 // callees instantiated at the *symbolic* `T` (return `T[]`, throws
-// `T.CompareError`) with no refinement anywhere. `is_fast` stands in for the
+// `T`-bounded) with no refinement anywhere. `is_fast` stands in for the
 // native `_is_primitive_array`; `fast_g` for `_rust_sort`; `slow_g` for the
 // `sort_by` path.
-function is_fast<T extends baml.Comparable>(xs: T[]) -> bool throws never {
+function is_fast<T extends baml.ops.Compare>(xs: T[]) -> bool throws never {
     return xs.length() == 0
 }
 
-function fast_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
+function fast_g<T extends baml.ops.Compare>(xs: T[]) -> T[] throws never {
     return xs
 }
 
-function slow_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
+function slow_g<T extends baml.ops.Compare>(xs: T[]) -> T[] throws never {
     return xs
 }
 
-function dispatch_f<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
+function dispatch_f<T extends baml.ops.Compare>(xs: T[]) -> T[] throws never {
     if (is_fast(xs)) {
         fast_g(xs)
     } else {
@@ -428,10 +435,12 @@ function dispatch_f<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareE
 
 class RouteItem {
     rank int
-    implements baml.Comparable {
-        type CompareError = never
-        function compare(self, other: Self) -> int throws never {
-            self.rank.compare(other.rank)
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never { self.rank == other.rank }
+    }
+    implements baml.ops.Compare {
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            self.rank.cmp(other.rank)
         }
     }
 }
@@ -457,30 +466,32 @@ test "element_is_dispatch_runtime_both_branches" {
 
 // The native natural sort and the `sort_by` + `compare` path must produce
 // identical orderings for every primitive domain — including float with
-// NaN/±inf/±0, where both paths must agree on `total_cmp`. The user-class
-// domain rides along as a sanity check (both sides take the comparator
-// path there).
+// NaN/±inf/±0, where both paths must agree on BAML's total float order. The
+// user-class domain rides along as a sanity check (both sides take the
+// comparator path there).
 class ParityItem {
     rank int
-    implements baml.Comparable {
-        type CompareError = never
-        function compare(self, other: Self) -> int throws never {
-            self.rank.compare(other.rank)
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never { self.rank == other.rank }
+    }
+    implements baml.ops.Compare {
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            self.rank.cmp(other.rank)
         }
     }
 }
 
-// Element-wise `compare(...) == 0` rather than `xs == ys`. The float domain
-// below includes NaN, and `==` is IEEE — `NaN != NaN`, so an array holding one
-// is not even equal to itself. `Comparable for float` is `total_cmp`, which is
-// both total and the very ordering these two sort paths are being compared on.
-function check<T extends baml.Comparable>(xs: T[], ys: T[]) -> bool throws T.CompareError {
+// Element-wise `compare(...) == 0` rather than `xs == ys`, so the check is on
+// the very ordering the two sort paths are being compared on rather than on
+// `==`. `Compare for float` is BAML's total float order, which is total over
+// the NaN/±inf/±0 domain below.
+function check<T extends baml.ops.Compare>(xs: T[], ys: T[]) -> bool throws never {
     xs.sort();
-    ys.sort_by((a: T, b: T) -> int throws T.CompareError { a.compare(b) });
+    ys.sort_by((a: T, b: T) -> baml.ops.Ordering throws never { a.cmp(b) });
     if (xs.length() != ys.length()) { return false }
     let i = 0;
     while (i < xs.length()) {
-        if (xs[i].compare(ys[i]) != 0) { return false }
+        if (xs[i].cmp(ys[i]) != baml.ops.Ordering.Equal) { return false }
         i = i + 1;
     }
     return true
@@ -519,8 +530,8 @@ test "float_nan_sorts_via_total_order_no_throw" {
     assert.is_true(float_nan_sort_main())
 }
 
-// An *out-of-body* `implements baml.Comparable for <class>` registers
-// `compare` under the synthetic `Comparable$for$<class>` class (as spelled at
+// An *out-of-body* `implements baml.ops.Compare for <class>` registers
+// `cmp` under the synthetic `Compare$for$<class>` class (as spelled at
 // the impl site), not under the class. `make_compare_callee` must find it
 // there — the in-body-only lookup made the sort type-check but fail at
 // runtime with "compare dispatch: function … not found".
@@ -528,10 +539,13 @@ class OobScore {
     points: int
 }
 
-implements baml.Comparable for OobScore {
-    type CompareError = never
-    function compare(self, other: Self) -> int throws never {
-        self.points.compare(other.points)
+implements baml.ops.Equals for OobScore {
+    function eq(self, other: Self) -> bool throws never { self.points == other.points }
+}
+
+implements baml.ops.Compare for OobScore {
+    function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+        self.points.cmp(other.points)
     }
 }
 
@@ -545,16 +559,18 @@ test "sort_user_class_with_out_of_body_comparable_impl" {
     assert.equal(oob_score_sort_main(), 123)
 }
 
-// Phase 2/4 interaction regression: a user `Comparable` class routes through
-// native `sort_by` + the `_compare_shim` lambda (the dispatch's fallback
+// Phase 2/4 interaction regression: a user `Compare` class routes through
+// native `sort_by` + the `a.cmp(b)` lambda (the dispatch's fallback
 // branch) and still sorts stably, in place, returning self.
 class Ranked {
     rank int
     tag string
-    implements baml.Comparable {
-        type CompareError = never
-        function compare(self, other: Self) -> int throws never {
-            self.rank.compare(other.rank)
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never { self.rank == other.rank }
+    }
+    implements baml.ops.Compare {
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            self.rank.cmp(other.rank)
         }
     }
 }

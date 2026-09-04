@@ -48,12 +48,19 @@ function intersection_bounds.$init_test_ns_intersection_bounds_intersection_boun
     return
 }
 
-function intersection_bounds.IbBoth.IbSized.size(self: intersection_bounds.IbBoth) -> int {
+function intersection_bounds.<(#0 as user.intersection_bounds.IbPrintable)>.display(self: #0) -> string {
+    load_type #0
+    load_var self
+    call user.intersection_bounds.ib_describe
+    return
+}
+
+function intersection_bounds.<(user.intersection_bounds.IbBoth as user.intersection_bounds.IbSized)>.size(self: intersection_bounds.IbBoth) -> int {
     load_const 7
     return
 }
 
-function intersection_bounds.IbBoth.IbTagged.tag(self: intersection_bounds.IbBoth) -> string {
+function intersection_bounds.<(user.intersection_bounds.IbBoth as user.intersection_bounds.IbTagged)>.tag(self: intersection_bounds.IbBoth) -> string {
     load_const "t:"
     load_var self
     load_field .name
@@ -61,19 +68,12 @@ function intersection_bounds.IbBoth.IbTagged.tag(self: intersection_bounds.IbBot
     return
 }
 
-function intersection_bounds.IbOther.IbSized.size(self: intersection_bounds.IbOther) -> int {
+function intersection_bounds.<(user.intersection_bounds.IbOther as user.intersection_bounds.IbSized)>.size(self: intersection_bounds.IbOther) -> int {
     load_const 2
     return
 }
 
-function intersection_bounds.IbPrintable$for$T.display(self: #0) -> string {
-    load_type #0
-    load_var self
-    call user.intersection_bounds.ib_describe
-    return
-}
-
-function intersection_bounds.IbRegistered.IbRegistry.summarize(self: intersection_bounds.IbRegistered, item: #0) -> string {
+function intersection_bounds.<(user.intersection_bounds.IbRegistered as user.intersection_bounds.IbRegistry)>.summarize(self: intersection_bounds.IbRegistered, item: #0) -> string {
     load_type #0
     load_var item
     call user.intersection_bounds.ib_describe

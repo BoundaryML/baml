@@ -1,0 +1,30 @@
+---
+title: Foundations
+description: Part I · Learn how source files, types, functions, and generated clients fit together.
+breadcrumbs:
+  - href: /baml
+    label: BAML
+  - href: /baml/book
+    label: Book
+  - label: Foundations
+---
+
+## A working mental model
+
+A BAML project defines the contract between application code and an AI model. Types describe the data crossing that boundary, functions name the operation, and a generated client gives the host application a typed way to call it.
+
+> **The source is the contract.** Change the BAML declaration, check the project, and regenerate the client before relying on the new shape in application code.
+
+A project can split related types and functions across files while the compiler checks them as one unit.
+
+<BamlProject id="cross-file-types" />
+
+## Chapters
+
+<div className="docs-card-grid">
+  <DocsCard description="Define typed inputs and outputs, write a body, and understand the generated call surface." href="/baml/book/foundations/functions" title="1. Functions" />
+</div>
+
+## Book or reference?
+
+Read the book when you want concepts introduced in sequence. Use the [function reference](/baml/language/functions) when you already know the concept and need its exact shape at a glance.

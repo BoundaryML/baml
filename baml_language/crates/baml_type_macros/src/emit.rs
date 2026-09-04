@@ -3,8 +3,8 @@
 //! Every member enum and satellite struct is produced from the master
 //! definition by **token-level ident replacement**: the master enum's ident
 //! (the self-reference placeholder) and any satellite idents are rewritten to
-//! the target member's equivalents, descending through `Box`/`Vec`/`Option`/
-//! tuples and method bodies alike. Because the placeholder is the master ident
+//! the target member's equivalents, descending through `Box`/`Box<[..]>`/`Vec`/
+//! `Option`/tuples and method bodies alike. Because the placeholder is the master ident
 //! itself, the master `enum` in the DSL is the ordinary `Ty` definition plus
 //! `#[axis(..)]` tags — no separate rewriting syntax is needed.
 //!
@@ -20,15 +20,28 @@ use proc_macro2::{Group, Ident, Literal, TokenStream, TokenTree};
 use quote::{ToTokens, format_ident, quote};
 use syn::{Attribute, Fields, GenericParam, Generics, Index, parse_quote};
 
-use crate::parse::{Family, MVariant, Member, Satellite};
+use crate::parse::{Child, Family, MVariant, Member, Satellite};
 
 pub(crate) fn emit(family: &Family) -> TokenStream {
     let mut out = TokenStream::new();
     for member in &family.members {
-        out.extend(gen_member_enum(family, member));
-        out.extend(gen_accessors(family, member));
-        out.extend(gen_head_visitors(family, member));
-        out.extend(gen_head_mappers(family, member));
+        match &member.child {
+            Child::Member(child_idx) => {
+                out.extend(gen_member_enum(family, member, *child_idx));
+                out.extend(gen_accessors(family, member));
+                out.extend(gen_head_visitors(family, member));
+                out.extend(gen_head_mappers(family, member));
+            }
+            // An interned member is the hash-cons pool's kind: children are
+            // handles, so its emission is type-shape-aware rather than
+            // ident-for-ident, and the plain walkers/mappers (which descend
+            // through child *trees*) do not apply.
+            Child::Interned(handle) => {
+                out.extend(crate::interned_member::gen_interned_member(
+                    family, member, handle,
+                ));
+            }
+        }
     }
     // Satellites are generated only for deep members; shallow members reuse
     // their child's satellite (e.g. `ConcreteTy::Function` holds
@@ -43,8 +56,8 @@ pub(crate) fn emit(family: &Family) -> TokenStream {
     out
 }
 
-fn gen_member_enum(family: &Family, member: &Member) -> TokenStream {
-    let child = &family.members[member.child];
+fn gen_member_enum(family: &Family, member: &Member, child_idx: usize) -> TokenStream {
+    let child = &family.members[child_idx];
     let map = replacements(family, &child.name);
 
     // Each variant carries its explicit stable discriminant from the master
@@ -125,7 +138,7 @@ fn gen_accessors(family: &Family, member: &Member) -> TokenStream {
     }
 }
 
-fn attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
+pub(crate) fn attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
     let vident = &v.ident;
     // Attr-less leaves borrow the shared empty attribute set.
     if !v.has_attr {
@@ -142,7 +155,7 @@ fn attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
     }
 }
 
-fn with_attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
+pub(crate) fn with_attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
     let vident = &v.ident;
     // Attr-less leaves have nowhere to store an attribute, so `with_attr` is
     // the identity — the incoming `attr` is dropped. `_ = &attr` silences the
@@ -434,6 +447,11 @@ fn visit_expr(
         let method = m.method();
         return Some(quote! { #place.#method(f); });
     }
+    if let Some(inner) = crate::convert::boxed_slice_arg(ty) {
+        let iter = m.iter();
+        let body = visit_expr(family, param, inner, quote!(__head_item), m)?;
+        return Some(quote! { for __head_item in #place.#iter() { #body } });
+    }
     if let Some(inner) = crate::convert::wrapper_arg(ty, "Box") {
         let inner_place = m.deref_box(&place);
         return visit_expr(family, param, inner, inner_place, m);
@@ -680,6 +698,16 @@ fn map_expr(family: &Family, param: &Ident, ty: &syn::Type, place: TokenStream) 
     {
         return quote! { #place.try_map_heads(f)? };
     }
+    if let Some(inner) = crate::convert::boxed_slice_arg(ty) {
+        let inner_expr = map_expr(family, param, inner, quote!(__head_item));
+        return quote! {{
+            let mut __head_out = ::std::vec::Vec::with_capacity(#place.len());
+            for __head_item in #place.iter() {
+                __head_out.push(#inner_expr);
+            }
+            __head_out.into_boxed_slice()
+        }};
+    }
     if let Some(inner) = crate::convert::wrapper_arg(ty, "Box") {
         let inner_expr = map_expr(family, param, inner, quote!((&**#place)));
         return quote! { ::std::boxed::Box::new(#inner_expr) };
@@ -781,39 +809,67 @@ pub(crate) fn with_clone_bounds(generics: &Generics) -> Generics {
     bounded
 }
 
-/// The idents to rewrite when generating for `target`: the master ident becomes
-/// `target`, and each satellite name becomes `target`'s satellite.
-fn replacements(family: &Family, target: &Ident) -> HashMap<String, Ident> {
+/// The rewrite plan when generating for `target`: the master ident becomes
+/// `target`, each satellite name becomes `target`'s satellite, and idents in
+/// *member-path position* are exempt (see [`Replacements::guards`]).
+struct Replacements {
+    map: HashMap<String, Ident>,
+    /// Idents that open a member path (`Ty::`, `Self::`, any member name).
+    /// An ident directly after `<guard>::` names a *variant or associated
+    /// item* of that member, not a top-level type — `Ty::Interface` is the
+    /// existential variant, which merely shares its name with the `Interface`
+    /// satellite — so it is never rewritten, even when it collides with a
+    /// satellite name.
+    guards: std::collections::HashSet<String>,
+}
+
+fn replacements(family: &Family, target: &Ident) -> Replacements {
     let mut map = HashMap::new();
     map.insert(family.master_ident.to_string(), target.clone());
     for sat in &family.satellites {
         map.insert(sat.name.to_string(), satellite_name_for(target, &sat.name));
     }
-    map
+    let mut guards: std::collections::HashSet<String> =
+        family.members.iter().map(|m| m.name.to_string()).collect();
+    guards.insert(family.master_ident.to_string());
+    guards.insert("Self".to_string());
+    Replacements { map, guards }
 }
 
-/// Walk `tokens`, replacing any [`Ident`] found in `map`; recurse into groups.
-fn replace_idents(tokens: TokenStream, map: &HashMap<String, Ident>) -> TokenStream {
-    tokens
-        .into_iter()
-        .map(|tt| match tt {
+/// Walk `tokens`, replacing any [`Ident`] found in the map — except in
+/// member-path position (directly after `<guard>::`) — recursing into groups.
+/// A path cannot straddle a group boundary, so per-group tracking suffices.
+fn replace_idents(tokens: TokenStream, rep: &Replacements) -> TokenStream {
+    let tokens: Vec<TokenTree> = tokens.into_iter().collect();
+    let mut out = Vec::with_capacity(tokens.len());
+    for (i, tt) in tokens.iter().enumerate() {
+        let mapped = match tt {
             TokenTree::Group(g) => {
-                let inner = replace_idents(g.stream(), map);
+                let inner = replace_idents(g.stream(), rep);
                 let mut replaced = Group::new(g.delimiter(), inner);
                 replaced.set_span(g.span());
                 TokenTree::Group(replaced)
             }
-            TokenTree::Ident(id) => match map.get(&id.to_string()) {
-                Some(rep) => {
-                    let mut rep = rep.clone();
-                    rep.set_span(id.span());
-                    TokenTree::Ident(rep)
+            TokenTree::Ident(id) => {
+                let guarded = i >= 3
+                    && matches!(&tokens[i - 1], TokenTree::Punct(p) if p.as_char() == ':')
+                    && matches!(&tokens[i - 2], TokenTree::Punct(p) if p.as_char() == ':')
+                    && matches!(&tokens[i - 3], TokenTree::Ident(prev)
+                        if rep.guards.contains(&prev.to_string()));
+                match (guarded, rep.map.get(&id.to_string())) {
+                    (false, Some(target)) => {
+                        let mut target = target.clone();
+                        target.set_span(id.span());
+                        TokenTree::Ident(target)
+                    }
+                    (true, _) | (false, None) => TokenTree::Ident(id.clone()),
                 }
-                None => TokenTree::Ident(id),
-            },
-            other => other,
-        })
-        .collect()
+            }
+            other => other.clone(),
+        };
+        out.push(mapped);
+    }
+    out.into_iter().collect()
 }
 
 /// `RuntimeTy` + `FunctionParamTy` → `RuntimeFunctionParamTy`; the master `Ty`
@@ -852,6 +908,6 @@ fn satellite_attrs(attrs: &[Attribute]) -> Vec<&Attribute> {
         .collect()
 }
 
-fn is_doc(attr: &Attribute) -> bool {
+pub(crate) fn is_doc(attr: &Attribute) -> bool {
     attr.path().is_ident("doc")
 }

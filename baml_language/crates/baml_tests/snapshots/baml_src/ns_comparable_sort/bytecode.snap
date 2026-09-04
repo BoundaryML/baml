@@ -160,12 +160,12 @@ function comparable_sort.$init_test_ns_comparable_sort_comparable_sort(registry:
     return
 }
 
-function comparable_sort.Countable$for$T[].count(self: #0[]) -> int {
+function comparable_sort.<(#0[] as user.comparable_sort.Countable)>.count(self: #0[]) -> int {
     load_const -1
     return
 }
 
-function comparable_sort.FirstNamed$for$T[].first_name(self: #0[]) -> string {
+function comparable_sort.<(#0[] as user.comparable_sort.FirstNamed)>.first_name(self: #0[]) -> string {
     load_var self
     container_len
     store_var _3
@@ -190,139 +190,7 @@ function comparable_sort.FirstNamed$for$T[].first_name(self: #0[]) -> string {
     return
 }
 
-function comparable_sort.Num.Cmp.compare(self: comparable_sort.Num, other: comparable_sort.Num) -> int {
-    load_var self
-    load_field .value
-    load_var other
-    load_field .value
-    sub_int
-    return
-}
-
-function comparable_sort.OobScore.baml.Comparable.compare(self: comparable_sort.OobScore, other: comparable_sort.OobScore) -> int {
-    load_var self
-    load_field .points
-    load_var other
-    load_field .points
-    load_type baml.Comparable<CompareError = never>
-    load_const "compare"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
-    return
-}
-
-function comparable_sort.ParityItem.baml.Comparable.compare(self: comparable_sort.ParityItem, other: comparable_sort.ParityItem) -> int {
-    load_var self
-    load_field .rank
-    load_var other
-    load_field .rank
-    load_type baml.Comparable<CompareError = never>
-    load_const "compare"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
-    return
-}
-
-function comparable_sort.Ranked.baml.Comparable.compare(self: comparable_sort.Ranked, other: comparable_sort.Ranked) -> int {
-    load_var self
-    load_field .rank
-    load_var other
-    load_field .rank
-    load_type baml.Comparable<CompareError = never>
-    load_const "compare"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
-    return
-}
-
-function comparable_sort.Resume.baml.Comparable.compare(self: comparable_sort.Resume, other: comparable_sort.Resume) -> int {
-    load_var self
-    load_field .rank
-    load_var other
-    load_field .rank
-    load_type baml.Comparable<CompareError = never>
-    load_const "compare"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
-    return
-}
-
-function comparable_sort.Risky.HasErr.f(self: comparable_sort.Risky) -> int {
-    load_const "kaboom"
-    init_instance user.comparable_sort.Kaboom .message
-    throw
-}
-
-function comparable_sort.RouteItem.baml.Comparable.compare(self: comparable_sort.RouteItem, other: comparable_sort.RouteItem) -> int {
-    load_var self
-    load_field .rank
-    load_var other
-    load_field .rank
-    load_type baml.Comparable<CompareError = never>
-    load_const "compare"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
-    return
-}
-
-function comparable_sort.Safe.HasErr.f(self: comparable_sort.Safe) -> int {
-    load_var self
-    load_field .value
-    return
-}
-
-function comparable_sort.Score.baml.Comparable.compare(self: comparable_sort.Score, other: comparable_sort.Score) -> int {
-    load_var self
-    load_field .points
-    load_var other
-    load_field .points
-    cmp_int_op <
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_var self
-    load_field .points
-    load_var other
-    load_field .points
-    cmp_int_op >
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const 0
-    jump L4
-
-  L2:
-    load_const 1
-    jump L4
-
-  L3:
-    load_const -1
-
-  L4:
-    return
-}
-
-function comparable_sort.ScorePts.baml.Comparable.compare(self: comparable_sort.ScorePts, other: comparable_sort.ScorePts) -> int {
-    load_var self
-    load_field .points
-    load_var other
-    load_field .points
-    load_type baml.Comparable<CompareError = never>
-    load_const "compare"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
-    return
-}
-
-function comparable_sort.Wrap$for$T[].g(self: #0[]) -> int {
+function comparable_sort.<(#0[] as user.comparable_sort.Wrap)>.g(self: #0[]) -> int {
     load_var self
     container_len
     store_var _3
@@ -348,6 +216,204 @@ function comparable_sort.Wrap$for$T[].g(self: #0[]) -> int {
     return
 }
 
+function comparable_sort.<(user.comparable_sort.Num as user.comparable_sort.Cmp)>.compare(self: comparable_sort.Num, other: comparable_sort.Num) -> int {
+    load_var self
+    load_field .value
+    load_var other
+    load_field .value
+    sub_int
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.OobScore as baml.ops.Compare)>.cmp(self: comparable_sort.OobScore, other: comparable_sort.OobScore) -> baml.ops.Ordering {
+    load_var self
+    load_field .points
+    load_var other
+    load_field .points
+    load_type baml.ops.Compare
+    load_const "cmp"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.OobScore as baml.ops.Equals)>.eq(self: comparable_sort.OobScore, other: comparable_sort.OobScore) -> bool {
+    load_var self
+    load_field .points
+    load_var other
+    load_field .points
+    cmp_int_op ==
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.ParityItem as baml.ops.Compare)>.cmp(self: comparable_sort.ParityItem, other: comparable_sort.ParityItem) -> baml.ops.Ordering {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .rank
+    load_type baml.ops.Compare
+    load_const "cmp"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.ParityItem as baml.ops.Equals)>.eq(self: comparable_sort.ParityItem, other: comparable_sort.ParityItem) -> bool {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .rank
+    cmp_int_op ==
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.Ranked as baml.ops.Compare)>.cmp(self: comparable_sort.Ranked, other: comparable_sort.Ranked) -> baml.ops.Ordering {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .rank
+    load_type baml.ops.Compare
+    load_const "cmp"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.Ranked as baml.ops.Equals)>.eq(self: comparable_sort.Ranked, other: comparable_sort.Ranked) -> bool {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .rank
+    cmp_int_op ==
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.Resume as baml.ops.Compare)>.cmp(self: comparable_sort.Resume, other: comparable_sort.Resume) -> baml.ops.Ordering {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .rank
+    load_type baml.ops.Compare
+    load_const "cmp"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.Resume as baml.ops.Equals)>.eq(self: comparable_sort.Resume, other: comparable_sort.Resume) -> bool {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .rank
+    cmp_int_op ==
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.Risky as user.comparable_sort.HasErr)>.f(self: comparable_sort.Risky) -> int {
+    load_const "kaboom"
+    init_instance user.comparable_sort.Kaboom .message
+    throw
+}
+
+function comparable_sort.<(user.comparable_sort.RouteItem as baml.ops.Compare)>.cmp(self: comparable_sort.RouteItem, other: comparable_sort.RouteItem) -> baml.ops.Ordering {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .rank
+    load_type baml.ops.Compare
+    load_const "cmp"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.RouteItem as baml.ops.Equals)>.eq(self: comparable_sort.RouteItem, other: comparable_sort.RouteItem) -> bool {
+    load_var self
+    load_field .rank
+    load_var other
+    load_field .rank
+    cmp_int_op ==
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.Safe as user.comparable_sort.HasErr)>.f(self: comparable_sort.Safe) -> int {
+    load_var self
+    load_field .value
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.Score as baml.ops.Compare)>.cmp(self: comparable_sort.Score, other: comparable_sort.Score) -> baml.ops.Ordering {
+    load_var self
+    load_field .points
+    load_var other
+    load_field .points
+    cmp_int_op <
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var self
+    load_field .points
+    load_var other
+    load_field .points
+    cmp_int_op >
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const baml.ops.Ordering.Equal
+    alloc_variant baml.ops.Ordering
+    jump L4
+
+  L2:
+    load_const baml.ops.Ordering.Greater
+    alloc_variant baml.ops.Ordering
+    jump L4
+
+  L3:
+    load_const baml.ops.Ordering.Less
+    alloc_variant baml.ops.Ordering
+
+  L4:
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.Score as baml.ops.Equals)>.eq(self: comparable_sort.Score, other: comparable_sort.Score) -> bool {
+    load_var self
+    load_field .points
+    load_var other
+    load_field .points
+    cmp_int_op ==
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.ScorePts as baml.ops.Compare)>.cmp(self: comparable_sort.ScorePts, other: comparable_sort.ScorePts) -> baml.ops.Ordering {
+    load_var self
+    load_field .points
+    load_var other
+    load_field .points
+    load_type baml.ops.Compare
+    load_const "cmp"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function comparable_sort.<(user.comparable_sort.ScorePts as baml.ops.Equals)>.eq(self: comparable_sort.ScorePts, other: comparable_sort.ScorePts) -> bool {
+    load_var self
+    load_field .points
+    load_var other
+    load_field .points
+    cmp_int_op ==
+    return
+}
+
 function comparable_sort.call_g(us: #0[]) -> int {
     load_var us
     load_type comparable_sort.Wrap<WE = (#0 as comparable_sort.HasErr).E>
@@ -360,12 +426,12 @@ function comparable_sort.call_g(us: #0[]) -> int {
 
 function comparable_sort.check(xs: #0[], ys: #0[]) -> bool {
     load_var xs
-    load_type baml.Sortable<SortError = (#0 as baml.Comparable).CompareError>
+    load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     pop 1
     load_type #0
-    load_type (#0 as baml.Comparable).CompareError
+    load_type never
     load_var ys
     load_type #0
     make_closure .<lambda(check, 0)>, captures=0, ntypeargs=1
@@ -406,13 +472,15 @@ function comparable_sort.check(xs: #0[], ys: #0[]) -> bool {
     load_array_element
     load_var2 2 5
     load_array_element
-    load_type baml.Comparable
-    load_const "compare"
+    load_type baml.ops.Compare
+    load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
     store_var _16
     load_var _16
-    load_const 0
-    cmp_int_op !=
+    load_const baml.ops.Ordering.Equal
+    alloc_variant baml.ops.Ordering
+    call baml.ops.equals_equals
+    unary_op !
     pop_jump_if_false L4
     jump L5
 
@@ -431,16 +499,6 @@ function comparable_sort.check(xs: #0[], ys: #0[]) -> bool {
     load_const false
 
   L7:
-    return
-}
-
-function comparable_sort.cmp(a: #0, b: #0) -> int {
-    load_var2 1 2
-    load_type baml.Comparable
-    load_const "compare"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -468,7 +526,7 @@ function comparable_sort.dispatch_f(xs: #0[]) -> #0[] {
 
 function comparable_sort.do_sort(xs: int[]) -> int[] {
     load_var xs
-    load_type baml.Sortable<SortError = never>
+    load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -545,7 +603,7 @@ function comparable_sort.float_nan_sort_main() -> bool {
     alloc_array 4
     store_var xs
     load_var xs
-    load_type baml.Sortable<SortError = never>
+    load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     pop 1
@@ -620,7 +678,7 @@ function comparable_sort.float_nan_sort_main() -> bool {
 
 function comparable_sort.gsort(xs: #0[]) -> #0[] {
     load_type #0
-    load_type (#0 as baml.Comparable).CompareError
+    load_type never
     load_var xs
     load_type #0
     make_closure .<lambda(gsort, 0)>, captures=0, ntypeargs=1
@@ -674,7 +732,7 @@ function comparable_sort.oob_score_sort_main() -> int {
     init_instance user.comparable_sort.OobScore .points
     load_type comparable_sort.OobScore
     alloc_array 3
-    load_type baml.Sortable<SortError = never>
+    load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var s
@@ -857,47 +915,47 @@ function comparable_sort.parity_main() -> int {
     return
 }
 
-function comparable_sort.phase2_compare_explicit_binding_main() -> int {
+function comparable_sort.phase2_compare_explicit_binding_main() -> baml.ops.Ordering {
     load_const 9
     init_instance user.comparable_sort.Score .points
     load_const 1
     init_instance user.comparable_sort.Score .points
-    load_type baml.Comparable<CompareError = never>
-    load_const "compare"
+    load_type baml.ops.Compare
+    load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
     store_var result
     load_var result
     return
 }
 
-function comparable_sort.phase2_compare_main() -> int {
+function comparable_sort.phase2_compare_main() -> baml.ops.Ordering {
     load_const 9
     init_instance user.comparable_sort.Score .points
     load_const 1
     init_instance user.comparable_sort.Score .points
-    load_type baml.Comparable<CompareError = never>
-    load_const "compare"
+    load_type baml.ops.Compare
+    load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
     store_var _0
     load_var _0
     return
 }
 
-function comparable_sort.phase3_generic_compare_primitive_main() -> int {
+function comparable_sort.phase3_generic_compare_primitive_main() -> baml.ops.Ordering {
     load_type int
     load_const 3
     load_const 1
-    call user.comparable_sort.cmp
+    call user.comparable_sort.three_way
     return
 }
 
-function comparable_sort.phase3_generic_compare_user_class_main() -> int {
+function comparable_sort.phase3_generic_compare_user_class_main() -> baml.ops.Ordering {
     load_type comparable_sort.ScorePts
     load_const 9
     init_instance user.comparable_sort.ScorePts .points
     load_const 1
     init_instance user.comparable_sort.ScorePts .points
-    call user.comparable_sort.cmp
+    call user.comparable_sort.three_way
     return
 }
 
@@ -993,7 +1051,7 @@ function comparable_sort.phase3_sort_ints_main() -> int {
     load_const 2
     load_type int
     alloc_array 3
-    load_type baml.Sortable<SortError = never>
+    load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var s
@@ -1024,7 +1082,7 @@ function comparable_sort.phase3_sort_user_class_main() -> int {
     init_instance user.comparable_sort.ScorePts .points
     load_type comparable_sort.ScorePts
     alloc_array 3
-    load_type baml.Sortable<SortError = never>
+    load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var sorted
@@ -1044,7 +1102,7 @@ function comparable_sort.phase5_resume_sort_main() -> int {
     init_instance user.comparable_sort.Resume .rank
     load_type comparable_sort.Resume
     alloc_array 3
-    load_type baml.Sortable<SortError = never>
+    load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var sorted
@@ -1100,7 +1158,7 @@ function comparable_sort.ranked_sort_main() -> string {
     alloc_array 4
     store_var xs
     load_var xs
-    load_type baml.Sortable<SortError = never>
+    load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
     store_var result
@@ -1248,5 +1306,15 @@ function comparable_sort.spike_1c_main() -> bool {
     load_const 2
     init_instance user.comparable_sort.Num .value
     call user.comparable_sort.lt
+    return
+}
+
+function comparable_sort.three_way(a: #0, b: #0) -> baml.ops.Ordering {
+    load_var2 1 2
+    load_type baml.ops.Compare
+    load_const "cmp"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }

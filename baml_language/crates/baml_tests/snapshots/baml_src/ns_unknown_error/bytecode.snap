@@ -90,7 +90,7 @@ function unknown_error.$init_test_ns_unknown_error_unknown_error(registry: testi
     return
 }
 
-function unknown_error.UeRunnerImpl.UeRunner.run(self: unknown_error.UeRunnerImpl) -> bool {
+function unknown_error.<(user.unknown_error.UeRunnerImpl as user.unknown_error.UeRunner)>.run(self: unknown_error.UeRunnerImpl) -> bool {
     call user.unknown_error.ue_origin
     return
 }
@@ -199,7 +199,7 @@ function unknown_error.ue_context_survives_gc() -> bool {
 
   L1:
     load_var _2
-    call baml.errors.ErrorContext.root_cause
+    call baml.errors.Context.root_cause
     load_field .error
     store_var _6
     load_var _6
@@ -456,7 +456,7 @@ function unknown_error.ue_preserves_cause_chain() -> bool {
 
   L1:
     load_var _2
-    call baml.errors.ErrorContext.root_cause
+    call baml.errors.Context.root_cause
     load_field .error
     store_var _6
     load_var _6

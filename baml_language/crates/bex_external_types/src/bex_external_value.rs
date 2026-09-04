@@ -108,21 +108,32 @@ pub enum BexExternalAdt {
     PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
     Media(std::sync::Arc<baml_builtins2::MediaValue>),
-    /// GC-rooted reference to a heap instance, paired with the full
-    /// type identity of the instance (class FQN + concrete generic args).
+    /// GC-rooted reference to an engine-owned heap value with a trusted
+    /// boundary kind and optional host-facing type decoration.
     ///
-    /// `ty` is canonically a `RuntimeTy::Class { name, args }` — the same shape
-    /// the wire encoder projects to `BamlTyName`. The `heap_handle` keeps
-    /// the instance alive on the heap so the engine can re-enter it for
-    /// instance-method calls (`Stream.next`, `Stream.final`, …).
-    ///
-    /// Currently used by `ai.stream.Stream`; any future stdlib generic
-    /// class that wants typed-handle round-trip treatment uses this same
-    /// variant.
+    /// `kind` is the only boundary discriminator. `ty` is diagnostic metadata
+    /// for host annotations and must never select a wrapper or drive generic
+    /// substitution: live nominal identity and type arguments come from the
+    /// resolved heap object. `heap_handle` keeps that object alive so the
+    /// engine can re-enter it for method calls.
     TaggedHeapHandle {
+        kind: TaggedHeapHandleKind,
         ty: baml_type::RuntimeTy,
         heap_handle: crate::Handle,
     },
+}
+
+/// Trusted role of a rooted heap capability crossing a host boundary.
+///
+/// This is deliberately independent of [`RuntimeTy`]. A runtime-created type
+/// may share a display name with a compiled type, so a name-shaped wire type
+/// can describe a value but cannot establish its identity or behavior.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaggedHeapHandleKind {
+    Callable,
+    Stream,
+    FunctionSpec,
+    RuntimeValue,
 }
 
 /// How a `type` value crosses a boundary: as a live reference into the issuing
@@ -469,7 +480,7 @@ impl BexExternalValue {
     /// explicitly distinguishing it from an actual declared union.
     pub fn typed(value: BexExternalValue, value_type: RuntimeTy) -> Self {
         let mut metadata = UnionMetadata::new(
-            RuntimeTy::Union(vec![value_type.clone()], TyAttr::default()),
+            RuntimeTy::Union(Box::new([value_type.clone()]), TyAttr::default()),
             value_type,
         );
         metadata.is_inbound_type_annotation = true;

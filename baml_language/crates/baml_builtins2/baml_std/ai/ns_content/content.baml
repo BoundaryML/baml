@@ -4,8 +4,8 @@
 //
 // Mirrors _planv2/pages/04_reference/01_api.md (the `ai.content` namespace).
 
-// A model turn is structured blocks, never a bare string and never an HTTP
-// envelope.
+/// A model turn is structured blocks, never a bare string and never an HTTP
+/// envelope.
 class Text {
     text: string,
 }
@@ -20,9 +20,9 @@ class ToolUse {
     args: map<string, unknown>,
 }
 
-// A media payload the turn produced: a generated image, a file a provider-side
-// tool wrote. The value is a real BAML media value, so `-> image` returns
-// something callers can save or pass straight back into another prompt.
+/// A media payload the turn produced: a generated image, a file a provider-side
+/// tool wrote. The value is a real BAML media value, so `-> image` returns
+/// something callers can save or pass straight back into another prompt.
 class Media {
     media: root.MediaPart,
     // The provider's own handle for this output, when it names one
@@ -32,7 +32,7 @@ class Media {
     // (OpenAI image generation reports this).
     revised_prompt: string?,
 
-    // The payload's media kind: "image", "audio", "video", or "pdf".
+    /// The payload's media kind: "image", "audio", "video", or "pdf".
     function kind(self) -> string {
         match (self.media) {
             let image: baml.media.Image => "image",
@@ -42,13 +42,13 @@ class Media {
         }
     }
 
-    // Wrap a media value a client just built from a provider payload.
-    // `baml.media.Image.from_base64` and its siblings return the `image` /
-    // `audio` / `video` / `pdf` primitives, which are distinct static types
-    // from the `baml.media.*` wrapper classes `MediaPart` is a union of, so
-    // the value bridges through its BEP-038 `{kind, source, value, mime}`
-    // envelope. The decode discriminates on the envelope's `kind`, so the
-    // union lands on the wrapper for the value's own media kind.
+    /// Wrap a media value a client just built from a provider payload.
+    /// `baml.media.Image.from_base64` and its siblings return the `image` /
+    /// `audio` / `video` / `pdf` primitives, which are distinct static types
+    /// from the `baml.media.*` wrapper classes `MediaPart` is a union of, so
+    /// the value bridges through its BEP-038 `{kind, source, value, mime}`
+    /// envelope. The decode discriminates on the envelope's `kind`, so the
+    /// union lands on the wrapper for the value's own media kind.
     function new(
         value: image | audio | video | pdf,
         provider_id: string? = null,
@@ -70,8 +70,8 @@ class Media {
 
 type Block = Text | Reasoning | ToolUse | Media;
 
-// Why the model stopped. `ToolUse` means the turn ended with tool calls the
-// runner must execute before the next turn.
+/// Why the model stopped. `ToolUse` means the turn ended with tool calls the
+/// runner must execute before the next turn.
 enum StopReason {
     Complete,
     ToolUse,

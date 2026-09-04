@@ -9,7 +9,7 @@
 
 use std::collections::BTreeSet;
 
-use baml_base::qualified_name::AI_STREAM_STREAM;
+use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM};
 use baml_codegen_types::{Name, Ty};
 
 /// Which named types the emitter decided it can emit this run (the
@@ -40,8 +40,8 @@ impl TranslateCtx {
 
 /// Swift namespace segments for a symbol, mirroring Python's routing:
 /// pkg `user` → the namespace path as-is; pkg `baml` (stdlib) → under
-/// `baml`; any other package → under `vendor.<pkg>`. `$stream`
-/// companion CLASSES route under a `stream_types` prefix (Python's
+/// `baml`; any other package → under `vendor.<pkg>`. PPIR `$stream`
+/// partial classes route under a `stream_types` prefix (Python's
 /// `baml_sdk.stream_types.<ns>`) — the suffix strips from the type
 /// name, so `Resume$stream` is `Baml.stream_types.lorem.Resume`.
 pub(crate) fn namespace_for(name: &Name) -> Vec<String> {
@@ -87,6 +87,9 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         // a unit-like runtime type that encodes/decodes as BAML null.
         Ty::Null { .. } => Some("BamlNull".to_string()),
         Ty::Uint8Array { .. } => Some("Foundation.Data".to_string()),
+        // Provider-neutral prompts cross as a copied protobuf tree. They are
+        // portable values, not generated `$rust_type` handle wrappers.
+        Ty::PromptAst { .. } => Some("BamlPrompt".to_string()),
         // Media primitives are the handle-backed stdlib classes
         // (already emitted as generated structs; construction via
         // BamlMedia over the C ABI).
@@ -125,6 +128,24 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         }
         Ty::Union(members, _) => translate_union(members, ctx),
         Ty::Class(name, args, _) => {
+            // `ai.FunctionSpec<Final>` is a live runtime capability, never a
+            // generated value-model class. The PPIR partial type belongs to
+            // the separate `ai.stream.Stream<Partial, Final>` projection.
+            if name.to_string() == AI_FUNCTION_SPEC {
+                if args.len() != 1 {
+                    return None;
+                }
+                let final_ty = translate_ty(&args[0], ctx)?;
+                return Some(format!("BamlFunctionSpec<{final_ty}>"));
+            }
+            // `ai.Prompt` is the nominal stdlib facade around PromptAst. The
+            // generated SDK aliases it to the same portable bridge wrapper.
+            if name.to_string() == "ai.Prompt" {
+                if !args.is_empty() {
+                    return None;
+                }
+                return Some("BamlPrompt".to_string());
+            }
             // `ai.stream.Stream<Partial, Final>` is runtime-owned: it
             // translates to the BamlBridge `BamlStream` wrapper, never
             // a generated struct (its state is an engine handle).

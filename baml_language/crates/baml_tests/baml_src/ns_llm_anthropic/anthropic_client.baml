@@ -92,7 +92,7 @@ function anth_failure_label(e: unknown) -> string {
 }
 
 // One SseStream batch string (a JSON array of {event,data,id}) from raw
-// `data:` payloads — the input `anthropic_decode_batch` consumes.
+// `data:` payloads — the input `decode_batch` consumes.
 function anth_batch(payloads: string[]) -> string {
     let items: map<string, unknown>[] = [];
     for (let payload in payloads) {
@@ -107,11 +107,11 @@ function anth_batch(payloads: string[]) -> string {
 
 // Render one request without any server: the client below the runner.
 function anth_render_body(
-    cl: anthropic.AnthropicClient,
+    cl: anthropic.Client,
     spec: ai.FunctionSpec<string>,
     journal: ai.Journal,
 ) -> json {
-    let req = anthropic.internal.anthropic_render(
+    let req = anthropic.internal.render(
         cl,
         ai.ModelTurnInput {
             prompt: spec.prompt_template,
@@ -136,12 +136,12 @@ function anth_turn_input(spec: ai.FunctionSpec<string>) -> ai.ModelTurnInput {
 }
 
 // `invoke` through the interface, as a string, so a caller can catch_all it.
-function anth_invoke_label(cl: anthropic.AnthropicClient, input: ai.ModelTurnInput) -> string {
+function anth_invoke_label(cl: anthropic.Client, input: ai.ModelTurnInput) -> string {
     let turn = cl.invoke(input);
     `blocks=${turn.content.length()}`
 }
 
-function anth_stream_value(cl: anthropic.AnthropicClient) -> string {
+function anth_stream_value(cl: anthropic.Client) -> string {
     let stream = ai.stream.from_spec<string | null, string>(
         AnthMockAsk@spec("Say pong."),
         client = cl,
@@ -160,7 +160,7 @@ function anthropic_request_shape() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(canned)],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let cl = anthropic.AnthropicClient.new(
+            let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -217,7 +217,7 @@ function anthropic_request_timeout_ms() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(anth_canned_text("pong", "end_turn"))],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let cl = anthropic.AnthropicClient.new(
+            let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -251,7 +251,7 @@ function anthropic_params_and_passthrough() -> string {
                 "max_tokens": null,
                 "metadata": { "user_id": "u1" },
             };
-            let cl = anthropic.AnthropicClient.new(
+            let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -318,7 +318,7 @@ function anthropic_cache_control_placement() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(canned)],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let cl = anthropic.AnthropicClient.new(
+            let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -342,7 +342,7 @@ test "anthropic_cache_control_placement" {
 // BUG 7.1: an assistant-first prompt with no system content used to send
 // `messages[0].role == "assistant"`, which the API rejects outright.
 function anthropic_assistant_first_gets_leading_user() -> string {
-    let cl = anthropic.AnthropicClient.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let body = anth_render_body(cl, AnthAssistantFirst@spec(), ai.Journal { log: [] });
     [
         `role0=${baml.json.path_or<string>(body, ".messages[0].role", "-")}`,
@@ -364,7 +364,7 @@ test "anthropic_assistant_first_gets_leading_user" {
 // client survives sanitization and is dropped by the client's own lowering —
 // either way no empty message reaches the wire.
 function anthropic_reasoning_only_turn_is_dropped() -> string {
-    let cl = anthropic.AnthropicClient.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let journal = ai.Journal {
         log: [
             ai.events.AssistantMessage {
@@ -390,12 +390,12 @@ test "anthropic_reasoning_only_turn_is_dropped" {
 }
 
 // Dropping that turn MID-conversation left the user turns that bracketed it
-// adjacent, and the leading-role repair in `anthropic_messages_request` only
-// fixes an assistant-FIRST list. `_anthropic_render_messages` merges same-role
+// adjacent, and the leading-role repair in `messages_request` only
+// fixes an assistant-FIRST list. `_render_messages` merges same-role
 // neighbours, so the roles alternate and both user payloads survive in order
 // inside one message.
 function anthropic_reasoning_only_turn_mid_conversation() -> string {
-    let cl = anthropic.AnthropicClient.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let journal = ai.Journal {
         log: [
             ai.events.AssistantMessage {
@@ -437,7 +437,7 @@ test "anthropic_reasoning_only_turn_mid_conversation" {
 // An orphaned tool call — one with no result before the next user turn — is
 // closed by ai.wire.sanitize_for_client rather than sent unanswered.
 function anthropic_orphaned_tool_call_is_closed() -> string {
-    let cl = anthropic.AnthropicClient.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let journal = ai.Journal {
         log: [
             ai.events.AssistantMessage {
@@ -475,7 +475,7 @@ function anthropic_tool_round_trip() -> string {
             root.llm_mock.MockResponse.ok(anth_canned_text("done", "end_turn")),
         ],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let cl = anthropic.AnthropicClient.new(
+            let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -528,7 +528,7 @@ function anthropic_stop_reason_outcome(stop_reason: string) -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(canned)],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let cl = anthropic.AnthropicClient.new(
+            let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -575,7 +575,7 @@ function anthropic_http_error(status: int) -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.error(status, canned)],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let cl = anthropic.AnthropicClient.new(
+            let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -636,7 +636,7 @@ function anthropic_stream_text() -> string {
     root.llm_mock.mock_sse_serve(
         events,
         (mock: root.llm_mock.MockSseServer) -> {
-            let cl = anthropic.AnthropicClient.new(
+            let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -663,7 +663,7 @@ function anthropic_stream_time_to_first_token_timeout_ms() -> string {
             ),
         ],
         (mock: root.llm_mock.MockSseServer) -> {
-            let cl = anthropic.AnthropicClient.new(
+            let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -703,7 +703,7 @@ function anthropic_stream_truncated() -> string {
     root.llm_mock.mock_sse_serve(
         events,
         (mock: root.llm_mock.MockSseServer) -> {
-            let cl = anthropic.AnthropicClient.new(
+            let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -739,7 +739,7 @@ function anthropic_stream_error_event(payload: string) -> string {
     root.llm_mock.mock_sse_serve(
         events,
         (mock: root.llm_mock.MockSseServer) -> {
-            let cl = anthropic.AnthropicClient.new(
+            let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -787,7 +787,7 @@ function anthropic_stream_http_error(status: int) -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.error(status, canned)],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let cl = anthropic.AnthropicClient.new(
+            let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
@@ -814,7 +814,7 @@ test "anthropic_stream_http_error_500" {
 // Typed SSE decode below the TurnStream: content_block_start names the tool,
 // input_json_delta assembles its arguments, thinking/signature deltas are kept
 // out of the answer text, and cache tokens survive to the end of the turn.
-// ai.stream.StreamEvent cannot carry any of this yet (PLAN §6), so the decoder
+// ai.stream.Event cannot carry any of this yet (PLAN §6), so the decoder
 // folds it into AnthStreamState — which is exactly what this asserts.
 function anthropic_decode_tool_stream() -> string {
     let state = anthropic.internal.AnthStreamState.new();
@@ -834,7 +834,7 @@ function anthropic_decode_tool_stream() -> string {
         ],
     );
     let seen: string[] = [];
-    for (let ev in anthropic.internal.anthropic_decode_batch(batch, state)) {
+    for (let ev in anthropic.internal.decode_batch(batch, state)) {
         match (ev) {
             let d: ai.stream.TextDelta => {
                 seen.push(`text:${d.text}`);
@@ -892,7 +892,7 @@ function anthropic_decode_skips_garbage() -> string {
         ],
     );
     let seen: string[] = [];
-    for (let ev in anthropic.internal.anthropic_decode_batch(batch, state)) {
+    for (let ev in anthropic.internal.decode_batch(batch, state)) {
         match (ev) {
             let d: ai.stream.TextDelta => {
                 seen.push(d.text);
@@ -916,7 +916,7 @@ test "anthropic_decode_skips_garbage" {
 // guaranteed provider 400; it is named client-side now, like video.
 function anthropic_audio_input_rejected() -> string {
     let clip = baml.media.Audio.from_base64("QUJD", "audio/mp3");
-    let cl = anthropic.AnthropicClient.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let label = baml.json.stringify(
         anth_render_body(cl, AnthMockListen@spec(clip), ai.Journal { log: [] }),
     ) catch_all (e) {
@@ -937,7 +937,7 @@ test "anthropic_audio_input_rejected" {
 // provider 400 — `.svg` sources reach `ai.internal._media_mime_type` as image/svg+xml.
 function anthropic_svg_image_rejected() -> string {
     let picture = baml.media.Image.from_base64("PHN2Zy8+", "image/svg+xml");
-    let cl = anthropic.AnthropicClient.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let label = baml.json.stringify(
         anth_render_body(cl, AnthMockVision@spec(picture), ai.Journal { log: [] }),
     ) catch_all (e) {
@@ -955,7 +955,7 @@ test "anthropic_svg_image_rejected" {
 // A supported image still lowers to the documented base64 source shape.
 function anthropic_png_image_block() -> string {
     let picture = baml.media.Image.from_base64("SGVsbG8=", "image/png");
-    let cl = anthropic.AnthropicClient.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let body = anth_render_body(cl, AnthMockVision@spec(picture), ai.Journal { log: [] });
     [
         `type=${baml.json.path_or<string>(body, ".messages[0].content[1].type", "-")}`,
@@ -979,10 +979,10 @@ test "anthropic_png_image_block" {
 // error fires; a live/Infisical shell has ANTHROPIC_API_KEY, and the canonical
 // fallback resolves it (base_url points at a closed port, so nothing escapes to
 // the network either way). Both branches assert the same thing — no panic.
-function anth_missing_key_client() -> anthropic.AnthropicClient {
+function anth_missing_key_client() -> anthropic.Client {
     // `env.NAME` naming a variable that exists nowhere: the ref resolves to
     // null at REQUEST time and the client falls through to ANTHROPIC_API_KEY.
-    anthropic.AnthropicClient.new(
+    anthropic.Client.new(
         model = "claude-haiku-4-5",
         api_key = env.BAML_ANTHROPIC_KEY_THAT_IS_NEVER_SET,
         base_url = "http://127.0.0.1:1",
@@ -1044,7 +1044,7 @@ test "anthropic_missing_key_invoke" {
 // optional parameter (the generated schema types it `["string","null"]` and
 // marks it required), so dropping it rewrote conversation history.
 function anthropic_replayed_tool_args_keep_nulls() -> string {
-    let cl = anthropic.AnthropicClient.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let args: map<string, unknown> = { "city": "SF", "unit": null };
     let journal = ai.Journal {
         log: [
@@ -1081,7 +1081,7 @@ function anthropic_reasoning_tokens() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(canned)],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let cl = anthropic.AnthropicClient.new(
+            let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),

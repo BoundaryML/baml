@@ -2,7 +2,7 @@
 // `"provider/model"` shorthand map. Nothing here is part of the public ai
 // surface.
 
-/// The `"provider/model"` prefixes `ai.clients.resolve` understands, for error
+/// (internal) The `"provider/model"` prefixes `ai.clients.resolve` understands, for error
 /// messages.
 function _shorthand_prefixes() -> string {
     [
@@ -18,18 +18,19 @@ function _shorthand_prefixes() -> string {
         "bedrock",
         "ai-gateway-images",
         "claude-code",
-    ].join(", ")
+    ]
+        .join(", ")
 }
 
-// !!! DRIFT HAZARD !!!
-// This is the RUNTIME half of the "provider/model" shorthand map. Its
-// compile-time twin is `spec_client_provider` in
-// `crates/baml_compiler2_ast/src/lower_cst.rs`, which lowers a literal
-// `client "openai/gpt-4o-mini"` straight to a constructor call. The two maps
-// must list the SAME prefixes and pick the SAME class for each one — a
-// `client:` written as a literal and the identical string arriving here at
-// runtime have to select the same client. Change one, change the other, and
-// update `_shorthand_prefixes` above.
+/// (internal) !!! DRIFT HAZARD !!!
+/// This is the RUNTIME half of the "provider/model" shorthand map. Its
+/// compile-time twin is `spec_client_provider` in
+/// `crates/baml_compiler2_ast/src/lower_cst.rs`, which lowers a literal
+/// `client "openai/gpt-4o-mini"` straight to a constructor call. The two maps
+/// must list the SAME prefixes and pick the SAME class for each one — a
+/// `client:` written as a literal and the identical string arriving here at
+/// runtime have to select the same client. Change one, change the other, and
+/// update `_shorthand_prefixes` above.
 function _from_shorthand(shorthand: string) -> root.Client {
     let separator = shorthand.index_of("/");
     if let index: int = separator {
@@ -42,8 +43,8 @@ function _from_shorthand(shorthand: string) -> root.Client {
             "azure" => openai.AzureClient.new(model = model),
             "ollama" => openai.OllamaClient.new(model = model),
             "openrouter" => openai.OpenRouterClient.new(model = model),
-            "anthropic" => anthropic.AnthropicClient.new(model = model),
-            "google" => google.GoogleClient.new(model = model),
+            "anthropic" => anthropic.Client.new(model = model),
+            "google" => google.GeminiClient.new(model = model),
             "vertex" => google.VertexClient.new(model = model),
             "bedrock" => aws.BedrockClient.new(model = model),
             "ai-gateway-images" => vercel.AiGatewayImageClient.new(model = model),

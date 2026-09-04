@@ -405,7 +405,7 @@ mod tests {
             let data = baml_compiler2_ppir::item_data::class_data(&db, loc);
             let qtn =
                 baml_compiler2_hir_ty::lower::qualify_def(&db, Definition::Class(loc), &data.name);
-            Ty::Class(qtn, vec![], TyAttr::default())
+            Ty::Class(qtn, Box::new([]), TyAttr::default())
         };
         let iface = |iface_name: &str| {
             let loc = *baml_compiler2_ppir::item_data::file_interfaces(&db, file)
@@ -419,8 +419,8 @@ mod tests {
                 .expect("interface loc resolves to a qtn");
             baml_type::Interface {
                 name: qtn,
-                generics: vec![],
-                associated_types: vec![],
+                generics: Box::new([]),
+                associated_types: Box::new([]),
             }
         };
 
@@ -591,8 +591,8 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Five conflicts: greet, greet$spec, greet$render_prompt,
-        // greet$build_request, and greet$parse. Each LLM function expands to
+        // Five conflicts: greet, greet@spec, greet@render_prompt,
+        // greet@build_request, and greet@parse. Each LLM function expands to
         // AST-level companions, all duplicated across 3 files.
         assert_eq!(ns.conflicts().len(), 5);
         for conflict in ns.conflicts() {

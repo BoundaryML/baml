@@ -2,9 +2,16 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-function deep_copy  (baml.deep_copy)  <builtin>/baml/core.baml:3-5
+function deep_copy  (baml.deep_copy)  <builtin>/baml/core.baml:10-12
 
-/// Returns a deep copy of `value` — all nested structures are recursively cloned.
+/// Returns a deep copy of `value`: nested arrays, maps, and class instances
+/// are cloned recursively.
+///
+/// Sharing and cycles survive the copy. Two references to the same nested
+/// object still point at one copied object afterward, rather than becoming
+/// independent copies. `Future` is the exception — a future is a handle onto
+/// live async state the runtime owns, not a value with contents to clone, so a
+/// future nested inside `value` is shared, not duplicated.
 function deep_copy<T>(value: T) -> T throws never
 
 references (0):

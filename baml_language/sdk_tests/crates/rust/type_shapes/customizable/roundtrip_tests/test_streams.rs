@@ -21,9 +21,8 @@
 // enum per union named by joining the arm type names with `Or`
 // (`ResumeOrResponse`, `ResumeOrResumeStream`).
 use baml_sdk::lorem::{
-    Box, Resume, ResumeOrResponse, ResumeOrResumeStream, round_trip_box_of_resume_stream,
-    round_trip_resume_or_http_response, round_trip_resume_or_resume_stream,
-    round_trip_resume_stream, round_trip_root_foo_stream,
+    Box, Resume, ResumeOrResumeStream, round_trip_box_of_resume_stream,
+    round_trip_resume_or_resume_stream, round_trip_resume_stream, round_trip_root_foo_stream,
 };
 use baml_sdk::stream_types::Foo as StreamFoo;
 use baml_sdk::stream_types::lorem::Resume as StreamResume;
@@ -64,19 +63,5 @@ fn test_streams_round_trip_resume_or_resume_stream() {
     assert_eq!(
         round_trip_resume_or_resume_stream(ResumeOrResumeStream::Resume(r.clone())).unwrap(),
         ResumeOrResumeStream::Resume(r)
-    );
-}
-
-#[test]
-fn test_streams_round_trip_resume_or_http_response() {
-    // Pass the `Resume` arm; the `baml.http.Response` arm isn't
-    // host-constructible.
-    let r = Resume {
-        name: "lovelace".to_string(),
-        email: Some("a@x.com".to_string()),
-    };
-    assert_eq!(
-        round_trip_resume_or_http_response(ResumeOrResponse::Resume(r.clone())).unwrap(),
-        ResumeOrResponse::Resume(r)
     );
 }

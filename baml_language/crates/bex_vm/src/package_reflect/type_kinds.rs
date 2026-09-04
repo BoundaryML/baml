@@ -8,18 +8,27 @@ use baml_compiler_diagnostics::{
 };
 use bex_heap::TlabHolder;
 use bex_vm_types::types::{
-    Class, ClassField, Enum, EnumVariant, InterfaceDef, MethodImpl, Object, PortableTypeDef,
-    RuntimeImplRule, TypeValue, Value,
+    Class, ClassField, Enum, EnumVariant, InterfaceDef, Object, PortableTypeDef, RuntimeImplRule,
+    TypeValue, Value,
 };
 use indexmap::IndexMap;
 
 use super::{
-    BamlClassArrayType, BamlClassClassType, BamlClassEnumType, BamlClassFunctionType,
-    BamlClassInterfaceImplementation, BamlClassInterfaceType, BamlClassLiteralType,
-    BamlClassMapType, BamlClassPrimitiveType, BamlClassType, BamlClassUnionType,
-    BamlNamespaceArray, BamlNamespaceClass, BamlNamespaceEnum, BamlNamespaceFunction,
-    BamlNamespaceInterface, BamlNamespaceLiteral, BamlNamespaceMap, BamlNamespacePrimitive,
-    BamlNamespaceUnion, PackageReflectImpl, copy,
+    BamlClassArrayReflectTypeView_for_Type, BamlClassArrayType,
+    BamlClassClassReflectTypeView_for_Type, BamlClassClassType,
+    BamlClassEnumReflectTypeView_for_Type, BamlClassEnumType,
+    BamlClassFunctionReflectTypeView_for_Type, BamlClassFunctionType,
+    BamlClassInterfaceImplementation, BamlClassInterfaceReflectTypeView_for_Type,
+    BamlClassInterfaceType, BamlClassLiteralReflectTypeView_for_Type,
+    BamlClassMapReflectTypeView_for_Type, BamlClassMapType,
+    BamlClassPrimitiveReflectTypeView_for_Type, BamlClassType,
+    BamlClassUnionReflectTypeView_for_Type, BamlClassUnionType, BamlNamespaceArray,
+    BamlNamespaceArrayReflect, BamlNamespaceClass, BamlNamespaceClassReflect, BamlNamespaceEnum,
+    BamlNamespaceEnumReflect, BamlNamespaceFunction, BamlNamespaceFunctionReflect,
+    BamlNamespaceInterface, BamlNamespaceInterfaceReflect, BamlNamespaceLiteral,
+    BamlNamespaceLiteralReflect, BamlNamespaceMap, BamlNamespaceMapReflect, BamlNamespacePrimitive,
+    BamlNamespacePrimitiveReflect, BamlNamespaceUnion, BamlNamespaceUnionReflect,
+    PackageReflectImpl, copy,
 };
 use crate::BexVm;
 
@@ -166,8 +175,8 @@ pub(super) struct WitnessField {
 
 pub(super) struct ValidatedClassWitness {
     interface_ptr: bex_vm_types::HeapPtr,
-    interface_args: Vec<bex_vm_types::RealizedTy>,
-    interface_assoc: Vec<(baml_type::Name, bex_vm_types::RealizedTy)>,
+    interface_args: Box<[bex_vm_types::RealizedTy]>,
+    interface_assoc: Box<[(baml_type::Name, bex_vm_types::RealizedTy)]>,
     field_links: Vec<u32>,
 }
 
@@ -333,47 +342,14 @@ pub(super) fn register_class_witnesses(
     witnesses: Vec<ValidatedClassWitness>,
 ) {
     for witness in witnesses {
-        let Object::Interface(interface) = vm.get_object(witness.interface_ptr) else {
-            unreachable!("witness interface validated before allocation")
-        };
-        let mut methods = IndexMap::new();
         let for_ty_pattern = bex_vm_types::TyTemplate::from(ty.clone());
-        let mut default_frame = vec![for_ty_pattern.clone()];
-        default_frame.extend(
-            witness
-                .interface_args
-                .iter()
-                .cloned()
-                .map(bex_vm_types::TyTemplate::from),
-        );
-        default_frame.extend(
-            witness
-                .interface_assoc
-                .iter()
-                .map(|(_, ty)| bex_vm_types::TyTemplate::from(ty.clone())),
-        );
-        for method in &interface.methods {
-            // A witness supplies fields only; every method comes from the
-            // interface's default body, which the loader bound to a pointer.
-            // (The gate above rejected any interface with a required method.)
-            if method.default.is_none() {
-                continue;
-            }
-            let callee = method.default_fn;
-            debug_assert!(
-                !callee.is_null(),
-                "interface `{}` default `{}` was pooled but never bound",
-                interface.name,
-                method.name
-            );
-            methods.insert(
-                method.name.clone(),
-                MethodImpl {
-                    fqn: callee,
-                    frame: default_frame.clone(),
-                },
-            );
-        }
+        // A witness supplies fields only, so its method table is EMPTY: every
+        // method is the interface's default body, adopted at resolution
+        // (`ImplResolver::rule_method_impl` falls back to the interface's
+        // bound `default_fn` with the `[Self, iface args..]` frame). The
+        // required-method gate in `register_class_witnesses` (the
+        // "cannot be witnessed structurally" rejection) already excluded
+        // any interface with a bodyless required method.
         // The witness is an ordinary heap `Object::ImplRule` — the resolver
         // borrows it exactly like a package-owned rule and the collector keeps
         // its `interface_head`/`methods[].fqn` current — so the side table
@@ -392,7 +368,7 @@ pub(super) fn register_class_witnesses(
                 .into_iter()
                 .map(|(name, ty)| (name, bex_vm_types::TyTemplate::from(ty)))
                 .collect(),
-            methods,
+            methods: IndexMap::new(),
             field_links: witness.field_links.into_boxed_slice(),
         })));
         vm.dynamic_dispatch.register_rule(
@@ -495,7 +471,7 @@ impl BamlNamespaceClass for PackageReflectImpl {
         // to re-resolve.
         let ty = bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, type_tag),
-            Vec::new(),
+            Box::new([]),
             baml_type::TyAttr::default(),
         );
         register_class_witnesses(vm, class_ptr, &ty, witnesses);
@@ -974,7 +950,7 @@ fn substitute_witness_field_type(
             members
                 .iter()
                 .map(|member| substitute_witness_field_type(member, interface, args, assoc))
-                .collect::<Result<Vec<_>, _>>()?,
+                .collect::<Result<Box<[_]>, _>>()?,
             attr.clone(),
         )),
         RuntimeTy::Class(name, type_args, attr) => Ok(RuntimeTy::Class(
@@ -982,7 +958,7 @@ fn substitute_witness_field_type(
             type_args
                 .iter()
                 .map(|arg| substitute_witness_field_type(arg, interface, args, assoc))
-                .collect::<Result<Vec<_>, _>>()?,
+                .collect::<Result<Box<[_]>, _>>()?,
             attr.clone(),
         )),
         RuntimeTy::Interface(name, type_args, bindings, attr) => Ok(RuntimeTy::Interface(
@@ -990,7 +966,7 @@ fn substitute_witness_field_type(
             type_args
                 .iter()
                 .map(|arg| substitute_witness_field_type(arg, interface, args, assoc))
-                .collect::<Result<Vec<_>, _>>()?,
+                .collect::<Result<Box<[_]>, _>>()?,
             bindings
                 .iter()
                 .map(|(name, ty)| {
@@ -999,7 +975,7 @@ fn substitute_witness_field_type(
                         substitute_witness_field_type(ty, interface, args, assoc)?,
                     ))
                 })
-                .collect::<Result<Vec<_>, String>>()?,
+                .collect::<Result<Box<[_]>, String>>()?,
             attr.clone(),
         )),
         RuntimeTy::Function {
@@ -1017,7 +993,7 @@ fn substitute_witness_field_type(
                         mode: param.mode,
                     })
                 })
-                .collect::<Result<Vec<_>, String>>()?,
+                .collect::<Result<Box<[_]>, String>>()?,
             ret: Box::new(substitute_witness_field_type(ret, interface, args, assoc)?),
             throws: Box::new(substitute_witness_field_type(
                 throws, interface, args, assoc,
@@ -1046,7 +1022,7 @@ fn substitute_witness_field_type(
                     .generics
                     .iter()
                     .map(|ty| substitute_witness_field_type(ty, interface, args, assoc))
-                    .collect::<Result<Vec<_>, _>>()?,
+                    .collect::<Result<Box<[_]>, _>>()?,
                 projection_interface
                     .associated_types
                     .iter()
@@ -1056,7 +1032,7 @@ fn substitute_witness_field_type(
                             substitute_witness_field_type(ty, interface, args, assoc)?,
                         ))
                     })
-                    .collect::<Result<Vec<_>, String>>()?,
+                    .collect::<Result<Box<[_]>, String>>()?,
             )),
             member: member.clone(),
             attr: attr.clone(),
@@ -1268,7 +1244,7 @@ pub(crate) fn view_type_value(
 fn reflected_class(
     vm: &BexVm,
     view: Value,
-) -> Result<(bex_vm_types::Class, Vec<bex_vm_types::RealizedTy>), crate::errors::VmRustFnError> {
+) -> Result<(bex_vm_types::Class, Box<[bex_vm_types::RealizedTy]>), crate::errors::VmRustFnError> {
     let ty_value = view_type_value(vm, view, baml_type::type_kind::TypeKind::Class)?;
     let ptr = ty_value
         .as_object_ptr()
@@ -1459,7 +1435,7 @@ fn alloc_compilation_error_with_span(
     let diagnostic_ty = bex_vm_types::RealizedTy::Class(
         vm.declaration_head(&diagnostic_qtn)
             .unwrap_or_else(|| unreachable!("`reflect.Diagnostic` is declared by the stdlib")),
-        vec![],
+        Box::new([]),
         baml_type::TyAttr::default(),
     );
     let diagnostics = Value::object(vm.alloc_array(diagnostic_ty, values));
@@ -1566,8 +1542,6 @@ macro_rules! impl_as_type {
 }
 
 impl BamlClassClassType for PackageReflectImpl {
-    impl_as_type!(Class, class);
-
     fn fields(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         let (class, args) = reflected_class(vm, *r#type)?;
         Ok(class
@@ -1617,8 +1591,6 @@ impl BamlClassClassType for PackageReflectImpl {
 }
 
 impl BamlClassEnumType for PackageReflectImpl {
-    impl_as_type!(Enum, r#enum);
-
     fn values(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         let enm = reflected_enum(vm, *r#type)?;
         Ok(enm
@@ -1651,8 +1623,6 @@ impl BamlClassEnumType for PackageReflectImpl {
 }
 
 impl BamlClassUnionType for PackageReflectImpl {
-    impl_as_type!(Union, union);
-
     fn member_types(
         vm: &mut BexVm,
         r#type: &Value,
@@ -1669,8 +1639,6 @@ impl BamlClassUnionType for PackageReflectImpl {
 }
 
 impl BamlClassArrayType for PackageReflectImpl {
-    impl_as_type!(Array, array);
-
     fn element_type(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Array)?;
         let bex_vm_types::RealizedTy::List(element, _) = ty else {
@@ -1683,8 +1651,6 @@ impl BamlClassArrayType for PackageReflectImpl {
 }
 
 impl BamlClassMapType for PackageReflectImpl {
-    impl_as_type!(Map, map);
-
     fn key_type(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Map)?;
         let bex_vm_types::RealizedTy::Map { key, .. } = ty else {
@@ -1707,8 +1673,6 @@ impl BamlClassMapType for PackageReflectImpl {
 }
 
 impl BamlClassFunctionType for PackageReflectImpl {
-    impl_as_type!(Function, function);
-
     fn params(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Function)?;
         let bex_vm_types::RealizedTy::Function { params, .. } = ty else {
@@ -1743,8 +1707,6 @@ impl BamlClassFunctionType for PackageReflectImpl {
 }
 
 impl BamlClassInterfaceType for PackageReflectImpl {
-    impl_as_type!(Interface, interface);
-
     #[expect(
         clippy::used_underscore_items,
         reason = "the generated view accessor is named for the `_ty` field it reads"
@@ -1762,10 +1724,60 @@ impl BamlClassInterfaceType for PackageReflectImpl {
     }
 }
 
-impl BamlClassLiteralType for PackageReflectImpl {
+// The `implements reflect.TypeView` blocks' `as_type` bodies — impl-block
+// methods, so codegen emits one `…ReflectTypeView_for_Type` trait per view
+// class (plus the aggregating `BamlNamespace…Reflect` supertraits).
+
+impl BamlClassArrayReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Array, array);
+}
+
+impl BamlClassClassReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Class, class);
+}
+
+impl BamlClassEnumReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Enum, r#enum);
+}
+
+impl BamlClassFunctionReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Function, function);
+}
+
+impl BamlClassInterfaceReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Interface, interface);
+}
+
+impl BamlClassLiteralReflectTypeView_for_Type for PackageReflectImpl {
     impl_as_type!(Literal, literal);
 }
 
-impl BamlClassPrimitiveType for PackageReflectImpl {
+impl BamlClassMapReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Map, map);
+}
+
+impl BamlClassPrimitiveReflectTypeView_for_Type for PackageReflectImpl {
     impl_as_type!(Primitive, primitive);
 }
+
+impl BamlClassUnionReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Union, union);
+}
+
+impl BamlNamespaceArrayReflect for PackageReflectImpl {}
+
+impl BamlNamespaceClassReflect for PackageReflectImpl {}
+
+impl BamlNamespaceEnumReflect for PackageReflectImpl {}
+
+impl BamlNamespaceFunctionReflect for PackageReflectImpl {}
+
+impl BamlNamespaceInterfaceReflect for PackageReflectImpl {}
+
+impl BamlNamespaceLiteralReflect for PackageReflectImpl {}
+
+impl BamlNamespaceMapReflect for PackageReflectImpl {}
+
+impl BamlNamespacePrimitiveReflect for PackageReflectImpl {}
+
+impl BamlNamespaceUnionReflect for PackageReflectImpl {}

@@ -58,6 +58,24 @@ impl PartialEq for Handle {
 
 impl Eq for Handle {}
 
+/// Hashes exactly what [`PartialEq`] compares: the slab key and the issuing
+/// heap's identity. Only the allocation address participates — the vtable half
+/// of the fat pointer is not part of `Arc::ptr_eq`'s answer, and equal handles
+/// must hash equal. With the heap's one-key-per-object dedup, a
+/// `Handle`-keyed map is therefore an object-identity map.
+impl std::hash::Hash for Handle {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.inner.slab_key.hash(state);
+        self.inner
+            .heap
+            .as_ref()
+            .map_or(std::ptr::null::<()>(), |heap| {
+                Arc::as_ptr(heap).cast::<()>()
+            })
+            .hash(state);
+    }
+}
+
 /// Internal handle data.
 ///
 /// This is public for use by `bex_heap` but should not be constructed
@@ -184,5 +202,22 @@ mod tests {
         let handle = Handle::new_detached(42);
         let debug_str = format!("{:?}", handle);
         assert!(debug_str.contains("42"));
+    }
+
+    /// `Hash` must agree with `Eq` (slab key + issuing heap) so a
+    /// `Handle`-keyed map is an object-identity map.
+    #[test]
+    fn hash_agrees_with_eq() {
+        use std::collections::HashMap;
+
+        let handle = Handle::new_detached(42);
+        let mut map = HashMap::new();
+        map.insert(handle.clone(), "hit");
+
+        // A clone and an independently built equal handle both land on the
+        // same entry; a different slab key misses.
+        assert_eq!(map.get(&handle.clone()), Some(&"hit"));
+        assert_eq!(map.get(&Handle::new_detached(42)), Some(&"hit"));
+        assert_eq!(map.get(&Handle::new_detached(7)), None);
     }
 }

@@ -12,20 +12,20 @@
 
 #include <string>
 
-using baml_sdk::baml::json::JsonParseError;
+namespace baml_json = baml_sdk::baml::json;
 using baml_sdk::raises_test::ParseError;
 using baml_sdk::raises_test::TimeoutError;
 using baml_sdk::throws_test::MyError;
 
 BAML_TEST(errors_stdlib_error_surfaces_typed) {
   // `baml.json.parse` on bad input -> thrown whose value decodes to a
-  // JsonParseError (a plain generated struct). Proves stdlib error classes
-  // surface structured, independent of any user `throws` clause.
+  // baml_json::ParseError (a plain generated struct). Proves stdlib error
+  // classes surface structured, independent of any user `throws` clause.
   try {
     baml_sdk::throws_test::ParseJson("{not valid json");
     baml_test::fail("ParseJson did not throw");
-  } catch (const baml::thrown<baml::variant<JsonParseError>>& e) {
-    BAML_ASSERT(std::holds_alternative<JsonParseError>(e.value));
+  } catch (const baml::thrown<baml::variant<baml_json::ParseError>>& e) {
+    BAML_ASSERT(std::holds_alternative<baml_json::ParseError>(e.value));
   }
 }
 

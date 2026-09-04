@@ -19,7 +19,8 @@ export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 // Stream wrapper. Exported as `BamlStream`; codegen aliases it as `Stream`.
 export { BamlStream } from './stream.js';
-export { encodeCallArgs, decodeCallResult } from './proto.js';
+export { BamlFunctionSpec } from './function_spec.js';
+export { BamlPrompt, encodeCallArgs, decodeCallResult } from './proto.js';
 export { CtxManager } from './ctx_manager.js';
 // Codegen support: typemap + placeholder sentinel + free runtime initializer.
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';

@@ -1703,7 +1703,7 @@ function patterns_new_runtime.score_abcde(v: patterns_new_runtime.ABCDE_A | patt
     load_field .0
     is_type int
     pop_jump_if_false L0
-    jump L19
+    jump L7
 
   L0:
     load_var v
@@ -1713,7 +1713,7 @@ function patterns_new_runtime.score_abcde(v: patterns_new_runtime.ABCDE_A | patt
     load_field .0
     is_type int
     pop_jump_if_false L1
-    jump L14
+    jump L6
 
   L1:
     load_var v
@@ -1723,7 +1723,7 @@ function patterns_new_runtime.score_abcde(v: patterns_new_runtime.ABCDE_A | patt
     load_field .0
     is_type int
     pop_jump_if_false L2
-    jump L9
+    jump L5
 
   L2:
     load_var v
@@ -1737,116 +1737,33 @@ function patterns_new_runtime.score_abcde(v: patterns_new_runtime.ABCDE_A | patt
 
   L3:
     load_const 0
-    jump L24
+    jump L8
 
   L4:
     load_var v
-    type_tag
-    dense_tag [ABCDE_A, ABCDE_B, ABCDE_C, ABCDE_D]
-    jump_table [L8, L7, L6, L5], default L25
+    load_type patterns_new_runtime.HasIntField
+    virtual_load_field .field
+    jump L8
 
-  L5: ABCDE_D
+  L5:
     load_var v
-    load_field .0
-    jump L24
+    load_type patterns_new_runtime.HasIntField
+    virtual_load_field .field
+    jump L8
 
-  L6: ABCDE_C
+  L6:
     load_var v
-    load_field .0
-    jump L24
+    load_type patterns_new_runtime.HasIntField
+    virtual_load_field .field
+    jump L8
 
-  L7: ABCDE_B
+  L7:
     load_var v
-    load_field .0
-    jump L24
+    load_type patterns_new_runtime.HasIntField
+    virtual_load_field .field
 
-  L8: ABCDE_A
-    load_var v
-    load_field .0
-    jump L24
-
-  L9:
-    load_var v
-    type_tag
-    dense_tag [ABCDE_A, ABCDE_B, ABCDE_C, ABCDE_D]
-    jump_table [L13, L12, L11, L10], default L25
-
-  L10: ABCDE_D
-    load_var v
-    load_field .0
-    jump L24
-
-  L11: ABCDE_C
-    load_var v
-    load_field .0
-    jump L24
-
-  L12: ABCDE_B
-    load_var v
-    load_field .0
-    jump L24
-
-  L13: ABCDE_A
-    load_var v
-    load_field .0
-    jump L24
-
-  L14:
-    load_var v
-    type_tag
-    dense_tag [ABCDE_A, ABCDE_B, ABCDE_C, ABCDE_D]
-    jump_table [L18, L17, L16, L15], default L25
-
-  L15: ABCDE_D
-    load_var v
-    load_field .0
-    jump L24
-
-  L16: ABCDE_C
-    load_var v
-    load_field .0
-    jump L24
-
-  L17: ABCDE_B
-    load_var v
-    load_field .0
-    jump L24
-
-  L18: ABCDE_A
-    load_var v
-    load_field .0
-    jump L24
-
-  L19:
-    load_var v
-    type_tag
-    dense_tag [ABCDE_A, ABCDE_B, ABCDE_C, ABCDE_D]
-    jump_table [L23, L22, L21, L20], default L25
-
-  L20: ABCDE_D
-    load_var v
-    load_field .0
-    jump L24
-
-  L21: ABCDE_C
-    load_var v
-    load_field .0
-    jump L24
-
-  L22: ABCDE_B
-    load_var v
-    load_field .0
-    jump L24
-
-  L23: ABCDE_A
-    load_var v
-    load_field .0
-
-  L24:
+  L8:
     return
-
-  L25:
-    unreachable
 }
 
 function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {

@@ -3,16 +3,22 @@
 //! Converts `InboundValue` (from the C bridge) to the engine's `BexExternalValue` representation
 //! so the BEX engine can use them as function arguments.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use bex_project::{BexExternalValue, RuntimeTy};
+use bex_project::{
+    BexExternalAdt, BexExternalValue, MediaKind, MediaValue, PromptAst, PromptAstSimple, RuntimeTy,
+};
 use indexmap::IndexMap;
 use prost::Message;
 
 use crate::{
     baml_bridge::cffi::{
-        BamlHandleType, InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry,
-        InboundMapValue, InboundValue, inbound_value::Value as InboundValueVariant,
+        BamlHandleType, BamlValueMedia, BamlValuePromptAst, BamlValuePromptAstSimple,
+        InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry, InboundMapValue,
+        InboundValue, MediaTypeEnum, baml_value_media,
+        baml_value_prompt_ast::Value as PromptAstVariant,
+        baml_value_prompt_ast_simple::Value as PromptAstSimpleVariant,
+        inbound_value::Value as InboundValueVariant,
     },
     error::CtypesError,
     handle_table::CffiHandleTable,
@@ -70,6 +76,12 @@ pub fn inbound_to_external(
             // A reflected BAML type passed as an argument value.
             InboundValueVariant::TyValue(ty) => crate::ty_decode::proto_ty_to_external(&ty),
             InboundValueVariant::TyDefValue(ty) => crate::ty_decode::proto_ty_def_to_external(&ty),
+            InboundValueVariant::MediaValue(media) => Ok(BexExternalValue::Adt(
+                BexExternalAdt::Media(proto_media_to_bex_media(media)?),
+            )),
+            InboundValueVariant::PromptAstValue(prompt) => Ok(BexExternalValue::Adt(
+                BexExternalAdt::PromptAst(Arc::new(proto_prompt_ast_to_bex_prompt_ast(prompt)?)),
+            )),
             InboundValueVariant::Handle(handle) => {
                 // HOST_VALUE_* keys do NOT live in HANDLE_TABLE. The host
                 // bridge owns the lookup; we construct the Arc stub here so
@@ -105,18 +117,104 @@ pub fn inbound_to_external(
     })
 }
 
+fn proto_media_to_bex_media(media: BamlValueMedia) -> Result<Arc<MediaValue>, CtypesError> {
+    let kind = match MediaTypeEnum::try_from(media.media) {
+        Ok(MediaTypeEnum::Image) => MediaKind::Image,
+        Ok(MediaTypeEnum::Audio) => MediaKind::Audio,
+        Ok(MediaTypeEnum::Video) => MediaKind::Video,
+        Ok(MediaTypeEnum::Pdf) => MediaKind::Pdf,
+        Ok(MediaTypeEnum::Other) => MediaKind::Generic,
+        Ok(MediaTypeEnum::MediaTypeUnspecified) | Err(_) => {
+            return Err(CtypesError::InternalError(
+                "portable media payload has no valid media kind".to_string(),
+            ));
+        }
+    };
+    let mime_type = media.mime_type.as_deref();
+    match media.value {
+        Some(baml_value_media::Value::Url(url)) => Ok(MediaValue::from_url(kind, &url, mime_type)),
+        Some(baml_value_media::Value::Base64(base64)) => {
+            Ok(MediaValue::from_base64(kind, &base64, mime_type))
+        }
+        Some(baml_value_media::Value::File(file)) => {
+            Ok(MediaValue::from_file(kind, &file, mime_type))
+        }
+        None => Err(CtypesError::InternalError(
+            "portable media payload has no content".to_string(),
+        )),
+    }
+}
+
+fn proto_prompt_ast_to_bex_prompt_ast(
+    prompt: BamlValuePromptAst,
+) -> Result<PromptAst, CtypesError> {
+    match prompt.value {
+        Some(PromptAstVariant::Simple(simple)) => Ok(PromptAst::Simple(Arc::new(
+            proto_prompt_ast_simple_to_bex_prompt_ast_simple(simple)?,
+        ))),
+        Some(PromptAstVariant::Message(message)) => {
+            let content = message.content.ok_or_else(|| {
+                CtypesError::InternalError("portable prompt message has no content".to_string())
+            })?;
+            let metadata = serde_json::from_str(&message.metadata_as_json).map_err(|error| {
+                CtypesError::InternalError(format!(
+                    "portable prompt message has invalid metadata JSON: {error}"
+                ))
+            })?;
+            Ok(PromptAst::Message {
+                role: message.role,
+                content: Arc::new(proto_prompt_ast_simple_to_bex_prompt_ast_simple(content)?),
+                metadata,
+            })
+        }
+        Some(PromptAstVariant::Multiple(multiple)) => Ok(PromptAst::Vec(
+            multiple
+                .items
+                .into_iter()
+                .map(proto_prompt_ast_to_bex_prompt_ast)
+                .map(|item| item.map(Arc::new))
+                .collect::<Result<_, _>>()?,
+        )),
+        None => Err(CtypesError::InternalError(
+            "portable prompt payload has no value".to_string(),
+        )),
+    }
+}
+
+fn proto_prompt_ast_simple_to_bex_prompt_ast_simple(
+    simple: BamlValuePromptAstSimple,
+) -> Result<PromptAstSimple, CtypesError> {
+    match simple.value {
+        Some(PromptAstSimpleVariant::String(string)) => Ok(PromptAstSimple::String(string)),
+        Some(PromptAstSimpleVariant::Media(media)) => {
+            Ok(PromptAstSimple::Media(proto_media_to_bex_media(media)?))
+        }
+        Some(PromptAstSimpleVariant::Multiple(multiple)) => Ok(PromptAstSimple::Multiple(
+            multiple
+                .items
+                .into_iter()
+                .map(proto_prompt_ast_simple_to_bex_prompt_ast_simple)
+                .map(|item| item.map(Arc::new))
+                .collect::<Result<_, _>>()?,
+        )),
+        None => Err(CtypesError::InternalError(
+            "portable prompt content has no value".to_string(),
+        )),
+    }
+}
+
 /// Build the default "any scalar" union type for untyped inbound values.
 fn default_scalar_union_ty() -> RuntimeTy {
     let d = baml_type::TyAttr::default();
     RuntimeTy::Union(
-        vec![
+        Box::new([
             RuntimeTy::Int { attr: d.clone() },
             RuntimeTy::Float { attr: d.clone() },
             RuntimeTy::String { attr: d.clone() },
             RuntimeTy::Bool { attr: d.clone() },
             RuntimeTy::Uint8Array { attr: d.clone() },
             RuntimeTy::Null { attr: d.clone() },
-        ],
+        ]),
         d,
     )
 }
@@ -269,6 +367,71 @@ mod tests {
         )
         .unwrap();
         assert_eq!(decoded, BexExternalValue::Bool(true));
+    }
+
+    #[test]
+    fn portable_prompt_with_media_decodes_as_owned_adts() {
+        use crate::baml_bridge::cffi::{
+            BamlValuePromptAstMessage, BamlValuePromptAstMultiple, BamlValuePromptAstSimpleMultiple,
+        };
+
+        let image = BamlValueMedia {
+            media: MediaTypeEnum::Image as i32,
+            mime_type: Some("image/png".to_string()),
+            value: Some(baml_value_media::Value::Base64("aW1hZ2U=".to_string())),
+        };
+        let content = BamlValuePromptAstSimple {
+            value: Some(PromptAstSimpleVariant::Multiple(
+                BamlValuePromptAstSimpleMultiple {
+                    items: vec![
+                        BamlValuePromptAstSimple {
+                            value: Some(PromptAstSimpleVariant::String("look: ".to_string())),
+                        },
+                        BamlValuePromptAstSimple {
+                            value: Some(PromptAstSimpleVariant::Media(image)),
+                        },
+                    ],
+                },
+            )),
+        };
+        let prompt = BamlValuePromptAst {
+            value: Some(PromptAstVariant::Multiple(BamlValuePromptAstMultiple {
+                items: vec![BamlValuePromptAst {
+                    value: Some(PromptAstVariant::Message(BamlValuePromptAstMessage {
+                        role: "user".to_string(),
+                        content: Some(content),
+                        metadata_as_json: "{\"cache\":true}".to_string(),
+                    })),
+                }],
+            })),
+        };
+
+        for _ in 0..2 {
+            let decoded = inbound_to_external(
+                InboundValue {
+                    value_type: None,
+                    value: Some(InboundValueVariant::PromptAstValue(prompt.clone())),
+                },
+                &CffiHandleTable::new(),
+            )
+            .unwrap();
+            let BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) = decoded else {
+                panic!("expected a prompt AST payload")
+            };
+            let messages = ast.to_structured_messages();
+            assert_eq!(messages.len(), 1);
+            assert_eq!(messages[0].0, "user");
+            assert_eq!(messages[0].2["cache"], true);
+            let PromptAstSimple::Multiple(parts) = messages[0].1.as_ref() else {
+                panic!("expected ordered text and media parts")
+            };
+            let PromptAstSimple::Media(media) = parts[1].as_ref() else {
+                panic!("expected media in the second prompt part")
+            };
+            assert_eq!(media.kind, MediaKind::Image);
+            assert_eq!(media.mime_type().as_deref(), Some("image/png"));
+            assert_eq!(media.base64(), "aW1hZ2U=");
+        }
     }
 
     #[test]
@@ -575,7 +738,7 @@ mod tests {
         use crate::baml_bridge::cffi::InboundClassValue;
         let class_type = RuntimeTy::Class(
             baml_type::TypeName::local(baml_type::Name::new("GenericBox")),
-            vec![RuntimeTy::int()],
+            Box::new([RuntimeTy::int()]),
             baml_type::TyAttr::default(),
         );
         let decoded = inbound_to_external(

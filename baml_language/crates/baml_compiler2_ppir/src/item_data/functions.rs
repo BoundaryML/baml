@@ -51,6 +51,22 @@ pub struct FunctionSourceMap {
     pub param_spans: Vec<TextRange>,
 }
 
+/// How many generic parameters the function's enclosing type contributes.
+///
+/// Zero for a free function, and for a method whose generics live on an
+/// out-of-body `implements` block. A method on a generic class reports the
+/// class's, which callers thread as type-arg operands alongside the function's
+/// own — see the IO-builtin arity in `baml_compiler2_mir`.
+#[salsa::tracked]
+pub fn enclosing_type_generic_param_count<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> usize {
+    crate::file_item_tree(db, function.file(db))
+        .enclosing_type_generic_params(function.id(db))
+        .len()
+}
+
 /// Semantic data for one function signature. Span-free — see the module docs.
 #[salsa::tracked(returns(ref))]
 pub fn function_data<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> FunctionData {
@@ -224,13 +240,14 @@ fn lower_elaborated<'db>(
 /// The item a method belongs to, as a `Loc`.
 ///
 /// Mirrors `item_tree::MethodOwner` (see its docs for the ownership rules —
-/// notably, in-body `implements I { … }` methods are owned by their *class*).
+/// notably, an in-body `implements I { … }` method is owned by its impl
+/// block, not its class — the in-class spelling is pure syntax).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update)]
 pub enum MethodOwner<'db> {
     Class(baml_compiler2_hir::loc::ClassLoc<'db>),
     Interface(baml_compiler2_hir::loc::InterfaceLoc<'db>),
-    /// An out-of-body `implements<…> I for T { … }` block.
-    FreeImpl(baml_compiler2_hir::loc::ImplLoc<'db>),
+    /// A method of an `implements` block — in-class and out-of-body alike.
+    Impl(baml_compiler2_hir::loc::ImplLoc<'db>),
 }
 
 /// The item `method` belongs to, or `None` for a top-level function.
@@ -257,8 +274,8 @@ pub fn method_owner<'db>(
         item_tree::MethodOwner::Interface(id) => {
             MethodOwner::Interface(baml_compiler2_hir::loc::InterfaceLoc::new(db, file, id))
         }
-        item_tree::MethodOwner::FreeImpl(id) => {
-            MethodOwner::FreeImpl(baml_compiler2_hir::loc::ImplLoc::new(db, file, id))
+        item_tree::MethodOwner::Impl(id) => {
+            MethodOwner::Impl(baml_compiler2_hir::loc::ImplLoc::new(db, file, id))
         }
     })
 }

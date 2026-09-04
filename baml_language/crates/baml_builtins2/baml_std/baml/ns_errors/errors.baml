@@ -35,18 +35,8 @@ class RenderPrompt {
     message: string,
 }
 
-/// The operation has not been implemented.
-class NotImplemented {
-    message: string,
-}
-
 /// An LLM client request failed.
 class LlmClient {
-    message: string,
-}
-
-/// A catch-all error for development-time issues.
-class DevOther {
     message: string,
 }
 

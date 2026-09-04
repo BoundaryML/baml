@@ -40,7 +40,7 @@ class MockRequest {
     body: string,
 
     // The request body parsed as JSON, for `baml.json.path<T>(req.json(), ".model")`.
-    // Throws `baml.json.JsonParseError` if the client did not send JSON.
+    // Throws `baml.json.ParseError` if the client did not send JSON.
     function json(self) -> json {
         baml.json.parse(self.body)
     }
@@ -147,8 +147,27 @@ class MockJsonServer {
                 let body = canned.body;
                 spawn {
                     baml.sys.sleep(delay);
-                    response.write(body.to_utf8());
-                    response.end();
+                    // The delayed write races the client: a request-timeout
+                    // test hangs up before `delay` elapses, and if teardown
+                    // loses the race to cancel this task, writing into the
+                    // closed stream throws the hangup `Io` — the outcome the
+                    // test arranged, not a mock failure. Any OTHER I/O error
+                    // is a real mock failure and still propagates as an
+                    // unhandled spawn error (same filter as
+                    // `MockSseServer.handle`).
+                    {
+                        response.write(body.to_utf8());
+                        response.end();
+                        null
+                    } catch (e) {
+                        baml.errors.Io => {
+                            if (e.message == "streaming response could not be written: the client has hung up") {
+                                null
+                            } else {
+                                throw e
+                            }
+                        }
+                    };
                     null
                 };
                 response

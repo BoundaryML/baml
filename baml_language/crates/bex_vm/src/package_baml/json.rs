@@ -56,18 +56,6 @@ where
     r
 }
 
-/// Build the runtime registration key for a `RealizedTy::Class(qtn, ...)` /
-/// `RealizedTy::Enum(qtn, _)` lookup against `BexVm::resolved_class_names`.
-///
-/// Compiler-side `display_name` strips the `user.` prefix from
-/// user-defined types for nicer diagnostic strings, but
-/// the runtime registration uses the full `package.namespace.name` form.
-/// We rebuild that form here from `module_path + name`; for builtin types
-/// (where `display_name` already encodes the full path) this also works
-/// because `module_path` is the same path split on dots.
-fn class_lookup_key(qtn: &TypeName) -> String {
-    qtn.render_dotted(false)
-}
 use std::collections::HashMap;
 
 use bex_heap::TlabHolder;
@@ -78,8 +66,7 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use super::{
-    BamlNamespaceJson, Continuation, NativeCallResult, PackageBamlImpl,
-    make_to_json_override_callee, to_json_override_fn_name,
+    BamlNamespaceJson, Continuation, NativeCallResult, PackageBamlImpl, make_to_json_callee,
 };
 use crate::{
     BexVm,
@@ -113,13 +100,16 @@ use crate::{
 /// (pass 2), then renders structurally splicing in the override results (pass 3).
 pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) -> NativeCallResult {
     let mut pending: Vec<HeapPtr> = Vec::new();
-    collect_to_json_overrides(vm, value, &mut pending);
+    if let Err(e) = collect_to_json_overrides(vm, value, &mut pending) {
+        return NativeCallResult::Error(e.into());
+    }
 
     let Some(&first_ptr) = pending.first() else {
         return render_to_json_done(vm, value, &pending, &[]);
     };
-    match make_to_json_override_callee(vm, Value::object(first_ptr)) {
-        Some(callee) => NativeCallResult::YieldToCall {
+    match make_to_json_callee(vm, Value::object(first_ptr)) {
+        Err(e) => NativeCallResult::Error(e.into()),
+        Ok(Some(callee)) => NativeCallResult::YieldToCall {
             callee,
             args: vec![],
             type_args: vec![],
@@ -129,17 +119,22 @@ pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) ->
                 results: Vec::new(),
             }),
         },
-        None => render_to_json_done(vm, value, &pending, &[]),
+        Ok(None) => render_to_json_done(vm, value, &pending, &[]),
     }
 }
 
-/// Whether `value`'s runtime class carries an in-body `baml.ToJson` override.
-/// Shares `make_to_json_override_callee`'s resolution but allocates nothing on
-/// the VM heap, so it is safe during the allocation-free pre-order collection.
-fn has_to_json_override(vm: &BexVm, value: Value) -> bool {
-    to_json_override_fn_name(vm, value)
-        .and_then(|name| vm.find_function_by_name(&name))
-        .is_some()
+/// Whether `value`'s runtime type carries a `baml.ToJson` override.
+/// Shares `make_to_json_callee`'s rule resolution but allocates
+/// nothing on the VM heap, so it is safe during the allocation-free pre-order
+/// collection.
+/// A resolver error PROPAGATES (`shim_rule_method`'s own contract: never a
+/// silent structural fallback) — swallowing it here would let the
+/// collection pass disagree with the dispatch pass.
+fn has_to_json_override(vm: &BexVm, value: Value) -> Result<bool, VmInternalError> {
+    Ok(matches!(
+        super::shim_rule_method(vm, value, "ToJson", "to_json")?,
+        Some(resolved) if !resolved.is_default
+    ))
 }
 
 /// Pre-order DFS collecting, by heap pointer and in render order, every
@@ -150,13 +145,17 @@ fn has_to_json_override(vm: &BexVm, value: Value) -> bool {
 /// map values, then instance fields) so the two stay index-aligned. A media
 /// instance is treated as a leaf, matching `render_to_serde`, which emits its
 /// tagged form without descending into the opaque `_data` field.
-fn collect_to_json_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>) {
+fn collect_to_json_overrides(
+    vm: &BexVm,
+    value: Value,
+    out: &mut Vec<HeapPtr>,
+) -> Result<(), VmInternalError> {
     let ValueKind::Object(ptr) = value.kind() else {
-        return;
+        return Ok(());
     };
-    if has_to_json_override(vm, value) {
+    if has_to_json_override(vm, value)? {
         out.push(ptr);
-        return;
+        return Ok(());
     }
     // Snapshot children (owned), dropping the heap borrow before recursing.
     let children: Vec<Value> = match vm.get_object(ptr) {
@@ -175,8 +174,9 @@ fn collect_to_json_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>) {
         _ => Vec::new(),
     };
     for v in children {
-        collect_to_json_overrides(vm, v, out);
+        collect_to_json_overrides(vm, v, out)?;
     }
+    Ok(())
 }
 
 /// Whether `inst`'s class is one of the builtin media classes.
@@ -212,7 +212,7 @@ fn render_to_json_done(
 /// default. Mirrors `root.rs`'s `render_to_string`, but produces a
 /// `serde_json::Value` instead of a `String` and can fail: a value with no json
 /// representation (`uint8array` without explicit encoding, functions, futures,
-/// ...) raises `JsonSerializationError`. A node whose runtime class overrides
+/// ...) raises `SerializationError`. A node whose runtime class overrides
 /// `baml.ToJson` (recorded pre-order in `pending` by `collect_to_json_overrides`)
 /// is rendered via its precomputed `results[*counter]`. Because collect and
 /// render share the same pre-order, `pending[*counter]` is exactly the next
@@ -388,15 +388,19 @@ impl Continuation for ToJsonWalkContinuation {
         self.results.push(value_to_serde(vm, value));
 
         // Dispatch the next override, if any (and resolvable); otherwise render.
-        if let Some(&next_ptr) = self.pending.get(self.results.len())
-            && let Some(callee) = make_to_json_override_callee(vm, Value::object(next_ptr))
-        {
-            return NativeCallResult::YieldToCall {
-                callee,
-                args: vec![],
-                type_args: vec![],
-                continuation: self,
-            };
+        if let Some(&next_ptr) = self.pending.get(self.results.len()) {
+            match make_to_json_callee(vm, Value::object(next_ptr)) {
+                Err(e) => return NativeCallResult::Error(e.into()),
+                Ok(Some(callee)) => {
+                    return NativeCallResult::YieldToCall {
+                        callee,
+                        args: vec![],
+                        type_args: vec![],
+                        continuation: self,
+                    };
+                }
+                Ok(None) => {}
+            }
         }
         render_to_json_done(vm, self.root, &self.pending, &self.results)
     }
@@ -425,9 +429,9 @@ impl Continuation for ToJsonWalkContinuation {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const JSON_PARSE_ERROR_FQN: &str = "baml.json.JsonParseError";
-const JSON_DECODE_ERROR_FQN: &str = "baml.json.JsonDecodeError";
-const JSON_SERIALIZATION_ERROR_FQN: &str = "baml.json.JsonSerializationError";
+const JSON_PARSE_ERROR_FQN: &str = "baml.json.ParseError";
+const JSON_DECODE_ERROR_FQN: &str = "baml.json.DecodeError";
+const JSON_SERIALIZATION_ERROR_FQN: &str = "baml.json.SerializationError";
 
 // ─── Trait implementation ─────────────────────────────────────────────────────
 
@@ -512,7 +516,7 @@ impl BamlNamespaceJson for PackageBamlImpl {
 /// - JSON array    → heap-boxed `Object::Array`
 /// - JSON object   → heap-boxed `Object::Map`
 ///
-/// On failure, throws a `baml.json.JsonParseError { message }` instance.
+/// On failure, throws a `baml.json.ParseError { message }` instance.
 pub fn json_parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
     let parsed: serde_json::Value = serde_json::from_str(s).map_err(|e| {
         let msg = e.to_string();
@@ -728,7 +732,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
 /// Serialize a VM `Value` to a JSON string driven by the runtime `RealizedTy`.
 ///
 /// Walks the value matching the shape of `ty`.  Throws
-/// `JsonSerializationError` for non-representable types (`uint8array`,
+/// `SerializationError` for non-representable types (`uint8array`,
 /// function values, etc.).
 pub fn json_to_string_typed(
     vm: &mut BexVm,
@@ -989,7 +993,7 @@ fn serialize_class_instance(
     // Per BEP-038 (`@alias` / `@skip` are LLM-path-only): JSON interchange
     // always uses raw field names and includes every declared field, even
     // those marked `@skip`.  Aliased keys live exclusively on the
-    // `ctx.output_format()` / `$parse` LLM path.
+    // `ctx.output_format()` / FunctionSpec.parse LLM path.
     let mut out = serde_json::Map::with_capacity(class_fields.len());
     for (i, cf) in class_fields.iter().enumerate() {
         let Some(field_value) = field_values.get(i).copied() else {
@@ -1110,7 +1114,7 @@ pub(crate) fn read_media_value(
 /// Parse a JSON string and coerce it to a VM `Value` of the given runtime
 /// `RealizedTy`.
 ///
-/// Throws `JsonParseError` for invalid JSON and `JsonDecodeError` when the
+/// Throws `ParseError` for invalid JSON and `DecodeError` when the
 /// parsed JSON does not match the target type.
 pub fn json_from_string_typed(
     vm: &mut BexVm,
@@ -1129,7 +1133,7 @@ pub fn json_from_string_typed(
 }
 
 /// Walk a parsed `serde_json::Value` driven by `ty`, allocating VM values.
-/// Throws `JsonDecodeError` on shape mismatch.
+/// Throws `DecodeError` on shape mismatch.
 fn ty_serde_to_value(
     vm: &mut BexVm,
     json: &serde_json::Value,
@@ -1747,40 +1751,62 @@ impl Continuation for ClassFromJsonCont {
     }
 }
 
-/// If `ty` is a class/interface type whose runtime type carries an in-body
-/// `implements baml.FromJson { function from_json ... }` override, returns a
-/// `YieldToCall` dispatching `{fqn}.baml.FromJson.from_json(j)`. The deserialize
-/// analog of `try_yield_user_from_json`, but keyed on the interface method name
-/// rather than the magic `{fqn}.from_json`. Returns `None` for non-class types,
-/// media, and types without the override (→ structural fallback).
+/// If `ty` is a class/interface type whose `baml.FromJson` rule carries an
+/// override, returns a `YieldToCall` dispatching that `from_json(j)` with the
+/// rule's realized frame. The deserialize analog of
+/// `try_yield_user_from_json`, but resolved through the impl rules (so
+/// blanket and out-of-body impls and runtime-declared classes all reach
+/// their override). Returns `None` for non-class types, media, and types
+/// whose rule is absent or inherits the structural default body (→ the
+/// structural fallback, which is what that default delegates to).
 fn try_yield_interface_from_json(
     vm: &mut BexVm,
     j: Value,
     ty: &RealizedTy,
 ) -> Option<NativeCallResult> {
-    let (head, type_args) = match ty {
-        RealizedTy::Class(head, type_args, _) | RealizedTy::Interface(head, type_args, _, _) => {
-            (head, type_args)
-        }
+    let head = match ty {
+        RealizedTy::Class(head, _, _) | RealizedTy::Interface(head, _, _, _) => head,
         _ => return None,
     };
     if media_kind_from_head(*head).is_some() {
         return None;
     }
-    // BUG: this reaches the override by building its mangled global name and
-    // scanning for it, so it sees only an inherent `implements baml.FromJson`
-    // block on the class itself — a blanket or out-of-body impl that the
-    // resolver would find is invisible here, and a runtime-declared class has
-    // no such global at all. The fix is to ask `ImplResolver` for the
-    // `baml.FromJson` rule and take its `from_json` method, exactly as
-    // `dispatch_op` does; that also drops the string round-trip.
-    let qtn = head.declared_name()?;
-    let from_json_name = format!("{}.baml.FromJson.from_json", class_lookup_key(&qtn));
-    let callee = vm.find_function_by_name(&from_json_name)?;
+    // Type-directed dispatch: there is no receiver value, so the resolver
+    // roots in the world that owns the target declaration (its package for a
+    // runtime class; the lexical frame's world for static declarations).
+    let from_json_qtn = baml_type::TypeName::new(
+        baml_type::Name::new("baml"),
+        Vec::new(),
+        baml_type::Name::new("FromJson"),
+    );
+    let from_json_head = vm.declaration_head(&from_json_qtn)?;
+    let resolver = match vm.get_object(head.ptr()) {
+        Object::Class(class) if !class.owner.is_null() => {
+            super::resolve::ImplResolver::for_package(vm, class.owner)
+        }
+        // An interface head carries the same owner edge; rooting it the
+        // same way keeps runtime-declared interfaces symmetric with
+        // runtime classes instead of falling to the lexical world.
+        Object::Interface(iface) if !iface.owner.is_null() => {
+            super::resolve::ImplResolver::for_package(vm, iface.owner)
+        }
+        _ => super::resolve::ImplResolver::new(vm),
+    };
+    let (rule, bound_args) = resolver.resolve_implements_rule(ty, from_json_head, &[])?;
+    let resolved = resolver.rule_method_impl(&rule, "from_json")?;
+    if resolved.is_default {
+        // The rule adopts the structural default body: the caller renders the
+        // structural conversion itself.
+        return None;
+    }
+    let type_args = match resolver.realize_frame(&resolved.method.frame, &bound_args) {
+        Ok(type_args) => type_args,
+        Err(e) => return Some(NativeCallResult::Error(e.into())),
+    };
     Some(NativeCallResult::YieldToCall {
-        callee,
+        callee: resolved.method.fqn,
         args: vec![j],
-        type_args: type_args.clone(),
+        type_args,
         continuation: Box::new(IdentityFromJsonCont),
     })
 }

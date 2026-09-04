@@ -1,0 +1,55 @@
+---
+title: Functions
+description: Chapter 1 · Define a typed operation, connect it to a model, and call it from application code.
+breadcrumbs:
+  - href: /baml
+    label: BAML
+  - href: /baml/book
+    label: Book
+  - href: /baml/book/foundations
+    label: Foundations
+  - label: Functions
+---
+
+Functions are the main entry points into a BAML program. Every function declares a name, a parameter list, a return type, and a body. The body can compute a value directly or use a client and prompt to ask a model for the declared result.
+
+## Anatomy of a function
+
+The smallest useful function returns a typed value directly.
+
+<BamlSnippet id="functions/return-number" />
+
+`ReturnNumber` is the function name, `value` is a named parameter, and the arrow introduces the return type. The final expression in the body becomes the result.
+
+## The typed boundary
+
+Inputs and outputs can use primitives, optional values, lists, enums, classes, and other named types. Prefer a named class when downstream code cares about more than one field.
+
+<BamlSnippet id="receipts/extract-receipt" region="types" />
+
+> Optionality is part of the contract. Use `float?` only when the application can genuinely handle a missing value.
+
+The compiler rejects a body whose value does not match the declared return type. This deliberately invalid example is checked for the expected `E0001` diagnostic during documentation validation.
+
+<BamlSnippet id="errors/invalid-return-type" />
+
+## Model-backed functions
+
+A model-backed function selects a configured client and supplies a prompt. Including `${ctx.output_format()}` gives the model the output instructions derived from the return type.
+
+<BamlSnippet id="receipts/extract-receipt" region="function" />
+
+## Call from an application
+
+After generation, the TypeScript client exposes the function under the same name. Its promise resolves to the generated `Receipt` type.
+
+```typescript
+import { b } from "./baml_client"
+
+const receipt = await b.ExtractReceipt(input)
+console.log(receipt.items)
+```
+
+## Where to go next
+
+Use the [function reference](/baml/language/functions) for a condensed syntax view, or build a complete flow in the [structured extraction tutorial](/tutorials/structured-extraction).

@@ -533,7 +533,7 @@ test "catch_negative_index_as_index_out_of_bounds" {
 
 function s5b_divides_2() -> int { 10 / 0 }
 
-function named_panic_binding_division_by_zero_field_fn() -> int {
+function named_panic_binding_division_by_zero_field_fn() -> int | bigint {
     s5b_divides_2() catch (e) {
         let err: baml.panics.DivisionByZero => err.dividend
     }

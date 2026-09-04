@@ -762,14 +762,14 @@ fn planned_pending_type(
             }
             let base = planned_pending_type(vm, roots[0], plans)?;
             let mut members = match base {
-                bex_vm_types::RealizedTy::Union(members, _) => members,
+                bex_vm_types::RealizedTy::Union(members, _) => members.into_vec(),
                 other => vec![other],
             };
             if !members.iter().any(bex_vm_types::RealizedTy::is_null) {
                 members.push(bex_vm_types::RealizedTy::null());
             }
             Ok(bex_vm_types::RealizedTy::Union(
-                members,
+                members.into(),
                 baml_type::TyAttr::default(),
             ))
         }
@@ -788,7 +788,7 @@ fn planned_pending_type(
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             Ok(bex_vm_types::RealizedTy::Union(
-                members,
+                members.into(),
                 baml_type::TyAttr::default(),
             ))
         }
@@ -878,7 +878,7 @@ fn build_group(
         })));
         let ty = bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(ptr, type_tag),
-            Vec::new(),
+            Box::new([]),
             baml_type::TyAttr::default(),
         );
         identities.insert(node.id, ClassIdentityPlan { ty: ty.clone() });
@@ -1015,16 +1015,16 @@ fn resolve_pending_if_ready(vm: &mut BexVm, pending: Value) -> Result<Option<Val
                         .next()
                         .ok_or_else(|| "a pending optional has no base".to_string())?;
                     let mut members = match value {
-                        bex_vm_types::RealizedTy::Union(members, _) => members,
+                        bex_vm_types::RealizedTy::Union(members, _) => members.into_vec(),
                         other => vec![other],
                     };
                     if !members.iter().any(bex_vm_types::RealizedTy::is_null) {
                         members.push(bex_vm_types::RealizedTy::null());
                     }
-                    bex_vm_types::RealizedTy::Union(members, baml_type::TyAttr::default())
+                    bex_vm_types::RealizedTy::Union(members.into(), baml_type::TyAttr::default())
                 }
                 PendingOp::Union => {
-                    bex_vm_types::RealizedTy::Union(values, baml_type::TyAttr::default())
+                    bex_vm_types::RealizedTy::Union(values.into(), baml_type::TyAttr::default())
                 }
                 PendingOp::Direct => unreachable!(),
             };

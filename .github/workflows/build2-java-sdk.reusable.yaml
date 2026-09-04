@@ -74,7 +74,7 @@ jobs:
     outputs:
       include: ${{ steps.gen.outputs.include }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -111,7 +111,7 @@ jobs:
       # runner has no NASM installed (consulted only there; harmless elsewhere).
       AWS_LC_SYS_PREBUILT_NASM: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -148,7 +148,7 @@ jobs:
           enable-cross: false
           skip-protoc: true
 
-      - name: Install cross (musl targets)
+      - name: Setup cross (musl targets)
         # musl builds run inside `cross` containers (mirroring
         # build2-bridge-cffi): the container image carries the full musl
         # toolchain, so the JNI cdylib links against musl libc cleanly —
@@ -156,10 +156,13 @@ jobs:
         # the cdylib link (rehearsal run 29862339596). `Cross.toml` at the
         # workspace root forwards RUSTFLAGS into the container.
         if: ${{ matrix._.libc == 'musl' }}
-        run: |
-          set -euo pipefail
-          cargo install cross --locked --version 0.2.5
-          echo 'CARGO=cross' >> "$GITHUB_ENV"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache cargo:cross"
+
+      - name: Select cross (musl targets)
+        if: ${{ matrix._.libc == 'musl' }}
+        run: echo 'CARGO=cross' >> "$GITHUB_ENV"
 
       - name: Build bridge_java cdylib
         working-directory: baml_language
@@ -211,7 +214,7 @@ jobs:
           ls -la build/libs
 
       - name: Upload natives jar
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: java-sdk-natives-${{ matrix._.platform }}
           path: baml_language/sdks/java/baml_bridge/build/libs/*natives*.jar
@@ -224,7 +227,7 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -262,7 +265,7 @@ jobs:
           ls -la build/libs
 
       - name: Upload main/sources/javadoc jars
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: java-sdk-main
           path: |

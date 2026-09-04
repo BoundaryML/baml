@@ -446,7 +446,7 @@ pub(crate) mod support {
                 })
                 .collect();
             let type_params = if let Some(callee_ty) = inference.type_of_expr.get(callee) {
-                collect_typevars(&callee_ty.to_plain())
+                collect_typevars(callee_ty)
             } else {
                 Vec::new()
             };
@@ -483,7 +483,7 @@ pub(crate) mod support {
         inference
             .type_of_expr
             .get(&expr_id)
-            .map(|t| t.to_plain().render_canonical())
+            .map(|t| t.render_canonical())
             .unwrap_or_else(|| "unknown".into())
     }
 
@@ -579,7 +579,7 @@ pub(crate) mod support {
                     })
                     .collect();
                 let type_params = if let Some(callee_ty) = inference.type_of_expr.get(callee) {
-                    collect_typevars(&callee_ty.to_plain())
+                    collect_typevars(callee_ty)
                 } else {
                     Vec::new()
                 };
@@ -844,7 +844,7 @@ pub(crate) mod support {
                     let binding_ty = inference
                         .type_of_pat
                         .get(pattern)
-                        .map(|t| t.to_plain().render_canonical());
+                        .map(|t| t.render_canonical());
                     let ty_display = match &binding_ty {
                         Some(bt) if *bt != init_ty => format!("{init_ty} -> {bt}"),
                         _ => init_ty,
@@ -996,7 +996,7 @@ pub(crate) mod support {
                     Definition::TypeAlias(loc) => {
                         aliases.insert(
                             baml_compiler2_hir_ty::lower::qualify_def(db, *def, name),
-                            baml_compiler2_hir_ty::lower::type_alias_value(db, *loc).to_plain(),
+                            baml_compiler2_hir_ty::lower::type_alias_value(db, *loc),
                         );
                     }
                     Definition::Class(loc) => {
@@ -1116,8 +1116,7 @@ pub(crate) mod support {
                                 && let Definition::TypeAlias(alias_loc) = c.definition
                             {
                                 let resolved =
-                                    baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc)
-                                        .to_plain();
+                                    baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc);
                                 writeln!(
                                     output,
                                     "{kind_str} {fqn} = {}",
@@ -1201,12 +1200,12 @@ pub(crate) mod support {
                             format!(
                                 "{}: {}{}",
                                 param.name,
-                                param.ty.to_plain().render_canonical(),
+                                param.ty.render_canonical(),
                                 default_suffix
                             )
                         })
                         .collect();
-                    let ret = sig.ret.to_plain().render_canonical();
+                    let ret = sig.ret.render_canonical();
                     // Inferred throws from the package transitive throw set.
                     let inferred_throws: Option<String> = {
                         let key = baml_base::Name::new(&*fqn);
@@ -1219,19 +1218,23 @@ pub(crate) mod support {
                                 types.join(" | ")
                             })
                     };
-                    let throws = if sig.throws_declared {
-                        let declared = sig.throws.to_plain().render_canonical();
-                        match &inferred_throws {
-                            Some(inferred) => {
-                                format!(" throws {declared} infers {inferred}")
-                            }
-                            None => format!(" throws {declared}"),
+                    // "Written a clause?" is a source-level question, so the
+                    // display reads the syntax side; the signature itself
+                    // carries only the effective type.
+                    let clause_written =
+                        baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc)
+                            .throws
+                            .is_some();
+                    let throws = match (clause_written, &inferred_throws) {
+                        (true, Some(inferred)) => {
+                            format!(
+                                " throws {} infers {inferred}",
+                                sig.throws.render_canonical()
+                            )
                         }
-                    } else {
-                        match &inferred_throws {
-                            Some(inferred) => format!(" throws {inferred}"),
-                            None => " throws never".to_string(),
-                        }
+                        (true, None) => format!(" throws {}", sig.throws.render_canonical()),
+                        (false, Some(inferred)) => format!(" throws {inferred}"),
+                        (false, None) => " throws never".to_string(),
                     };
                     sig_display =
                         format!("{generics_display}({}) -> {ret}{throws}", params.join(", "));
@@ -2383,7 +2386,7 @@ pub(crate) mod support {
         inference
             .type_of_expr
             .get(&expr_id)
-            .map(|ty| ty.to_plain().render_canonical())
+            .map(|ty| ty.render_canonical())
             .unwrap_or_else(|| {
                 panic!(
                     "expression `{expr_text}` in function `{function_name}` has no inferred type"

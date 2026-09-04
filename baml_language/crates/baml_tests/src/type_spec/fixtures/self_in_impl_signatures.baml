@@ -8,13 +8,17 @@
 class SisScore {
     points int
 
-    implements baml.Comparable {
-        type CompareError = never
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never {
+            self.points == other.points
+        }
+    }
 
-        function compare(self, other: Self) -> int throws never {
+    implements baml.ops.Compare {
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
             let p = other.points;
              // ^ int
-            self.points.compare(p)
+            self.points.cmp(p)
         }
     }
 }
@@ -29,6 +33,6 @@ class SisPair {
     }
 }
 
-function sis_use(a: SisScore, b: SisScore) -> int throws never {
-    a.compare(b)
+function sis_use(a: SisScore, b: SisScore) -> baml.ops.Ordering throws never {
+    a.cmp(b)
 }

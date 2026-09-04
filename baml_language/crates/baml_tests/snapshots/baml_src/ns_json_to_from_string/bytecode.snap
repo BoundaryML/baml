@@ -226,7 +226,7 @@ function json_to_from_string.check_decode_error_path_contains_field() -> bool {
     load_var e
     store_var _4
     load_var _4
-    narrow_bind baml.json.JsonDecodeError, slot=3
+    narrow_bind baml.json.DecodeError, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -416,7 +416,7 @@ function json_to_from_string.level3(s: string) -> #0 {
     return
 }
 
-function json_to_from_string.make_decoder() -> (string) -> #0 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function json_to_from_string.make_decoder() -> (string) -> #0 throws baml.json.ParseError | baml.json.DecodeError {
     load_type #0
     make_closure .<lambda(make_decoder, 0)>, captures=0, ntypeargs=1
     return

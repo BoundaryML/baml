@@ -298,7 +298,7 @@ impl Parser {
         if members.len() == 1 {
             members.pop().unwrap()
         } else {
-            RuntimeTy::Union(members, TyAttr::default())
+            RuntimeTy::Union(members.into(), TyAttr::default())
         }
     }
 
@@ -385,7 +385,7 @@ impl Parser {
                     // Capitalized or otherwise — treat as class name.
                     name => RuntimeTy::Class(
                         TypeName::local(name.into()),
-                        Vec::new(),
+                        Box::new([]),
                         TyAttr::default(),
                     ),
                 }

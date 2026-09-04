@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.226.2](https://github.com/boundaryml/baml/compare/0.226.1..0.226.2) - 2026-08-31
+
+### Miscellaneous Chores
+
+- publish a clean follow-up BAML v0 release after a 0.226.1 source archive checksum mismatch was reported between proxy.golang.org and GitHub
+
 ## [0.226.1](https://github.com/boundaryml/baml/compare/0.226.0..0.226.1) - 2026-08-18
 
 ### Bug Fixes

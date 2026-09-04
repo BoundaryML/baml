@@ -92,7 +92,7 @@ function main() -> string {
     let _ = baml.json.to_string(baml.Uint8Array.from_hex("00ff"))
     "unexpected success"
   } catch (e) {
-    baml.json.JsonSerializationError => "serialization error"
+    baml.json.SerializationError => "serialization error"
   }
 }
 "#

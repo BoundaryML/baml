@@ -57,12 +57,25 @@ pub(crate) fn translate(ty: &Ty, ctx: &TyCtx<'_>) -> Result<TokenStream, Unsuppo
     translate_inner(ty, ctx, false)
 }
 
+/// Translate a function's declared throws contract.
+///
+/// Open BAML interfaces cannot be represented as Rust values. When one is
+/// present in a throws contract, leave it to `Error::Runtime` (which preserves
+/// its class name, message, and trace) while retaining the typed Rust surface
+/// for every representable concrete arm.
+pub(crate) fn translate_throws(ty: &Ty, ctx: &TyCtx<'_>) -> Result<TokenStream, Unsupported> {
+    let Some(filtered) = unions::filter_throws_type(ty, ctx.analysis) else {
+        return Ok(quote! { ::core::convert::Infallible });
+    };
+    translate(&filtered, ctx)
+}
+
 /// The absolute `crate::…` path of an emitted nominal type.
 pub(crate) fn type_path(name: &Name, analysis: &Analysis) -> TokenStream {
     let routed = routing::route(name).segments;
     let segments = analysis.renamed(&routed);
     let mods = segments.iter().map(|seg| idents::ident(seg));
-    let type_ident = idents::ident(name.name().as_str());
+    let type_ident = idents::ident(name.bare_name());
     quote! { crate::#(#mods::)*#type_ident }
 }
 
@@ -114,7 +127,13 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                     let Some(union_enum) = ctx.unions.lookup(ctx.leaf, arms) else {
                         return Err(Unsupported {
                             reason: unions::shape_error(arms).unwrap_or_else(|| {
-                                "union references a skipped or unknown type".to_string()
+                                format!(
+                                    "union references a skipped or unknown type: {}",
+                                    arms.iter()
+                                        .map(std::string::ToString::to_string)
+                                        .collect::<Vec<_>>()
+                                        .join(" | ")
+                                )
                             }),
                         });
                     };
@@ -164,6 +183,19 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             }
         }
         Ty::Class(name, args, _) => {
+            let builtin = name.to_string();
+            if builtin == "ai.FunctionSpec" && args.len() == 1 {
+                let output = translate_inner(&args[0], ctx, true)?;
+                return Ok(quote! { ::baml_bridge::FunctionSpec<#output> });
+            }
+            if builtin == "ai.stream.Stream" && args.len() == 2 {
+                let partial = translate_inner(&args[0], ctx, true)?;
+                let output = translate_inner(&args[1], ctx, true)?;
+                return Ok(quote! { ::baml_bridge::Stream<#partial, #output> });
+            }
+            if builtin == "ai.Prompt" && args.is_empty() {
+                return Ok(quote! { ::baml_bridge::Prompt });
+            }
             // The builtin opaque host-error class is the Rust surface of an
             // opaque host throw: it maps to `baml_bridge::HostCallable` (the
             // erased default), not an emitted class — it never appears in the
@@ -342,6 +374,107 @@ mod tests {
             .unwrap_or_else(|u| panic!("expected {ty} to translate, got: {}", u.reason))
     }
 
+    fn rendered_throws(ty: &Ty, pool: &SymbolPool) -> String {
+        let (analysis, warnings) = analyze(pool);
+        assert!(warnings.is_empty(), "unexpected analysis warnings");
+        let unions = crate::unions::collect(pool, &analysis);
+        let ctx = TyCtx {
+            analysis: &analysis,
+            unions: &unions,
+            leaf: &[],
+            boxing_for: None,
+            generic_params: &[],
+        };
+        translate_throws(ty, &ctx)
+            .map(|t| t.to_string())
+            .unwrap_or_else(|u| panic!("expected throws {ty} to translate, got: {}", u.reason))
+    }
+
+    fn open_interface() -> Ty {
+        Ty::Interface(
+            name("user", &[], "OpenError"),
+            Box::new([]),
+            Box::new([]),
+            baml_base::TyAttr::EMPTY,
+        )
+    }
+
+    fn concrete_or_open_interface() -> Ty {
+        Ty::Union(
+            Box::new([
+                Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                open_interface(),
+            ]),
+            baml_base::TyAttr::EMPTY,
+        )
+    }
+
+    #[test]
+    fn throws_with_no_representable_union_arms_is_infallible() {
+        let throws = Ty::Union(Box::new([open_interface()]), baml_base::TyAttr::EMPTY);
+        assert_eq!(
+            rendered_throws(&throws, &SymbolPool::default()),
+            ":: core :: convert :: Infallible"
+        );
+    }
+
+    #[test]
+    fn throws_filtering_recurses_through_lists_and_maps() {
+        let list = Ty::List(
+            Box::new(concrete_or_open_interface()),
+            baml_base::TyAttr::EMPTY,
+        );
+        let map = Ty::Map {
+            key: Box::new(Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            }),
+            value: Box::new(concrete_or_open_interface()),
+            attr: baml_base::TyAttr::EMPTY,
+        };
+        let pool = SymbolPool::default();
+
+        assert_eq!(
+            rendered_throws(&list, &pool),
+            ":: std :: vec :: Vec < :: core :: primitive :: i64 >"
+        );
+        assert_eq!(
+            rendered_throws(&map, &pool),
+            ":: baml_bridge :: Map < :: std :: string :: String , :: core :: primitive :: i64 >"
+        );
+    }
+
+    #[test]
+    fn throws_filtering_recurses_through_class_arguments() {
+        let envelope = name("user", &[], "Envelope");
+        let mut envelope_symbol = class(
+            &envelope,
+            vec![(
+                "value",
+                Ty::TypeVar(
+                    baml_codegen_types::ParamTy::new(0, baml_base::Name::new("T")),
+                    baml_base::TyAttr::EMPTY,
+                ),
+            )],
+        );
+        let Symbol::Class(envelope_class) = &mut envelope_symbol else {
+            unreachable!()
+        };
+        envelope_class.generic_params = vec![baml_base::Name::new("T")];
+        let pool = SymbolPool::from([(envelope.clone(), envelope_symbol)]);
+        let throws = Ty::Class(
+            envelope,
+            Box::new([concrete_or_open_interface()]),
+            baml_base::TyAttr::EMPTY,
+        );
+
+        assert_eq!(
+            rendered_throws(&throws, &pool),
+            "crate :: Envelope < :: core :: primitive :: i64 >"
+        );
+    }
+
     #[test]
     fn primitives() {
         assert_eq!(
@@ -407,28 +540,28 @@ mod tests {
         let expected = ":: std :: option :: Option < :: core :: primitive :: i64 >";
         assert_eq!(
             rendered(&Ty::Union(
-                vec![
+                Box::new([
                     Ty::Int {
                         attr: baml_base::TyAttr::EMPTY
                     },
                     Ty::Null {
                         attr: baml_base::TyAttr::EMPTY
                     }
-                ],
+                ]),
                 baml_base::TyAttr::EMPTY
             )),
             expected
         );
         assert_eq!(
             rendered(&Ty::Union(
-                vec![
+                Box::new([
                     Ty::Null {
                         attr: baml_base::TyAttr::EMPTY
                     },
                     Ty::Int {
                         attr: baml_base::TyAttr::EMPTY
                     }
-                ],
+                ]),
                 baml_base::TyAttr::EMPTY
             )),
             expected
@@ -483,14 +616,14 @@ mod tests {
         assert!(
             translate(
                 &Ty::Union(
-                    vec![
+                    Box::new([
                         Ty::Int {
                             attr: baml_base::TyAttr::EMPTY
                         },
                         Ty::String {
                             attr: baml_base::TyAttr::EMPTY
                         }
-                    ],
+                    ]),
                     baml_base::TyAttr::EMPTY
                 ),
                 &ctx
@@ -500,7 +633,7 @@ mod tests {
         assert!(
             translate(
                 &Ty::Union(
-                    vec![
+                    Box::new([
                         Ty::Int {
                             attr: baml_base::TyAttr::EMPTY
                         },
@@ -510,7 +643,7 @@ mod tests {
                         Ty::Null {
                             attr: baml_base::TyAttr::EMPTY
                         }
-                    ],
+                    ]),
                     baml_base::TyAttr::EMPTY
                 ),
                 &ctx
@@ -545,7 +678,7 @@ mod tests {
         };
         assert_eq!(
             translate(
-                &Ty::Class(resume, Vec::new(), baml_base::TyAttr::EMPTY),
+                &Ty::Class(resume, Box::new([]), baml_base::TyAttr::EMPTY),
                 &ctx
             )
             .unwrap()
@@ -578,7 +711,13 @@ mod tests {
             boxing_for: None,
             generic_params: &[],
         };
-        assert!(translate(&Ty::Class(bad, Vec::new(), baml_base::TyAttr::EMPTY), &ctx).is_err());
+        assert!(
+            translate(
+                &Ty::Class(bad, Box::new([]), baml_base::TyAttr::EMPTY),
+                &ctx
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -587,18 +726,18 @@ mod tests {
         // already heap-indirected).
         let tree = name("user", &[], "Tree");
         let optional_self = Ty::Union(
-            vec![
-                Ty::Class(tree.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+            Box::new([
+                Ty::Class(tree.clone(), Box::new([]), baml_base::TyAttr::EMPTY),
                 Ty::Null {
                     attr: baml_base::TyAttr::EMPTY,
                 },
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let self_list = Ty::List(
             Box::new(Ty::Class(
                 tree.clone(),
-                Vec::new(),
+                Box::new([]),
                 baml_base::TyAttr::EMPTY,
             )),
             baml_base::TyAttr::EMPTY,
@@ -637,21 +776,21 @@ mod tests {
         let a = name("user", &[], "A");
         let b = name("user", &[], "B");
         let a_field = Ty::Union(
-            vec![
-                Ty::Class(b.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+            Box::new([
+                Ty::Class(b.clone(), Box::new([]), baml_base::TyAttr::EMPTY),
                 Ty::Null {
                     attr: baml_base::TyAttr::EMPTY,
                 },
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let b_field = Ty::Union(
-            vec![
-                Ty::Class(a.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+            Box::new([
+                Ty::Class(a.clone(), Box::new([]), baml_base::TyAttr::EMPTY),
                 Ty::Null {
                     attr: baml_base::TyAttr::EMPTY,
                 },
-            ],
+            ]),
             baml_base::TyAttr::EMPTY,
         );
         let pool = SymbolPool::from([
@@ -687,7 +826,7 @@ mod tests {
                     &outer,
                     vec![(
                         "inner",
-                        Ty::Class(inner.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+                        Ty::Class(inner.clone(), Box::new([]), baml_base::TyAttr::EMPTY),
                     )],
                 ),
             ),
@@ -718,7 +857,7 @@ mod tests {
                     &holder,
                     vec![(
                         "bad",
-                        Ty::Class(bad.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+                        Ty::Class(bad.clone(), Box::new([]), baml_base::TyAttr::EMPTY),
                     )],
                 ),
             ),
@@ -876,7 +1015,7 @@ mod tests {
         assert!(warnings.is_empty());
         assert_eq!(
             translate(
-                &Ty::Class(in_foo_ns, Vec::new(), baml_base::TyAttr::EMPTY),
+                &Ty::Class(in_foo_ns, Box::new([]), baml_base::TyAttr::EMPTY),
                 &TyCtx {
                     analysis: &analysis,
                     unions: &NO_UNIONS,

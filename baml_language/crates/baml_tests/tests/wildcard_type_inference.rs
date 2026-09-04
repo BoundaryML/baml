@@ -13,7 +13,7 @@
 //!     stays exhaustive.
 //!
 //! Both are filled during type checking from real inference — there is no
-//! spawn/throws special-casing; `_` lowers to a single `Ty::Infer` hole.
+//! spawn/throws special-casing; `_` lowers to a single inference-hole node.
 //!
 //! Tests here use `#[should_panic]` for compile-error assertions, which cannot be
 //! expressed in the BAML corpus.
@@ -207,7 +207,7 @@ async fn throws_wildcard_absorbs_stdlib_throws() {
 /// full inferred union (the named `BadInput` plus the stdlib json throws), not
 /// just the declared member.
 #[tokio::test]
-#[should_panic(expected = "JsonParseError")]
+#[should_panic(expected = "ParseError")]
 async fn throws_wildcard_caller_sees_full_union() {
     let _ = baml_test!(
         r#"

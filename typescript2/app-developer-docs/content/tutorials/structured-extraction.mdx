@@ -1,0 +1,52 @@
+---
+title: Build a structured extractor
+description: Model a receipt, extract typed data, call the generated client, and strengthen the boundary.
+breadcrumbs:
+  - href: /tutorials
+    label: Tutorials
+  - label: Structured extraction
+---
+
+## What you will build
+
+This tutorial builds a server-side function that turns receipt text into a typed list of items and an optional total. It assumes a configured model client and a generated TypeScript client.
+
+## 1. Model the result
+
+Start with the data the application needs. Keep monetary fields numeric so callers do not need to parse display strings.
+
+<BamlSnippet id="receipts/extract-receipt" region="types" />
+
+## 2. Add the function
+
+Declare the input and output, select the configured client, and include the generated output instructions in the prompt.
+
+<BamlSnippet id="receipts/extract-receipt" region="function" />
+
+> Keep the prompt focused on the task. The return type already carries the structural contract into the generated output instructions.
+
+## 3. Call the client
+
+Check the BAML project, regenerate the client, and call the function from server-side application code.
+
+```typescript
+import { b } from "./baml_client"
+
+export async function extractReceipt(text: string) {
+  const receipt = await b.ExtractReceipt(text)
+
+  return {
+    lineItems: receipt.items.length,
+    total: receipt.total ?? null,
+  }
+}
+```
+
+## 4. Harden the boundary
+
+- Add representative tests for clean, noisy, and incomplete receipts.
+- Decide whether a missing total is acceptable before making it optional.
+- Keep credentials and model calls in server-only modules.
+- Regenerate the client whenever the result model changes.
+
+Review the [TypeScript bridge](/baml/bridges/typescript) for host-language details, or open the [functions chapter](/baml/book/foundations/functions) for the underlying language model.

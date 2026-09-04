@@ -32,7 +32,7 @@
 
 use std::collections::BTreeMap;
 
-use baml_base::qualified_name::{AI_STREAM_DONE, AI_STREAM_STREAM};
+use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_DONE, AI_STREAM_STREAM};
 use baml_codegen_types::{Name, Ty};
 
 use crate::routing::{PackagePath, java_identifier, route};
@@ -293,8 +293,14 @@ fn annotate_element(ty: &Ty, rendered: String, aliases: &AliasTable) -> String {
 /// `baml_sdk.baml.media.*` paths because the runtime jar provides
 /// classes at exactly those packages).
 fn qualified_type(name: &Name) -> String {
+    if name.to_string() == "ai.Prompt" {
+        return "baml_bridge.BamlPrompt".to_string();
+    }
     if name.to_string() == AI_STREAM_STREAM {
         return "baml_bridge.BamlStream".to_string();
+    }
+    if name.to_string() == AI_FUNCTION_SPEC {
+        return "baml_bridge.BamlFunctionSpec".to_string();
     }
     if name.to_string() == AI_STREAM_DONE {
         return "baml_sdk.ai.stream.Done".to_string();
@@ -927,10 +933,10 @@ mod tests {
         }
     }
     fn union(items: Vec<Ty>) -> Ty {
-        Ty::Union(items, a())
+        Ty::Union(items.into(), a())
     }
     fn class_ty(n: Name, args: Vec<Ty>) -> Ty {
-        Ty::Class(n, args, a())
+        Ty::Class(n, args.into(), a())
     }
     fn enum_ty(n: Name) -> Ty {
         Ty::Enum(n, a())
@@ -943,7 +949,7 @@ mod tests {
     }
     fn callable(params: Vec<CallableParam>, ret: Ty) -> Ty {
         Ty::Function {
-            params,
+            params: params.into(),
             ret: Box::new(ret),
             throws: Box::new(Ty::Never { attr: a() }),
             attr: a(),

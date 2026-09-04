@@ -155,7 +155,7 @@ impl Span {
 pub type Name = SmolStr;
 
 /// A possibly-qualified type-path identifier as written in source
-/// (e.g., `MyClass`, `baml.errors.DevOther`, `root.http.Response`).
+/// (e.g., `MyClass`, `baml.errors.Io`, `root.http.Response`).
 ///
 /// Stored as a `Vec<Name>` so consumers (TIR resolution, MIR field-order
 /// lookup) can read the segments directly, rather than re-splitting a dotted

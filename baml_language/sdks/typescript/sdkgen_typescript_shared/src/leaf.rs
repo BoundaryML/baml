@@ -20,7 +20,7 @@ use std::{
     fmt::Write as _,
 };
 
-use baml_base::qualified_name::AI_STREAM_STREAM;
+use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM};
 use baml_codegen_types::FunctionArgumentDefault;
 
 use crate::{
@@ -104,6 +104,8 @@ const RUNTIME_OWNED_CLASS_REEXPORTS: &[(&str, &str)] = &[
     ("baml.media.Video", "BamlVideo"),
     ("baml.media.Pdf", "BamlPdf"),
     (AI_STREAM_STREAM, "BamlStream"),
+    (AI_FUNCTION_SPEC, "BamlFunctionSpec"),
+    ("ai.Prompt", "BamlPrompt"),
     ("reflect.Type", "reflectType"),
 ];
 
@@ -1330,7 +1332,7 @@ mod tests {
                     "r",
                     Ty::Class(
                         name("user", &["lorem"], "Resume"),
-                        vec![],
+                        Box::new([]),
                         baml_base::TyAttr::EMPTY,
                     ),
                 )],
@@ -1402,7 +1404,7 @@ mod tests {
                     vec![],
                     Ty::Class(
                         name("boundary", &[], "LocalId"),
-                        vec![],
+                        Box::new([]),
                         baml_base::TyAttr::EMPTY,
                     ),
                 ),
@@ -1413,7 +1415,7 @@ mod tests {
                     vec![],
                     Ty::Class(
                         name("boundary", &[], "LocalId"),
-                        vec![],
+                        Box::new([]),
                         baml_base::TyAttr::EMPTY,
                     ),
                 ),

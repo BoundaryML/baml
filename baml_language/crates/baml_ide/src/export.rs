@@ -72,7 +72,7 @@ type Db = dyn baml_compiler2_ppir::Db;
 
 // ── Type heads (rustdoc-style lossy impl attachment) ─────────────────────────
 //
-// An impl's `for` type may be generic (`implements<T extends Comparable>
+// An impl's `for` type may be generic (`implements<T extends baml.ops.Compare>
 // Sortable for T[]`), so attaching impls to a declaration cannot go through
 // the type checker's `impls_for_type` — that path *discharges bounds*, and
 // with no scope bounds registered for `T` it would silently drop every
@@ -158,7 +158,7 @@ fn ty_head(ty: &Ty) -> Option<TyHead> {
         | Ty::Resource { .. }
         | Ty::PromptAst { .. }
         | Ty::Void { .. } => None,
-        Ty::Unknown { .. } | Ty::Never { .. } | Ty::Error { .. } | Ty::Infer { .. } => None,
+        Ty::Unknown { .. } | Ty::Never { .. } | Ty::Error { .. } => None,
     }
 }
 
@@ -183,7 +183,7 @@ fn impl_attaches(impl_head: &TyHead, decl_head: &TyHead) -> bool {
 // M:baml.time.Duration.abs          method
 // F:user.Point.x                    field
 // E:user.Color.Red                  enum variant
-// A:baml.Comparable.CompareError    associated type
+// A:baml.ops.Compare.Ordering       associated type
 // M:(int as baml.ops.Add<bigint>).add   method reached through an impl block
 // ```
 //
@@ -285,9 +285,8 @@ impl SymbolId {
     /// (or its contributing impl block) rather than the namespace.
     fn of_definition(db: &Db, def: Definition<'_>) -> Option<Self> {
         if let Definition::Function(func) = def {
-            // An impl-contributed method is addressed through its block, even
-            // when the block is written in the class body and the method is
-            // therefore also a class method: `Duration` implementing both
+            // An impl-contributed method is addressed through its block
+            // (wherever the block is written): `Duration` implementing both
             // `Multiply<int>` and `Multiply<bigint>` contributes two methods
             // named `mul`, and `M:baml.time.Duration.mul` cannot name both.
             if let Some(imp) = contributing_impl(db, func) {
@@ -316,7 +315,8 @@ impl SymbolId {
                         &function_name(db, func),
                     ));
                 }
-                Some(item_data::MethodOwner::FreeImpl(_)) | None => {}
+                // Impl-owned methods took the `contributing_impl` road above.
+                Some(item_data::MethodOwner::Impl(_)) | None => {}
             }
         }
 
@@ -385,20 +385,13 @@ impl SymbolId {
     }
 }
 
-/// The impl block that contributes `function`, if any: the block itself for
-/// free-impl methods, or the class's (in-body/merged) block that lists it.
+/// The impl block that contributes `function`, if any. Impl-block methods
+/// are Impl-owned (in-body and free alike), so the compiler's owner record
+/// answers directly — a class-owned method is never an impl member.
 fn contributing_impl<'db>(db: &'db Db, function: FunctionLoc<'db>) -> Option<ImplLoc<'db>> {
     match item_data::method_owner(db, function)? {
-        item_data::MethodOwner::FreeImpl(imp) => Some(imp),
-        item_data::MethodOwner::Class(class) => item_data::class_impls(db, class)
-            .iter()
-            .copied()
-            .find(|&imp| {
-                item_data::impl_block_data(db, imp)
-                    .methods
-                    .contains(&function)
-            }),
-        item_data::MethodOwner::Interface(_) => None,
+        item_data::MethodOwner::Impl(imp) => Some(imp),
+        item_data::MethodOwner::Class(_) | item_data::MethodOwner::Interface(_) => None,
     }
 }
 
@@ -455,7 +448,7 @@ impl TyRef {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GenericExport {
     pub name: String,
-    /// Bound interfaces, rendered (`baml.Comparable`); listed, not proven.
+    /// Bound interfaces, rendered (`baml.ops.Compare`); listed, not proven.
     pub bounds: Vec<String>,
 }
 
@@ -587,7 +580,7 @@ pub struct ImplExport {
     pub generics: Vec<GenericExport>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub assoc_bindings: Vec<AssocBindingExport>,
-    /// Overrides plus inherited defaults, sorted by name.
+    /// Provided methods plus adopted defaults, sorted by name.
     pub methods: Vec<FunctionExport>,
     pub source: SourceExport,
 }
@@ -860,9 +853,9 @@ fn interface_generics(db: &Db, iface: InterfaceLoc<'_>) -> Vec<(ParamTy, Vec<Int
 
 /// An interned bounds map (the lowering layer's shape) as a plain list.
 fn plain_bounds(
-    interned: impl IntoIterator<Item = (ParamTy, Vec<baml_type::interned::InterfaceRef>)>,
+    bounds: impl IntoIterator<Item = (ParamTy, Vec<baml_type::Interface>)>,
 ) -> Vec<(ParamTy, Vec<InterfaceBound>)> {
-    interned
+    bounds
         .into_iter()
         .map(|(param, refs)| {
             (
@@ -870,16 +863,8 @@ fn plain_bounds(
                 refs.iter()
                     .map(|bound| InterfaceBound {
                         name: bound.name.clone(),
-                        generics: bound
-                            .generics
-                            .iter()
-                            .map(baml_type::interned::Ty::to_plain)
-                            .collect(),
-                        associated_types: bound
-                            .associated_types
-                            .iter()
-                            .map(|(name, t)| (name.clone(), t.to_plain()))
-                            .collect(),
+                        generics: bound.generics.iter().cloned().collect(),
+                        associated_types: bound.associated_types.iter().cloned().collect(),
                     })
                     .collect(),
             )
@@ -909,13 +894,13 @@ pub fn export_package<'db>(db: &'db Db, package: PackageId<'db>) -> PackageExpor
             .iter()
             .map(|(name, def)| (name, *def))
             .collect();
-        named.sort_by(|(a, _), (b, _)| a.cmp(b));
+        named.sort_by_key(|(name, _)| *name);
         let mut values: Vec<(&Name, Definition<'db>)> = ns_items
             .values
             .iter()
             .map(|(name, def)| (name, *def))
             .collect();
-        values.sort_by(|(a, _), (b, _)| a.cmp(b));
+        values.sort_by_key(|(name, _)| *name);
         named.extend(values);
         for (_, def) in named {
             if let Some(item) = export_item(db, def, &impl_index) {
@@ -1004,7 +989,7 @@ fn source_export(db: &Db, file: SourceFile, span: TextRange) -> SourceExport {
 /// when it is listed under one.
 ///
 /// An impl entry is addressed under its block rather than by the declaring
-/// symbol's id: an inherited default is re-listed by every implementor, and
+/// symbol's id: an adopted default is re-listed by every implementor, and
 /// a method declared in a free impl has no symbol id at all. The declaring
 /// id is kept in `declared_by`, which is what a consumer dedupes on when it
 /// wants to treat one declaration as one thing.
@@ -1034,7 +1019,7 @@ fn function_export(
                 })
                 .unwrap_or_default();
             // `declared_by` is only worth stating when it differs — an
-            // inherited default lives on the interface, while a method the
+            // adopted default lives on the interface, while a method the
             // block writes itself is already named by `id`.
             let declared_by = declared.filter(|declared| declared != &qualified);
             (qualified, declared_by)
@@ -1112,7 +1097,7 @@ fn required_method_export(db: &Db, iface: InterfaceLoc<'_>, index: usize) -> Req
             ret,
             throws,
             ..
-        } => (params.as_slice(), ret.as_ref(), throws.as_ref()),
+        } => (&**params, ret.as_ref(), throws.as_ref()),
         // A malformed required signature still exports, as unresolved.
         other => (&[][..], other, other),
     };
@@ -1318,9 +1303,7 @@ fn export_item<'db>(
             }
         }
         Definition::TypeAlias(alias) => ItemDetail::TypeAlias {
-            resolved: TyRef::of(
-                &baml_compiler2_hir_ty::lower::type_alias_value(db, alias).to_plain(),
-            ),
+            resolved: TyRef::of(&baml_compiler2_hir_ty::lower::type_alias_value(db, alias)),
         },
         Definition::Function(function) => ItemDetail::Function {
             signature: function_export(db, function, false, None).signature,
@@ -1381,7 +1364,7 @@ mod tests {
     /// Consumers key on ids — a report diffs on them, a cache blesses on
     /// them — so a collision is not a cosmetic flaw but a wrong answer about
     /// a different symbol. The pressure is entirely on impl blocks: an
-    /// inherited default is re-listed by every implementor, which is why an
+    /// adopted default is re-listed by every implementor, which is why an
     /// impl entry is addressed through its block and keeps the declaration
     /// in `declared_by`.
     ///
@@ -1487,8 +1470,8 @@ mod tests {
                 .unwrap_or_else(|| panic!("missing item {id}"))
         };
 
-        // Cross-link: baml.Int's impl list includes the Comparable block,
-        // and that block's export carries `compare`.
+        // Cross-link: baml.Int's impl list includes the Compare block,
+        // and that block's export carries `cmp`.
         let int = find("T:baml.Int");
         let int_impls: Vec<&str> = int["impls"]
             .as_array()
@@ -1498,20 +1481,20 @@ mod tests {
             .collect();
         let comparable_impl = int_impls
             .iter()
-            .find(|id| id.contains("baml.Comparable for int"))
-            .unwrap_or_else(|| panic!("Int lists its Comparable impl: {int_impls:?}"));
+            .find(|id| id.contains("baml.ops.Compare for int"))
+            .unwrap_or_else(|| panic!("Int lists its Compare impl: {int_impls:?}"));
         let impls = json["impls"].as_array().unwrap();
         let block = impls
             .iter()
             .find(|imp| imp["id"] == **comparable_impl)
-            .expect("Comparable-for-int block is exported");
+            .expect("Compare-for-int block is exported");
         assert!(
             block["methods"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .any(|m| m["name"] == "compare"),
-            "compare is listed"
+                .any(|m| m["name"] == "cmp"),
+            "cmp is listed"
         );
 
         // The generic Sortable impl attaches to Array with its symbolic
@@ -1531,21 +1514,18 @@ mod tests {
         );
 
         // Interface records list their implementors.
-        let comparable = find("T:baml.Comparable");
+        let comparable = find("T:baml.ops.Compare");
         assert!(
             comparable["implementors"].as_array().unwrap().len() >= 4,
-            "Comparable lists implementors"
+            "Compare lists implementors"
         );
         // Required-method signature: Self stays symbolic in the export.
         let required = comparable["required_methods"].as_array().unwrap();
-        let compare = required
+        let cmp = required
             .iter()
-            .find(|m| m["name"] == "compare")
-            .expect("Comparable::compare is required");
-        assert_eq!(
-            compare["signature"]["throws"]["display"],
-            "(Self as baml.Comparable).CompareError"
-        );
+            .find(|m| m["name"] == "cmp")
+            .expect("Compare::cmp is required");
+        assert_eq!(cmp["signature"]["params"][0]["ty"]["display"], "Self");
 
         // An interface exports the parameters it declares, and only those.
         // The in-scope view leads with the implicit `Self`, which belongs to
@@ -1569,14 +1549,14 @@ mod tests {
         );
         // Associated types are exported as members of the interface that
         // owns them.
-        let sortable = find("T:baml.Sortable");
+        let summable = find("T:baml.Summable");
         assert!(
-            sortable["assoc_types"]
+            summable["assoc_types"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .any(|a| a["name"] == "SortError"),
-            "Sortable carries SortError"
+                .any(|a| a["name"] == "Sum"),
+            "Summable carries Sum"
         );
 
         // Synthetic companions are present and flagged, never dropped.

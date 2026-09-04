@@ -517,11 +517,7 @@ fn collect_constructor_key_usages(
             continue;
         };
 
-        let Some(obj_ty) = inference
-            .type_of_expr
-            .get(&expr_id)
-            .map(baml_type::interned::Ty::to_plain)
-        else {
+        let Some(obj_ty) = inference.type_of_expr.get(&expr_id).cloned() else {
             continue;
         };
         let Ty::Class(ref qtn, _, _) = obj_ty else {

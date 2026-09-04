@@ -352,26 +352,14 @@ function control_flow.describe_or_pattern(r: control_flow.Ok | control_flow.Warn
   L1:
     load_var r
     load_field .0
-    jump L5
+    jump L3
 
   L2:
     load_var r
-    type_tag
-    load_const Ok
-    cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
+    load_type control_flow.HasValue
+    virtual_load_field .value
 
   L3:
-    load_var r
-    load_field .0
-    jump L5
-
-  L4:
-    load_var r
-    load_field .0
-
-  L5:
     return
 }
 
@@ -588,27 +576,14 @@ function control_flow.pick_let_else(r: control_flow.Ok | control_flow.Warn | con
 
   L1:
     load_const "err"
-    jump L5
+    jump L3
 
   L2:
     load_var r
-    store_var_load_var s
-    type_tag
-    load_const Ok
-    cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
+    load_type control_flow.HasValue
+    virtual_load_field .value
 
   L3:
-    load_var s
-    load_field .0
-    jump L5
-
-  L4:
-    load_var s
-    load_field .0
-
-  L5:
     return
 }
 

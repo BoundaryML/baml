@@ -1,4 +1,14 @@
+export interface SlackMrkdwnText {
+  text: string;
+  type: 'mrkdwn';
+}
+
+export type SlackBlock =
+  | { text: SlackMrkdwnText; type: 'section' }
+  | { elements: SlackMrkdwnText[]; type: 'context' };
+
 export interface WeeklyPost {
+  blocks?: SlackBlock[];
   channel: string;
   file?: {
     altText: string;
@@ -62,7 +72,11 @@ export async function postToSlack(
     await slackApi(
       token,
       'chat.postMessage',
-      { channel: message.channel, text: message.text },
+      {
+        channel: message.channel,
+        text: message.text,
+        ...(message.blocks?.length ? { blocks: message.blocks } : {}),
+      },
       fetchImpl,
     );
     return;
@@ -97,7 +111,9 @@ export async function postToSlack(
     {
       channel_id: message.channel,
       files: [{ id: ticket.file_id, title: message.file.title }],
-      initial_comment: message.text,
+      ...(message.blocks?.length
+        ? { blocks: message.blocks }
+        : { initial_comment: message.text }),
     },
     fetchImpl,
     'form',

@@ -151,7 +151,7 @@ fn dedup_and_collapse(types: Vec<Ty>, attr: TyAttr) -> Ty {
     match members.len() {
         0 => Ty::Never { attr },
         1 => members.into_iter().next().unwrap(),
-        _ => Ty::Union(members, attr),
+        _ => Ty::Union(members.into(), attr),
     }
 }
 
@@ -202,6 +202,20 @@ pub fn contains_error_recovery(ty: &Ty) -> bool {
 }
 
 impl Ty {
+    /// The bottom type with default attributes.
+    pub fn never() -> Self {
+        Ty::Never {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// The error-recovery sentinel with default attributes.
+    pub fn error() -> Self {
+        Ty::Error {
+            attr: TyAttr::default(),
+        }
+    }
+
     /// Whether this type may be the *implementor* (`for`-target) of an interface
     /// implementation — i.e. `implement I for <Self>` is allowed.
     ///
@@ -261,8 +275,7 @@ impl Ty {
             | Ty::TypeAlias(..)
             | Ty::Void { .. }
             | Ty::Unknown { .. }
-            | Ty::Error { .. }
-            | Ty::Infer { .. } => false,
+            | Ty::Error { .. } => false,
         }
     }
 
@@ -326,8 +339,7 @@ impl Ty {
             | Ty::TypeVar(..)
             | Ty::AssociatedTypeProjection { .. }
             | Ty::TypeAlias(..)
-            | Ty::Error { .. }
-            | Ty::Infer { .. } => false,
+            | Ty::Error { .. } => false,
         }
     }
 
@@ -401,14 +413,17 @@ impl Ty {
     /// `A | B | null`, `T??` stays `T?`, and `null?` is just `null`.
     pub fn optional(inner: Ty) -> Self {
         match inner {
-            Ty::Union(mut members, attr) => {
-                if !members.iter().any(Ty::is_null) {
+            Ty::Union(members, attr) => {
+                if members.iter().any(Ty::is_null) {
+                    Ty::Union(members, attr)
+                } else {
+                    let mut members = members.into_vec();
                     members.push(Ty::null());
+                    Ty::Union(members.into(), attr)
                 }
-                Ty::Union(members, attr)
             }
             n @ Ty::Null { .. } => n,
-            other => Ty::Union(vec![other, Ty::null()], TyAttr::default()),
+            other => Ty::Union(Box::new([other, Ty::null()]), TyAttr::default()),
         }
     }
 
@@ -431,7 +446,8 @@ impl Ty {
     pub fn strip_null(&self) -> Ty {
         match self {
             Ty::Union(members, attr) => {
-                let non_null: Vec<Ty> = members.iter().filter(|m| !m.is_null()).cloned().collect();
+                let non_null: Box<[Ty]> =
+                    members.iter().filter(|m| !m.is_null()).cloned().collect();
                 match non_null.len() {
                     0 => self.clone(),
                     1 => non_null.into_iter().next().expect("len checked"),
@@ -456,7 +472,7 @@ impl Ty {
     pub fn remove_null(&self) -> Ty {
         match self {
             Ty::Union(members, _) => {
-                let filtered: Vec<Ty> = members
+                let filtered: Box<[Ty]> = members
                     .iter()
                     .filter(|member| !matches!(member, Ty::Null { .. }))
                     .cloned()
@@ -496,7 +512,7 @@ impl Ty {
                 attr,
             },
             Ty::Class(name, type_args, attr) => {
-                let widened: Vec<Ty> = type_args.into_iter().map(Ty::widen_fresh).collect();
+                let widened: Box<[Ty]> = type_args.into_iter().map(Ty::widen_fresh).collect();
                 Ty::Class(name, widened, attr)
             }
             other => other,
@@ -515,14 +531,18 @@ impl Ty {
 
     /// `Class(name)` with default attributes (local module path), no type args.
     pub fn class(name: &str) -> Self {
-        Ty::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default())
+        Ty::Class(
+            TypeName::local(name.into()),
+            Box::new([]),
+            TyAttr::default(),
+        )
     }
 
     /// `Class(name, args)` under the `"user"` package (matches compiler2 output for user-defined classes).
     pub fn user_class_with_args(name: &str, args: Vec<Ty>) -> Self {
         Ty::Class(
             QualifiedTypeName::local(Name::new(name)),
-            args,
+            args.into(),
             TyAttr::default(),
         )
     }
@@ -641,8 +661,7 @@ impl Ty {
             Ty::TypeVar(..)
             | Ty::AssociatedTypeProjection { .. }
             | Ty::Never { .. }
-            | Ty::Error { .. }
-            | Ty::Infer { .. } => Err("compiler-only type should not reach runtime".to_string()),
+            | Ty::Error { .. } => Err("compiler-only type should not reach runtime".to_string()),
             Ty::Int { .. }
             | Ty::Bigint { .. }
             | Ty::Float { .. }
@@ -666,17 +685,200 @@ impl Ty {
     }
 }
 
-impl<N: Clone> Ty<N> {
-    fn needs_postfix_parens(&self) -> bool {
-        matches!(self, Ty::Union(..) | Ty::Function { .. })
+// The lowering-stage constructors type-expression lowering builds with.
+// Hand-mirrored from the `Ty` set above until the `ty_family!` macro learns
+// to generate per-member constructors (the D3 interned-member work makes
+// that worthwhile for three members; two is not yet a pattern).
+impl LoweringTy {
+    /// `int` with default attributes.
+    pub fn int() -> Self {
+        LoweringTy::Int {
+            attr: TyAttr::default(),
+        }
     }
 
-    fn needs_function_result_parens(&self) -> bool {
-        matches!(self, Ty::Function { .. })
+    /// `float` with default attributes.
+    pub fn float() -> Self {
+        LoweringTy::Float {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `string` with default attributes.
+    pub fn string() -> Self {
+        LoweringTy::String {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `bool` with default attributes.
+    pub fn bool() -> Self {
+        LoweringTy::Bool {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `null` with default attributes.
+    pub fn null() -> Self {
+        LoweringTy::Null {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `never` with default attributes.
+    pub fn never() -> Self {
+        LoweringTy::Never {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `void` with default attributes.
+    pub fn void() -> Self {
+        LoweringTy::Void {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `unknown` (the top type) with default attributes.
+    pub fn unknown() -> Self {
+        LoweringTy::Unknown {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// The error-recovery sentinel with default attributes.
+    pub fn error() -> Self {
+        LoweringTy::Error {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// The `_` inference hole with default attributes.
+    pub fn infer() -> Self {
+        LoweringTy::Infer {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `T[]` (list) with default attributes.
+    pub fn list(inner: LoweringTy) -> Self {
+        LoweringTy::List(Box::new(inner), TyAttr::default())
+    }
+
+    /// `A | B | ...` (union) with default attributes.
+    pub fn union(members: impl IntoIterator<Item = LoweringTy>) -> Self {
+        LoweringTy::Union(members.into_iter().collect(), TyAttr::default())
+    }
+
+    /// `T?` — sugar for `T | null`, flattened and idempotent; mirrors
+    /// [`Ty::optional`].
+    pub fn optional(inner: LoweringTy) -> Self {
+        match inner {
+            LoweringTy::Union(members, attr) => {
+                if members.iter().any(LoweringTy::is_null) {
+                    LoweringTy::Union(members, attr)
+                } else {
+                    let mut members = members.into_vec();
+                    members.push(LoweringTy::null());
+                    LoweringTy::Union(members.into(), attr)
+                }
+            }
+            n @ LoweringTy::Null { .. } => n,
+            other => LoweringTy::Union(Box::new([other, LoweringTy::null()]), TyAttr::default()),
+        }
+    }
+
+    /// True if this is exactly the `null` type.
+    pub fn is_null(&self) -> bool {
+        matches!(self, LoweringTy::Null { .. })
+    }
+
+    /// Deep node predicate: does any node in this tree satisfy `pred`?
+    ///
+    /// The plain members carry no intern-time flags, so containment
+    /// questions walk. A hand-written traversal until the `ty_family!`
+    /// macro generates per-member child visitors.
+    pub fn any_node(&self, pred: &mut impl FnMut(&LoweringTy) -> bool) -> bool {
+        if pred(self) {
+            return true;
+        }
+        match self {
+            LoweringTy::List(inner, _) => inner.any_node(pred),
+            LoweringTy::Map { key, value, .. } => key.any_node(pred) || value.any_node(pred),
+            LoweringTy::Union(members, _) => members.iter().any(|member| member.any_node(pred)),
+            LoweringTy::Class(_, args, _) => args.iter().any(|arg| arg.any_node(pred)),
+            LoweringTy::Interface(_, args, pins, _) => {
+                args.iter().any(|arg| arg.any_node(pred))
+                    || pins.iter().any(|(_, ty)| ty.any_node(pred))
+            }
+            LoweringTy::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                params.iter().any(|param| param.ty.any_node(pred))
+                    || ret.any_node(pred)
+                    || throws.any_node(pred)
+            }
+            LoweringTy::Future(value, error, _) => value.any_node(pred) || error.any_node(pred),
+            LoweringTy::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                base.any_node(pred)
+                    || interface.generics.iter().any(|arg| arg.any_node(pred))
+                    || interface
+                        .associated_types
+                        .iter()
+                        .any(|(_, ty)| ty.any_node(pred))
+            }
+            LoweringTy::Int { .. }
+            | LoweringTy::Bigint { .. }
+            | LoweringTy::Float { .. }
+            | LoweringTy::String { .. }
+            | LoweringTy::Bool { .. }
+            | LoweringTy::Null { .. }
+            | LoweringTy::Uint8Array { .. }
+            | LoweringTy::Media(..)
+            | LoweringTy::Literal(..)
+            | LoweringTy::Enum(..)
+            | LoweringTy::EnumVariant(..)
+            | LoweringTy::RustType { .. }
+            | LoweringTy::Type { .. }
+            | LoweringTy::Resource { .. }
+            | LoweringTy::PromptAst { .. }
+            | LoweringTy::Void { .. }
+            | LoweringTy::TypeAlias(..)
+            | LoweringTy::TypeVar(..)
+            | LoweringTy::Unknown { .. }
+            | LoweringTy::Never { .. }
+            | LoweringTy::Error { .. }
+            | LoweringTy::Infer { .. } => false,
+        }
+    }
+
+    /// Whether any node is the `_` inference hole.
+    pub fn contains_hole(&self) -> bool {
+        self.any_node(&mut |node| matches!(node, LoweringTy::Infer { .. }))
+    }
+
+    /// Whether any node is the `Error` sentinel.
+    pub fn contains_error(&self) -> bool {
+        self.any_node(&mut |node| matches!(node, LoweringTy::Error { .. }))
     }
 }
 
-impl<N: Clone + HeadDisplay> Ty<N> {
+impl<N: Clone> LoweringTy<N> {
+    fn needs_postfix_parens(&self) -> bool {
+        matches!(self, LoweringTy::Union(..) | LoweringTy::Function { .. })
+    }
+
+    fn needs_function_result_parens(&self) -> bool {
+        matches!(self, LoweringTy::Function { .. })
+    }
+}
+
+impl<N: Clone + HeadDisplay> LoweringTy<N> {
     fn fmt_as_postfix_base(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.needs_postfix_parens() {
             write!(f, "({self})")
@@ -753,6 +955,20 @@ pub trait TyRenderStrategy<N = QualifiedTypeName> {
     fn type_var(&self, name: &Name) -> String;
 }
 
+impl LoweringTy {
+    /// User-facing rendering of a written (possibly hole-carrying) type;
+    /// see [`Ty::render_user_facing`], whose policy this shares.
+    pub fn render_user_facing(&self) -> String {
+        self.render_with(&CanonicalTyRender { user_facing: true })
+    }
+
+    /// Canonical structural rendering of a written type; see
+    /// [`Ty::render_canonical`], whose policy this shares.
+    pub fn render_canonical(&self) -> String {
+        self.render_with(&CanonicalTyRender { user_facing: false })
+    }
+}
+
 impl Ty {
     /// User-facing rendering: identical to the canonical render
     /// ([`Ty::render_canonical`]) except the reserved implicit `user` package is
@@ -771,7 +987,7 @@ impl Ty {
     }
 }
 
-impl<N: Clone> Ty<N> {
+impl<N: Clone> LoweringTy<N> {
     /// Render with parentheses if needed for postfix (`[]`/`?`) context.
     fn render_as_postfix_base(&self, s: &dyn TyRenderStrategy<N>) -> String {
         let inner = self.render_with(s);
@@ -798,7 +1014,7 @@ impl<N: Clone> Ty<N> {
     /// funnels through here so the structure is described in exactly one place.
     pub fn render_with(&self, s: &dyn TyRenderStrategy<N>) -> String {
         match self {
-            Ty::Class(qn, type_args, _) => {
+            LoweringTy::Class(qn, type_args, _) => {
                 let mut out = s.qtn(qn);
                 if !type_args.is_empty() {
                     let args: Vec<_> = type_args.iter().map(|a| a.render_with(s)).collect();
@@ -808,7 +1024,7 @@ impl<N: Clone> Ty<N> {
                 }
                 out
             }
-            Ty::Interface(qn, type_args, associated_bindings, _) => {
+            LoweringTy::Interface(qn, type_args, associated_bindings, _) => {
                 let mut out = s.qtn(qn);
                 if !type_args.is_empty() || !associated_bindings.is_empty() {
                     let mut args: Vec<_> = type_args.iter().map(|a| a.render_with(s)).collect();
@@ -823,21 +1039,21 @@ impl<N: Clone> Ty<N> {
                 }
                 out
             }
-            Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => s.qtn(qn),
-            Ty::EnumVariant(qn, v, _) => format!("{}.{v}", s.qtn(qn)),
-            Ty::Int { .. } => PrimitiveType::Int.to_string(),
-            Ty::Bigint { .. } => PrimitiveType::Bigint.to_string(),
-            Ty::Float { .. } => PrimitiveType::Float.to_string(),
-            Ty::String { .. } => PrimitiveType::String.to_string(),
-            Ty::Bool { .. } => PrimitiveType::Bool.to_string(),
-            Ty::Null { .. } => PrimitiveType::Null.to_string(),
-            Ty::Uint8Array { .. } => PrimitiveType::Uint8Array.to_string(),
-            Ty::Media(kind, _) => kind.to_string(),
-            Ty::List(inner, _) => format!("{}[]", inner.render_as_postfix_base(s)),
-            Ty::Map {
+            LoweringTy::Enum(qn, _) | LoweringTy::TypeAlias(qn, _) => s.qtn(qn),
+            LoweringTy::EnumVariant(qn, v, _) => format!("{}.{v}", s.qtn(qn)),
+            LoweringTy::Int { .. } => PrimitiveType::Int.to_string(),
+            LoweringTy::Bigint { .. } => PrimitiveType::Bigint.to_string(),
+            LoweringTy::Float { .. } => PrimitiveType::Float.to_string(),
+            LoweringTy::String { .. } => PrimitiveType::String.to_string(),
+            LoweringTy::Bool { .. } => PrimitiveType::Bool.to_string(),
+            LoweringTy::Null { .. } => PrimitiveType::Null.to_string(),
+            LoweringTy::Uint8Array { .. } => PrimitiveType::Uint8Array.to_string(),
+            LoweringTy::Media(kind, _) => kind.to_string(),
+            LoweringTy::List(inner, _) => format!("{}[]", inner.render_as_postfix_base(s)),
+            LoweringTy::Map {
                 key: k, value: v, ..
             } => format!("map<{}, {}>", k.render_with(s), v.render_with(s)),
-            Ty::Union(members, _) => {
+            LoweringTy::Union(members, _) => {
                 // `?` is sugar that exists only in source/lowering; after that a
                 // nullable type is a plain union and renders as `T | null`.
                 // Function members are parenthesized so a nullable callback reads
@@ -846,7 +1062,7 @@ impl<N: Clone> Ty<N> {
                     .iter()
                     .map(|m| {
                         let rendered = m.render_with(s);
-                        if matches!(m, Ty::Function { .. }) {
+                        if matches!(m, LoweringTy::Function { .. }) {
                             format!("({rendered})")
                         } else {
                             rendered
@@ -855,8 +1071,8 @@ impl<N: Clone> Ty<N> {
                     .collect::<Vec<_>>()
                     .join(" | ")
             }
-            Ty::Literal(lit, _freshness, _) => lit.to_string(),
-            Ty::Function {
+            LoweringTy::Literal(lit, _freshness, _) => lit.to_string(),
+            LoweringTy::Function {
                 params,
                 ret,
                 throws,
@@ -880,8 +1096,8 @@ impl<N: Clone> Ty<N> {
                     throws.render_with(s),
                 )
             }
-            Ty::TypeVar(param, _) => s.type_var(param.name()),
-            Ty::AssociatedTypeProjection {
+            LoweringTy::TypeVar(param, _) => s.type_var(param.name()),
+            LoweringTy::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
@@ -894,21 +1110,22 @@ impl<N: Clone> Ty<N> {
                     member
                 )
             }
-            Ty::Never { .. } => "never".to_string(),
-            Ty::Void { .. } => "void".to_string(),
-            Ty::Unknown { .. } => "unknown".to_string(),
-            // The wildcard hole renders as the `_` the user wrote.
-            Ty::Infer { .. } => "_".to_string(),
-            Ty::RustType { .. } => "$rust_type".to_string(),
-            Ty::Type { .. } => "reflect.Type".to_string(),
+            LoweringTy::Never { .. } => "never".to_string(),
+            LoweringTy::Void { .. } => "void".to_string(),
+            LoweringTy::Unknown { .. } => "unknown".to_string(),
+
+            LoweringTy::RustType { .. } => "$rust_type".to_string(),
+            LoweringTy::Type { .. } => "reflect.Type".to_string(),
             // Opaque leaf types render as their fixed qualified names; these
             // strings feed canonical dumps and must stay byte-identical.
-            Ty::Resource { .. } => "ai.Resource".to_string(),
-            Ty::PromptAst { .. } => "ai.Prompt".to_string(),
-            Ty::Error { .. } => "!error".to_string(),
+            LoweringTy::Resource { .. } => "ai.Resource".to_string(),
+            LoweringTy::PromptAst { .. } => "ai.Prompt".to_string(),
+            LoweringTy::Error { .. } => "!error".to_string(),
+            // The written inference hole renders as written.
+            LoweringTy::Infer { .. } => "_".to_string(),
             // Like the opaque leaves above: the WRITABLE spelling. Bare
             // `Future` resolves nowhere — the class lives in `baml.future`.
-            Ty::Future(value, error, _) => {
+            LoweringTy::Future(value, error, _) => {
                 format!(
                     "baml.future.Future<{}, {}>",
                     value.render_with(s),
@@ -916,6 +1133,22 @@ impl<N: Clone> Ty<N> {
                 )
             }
         }
+    }
+}
+
+impl<N: Clone> Ty<N> {
+    /// The single structural renderer (see [`LoweringTy::render_with`]): a
+    /// finalized type is a hole-free `LoweringTy`, so the walk lives on the
+    /// widest plain member (where the `_` arm is representable) and this
+    /// borrows through the zero-cost upcast.
+    pub fn render_with(&self, s: &dyn TyRenderStrategy<N>) -> String {
+        self.as_lowering_ty().render_with(s)
+    }
+}
+
+impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self.as_lowering_ty(), f)
     }
 }
 
@@ -947,22 +1180,6 @@ impl TyRenderStrategy<QualifiedTypeName> for CanonicalTyRender {
 }
 
 impl<N: Clone> Interface<N> {
-    /// The interface *existential* type ([`Ty::Interface`]) denoted by this
-    /// constraint, with default attributes. The inverse of
-    /// [`Ty::as_interface`].
-    ///
-    /// A constraint may pin only some associated types whereas a fully-specified
-    /// existential pins all of them; this lifts the constraint verbatim, so the
-    /// result carries exactly the bindings the constraint holds.
-    pub fn to_ty(&self) -> Ty<N> {
-        Ty::Interface(
-            self.name.clone(),
-            self.generics.clone(),
-            self.associated_types.clone(),
-            TyAttr::default(),
-        )
-    }
-
     /// Iterate every [`Ty`] the constraint carries: its generic arguments
     /// followed by the type of each associated-type binding (the names are not
     /// yielded). Lets generic `Ty`-walkers descend into a constraint without
@@ -1003,25 +1220,25 @@ impl<N: Clone> Interface<N> {
 // The fix is to converge `Display` onto `render_user_facing` (or delete it and
 // force an explicit renderer at every site); until then, diagnostics must call
 // `render_user_facing()` rather than interpolate.
-impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
+impl<N: Clone + HeadDisplay> fmt::Display for LoweringTy<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Ty::Int { .. } => write!(f, "int"),
-            Ty::Float { .. } => write!(f, "float"),
-            Ty::String { .. } => write!(f, "string"),
-            Ty::Bool { .. } => write!(f, "bool"),
-            Ty::Null { .. } => write!(f, "null"),
-            Ty::Uint8Array { .. } => write!(f, "uint8array"),
-            Ty::Media(kind, _) => write!(f, "{kind}"),
-            Ty::Literal(lit, _, _) => match lit {
+            LoweringTy::Int { .. } => write!(f, "int"),
+            LoweringTy::Float { .. } => write!(f, "float"),
+            LoweringTy::String { .. } => write!(f, "string"),
+            LoweringTy::Bool { .. } => write!(f, "bool"),
+            LoweringTy::Null { .. } => write!(f, "null"),
+            LoweringTy::Uint8Array { .. } => write!(f, "uint8array"),
+            LoweringTy::Media(kind, _) => write!(f, "{kind}"),
+            LoweringTy::Literal(lit, _, _) => match lit {
                 Literal::Int(i) => write!(f, "{i}"),
                 Literal::Bigint(n) => write!(f, "{n}n"),
                 Literal::Float(s) => write!(f, "{s}"),
                 Literal::String(s) => write!(f, "{s:?}"),
                 Literal::Bool(b) => write!(f, "{b}"),
             },
-            Ty::Bigint { .. } => write!(f, "bigint"),
-            Ty::Class(tn, args, _) => {
+            LoweringTy::Bigint { .. } => write!(f, "bigint"),
+            LoweringTy::Class(tn, args, _) => {
                 write!(f, "{}", tn.head_display_name())?;
                 if !args.is_empty() {
                     write!(f, "<")?;
@@ -1035,7 +1252,7 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
                 }
                 Ok(())
             }
-            Ty::Interface(tn, args, associated_bindings, _) => {
+            LoweringTy::Interface(tn, args, associated_bindings, _) => {
                 write!(f, "{}", tn.head_display_name())?;
                 if !args.is_empty() || !associated_bindings.is_empty() {
                     write!(f, "<")?;
@@ -1058,15 +1275,17 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
                 }
                 Ok(())
             }
-            Ty::Enum(tn, _) => write!(f, "{}", tn.head_display_name()),
-            Ty::EnumVariant(tn, variant, _) => write!(f, "{}.{variant}", tn.head_display_name()),
-            Ty::TypeAlias(tn, _) => write!(f, "{}", tn.head_display_name()),
-            Ty::List(inner, _) => {
+            LoweringTy::Enum(tn, _) => write!(f, "{}", tn.head_display_name()),
+            LoweringTy::EnumVariant(tn, variant, _) => {
+                write!(f, "{}.{variant}", tn.head_display_name())
+            }
+            LoweringTy::TypeAlias(tn, _) => write!(f, "{}", tn.head_display_name()),
+            LoweringTy::List(inner, _) => {
                 inner.fmt_as_postfix_base(f)?;
                 write!(f, "[]")
             }
-            Ty::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
-            Ty::Union(types, _) => {
+            LoweringTy::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
+            LoweringTy::Union(types, _) => {
                 // `?` is sugar that exists only in source/lowering; after that a
                 // nullable type is a plain union and renders as `T | null`.
                 // Function members are parenthesized so a nullable callback reads
@@ -1075,7 +1294,7 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
                     .iter()
                     .map(|ty| {
                         let rendered = ty.to_string();
-                        if matches!(ty, Ty::Function { .. }) {
+                        if matches!(ty, LoweringTy::Function { .. }) {
                             format!("({rendered})")
                         } else {
                             rendered
@@ -1084,7 +1303,7 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
                     .collect();
                 write!(f, "{}", parts.join(" | "))
             }
-            Ty::Function {
+            LoweringTy::Function {
                 params,
                 ret,
                 throws,
@@ -1092,7 +1311,7 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
             } => {
                 let param_strs: Vec<std::string::String> =
                     params.iter().map(|p| p.ty.to_string()).collect();
-                let throws_display = if matches!(throws.as_ref(), Ty::Void { .. }) {
+                let throws_display = if matches!(throws.as_ref(), LoweringTy::Void { .. }) {
                     "never".to_string()
                 } else {
                     throws.to_string()
@@ -1101,29 +1320,30 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
                 ret.fmt_as_function_result(f)?;
                 write!(f, " throws {}", throws_display)
             }
-            Ty::Void { .. } => write!(f, "void"),
-            Ty::Unknown { .. } => write!(f, "unknown"),
-            Ty::Future(value, error, _) => {
+            LoweringTy::Void { .. } => write!(f, "void"),
+            LoweringTy::Unknown { .. } => write!(f, "unknown"),
+            LoweringTy::Future(value, error, _) => {
                 // The writable spelling — lowercase `future<…>` resolves
                 // nowhere, and a diagnostic must not teach it.
                 write!(f, "baml.future.Future<{value}, {error}>")
             }
-            Ty::TypeVar(name, _) => write!(f, "{name}"),
-            Ty::AssociatedTypeProjection {
+            LoweringTy::TypeVar(name, _) => write!(f, "{name}"),
+            LoweringTy::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
                 ..
             } => write!(f, "({base} as {}).{member}", interface.to_ty()),
-            Ty::Never { .. } => write!(f, "never"),
-            Ty::Error { .. } => write!(f, "<error>"),
-            Ty::Infer { .. } => write!(f, "_"),
+            LoweringTy::Never { .. } => write!(f, "never"),
+            LoweringTy::Error { .. } => write!(f, "<error>"),
+            LoweringTy::Infer { .. } => write!(f, "_"),
+
             // Opaque leaf types: render identically to `render_with` so the two
             // renderers never diverge.
-            Ty::RustType { .. } => write!(f, "$rust_type"),
-            Ty::Type { .. } => write!(f, "reflect.Type"),
-            Ty::Resource { .. } => write!(f, "ai.Resource"),
-            Ty::PromptAst { .. } => write!(f, "ai.Prompt"),
+            LoweringTy::RustType { .. } => write!(f, "$rust_type"),
+            LoweringTy::Type { .. } => write!(f, "reflect.Type"),
+            LoweringTy::Resource { .. } => write!(f, "ai.Resource"),
+            LoweringTy::PromptAst { .. } => write!(f, "ai.Prompt"),
         }
     }
 }
@@ -1203,7 +1423,7 @@ mod tests {
             Ty::type_var("T"),
             Ty::AssociatedTypeProjection {
                 base: boxed(Ty::type_var("T")),
-                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
+                interface: Box::new(Interface::new(qtn("Iterator"), Box::new([]), Box::new([]))),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),
             },
@@ -1216,14 +1436,14 @@ mod tests {
         let invalid = [
             Ty::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default()),
             Ty::EnumVariant(qtn("Color"), Name::new("Red"), TyAttr::default()),
-            Ty::Interface(qtn("I"), vec![], vec![], TyAttr::default()),
+            Ty::Interface(qtn("I"), Box::new([]), Box::new([]), TyAttr::default()),
             Ty::union([ty_int(), ty_string()]),
             // `Future` is dispatchable at runtime (a heap future carries its `<T, E>`);
             // written impls on it are simply not implemented yet — see
             // `is_valid_impl_subject`.
             Ty::Future(boxed(ty_int()), boxed(Ty::null()), TyAttr::default()),
             Ty::Function {
-                params: vec![],
+                params: Box::new([]),
                 ret: boxed(Ty::null()),
                 throws: boxed(Ty::null()),
                 attr: TyAttr::default(),
@@ -1278,7 +1498,7 @@ mod tests {
                 attr: TyAttr::default(),
             },
             Ty::Function {
-                params: vec![],
+                params: Box::new([]),
                 ret: boxed(Ty::null()),
                 throws: boxed(Ty::null()),
                 attr: TyAttr::default(),
@@ -1303,7 +1523,7 @@ mod tests {
         // projection), and the alias/sentinel non-types — all not concrete.
         let not_concrete = [
             Ty::union([ty_int(), ty_string()]),
-            Ty::Interface(qtn("I"), vec![], vec![], TyAttr::default()),
+            Ty::Interface(qtn("I"), Box::new([]), Box::new([]), TyAttr::default()),
             Ty::Unknown {
                 attr: TyAttr::default(),
             },
@@ -1318,15 +1538,12 @@ mod tests {
             Ty::type_var("T"),
             Ty::AssociatedTypeProjection {
                 base: boxed(Ty::type_var("T")),
-                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
+                interface: Box::new(Interface::new(qtn("Iterator"), Box::new([]), Box::new([]))),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),
             },
             Ty::TypeAlias(qtn("A"), TyAttr::default()),
             Ty::Error {
-                attr: TyAttr::default(),
-            },
-            Ty::Infer {
                 attr: TyAttr::default(),
             },
         ];
@@ -1406,7 +1623,7 @@ mod tests {
     #[test]
     fn test_function_display_uses_never_for_void_throws_sentinel() {
         let ty = Ty::Function {
-            params: vec![FunctionParamTy::required(None, ty_int())],
+            params: Box::new([FunctionParamTy::required(None, ty_int())]),
             ret: Box::new(ty_string()),
             throws: Box::new(Ty::Void {
                 attr: TyAttr::default(),
@@ -1421,9 +1638,9 @@ mod tests {
     #[test]
     fn test_function_display_parenthesizes_nested_function_returns() {
         let ty = Ty::Function {
-            params: vec![],
+            params: Box::new([]),
             ret: Box::new(Ty::Function {
-                params: vec![FunctionParamTy::required(None, ty_int())],
+                params: Box::new([FunctionParamTy::required(None, ty_int())]),
                 ret: Box::new(ty_string()),
                 throws: Box::new(Ty::Void {
                     attr: TyAttr::default(),
@@ -1445,7 +1662,7 @@ mod tests {
     #[test]
     fn test_function_display_parenthesizes_function_postfix_types() {
         let callback = Ty::Function {
-            params: vec![FunctionParamTy::required(None, ty_int())],
+            params: Box::new([FunctionParamTy::required(None, ty_int())]),
             ret: Box::new(ty_string()),
             throws: Box::new(Ty::Void {
                 attr: TyAttr::default(),
