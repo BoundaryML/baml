@@ -137,6 +137,19 @@ pub enum FormatterError {
 }
 
 #[cfg(test)]
+#[track_caller]
+fn assert_formats_to(source: &str, expected: &str) {
+    let options = FormatOptions::default();
+    let formatted = format(source, &options).expect("formatter should succeed");
+    assert_eq!(
+        formatted, expected,
+        "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+    );
+    let second = format(&formatted, &options).expect("formatter should be idempotent");
+    assert_eq!(formatted, second, "formatter should be idempotent");
+}
+
+#[cfg(test)]
 mod format_options_tests {
     use super::*;
 
@@ -1244,14 +1257,6 @@ mod contextual_keyword_name_tests {
 mod spawn_and_hug_format_tests {
     use super::*;
 
-    fn assert_formats_to(source: &str, expected: &str) {
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed");
-        assert_eq!(formatted, expected);
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second, "formatter should be idempotent");
-    }
-
     /// A relocated `spawn { … }` body reindents like any block instead of
     /// printing verbatim at its original columns, and a call whose sole
     /// argument is a spawn hugs the parens (`push(spawn {` … `});`).
@@ -1503,17 +1508,6 @@ mod is_format_tests {
 
     use super::*;
 
-    fn assert_formats_to(source: &str, expected: &str) {
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed on `is`");
-        assert_eq!(
-            formatted, expected,
-            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
-        );
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second, "formatter should be idempotent");
-    }
-
     #[test]
     fn test_is_basic_type_pattern_one_line() {
         let source = "function check(v: int | string) -> bool {\n    v is int\n}\n";
@@ -1622,17 +1616,6 @@ mod if_let_format_tests {
 
     use super::*;
 
-    fn assert_formats_to(source: &str, expected: &str) {
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed on `if let`");
-        assert_eq!(
-            formatted, expected,
-            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
-        );
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second, "formatter should be idempotent");
-    }
-
     #[test]
     fn test_if_let_basic_binding() {
         let source = "function f(r: int | string) -> string {\n    if let v: int = r {\n        \"int\"\n    } else {\n        \"other\"\n    }\n}\n";
@@ -1683,17 +1666,6 @@ mod let_else_format_tests {
     //! Formatter tests for `let PATTERN = SCRUTINEE else { ... };`.
 
     use super::*;
-
-    fn assert_formats_to(source: &str, expected: &str) {
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed on `let … else`");
-        assert_eq!(
-            formatted, expected,
-            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
-        );
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second, "formatter should be idempotent");
-    }
 
     #[test]
     fn test_let_else_basic() {
@@ -1751,17 +1723,6 @@ mod while_let_format_tests {
 
     use super::*;
 
-    fn assert_formats_to(source: &str, expected: &str) {
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed on `while let`");
-        assert_eq!(
-            formatted, expected,
-            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
-        );
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second, "formatter should be idempotent");
-    }
-
     #[test]
     fn test_while_let_basic() {
         // No parens around the scrutinee (mirrors `if let`, unlike plain
@@ -1808,17 +1769,6 @@ mod while_let_format_tests {
 #[cfg(test)]
 mod const_format_tests {
     use super::*;
-
-    fn assert_formats_to(source: &str, expected: &str) {
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed on `const`");
-        assert_eq!(
-            formatted, expected,
-            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
-        );
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second, "formatter should be idempotent");
-    }
 
     #[test]
     fn test_const_basic_binding() {
@@ -1896,17 +1846,6 @@ mod map_literal_format_tests {
 
     use super::*;
 
-    fn assert_formats_to(source: &str, expected: &str) {
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed on map literal");
-        assert_eq!(
-            formatted, expected,
-            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
-        );
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second, "formatter should be idempotent");
-    }
-
     #[test]
     fn test_empty_map_has_no_interior_padding() {
         // Regression for B-234: an empty map literal must format as `{}`, not `{  }`.
@@ -1956,17 +1895,6 @@ mod over_split_regression_tests {
     //! expression that fits.
 
     use super::*;
-
-    fn assert_formats_to(source: &str, expected: &str) {
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed");
-        assert_eq!(
-            formatted, expected,
-            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
-        );
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second, "formatter should be idempotent");
-    }
 
     #[test]
     fn test_await_in_paren_and_binary_stays_inline() {
@@ -2022,17 +1950,6 @@ mod defer_comment_tests {
 
     use super::*;
 
-    fn assert_formats_to(source: &str, expected: &str) {
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed");
-        assert_eq!(
-            formatted, expected,
-            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
-        );
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second, "formatter should be idempotent");
-    }
-
     /// The headline case from the ticket: the trailing comment on a `defer`
     /// statement must survive, exactly like the one on the normal statement.
     #[test]
@@ -2075,17 +1992,6 @@ mod return_comment_tests {
 
     use super::*;
 
-    fn assert_formats_to(source: &str, expected: &str) {
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed");
-        assert_eq!(
-            formatted, expected,
-            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
-        );
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second, "formatter should be idempotent");
-    }
-
     /// A trailing comment on a braceless `return` arm with no trailing comma must
     /// survive. The formatter wraps the arm into `{ return …; }` (its established
     /// behavior) and keeps the comment at the arm level.
@@ -2127,17 +2033,6 @@ mod member_chain_layout_tests {
     //! boundaries — and only when the line overflows.
 
     use super::*;
-
-    fn assert_formats_to(source: &str, expected: &str) {
-        let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("formatter should succeed");
-        assert_eq!(
-            formatted, expected,
-            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
-        );
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second, "formatter should be idempotent");
-    }
 
     /// The headline case: the namespace path and both calls stay glued on the
     /// receiver line; only the final call's arguments wrap.
