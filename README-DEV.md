@@ -24,45 +24,25 @@ pnpm dev
 
 We use [mise](https://mise.jdx.dev/) (formerly rtx) as our polyglot tool version manager. This ensures all developers use the exact same versions of tools, preventing "works on my machine" issues.
 
+### Toolchain
+
+Three tools manage the dev environment:
+
+- **mise** — versions of every tool except Rust, declared in `mise.toml`.
+- **direnv** — loads `.envrc`, which activates mise and sets the build
+  environment.
+- **rustup** — the Rust toolchain. Rust is not in `mise.toml`; each workspace
+  pins its own version in `rust-toolchain.toml` and rustup installs it on
+  first use. See [Rust workspace toolchains](#rust-workspace-toolchains).
+
 ### What is mise?
 
-mise is a tool version manager that can handle multiple programming languages and tools in one place. It replaces the need for nvm, rbenv, pyenv, and other version managers. Rust is the exception: it is managed by rustup, not mise (see [Rust toolchain](#rust-toolchain)).
+mise is a tool version manager that can handle multiple programming languages and tools in one place. It replaces the need for nvm, rbenv, pyenv, and other version managers, except rustup.
 
 ### Configuration
 
-Our tool versions are defined in `mise.toml`:
-
-```toml
-[tools]
-go = "1.23"
-python = "3.12"
-ruby = "3.2.2"
-node = "lts"
-# ... and more
-```
-
-### Rust toolchain
-
-Rust is deliberately **not** declared in `mise.toml`. The toolchain is pinned by
-`rust-toolchain.toml` at the repo root and installed by rustup:
-
-```toml
-[toolchain]
-channel = "1.93.0"
-targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-musl"]
-```
-
-rustup reads that file and installs, selects and updates the toolchain
-automatically the first time you run `cargo` or `rustc` inside the repo — there
-is nothing to install by hand and no version to keep in sync. To confirm:
-
-```bash
-rustup show active-toolchain
-# 1.93.0-aarch64-apple-darwin (overridden by '/path/to/baml/rust-toolchain.toml')
-```
-
-`mise install` will not install Rust, and `~/.local/share/mise/installs/rust/`
-will not exist. That is expected.
+Tool versions are declared in [`mise.toml`](./mise.toml); see that file for the
+current set.
 
 ### Common mise Commands
 
@@ -93,13 +73,11 @@ If you prefer to install tools manually or need to understand what the setup scr
 
 ### Required Tools
 
-1. **Rust** (pinned by `rust-toolchain.toml`, currently 1.93.0)
+1. **Rust** — install rustup; each workspace's `rust-toolchain.toml` pins
+   the version.
    ```bash
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
    ```
-   Install rustup only. Do not pass an explicit version or set a default:
-   `rust-toolchain.toml` overrides both, and rustup installs the pinned
-   toolchain on first use inside the repo.
 
 2. **Go** (1.23)
    - Download from https://golang.org/dl/
@@ -274,7 +252,7 @@ pnpm build              # TypeScript components
 **IntelliJ/RustRover:**
 - Configure SDK paths to use mise-installed versions
 - Go: `~/.local/share/mise/installs/go/1.23/`
-- Rust: `~/.rustup/toolchains/1.93.0-<host-triple>/` (rustup, not mise)
+- Rust: managed by rustup, not mise (`rustup show home`)
 - Python: `~/.local/share/mise/installs/python/3.12/`
 - Ruby: `~/.local/share/mise/installs/ruby/3.2.2/`
 
