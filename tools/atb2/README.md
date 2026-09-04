@@ -86,6 +86,13 @@ carries cargo, gh, node and the Claude Code CLI; the volume at `/data` holds
 the cached canary clone, the cargo target and the run dirs, and the first
 boot builds canary's `baml-cli` there.
 
+Set `ATB2_CANARY_REV` to a commit SHA to pin the runner's compiler. If the
+cached executable's recorded revision matches that pin, startup skips the
+GitHub fetch and can proceed while GitHub is unavailable. Unpinned boots
+and missing or mismatched cached builds still require a successful fetch.
+The offline startup regression tests run with
+`python3 tools/atb2/deploy/test_entrypoint.py`.
+
 `.github/workflows/atb2-deploy.yml` redeploys it on every push to `canary`
 that touches `tools/atb2`; it holds one secret, `FLY_API_TOKEN`, and skips
 itself until that exists. The site (`typescript2/app-feedback`) deploys

@@ -15,31 +15,37 @@
 # INFISICAL_TOKEN; INFISICAL_PROJECT_ID and INFISICAL_ENV come from fly.toml.
 set -euo pipefail
 
-home="${ATB2_HOME:-/data}"
+runner_home="${ATB2_HOME:-/data}"
 # the CLI login (claude) lives under HOME; keep it on the volume so it
 # survives redeploys. atb2 never handles a Claude credential itself.
-export HOME="$home/home"
+export HOME="$runner_home/home"
 mkdir -p "$HOME"
-repo="$home/repo"
-cli="$home/target/debug/baml-cli"
-built="$home/target/.baml-cli-rev"
+repo="$runner_home/repo"
+cli="$runner_home/target/debug/baml-cli"
+built="$runner_home/target/.baml-cli-rev"
 
 if [ -z "${ATB2_SECRETS_LOADED:-}" ]; then
   # ---- phase 1: the toolchain, with no secrets around
-  if [ ! -d "$repo/.git" ]; then
-    git clone --branch canary https://github.com/BoundaryML/baml.git "$repo"
-  fi
-  (cd "$repo" && git fetch -q origin canary)
-  want="${ATB2_CANARY_REV:-$(cd "$repo" && git rev-parse origin/canary)}"
   have="$(cat "$built" 2>/dev/null || true)"
+  want="${ATB2_CANARY_REV:-}"
+  # A pinned, matching executable is sufficient for boot, even offline.
+  # Tracking canary and missing/mismatched builds still require a fresh fetch;
+  # never silently start a different revision from the one requested.
+  if [ -z "$want" ] || [ ! -x "$cli" ] || [ "$have" != "$want" ]; then
+    if [ ! -d "$repo/.git" ]; then
+      git clone --branch canary https://github.com/BoundaryML/baml.git "$repo"
+    fi
+    (cd "$repo" && git fetch -q origin canary)
+    want="${ATB2_CANARY_REV:-$(cd "$repo" && git rev-parse origin/canary)}"
+  fi
   if [ ! -x "$cli" ] || [ "$have" != "$want" ]; then
-    echo "atb2: building baml-cli at $want into $home/target (had: ${have:-none})"
+    echo "atb2: building baml-cli at $want into $runner_home/target (had: ${have:-none})"
     (cd "$repo" && git checkout -q --detach "$want")
     # an explicit environment: nothing from this process reaches cargo
     (cd "$repo/baml_language" && env -i \
         PATH="$PATH" HOME="$HOME" USER="${USER:-atb2}" LANG=C.UTF-8 TERM=dumb \
         CARGO_HOME="${CARGO_HOME:-/usr/local/cargo}" RUSTUP_HOME="${RUSTUP_HOME:-/usr/local/rustup}" \
-        CARGO_TARGET_DIR="$home/target" CARGO_INCREMENTAL=0 \
+        CARGO_TARGET_DIR="$runner_home/target" CARGO_INCREMENTAL=0 \
         cargo build -p baml_cli --bin baml-cli)
     echo "$want" > "$built"
   fi
