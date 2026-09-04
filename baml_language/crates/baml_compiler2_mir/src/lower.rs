@@ -1772,7 +1772,7 @@ struct LoweringContext<'db> {
     // THE inference table store: converted once at construction into
     // MIR's own consumption vocabulary, whichever engine produced them.
     // Scopes outside this function answer `None`, and at least one caller
-    // (`try_lower_to_string_fallback`) keys behavior on that absence.
+    // (`try_lower_to_value_fallback`) keys behavior on that absence.
     tables: crate::inference_provider::ProviderTables<'db>,
     // Function generic bounds, lowered in TIR space. MIR uses these to keep
     // bounded type variables ABI-erased while still lowering bound-member
@@ -8069,15 +8069,9 @@ impl<'db> LoweringContext<'db> {
         Operand::Constant(constant)
     }
 
-    /// Operator-style `recv.to_string()` -> `string.from(recv)` desugar, the
-    /// inverse direction of `==` -> `baml.ops.equals_equals` (`lower_equality_via_driver`).
-    /// Fires only for a 0-arg `to_string` call with NO resolved method: the only
-    /// source of a real `to_string` is `implements baml.ToString` (a bare one is
-    /// banned), which resolves to a method and is handled by the dispatch/resolution
-    /// paths in `lower_call`. `string.from` is total (`throws never`) and honors any
-    /// `baml.ToString` override via its runtime shim, so it matches a real call.
-    /// Returns `true` (and emits the call) when it handled the expression.
-    fn try_lower_to_string_fallback(
+    /// Lower `recv.to_string()` or `recv.to_json()` through its standard
+    /// conversion function when no real method resolved.
+    fn try_lower_to_value_fallback(
         &mut self,
         expr_id: AstExprId,
         callee: AstExprId,
@@ -8088,19 +8082,24 @@ impl<'db> LoweringContext<'db> {
             return false;
         }
         let callee_expr = self.body.exprs[callee].clone();
-        // Trigger shape (shared with TIR type inference + throws analysis): a
-        // `to_string` member/path call.
-        if !is_sugar_callee(&callee_expr, "to_string") {
+        let target = if is_sugar_callee(&callee_expr, "to_string") {
+            ItemRef::Method {
+                package: Name::new("baml"),
+                namespace: vec![],
+                class: Name::new("String"),
+                name: Name::new("from"),
+            }
+        } else if is_sugar_callee(&callee_expr, "to_json") {
+            ItemRef::Free {
+                package: Name::new("baml"),
+                namespace: vec![Name::new("json")],
+                name: Name::new("from"),
+            }
+        } else {
             return false;
-        }
-        // Fires only when the checker left the callee *untyped* (`Error`) — no
-        // real `to_string` method resolved. A real implementor (any `baml.ToString`
-        // / interface impl) types the callee as a method and is dispatched by the
-        // normal paths. Key on the callee's TIR type, not on resolution presence: a
-        // generic typevar receiver records a placeholder resolution yet still has an
-        // untyped callee, and must take the fallback rather than ICE on it.
-        // A nullable receiver types the missing member as `Error | null`, so test
-        // the non-null part (matches the TIR fallback gate).
+        };
+        // A real method takes precedence. Nullable receivers can leave
+        // `Error | null`; generic receivers can retain a placeholder resolution.
         let callee_untyped = self
             .tir_expr_type(self.expr_metadata_key(callee))
             .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
@@ -8154,233 +8153,70 @@ impl<'db> LoweringContext<'db> {
             _ => return false,
         };
 
-        // `string.from` is the static `from<T>` on `class String` (baml root
-        // package, no namespace). Pass the receiver's static type as the leading
-        // type arg so `T` binds under monomorphization (a generic receiver `t: T`
-        // would otherwise leave `T` undetermined and ICE). The shim ignores `T` at
-        // runtime, so an out-of-scope typevar or unknown receiver type safely
-        // drops to ntypeargs=0 — matching how `string.from(x)` is normally emitted.
-        let caller_generic_params = self.enclosing_generic_params();
-        let type_arg_ops: Vec<Operand<'db>> = match &recv_tir_ty {
-            Some(t)
-                if !baml_type_runtime::contains_typevar_where(t, &|name| {
-                    !caller_generic_params.iter().any(|p| p == name)
-                }) =>
-            {
-                // An `Error` sentinel ANYWHERE in the receiver type is
-                // not lowerable — `ty_to_template` ICEs on it rather than
-                // degrading — so erase the whole type to `unknown`, its only
-                // sound static erasure. A `catch`/`catch_all` binder reaches here
-                // that way: its type is the union of the base expression's throw
-                // facts, and an unaccounted callee contributes the top type
-                // `unknown` by design, so `e` is legitimately typed
-                // `SomeError | unknown`.
-                // Erase rather than drop to ntypeargs=0 — these generic shims
-                // bind `T` in a frame slot their own bodies read, so a
-                // zero-type-arg call traps in the VM.
-                let erased;
-                let t = if baml_type_runtime::contains_error_recovery(t) {
-                    erased = Tir2Ty::Unknown {
-                        attr: TyAttr::default(),
-                    };
-                    &erased
-                } else {
-                    t
-                };
-                self.emit_frame_type_arg_ops(std::slice::from_ref(t))
-            }
-            _ => Vec::new(),
-        };
-        let ntypeargs = type_arg_ops.len();
-        let mut all_args = type_arg_ops;
-        all_args.push(recv_op);
-
-        let callee_op = Operand::Constant(Constant::Function(ItemRef::Method {
-            package: Name::new("baml"),
-            namespace: vec![],
-            class: Name::new("String"),
-            name: Name::new("from"),
-        }));
-        // `string.from` is `throws never`; the unwind target is harmless/unused.
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        let target = self.builder.create_block();
-        // The call destination must be a `Place::Local`; route projection/capture
-        // dests through a temp + assign-through (mirrors the normal call path).
-        if let Place::Local(_) = dest {
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                dest.clone(),
-                target,
-                unwind,
-            );
-            self.builder.set_current_block(target);
-        } else {
-            let call_ty = self.expr_ty(expr_id);
-            let tmp = self.builder.temp(call_ty);
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                Place::local(tmp),
-                target,
-                unwind,
-            );
-            self.builder.set_current_block(target);
-            self.builder
-                .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
-        }
+        let type_arg_ops = self.fallback_type_arg_ops(recv_tir_ty.as_ref());
+        self.emit_conversion_call(expr_id, target, type_arg_ops, recv_op, dest);
         true
     }
 
-    /// Operator-style `recv.to_json()` -> `baml.json.from(recv)` desugar, the json
-    /// analog of [`try_lower_to_string_fallback`]. Fires only for a 0-arg `to_json`
-    /// call with NO resolved method: the only source of a real `to_json` is
-    /// `implements baml.ToJson` (a bare one is banned), handled by the dispatch
-    /// paths in `lower_call`. `baml.json.from` honors any `baml.ToJson` override via
-    /// its runtime shim, so it matches a real call. Unlike `string.from` it throws
-    /// `SerializationError`, so the call's unwind target carries the throw.
-    /// Returns `true` (and emits the call) when it handled the expression.
-    fn try_lower_to_json_fallback(
+    fn fallback_type_arg_ops(&mut self, ty: Option<&Tir2Ty>) -> Vec<Operand<'db>> {
+        let Some(ty) = ty else { return Vec::new() };
+        let generic_params = self.enclosing_generic_params();
+        if baml_type_runtime::contains_typevar_where(ty, &|name| {
+            !generic_params.iter().any(|param| param == name)
+        }) {
+            return Vec::new();
+        }
+        // These shims read T from a frame slot. Erase recovery types instead
+        // of omitting the slot or passing a sentinel to runtime lowering.
+        let erased;
+        let ty = if baml_type_runtime::contains_error_recovery(ty) {
+            erased = Tir2Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+            &erased
+        } else {
+            ty
+        };
+        self.emit_frame_type_arg_ops(std::slice::from_ref(ty))
+    }
+
+    fn emit_conversion_call(
         &mut self,
         expr_id: AstExprId,
-        callee: AstExprId,
-        args: &[AstExprId],
+        callee: ItemRef<'db>,
+        mut type_args: Vec<Operand<'db>>,
+        value: Operand<'db>,
         dest: &Place,
-    ) -> bool {
-        if !args.is_empty() {
-            return false;
-        }
-        let callee_expr = self.body.exprs[callee].clone();
-        if !is_sugar_callee(&callee_expr, "to_json") {
-            return false;
-        }
-        // Fires only when TIR left the callee untyped (no real `to_json` method).
-        let callee_untyped = self
-            .tir_expr_type(self.expr_metadata_key(callee))
-            .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
-        if !callee_untyped {
-            return false;
-        }
-        let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match &callee_expr {
-            AstExpr::MemberAccess { base, .. } => {
-                let base_id = *base;
-                let ty = self.tir_expr_type(self.expr_metadata_key(base_id)).cloned();
-                (self.lower_to_operand(base_id), ty)
-            }
-            AstExpr::Path(segments) => {
-                let receiver_segments = &segments[..segments.len() - 1];
-                let recv_op = if receiver_segments.len() == 1 {
-                    let Some(place) = self.place_for_path(callee, &receiver_segments[0]) else {
-                        return false;
-                    };
-                    Operand::Copy(place)
-                } else {
-                    let recv_ty = self
-                        .tir_path_segment_type((
-                            self.current_metadata_scope,
-                            callee,
-                            receiver_segments.len() - 1,
-                        ))
-                        .cloned()
-                        .map(|t| self.convert_tir_ty_for_runtime(&t))
-                        .unwrap_or_else(|| RuntimeTy::Unknown {
-                            attr: TyAttr::default(),
-                        });
-                    let recv_local = self.builder.temp(recv_ty);
-                    self.lower_multi_segment_path_as_field_chain(
-                        callee,
-                        receiver_segments,
-                        Place::local(recv_local),
-                    );
-                    Operand::Copy(Place::local(recv_local))
-                };
-                let prefix_idx = segments.len() - 2;
-                let ty = self
-                    .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
-                    .cloned();
-                (recv_op, ty)
-            }
-            _ => return false,
+    ) {
+        let ntypeargs = type_args.len();
+        type_args.push(value);
+        // Calls write to a local; projections and captures need assignment
+        // after the continuation resumes.
+        let result = match dest {
+            Place::Local(local) => *local,
+            _ => self.builder.temp(self.expr_ty(expr_id)),
         };
-
-        // `baml.json.from` is the namespace function `from<T>(value: T) -> json`.
-        // Pass the receiver's static type as the leading type arg so `T` binds
-        // under monomorphization (the shim ignores `T` at runtime, so an
-        // out-of-scope typevar / unknown receiver safely drops to ntypeargs=0).
-        let caller_generic_params = self.enclosing_generic_params();
-        let type_arg_ops: Vec<Operand<'db>> = match &recv_tir_ty {
-            Some(t)
-                if !baml_type_runtime::contains_typevar_where(t, &|name| {
-                    !caller_generic_params.iter().any(|p| p == name)
-                }) =>
-            {
-                // An `Error` sentinel ANYWHERE in the receiver type is
-                // not lowerable — `ty_to_template` ICEs on it rather than
-                // degrading — so erase the whole type to `unknown`, its only
-                // sound static erasure. A `catch`/`catch_all` binder reaches here
-                // that way: its type is the union of the base expression's throw
-                // facts, and an unaccounted callee contributes the top type
-                // `unknown` by design, so `e` is legitimately typed
-                // `SomeError | unknown`.
-                // Erase rather than drop to ntypeargs=0 — these generic shims
-                // bind `T` in a frame slot their own bodies read, so a
-                // zero-type-arg call traps in the VM.
-                let erased;
-                let t = if baml_type_runtime::contains_error_recovery(t) {
-                    erased = Tir2Ty::Unknown {
-                        attr: TyAttr::default(),
-                    };
-                    &erased
-                } else {
-                    t
-                };
-                self.emit_frame_type_arg_ops(std::slice::from_ref(t))
-            }
-            _ => Vec::new(),
-        };
-        let ntypeargs = type_arg_ops.len();
-        let mut all_args = type_arg_ops;
-        all_args.push(recv_op);
-
-        let callee_op = Operand::Constant(Constant::Function(ItemRef::Free {
-            package: Name::new("baml"),
-            namespace: vec![Name::new("json")],
-            name: Name::new("from"),
-        }));
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
-        if let Place::Local(_) = dest {
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        self.builder.call_with_type_args(
+            Operand::Constant(Constant::Function(callee)),
+            type_args,
+            ntypeargs,
+            Place::local(result),
+            target,
+            unwind,
+        );
+        self.builder.set_current_block(target);
+        if !matches!(dest, Place::Local(_)) {
+            self.builder.assign(
                 dest.clone(),
-                target,
-                unwind,
+                Rvalue::Use(Operand::Copy(Place::local(result))),
             );
-            self.builder.set_current_block(target);
-        } else {
-            let call_ty = self.expr_ty(expr_id);
-            let tmp = self.builder.temp(call_ty);
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                Place::local(tmp),
-                target,
-                unwind,
-            );
-            self.builder.set_current_block(target);
-            self.builder
-                .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
         }
-        true
     }
 
     /// Static-constructor sugar: `Type.from_json(j)` -> `baml.json.to<Type>(j)`.
-    /// The deserialize analog of `try_lower_to_json_fallback`. The call's RESULT
+    /// The deserialize analog of `try_lower_to_value_fallback`. The call's RESULT
     /// type is the receiver type `Type`, so it threads in as the leading type arg
     /// (concretely — `Box<int>` decodes to `Box<int>`). Fires only when TIR left
     /// the callee untyped (no real `from_json` method / `baml.FromJson` override).
@@ -8429,74 +8265,19 @@ impl<'db> LoweringContext<'db> {
         // resolves on the runtime value when no static type is supplied).
         let recv_tir_ty: Option<Tir2Ty> =
             self.tir_expr_type(self.expr_metadata_key(expr_id)).cloned();
-        let caller_generic_params = self.enclosing_generic_params();
-        let type_arg_ops: Vec<Operand<'db>> = match &recv_tir_ty {
-            Some(t)
-                if !baml_type_runtime::contains_typevar_where(t, &|name| {
-                    !caller_generic_params.iter().any(|p| p == name)
-                }) =>
-            {
-                // An `Error` sentinel ANYWHERE in the receiver type is
-                // not lowerable — `ty_to_template` ICEs on it rather than
-                // degrading — so erase the whole type to `unknown`, its only
-                // sound static erasure. A `catch`/`catch_all` binder reaches here
-                // that way: its type is the union of the base expression's throw
-                // facts, and an unaccounted callee contributes the top type
-                // `unknown` by design, so `e` is legitimately typed
-                // `SomeError | unknown`.
-                // Erase rather than drop to ntypeargs=0 — these generic shims
-                // bind `T` in a frame slot their own bodies read, so a
-                // zero-type-arg call traps in the VM.
-                let erased;
-                let t = if baml_type_runtime::contains_error_recovery(t) {
-                    erased = Tir2Ty::Unknown {
-                        attr: TyAttr::default(),
-                    };
-                    &erased
-                } else {
-                    t
-                };
-                self.emit_frame_type_arg_ops(std::slice::from_ref(t))
-            }
-            _ => Vec::new(),
-        };
-        let ntypeargs = type_arg_ops.len();
+        let type_arg_ops = self.fallback_type_arg_ops(recv_tir_ty.as_ref());
         let arg_op = self.lower_to_operand(args[0]);
-        let mut all_args = type_arg_ops;
-        all_args.push(arg_op);
-
-        let callee_op = Operand::Constant(Constant::Function(ItemRef::Free {
-            package: Name::new("baml"),
-            namespace: vec![Name::new("json")],
-            name: Name::new("to"),
-        }));
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        let target = self.builder.create_block();
-        if let Place::Local(_) = dest {
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                dest.clone(),
-                target,
-                unwind,
-            );
-            self.builder.set_current_block(target);
-        } else {
-            let call_ty = self.expr_ty(expr_id);
-            let tmp = self.builder.temp(call_ty);
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                Place::local(tmp),
-                target,
-                unwind,
-            );
-            self.builder.set_current_block(target);
-            self.builder
-                .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
-        }
+        self.emit_conversion_call(
+            expr_id,
+            ItemRef::Free {
+                package: Name::new("baml"),
+                namespace: vec![Name::new("json")],
+                name: Name::new("to"),
+            },
+            type_arg_ops,
+            arg_op,
+            dest,
+        );
         true
     }
 
@@ -8996,11 +8777,7 @@ impl<'db> LoweringContext<'db> {
         // after all real dispatch (interface/union above, method resolution below)
         // has been attempted, so a `baml.ToString` implementor always wins first;
         // only a `to_string` call with no resolved method reaches the fallback.
-        if self.try_lower_to_string_fallback(expr_id, callee, args, &dest) {
-            return;
-        }
-        // Same fallback for `recv.to_json()` -> `baml.json.from(recv)`.
-        if self.try_lower_to_json_fallback(expr_id, callee, args, &dest) {
+        if self.try_lower_to_value_fallback(expr_id, callee, args, &dest) {
             return;
         }
         // Static-constructor `Type.from_json(j)` -> `baml.json.to<Type>(j)`.
@@ -9621,73 +9398,48 @@ impl<'db> LoweringContext<'db> {
         )
     }
 
+    fn path_callee(&self, callee: AstExprId) -> Option<FunctionLoc<'db>> {
+        let AstExpr::Path(segments) = &self.body.exprs[callee] else {
+            return None;
+        };
+        if let [name] = segments.as_slice() {
+            let span_start = self
+                .source_map
+                .as_ref()
+                .map(|sm| sm.expr_span(callee).start())
+                .unwrap_or_default();
+            match resolve_name_at_in_scope(
+                self.db,
+                self.file,
+                span_start,
+                name,
+                self.scope_func_name.as_ref(),
+            ) {
+                ResolvedName::Builtin(Definition::Function(func))
+                | ResolvedName::Item(Definition::Function(func)) => Some(func),
+                _ => None,
+            }
+        } else {
+            let key = self.expr_metadata_key(callee);
+            self.tir_path_member_resolutions(key)
+                .and_then(|resolutions| resolutions.last())
+                .and_then(resolution_func_loc)
+                .or_else(|| self.tir_resolution(key).and_then(resolution_func_loc))
+        }
+    }
+
     fn sys_op_callee(&self, callee: AstExprId) -> Option<FunctionLoc<'db>> {
-        use baml_compiler2_ast::BuiltinKind;
-
-        // ── Path callee (single- or multi-segment) ─────────────────────────────
-        if let AstExpr::Path(segments) = &self.body.exprs[callee] {
-            let func_loc = if segments.len() == 1 {
-                let span_start = self
-                    .source_map
-                    .as_ref()
-                    .map(|sm| sm.expr_span(callee).start())
-                    .unwrap_or_default();
-                let resolved = resolve_name_at_in_scope(
-                    self.db,
-                    self.file,
-                    span_start,
-                    &segments[0],
-                    self.scope_func_name.as_ref(),
-                );
-                match resolved {
-                    ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
-                    ResolvedName::Item(Definition::Function(fl)) => Some(fl),
-                    _ => None,
-                }
-            } else {
-                // Multi-segment: check path_member_resolutions first (local-rooted paths
-                // like `file.read_string`), then fall back to flat resolutions (package paths).
-                // The last resolution in path_member_resolutions is the final-segment resolution.
-                let from_pmr = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
-                    .and_then(|res| resolution_func_loc(res));
-                if from_pmr.is_some() {
-                    from_pmr
-                } else {
-                    self.tir_resolution(self.expr_metadata_key(callee))
-                        .and_then(|res| resolution_func_loc(res))
-                }
-            };
-            if let Some(fl) = func_loc {
-                let body = baml_compiler2_ppir::function_body(self.db, fl);
-                if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                    return Some(fl);
-                }
-            }
-        }
-
-        // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
-        // `f?.read` resolves to the same member — `?.` only decides *whether*
-        // the call happens — so an optional-chained sys-op must be recognized
-        // here too. Missing it left `f?.read()` as a plain `call` of a
-        // body-less builtin, with any omitted defaulted arg still an
-        // `OmittedArg` sentinel by the time it reached the engine.
-        if let AstExpr::MemberAccess { .. } | AstExpr::OptionalMemberAccess { .. } =
-            &self.body.exprs[callee]
-        {
-            if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
-                let func_loc = resolution_func_loc(resolution);
-                if let Some(fl) = func_loc {
-                    let body = baml_compiler2_ppir::function_body(self.db, fl);
-                    if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                        return Some(fl);
-                    }
-                }
-            }
-        }
-
-        None
+        let func = match &self.body.exprs[callee] {
+            AstExpr::MemberAccess { .. } | AstExpr::OptionalMemberAccess { .. } => self
+                .tir_resolution(self.expr_metadata_key(callee))
+                .and_then(resolution_func_loc),
+            _ => self.path_callee(callee),
+        }?;
+        matches!(
+            baml_compiler2_ppir::function_body(self.db, func).as_ref(),
+            FunctionBody::Builtin(baml_compiler2_ast::BuiltinKind::Io)
+        )
+        .then_some(func)
     }
 
     fn check_await_any(&self, callee: AstExprId) -> bool {
@@ -9713,129 +9465,21 @@ impl<'db> LoweringContext<'db> {
                 return external.builtin_kind;
             }
         }
-        // ── Path callee (single- or multi-segment) ─────────────────────────────
-        if let AstExpr::Path(segments) = &self.body.exprs[callee] {
-            let func_loc = if segments.len() == 1 {
-                let span_start = self
-                    .source_map
-                    .as_ref()
-                    .map(|sm| sm.expr_span(callee).start())
-                    .unwrap_or_default();
-                let resolved = resolve_name_at_in_scope(
-                    self.db,
-                    self.file,
-                    span_start,
-                    &segments[0],
-                    self.scope_func_name.as_ref(),
-                );
-                match resolved {
-                    ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
-                    ResolvedName::Item(Definition::Function(fl)) => Some(fl),
-                    _ => None,
-                }
-            } else {
-                // Multi-segment: check path_member_resolutions first (local-rooted paths
-                // like `file.read_string`), then fall back to flat resolutions (package paths).
-                // The last resolution in path_member_resolutions is the final-segment resolution.
-                let from_pmr = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
-                    .and_then(|res| resolution_func_loc(res));
-                if from_pmr.is_some() {
-                    from_pmr
-                } else {
-                    self.tir_resolution(self.expr_metadata_key(callee))
-                        .and_then(|res| resolution_func_loc(res))
-                }
-            };
-            if let Some(fl) = func_loc {
-                let body = baml_compiler2_ppir::function_body(self.db, fl);
-                if let FunctionBody::Builtin(kind) = body.as_ref() {
-                    return Some(*kind);
-                }
-            }
+        let func = match &self.body.exprs[callee] {
+            AstExpr::MemberAccess { .. } => self
+                .tir_resolution(self.expr_metadata_key(callee))
+                .and_then(resolution_func_loc),
+            _ => self.path_callee(callee),
+        }?;
+        match baml_compiler2_ppir::function_body(self.db, func).as_ref() {
+            FunctionBody::Builtin(kind) => Some(*kind),
+            _ => None,
         }
-
-        // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
-        if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
-            if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
-                let func_loc = resolution_func_loc(resolution);
-                if let Some(fl) = func_loc {
-                    let body = baml_compiler2_ppir::function_body(self.db, fl);
-                    if let FunctionBody::Builtin(kind) = body.as_ref() {
-                        return Some(*kind);
-                    }
-                }
-            }
-        }
-
-        None
     }
 
     fn sys_op_synthetic_type_arg_count(&self, callee: AstExprId) -> Option<usize> {
-        use baml_compiler2_ast::BuiltinKind;
-
-        // ── Path callee (single- or multi-segment) ─────────────────────────────
-        if let AstExpr::Path(segments) = &self.body.exprs[callee] {
-            let func_loc = if segments.len() == 1 {
-                let span_start = self
-                    .source_map
-                    .as_ref()
-                    .map(|sm| sm.expr_span(callee).start())
-                    .unwrap_or_default();
-                let resolved = resolve_name_at_in_scope(
-                    self.db,
-                    self.file,
-                    span_start,
-                    &segments[0],
-                    self.scope_func_name.as_ref(),
-                );
-                match resolved {
-                    ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
-                    ResolvedName::Item(Definition::Function(fl)) => Some(fl),
-                    _ => None,
-                }
-            } else {
-                // Multi-segment: check path_member_resolutions first (local-rooted paths
-                // like `file.read_string`), then fall back to flat resolutions (package paths).
-                // The last resolution in path_member_resolutions is the final-segment resolution.
-                let from_pmr = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
-                    .and_then(|res| resolution_func_loc(res));
-                if from_pmr.is_some() {
-                    from_pmr
-                } else {
-                    self.tir_resolution(self.expr_metadata_key(callee))
-                        .and_then(|res| resolution_func_loc(res))
-                }
-            };
-            if let Some(fl) = func_loc {
-                let body = baml_compiler2_ppir::function_body(self.db, fl);
-                if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                    return Some(self.synthetic_type_arg_count_for_sys_op(fl));
-                }
-            }
-        }
-
-        // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
-        // See `sys_op_callee`: `f?.read` names the same member, so the
-        // optional-chained shape has to be recognized as a sys-op too.
-        if let AstExpr::MemberAccess { .. } | AstExpr::OptionalMemberAccess { .. } =
-            &self.body.exprs[callee]
-        {
-            if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
-                let func_loc = resolution_func_loc(resolution);
-                if let Some(fl) = func_loc {
-                    let body = baml_compiler2_ppir::function_body(self.db, fl);
-                    if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                        return Some(self.synthetic_type_arg_count_for_sys_op(fl));
-                    }
-                }
-            }
-        }
-
-        None
+        self.sys_op_callee(callee)
+            .map(|func| self.synthetic_type_arg_count_for_sys_op(func))
     }
 
     fn synthetic_type_arg_count_for_sys_op(
@@ -9884,54 +9528,23 @@ impl<'db> LoweringContext<'db> {
             };
         }
 
-        // ── Path callee (single- or multi-segment) ─────────────────────────────
-        if let AstExpr::Path(segments) = &self.body.exprs[callee] {
-            let func_loc = if segments.len() == 1 {
-                let span_start = self
-                    .source_map
-                    .as_ref()
-                    .map(|sm| sm.expr_span(callee).start())
-                    .unwrap_or_default();
-                let resolved = resolve_name_at_in_scope(
-                    self.db,
-                    self.file,
-                    span_start,
-                    &segments[0],
-                    self.scope_func_name.as_ref(),
-                );
-                match resolved {
-                    ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
-                    ResolvedName::Item(Definition::Function(fl)) => Some(fl),
-                    _ => None,
-                }
-            } else {
-                let from_pmr = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
-                    .and_then(|res| resolution_func_loc(res));
-                if from_pmr.is_some() {
-                    from_pmr
-                } else {
-                    self.tir_resolution(self.expr_metadata_key(callee))
-                        .and_then(|res| resolution_func_loc(res))
-                }
-            };
-            if let Some(fl) = func_loc {
-                let body = baml_compiler2_ppir::function_body(self.db, fl);
-                if let FunctionBody::Builtin(BuiltinKind::Intrinsic) = body.as_ref() {
-                    let item_ref = def_to_item_ref(self.db, Definition::Function(fl));
-                    return match item_ref.to_string().as_str() {
-                        "log.info" => Some(IntrinsicOp::Log(LogLevel::Info)),
-                        "log.debug" => Some(IntrinsicOp::Log(LogLevel::Debug)),
-                        "log.warn" => Some(IntrinsicOp::Log(LogLevel::Warn)),
-                        "log.error" => Some(IntrinsicOp::Log(LogLevel::Error)),
-                        _ => None,
-                    };
-                }
-            }
+        let func = self.path_callee(callee)?;
+        if !matches!(
+            baml_compiler2_ppir::function_body(self.db, func).as_ref(),
+            FunctionBody::Builtin(BuiltinKind::Intrinsic)
+        ) {
+            return None;
         }
-
-        None
+        match def_to_item_ref(self.db, Definition::Function(func))
+            .to_string()
+            .as_str()
+        {
+            "log.info" => Some(IntrinsicOp::Log(LogLevel::Info)),
+            "log.debug" => Some(IntrinsicOp::Log(LogLevel::Debug)),
+            "log.warn" => Some(IntrinsicOp::Log(LogLevel::Warn)),
+            "log.error" => Some(IntrinsicOp::Log(LogLevel::Error)),
+            _ => None,
+        }
     }
 }
 
@@ -9974,51 +9587,8 @@ impl<'db> LoweringContext<'db> {
                         && name.as_str() == "of"
                 )
         });
-        let func_loc = (!external_type_of)
-            .then(|| {
-                if let AstExpr::Path(segments) = &self.body.exprs[callee] {
-                    if segments.len() == 1 {
-                        let span_start = self
-                            .source_map
-                            .as_ref()
-                            .map(|sm| sm.expr_span(callee).start())
-                            .unwrap_or_default();
-                        let resolved = resolve_name_at_in_scope(
-                            self.db,
-                            self.file,
-                            span_start,
-                            &segments[0],
-                            self.scope_func_name.as_ref(),
-                        );
-                        match resolved {
-                            ResolvedName::Builtin(
-                                baml_compiler2_hir::contributions::Definition::Function(fl),
-                            ) => Some(fl),
-                            ResolvedName::Item(
-                                baml_compiler2_hir::contributions::Definition::Function(fl),
-                            ) => Some(fl),
-                            _ => None,
-                        }
-                    } else {
-                        let from_pmr = self
-                            .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                            .and_then(|resolutions| resolutions.last())
-                            .and_then(|res| resolution_func_loc(res));
-                        if from_pmr.is_some() {
-                            from_pmr
-                        } else {
-                            self.tir_resolution(self.expr_metadata_key(callee))
-                                .and_then(|res| resolution_func_loc(res))
-                        }
-                    }
-                } else {
-                    None
-                }
-            })
-            .flatten();
-
         if !external_type_of {
-            let func_loc = func_loc?;
+            let func_loc = self.path_callee(callee)?;
             let body = baml_compiler2_ppir::function_body(self.db, func_loc);
             if !matches!(
                 body.as_ref(),

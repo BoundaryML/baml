@@ -20,12 +20,7 @@ pub(crate) fn optimize_function(func: &mut MirFunction) {
     let MirFunctionKind::Bytecode(body) = &mut func.kind else {
         return; // nothing to clean up on builtins
     };
-    eliminate_dead_blocks(body);
-    merge_passthrough_blocks(body);
-    propagate_copies(body, func.arity);
-    eliminate_dead_locals(body, func.arity);
-    merge_passthrough_blocks(body); // catch blocks emptied by copy-prop / dead-local elim
-    reorder_blocks_rpo(body);
+    optimize_body(body, func.arity);
 
     #[cfg(debug_assertions)]
     verify_mir(body, &func.item_ref);
@@ -36,12 +31,7 @@ pub(crate) fn optimize_function(func: &mut MirFunction) {
 /// Used for let-binding initializers, which are lowered as bodies without
 /// the enclosing `MirFunction` wrapper (arity = 0).
 pub(crate) fn optimize_function_body(body: &mut MirFunctionBody) {
-    eliminate_dead_blocks(body);
-    merge_passthrough_blocks(body);
-    propagate_copies(body, 0);
-    eliminate_dead_locals(body, 0);
-    merge_passthrough_blocks(body); // catch blocks emptied by copy-prop / dead-local elim
-    reorder_blocks_rpo(body);
+    optimize_body(body, 0);
 
     #[cfg(debug_assertions)]
     verify_mir(
@@ -52,6 +42,15 @@ pub(crate) fn optimize_function_body(body: &mut MirFunctionBody) {
             name: Name::new("_"),
         },
     );
+}
+
+fn optimize_body(body: &mut MirFunctionBody, arity: usize) {
+    eliminate_dead_blocks(body);
+    merge_passthrough_blocks(body);
+    propagate_copies(body, arity);
+    eliminate_dead_locals(body, arity);
+    merge_passthrough_blocks(body); // catch blocks emptied by copy-prop / dead-local elim
+    reorder_blocks_rpo(body);
 }
 
 // ============================================================================
