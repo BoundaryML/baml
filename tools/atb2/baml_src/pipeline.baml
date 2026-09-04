@@ -154,7 +154,9 @@ function ingest_feedback() -> Feedback[] {
             fresh.push(fb);
         };
     }
-    advance_cursor("posthog", ph.newest, ph.resume);
+    if (ph.ran) {
+        advance_cursor("posthog", ph.newest, ph.resume);
+    };
     //# Slack: intake channel messages since the cursor (or the resumed scan)
     let sl = slack_feedback(get_cursor("slack_oldest"), resume = get_cursor("slack_resume"));
     for (let fb in sl.feedback) {
@@ -163,7 +165,9 @@ function ingest_feedback() -> Feedback[] {
             fresh.push(fb);
         };
     }
-    advance_cursor("slack", sl.newest_ts, sl.resume);
+    if (sl.ran) {
+        advance_cursor("slack", sl.newest_ts, sl.resume);
+    };
     log.info(
         {
             "ingested": fresh.length(),
@@ -174,7 +178,9 @@ function ingest_feedback() -> Feedback[] {
     fresh
 }
 
-/// Moves an intake's cursor only once its scan is complete. While a scan
+/// Moves an intake's cursor only once its scan is complete; the caller
+/// skips this entirely when the intake did not run (unconfigured), so a
+/// stored continuation survives until the intake is back. While a scan
 /// is cut short by the page cap, the continuation and the newest timestamp
 /// seen so far are kept instead, and the next run picks up where it left
 /// off; the timestamp cursor moves when the last page is in. Both intakes

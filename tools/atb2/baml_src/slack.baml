@@ -348,7 +348,7 @@ function slack_intake_channel() -> string? {
 function slack_feedback(oldest: string?, resume: string? = null) -> SlackFeedback {
     let channel = slack_intake_channel();
     if (channel == null || slack_token() == null) {
-        return SlackFeedback { feedback: [], newest_ts: oldest, resume: null };
+        return SlackFeedback { feedback: [], newest_ts: oldest, resume: null, ran: false };
     };
     let ch = channel ?? "";
     let base = "channel="
@@ -396,7 +396,7 @@ function slack_feedback(oldest: string?, resume: string? = null) -> SlackFeedbac
             let fb: Feedback => feedback.push(fb),
         };
     }
-    SlackFeedback { feedback: feedback, newest_ts: newest, resume: cursor }
+    SlackFeedback { feedback: feedback, newest_ts: newest, resume: cursor, ran: true }
 }
 
 class SlackFeedback {
@@ -407,6 +407,8 @@ class SlackFeedback {
     /// Set when the page cap stopped the scan: Slack's next_cursor to
     /// continue from. Until it is null, `oldest` must not move.
     resume: string?,
+    /// False when the intake is not configured: nothing was scanned.
+    ran: bool,
 }
 
 /// One Slack message as a report, or null when it is not one (a bot, a

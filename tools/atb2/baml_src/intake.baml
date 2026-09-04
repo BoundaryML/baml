@@ -47,6 +47,9 @@ class PosthogFeedback {
     /// from on the next call. Until it is null, `after` must not move, or
     /// the unvisited (older) events would be skipped for good.
     resume: string?,
+    /// False when the intake is not configured: nothing was scanned, and the
+    /// cursor state must be left exactly as it was.
+    ran: bool,
 }
 
 /// `baml_feedback` events after `after` (ISO timestamp, or null for the
@@ -59,7 +62,7 @@ function posthog_feedback(
     max_pages: int = 10,
 ) -> PosthogFeedback {
     if (!posthog_configured()) {
-        return PosthogFeedback { feedback: [], newest: after, resume: null };
+        return PosthogFeedback { feedback: [], newest: after, resume: null, ran: false };
     };
     let key = posthog_env("API_KEY") ?? "";
     let project = posthog_env("PROJECT_ID") ?? "";
@@ -99,7 +102,7 @@ function posthog_feedback(
             let fb: Feedback => feedback.push(fb),
         };
     }
-    PosthogFeedback { feedback: feedback, newest: newest, resume: url }
+    PosthogFeedback { feedback: feedback, newest: newest, resume: url, ran: true }
 }
 
 /// One page of the events API. Only the configured host is ever called:
@@ -243,6 +246,8 @@ testset "intake" {
         assert.equal(posthog_configured(), false);
         assert.equal(posthog_feedback(null).feedback.length(), 0);
         assert.equal(posthog_feedback(null).resume == null, true);
+        assert.equal(posthog_feedback(null).ran, false);
+        assert.equal(slack_feedback(null).ran, false);
         assert.equal(slack_feedback(null).feedback.length(), 0);
         assert.equal(slack_feedback(null).resume == null, true);
     }
