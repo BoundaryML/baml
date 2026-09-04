@@ -59,7 +59,7 @@ export default function QuickstartPage() {
       {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static page CSS */}
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <Navbar />
-      <main className="qs-wrap inline-code-content">
+      <main className="qs-wrap">
         <div className="qs-head">
           <h1 className="qs-h1">Quickstart</h1>
           <p className="qs-lead">

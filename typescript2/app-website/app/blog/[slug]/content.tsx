@@ -84,7 +84,7 @@ export async function PostBody({ children }: { children: string }) {
   });
 
   return (
-    <div className="inline-code-content prose flex flex-col flex-1 mx-auto container-sm max-w-screen-md">
+    <div className="prose flex flex-col flex-1 mx-auto container-sm max-w-screen-md">
       {content}
     </div>
   );

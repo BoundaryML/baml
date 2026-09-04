@@ -695,8 +695,8 @@ pre > code {
   counter-reset: line;
 }
 
-/* Shared inline code treatment for long-form prose. */
-.inline-code-content :not(pre) > code {
+/* Inline code treatment across the website. */
+:not(pre) > code {
   padding: 2px 5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.86em;
@@ -706,8 +706,8 @@ pre > code {
   border-radius: 4px;
 }
 
-.inline-code-content :not(pre) > code::before,
-.inline-code-content :not(pre) > code::after {
+:not(pre) > code::before,
+:not(pre) > code::after {
   content: none;
 }
 
