@@ -44,6 +44,15 @@ class FixtureInspection
     @library = FFI::DynamicLibrary.open(path, flags)
   end
 
+  def call_keyed(key)
+    table_class = Baml::Bridge.const_get(:Native, false).const_get(:ApiV1, false)
+    getter = FFI::Function.new(:pointer, [], @library.find_function("baml_get_api_v1"))
+    table = table_class.new(getter.call)
+    call = FFI::Function.new(:void, %i[uint64 pointer size_t uint32], table[:call_function_for_runtime])
+    call.call(key, nil, 0, 1)
+    FFI::Function.new(:uint64, [], @library.find_function("baml_test_last_call_key")).call
+  end
+
   def count(symbol)
     FFI::Function.new(:uint32, [], @library.find_function(symbol)).call
   end
@@ -240,6 +249,9 @@ when "invalid_bytecode_retry_and_identity"
   assert(other != key, "distinct programs must have independent registrations")
   assert_equal(3, fixture_inspection.count("baml_test_initialize_count"))
   assert_equal(9, fixture_inspection.count("baml_test_free_count"))
+  assert(key > (1 << 53), "generated keys must exercise all uint64 bits")
+  assert_equal(key, fixture_inspection.call_keyed(key))
+  assert_equal(other, fixture_inspection.call_keyed(other))
 when "concurrent_initialization"
   use_fixture
   ENV["BAML_FAKE_INIT_DELAY_MS"] = "25"

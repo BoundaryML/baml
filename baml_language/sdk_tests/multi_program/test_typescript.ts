@@ -25,6 +25,7 @@ const b = await import('./b/typescript/baml_sdk/index.js');
 assert.equal(typeof keyA, 'bigint');
 assert.ok(keyA > BigInt(Number.MAX_SAFE_INTEGER) && keyB > BigInt(Number.MAX_SAFE_INTEGER));
 assert.notEqual(keyA, keyB);
+assert.throws(() => BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytesA), undefined, keyA).close(), /process-owned/);
 assert.equal(a.value(), 11);
 assert.equal(b.value(), 22);
 assert.equal(closure(), 11);

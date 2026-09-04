@@ -46,7 +46,12 @@ def test_generated_programs_and_registration():
     again = load_sdk("sdk_a_again", "a")
     assert again._RUNTIME.runtime_key == a._RUNTIME.runtime_key
     assert isinstance(again.result(), again.Result)
+    assert isinstance(call_function_sync(again._RUNTIME, "user.result", {}).result(), again.Result)
+    assert isinstance(call_function_sync(a._RUNTIME, "user.result", {}).result(), a.Result)
     assert isinstance(a.result(), a.Result)
+    with pytest.raises(BamlPanic, match="process-owned"):
+        again._RUNTIME.close()
+    assert again.value() == a.value() == 11
     with pytest.raises(Exception, match="Conflicting BAML program"):
         BamlRuntime.initialize_runtime_from_bytecode(b._inlinedbaml.BYTECODE, None, a._RUNTIME.runtime_key)
     assert a.value() == 11 and b.value() == 22
@@ -106,11 +111,18 @@ def test_inflight_close_and_cancellation_keep_origin():
         assert await asyncio.to_thread(started_a.wait, 10)
         assert await asyncio.to_thread(started_b.wait, 10)
         a.close()
+        release_function_call(id_a)
+        release_function_call(id_b)
         assert cancel_function_call(id_b)
+        # The Go defer executes this same ABI operation after cancellation,
+        # potentially before the native completion callback. It must be a no-op.
+        release_function_call(id_b)
         release_a.set(); release_b.set()
         assert decode_call_result(await call_a) == 33
         with pytest.raises(Exception, match="[Cc]ancel"):
             decode_call_result(await call_b)
+        assert not cancel_function_call(id_a)
+        assert not cancel_function_call(id_b)
         b.close()
     asyncio.run(run())
 

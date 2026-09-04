@@ -99,6 +99,10 @@ export declare class BamlPdf {
 /** A handle to one uint64 runtime registration in the shared CFFI library. */
 export declare class BamlRuntime {
   get runtimeKey(): bigint
+  /**
+   * Close a dynamic registration. Generated SDK registrations are process-owned
+   * and return an error, preserving all imports that share that program key.
+   */
   close(): void
   /** Create an independent dynamic registration from BAML source files. */
   static initializeRuntime(rootPath: string, files: Record<string, string>): BamlRuntime

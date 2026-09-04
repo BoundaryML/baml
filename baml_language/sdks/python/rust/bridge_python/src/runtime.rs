@@ -33,7 +33,7 @@ struct DecodedCallArgs {
 
 /// A handle to one uint64 runtime registration in the shared CFFI library.
 #[gen_stub_pyclass]
-#[pyclass]
+#[pyclass(dict)]
 pub struct BamlRuntime {
     #[pyo3(get)]
     pub runtime_key: u64,

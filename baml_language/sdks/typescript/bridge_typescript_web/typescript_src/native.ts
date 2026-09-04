@@ -389,6 +389,7 @@ export class Collector {
 
 export class BamlRuntime {
   private constructor(readonly runtimeKey: bigint) {}
+  /** Close a dynamic registration; generated process-owned keys reject close. */
   close(): void { unregisterRuntime(this.runtimeKey); runtimes.delete(this.runtimeKey); }
   static initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string, runtimeKey?: bigint): BamlRuntime {
     ensureWebSysopsConfigured();
@@ -444,7 +445,13 @@ export function getRuntime(key?: bigint): BamlRuntime {
   return runtime;
 }
 export function newFunctionCall(): bigint { return newWasmFunctionCall(); }
-export function releaseFunctionCall(callId: bigint | string): void { releaseWasmFunctionCall(BigInt(callId)); }
+export function releaseFunctionCall(callId: bigint | string): void {
+  const parsed = typeof callId === "bigint" ? callId : parseCallId(callId);
+  if (parsed < 0n || parsed > MAX_UINT64) {
+    throw new TypeError("callId must be a decimal uint64 string");
+  }
+  releaseWasmFunctionCall(parsed);
+}
 export function cancelFunctionCall(callId: bigint | string): boolean {
   const parsed = typeof callId === "bigint" ? callId : parseCallId(callId);
   if (parsed < 0n || parsed > MAX_UINT64) {

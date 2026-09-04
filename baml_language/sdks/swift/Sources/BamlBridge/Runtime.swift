@@ -86,6 +86,7 @@ public final class BamlRuntime: @unchecked Sendable {
         return runtime
     }
 
+    /// Closes a dynamic registration. Generated process-owned registrations throw.
     public func close() throws {
         guard let runtimeKey else { return }
         let diagnostic = String(decoding: BamlApi.takeBuffer(BamlApi.unregisterRuntime(runtimeKey)), as: UTF8.self)

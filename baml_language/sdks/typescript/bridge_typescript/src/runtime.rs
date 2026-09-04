@@ -37,6 +37,8 @@ impl BamlRuntime {
         self.key.into()
     }
 
+    /// Close a dynamic registration. Generated SDK registrations are process-owned
+    /// and return an error, preserving all imports that share that program key.
     #[napi]
     pub fn close(&self) -> napi::Result<()> {
         bridge_cffi::unregister_runtime(self.key)

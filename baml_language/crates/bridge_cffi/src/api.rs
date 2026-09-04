@@ -362,6 +362,15 @@ mod tests {
         assert_same_function!(api.register_callback, crate::register_callback);
         assert_same_function!(api.call_function, crate::call_function);
         assert_same_function!(api.new_function_call, crate::new_function_call);
+        assert_same_function!(api.register_program, crate::register_program_ffi);
+        assert_same_function!(api.create_runtime, crate::create_runtime_ffi);
+        assert_same_function!(api.unregister_runtime, crate::unregister_runtime_ffi);
+        assert_same_function!(
+            api.call_function_for_runtime,
+            crate::call_function_for_runtime
+        );
+        assert_same_function!(api.program_key, crate::program_key_ffi);
+        assert_same_function!(api.release_function_call, crate::release_function_call);
         assert_same_function!(api.cancel_function_call, crate::cancel_function_call);
         assert_same_function!(
             api.register_host_dispatch_callback,
@@ -402,6 +411,12 @@ mod tests {
         let _: BamlRegisterCallbackFn = api.register_callback;
         let _: BamlCallFunctionFn = api.call_function;
         let _: BamlNewFunctionCallFn = api.new_function_call;
+        let _: BamlRegisterProgramFn = api.register_program;
+        let _: BamlCreateRuntimeFn = api.create_runtime;
+        let _: BamlUnregisterRuntimeFn = api.unregister_runtime;
+        let _: BamlCallFunctionForRuntimeFn = api.call_function_for_runtime;
+        let _: BamlCreateRuntimeFn = api.program_key;
+        let _: extern "C" fn(u64) = api.release_function_call;
         let _: BamlCancelFunctionCallFn = api.cancel_function_call;
         let _: BamlRegisterHostDispatchCallbackFn = api.register_host_dispatch_callback;
         let _: BamlRegisterHostReleaseCallbackFn = api.register_host_release_callback;

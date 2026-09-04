@@ -1,4 +1,5 @@
 import initWasm, * as raw from "#bridge-web-core";
+import { releaseFunctionCall } from "#bridge-web-native";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const rawHandleMediaExports = [
@@ -28,6 +29,17 @@ describe("raw WASM handle and media exports", () => {
     expect(raw.cancelFunctionCall(id)).toBe(false);
     raw.releaseFunctionCall(id);
   });
+  it("rejects out-of-range public release IDs before WASM can wrap them", () => {
+    const id = raw.newFunctionCall();
+    for (const invalid of [-1n, 1n << 64n, (1n << 64n) + id, "-1", "18446744073709551616"]) {
+      expect(() => releaseFunctionCall(invalid)).toThrow("callId must be a decimal uint64 string");
+    }
+    // The overflowing alias must not release the valid reservation.
+    expect(raw.cancelFunctionCall(id)).toBe(true);
+    releaseFunctionCall(id);
+    expect(raw.cancelFunctionCall(id)).toBe(false);
+  });
+
   it("exposes the same named handle/media contract", () => {
     for (const name of rawHandleMediaExports) expect(raw[name]).toBeTypeOf("function");
   });

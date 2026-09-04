@@ -17,6 +17,7 @@
 #endif
 
 static uint32_t initialize_count = 0;
+static uint64_t last_call_key = 0;
 static volatile uint32_t initialize_started = 0;
 static uint32_t free_count = 0;
 static uint32_t register_count = 0;
@@ -247,7 +248,7 @@ static BamlBuffer probe_create_runtime(const uint8_t *bytes, size_t length, uint
 }
 static BamlBuffer probe_unregister_runtime(uint64_t key) { (void)key; return (BamlBuffer){NULL, 0}; }
 static void probe_call_keyed(uint64_t key, const uint8_t *bytes, size_t length, uint32_t callback) {
-  (void)key; probe_call(bytes, length, callback);
+  last_call_key = key; probe_call(bytes, length, callback);
 }
 
 static const BamlApiV1 default_api = {
@@ -341,6 +342,10 @@ BAML_CFFI_API const BamlApiV1 *baml_get_api_v1(void) {
   }
   null_requested_field(getenv("BAML_FAKE_NULL_FIELD"));
   return &probe_api;
+}
+
+BAML_CFFI_API uint64_t baml_test_last_call_key(void) {
+  return last_call_key;
 }
 
 BAML_CFFI_API uint32_t baml_test_initialize_count(void) {

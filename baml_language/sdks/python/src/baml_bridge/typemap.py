@@ -6,6 +6,7 @@ import contextvars
 import functools
 import inspect
 import threading
+import weakref
 from contextlib import contextmanager
 from typing import Dict, Optional, Tuple, Type
 
@@ -33,6 +34,7 @@ _STDLIB_REVERSE_OVERRIDES: Dict[Tuple[str, str], str] = {
 
 class BamlTypeMap:
     __slots__ = (
+        "__weakref__",
         "runtime",
         # Lazy entries — codegen-emitted, resolved on first lookup.
         "_class_lazy",
@@ -183,6 +185,10 @@ _PROGRAM_MAPS: Dict[int, BamlTypeMap] = {}
 def set_type_map(m: BamlTypeMap, runtime=None, sdk_module: str | None = None) -> None:
     global _TYPE_MAP
     m.runtime = runtime
+    if runtime is not None:
+        # Each SDK import has its own wrapper even when native contents dedupe.
+        # A weak reference avoids a runtime -> map -> runtime ownership cycle.
+        runtime._sdk_type_map = weakref.ref(m)
     if sdk_module is None:
         _TYPE_MAP = m
     else:
@@ -250,6 +256,10 @@ def runtime_argument_bound(call):
     """Bind raw runtime helpers before encoding callbacks or decoding capabilities."""
     def resolve(runtime):
         import copy
+        local_ref = getattr(runtime, "_sdk_type_map", None)
+        local = local_ref() if local_ref is not None else None
+        if local is not None:
+            return local
         base = get_type_map()
         if base.runtime is not None and base.runtime.runtime_key == runtime.runtime_key:
             return base
