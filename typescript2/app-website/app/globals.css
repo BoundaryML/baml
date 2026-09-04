@@ -25,9 +25,9 @@
  * ::-webkit-scrollbar for Safari/older Chromium (ignored when the standard
  * properties are supported). */
 * {
-  scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--foreground) 26%, transparent)
     transparent;
+  scrollbar-width: thin;
 }
 ::-webkit-scrollbar {
   width: 10px;
@@ -39,10 +39,10 @@
 }
 ::-webkit-scrollbar-thumb {
   background-color: color-mix(in srgb, var(--foreground) 26%, transparent);
-  border-radius: 999px;
+  background-clip: padding-box;
   /* Transparent border + padding-box clip = inset pill thumb. */
   border: 3px solid transparent;
-  background-clip: padding-box;
+  border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in srgb, var(--foreground) 42%, transparent);
@@ -479,9 +479,6 @@
  * text-foreground, vsc-* utilities, etc.) inherit local values without
  * leaking back into the marketing-site theme. */
 .baml-playground-root {
-  color-scheme: light;
-
-  /* vsc-* token defaults */
   --vsc-bg: #fffdf6;
   --vsc-bg-secondary: #f4eee2;
   --vsc-surface: #f7f0e4;
@@ -530,9 +527,10 @@
   --border: #d8cfbd;
   --input: #d8cfbd;
   --ring: #6d28d9;
+  color: var(--vsc-text);
+  color-scheme: light;
 
   background-color: var(--vsc-bg);
-  color: var(--vsc-text);
 }
 
 /* Dark variant of the playground surface. Activated when the page's code
@@ -542,8 +540,6 @@
  * brand purple as the accent, but lightened so it reads on a dark panel
  * (the old #6d28d9 codelens/link was nearly invisible on dark). */
 .baml-playground-root[data-theme="dark"] {
-  color-scheme: dark;
-
   --vsc-bg: #1e1e1e;
   --vsc-bg-secondary: #252526;
   --vsc-surface: #252526;
@@ -586,9 +582,10 @@
   --border: #333333;
   --input: #3c3c3c;
   --ring: #8b5cf6;
+  color: var(--vsc-text);
+  color-scheme: dark;
 
   background-color: var(--vsc-bg);
-  color: var(--vsc-text);
 }
 
 .dark {
@@ -631,7 +628,11 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    font-family:
+      "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      "Liberation Mono", "Courier New", monospace;
+    font-size: 14px;
+    line-height: 1.5;
     background-image:
       radial-gradient(
         circle at 1px 1px,
@@ -646,11 +647,7 @@
     background-size:
       18px 18px,
       100% 100%;
-    font-family:
-      "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-      "Liberation Mono", "Courier New", monospace;
-    font-size: 14px;
-    line-height: 1.5;
+    @apply bg-background text-foreground;
   }
 }
 
