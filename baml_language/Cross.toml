@@ -8,7 +8,22 @@
 #
 # `cross` runs the build inside a container and forwards only a curated set of
 # environment variables, so the source fingerprint and Rust/native remapping
-# flags must be listed here explicitly or they never reach the compilers.
+# listed here explicitly or they never reach the compilers. The wrapper and the
+# host-compatible sccache binary are copied into cross's shared /target mount by
+# `.github/actions/setup-r2-sccache`.
+[build.env]
+passthrough = [
+  "BAML_SCCACHE_BIN=/target/sccache-host",
+  "BAML_SCCACHE_R2_ACCESS_KEY_ID",
+  "BAML_SCCACHE_R2_SECRET_ACCESS_KEY",
+  "RUSTC_WRAPPER=/target/baml-sccache",
+  "SCCACHE_BUCKET",
+  "SCCACHE_ENDPOINT",
+  "SCCACHE_ERROR_LOG",
+  "SCCACHE_IDLE_TIMEOUT",
+  "SCCACHE_REGION",
+  "SCCACHE_S3_KEY_PREFIX",
+]
 [target.x86_64-unknown-linux-gnu.env]
 passthrough = ["BAML_GIT_SHA", "RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
 

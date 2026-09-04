@@ -23,6 +23,11 @@ on:
         type: string
         default: ""
         required: false
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
   push:
     branches:
       # Mirror the Python reusable workflow's rehearsal-branch trigger so the
@@ -39,6 +44,8 @@ defaults:
     shell: bash
 
 env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   MACOSX_DEPLOYMENT_TARGET: "10.13"
 
 jobs:
@@ -132,10 +139,10 @@ jobs:
         # HOME at the real root home before any tool setup runs.
         run: echo "HOME=/root" >> "$GITHUB_ENV"
 
-      - name: Setup tools (sccache, direnv, node, pnpm)
-        uses: ./.github/actions/setup-mise
+      - name: Setup tools and shared R2 sccache
+        uses: ./.github/actions/setup-r2-sccache
         with:
-          install_args: "sccache direnv node npm:pnpm"
+          extra-tools: "node npm:pnpm"
 
       - name: Set up Node.js (container)
         if: matrix._.container

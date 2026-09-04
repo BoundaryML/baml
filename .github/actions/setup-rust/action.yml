@@ -34,6 +34,14 @@ inputs:
     description: "Cache even if the workflow fails"
     required: false
     default: "false"
+  cache-all-crates:
+    description: "Cache all Cargo registry crates"
+    required: false
+    default: "false"
+  cache-targets:
+    description: "Cache compiled target directories"
+    required: false
+    default: "true"
   enable-cache:
     description: "Enable Rust cache"
     required: false
@@ -100,6 +108,8 @@ runs:
         workspaces: ${{ inputs.workspace }}
         prefix-key: ${{ inputs.prefix-key }}
         cache-on-failure: ${{ inputs.cache-on-failure }}
+        cache-all-crates: ${{ inputs.cache-all-crates }}
+        cache-targets: ${{ inputs.cache-targets }}
 
     - name: Add wasm32 target
       if: inputs.enable-wasm == 'true'

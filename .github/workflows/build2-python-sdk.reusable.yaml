@@ -13,6 +13,11 @@ on:
         type: string
         default: ""
         required: false
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
   push:
     branches:
       - sam/publish-python
@@ -26,6 +31,10 @@ concurrency:
 defaults:
   run:
     shell: bash
+
+env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
 jobs:
   # Target set + per-target runner/manylinux/architecture come from the platform
@@ -95,6 +104,9 @@ jobs:
           fi
           scripts/baml-language-version stamp --plan release-plan.json
 
+      - name: Setup shared R2 sccache
+        uses: ./.github/actions/setup-r2-sccache
+
       # NOTE: we deliberately do NOT use ./.github/actions/setup-mise here.
       # The host Python version pins the abi3 floor of the resulting wheel,
       # so we want a specific Python (3.10, matching the abi3-py310 target)
@@ -134,7 +146,15 @@ jobs:
           # baml_language/Cargo.toml.
           args: --release --strip --out dist
           manylinux: ${{ matrix._.manylinux }}
+          # maturin-action forwards SCCACHE_* automatically, but its Docker
+          # allowlist intentionally excludes AWS credential variable names.
+          docker-options: "-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY"
           before-script-linux: |
+            # Do not use maturin-action's `sccache: true`: it unconditionally
+            # enables the GHA backend. Install the wrapper in the build
+            # container while preserving the R2 configuration from .envrc.
+            uv tool install "sccache>=0.10.0"
+            sccache --version
             if command -v yum &> /dev/null; then
                 yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
             else

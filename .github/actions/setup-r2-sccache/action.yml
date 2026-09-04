@@ -1,0 +1,64 @@
+name: "Setup R2 sccache"
+description: "Install sccache and configure the shared BAML R2 backend from .envrc"
+
+inputs:
+  extra-tools:
+    description: "Additional mise tools required by the calling build job"
+    required: false
+    default: ""
+  prepare-cross:
+    description: "Copy the BAML wrapper and host sccache binary into the workspace for cross containers"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install sccache, direnv, and build tools
+      uses: ./.github/actions/setup-mise
+      with:
+        install_args: "sccache direnv ${{ inputs.extra-tools }}"
+
+    - name: Configure shared R2 sccache
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        direnv allow .envrc
+        # This linker override is for host cross-compilation. Containerized
+        # builds provide and select their own target linker.
+        direnv export gha | awk '
+          /^CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER<</ {
+            delimiter = substr($0, index($0, "<<") + 2)
+            skip = 1
+            next
+          }
+          skip && $0 == delimiter {
+            skip = 0
+            next
+          }
+          !skip { print }
+        ' >> "$GITHUB_ENV"
+
+        # Release workflows invoke sccache directly on every host platform.
+        # The repository wrapper performs this BAML_* -> AWS_* mapping for
+        # POSIX cargo jobs, but Windows release builds also need the aliases.
+        if [[ -n "${BAML_SCCACHE_R2_ACCESS_KEY_ID:-}" && -n "${BAML_SCCACHE_R2_SECRET_ACCESS_KEY:-}" ]]; then
+          {
+            printf 'AWS_ACCESS_KEY_ID=%s\n' "$BAML_SCCACHE_R2_ACCESS_KEY_ID"
+            printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$BAML_SCCACHE_R2_SECRET_ACCESS_KEY"
+          } >> "$GITHUB_ENV"
+        fi
+        echo 'RUSTC_WRAPPER=sccache' >> "$GITHUB_ENV"
+
+    - name: Prepare sccache for cross containers
+      if: ${{ inputs.prepare-cross == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        mkdir -p baml_language/target
+        cp tools/baml-sccache baml_language/target/baml-sccache
+        cp "$(command -v sccache)" baml_language/target/sccache-host
+        chmod +x baml_language/target/baml-sccache baml_language/target/sccache-host
+        echo 'SCCACHE_ERROR_LOG=/tmp/sccache-baml.log' >> "$GITHUB_ENV"

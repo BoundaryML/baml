@@ -15,6 +15,11 @@ on:
         description: "Serialized toolchain build matrix from release/platforms.json"
         type: string
         required: true
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
 
 permissions:
   contents: read
@@ -24,6 +29,8 @@ defaults:
     shell: bash
 
 env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -66,8 +73,14 @@ jobs:
           workspace: baml_language
           prefix-key: v5-rust-baml-language-toolchain-${{ matrix.target }}
           cache-on-failure: true
+          cache-all-crates: true
+          cache-targets: false
           enable-cross: false
           skip-protoc: true
+      - name: Setup shared R2 sccache
+        uses: ./.github/actions/setup-r2-sccache
+        with:
+          prepare-cross: ${{ matrix.cross_image && 'true' || 'false' }}
       - name: Setup musl cross toolchain
         if: ${{ matrix.libc == 'musl' }}
         uses: ./.github/actions/setup-musl-cross
@@ -80,7 +93,7 @@ jobs:
         if: ${{ matrix.cross_image }}
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache cargo:cross"
+          install_args: "cargo:cross"
       - name: Configure cross for GNU toolchain
         if: ${{ matrix.cross_image }}
         env:
@@ -103,7 +116,7 @@ jobs:
             passthrough+=', "CFLAGS_x86_64_unknown_linux_gnu=--sysroot=/usr/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu/sysroot"'
             passthrough+=', "CXXFLAGS_x86_64_unknown_linux_gnu=--sysroot=/usr/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu/sysroot"'
           fi
-          printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = [%s]\n' \
+          printf '[build.env]\npassthrough = ["BAML_SCCACHE_BIN=/target/sccache-host", "BAML_SCCACHE_R2_ACCESS_KEY_ID", "BAML_SCCACHE_R2_SECRET_ACCESS_KEY", "RUSTC_WRAPPER=/target/baml-sccache", "SCCACHE_BUCKET", "SCCACHE_ENDPOINT", "SCCACHE_ERROR_LOG", "SCCACHE_IDLE_TIMEOUT", "SCCACHE_REGION", "SCCACHE_S3_KEY_PREFIX"]\n[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = [%s]\n' \
             "$TARGET" "$CROSS_IMAGE" "$TARGET" "$passthrough" > "$cross_config"
           {
             echo 'CARGO=cross'

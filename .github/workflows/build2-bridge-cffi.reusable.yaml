@@ -58,6 +58,11 @@ on:
         type: string
         default: ""
         required: false
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
   # Manual-only standalone trigger for testing this reusable workflow before it
   # is wired into the release graph (with no inputs it builds a canary-stamped
   # artifact). It is otherwise invoked via `workflow_call`.
@@ -71,6 +76,10 @@ concurrency:
 defaults:
   run:
     shell: bash
+
+env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
 jobs:
   # The cffi build matrix is generated from the repository's platform contract
@@ -161,6 +170,11 @@ jobs:
           enable-cache: false
           skip-protoc: true
 
+      - name: Setup shared R2 sccache
+        uses: ./.github/actions/setup-r2-sccache
+        with:
+          prepare-cross: ${{ matrix._.use_cross || false }}
+
       - name: Exclude optional AWS-LC jitter exports on Windows
         if: contains(matrix._.target, 'windows-msvc')
         shell: bash
@@ -177,7 +191,7 @@ jobs:
         if: matrix._.use_cross
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache cargo:cross"
+          install_args: "cargo:cross"
 
       - name: Select cross (Linux targets)
         if: matrix._.use_cross

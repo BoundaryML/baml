@@ -17,6 +17,11 @@ on:
         type: string
         default: ""
         required: false
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-build-web-sdk
@@ -27,6 +32,8 @@ defaults:
     shell: bash
 
 env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -55,10 +62,10 @@ jobs:
           fi
           scripts/baml-language-version stamp --plan release-plan.json
 
-      - name: Setup Node.js, pnpm, and wasm-pack
-        uses: ./.github/actions/setup-mise
+      - name: Setup build tools and shared R2 sccache
+        uses: ./.github/actions/setup-r2-sccache
         with:
-          install_args: "node npm:pnpm github:rustwasm/wasm-pack"
+          extra-tools: "node npm:pnpm github:rustwasm/wasm-pack"
 
       - name: Setup Rust WASM target
         working-directory: baml_language
@@ -70,6 +77,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
           shared-key: "linux-wasm"
           save-if: false
 

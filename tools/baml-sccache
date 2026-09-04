@@ -9,4 +9,6 @@ if [[ -n "${BAML_SCCACHE_R2_SECRET_ACCESS_KEY:-}" ]]; then
     export AWS_SECRET_ACCESS_KEY="${BAML_SCCACHE_R2_SECRET_ACCESS_KEY}"
 fi
 
-exec sccache "$@"
+# Cross places the host-compatible sccache binary in its shared /target mount.
+# Native builds keep using the sccache resolved from PATH.
+exec "${BAML_SCCACHE_BIN:-sccache}" "$@"
