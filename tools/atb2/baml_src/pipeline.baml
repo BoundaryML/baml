@@ -52,28 +52,46 @@ function run_pipeline(
         report.ingested = fresh.length();
     };
     //# triage: report -> issue (create, organize, gauge), thread opened
+    // without the store the issues live only here, and flow straight on to
+    // the later stages of this same run
+    let created: Issue[] = [];
     if (want.includes("triage")) {
         for (let fb in fresh) {
             match (triage_feedback(fb)) {
                 null => report.skipped.push(fb.id + ": no issue (fixed on this toolchain)"),
-                let _i: Issue => {
+                let i: Issue => {
                     report.issues_created += 1;
+                    created.push(i);
                     null
                 },
             };
         }
     };
     //# handle: open, gauged issues -> handle_issue -> runs row
+    let handled: Issue[] = [];
     if (want.includes("handle")) {
-        for (let issue in load_issues_in("open")) {
+        let open = if (db_configured()) {
+            load_issues_in("open")
+        } else {
+            created
+        };
+        for (let issue in open) {
             match (handle_one(issue, mode)) {
                 null => {
                     report.skipped.push(
                         issue.id + ": " + (handle_ready(issue, false) ?? "no outcome"),
                     )
                 },
-                let _o: HandleOutcome => {
+                let o: HandleOutcome => {
                     report.handled += 1;
+                    match (o.pr) {
+                        null => null,
+                        let pr: string => {
+                            handled.push(
+                                with_status(issue, InProgress { state: "in_progress", pr: pr }),
+                            )
+                        },
+                    };
                     null
                 },
             };
@@ -81,7 +99,12 @@ function run_pipeline(
     };
     //# merge: in-progress issues with a PR -> merge_issue
     if (want.includes("merge")) {
-        for (let issue in load_issues_in("in_progress")) {
+        let in_progress = if (db_configured()) {
+            load_issues_in("in_progress")
+        } else {
+            handled
+        };
+        for (let issue in in_progress) {
             match (merge_one(issue, mode)) {
                 null => report.skipped.push(issue.id + ": no PR to watch"),
                 let r: MergeResult => {

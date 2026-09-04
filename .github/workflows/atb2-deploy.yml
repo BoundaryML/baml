@@ -19,7 +19,8 @@ on:
       - ".github/workflows/atb2-deploy.yml"
   pull_request:
     paths:
-      - "tools/atb2/deploy/**"
+      # everything the image copies in, not only the deploy files
+      - "tools/atb2/**"
       - ".github/workflows/atb2-deploy.yml"
   workflow_dispatch:
 
@@ -43,10 +44,11 @@ jobs:
           persist-credentials: false
       - run: docker build -f tools/atb2/deploy/Dockerfile -t atb2-runner:ci tools/atb2
 
-  # On canary: deploy.
+  # On canary only: deploy. A manual run from any other ref is refused, so
+  # the deploy token never runs against unreviewed code.
   runner:
     name: Fly (atb2-runner)
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/canary'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:

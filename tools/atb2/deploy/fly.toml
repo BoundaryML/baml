@@ -26,6 +26,8 @@ primary_region = "sjc"
 
 [env]
   ATB2_HOME = "/data"
+  # pin the canary revision the runner builds (a commit sha); unset = origin/canary head
+  # ATB2_CANARY_REV = ""
   ATB2_DATASET = "live"
   ATB2_POLL_S = "60"
   INFISICAL_PROJECT_ID = "bdd280e2-259c-4750-9b16-a8597a67214c"

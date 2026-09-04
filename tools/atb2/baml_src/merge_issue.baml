@@ -857,7 +857,8 @@ function merge_issue_loop(
         //# claim the oldest queued request
         match (claim_merge_request(runner)) {
             null => {
-                if (once && served > 0) {
+                if (once) {
+                    // one-shot: an empty queue is a complete run of zero
                     return served;
                 };
                 wait_poll();

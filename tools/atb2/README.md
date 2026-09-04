@@ -77,7 +77,14 @@ and one process, `runner_loop`, which serves `@bammy babysit <PR>` requests
 from the store in the background and runs `run_pipeline` every five minutes.
 One machine on purpose: a Fly volume attaches to one machine, and both loops
 share the cached clone and cargo target on it. A panic ends the process and
-Fly restarts it; every stage is idempotent against the store. The image
+Fly restarts it; every stage is idempotent against the store.
+
+At boot the entrypoint builds canary's `baml-cli` on the volume before any
+secret is loaded, in an explicit environment, and rebuilds whenever the
+canary revision changed (`ATB2_CANARY_REV` in `fly.toml` pins one). The
+agent's Claude credential is the runner's own spend-capped one: the agent's
+Bash commands cannot see it in their environment (the CLI scrubs it) but
+share the CLI's uid, the same exposure as Claude Code with Bash on a laptop. The image
 carries cargo, gh, node and the Claude Code CLI; the volume at `/data` holds
 the cached canary clone, the cargo target and the run dirs, and the first
 boot builds canary's `baml-cli` there.

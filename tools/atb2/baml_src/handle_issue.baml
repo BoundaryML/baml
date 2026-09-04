@@ -578,7 +578,11 @@ function sandbox_env(with_gh: bool) -> map<string, string> {
         env.set("GIT_TERMINAL_PROMPT", "0");
         // the CLI's own credential on a headless host: one, never both, and
         // the CLI scrubs it (and every other credential it knows) from the
-        // env of the Bash commands the agent runs
+        // env of the Bash commands the agent runs. Accepted residual risk:
+        // those commands share the CLI's uid and could read its environment
+        // through /proc; the credential is therefore the runner's own,
+        // spend-capped Claude credential and nothing else, the same exposure
+        // as Claude Code with Bash on any developer machine.
         match (agent_credential()) {
             null => null,
             let c: string[] => {
