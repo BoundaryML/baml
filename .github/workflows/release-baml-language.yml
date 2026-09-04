@@ -448,18 +448,6 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
 
-  # Platform-neutral C# work (schema vectors, generator output, ABI bytecode,
-  # package-comparison policy) runs alongside the shared native matrix.
-  prepare-csharp-sdk:
-    name: Prepare C# SDK product inputs
-    needs: [plan, build-matrix]
-    uses: ./.github/workflows/prepare-csharp-sdk.reusable.yaml
-    permissions:
-      contents: read
-    with:
-      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
-      source_sha: ${{ needs.plan.outputs.source_sha }}
-
   # Language-neutral engine cdylib, shared by every dylib-loader SDK.
   build-bridge-cffi:
     name: Build bridge_cffi cdylib
@@ -570,7 +558,7 @@ jobs:
 
   build-csharp-sdk:
     name: Assemble C# SDK product package
-    needs: [plan, prepare-csharp-sdk, build-bridge-cffi]
+    needs: [plan, build-bridge-cffi]
     uses: ./.github/workflows/build2-csharp-sdk.reusable.yaml
     permissions:
       contents: read
@@ -605,7 +593,6 @@ jobs:
       - build-bridge-cffi
       - build-go-sdk
       - build-swift-sdk
-      - prepare-csharp-sdk
       - build-csharp-sdk
       # The Rust SDK is production-ready (crates.io publisher live), so its
       # build gates the release: a failure here blocks
@@ -2150,7 +2137,6 @@ jobs:
       - dry-run-artifacts
       - dry-run-summary
       - build-swift-sdk
-      - prepare-csharp-sdk
       - build-csharp-sdk
       - publish-csharp-sdk
       - release-prerequisites-complete

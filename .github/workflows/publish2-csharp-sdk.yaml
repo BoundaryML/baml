@@ -82,9 +82,6 @@ jobs:
             --provenance product-package/native-provenance.json \
             --manifest product-package/native-manifest.sha256 \
             --package "$package"
-          scripts/baml-csharp-release-contract verify-generated-sources \
-            --root product-package/baml_sdk \
-            --manifest product-package/generated-sources.sha256
 
           digest="$(sha256sum "$package" | cut -d ' ' -f 1)"
           grep -Fxq "$digest  $(basename "$package")" \

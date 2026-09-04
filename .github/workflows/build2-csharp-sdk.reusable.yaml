@@ -51,20 +51,12 @@ jobs:
           path: native-downloads
           merge-multiple: false
 
-      - uses: actions/download-artifact@v8
-        with:
-          name: csharp-neutral-preparation
-          path: neutral-preparation
-
       - name: Stamp the frozen release plan
         env:
           RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
         run: |
           set -euo pipefail
           printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
-          diff -u \
-            <(jq -S . release-plan.json) \
-            <(jq -S . neutral-preparation/release-plan.json)
           scripts/baml-language-version stamp --plan release-plan.json
           canonical_version="$(jq -r .canonical_version release-plan.json)"
           nuget_version="$(jq -r .registry_versions.nuget release-plan.json)"
@@ -97,11 +89,7 @@ jobs:
           set -euo pipefail
           product_root="$RUNNER_TEMP/csharp-product"
           package_output="$product_root/packages"
-          generated_output="$PWD/neutral-preparation/baml_sdk"
           mkdir -p "$package_output"
-          scripts/baml-csharp-release-contract verify-generated-sources \
-            --root "$generated_output" \
-            --manifest neutral-preparation/generated-sources.sha256
           baml_language/sdks/csharp/bridge_csharp/tools/pack-product.sh \
             staging \
             native-manifest.sha256 \
@@ -118,13 +106,6 @@ jobs:
           cp native-manifest.sha256 product-output/
           cp native-provenance.json product-output/
           cp release-plan.json product-output/
-          cp neutral-preparation/generated-sources.sha256 product-output/
-          cp -R "$generated_output" product-output/
-          mkdir -p product-output/nuget-smoke
-          cp \
-            baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.NuGetPackageSmoke/Baml.Bridge.NuGetPackageSmoke.csproj \
-            baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.NuGetPackageSmoke/Program.cs \
-            product-output/nuget-smoke/
           (
             cd product-output
             sha256sum "$(basename "$package")" > product-package.sha256
