@@ -21,6 +21,12 @@
 
 // ==================== Web API ====================
 
+/// Slack could not be reached or said no. Thrown so a caller can log it
+/// and go on: Slack being down must never stop a run.
+class SlackError {
+    message: string,
+}
+
 function slack_configured() -> bool {
     slack_token() != null
         && baml.env.get("ATB2_SLACK_CHANNEL") != null
@@ -69,7 +75,9 @@ function slack_api(method: string, body: json?, query: string) -> json {
         },
         timeout = baml.time.Duration.from_seconds(30),
     ) catch (_) {
-        _ => baml.sys.panic("slack: " + method + " failed"),
+        _ => {
+            throw SlackError { message: method + " failed" };
+        },
     };
     let text = res.text() catch (_) {
         _ => "{}",
@@ -78,9 +86,7 @@ function slack_api(method: string, body: json?, query: string) -> json {
         _ => baml.json.parse("{}"),
     };
     if (!baml.json.path_or<bool>(out, ".ok", false)) {
-        baml.sys.panic(
-            "slack: " + method + ": " + baml.json.path_or<string>(out, ".error", "not ok"),
-        );
+        throw SlackError { message: method + ": " + baml.json.path_or<string>(out, ".error", "not ok") };
     };
     out
 }

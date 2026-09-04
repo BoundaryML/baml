@@ -11,6 +11,12 @@
 
 // ==================== PostgREST ====================
 
+/// The store could not be reached or refused a request. Thrown, not
+/// panicked, so a loop can log it and go on with the next run.
+class StoreError {
+    message: string,
+}
+
 /// The store is configured: reads and writes go to Supabase.
 function db_configured() -> bool {
     supabase_configured()
@@ -35,7 +41,7 @@ function supabase_send(method: string, path: string, body: string, prefer: strin
     let base = baml.env.get("FEEDBACK_SUPABASE_URL") ?? "";
     if (!base.starts_with("https://")) {
         // the service key rides in two headers: never over plain http
-        baml.sys.panic("supabase: FEEDBACK_SUPABASE_URL must be https");
+        throw StoreError { message: "FEEDBACK_SUPABASE_URL must be https" };
     };
     let url = base + "/rest/v1/" + path;
     let key = baml.env.get("FEEDBACK_SUPABASE_KEY") ?? "";
@@ -52,30 +58,46 @@ function supabase_send(method: string, path: string, body: string, prefer: strin
         baml.http.Request { method: method, url: url, headers: headers, body: body },
         timeout = baml.time.Duration.from_seconds(30),
     ) catch (e) {
-        _ => baml.sys.panic("supabase: " + method + " failed for " + url),
+        _ => {
+            throw StoreError { message: method + " failed for " + url };
+        },
     };
     let text = res.text() catch (_) {
         _ => "",
     };
     if (!res.ok()) {
-        baml.sys.panic(
-            "supabase: "
-                + res.status_code.to_string()
-                + " for "
-                + method
-                + " "
-                + url
-                + ": "
-                + tail(text, 3),
-        );
+        throw StoreError {
+            message: res.status_code.to_string() + " for " + method + " " + url + ": " + tail(text, 3),
+        };
     };
     text
 }
 
-/// Insert-or-update on the primary key. `rows` is a JSON array. Ids never
-/// collide across datasets by construction (live ids are ISSUE-/PH-/SL-,
-/// eval ids are the reference GH- numbers) and every read filters on
-/// dataset, so an eval run cannot touch a live row.
+/// Which dataset an id belongs to: eval rows are the reference issues
+/// (GH-<number>); everything else (ISSUE-, PH-, SL-) is live. The database
+/// enforces the same rule with a check constraint (see the PR), so an eval
+/// run cannot upsert over a live row or the other way round.
+function dataset_of_id(id: string) -> string {
+    if (id.starts_with("GH-")) {
+        "eval"
+    } else {
+        "live"
+    }
+}
+
+/// Refuses a write whose id belongs to the other dataset.
+function guard_dataset(id: string) -> null {
+    if (dataset_of_id(id) != dataset()) {
+        throw StoreError {
+            message: "id " + id + " belongs to dataset " + dataset_of_id(id) + ", this run writes " + dataset(),
+        };
+    };
+    null
+}
+
+/// Insert-or-update on the primary key. `rows` is a JSON array. Every read
+/// filters on dataset and every write is guarded (guard_dataset), and the
+/// database checks the id/dataset pairing too.
 function upsert(table: string, rows: json) -> null {
     supabase_send(
         "POST",
@@ -289,6 +311,7 @@ function save_feedback(fb: Feedback, origin: json) -> null {
     if (!db_configured()) {
         return null;
     };
+    guard_dataset(fb.id);
     upsert("feedback", [feedback_row(fb, origin)].to_json());
     null
 }
@@ -305,6 +328,7 @@ function save_issue(issue: Issue) -> null {
     if (!db_configured()) {
         return null;
     };
+    guard_dataset(issue.id);
     upsert("issues", [issue_row(issue)].to_json());
     null
 }
@@ -544,6 +568,21 @@ testset "store" {
             ),
             dataset(),
         );
+    }
+
+    test "a write refuses an id from the other dataset" {
+        assert.equal(dataset_of_id("GH-4587"), "eval");
+        assert.equal(dataset_of_id("ISSUE-01j9"), "live");
+        assert.equal(dataset_of_id("PH-abc"), "live");
+        let other = if (dataset() == "eval") {
+            "ISSUE-x"
+        } else {
+            "GH-1"
+        };
+        let refused = guard_dataset(other) catch (_) {
+            StoreError => "refused",
+        };
+        assert.equal(refused ?? "allowed", "refused");
     }
 
     test "filters are url-safe" {

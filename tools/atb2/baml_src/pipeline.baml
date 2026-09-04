@@ -129,21 +129,38 @@ function run_pipeline(
     report
 }
 
-/// run_pipeline forever, `every_s` apart: what the Fly runner runs. A store
-/// or gh failure inside a run panics, which ends the process; the Fly
-/// machine's restart policy (deploy/fly.toml) brings it back, and every
-/// stage is idempotent against the store, so nothing is lost or repeated.
+/// The report of a run that ended in a store, intake or Slack failure.
+function failed_run(what: string) -> PipelineReport {
+    log.error({ "pipeline_loop": "run failed", "at": what });
+    PipelineReport {
+        ingested: 0,
+        issues_created: 0,
+        handled: 0,
+        merged: 0,
+        skipped: [what + " failed; next run retries"],
+    }
+}
+
+/// run_pipeline forever, `every_s` apart: what the Fly runner runs. A store,
+/// intake or Slack failure ends the run, is logged, and the next run
+/// retries; every stage is idempotent against the store. Anything else
+/// (a panic) ends the process and the Fly restart policy brings it back.
 //#pipeline_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null
 function pipeline_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null {
     while (true) {
-        //# one run
-        let r = run_pipeline(mode = mode);
+        //# one run; a store, intake or Slack failure ends this run only
+        let r = run_pipeline(mode = mode) catch (e) {
+            StoreError => failed_run("store"),
+            IntakeError => failed_run("intake"),
+            SlackError => failed_run("slack"),
+        };
         log.info(
             {
                 "pipeline_loop": "run done",
                 "ingested": r.ingested,
                 "handled": r.handled,
                 "merged": r.merged,
+                "skipped": r.skipped,
             },
         );
         //# sleep

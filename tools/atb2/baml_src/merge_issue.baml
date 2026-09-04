@@ -854,8 +854,14 @@ function merge_issue_loop(
         if (back > 0) {
             log.warn({ "merge_request": runner, "reclaimed": back });
         };
-        //# claim the oldest queued request
-        match (claim_merge_request(runner)) {
+        //# claim the oldest queued request; a store failure waits a poll
+        let claimed = claim_merge_request(runner) catch (_) {
+            StoreError => {
+                log.error({ "merge_request": runner, "store": "claim failed; retrying next poll" });
+                null
+            },
+        };
+        match (claimed) {
             null => {
                 if (once) {
                     // one-shot: an empty queue is a complete run of zero
@@ -867,8 +873,12 @@ function merge_issue_loop(
                 log.info(
                     { "merge_request": runner, "request": r.id, "pr": r.pr, "by": r.requested_by },
                 );
-                //# run it, narrating in the request's thread
-                let result = merge_issue(r.pr, mode = mode, thread = merge_request_thread(r), mention = r.requested_by);
+                //# run it, narrating in the request's thread; a Slack or store
+                //# failure inside ends this request as round_failed
+                let result = merge_issue(r.pr, mode = mode, thread = merge_request_thread(r), mention = r.requested_by) catch (_) {
+                    StoreError => MergeResult { kind: "round_failed", pr: r.pr, rounds: 0 },
+                    SlackError => MergeResult { kind: "round_failed", pr: r.pr, rounds: 0 },
+                };
                 finish_merge_request(
                     r.id,
                     runner,
@@ -878,7 +888,16 @@ function merge_issue_loop(
                         "done"
                     },
                     result.to_json(),
-                );
+                ) catch (_) {
+                    StoreError => {
+                        log.error(
+                            {
+                                "merge_request": r.id,
+                                "store": "finish failed; the stale-claim sweep requeues it",
+                            },
+                        )
+                    },
+                };
                 served += 1;
                 if (once) {
                     return served;

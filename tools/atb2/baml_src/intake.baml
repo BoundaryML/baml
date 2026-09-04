@@ -16,6 +16,11 @@
 
 // ==================== PostHog ====================
 
+/// PostHog could not be read. Thrown so the loop logs it and goes on.
+class IntakeError {
+    message: string,
+}
+
 function posthog_configured() -> bool {
     posthog_env("API_KEY") != null && posthog_env("PROJECT_ID") != null
 }
@@ -29,7 +34,7 @@ function posthog_env(name: string) -> string? {
 function posthog_host() -> string {
     let h = (posthog_env("HOST") ?? "https://us.posthog.com").trim();
     if (!h.starts_with("https://")) {
-        baml.sys.panic("posthog: ATB2_POSTHOG_HOST must be https, got " + h);
+        throw IntakeError { message: "ATB2_POSTHOG_HOST must be https, got " + h };
     };
     if (h.ends_with("/")) {
         h.slice(0, h.length() - 1)
@@ -109,7 +114,7 @@ function posthog_feedback(
 /// a `next` link that points elsewhere is refused.
 function posthog_get(url: string, key: string, host: string) -> json {
     if (!url.starts_with(host + "/")) {
-        baml.sys.panic("posthog: refusing to follow a link off " + host);
+        throw IntakeError { message: "refusing to follow a link off " + host };
     };
     let res = baml.http.send(
         baml.http.Request {
@@ -120,13 +125,15 @@ function posthog_get(url: string, key: string, host: string) -> json {
         },
         timeout = baml.time.Duration.from_seconds(30),
     ) catch (_) {
-        _ => baml.sys.panic("posthog: request failed"),
+        _ => {
+            throw IntakeError { message: "posthog: request failed" };
+        },
     };
     let text = res.text() catch (_) {
         _ => "",
     };
     if (!res.ok()) {
-        baml.sys.panic("posthog: " + res.status_code.to_string() + ": " + tail(text, 2));
+        throw IntakeError { message: "posthog: " + res.status_code.to_string() + ": " + tail(text, 2) };
     };
     baml.json.parse(text) catch (_) {
         _ => baml.json.parse("{}"),
