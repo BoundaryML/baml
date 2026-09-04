@@ -117,6 +117,7 @@ jobs:
           # GitHub's status=success filter has returned stale/incomplete HTTP
           # 200 responses. Fetch all states and filter locally, with extra room
           # for duplicate runs across the 100-commit ancestry window.
+          # See https://github.com/orgs/community/discussions/24626
           gh run list --workflow ci.yaml --branch canary --event push \
             --limit 1000 \
             --json headSha,databaseId,conclusion,createdAt > "$runs"
