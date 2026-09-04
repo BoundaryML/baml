@@ -8,6 +8,7 @@ on:
       - "typescript2/package.json"
       - "typescript2/pnpm-lock.yaml"
       - "typescript2/pnpm-workspace.yaml"
+      - "baml_language/**"
       - ".github/actions/setup-node2/**"
       - ".github/workflows/developer-docs.yml"
   push:
@@ -18,6 +19,7 @@ on:
       - "typescript2/package.json"
       - "typescript2/pnpm-lock.yaml"
       - "typescript2/pnpm-workspace.yaml"
+      - "baml_language/**"
       - ".github/actions/setup-node2/**"
       - ".github/workflows/developer-docs.yml"
   workflow_dispatch:
@@ -30,13 +32,13 @@ permissions:
   contents: read
 
 jobs:
-  portal:
-    name: Lint, test, type-check, and build
+  quality:
+    name: Lint, unit tests, and type-check
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -55,13 +57,166 @@ jobs:
         run: pnpm --filter app-developer-docs typecheck
         working-directory: typescript2
 
+  authored-content:
+    name: Authored content
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node2
+
+      - name: Validate MDX, structured content, and canonical sources
+        run: pnpm --filter app-developer-docs docs:authored:validate
+        working-directory: typescript2
+
+  route-validation:
+    name: Routes and contextual 404 contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node2
+
+      - name: Validate static and generated routes
+        run: pnpm --filter app-developer-docs docs:routes:validate
+        working-directory: typescript2
+
+  snippets:
+    name: BAML snippets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        working-directory: baml_language
+        run: rustup show
+
+      - name: Cache compiler build
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: developer-docs-snippets-${{ hashFiles('typescript2/app-developer-docs/lib/snippets/**/*.ts', 'typescript2/app-developer-docs/scripts/validate-snippets.ts', 'typescript2/app-developer-docs/content/code/**') }}
+          workspaces: "baml_language -> target"
+
+      - name: Build the selected BAML CLI
+        run: cargo build -p baml_cli --bin baml-cli
+        working-directory: baml_language
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node2
+
+      - name: Compile canonical documentation snippets
+        env:
+          BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
+        run: pnpm --filter app-developer-docs docs:snippets:validate
+        working-directory: typescript2
+
+  generated-content:
+    name: Generated content
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GENERATED_CONTENT_VERSION: ${{ vars.DEVELOPER_DOCS_GENERATED_CONTENT_VERSION || '0.18.1-nightly.20260901.a' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node2
+
+      - name: Validate generated schemas and projection contracts
+        run: pnpm --filter app-developer-docs docs:generated:validate
+        working-directory: typescript2
+
+      - name: Require the protected read-only database secret
+        env:
+          GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
+        run: test -n "$GENERATED_CONTENT_DATABASE_URL" || { echo "::error::GENERATED_CONTENT_DATABASE_URL is not configured"; exit 1; }
+
+      - name: Verify the required immutable release
+        env:
+          GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
+        run: pnpm --filter app-developer-docs docs:db:verify --version "$GENERATED_CONTENT_VERSION"
+        working-directory: typescript2
+
+  complete-build:
+    name: Complete static build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      VERCEL_ENV: preview
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node2
+
+      - name: Require the protected read-only database secret
+        env:
+          GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
+        run: test -n "$GENERATED_CONTENT_DATABASE_URL" || { echo "::error::GENERATED_CONTENT_DATABASE_URL is not configured"; exit 1; }
+
       - name: Build static preview artifact
         env:
           GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
-          VERCEL_ENV: preview
         run: pnpm --filter app-developer-docs build
         working-directory: typescript2
 
       - name: Verify preview is noindex
         run: 'grep -q "Disallow: /" app-developer-docs/out/robots.txt'
+        working-directory: typescript2
+
+      - name: Verify the database secret is absent from the artifact
+        env:
+          GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_URL }}
+        run: '! rg -F -l -- "$GENERATED_CONTENT_DATABASE_URL" app-developer-docs/out >/dev/null'
+        working-directory: typescript2
+
+      - name: Upload static preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: developer-docs-static-preview
+          path: typescript2/app-developer-docs/out
+          retention-days: 3
+
+  link-check:
+    name: Internal links and anchors
+    needs: complete-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node2
+
+      - name: Download static preview artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: developer-docs-static-preview
+          path: typescript2/app-developer-docs/out
+
+      - name: Validate internal routes and anchors
+        run: pnpm --filter app-developer-docs docs:links:validate
         working-directory: typescript2
