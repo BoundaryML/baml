@@ -303,7 +303,7 @@ function tell_thread(thread: SlackRef?, text: string) -> null {
 }
 
 /// A PR url in a mention ("babysit this PR https://github.com/o/r/pull/12",
-/// "<https://github.com/o/r/pull/12|pull/12>"), or null. Pure; the ingress
+/// "<https://github.com/o/r/pull/12|pull/12>"), or null. Pure; the Slack ingress
 /// has the same rule in Python.
 function pr_url_in(text: string) -> string? {
     for (

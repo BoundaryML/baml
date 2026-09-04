@@ -643,12 +643,12 @@ function render_feedback(fb: PrFeedback, logs: map<string, string>) -> string {
 }
 
 // ==================== The request queue ====================
-// "@bammy babysit <PR>": the ingress inserts a babysit_requests row; a
+// "@bammy babysit <PR>": the Slack ingress (intake.baml, next PR) inserts a babysit_requests row; a
 // runner with the toolchain (`baml run -e 'merge_issue_loop()'`, the Fly
 // app's `requests` process) claims it and runs merge_issue with the Slack
 // thread attached. `request_merge(pr)` queues one by hand.
 
-/// One queued request, as the ingress wrote it.
+/// One queued request, as the Slack ingress wrote it.
 class MergeRequest {
     id: int,
     pr: string,
@@ -701,7 +701,7 @@ function result_text(r: MergeResult) -> string {
 
 // ==================== The queue ====================
 
-/// Queues a request by hand, the way the ingress does for a mention.
+/// Queues a request by hand, the way the Slack ingress does for a mention.
 /// `thread` is where to narrate; null = no Slack, the result is only stored.
 function request_merge(pr: string, thread: SlackRef? = null) -> int {
     if (!db_configured()) {
