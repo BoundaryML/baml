@@ -81,6 +81,27 @@ public final class TypeRegistry {
     }
     private static Maps maps() { return BamlProgram.current().types; }
 
+    // Host class tokens may be constructed before entering a call's program scope.
+    // Only immutable nominal identities are shared here, keyed by the actual loader.
+    // Values contain strings, so the weak keys do not retain unloaded SDK loaders.
+    private static final Map<ClassLoader, Map<String, String>> CLASS_IDENTITIES = new java.util.WeakHashMap<>();
+    private static final Map<ClassLoader, Map<String, String>> ENUM_IDENTITIES = new java.util.WeakHashMap<>();
+
+    private static synchronized void registerIdentity(
+            Map<ClassLoader, Map<String, String>> identities, String javaName, String fqn) {
+        var names = identities.computeIfAbsent(BamlProgram.current().loader, ignored -> new HashMap<>());
+        var previous = names.putIfAbsent(javaName, fqn);
+        if (previous != null && !previous.equals(fqn)) {
+            throw new IllegalArgumentException("Conflicting BAML identity for Java class " + javaName);
+        }
+    }
+
+    private static synchronized String identityFor(
+            Map<ClassLoader, Map<String, String>> identities, Class<?> type) {
+        var names = identities.get(type.getClassLoader());
+        return names == null ? null : names.get(type.getName());
+    }
+
     static {
         // Runtime-owned stdlib types the emitter deliberately does NOT generate
         // (RUNTIME_OWNED_FQNS in sdkgen_java) — their bodies ship in this runtime
@@ -130,6 +151,7 @@ public final class TypeRegistry {
                     "class field descriptor length mismatch for " + bamlFqn + ": "
                             + fieldOrder.length + " fields vs " + fieldDescs.length + " descriptors");
         }
+        registerIdentity(CLASS_IDENTITIES, javaClassName, bamlFqn);
         ClassEntry entry = new ClassEntry(bamlFqn, javaClassName, fieldOrder, fieldDescs);
         if (maps().classesByFqn.putIfAbsent(bamlFqn, entry) == null) {
             maps().classesByJavaName.putIfAbsent(javaClassName, entry);
@@ -149,6 +171,7 @@ public final class TypeRegistry {
                     "enum arrays length mismatch for " + bamlFqn + ": "
                             + javaConstants.length + " constants vs " + wireNames.length + " wire names");
         }
+        registerIdentity(ENUM_IDENTITIES, javaClassName, bamlFqn);
         EnumEntry entry = new EnumEntry(bamlFqn, javaClassName, javaConstants, wireNames);
         if (maps().enumsByFqn.putIfAbsent(bamlFqn, entry) == null) {
             maps().enumsByJavaName.putIfAbsent(javaClassName, entry);
@@ -413,8 +436,7 @@ public final class TypeRegistry {
      * class token's FQN without loading anything.
      */
     public static String classFqnForJavaClass(Class<?> javaClass) {
-        ClassEntry entry = maps().classesByJavaName.get(javaClass.getName());
-        return entry == null ? null : entry.bamlFqn;
+        return identityFor(CLASS_IDENTITIES, javaClass);
     }
 
     /**
@@ -423,8 +445,7 @@ public final class TypeRegistry {
      * registered enum. The enum counterpart of {@link #classFqnForJavaClass}.
      */
     public static String enumFqnForJavaClass(Class<?> javaClass) {
-        EnumEntry entry = maps().enumsByJavaName.get(javaClass.getName());
-        return entry == null ? null : entry.bamlFqn;
+        return identityFor(ENUM_IDENTITIES, javaClass);
     }
 
     // -- reified type-argument side-table ------------------------------------

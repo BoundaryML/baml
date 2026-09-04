@@ -11,9 +11,9 @@ repository = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
-baml_program_identity.workspace = true
 baml_base = { workspace = true }
 baml_codegen_types = { workspace = true }
+baml_program_identity.workspace = true
 base64 = { workspace = true }
 
 [lib]

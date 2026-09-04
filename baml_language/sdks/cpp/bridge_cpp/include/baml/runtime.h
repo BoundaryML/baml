@@ -65,15 +65,22 @@ extern "C" inline void baml_cpp_unhandled_spawn_error_trampoline(
 
 inline void install_shutdown_hook();
 
-inline void register_program(uint64_t key, const uint8_t* bytecode, size_t length, const char* metadata = nullptr) {
-  detail::ensure_registered(toolchain_version(), kBridgeRuntimeName, bridge_runtime_version());
+inline void register_program(uint64_t key, const uint8_t* bytecode,
+                             size_t length, const char* metadata = nullptr) {
+  detail::ensure_registered(toolchain_version(), kBridgeRuntimeName,
+                            bridge_runtime_version());
   const auto& api = detail::api();
-  const size_t required = offsetof(BamlApiV1, call_function_for_runtime) + sizeof(api.call_function_for_runtime);
-  if (api.struct_size < required || !api.register_program || !api.call_function_for_runtime)
-    throw error("The BAML library does not support uint64 runtime registration");
-  api.register_unhandled_spawn_error_callback(baml_cpp_unhandled_spawn_error_trampoline);
+  const size_t required = offsetof(BamlApiV1, call_function_for_runtime) +
+                          sizeof(api.call_function_for_runtime);
+  if (api.struct_size < required || !api.register_program ||
+      !api.call_function_for_runtime)
+    throw error(
+        "The BAML library does not support uint64 runtime registration");
+  api.register_unhandled_spawn_error_callback(
+      baml_cpp_unhandled_spawn_error_trampoline);
   install_shutdown_hook();
-  detail::owned_buffer failure{api.register_program(key, bytecode, length, metadata)};
+  detail::owned_buffer failure{
+      api.register_program(key, bytecode, length, metadata)};
   if (!failure.empty()) throw error(failure.to_string());
 }
 

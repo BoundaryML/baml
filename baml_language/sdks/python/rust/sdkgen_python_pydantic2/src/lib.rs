@@ -544,7 +544,7 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
     functions.sort_by_key(|(name, _, _)| *name);
 
     let mut out = String::from(
-        "from __future__ import annotations\n\nFUNCTIONS: dict[str, dict[str, object]] = {\n",
+        "from __future__ import annotations\n\nassert __package__ is not None\n\nFUNCTIONS: dict[str, dict[str, object]] = {\n",
     );
     for (name, symbol, function) in functions {
         let fqn = name.to_string();

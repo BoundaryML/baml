@@ -94,10 +94,10 @@ struct ActiveCallRoute {
     runtime: Weak<dyn Bex>,
 }
 
-static ACTIVE_CALL_RUNTIMES: LazyLock<Mutex<HashMap<u64, Arc<ActiveCallRoute>>>> =
+static ACTIVE_CALL_RUNTIMES: LazyLock<Mutex<HashMap<u64, Option<Arc<ActiveCallRoute>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn active_call_runtimes() -> MutexGuard<'static, HashMap<u64, Arc<ActiveCallRoute>>> {
+fn active_call_runtimes() -> MutexGuard<'static, HashMap<u64, Option<Arc<ActiveCallRoute>>>> {
     ACTIVE_CALL_RUNTIMES
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -113,6 +113,7 @@ impl Drop for ActiveCallRouteGuard {
         let mut routes = active_call_runtimes();
         if routes
             .get(&self.call_id)
+            .and_then(Option::as_ref)
             .is_some_and(|current| Arc::ptr_eq(current, &self.route))
         {
             routes.remove(&self.call_id);
@@ -128,10 +129,16 @@ pub(crate) fn register_active_call_runtime(
         runtime: Arc::downgrade(runtime),
     });
     let mut routes = active_call_runtimes();
-    if routes.contains_key(&call_id) {
-        return Err(BridgeError::DuplicateCallId(call_id));
+    match routes.get(&call_id) {
+        Some(Some(_)) => return Err(BridgeError::DuplicateCallId(call_id)),
+        Some(None) => {
+            // Cancellation may arrive before async dispatch resolves its runtime.
+            // Apply it only to the originating engine once that engine is known.
+            runtime.cancel_function_call(bex_project::CallId(call_id))?;
+        }
+        None => {}
     }
-    routes.insert(call_id, Arc::clone(&route));
+    routes.insert(call_id, Some(Arc::clone(&route)));
     Ok(ActiveCallRouteGuard { call_id, route })
 }
 
@@ -228,8 +235,6 @@ pub mod handle;
 mod identity;
 mod runtime_owner;
 mod runtime_registry;
-pub use runtime_registry::{get_runtime, get_runtime_by_key, runtime_key, unregister_runtime};
-
 pub use baml_to_host::{
     call_and_encode, call_handle_and_encode, error_to_outbound, result_to_outbound,
     unhandled_spawn_error_to_outbound,
@@ -241,6 +246,7 @@ pub use identity::{
     BridgeInfo, BridgeLanguage, ensure_version_compatible, register_bridge, registered_bridge,
 };
 pub use platform::*;
+pub use runtime_registry::{get_runtime, get_runtime_by_key, runtime_key, unregister_runtime};
 
 /// Create an independent dynamic runtime from serialized BAML bytecode.
 ///
@@ -526,22 +532,21 @@ pub fn function_call_context_builder(
 
 /// Cancel an in-flight function call by ID.
 ///
-/// Returns true on success, false if the runtime is not initialized.
+/// Cancellation before dispatch is retained until the originating runtime is known.
+/// Returns false for a zero ID or a runtime cancellation failure.
 pub fn cancel_function_call_by_id(id: u64) -> bool {
     if id == 0 {
         return false;
     }
-    let originating_runtime = active_call_runtimes()
-        .get(&id)
-        .and_then(|route| route.runtime.upgrade());
-    originating_runtime
-        .ok_or(BridgeError::NotInitialized)
-        .and_then(|runtime| {
+    let mut routes = active_call_runtimes();
+    match routes.entry(id).or_insert(None) {
+        Some(route) => route.runtime.upgrade().is_some_and(|runtime| {
             runtime
                 .cancel_function_call(bex_project::CallId(id))
-                .map_err(BridgeError::from)
-        })
-        .is_ok()
+                .is_ok()
+        }),
+        None => true,
+    }
 }
 
 /// Allocate a new process-unique function-call ID.
@@ -552,7 +557,7 @@ pub extern "C" fn new_function_call() -> u64 {
 
 /// Cancel an in-flight function call.
 ///
-/// Returns 0 on success, 1 if the call ID is unknown or already completed.
+/// Returns 0 when cancellation is accepted, including before dispatch, or 1 on failure.
 #[unsafe(no_mangle)]
 pub extern "C" fn cancel_function_call(id: u64) -> i32 {
     if cancel_function_call_by_id(id) { 0 } else { 1 }

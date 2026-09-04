@@ -1,9 +1,10 @@
 //! Finalize a dynamic engine after the last registration, call, and capability owner releases it.
+use std::sync::{Arc, LazyLock, Mutex, Weak};
+
 use bex_project::{
     Bex, BexArgs, BexCallTraceResult, BexExternalValue, CallId, FunctionCallContext, Handle,
     RuntimeError, UnhandledSpawnErrorHandler,
 };
-use std::sync::{Arc, LazyLock, Mutex, Weak};
 
 static RETIRING: LazyLock<Mutex<Vec<Weak<dyn Bex>>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 

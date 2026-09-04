@@ -49,7 +49,7 @@
 /**
  * Generated identities occupy the upper half; dynamic identities the lower half.
  */
-#define GENERATED_KEY_BIT (1 << 63)
+#define GENERATED_KEY_BIT (1ull << 63)
 
 /**
  * Handle-type values returned by media constructors and carried on the wire.

@@ -21,12 +21,12 @@ rustls = [ "sys_native/rustls" ]
 bundle-http = [ "sys_native/bundle-http" ]
 
 [dependencies]
-async-trait.workspace = true
 baml_program_identity.workspace = true
 baml_version = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_ops = { workspace = true }
+async-trait.workspace = true
 futures = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }
@@ -51,9 +51,8 @@ wasm-bindgen-futures = { workspace = true }
 cbindgen = { workspace = true }
 
 [dev-dependencies]
-bex_vm_types.workspace = true
-baml_tests.workspace = true
 baml_artifact = { workspace = true, features = [ "test-support" ] }
+baml_tests.workspace = true
 
 [package.metadata.ci]
 wasm_support = true

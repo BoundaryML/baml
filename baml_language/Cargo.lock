@@ -1091,6 +1091,7 @@ name = "baml_program_identity"
 version = "0.0.0-beta"
 dependencies = [
  "baml_artifact",
+ "baml_base",
  "bex_vm_types",
  "borsh",
  "sha2",
@@ -1619,7 +1620,6 @@ dependencies = [
  "baml_version",
  "bex_events",
  "bex_project",
- "bex_vm_types",
  "bridge_ctypes",
  "cbindgen",
  "futures",

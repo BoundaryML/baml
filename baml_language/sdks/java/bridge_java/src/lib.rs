@@ -83,7 +83,7 @@ fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::Bridge
 /// error handling already lives in `bridge_cffi::call_and_encode`.
 fn call_sync_to_bytes(runtime_key: Option<u64>, args_proto: &[u8]) -> Vec<u8> {
     let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-        let runtime = bridge_cffi::runtime_for_encoded_call(runtime_key, &args_proto)?;
+        let runtime = bridge_cffi::runtime_for_encoded_call(runtime_key, args_proto)?;
         let decoded = decode_args(args_proto)?;
         let rt = bridge_cffi::get_tokio_runtime()?;
         Ok((runtime, decoded, rt))

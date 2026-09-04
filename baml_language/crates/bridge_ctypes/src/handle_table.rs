@@ -53,6 +53,7 @@ pub struct CffiHandleTableOptions<'a> {
 }
 
 impl CffiHandleTableOptions<'_> {
+    #[must_use]
     pub fn with_runtime(mut self, key: u64, runtime: Arc<dyn bex_project::Bex>) -> Self {
         self.runtime_owner = Some(RuntimeOwner { key, runtime });
         self

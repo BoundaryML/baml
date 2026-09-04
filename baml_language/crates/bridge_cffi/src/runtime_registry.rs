@@ -1,10 +1,12 @@
 //! Process-wide runtime registrations. Keys are never reused after removal.
-use crate::BridgeError;
-use bex_project::Bex;
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, LazyLock, RwLock, Weak},
 };
+
+use bex_project::Bex;
+
+use crate::BridgeError;
 
 struct Entry {
     runtime: Arc<dyn Bex>,
@@ -20,7 +22,7 @@ struct Registry {
 static REGISTRY: LazyLock<RwLock<Registry>> = LazyLock::new(|| RwLock::new(Registry::default()));
 
 /// Generated identities occupy the upper half; dynamic identities the lower half.
-pub const GENERATED_KEY_BIT: u64 = 1 << 63;
+pub const GENERATED_KEY_BIT: u64 = 1u64 << 63;
 
 pub fn get_runtime_by_key(key: u64) -> Result<Arc<dyn Bex>, BridgeError> {
     REGISTRY

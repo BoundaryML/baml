@@ -32,7 +32,7 @@ pub use bex_external_types::{
     TaggedHeapHandleKind, TyAttr, TypeDefRef, WeakHeapRef, host_release_dispatch,
     runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
-pub use bex_vm_types::{HeapPtr, Program};
+pub use bex_vm_types::{HeapPtr, Object, Program};
 use indexmap::IndexMap;
 pub use sys_ops::SysOps;
 pub use sys_types::{CallId, CancellationToken};

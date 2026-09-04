@@ -215,20 +215,6 @@ fn dispatch_handle(
     Ok(receiver)
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn zero_function_handle_fails_before_loading_the_c_api() {
-        let Err(error) = super::dispatch_handle(0, Vec::new()) else {
-            panic!("a zero function handle must fail before dispatch")
-        };
-        assert_eq!(
-            error.to_string(),
-            "cannot invoke a zero BAML function handle"
-        );
-    }
-}
-
 /// Register generated contents. Repeated identical registrations share the native engine.
 pub fn register_program(key: u64, bytecode: &[u8], metadata: Option<&str>) -> Result<(), SdkError> {
     let api = capi::api()?;
@@ -280,7 +266,8 @@ impl Runtime {
         let api = capi::api()?;
         let mut key = 0;
         #[expect(unsafe_code)]
-        let status = unsafe { (api.create_runtime)(bytecode.as_ptr(), bytecode.len(), &mut key) };
+        let status =
+            unsafe { (api.create_runtime)(bytecode.as_ptr(), bytecode.len(), &raw mut key) };
         api.take_status(status).map_err(SdkError::new)?;
         Ok(Self { key })
     }
@@ -292,5 +279,19 @@ impl Runtime {
         #[expect(unsafe_code)]
         let status = unsafe { (api.unregister_runtime)(self.key) };
         api.take_status(status).map_err(SdkError::new)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn zero_function_handle_fails_before_loading_the_c_api() {
+        let Err(error) = super::dispatch_handle(0, Vec::new()) else {
+            panic!("a zero function handle must fail before dispatch")
+        };
+        assert_eq!(
+            error.to_string(),
+            "cannot invoke a zero BAML function handle"
+        );
     }
 }

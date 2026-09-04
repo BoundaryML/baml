@@ -1,10 +1,11 @@
 //! These test bridge registration/ownership and ABI transport, which BAML cannot observe.
-use bex_project::{BexArgs, BexExternalValue};
-use bridge_cffi::{get_runtime_by_key, runtime_key};
 use std::{
     collections::HashMap,
     sync::{Arc, Barrier},
 };
+
+use bex_project::{BexArgs, BexExternalValue};
+use bridge_cffi::{get_runtime_by_key, runtime_key};
 
 #[test]
 fn dynamic_instances_are_independent_and_removal_does_not_invalidate_acquired_calls() {
@@ -92,13 +93,13 @@ fn concurrent_generated_registration_is_idempotent_and_conflicts_do_not_replace(
 #[test]
 fn canonical_identity_excludes_paths_and_artifact_metadata() {
     let mut program = baml_tests::stdlib_prefix::compile_source("function value() -> int { 7 }");
-    let encode = |p: &bex_vm_types::Program| {
+    let encode = |p: &bex_project::Program| {
         baml_artifact::encode(baml_artifact::ArtifactKind::Program, p).unwrap()
     };
     let original = encode(&program);
     let key = baml_program_identity::program_key(&original).unwrap();
     for object in &mut program.objects {
-        if let bex_vm_types::Object::Function(function) = object {
+        if let bex_project::Object::Function(function) = object {
             function.source_file = "/another-machine/a/relocated/program.baml".into();
             function.debug_locals.clear();
             function.bytecode.line_table.clear();
@@ -117,8 +118,10 @@ fn canonical_identity_excludes_paths_and_artifact_metadata() {
 
 #[test]
 fn capabilities_keep_their_origin_and_reject_mixed_runtime_arguments() {
-    use bridge_ctypes::baml_bridge::cffi::{CallFunctionArgs, call_function_args::CallTarget};
-    use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, RuntimeOwner};
+    use bridge_ctypes::{
+        CffiHandleTableEntry, HANDLE_TABLE, RuntimeOwner,
+        baml_bridge::cffi::{CallFunctionArgs, call_function_args::CallTarget},
+    };
     let runtime = || {
         bridge_cffi::initialize_runtime(
             ".",

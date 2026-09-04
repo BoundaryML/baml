@@ -2,7 +2,7 @@
 use sha2::{Digest, Sha256};
 
 /// Canonical compiled contents, excluding artifact headers and diagnostic locations.
-/// Borsh orders HashMap keys. Pool order and package order are compiler-defined.
+/// Borsh orders `HashMap` keys. Pool order and package order are compiler-defined.
 pub fn canonical_bytes(bytecode: &[u8]) -> Result<Vec<u8>, String> {
     let mut program: bex_vm_types::Program =
         baml_artifact::decode(baml_artifact::ArtifactKind::Program, bytecode)
@@ -10,7 +10,7 @@ pub fn canonical_bytes(bytecode: &[u8]) -> Result<Vec<u8>, String> {
     for object in &mut program.objects {
         if let bex_vm_types::Object::Function(function) = object {
             function.source_file.clear();
-            function.span.file_id = Default::default();
+            function.span.file_id = baml_base::FileId::default();
             function.debug_locals.clear();
             function.bytecode.line_table.clear();
             function.bytecode.meta.clear();

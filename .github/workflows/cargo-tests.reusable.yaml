@@ -1139,6 +1139,17 @@ jobs:
         run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }}) and test(setup_guard::ran)'
         working-directory: baml_language
 
+      # Reuse each language's freshly built bridge from the setup above. Each
+      # runner loads distinct generated SDKs together in a single host process.
+      - name: "Run multiple-program SDK regressions"
+        if: matrix.os-label == 'linux' && (matrix.sdk-label == 'python-pydantic2' || matrix.sdk-label == 'typescript')
+        env:
+          MULTI_PROGRAM_LANGUAGE: ${{ matrix.sdk-label == 'python-pydantic2' && 'python' || 'typescript' }}
+        run: |
+          cargo build -p baml_cli --bin baml-cli
+          python3 sdk_tests/multi_program/run.py --language "$MULTI_PROGRAM_LANGUAGE"
+        working-directory: baml_language
+
       - name: "Run sdk tests"
         if: matrix.sdk-label != 'csharp'
         run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'

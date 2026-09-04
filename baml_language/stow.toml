@@ -87,7 +87,7 @@ name = "baml"
 approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query"]
 # The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
 # the same shape), not a prefix + word.
-approved_suffixes = ["artifact", "compiler2_hir_ty"]
+approved_suffixes = ["artifact", "compiler2_hir_ty", "program_identity"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["bex_project"]
 # The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring
@@ -121,7 +121,8 @@ reason = "baml_* crates should not depend on bex_* crates."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_db", "baml_cli", "baml_exec", "baml_pack_host"]
+# Program identity canonicalizes the artifact data without loading an engine.
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_db", "baml_cli", "baml_exec", "baml_pack_host", "baml_program_identity"]
 reason = "Only compiler_emit and baml_db crates should depend on bex_vm_types (pure data layer)."
 
 

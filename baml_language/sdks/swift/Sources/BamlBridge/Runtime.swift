@@ -205,7 +205,7 @@ public final class BamlRuntime: @unchecked Sendable {
         _ fqn: String,
         args: [(String, (any BamlEncodable)?)]
     ) throws -> R {
-        try R._bamlDecode(unwrapEnvelope(invokeSync(fqn, args: args)))
+        try R._bamlDecode(unwrapEnvelope(invokeSync(fqn, args: args), runtime: self))
     }
 
     /// Undecoded ok-value variants — for callers that interpret the
@@ -215,7 +215,7 @@ public final class BamlRuntime: @unchecked Sendable {
         _ fqn: String,
         args: [(String, (any BamlEncodable)?)]
     ) throws -> BamlOutboundValue {
-        try unwrapEnvelope(invokeSync(fqn, args: args))
+        try unwrapEnvelope(invokeSync(fqn, args: args), runtime: self)
     }
 
     public func callRaw(
@@ -223,7 +223,7 @@ public final class BamlRuntime: @unchecked Sendable {
         args: [(String, (any BamlEncodable)?)]
     ) async throws -> BamlOutboundValue {
         do {
-            return try unwrapEnvelope(await invokeAsync(fqn, args: args))
+            return try unwrapEnvelope(await invokeAsync(fqn, args: args), runtime: self)
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             throw CancellationError()
         }
@@ -234,7 +234,7 @@ public final class BamlRuntime: @unchecked Sendable {
         args: [(String, (any BamlEncodable)?)]
     ) async throws -> BamlOutboundValue {
         do {
-            return try unwrapEnvelope(await invokeHandleAsync(handleKey, args: args))
+            return try unwrapEnvelope(await invokeHandleAsync(handleKey, args: args), runtime: self)
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             throw CancellationError()
         }
@@ -244,7 +244,7 @@ public final class BamlRuntime: @unchecked Sendable {
         _ fqn: String,
         args: [(String, (any BamlEncodable)?)]
     ) throws {
-        _ = try unwrapEnvelope(invokeSync(fqn, args: args))
+        _ = try unwrapEnvelope(invokeSync(fqn, args: args), runtime: self)
     }
 
     public func call<R: BamlDecodable>(
@@ -252,7 +252,7 @@ public final class BamlRuntime: @unchecked Sendable {
         args: [(String, (any BamlEncodable)?)]
     ) async throws -> R {
         do {
-            return try R._bamlDecode(unwrapEnvelope(await invokeAsync(fqn, args: args)))
+            return try R._bamlDecode(unwrapEnvelope(await invokeAsync(fqn, args: args), runtime: self))
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             // Engine-confirmed cancellation surfaces as Swift's native
             // cancellation error (Python maps it to asyncio.CancelledError
@@ -266,7 +266,7 @@ public final class BamlRuntime: @unchecked Sendable {
         args: [(String, (any BamlEncodable)?)]
     ) async throws {
         do {
-            _ = try unwrapEnvelope(await invokeAsync(fqn, args: args))
+            _ = try unwrapEnvelope(await invokeAsync(fqn, args: args), runtime: self)
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             throw CancellationError()
         }

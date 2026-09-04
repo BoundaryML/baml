@@ -810,6 +810,9 @@ func UnexpectedNeverReturn(function string) error {
 
 // WithRuntime routes a call using its originating uint64 registration.
 func WithRuntime(ctx context.Context, key uint64) context.Context {
+	if ctx == nil {
+		return nil
+	}
 	return context.WithValue(ctx, runtimeContextKey{}, key)
 }
 

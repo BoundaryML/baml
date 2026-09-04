@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
-import { BamlRuntime, callFunctionSync, decodeCallResult, encodeCallArgs, newFunctionCall } from '@boundaryml/baml-bridge';
+import { BamlRuntime, callFunctionSync, cancelFunctionCall, decodeCallResult, encodeCallArgs, newFunctionCall } from '@boundaryml/baml-bridge';
 import * as a from './a/typescript/baml_sdk/index.js';
 import { BYTECODE as bytesA, PROGRAM_KEY as keyA } from './a/typescript/baml_sdk/_inlinedbaml.js';
 import { BYTECODE as bytesB, PROGRAM_KEY as keyB } from './b/typescript/baml_sdk/_inlinedbaml.js';
+
+// Fail if native teardown terminates the process before the assertions finish.
+process.exitCode = 1;
 
 const closure = a.closure();
 const stream = a.stream();
@@ -29,6 +32,12 @@ assert.equal(a.result().read(), 11);
 assert.equal(b.result().read(), 22);
 const repeated = BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytesA), undefined, keyA);
 assert.equal(repeated.runtimeKey, keyA);
+assert.ok(callFunctionSync(repeated, 'user.result', {}).result() instanceof a.Result);
+const cancelledCall = BigInt(newFunctionCall());
+assert.equal(cancelFunctionCall(cancelledCall), true);
+assert.throws(() => decodeCallResult(repeated.callFunctionSync(encodeCallArgs({}, {functionName: 'user.value', callId: cancelledCall}))), /cancel/i);
+assert.equal(b.value(), 22);
+
 assert.throws(() => BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytesB), undefined, keyA), /Conflicting BAML program/);
 const high = BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytesA), undefined, (1n << 64n) - 1n);
 assert.equal(high.runtimeKey, (1n << 64n) - 1n);
@@ -72,4 +81,5 @@ const firstCounter = callFunctionSync(statefulA, 'counter', {}).result() as () =
 const secondCounter = callFunctionSync(statefulB, 'counter', {}).result() as () => number;
 assert.deepEqual([firstCounter(), firstCounter(), secondCounter(), firstCounter(), secondCounter()], [1,2,1,3,2]);
 statefulA.close(); statefulB.close();
+process.exitCode = 0;
 console.log('TypeScript multiple-program regression passed');

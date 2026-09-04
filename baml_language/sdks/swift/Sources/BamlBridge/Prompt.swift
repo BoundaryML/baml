@@ -7,18 +7,25 @@ import Foundation
 /// type as its lossless transport and persistence layer.
 public struct BamlPrompt: Sendable, Equatable {
     private let value: BamlBridge_Cffi_V1_BamlValuePromptAst
+    private let runtime: BamlRuntime
 
-    private init(_ value: BamlBridge_Cffi_V1_BamlValuePromptAst) {
+    private init(_ value: BamlBridge_Cffi_V1_BamlValuePromptAst, runtime: BamlRuntime) {
+        self.runtime = runtime
         self.value = value
     }
 
     /// Reconstruct a prompt from its canonical protobuf payload.
-    public init(serializedData: Data) throws {
+    public init(serializedData: Data, runtime: BamlRuntime = .shared) throws {
         let value = try BamlBridge_Cffi_V1_BamlValuePromptAst(serializedBytes: serializedData)
         guard value.value != nil else {
             throw BamlDecodeError.typeMismatch(expected: "prompt tree", got: "empty prompt")
         }
         self.value = value
+        self.runtime = runtime
+    }
+
+    public static func == (lhs: BamlPrompt, rhs: BamlPrompt) -> Bool {
+        lhs.value == rhs.value
     }
 
     /// A detached payload suitable for persistence or another runtime.
@@ -30,20 +37,20 @@ public struct BamlPrompt: Sendable, Equatable {
     /// The portable tree is copied back into the runtime on every call, so the
     /// same value remains reusable after persistence or across runtimes.
     public func text() throws -> String {
-        try BamlRuntime.shared.callSync("ai.Prompt.text", args: [("self", self)])
+        try runtime.callSync("ai.Prompt.text", args: [("self", self)])
     }
 
     public func textAsync() async throws -> String {
-        try await BamlRuntime.shared.call("ai.Prompt.text", args: [("self", self)])
+        try await runtime.call("ai.Prompt.text", args: [("self", self)])
     }
 
     /// Return a portable structural view of the prompt's ordered messages.
     public func messages() throws -> [BamlPromptMessage] {
-        try BamlRuntime.shared.callSync("ai.Prompt.messages", args: [("self", self)])
+        try runtime.callSync("ai.Prompt.messages", args: [("self", self)])
     }
 
     public func messagesAsync() async throws -> [BamlPromptMessage] {
-        try await BamlRuntime.shared.call("ai.Prompt.messages", args: [("self", self)])
+        try await runtime.call("ai.Prompt.messages", args: [("self", self)])
     }
 }
 
@@ -63,7 +70,7 @@ extension BamlPrompt: BamlDecodable {
         guard case .promptAstValue(let prompt) = raw.value, prompt.value != nil else {
             throw BamlDecodeError.typeMismatch(expected: "BamlPrompt", got: wireArmName(raw))
         }
-        return BamlPrompt(prompt)
+        return BamlPrompt(prompt, runtime: value.runtime)
     }
 }
 
