@@ -49,6 +49,16 @@ const nextConfig = {
   async redirects() {
     return [
       {
+        source: '/changelog',
+        destination: '/blog?tags=release',
+        permanent: true,
+      },
+      {
+        source: '/changelog.md',
+        destination: '/blog?tags=release',
+        permanent: true,
+      },
+      {
         source: '/what-is-baml',
         destination: '/',
         permanent: false,
