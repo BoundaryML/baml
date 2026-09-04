@@ -57,9 +57,7 @@ type pendingCall struct {
 	result chan []byte
 }
 
-// Initialize replaces the process-wide BAML runtime with the supplied
-// serialized program. Generated projects normally call this through their
-// internal bootstrap package exactly once.
+// Initialize creates a legacy unkeyed registration. Prefer NewRuntime or RegisterProgram.
 func Initialize(bytecode []byte) error {
 	return InitializeWithMetadata(bytecode, "")
 }
@@ -151,6 +149,7 @@ type inputEncoder struct {
 // handles have already been drained (so release harmlessly reports invalid),
 // while any handle after a decode failure remains in the table and is freed.
 type inputTransaction struct {
+	runtimeKey    uint64
 	keys          []uint64
 	hostValueKeys []uint64
 }
@@ -399,7 +398,19 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 		return Value{}, err
 	}
 	defer transaction.rollback()
-	nativeCall(encoded, callbackID)
+	key := runtimeKeyFromContext(ctx)
+	if key == 0 {
+		key = transaction.runtimeKey
+	}
+	if transaction.runtimeKey != 0 && key != transaction.runtimeKey {
+		pendingCalls.Delete(callbackID)
+		return Value{}, errors.New("BAML handles belong to another runtime")
+	}
+	if key == 0 {
+		nativeCall(encoded, callbackID)
+	} else {
+		nativeCallKeyed(key, encoded, callbackID)
+	}
 	transaction.commitHostValues()
 
 	payload, err := waitForCallResult(ctx, call.result)
@@ -408,7 +419,11 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 		nativeCancel(engineCallID)
 		return Value{}, err
 	}
-	return decodeResult(payload)
+	value, decodeErr := decodeResult(payload)
+	if value.owner != nil {
+		value.owner.runtimeKey = key
+	}
+	return value, decodeErr
 }
 
 func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (Value, error) {
@@ -443,7 +458,19 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (V
 		return Value{}, err
 	}
 	defer transaction.rollback()
-	nativeCall(encoded, callbackID)
+	key := runtimeKeyFromContext(ctx)
+	if key == 0 {
+		key = transaction.runtimeKey
+	}
+	if transaction.runtimeKey != 0 && key != transaction.runtimeKey {
+		pendingCalls.Delete(callbackID)
+		return Value{}, errors.New("BAML handles belong to another runtime")
+	}
+	if key == 0 {
+		nativeCall(encoded, callbackID)
+	} else {
+		nativeCallKeyed(key, encoded, callbackID)
+	}
 	transaction.commitHostValues()
 
 	payload, err := waitForCallResult(ctx, call.result)
@@ -452,7 +479,11 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (V
 		nativeCancel(engineCallID)
 		return Value{}, err
 	}
-	return decodeResult(payload)
+	value, decodeErr := decodeResult(payload)
+	if value.owner != nil {
+		value.owner.runtimeKey = key
+	}
+	return value, decodeErr
 }
 
 func waitForCallResult(ctx context.Context, result <-chan []byte) ([]byte, error) {
@@ -776,3 +807,39 @@ func outboundFailureIdentity(value *cffi.BamlOutboundValue) (string, string) {
 func UnexpectedNeverReturn(function string) error {
 	return fmt.Errorf("BAML never-returning function %q returned successfully", function)
 }
+
+// WithRuntime routes a call using its originating uint64 registration.
+func WithRuntime(ctx context.Context, key uint64) context.Context {
+	return context.WithValue(ctx, runtimeContextKey{}, key)
+}
+
+type runtimeContextKey struct{}
+
+func runtimeKeyFromContext(ctx context.Context) uint64 {
+	key, _ := ctx.Value(runtimeContextKey{}).(uint64)
+	return key
+}
+func RegisterProgram(key uint64, bytecode []byte, metadata string) error {
+	if err := ensureNativeRuntime(context.Background()); err != nil {
+		return err
+	}
+	return nativeRegisterProgram(key, bytecode, metadata)
+}
+
+// Runtime owns an independent dynamic registration. Close it after dispatching its final call.
+type Runtime struct{ Key uint64 }
+
+func NewRuntime(bytecode []byte) (*Runtime, error) {
+	if err := ensureNativeRuntime(context.Background()); err != nil {
+		return nil, err
+	}
+	key, err := nativeCreateRuntime(bytecode)
+	if err != nil {
+		return nil, err
+	}
+	return &Runtime{Key: key}, nil
+}
+func (runtime *Runtime) Context(ctx context.Context) context.Context {
+	return WithRuntime(ctx, runtime.Key)
+}
+func (runtime *Runtime) Close() error { return nativeUnregisterRuntime(runtime.Key) }

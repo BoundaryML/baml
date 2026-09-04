@@ -23,7 +23,7 @@ pub mod baml_bridge {
 
 pub use error::CtypesError;
 pub use handle_table::{
-    CffiHandleTable, CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
+    CffiHandleTable, CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE, RuntimeOwner,
 };
 pub use traceback::format_traceback_lines;
 pub use ty_decode::{

@@ -435,7 +435,7 @@ func Class(ctx context.Context, name string, fields []Field) (Type, error) {
 		if hasMetadata(field.Metadata) { value = withMetadataInput(field.Metadata) }
 		rows[index] = baml_go.NamedInput{Name: field.Name, Value: value}
 	}
-	result, err := baml_go.Call(ctx, "reflect.class.new", map[string]baml_go.Input{
+	result, err := baml_go.Call(baml_go.WithRuntime(ctx, bootstrap.RuntimeKey), "reflect.class.new", map[string]baml_go.Input{
 		"name": baml_go.String(name),
 		"fields": baml_go.OrderedMap(rows),
 	})
@@ -453,7 +453,7 @@ func Enum(ctx context.Context, name string, values []EnumValue) (Type, error) {
 			"meta": metadataInput(value.Metadata),
 		})
 	}
-	result, err := baml_go.Call(ctx, "reflect.enum.new", map[string]baml_go.Input{
+	result, err := baml_go.Call(baml_go.WithRuntime(ctx, bootstrap.RuntimeKey), "reflect.enum.new", map[string]baml_go.Input{
 		"name": baml_go.String(name),
 		"values": baml_go.List(rows, func(value baml_go.Input) baml_go.Input { return value }),
 	})
@@ -470,7 +470,7 @@ type Package struct {
 
 func CompilePackage(ctx context.Context, files map[string]string) (*Package, error) {
 	if err := bootstrap.Ensure(); err != nil { return nil, err }
-	result, err := baml_go.Call(ctx, "reflect.Package.compile", map[string]baml_go.Input{
+	result, err := baml_go.Call(baml_go.WithRuntime(ctx, bootstrap.RuntimeKey), "reflect.Package.compile", map[string]baml_go.Input{
 		"files": baml_go.Map(files, baml_go.String),
 	})
 	if err != nil { return nil, err }
@@ -2046,6 +2046,10 @@ fn render_functions(
             let _ = writeln!(out, "\t\treturn {zero_local}, {error_local}\n\t}}");
         }
 
+        let _ = writeln!(
+            out,
+            "\t{context_parameter} = {runtime_package}.WithRuntime({context_parameter}, {bootstrap_package}.RuntimeKey)"
+        );
         let required_arguments = routed
             .arguments
             .iter()
@@ -5062,9 +5066,12 @@ fn render_go_literal_value(literal: &GoLiteral, runtime: &str) -> String {
 fn render_bootstrap(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
     let mut out = String::from(BANNER);
     out.push_str("package bootstrap\n\n");
+    let key = baml_program_identity::program_key(bytecode)
+        .unwrap_or_else(|_| baml_program_identity::key_from_canonical(bytecode));
     out.push_str("import (\n\t\"sync\"\n\n");
     let _ = writeln!(out, "\t\"{BAML_GO_MODULE}\"\n)\n");
     out.push_str("var (\n\tonce          sync.Once\n\tinitializeErr error\n)\n\n");
+    let _ = writeln!(out, "const RuntimeKey uint64 = {key}\n");
     out.push_str("var bytecode = []byte{\n");
     for chunk in bytecode.chunks(20) {
         let line = chunk
@@ -5080,9 +5087,9 @@ fn render_bootstrap(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String
     }
     out.push_str("func Ensure() error {\n");
     if embedded_baml_toml.is_some() {
-        out.push_str("\tonce.Do(func() { initializeErr = baml_go.InitializeWithMetadata(bytecode, embeddedBamlToml) })\n");
+        out.push_str("\tonce.Do(func() { initializeErr = baml_go.RegisterProgram(RuntimeKey, bytecode, embeddedBamlToml) })\n");
     } else {
-        out.push_str("\tonce.Do(func() { initializeErr = baml_go.Initialize(bytecode) })\n");
+        out.push_str("\tonce.Do(func() { initializeErr = baml_go.RegisterProgram(RuntimeKey, bytecode, \"\") })\n");
     }
     out.push_str("\treturn initializeErr\n}\n");
     out

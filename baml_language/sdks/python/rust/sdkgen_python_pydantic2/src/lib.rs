@@ -555,7 +555,11 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
             format!("baml_sdk.{}", leaf.segments.join("."))
         };
         let _ = writeln!(out, "    {}: {{", py_string(&fqn));
-        let _ = writeln!(out, "        \"module\": {},", py_string(&module));
+        let _ = writeln!(
+            out,
+            "        \"module\": __package__ + {},",
+            py_string(&module["baml_sdk".len()..])
+        );
         out.push_str("        \"type_params\": (");
         for param in &function.generic_params {
             let _ = write!(out, "{}, ", py_string(param.as_str()));
@@ -708,16 +712,16 @@ fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> Stri
     out.push_str("from . import _inlinedbaml\n");
     out.push_str("from ._typemap import _TYPE_MAP\n\n");
     if use_bytecode {
-        out.push_str("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)\n\n");
+        out.push_str("_RUNTIME = BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML, _inlinedbaml.PROGRAM_KEY)\n\n");
     } else {
-        out.push_str("BamlRuntime.initialize_runtime(\n");
-        out.push_str("    \"baml_src\", _inlinedbaml.FILES\n");
+        out.push_str("_RUNTIME = BamlRuntime.initialize_runtime(\n");
+        out.push_str("    \"baml_src\", _inlinedbaml.FILES, _inlinedbaml.PROGRAM_KEY\n");
         out.push_str(")\n\n");
     }
     out.push_str("def get_baml_source_files() -> dict[str, str]:\n");
     out.push_str("    from ._baml_sources import FILES\n");
     out.push_str("    return FILES\n\n");
-    out.push_str("set_type_map(_TYPE_MAP)\n");
+    out.push_str("set_type_map(_TYPE_MAP, _RUNTIME, __name__)\n");
     if !top_children.is_empty() {
         append_lazy_children_block(&mut out, top_children);
     }
@@ -802,6 +806,18 @@ fn render_inlinedbaml(payload: RuntimePayload<'_>) -> String {
 
 fn render_inlinedbaml_source(files: &[UserBamlFile]) -> String {
     let mut out = String::from("from __future__ import annotations\n\n");
+    let entries: Vec<_> = files
+        .iter()
+        .map(|(path, source)| (path.to_string_lossy().into_owned(), source.as_str()))
+        .collect();
+    let canonical = baml_program_identity::canonical_sources(
+        entries
+            .iter()
+            .map(|(path, source)| (path.as_str(), *source)),
+    )
+    .expect("generated source paths must be relative");
+    let key = baml_program_identity::key_from_canonical(&canonical);
+    let _ = writeln!(out, "PROGRAM_KEY: int = {key}");
     out.push_str(&render_baml_source_files(files));
     out
 }
@@ -833,6 +849,9 @@ fn render_baml_source_files(files: &[UserBamlFile]) -> String {
 fn render_inlinedbaml_bytecode(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
     let mut out = String::from("from __future__ import annotations\n\nBYTECODE: bytes = ");
     out.push_str(&py_bytes(bytecode));
+    let key = baml_program_identity::program_key(bytecode)
+        .unwrap_or_else(|_| baml_program_identity::key_from_canonical(bytecode));
+    let _ = write!(out, "\nPROGRAM_KEY: int = {key}");
     out.push_str("\nEMBEDDED_BAML_TOML: str | None = ");
     out.push_str(
         &embedded_baml_toml
@@ -1058,7 +1077,7 @@ mod tests {
         assert!(root.contains("from baml_bridge import BamlRuntime, set_type_map"));
         assert!(root.contains("from . import _inlinedbaml"));
         assert!(root.contains("from ._typemap import _TYPE_MAP"));
-        assert!(root.contains("set_type_map(_TYPE_MAP)"));
+        assert!(root.contains("set_type_map(_TYPE_MAP, _RUNTIME, __name__)"));
         assert!(root.contains("from . import reflect as reflect"));
         // PEP 562 lazy re-export: root lists `baml` in `_LAZY_CHILDREN`
         // and exposes it through `__getattr__`. `to_source_code` always
@@ -2051,7 +2070,7 @@ mod tests {
 
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
-            root.contains("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)")
+            root.contains("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML, _inlinedbaml.PROGRAM_KEY)")
         );
         assert!(!root.contains("BamlRuntime.initialize_runtime("));
         assert!(root.contains("def get_baml_source_files() -> dict[str, str]:"));
@@ -4459,7 +4478,7 @@ mod tests {
         assert!(
             root.contains(
                 "BamlRuntime.initialize_runtime(\n    \
-                 \"baml_src\", _inlinedbaml.FILES\n)"
+                 \"baml_src\", _inlinedbaml.FILES, _inlinedbaml.PROGRAM_KEY\n)"
             ),
             "root was:\n{root}"
         );

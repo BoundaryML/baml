@@ -52,6 +52,11 @@ module Baml
           register_unhandled_spawn_error_callback
           shutdown_runtime
           initialize_runtime_from_bytecode_with_metadata
+          register_program
+          create_runtime
+          unregister_runtime
+          call_function_for_runtime
+          program_key
         ].freeze
 
         layout :abi_version, :uint32,
@@ -66,6 +71,8 @@ module Baml
           %i[pointer size_t],
           { blocking: true }
         ],
+        register_program: [Buffer.by_value, %i[uint64 pointer size_t pointer], { blocking: true }],
+        program_key: [Buffer.by_value, %i[pointer size_t pointer]],
         free_buffer: [:void, [Buffer.by_value]],
         register_callback: [:void, [:pointer]],
         register_bridge: [Buffer.by_value, [:pointer]]
@@ -94,16 +101,23 @@ module Baml
           function(:register_callback).call(callback)
         end
 
-        def initialize_runtime(bytecode)
+        def initialize_runtime(bytecode, runtime_key = nil)
           pointer = memory_for(bytecode)
-          diagnostic = read_owned_utf8(
-            function(:initialize_runtime_from_bytecode).call(pointer, bytecode.bytesize),
-            "initialize_runtime_from_bytecode"
-          )
-          return if diagnostic.empty?
+          unless runtime_key
+            out_key = FFI::MemoryPointer.new(:uint64)
+            check_status(function(:program_key).call(pointer, bytecode.bytesize, out_key))
+            runtime_key = out_key.read_uint64
+          end
+          unless runtime_key.is_a?(Integer) && runtime_key.between?(0, (1 << 64) - 1)
+            raise RangeError, "BAML runtime key must be a uint64"
+          end
+          check_status(function(:register_program).call(runtime_key, pointer, bytecode.bytesize, nil))
+          runtime_key
+        end
 
-          raise ProgramInitializationError,
-                "Native BAML program initialization failed: #{diagnostic}"
+        def check_status(buffer)
+          diagnostic = read_owned_utf8(buffer, "register_program")
+          raise ProgramInitializationError, diagnostic unless diagnostic.empty?
         end
 
         private

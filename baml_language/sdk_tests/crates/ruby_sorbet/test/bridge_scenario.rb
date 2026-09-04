@@ -116,7 +116,7 @@ when "configuration_retry"
   end
   initialize_fixture
   assert_equal(1, fixture_inspection.count("baml_test_initialize_count"))
-  assert_equal(3, fixture_inspection.count("baml_test_free_count"))
+  assert_equal(4, fixture_inspection.count("baml_test_free_count"))
 when "open_retry"
   ENV["BAML_RUNTIME_PATH"] = INVALID_LIBRARY
   assert_raises(Baml::Bridge::RuntimeLoadError) do
@@ -145,7 +145,7 @@ when "open_retry"
 
   initialize_fixture
   assert_equal(1, fixture_inspection.count("baml_test_initialize_count"))
-  assert_equal(3, fixture_inspection.count("baml_test_free_count"))
+  assert_equal(4, fixture_inspection.count("baml_test_free_count"))
 when "concurrent_open_failure_preserves_claim"
   runtime_class = Baml::Bridge.const_get(:ProcessRuntime, false)
   runtime = runtime_class.new
@@ -227,15 +227,19 @@ when "invalid_bytecode_retry_and_identity"
   assert_raises(Baml::Bridge::ProgramInitializationError) do
     Baml::Bridge.initialize!("invalid".b)
   end
-  Baml::Bridge.initialize!(original)
+  key = Baml::Bridge.initialize!(original)
   original.replace("changed-program")
   Baml::Bridge.initialize!(VALID_PROGRAM.dup)
-  assert_raises(Baml::Bridge::ProgramConflictError) do
-    Baml::Bridge.initialize!(original)
+  assert_raises(Baml::Bridge::ProgramInitializationError) do
+    Baml::Bridge.initialize!(original, runtime_key: key)
   end
   assert_equal(2, fixture_inspection.count("baml_test_initialize_count"))
   assert_equal(1, fixture_inspection.count("baml_test_register_count"))
-  assert_equal(4, fixture_inspection.count("baml_test_free_count"))
+  assert_equal(7, fixture_inspection.count("baml_test_free_count"))
+  other = Baml::Bridge.initialize!("other-bytecode".b)
+  assert(other != key, "distinct programs must have independent registrations")
+  assert_equal(3, fixture_inspection.count("baml_test_initialize_count"))
+  assert_equal(9, fixture_inspection.count("baml_test_free_count"))
 when "concurrent_initialization"
   use_fixture
   ENV["BAML_FAKE_INIT_DELAY_MS"] = "25"
@@ -251,7 +255,7 @@ when "concurrent_initialization"
   assert(errors.empty?, "concurrent initialization errors: #{errors.size}")
   assert_equal(1, fixture_inspection.count("baml_test_initialize_count"))
   assert_equal(1, fixture_inspection.count("baml_test_register_count"))
-  assert_equal(3, fixture_inspection.count("baml_test_free_count"))
+  assert_equal(4, fixture_inspection.count("baml_test_free_count"))
 when "fork_before_native_use"
   unless Process.respond_to?(:fork)
     exit 0

@@ -81,9 +81,9 @@ fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::Bridge
 /// `BamlOutboundResult` envelope rather than thrown, so the returned bytes
 /// decode + raise uniformly on the Java side. The `catch_unwind` + engine
 /// error handling already lives in `bridge_cffi::call_and_encode`.
-fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
+fn call_sync_to_bytes(runtime_key: Option<u64>, args_proto: &[u8]) -> Vec<u8> {
     let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-        let runtime = bridge_cffi::get_runtime()?;
+        let runtime = bridge_cffi::runtime_for_encoded_call(runtime_key, &args_proto)?;
         let decoded = decode_args(args_proto)?;
         let rt = bridge_cffi::get_tokio_runtime()?;
         Ok((runtime, decoded, rt))
@@ -134,6 +134,7 @@ fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
     mut env: JNIEnv<'_>,
     class: JClass<'_>,
+    runtime_key: jlong,
     bytecode: JByteArray<'_>,
     embedded_baml_toml: JString<'_>,
     bridge_runtime_version: JString<'_>,
@@ -211,9 +212,15 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
         }
     };
 
-    if let Err(e) =
+    if let Err(e) = if runtime_key == 0 {
         bridge_cffi::initialize_runtime_from_bytecode(&bytes, embedded_baml_toml.as_deref())
-    {
+    } else {
+        bridge_cffi::register_runtime_from_bytecode(
+            runtime_key as u64,
+            &bytes,
+            embedded_baml_toml.as_deref(),
+        )
+    } {
         throw_runtime_exception_exact(&mut env, &e.to_string());
     }
 }
@@ -241,6 +248,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeShutdownRuntime(
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallSync<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
+    runtime_key: jlong,
     encoded_args: JByteArray<'local>,
 ) -> JByteArray<'local> {
     let args_proto = match env.convert_byte_array(&encoded_args) {
@@ -251,7 +259,10 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallSync<'local>(
         }
     };
 
-    let out = call_sync_to_bytes(&args_proto);
+    let out = call_sync_to_bytes(
+        (runtime_key != 0).then_some(runtime_key as u64),
+        &args_proto,
+    );
 
     match env.byte_array_from_slice(&out) {
         Ok(arr) => arr,
@@ -339,6 +350,7 @@ fn ensure_completion_route(
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
     mut env: JNIEnv<'local>,
     class: JClass<'local>,
+    runtime_key: jlong,
     call_id: jlong,
     encoded_args: JByteArray<'local>,
 ) {
@@ -358,7 +370,11 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
         }
     };
 
-    spawn_async_call(call_id as u64, args_proto);
+    spawn_async_call(
+        (runtime_key != 0).then_some(runtime_key as u64),
+        call_id as u64,
+        args_proto,
+    );
 }
 
 /// Spawn the engine call and route its `BamlOutboundResult` envelope back to
@@ -367,9 +383,9 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
 /// failures (uninitialized runtime, malformed args, no tokio runtime) are
 /// encoded into the same envelope and delivered immediately, so they decode +
 /// raise identically to a sync pre-call failure.
-fn spawn_async_call(call_id: u64, args_proto: Vec<u8>) {
+fn spawn_async_call(runtime_key: Option<u64>, call_id: u64, args_proto: Vec<u8>) {
     let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-        let runtime = bridge_cffi::get_runtime()?;
+        let runtime = bridge_cffi::runtime_for_encoded_call(runtime_key, &args_proto)?;
         let decoded = decode_args(&args_proto)?;
         let rt = bridge_cffi::get_tokio_runtime()?;
         Ok((runtime, decoded, rt))

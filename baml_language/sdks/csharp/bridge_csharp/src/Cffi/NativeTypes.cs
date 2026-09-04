@@ -61,6 +61,11 @@ internal unsafe struct BamlApiV1
     internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<sbyte*, nuint, int, void>, void> RegisterUnhandledSpawnErrorCallback;
     internal delegate* unmanaged[Cdecl]<BamlBuffer> ShutdownRuntime;
     internal delegate* unmanaged[Cdecl]<byte*, nuint, byte*, BamlBuffer> InitializeRuntimeFromBytecodeWithMetadata;
+    internal delegate* unmanaged[Cdecl]<ulong, byte*, nuint, byte*, BamlBuffer> RegisterProgram;
+    internal delegate* unmanaged[Cdecl]<byte*, nuint, ulong*, BamlBuffer> CreateRuntime;
+    internal delegate* unmanaged[Cdecl]<ulong, BamlBuffer> UnregisterRuntime;
+    internal delegate* unmanaged[Cdecl]<ulong, byte*, nuint, uint, void> CallFunctionForRuntime;
+    internal delegate* unmanaged[Cdecl]<byte*, nuint, ulong*, BamlBuffer> ProgramKey;
 }
 
 internal static unsafe class BamlApiV1Layout

@@ -14,8 +14,10 @@
 // in the SDK's module scope (the runtime package can't resolve a
 // `baml_sdk/...` path). The root `index.ts` calls `setTypeMap(_TYPE_MAP)` at
 // import time; resolution is lazy and memoized on first lookup.
+import { getRuntime as nativeGetRuntime } from './native.js';
 import { BamlError } from './errors.js';
 export class BamlTypeMap {
+    runtime;
     classLazy = new Map();
     enumLazy = new Map();
     aliasLazy = new Map();
@@ -109,10 +111,32 @@ export class BamlTypeMap {
     }
 }
 let _TYPE_MAP = new BamlTypeMap();
-export function setTypeMap(m) {
-    _TYPE_MAP = m;
+let activeTypeMap;
+export function setTypeMap(m, runtime) {
+    m.runtime = runtime;
+    if (!runtime)
+        _TYPE_MAP = m;
 }
-export function getTypeMap() {
-    return _TYPE_MAP;
+export function getTypeMap() { return activeTypeMap ?? _TYPE_MAP; }
+/** Only synchronous encode/decode sections use ambient context. Never hold it across await. */
+export function withTypeMap(m, fn) {
+    const previous = activeTypeMap;
+    activeTypeMap = m;
+    try {
+        return fn();
+    }
+    finally {
+        activeTypeMap = previous;
+    }
+}
+export function getRuntime() { return getTypeMap().runtime ?? nativeGetRuntime(); }
+/** Bind a runtime without changing the SDK's shared nominal type definitions. */
+export function typeMapForRuntime(runtime) {
+    const base = getTypeMap();
+    if (base.runtime?.runtimeKey === runtime.runtimeKey)
+        return base;
+    const bound = Object.create(base);
+    bound.runtime = runtime;
+    return bound;
 }
 //# sourceMappingURL=typemap.js.map

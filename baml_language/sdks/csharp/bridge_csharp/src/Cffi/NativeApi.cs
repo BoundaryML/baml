@@ -12,6 +12,9 @@ internal sealed unsafe partial class NativeApi
         LazyThreadSafetyMode.ExecutionAndPublication);
 
     private readonly BamlApiV1* table;
+    private ulong? runtimeKey;
+
+    internal NativeApi ForRuntime(ulong key) => new NativeApi(table, ProductVersion) { runtimeKey = key };
 
     internal NativeApi(BamlApiV1* table, string productVersion)
     {
@@ -52,6 +55,29 @@ internal sealed unsafe partial class NativeApi
         }
 
         return identifier;
+    }
+
+    internal ulong RegisterProgram(ReadOnlySpan<byte> bytecode, string? embeddedBamlToml, ulong? requestedKey)
+    {
+        nuint required = (nuint)System.Runtime.InteropServices.Marshal.OffsetOf<BamlApiV1>(nameof(BamlApiV1.ProgramKey)) + (nuint)IntPtr.Size;
+        if (table->StructSize < required || table->ProgramKey == null || table->RegisterProgram == null || table->CallFunctionForRuntime == null)
+            throw new BamlNativeLibraryLoadException("The native library does not support uint64 runtime registrations.");
+        fixed (byte* pointer = bytecode)
+        {
+            ulong key = requestedKey ?? 0;
+            if (requestedKey is null)
+            {
+                string error = NativeBuffer.ReadUtf8AndFree(table, table->ProgramKey(pointer, (nuint)bytecode.Length, &key));
+                if (error.Length != 0) throw new BamlProgramIntegrityException(error);
+            }
+            byte[]? metadata = embeddedBamlToml is null ? null : Encoding.UTF8.GetBytes(embeddedBamlToml + "\0");
+            fixed (byte* manifest = metadata)
+            {
+                string error = NativeBuffer.ReadUtf8AndFree(table, table->RegisterProgram(key, pointer, (nuint)bytecode.Length, manifest));
+                if (error.Length != 0) throw new BamlProgramIntegrityException(error);
+            }
+            return key;
+        }
     }
 
     internal void InitializeRuntime(ReadOnlySpan<byte> bytecode, string? embeddedBamlToml)
@@ -375,10 +401,10 @@ internal sealed unsafe partial class NativeApi
                 }
 
                 started = true;
-                api.table->CallFunction(
-                    arguments,
-                    argumentsLength,
-                    callbackId);
+                if (api.runtimeKey is ulong key)
+                    api.table->CallFunctionForRuntime(key, arguments, argumentsLength, callbackId);
+                else
+                    api.table->CallFunction(arguments, argumentsLength, callbackId);
                 return true;
             }
         }

@@ -1,10 +1,6 @@
 //! Native runtime and C ABI implementation for `bridge_cffi`.
 
-use std::{
-    collections::HashMap,
-    panic::AssertUnwindSafe,
-    sync::{Arc, RwLock},
-};
+use std::{collections::HashMap, panic::AssertUnwindSafe, sync::Arc};
 
 use bex_project::Bex;
 use bridge_ctypes::{DecodeFromBuffer, HANDLE_TABLE, kwargs_to_bex_values};
@@ -48,16 +44,14 @@ pub use ffi::{
     },
     objects::flush_events,
     runtime::{
-        BamlBridgeInfoV1, create_baml_runtime, destroy_baml_runtime,
+        BamlBridgeInfoV1, create_baml_runtime, create_runtime_ffi, destroy_baml_runtime,
         initialize_runtime_from_bytecode as initialize_runtime_from_bytecode_ffi,
-        initialize_runtime_from_bytecode_with_metadata, invoke_runtime_cli, register_bridge_ffi,
-        shutdown_runtime as shutdown_runtime_ffi, version,
+        initialize_runtime_from_bytecode_with_metadata, invoke_runtime_cli, program_key_ffi,
+        register_bridge_ffi, register_program_ffi, shutdown_runtime as shutdown_runtime_ffi,
+        unregister_runtime_ffi, version,
     },
     unhandled_spawn::register_unhandled_spawn_error_callback,
 };
-
-/// Global Bex runtime. Uses RwLock to allow replacing the runtime.
-static RUNTIME_INSTANCE: RwLock<Option<Arc<dyn Bex>>> = RwLock::new(None);
 
 /// Global Tokio runtime for async execution.
 static TOKIO_RUNTIME: OnceCell<Arc<Runtime>> = OnceCell::new();
@@ -72,22 +66,22 @@ pub fn get_tokio_runtime() -> Result<Arc<Runtime>, BridgeError> {
     result.cloned()
 }
 
-pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
-    RUNTIME_INSTANCE
-        .read()
-        .map_err(|_| BridgeError::LockPoisoned)?
-        .clone()
-        .ok_or(BridgeError::NotInitialized)
-}
-
-/// Initialize the global runtime from BAML source files.
-///
-/// If a runtime is already initialized, it will be replaced with the new one.
+/// Create an independent dynamic runtime from BAML source files.
 ///
 /// # Arguments
 /// * `root_path` - Root path for BAML files
 /// * `src_files` - Map of filename to content
 pub fn initialize_runtime(
+    root_path: &str,
+    src_files: HashMap<String, String>,
+) -> Result<Arc<dyn Bex>, BridgeError> {
+    let rt = build_source_runtime(root_path, src_files)?;
+    let rt = crate::runtime_owner::own_dynamic(rt);
+    crate::runtime_registry::insert_dynamic(rt.clone())?;
+    Ok(rt)
+}
+
+fn build_source_runtime(
     root_path: &str,
     src_files: HashMap<String, String>,
 ) -> Result<Arc<dyn Bex>, BridgeError> {
@@ -104,27 +98,23 @@ pub fn initialize_runtime(
 
     let rt: Arc<dyn Bex> = bex_project::new(vfs_path, bex_project::SysOps::native(), files)?;
     crate::install_unhandled_spawn_error_handler(&rt);
-    replace_runtime(rt.clone())?;
     Ok(rt)
 }
 
-pub(crate) fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
-    let mut guard = RUNTIME_INSTANCE
-        .write()
-        .map_err(|_| BridgeError::LockPoisoned)?;
-    let previous = guard.replace(rt);
-    drop(guard);
-    if let Some(previous) = previous {
-        get_tokio_runtime()?.spawn(previous.shutdown());
-    }
-    Ok(())
-}
-
-pub(crate) fn take_runtime() -> Result<Option<Arc<dyn Bex>>, BridgeError> {
-    RUNTIME_INSTANCE
-        .write()
-        .map_err(|_| BridgeError::LockPoisoned)
-        .map(|mut runtime| runtime.take())
+pub fn register_runtime_from_sources(
+    key: u64,
+    root_path: &str,
+    files: HashMap<String, String>,
+) -> Result<Arc<dyn Bex>, BridgeError> {
+    let canonical = baml_program_identity::canonical_sources(
+        files
+            .iter()
+            .map(|(path, source)| (path.as_str(), source.as_str())),
+    )
+    .map_err(BridgeError::Startup)?;
+    crate::runtime_registry::register_generated(key, canonical, || {
+        build_source_runtime(root_path, files)
+    })
 }
 
 pub(crate) fn dispatch_unhandled_spawn_error(content: Vec<u8>, cancelled: bool) {
@@ -137,21 +127,26 @@ pub(crate) fn dispatch_unhandled_spawn_error(content: Vec<u8>, cancelled: bool) 
 /// via the registered callback as a `BamlOutboundResult` envelope.
 #[unsafe(no_mangle)]
 pub extern "C" fn call_function(encoded_args: *const u8, length: usize, id: u32) {
-    if let Err(e) = call_function_inner(encoded_args, length, id) {
-        send_outbound_result_to_callback(id, &error_to_outbound(e));
-    }
+    dispatch_call(None, encoded_args, length, id);
 }
 
-fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Result<(), BridgeError> {
+fn call_function_inner(
+    runtime_key: Option<u64>,
+    encoded_args: *const u8,
+    length: usize,
+    id: u32,
+) -> Result<(), BridgeError> {
     use bridge_ctypes::baml_bridge::cffi::{CallFunctionArgs, call_function_args::CallTarget};
 
-    let runtime = get_runtime()?;
-
+    if length > isize::MAX as usize || (encoded_args.is_null() && length != 0) {
+        return Err(BridgeError::Internal("invalid call buffer".into()));
+    }
     let args = if encoded_args.is_null() || length == 0 {
         CallFunctionArgs::default()
     } else {
         unsafe { CallFunctionArgs::from_c_buffer(encoded_args, length) }?
     };
+    let runtime = crate::runtime_for_call(runtime_key, &args)?;
     let call_id = decoded_call_id(args.call_id)?;
     let target = args.call_target.ok_or(BridgeError::MissingCallTarget)?;
     if matches!(target, CallTarget::FunctionHandle(_)) && !args.type_args.is_empty() {
@@ -193,4 +188,25 @@ fn decoded_call_id(id: u64) -> Result<sys_types::CallId, BridgeError> {
         return Err(BridgeError::InvalidCallId);
     }
     Ok(sys_types::CallId(id))
+}
+
+/// Enqueue a call against its originating registration.
+pub extern "C" fn call_function_for_runtime(
+    key: u64,
+    encoded_args: *const u8,
+    length: usize,
+    id: u32,
+) {
+    dispatch_call(Some(key), encoded_args, length, id);
+}
+
+fn dispatch_call(key: Option<u64>, bytes: *const u8, length: usize, id: u32) {
+    let outcome = std::panic::catch_unwind(|| call_function_inner(key, bytes, length, id));
+    match outcome {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => send_outbound_result_to_callback(id, &error_to_outbound(error)),
+        Err(panic) => {
+            send_outbound_result_to_callback(id, &baml_to_host::panic_to_outbound(panic.as_ref()))
+        }
+    }
 }

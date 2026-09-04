@@ -2,6 +2,7 @@
 
 package baml_go
 
+import "fmt"
 import "github.com/boundaryml/baml-go/internal/cffi"
 
 func nativeOpen(string) (string, error) {
@@ -34,3 +35,9 @@ func nativeMediaConstruct(mediaConstructor, cffi.MediaTypeEnum, string, *string)
 func nativeMediaAccess(mediaAccessor, uint64, cffi.BamlHandleType) (*string, error) {
 	return nil, unsupportedNativeOperation()
 }
+
+func nativeRegisterProgram(uint64, []byte, string) error { return unsupportedNativeOperation() }
+func nativeCallKeyed(uint64, []byte, uint32)             {}
+
+func nativeCreateRuntime(bytes []byte) (uint64, error) { return 0, fmt.Errorf("unsupported platform") }
+func nativeUnregisterRuntime(key uint64) error         { return fmt.Errorf("unsupported platform") }

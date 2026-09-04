@@ -356,7 +356,7 @@ fn emit_binding(
                     ::std::vec![#(#kwarg_entries),*]
                 );
                 options.append_to(&mut kwargs);
-                ::baml_bridge::runtime::invoke_sync(#fqn, kwargs, #type_args_expr)
+                ::baml_bridge::runtime::invoke_sync_for_runtime(crate::_inlinedbaml::PROGRAM_KEY, #fqn, kwargs, #type_args_expr)
             }
 
             #(#doc_attrs)*
@@ -373,7 +373,7 @@ fn emit_binding(
                     ::std::vec![#(#kwarg_entries),*]
                 );
                 options.append_to(&mut kwargs);
-                ::baml_bridge::runtime::invoke(#fqn, kwargs, #type_args_expr).await
+                ::baml_bridge::runtime::invoke_for_runtime(crate::_inlinedbaml::PROGRAM_KEY, #fqn, kwargs, #type_args_expr).await
             }
         }
     } else {
@@ -387,7 +387,7 @@ fn emit_binding(
         pub fn #sync_name #generics_decl (#self_param #(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #(#converts)*
-            ::baml_bridge::runtime::invoke_sync(
+            ::baml_bridge::runtime::invoke_sync_for_runtime(crate::_inlinedbaml::PROGRAM_KEY,
                 #fqn,
                 ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
                 #type_args_expr,
@@ -400,7 +400,7 @@ fn emit_binding(
         pub async fn #async_name #generics_decl (#self_param #(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #(#converts)*
-            ::baml_bridge::runtime::invoke(
+            ::baml_bridge::runtime::invoke_for_runtime(crate::_inlinedbaml::PROGRAM_KEY,
                 #fqn,
                 ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
                 #type_args_expr,

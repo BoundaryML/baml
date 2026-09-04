@@ -642,14 +642,8 @@ fn render_root(root_decls: &BTreeMap<String, String>) -> String {
          \t/// `register_bridge` requires it to exactly match the linked\n\
          \t/// native library's version.\n\
          \tpublic static let sdkVersion = \"{version}\"\n\n\
-         \tstatic let _initialized: Bool = {{\n\
-         \t\tBamlRuntime.shared.initialize(\n\
-         \t\t\tbytecode: _BamlInlined.bytecode,\n\
-         \t\t\tsdkVersion: sdkVersion,\n\
-         \t\t\tembeddedBamlToml: _BamlInlined.embeddedBamlToml\n\
-         \t\t)\n\
-         \t\treturn true\n\
-         \t}}()\n",
+         \tstatic let _runtime = BamlRuntime.registerProgram(key: _BamlInlined.programKey, bytecode: _BamlInlined.bytecode, embeddedBamlToml: _BamlInlined.embeddedBamlToml)\n\
+         \tstatic var _initialized: Bool {{ _ = _runtime; return true }}\n",
         version = baml_version::CANONICAL_VERSION,
     );
     for rendered in root_decls.values() {
@@ -728,6 +722,9 @@ fn render_inlined_baml(baml_bytecode: &[u8], embedded_baml_toml: Option<&str>) -
         out.push('\n');
     }
     out.push_str("        \"\"\"\n");
+    let key = baml_program_identity::program_key(baml_bytecode)
+        .unwrap_or_else(|_| baml_program_identity::key_from_canonical(baml_bytecode));
+    let _ = writeln!(out, "    static let programKey: UInt64 = {key}");
     let manifest = embedded_baml_toml
         .map(|manifest| format!("Optional.some({manifest:?})"))
         .unwrap_or_else(|| "Optional.none".to_string());

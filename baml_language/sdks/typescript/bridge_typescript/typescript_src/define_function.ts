@@ -13,9 +13,9 @@
 
 import {
     BamlCallContext,
-    getRuntime,
     newFunctionCall as nativeNewFunctionCall,
 } from './native.js';
+import { getRuntime, getTypeMap, withTypeMap, type BamlTypeMap } from './typemap.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 import { attachCallContext } from './call_context.js';
 import { baml_bridge } from './proto/baml_cffi.js';
@@ -204,12 +204,14 @@ function buildArgs(
  * `sync` returns the decoded value; `async` returns a `Promise` of it.
  */
 export function defineFunction(
-    bamlFqn: string,
+    target: string | { name: string; typeMap: () => BamlTypeMap },
     mode: Mode,
     requiredParamNames: readonly string[],
     optionalParamNames?: readonly string[] | undefined,
     generics?: GenericParams | undefined,
 ): (...args: unknown[]) => unknown {
+    const bamlFqn = typeof target === "string" ? target : target.name;
+    const resolveMap = () => typeof target === "string" ? getTypeMap() : target.typeMap();
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
     // A free function / static method binds only its OWN generic params (a
@@ -223,14 +225,15 @@ export function defineFunction(
     if (mode === 'sync') {
         return (...args: unknown[]): unknown => {
             const built = buildArgs(args, requiredNames, optionNames);
-            const typeArgs = typeArgsFor(built);
-            const rt = getRuntime();
+            const typeMap = resolveMap();
+            const typeArgs = withTypeMap(typeMap, () => typeArgsFor(built));
+            const rt = withTypeMap(typeMap, () => getRuntime());
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn });
+            const argsProto = withTypeMap(typeMap, () => encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn }));
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {
                 const resultBytes = rt.callFunctionSync(argsProto, null, null);
-                return decodeCallResult(resultBytes);
+                return withTypeMap(typeMap, () => decodeCallResult(resultBytes));
             } finally {
                 callCtxBinding.detach();
             }
@@ -239,14 +242,15 @@ export function defineFunction(
     if (mode === 'async') {
         return async (...args: unknown[]): Promise<unknown> => {
             const built = buildArgs(args, requiredNames, optionNames);
-            const typeArgs = typeArgsFor(built);
-            const rt = getRuntime();
+            const typeMap = resolveMap();
+            const typeArgs = withTypeMap(typeMap, () => typeArgsFor(built));
+            const rt = withTypeMap(typeMap, () => getRuntime());
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn });
+            const argsProto = withTypeMap(typeMap, () => encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn }));
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {
                 const resultBytes = await rt.callFunction(argsProto, null, null);
-                return decodeCallResult(resultBytes);
+                return withTypeMap(typeMap, () => decodeCallResult(resultBytes));
             } finally {
                 callCtxBinding.detach();
             }
@@ -263,12 +267,14 @@ export function defineFunction(
  * appears in the surface type.
  */
 export function defineInstanceFunction(
-    bamlFqn: string,
+    target: string | { name: string; typeMap: () => BamlTypeMap },
     mode: Mode,
     requiredParamNames: readonly string[],
     optionalParamNames?: readonly string[] | undefined,
     generics?: GenericParams | undefined,
 ): { bind(self: unknown): (...args: unknown[]) => unknown } {
+    const bamlFqn = typeof target === "string" ? target : target.name;
+    const resolveMap = () => typeof target === "string" ? getTypeMap() : target.typeMap();
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
     const selfName = requiredNames[0] ?? 'self';
@@ -293,14 +299,15 @@ export function defineInstanceFunction(
             if (mode === 'sync') {
                 return (...args: unknown[]): unknown => {
                     const built = makeArgs(self, args);
-                    const typeArgs = typeArgsFor(built);
-                    const rt = getRuntime();
+                    const typeMap = resolveMap();
+            const typeArgs = withTypeMap(typeMap, () => typeArgsFor(built));
+                    const rt = withTypeMap(typeMap, () => getRuntime());
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn });
+                    const argsProto = withTypeMap(typeMap, () => encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn }));
                     const callCtxBinding = attachCallContext(built.ctx, callId);
                     try {
                         const resultBytes = rt.callFunctionSync(argsProto, null, null);
-                        return decodeCallResult(resultBytes);
+                        return withTypeMap(typeMap, () => decodeCallResult(resultBytes));
                     } finally {
                         callCtxBinding.detach();
                     }
@@ -309,14 +316,15 @@ export function defineInstanceFunction(
             if (mode === 'async') {
                 return async (...args: unknown[]): Promise<unknown> => {
                     const built = makeArgs(self, args);
-                    const typeArgs = typeArgsFor(built);
-                    const rt = getRuntime();
+                    const typeMap = resolveMap();
+            const typeArgs = withTypeMap(typeMap, () => typeArgsFor(built));
+                    const rt = withTypeMap(typeMap, () => getRuntime());
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn });
+                    const argsProto = withTypeMap(typeMap, () => encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn }));
                     const callCtxBinding = attachCallContext(built.ctx, callId);
                     try {
                         const resultBytes = await rt.callFunction(argsProto, null, null);
-                        return decodeCallResult(resultBytes);
+                        return withTypeMap(typeMap, () => decodeCallResult(resultBytes));
                     } finally {
                         callCtxBinding.detach();
                     }

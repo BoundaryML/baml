@@ -266,3 +266,9 @@ mod bytecode_artifact_tests {
 }
 
 pub use fs::FsPath;
+
+/// Canonical program payload used to compare generated registrations.
+pub fn canonical_program_bytes(bytecode: &[u8]) -> Result<Vec<u8>, RuntimeError> {
+    baml_program_identity::canonical_bytes(bytecode)
+        .map_err(|message| RuntimeError::Compilation { message })
+}

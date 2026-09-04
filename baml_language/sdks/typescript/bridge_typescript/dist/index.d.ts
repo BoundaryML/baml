@@ -27,12 +27,12 @@ export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor
  * `BamlRuntime.initializeRuntime` factory (which sets the process-global
  * singleton reachable via `getRuntime()`).
  */
-export declare function initializeRuntime(srcDir: string, files: Record<string, string>): void;
+export declare function initializeRuntime(srcDir: string, files: Record<string, string>): BamlRuntime;
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export declare function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array, embeddedBamlToml?: string): void;
+export declare function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array, embeddedBamlToml?: string, runtimeKey?: bigint): BamlRuntime;
 export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export declare function newFunctionCall(): bigint;
 export declare function cancelFunctionCall(callId: bigint): boolean;

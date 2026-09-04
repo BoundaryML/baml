@@ -20,8 +20,8 @@ __all__ = [
     "Usage",
     "cancel_function_call",
     "flush_events",
-    "get_runtime",
     "get_bridge_runtime_version",
+    "get_runtime",
     "get_toolchain_version",
     "get_version",
     "lookup_host_value",
@@ -165,28 +165,26 @@ class BamlPyHandle:
 @typing.final
 class BamlRuntime:
     r"""
-    The main BAML runtime. A zero-sized handle: the single source of truth for
-    the `Arc<dyn Bex>` singleton is `bridge_cffi`, fetched via
-    `bridge_cffi::get_runtime()` at each call site (31e-phase4), so this
-    no longer caches its own clone.
+    A handle to one uint64 runtime registration in the shared CFFI library.
     """
-    @staticmethod
-    def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
+    @property
+    def runtime_key(self) -> builtins.int: ...
+    def close(self) -> None:
         r"""
-        Initialize the process-global runtime from in-memory BAML source files.
-
-        Mirrors `bridge_cffi::initialize_runtime`: the same
-        single-slot singleton is used, so a second call replaces the prior
-        runtime.
-
+        Release a dynamic registration. In-flight calls keep their runtime alive.
+        """
+    @staticmethod
+    def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str], runtime_key: typing.Optional[builtins.int] = None) -> BamlRuntime:
+        r"""
+        Create an independent dynamic registration from BAML source files.
         # Arguments
         * `root_path` - Root path for BAML files
         * `files` - Map of filename to file content
         """
     @staticmethod
-    def initialize_runtime_from_bytecode(bytecode: typing.Sequence[builtins.int], embedded_baml_toml: typing.Optional[builtins.str] = None) -> BamlRuntime:
+    def initialize_runtime_from_bytecode(bytecode: typing.Sequence[builtins.int], embedded_baml_toml: typing.Optional[builtins.str] = None, runtime_key: typing.Optional[builtins.int] = None) -> BamlRuntime:
         r"""
-        Initialize the process-global runtime from serialized BAML bytecode.
+        Create a dynamic runtime, or register a generated uint64 identity, from serialized BAML bytecode.
 
         Generated SDKs use this path so importing `baml_sdk` can skip parsing
         and compiling the inlined BAML source files.
@@ -202,6 +200,7 @@ class BamlRuntime:
         r"""
         Call a BAML function synchronously (blocking).
         """
+
 @typing.final
 class BamlVideo:
     @staticmethod
@@ -433,6 +432,17 @@ class Usage:
         """
     def __repr__(self) -> builtins.str: ...
 
+def _live_handle_count() -> builtins.int:
+    r"""
+    Test-only: return the number of live ordinary HANDLE_TABLE keys.
+    """
+
+def _release_wire_handle(key: builtins.int) -> None:
+    r"""
+    Release a handle cloned for wire ownership when encoding aborts before the
+    engine can consume it.
+    """
+
 def _seed_function_ref_handle(global_index: builtins.int) -> tuple[builtins.int, builtins.int]:
     r"""
     Test-only: seed a `FunctionRef` entry through the shared CFFI API,
@@ -445,17 +455,6 @@ def _seed_generic_media_handle() -> tuple[builtins.int, builtins.int]:
     Test-only: seed an `Adt(Media(generic))` entry through the shared CFFI API.
     """
 
-def _release_wire_handle(key: builtins.int) -> None:
-    r"""
-    Release a handle cloned for wire ownership when encoding aborts before the
-    engine can consume it.
-    """
-
-def _live_handle_count() -> builtins.int:
-    r"""
-    Test-only: return the number of live ordinary HANDLE_TABLE keys.
-    """
-
 def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
 
 def flush_events() -> None:
@@ -464,19 +463,16 @@ def flush_events() -> None:
     (SDK `atexit` + `__all__` reference it).
     """
 
-def get_runtime() -> BamlRuntime:
-    r"""
-    Return the process-global `BamlRuntime`, or raise `BamlError` if
-    `BamlRuntime.initialize_runtime(...)` has not been called yet.
+def get_bridge_runtime_version() -> builtins.str: ...
 
-    Used by the pure-Python factories in `baml_bridge` so generated
-    leaves don't have to thread a runtime reference through every call
-    site.
+def get_runtime(runtime_key: typing.Optional[builtins.int] = None) -> BamlRuntime:
+    r"""
+    Resolve an explicit uint64 registration, or the only registered runtime.
     """
 
-def get_version() -> builtins.str: ...
 def get_toolchain_version() -> builtins.str: ...
-def get_bridge_runtime_version() -> builtins.str: ...
+
+def get_version() -> builtins.str: ...
 
 def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     r"""

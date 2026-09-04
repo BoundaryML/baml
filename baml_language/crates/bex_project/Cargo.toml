@@ -19,6 +19,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_program_identity.workspace = true
 baml_artifact = { workspace = true }
 baml_base = { workspace = true }
 baml_builtins2 = { workspace = true }

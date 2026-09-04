@@ -348,7 +348,7 @@ fn to_source_code_with_optional_metadata(
     );
     files.insert(
         PathBuf::from("src/_inlinedbaml.rs"),
-        FileContent::Text(render_inlinedbaml_module(embedded_baml_toml)),
+        FileContent::Text(render_inlinedbaml_module(baml_bytecode, embedded_baml_toml)),
     );
     files.insert(
         PathBuf::from("src/_runtime.rs"),
@@ -431,7 +431,9 @@ struct LeafItem {
 /// `_inlinedbaml.bin` (`include_bytes!` resolves relative to the
 /// containing source file) so rustc never has to parse the program as a
 /// byte-string literal.
-fn render_inlinedbaml_module(embedded_baml_toml: Option<&str>) -> String {
+fn render_inlinedbaml_module(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
+    let key = baml_program_identity::program_key(bytecode)
+        .unwrap_or_else(|_| baml_program_identity::key_from_canonical(bytecode));
     let embedded_baml_toml = match embedded_baml_toml {
         Some(manifest) => quote!(::core::option::Option::Some(#manifest)),
         None => quote!(::core::option::Option::None),
@@ -442,6 +444,7 @@ fn render_inlinedbaml_module(embedded_baml_toml: Option<&str>) -> String {
             /// The compiled BAML program this SDK was generated from, as
             /// borsh-encoded bytecode. The runtime boots from this on the
             /// first call.
+            pub(crate) const PROGRAM_KEY: u64 = #key;
             pub(crate) static BYTECODE: &[u8] =
                 ::core::include_bytes!("_inlinedbaml.bin");
             pub(crate) static EMBEDDED_BAML_TOML: ::core::option::Option<&str> =
@@ -463,7 +466,8 @@ fn render_runtime_module() -> String {
 
             pub(crate) fn ensure_init() -> ::std::result::Result<(), ::baml_bridge::SdkError> {
                 INIT.get_or_init(|| {
-                    ::baml_bridge::runtime::initialize_from_bytecode_with_metadata(
+                    ::baml_bridge::runtime::register_program(
+                        crate::_inlinedbaml::PROGRAM_KEY,
                         crate::_inlinedbaml::BYTECODE,
                         crate::_inlinedbaml::EMBEDDED_BAML_TOML,
                     )

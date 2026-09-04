@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Generic, TypeVar, cast
 
+from .typemap import get_type_map, runtime_bound
 from .baml_py import BamlPyHandle
 
 TNext = TypeVar("TNext")
@@ -49,6 +50,7 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
     """
 
     def __init__(self, handle: BamlPyHandle) -> None:
+        self._type_map = get_type_map()
         self._handle = handle
 
     @classmethod
@@ -65,6 +67,7 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
     def __aiter__(self) -> "BamlStream[TNext, TYield, TFinal]":
         return self
 
+    @runtime_bound
     async def __anext__(self) -> TYield:
         """Async-iteration sugar over the sentinel protocol: yields each
         non-null partial, translating the `ai.stream.Done` terminal marker
@@ -95,6 +98,7 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
     # `proto.py` imports `BamlStream` at module load, so the call-path
     # imports (`get_runtime`, `encode_call_args`, `decode_call_result`)
     # have to be method-local to avoid a circular import.
+    @runtime_bound
     def _call_sync(self, fqn: str) -> Any:
         from . import get_runtime
         from .baml_py import new_function_call
@@ -109,6 +113,7 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
         result_bytes = rt.call_function_sync(args_proto, None, None)
         return decode_call_result(result_bytes)
 
+    @runtime_bound
     async def _call_async(self, fqn: str) -> Any:
         from . import _decode_call_result_async, cancel_function_call, get_runtime
         from .baml_py import new_function_call

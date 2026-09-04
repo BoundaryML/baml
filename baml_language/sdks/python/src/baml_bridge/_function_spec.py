@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Generic, TypeVar
 
+from .typemap import get_type_map, runtime_bound
 from .baml_py import BamlPyHandle
 
 TOut = TypeVar("TOut")
@@ -13,9 +14,10 @@ TOut = TypeVar("TOut")
 class BamlFunctionSpec(Generic[TOut]):
     """Opaque bound LLM recipe owned by the engine that created it."""
 
-    __slots__ = ("_handle",)
+    __slots__ = ("_type_map", "_handle",)
 
     def __init__(self, handle: BamlPyHandle) -> None:
+        self._type_map = get_type_map()
         self._handle = handle
 
     @classmethod
@@ -79,6 +81,7 @@ class BamlFunctionSpec(Generic[TOut]):
     async def call_async(self, **kwargs: Any) -> TOut:
         return await self._call_async("ai.FunctionSpec.call", kwargs)
 
+    @runtime_bound
     def _call_sync(self, fqn: str, kwargs: dict[str, Any] | None = None) -> Any:
         from . import get_runtime
         from .baml_py import new_function_call
@@ -93,6 +96,7 @@ class BamlFunctionSpec(Generic[TOut]):
         )
         return decode_call_result(get_runtime().call_function_sync(encoded, None, None))
 
+    @runtime_bound
     async def _call_async(self, fqn: str, kwargs: dict[str, Any] | None = None) -> Any:
         from . import _decode_call_result_async, cancel_function_call, get_runtime
         from .baml_py import new_function_call

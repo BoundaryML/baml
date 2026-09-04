@@ -72,7 +72,7 @@ static BamlBuffer probe_initialize(const uint8_t *bytecode, size_t length) {
   initialize_started = 1;
   delay_initialize_if_requested();
   if (length == sizeof(valid) - 1 && bytecode != NULL &&
-      memcmp(bytecode, valid, sizeof(valid) - 1) == 0) {
+      (memcmp(bytecode, valid, sizeof(valid) - 1) == 0 || memcmp(bytecode, "other-bytecode", sizeof(valid) - 1) == 0)) {
     BamlBuffer buffer = {NULL, 0};
     return buffer;
   }
@@ -211,6 +211,43 @@ static BamlBuffer probe_initialize_with_metadata(
   return probe_initialize(bytecode, length);
 }
 
+
+// Test-only identity/registry; production uses SHA-256 and canonical program bytes.
+static BamlBuffer probe_program_key(const uint8_t *bytes, size_t length, uint64_t *key) {
+  uint64_t hash = UINT64_C(14695981039346656037);
+  for (size_t i = 0; i < length; ++i) { hash ^= bytes[i]; hash *= UINT64_C(1099511628211); }
+  *key = hash | (UINT64_C(1) << 63);
+  return (BamlBuffer){NULL, 0};
+}
+static BamlBuffer probe_register_program(uint64_t key, const uint8_t *bytes, size_t length, const char *metadata) {
+  (void)metadata;
+  static struct { uint64_t key; uint8_t bytes[64]; size_t length; } programs[16];
+  static size_t count;
+  for (size_t i = 0; i < count; ++i) {
+    if (programs[i].key == key) {
+      if (programs[i].length == length && memcmp(programs[i].bytes, bytes, length) == 0)
+        return (BamlBuffer){NULL, 0};
+      return buffer_from_literal("Conflicting BAML program registration");
+    }
+  }
+  if (length > 64 || count == 16) return buffer_from_literal("test registry capacity exceeded");
+  BamlBuffer status = probe_initialize(bytes, length);
+  if (status.len != 0) return status;
+  programs[count].key = key; programs[count].length = length;
+  memcpy(programs[count].bytes, bytes, length); ++count;
+  return status;
+}
+static BamlBuffer probe_create_runtime(const uint8_t *bytes, size_t length, uint64_t *key) {
+  static uint64_t next = 1;
+  BamlBuffer status = probe_initialize(bytes, length);
+  if (status.len == 0) *key = next++;
+  return status;
+}
+static BamlBuffer probe_unregister_runtime(uint64_t key) { (void)key; return (BamlBuffer){NULL, 0}; }
+static void probe_call_keyed(uint64_t key, const uint8_t *bytes, size_t length, uint32_t callback) {
+  (void)key; probe_call(bytes, length, callback);
+}
+
 static const BamlApiV1 default_api = {
     .abi_version = BAML_API_V1_ABI_VERSION,
     .struct_size = sizeof(BamlApiV1),
@@ -237,6 +274,11 @@ static const BamlApiV1 default_api = {
     .register_unhandled_spawn_error_callback = probe_register_unhandled_spawn_error,
     .shutdown_runtime = probe_shutdown_runtime,
     .initialize_runtime_from_bytecode_with_metadata = probe_initialize_with_metadata,
+    .register_program = probe_register_program,
+    .create_runtime = probe_create_runtime,
+    .unregister_runtime = probe_unregister_runtime,
+    .call_function_for_runtime = probe_call_keyed,
+    .program_key = probe_program_key,
 };
 
 static BamlApiV1 probe_api;
@@ -274,6 +316,11 @@ static void null_requested_field(const char *field) {
   NULL_FIELD(register_unhandled_spawn_error_callback)
   NULL_FIELD(shutdown_runtime)
   NULL_FIELD(initialize_runtime_from_bytecode_with_metadata)
+  NULL_FIELD(register_program)
+  NULL_FIELD(create_runtime)
+  NULL_FIELD(unregister_runtime)
+  NULL_FIELD(call_function_for_runtime)
+  NULL_FIELD(program_key)
 }
 
 BAML_CFFI_API const BamlApiV1 *baml_get_api_v1(void) {

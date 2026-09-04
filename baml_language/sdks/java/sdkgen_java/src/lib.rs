@@ -394,18 +394,33 @@ fn to_source_code_internal(
         ));
     }
     let anchor_body = format!(
-        "/**\n * Runtime anchor for the generated SDK: loading this class registers\n * the type map (BAML FQN \u{2194} generated class, with field declaration\n * order) and initializes the BAML runtime from the embedded bytecode\n * resource (idempotent) \u{2014} the Java analog of Python's root-package\n * import side effect. Every generated binding holder forces this via\n * {{@link #ensure()}}.\n */\npublic final class {anchor_ident} {{\n    private {anchor_ident}() {{}}\n\n    static {{\n{registrations}        try (java.io.InputStream in = {anchor_ident}.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.b64\")) {{\n            if (in == null) {{\n                throw new IllegalStateException(\n                        \"baml_sdk/inlinedbaml.b64 not found on the classpath \u{2014} is the generated resource root registered?\");\n            }}\n            byte[] b64 = in.readAllBytes();\n            byte[] bytecode = java.util.Base64.getMimeDecoder().decode(b64);\n            baml_bridge.BamlFfi.initFromBytecode(bytecode);\n        }} catch (java.io.IOException e) {{\n            throw new java.io.UncheckedIOException(\"failed to read embedded BAML bytecode\", e);\n        }}\n    }}\n\n    /** Forces class initialization (and thus runtime init). No-op afterwards. */\n    public static void ensure() {{}}\n}}\n"
+        "/**\n * Runtime anchor for the generated SDK: loading this class registers\n * the type map (BAML FQN \u{2194} generated class, with field declaration\n * order) and initializes the BAML runtime from the embedded bytecode\n * resource (idempotent) \u{2014} the Java analog of Python's root-package\n * import side effect. Every generated binding holder forces this via\n * {{@link #ensure()}}.\n */\npublic final class {anchor_ident} {{\n    private {anchor_ident}() {{}}\n\n    static {{\n{registrations}        try (java.io.InputStream in = {anchor_ident}.class.getResourceAsStream(\"inlinedbaml.b64\")) {{\n            if (in == null) {{\n                throw new IllegalStateException(\n                        \"baml_sdk/inlinedbaml.b64 not found on the classpath \u{2014} is the generated resource root registered?\");\n            }}\n            byte[] b64 = in.readAllBytes();\n            byte[] bytecode = java.util.Base64.getMimeDecoder().decode(b64);\n            baml_bridge.BamlFfi.initFromBytecode(bytecode);\n        }} catch (java.io.IOException e) {{\n            throw new java.io.UncheckedIOException(\"failed to read embedded BAML bytecode\", e);\n        }}\n    }}\n\n    /** Forces class initialization (and thus runtime init). No-op afterwards. */\n    public static void ensure() {{}}\n}}\n"
     );
     let anchor_body = if embedded_baml_toml.is_some() {
         anchor_body.replace(
             "            baml_bridge.BamlFfi.initFromBytecode(bytecode);",
             &format!(
-                "            try (java.io.InputStream manifestIn = {anchor_ident}.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.toml\")) {{\n                if (manifestIn == null) {{\n                    throw new IllegalStateException(\"baml_sdk/inlinedbaml.toml not found on the classpath\");\n                }}\n                String embeddedBamlToml = new String(manifestIn.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);\n                baml_bridge.BamlFfi.initFromBytecode(bytecode, embeddedBamlToml);\n            }}"
+                "            try (java.io.InputStream manifestIn = {anchor_ident}.class.getResourceAsStream(\"inlinedbaml.toml\")) {{\n                if (manifestIn == null) {{\n                    throw new IllegalStateException(\"baml_sdk/inlinedbaml.toml not found on the classpath\");\n                }}\n                String embeddedBamlToml = new String(manifestIn.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);\n                baml_bridge.BamlFfi.initFromBytecode(bytecode, embeddedBamlToml);\n            }}"
             ),
         )
     } else {
         anchor_body
     };
+    let key = baml_program_identity::program_key(baml_bytecode)
+        .unwrap_or_else(|_| baml_program_identity::key_from_canonical(baml_bytecode));
+    let anchor_body = anchor_body.replace("    static {", &format!("    public static final baml_bridge.BamlProgram PROGRAM = new baml_bridge.BamlProgram(0x{key:016x}L, {anchor_ident}.class.getClassLoader());\n    static {{\n        try (var programScope = PROGRAM.enter()) {{"))
+        .replace("    public static void ensure()", "    }\n    public static void ensure()");
+    for content in out.values_mut() {
+        *content = content
+            .replace(
+                "baml_bridge.BamlFfi.callSync(",
+                &format!("{anchor_fqn}.PROGRAM.callSync("),
+            )
+            .replace(
+                "baml_bridge.BamlFfi.callAsync(",
+                &format!("{anchor_fqn}.PROGRAM.callAsync("),
+            );
+    }
     out.insert(
         java_file_path(&root, anchor_ident),
         with_package(&root, &anchor_body),
@@ -1003,7 +1018,7 @@ mod tests {
             "{file}"
         );
         assert!(file.contains(
-            "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0);"
+            "return (java.lang.Long) baml_sdk.Baml.PROGRAM.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0);"
         ));
         assert!(file.contains(
             "public static java.util.concurrent.CompletableFuture<java.lang.Long> extract_resume_async(long x) {"
@@ -1013,7 +1028,7 @@ mod tests {
         // wildcard-bridge cast — no `thenApply` stage.
         assert!(
             file.contains(
-                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0);"
+                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) baml_sdk.Baml.PROGRAM.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0);"
             ),
             "{file}"
         );
@@ -1029,7 +1044,7 @@ mod tests {
         );
         assert!(
             file.contains(
-                "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, ctx);"
+                "return (java.lang.Long) baml_sdk.Baml.PROGRAM.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, ctx);"
             ),
             "{file}"
         );
@@ -1039,7 +1054,7 @@ mod tests {
         );
         assert!(
             file.contains(
-                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, ctx);"
+                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) baml_sdk.Baml.PROGRAM.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, ctx);"
             ),
             "{file}"
         );
@@ -1141,7 +1156,7 @@ mod tests {
         // free function, bound to `<class fqn>.<method>`.
         assert!(file.contains("public static java.lang.String create(java.lang.String name) {"));
         assert!(file.contains(
-            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.create\", new java.lang.String[] {\"name\"}, new java.lang.Object[] {name}, $RET0);"
+            "return (java.lang.String) baml_sdk.Baml.PROGRAM.callSync(\"user.methods_on_classes.Greeter.create\", new java.lang.String[] {\"name\"}, new java.lang.Object[] {name}, $RET0);"
         ));
         assert!(file.contains(
             "public static java.util.concurrent.CompletableFuture<java.lang.String> create_async(java.lang.String name) {"
@@ -1152,14 +1167,14 @@ mod tests {
         assert!(file.contains("public java.lang.String greet(java.lang.String greeting) {"));
         assert!(!file.contains("public static java.lang.String greet("));
         assert!(file.contains(
-            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0);"
+            "return (java.lang.String) baml_sdk.Baml.PROGRAM.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0);"
         ));
         assert!(file.contains(
             "public java.util.concurrent.CompletableFuture<java.lang.String> greet_async(java.lang.String greeting) {"
         ));
         assert!(!file.contains("thenApply"), "{file}");
         assert!(file.contains(
-            "return (java.util.concurrent.CompletableFuture<java.lang.String>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0);"
+            "return (java.util.concurrent.CompletableFuture<java.lang.String>) (java.util.concurrent.CompletableFuture<?>) baml_sdk.Baml.PROGRAM.callAsync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0);"
         ), "{file}");
 
         // Trailing-`ctx` overloads land on both the static and instance methods.
@@ -1170,7 +1185,7 @@ mod tests {
             "public java.lang.String greet(java.lang.String greeting, baml_bridge.BamlCallContext ctx) {"
         ), "{file}");
         assert!(file.contains(
-            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0, ctx);"
+            "return (java.lang.String) baml_sdk.Baml.PROGRAM.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0, ctx);"
         ), "{file}");
     }
 
@@ -1226,7 +1241,7 @@ mod tests {
         // required arg, so untouched optionals are absent (engine defaults).
         assert!(file.contains("public static long optional_args_probe(long x) {"));
         assert!(file.contains(
-            "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0);"
+            "return (java.lang.Long) baml_sdk.Baml.PROGRAM.callSync(\"user.optional_args_probe\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0);"
         ));
 
         // The configurator overload pair: a trailing Consumer<...$Opts>.
@@ -1242,7 +1257,7 @@ mod tests {
         assert!(file.contains("optional_args_probe$Opts $opts = new optional_args_probe$Opts();"));
         assert!(file.contains("$cfg.accept($opts);"));
         assert!(file.contains(
-            "baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0);"
+            "baml_sdk.Baml.PROGRAM.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0);"
         ));
 
         // The configurator overload gains its own trailing-`ctx` pair, with
@@ -1254,7 +1269,7 @@ mod tests {
             "public static java.util.concurrent.CompletableFuture<java.lang.Long> optional_args_probe_async(long x, java.util.function.Consumer<optional_args_probe$Opts> $cfg, baml_bridge.BamlCallContext ctx) {"
         ), "{file}");
         assert!(file.contains(
-            "baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0, ctx);"
+            "baml_sdk.Baml.PROGRAM.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0, ctx);"
         ), "{file}");
 
         // Nested opts class with BOXED fluent setters (null must be passable).
@@ -1363,7 +1378,7 @@ mod tests {
             "public long probe(long arg0, java.util.function.Consumer<probe$Opts> $cfg) {"
         ));
         assert!(file.contains(
-            "baml_bridge.BamlFfi.callSync(\"user.OptBox.probe\", $opts.$names(new java.lang.String[] {\"self\", \"arg0\"}), $opts.$args(new java.lang.Object[] {this, arg0}), $RET0);"
+            "baml_sdk.Baml.PROGRAM.callSync(\"user.OptBox.probe\", $opts.$names(new java.lang.String[] {\"self\", \"arg0\"}), $opts.$args(new java.lang.Object[] {this, arg0}), $RET0);"
         ));
         // The nested opts class is static (instantiable from an instance method).
         assert!(file.contains("public static final class probe$Opts {"));
@@ -1750,7 +1765,7 @@ mod tests {
         );
         assert!(
             file.contains(
-                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, null, types);"
+                "return (T) baml_sdk.Baml.PROGRAM.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, null, types);"
             ),
             "{file}"
         );
@@ -1844,7 +1859,7 @@ mod tests {
         // bag through the runtime call.
         assert!(
             file.contains(
-                "baml_bridge.BamlFfi.callSync(\"user.probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0, ctx, types);"
+                "baml_sdk.Baml.PROGRAM.callSync(\"user.probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0, ctx, types);"
             ),
             "{file}"
         );

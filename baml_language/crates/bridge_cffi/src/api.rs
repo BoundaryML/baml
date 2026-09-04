@@ -127,6 +127,17 @@ pub type BamlMediaConstructorFn = unsafe extern "C" fn(
 pub type BamlMediaAccessorFn =
     unsafe extern "C" fn(key: u64, handle_type: i32, out: *mut Buffer) -> BamlCffiStatus;
 pub type BamlRegisterBridgeFn = unsafe extern "C" fn(info: *const BamlBridgeInfoV1) -> Buffer;
+pub type BamlRegisterProgramFn = unsafe extern "C" fn(
+    key: u64,
+    bytecode: *const u8,
+    length: usize,
+    metadata: *const libc::c_char,
+) -> Buffer;
+pub type BamlCreateRuntimeFn =
+    unsafe extern "C" fn(bytecode: *const u8, length: usize, out_key: *mut u64) -> Buffer;
+pub type BamlUnregisterRuntimeFn = extern "C" fn(key: u64) -> Buffer;
+pub type BamlCallFunctionForRuntimeFn =
+    extern "C" fn(key: u64, encoded_args: *const u8, length: usize, callback_id: u32);
 pub type BamlGetApiV1Fn = extern "C" fn() -> *const BamlApiV1;
 
 /// First version of the shared BAML C API.
@@ -257,9 +268,24 @@ pub struct BamlApiV1 {
     /// Replace the runtime from bytecode after validating embedded generation metadata.
     pub initialize_runtime_from_bytecode_with_metadata:
         BamlInitializeRuntimeFromBytecodeWithMetadataFn,
+    /// Append-only keyed API. Generated keys are process-owned and idempotent for identical contents.
+    pub register_program: BamlRegisterProgramFn,
+    /// Allocate an independent dynamic registration; out_key is written only on success.
+    pub create_runtime: BamlCreateRuntimeFn,
+    /// Remove a dynamic registration. In-flight calls retain their engine.
+    pub unregister_runtime: BamlUnregisterRuntimeFn,
+    /// Route a call using all 64 bits of its originating registration key.
+    pub call_function_for_runtime: BamlCallFunctionForRuntimeFn,
+    /// Compute a generated identity from canonical program contents.
+    pub program_key: BamlCreateRuntimeFn,
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
+    program_key: crate::program_key_ffi,
+    register_program: crate::register_program_ffi,
+    create_runtime: crate::create_runtime_ffi,
+    unregister_runtime: crate::unregister_runtime_ffi,
+    call_function_for_runtime: crate::call_function_for_runtime,
     abi_version: BAML_API_V1_ABI_VERSION,
     struct_size: std::mem::size_of::<BamlApiV1>(),
     version: crate::version,

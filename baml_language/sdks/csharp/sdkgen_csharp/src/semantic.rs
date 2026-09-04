@@ -3463,7 +3463,7 @@ fn render_program(
         ));
     }
     source.push_str(&format!(
-        "        {registry} = builder.Build();\n    }}\n\n    private static global::Baml.Generated.V1.BamlGeneratedProgram Register() =>\n        global::Baml.Generated.V1.BamlGeneratedContract.RegisterProgram(\n            global::Baml.Generated.V1.BamlGeneratedContract.Version,\n            Bytecode,\n            Fingerprint,\n            {embedded_baml_toml},\n            {registry});\n\n",
+        "        {registry} = builder.Build();\n    }}\n\n    private static global::Baml.Generated.V1.BamlGeneratedProgram Register() =>\n        global::Baml.Generated.V1.BamlGeneratedContract.RegisterProgram(\n            global::Baml.Generated.V1.BamlGeneratedContract.Version,\n            Bytecode,\n            Fingerprint,\n            {embedded_baml_toml},\n            {registry},\n            __BAML_PROGRAM_KEY__UL);\n\n",
         embedded_baml_toml = embedded_baml_toml
             .map(csharp_string)
             .unwrap_or_else(|| "null".to_string()),

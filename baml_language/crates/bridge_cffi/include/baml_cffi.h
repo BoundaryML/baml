@@ -47,6 +47,11 @@
 #define BAML_API_V1_ABI_VERSION 2
 
 /**
+ * Generated identities occupy the upper half; dynamic identities the lower half.
+ */
+#define GENERATED_KEY_BIT (1 << 63)
+
+/**
  * Handle-type values returned by media constructors and carried on the wire.
  *
  * Values 3 and 4 are permanently reserved. Host-value handle keys use their
@@ -303,6 +308,22 @@ typedef struct BamlBuffer (*BamlInitializeRuntimeFromBytecodeWithMetadataFn)(con
                                                                              size_t length,
                                                                              const char *baml_toml);
 
+typedef struct BamlBuffer (*BamlRegisterProgramFn)(uint64_t key,
+                                                   const uint8_t *bytecode,
+                                                   size_t length,
+                                                   const char *metadata);
+
+typedef struct BamlBuffer (*BamlCreateRuntimeFn)(const uint8_t *bytecode,
+                                                 size_t length,
+                                                 uint64_t *out_key);
+
+typedef struct BamlBuffer (*BamlUnregisterRuntimeFn)(uint64_t key);
+
+typedef void (*BamlCallFunctionForRuntimeFn)(uint64_t key,
+                                             const uint8_t *encoded_args,
+                                             size_t length,
+                                             uint32_t callback_id);
+
 /**
  * First version of the shared BAML C API.
  *
@@ -481,6 +502,26 @@ typedef struct BamlApiV1 {
    * Replace the runtime from bytecode after validating embedded generation metadata.
    */
   BamlInitializeRuntimeFromBytecodeWithMetadataFn initialize_runtime_from_bytecode_with_metadata;
+  /**
+   * Append-only keyed API. Generated keys are process-owned and idempotent for identical contents.
+   */
+  BamlRegisterProgramFn register_program;
+  /**
+   * Allocate an independent dynamic registration; out_key is written only on success.
+   */
+  BamlCreateRuntimeFn create_runtime;
+  /**
+   * Remove a dynamic registration. In-flight calls retain their engine.
+   */
+  BamlUnregisterRuntimeFn unregister_runtime;
+  /**
+   * Route a call using all 64 bits of its originating registration key.
+   */
+  BamlCallFunctionForRuntimeFn call_function_for_runtime;
+  /**
+   * Compute a generated identity from canonical program contents.
+   */
+  BamlCreateRuntimeFn program_key;
 } BamlApiV1;
 
 typedef const struct BamlApiV1 *(*BamlGetApiV1Fn)(void);

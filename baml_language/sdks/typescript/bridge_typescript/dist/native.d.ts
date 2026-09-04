@@ -96,19 +96,14 @@ export declare class BamlPdf {
   _toHandle(): BamlHandle
 }
 
-/** The main BAML runtime. A zero-sized handle (see module docs). */
+/** A handle to one uint64 runtime registration in the shared CFFI library. */
 export declare class BamlRuntime {
-  /**
-   * Initialize the process-global runtime from in-memory BAML source
-   * files. `bridge_cffi::initialize_runtime` is a single-slot singleton, so
-   * a second call replaces the prior runtime; the result is also reachable
-   * via the module-level `getRuntime()`. Renamed from `fromFiles` for
-   * parity with `bridge_python`'s sole `initialize_runtime` constructor and
-   * the `initializeRuntime(...)` import the spec docs use.
-   */
+  get runtimeKey(): bigint
+  close(): void
+  /** Create an independent dynamic registration from BAML source files. */
   static initializeRuntime(rootPath: string, files: Record<string, string>): BamlRuntime
-  /** Initialize the process-global runtime from precompiled BAML bytecode. */
-  static initializeRuntimeFromBytecode(bytecode: Buffer, embeddedBamlToml?: string | undefined | null): BamlRuntime
+  /** Create a dynamic runtime, or register a generated uint64 identity, from precompiled BAML bytecode. */
+  static initializeRuntimeFromBytecode(bytecode: Buffer, embeddedBamlToml?: string | undefined | null, runtimeKey?: bigint | undefined | null): BamlRuntime
   /** Call a BAML function synchronously (blocking). */
   callFunctionSync(argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Buffer
   /** Call a BAML function asynchronously. */
@@ -216,13 +211,8 @@ export declare function flushEvents(): void
 
 export declare function getBridgeRuntimeVersion(): string
 
-/**
- * Return the process-global `BamlRuntime`, or a `BamlError`-shaped
- * `napi::Error` if `initializeRuntime` has not run yet. The handle is
- * zero-sized; the `Arc<dyn Bex>` lives in `bridge_cffi`. Mirrors
- * `bridge_python`'s module-level `get_runtime()`.
- */
-export declare function getRuntime(): BamlRuntime
+/** Resolve an explicit uint64 registration, or the only registered runtime. */
+export declare function getRuntime(runtimeKey?: bigint | undefined | null): BamlRuntime
 
 export declare function getToolchainVersion(): string
 
@@ -291,10 +281,9 @@ export declare function registerHostCallable(callable: (callId: number, argsByte
  * and the TS-side map entry would be torn down with the process
  * anyway.
  *
- * Note this is the inverse of `register_host_callable`'s dispatch tsfn,
- * which is `weak::<false>()` — that one pins the loop because a hung
- * host callback awaiting completion *must* keep the loop alive so the
- * JS callback can actually run.
+ * Dispatch callbacks also use weak libuv references. Pending native call
+ * promises keep the loop alive; the beforeExit shutdown hook drains spawned
+ * BAML work. Idle program registrations must not prevent that hook from running.
  *
  * Exposed to JS as `registerHostValueReleaseCallback(cb)`. Must be called
  * exactly once at SDK module init, before any host call is dispatched.
@@ -311,7 +300,7 @@ export declare function registerUnhandledSpawnErrorCallback(callback: (errorByte
  * registers a callable for an early kwarg and then fails to encode a later
  * kwarg, the `CallFunctionArgs` is never sent, so the engine never decodes
  * (and so never releases) that key. Without this, the registry entry — and
- * its strong `weak::<false>` tsfn ref, which keeps the libuv loop alive —
+ * its retained JavaScript function reference —
  * would leak for the life of the process. The encoder calls this for every
  * key it registered during a failed encode.
  */

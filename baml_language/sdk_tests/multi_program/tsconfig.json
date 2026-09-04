@@ -1,0 +1,1 @@
+{"compilerOptions":{"target":"ES2022","module":"NodeNext","moduleResolution":"NodeNext","strict":true,"skipLibCheck":true,"outDir":".compiled"},"include":["test_typescript.ts","a/typescript/**/*.ts","a_copy/typescript/**/*.ts", "b/typescript/**/*.ts"]}

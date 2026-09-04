@@ -13,7 +13,7 @@ use prost::Message as _;
 
 use crate::{BamlValue, Error, SdkError, capi, completion, decode, wire};
 
-/// Initialize (or replace) the process-global runtime from the
+/// Create a legacy unkeyed runtime registration from the
 /// borsh-encoded bytecode a generated SDK embeds.
 ///
 /// Generated SDKs call this lazily on first use; it is public for hosts
@@ -48,7 +48,7 @@ pub fn initialize_from_bytecode_with_metadata(
     api.take_status(status).map_err(SdkError::new)
 }
 
-/// Initialize (or replace) the process-global runtime by compiling BAML
+/// Create a legacy unkeyed runtime registration by compiling BAML
 /// source files (`file name → content`, names relative to `root_path`).
 pub fn initialize_from_files(
     root_path: &str,
@@ -140,6 +140,15 @@ fn dispatch(
     kwargs: Vec<wire::InboundMapEntry>,
     type_args: Vec<wire::BamlTyArg>,
 ) -> Result<completion::Receiver, SdkError> {
+    dispatch_for_runtime(None, fqn, kwargs, type_args)
+}
+
+fn dispatch_for_runtime(
+    key: Option<u64>,
+    fqn: &str,
+    kwargs: Vec<wire::InboundMapEntry>,
+    type_args: Vec<wire::BamlTyArg>,
+) -> Result<completion::Receiver, SdkError> {
     let api = capi::api()?;
     let receiver = completion::register(api);
     // Host-callable dispatch must be installed before the engine can hold
@@ -161,7 +170,15 @@ fn dispatch(
     // SAFETY: `args` outlives the call; the engine copies it before returning.
     #[expect(unsafe_code)]
     unsafe {
-        (api.call_function)(args.as_ptr(), args.len(), receiver.dispatch_id());
+        match key {
+            Some(key) => (api.call_function_for_runtime)(
+                key,
+                args.as_ptr(),
+                args.len(),
+                receiver.dispatch_id(),
+            ),
+            None => (api.call_function)(args.as_ptr(), args.len(), receiver.dispatch_id()),
+        }
     }
     Ok(receiver)
 }
@@ -209,5 +226,71 @@ mod tests {
             error.to_string(),
             "cannot invoke a zero BAML function handle"
         );
+    }
+}
+
+/// Register generated contents. Repeated identical registrations share the native engine.
+pub fn register_program(key: u64, bytecode: &[u8], metadata: Option<&str>) -> Result<(), SdkError> {
+    let api = capi::api()?;
+    let metadata = metadata
+        .map(CString::new)
+        .transpose()
+        .map_err(|_| SdkError::new("metadata contains NUL"))?;
+    #[expect(unsafe_code)]
+    let status = unsafe {
+        (api.register_program)(
+            key,
+            bytecode.as_ptr(),
+            bytecode.len(),
+            metadata.as_ref().map_or(std::ptr::null(), |s| s.as_ptr()),
+        )
+    };
+    api.take_status(status).map_err(SdkError::new)
+}
+
+pub fn invoke_sync_for_runtime<R: BamlValue, E: BamlValue>(
+    key: u64,
+    fqn: &str,
+    kwargs: Vec<wire::InboundMapEntry>,
+    type_args: Vec<wire::BamlTyArg>,
+) -> Result<R, Error<E>> {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return Err(Error::CalledSyncFromAsync);
+    }
+    let receiver = dispatch_for_runtime(Some(key), fqn, kwargs, type_args).map_err(Error::Sdk)?;
+    decode::decode_result(&receiver.wait_blocking())
+}
+pub async fn invoke_for_runtime<R: BamlValue, E: BamlValue>(
+    key: u64,
+    fqn: &str,
+    kwargs: Vec<wire::InboundMapEntry>,
+    type_args: Vec<wire::BamlTyArg>,
+) -> Result<R, Error<E>> {
+    let receiver = dispatch_for_runtime(Some(key), fqn, kwargs, type_args).map_err(Error::Sdk)?;
+    decode::decode_result(&receiver.wait().await)
+}
+
+/// An independent dynamic runtime registration. Call `close` when no new named calls are needed.
+/// In-flight calls and native capabilities retain their acquired runtime ownership.
+pub struct Runtime {
+    key: u64,
+}
+impl Runtime {
+    pub fn from_bytecode(bytecode: &[u8]) -> Result<Self, SdkError> {
+        let api = capi::api()?;
+        let mut key = 0;
+        #[expect(unsafe_code)]
+        let status = unsafe { (api.create_runtime)(bytecode.as_ptr(), bytecode.len(), &mut key) };
+        api.take_status(status).map_err(SdkError::new)?;
+        Ok(Self { key })
+    }
+    pub fn key(&self) -> u64 {
+        self.key
+    }
+    pub fn close(self) -> Result<(), SdkError> {
+        let api = capi::api()?;
+        #[expect(unsafe_code)]
+        let status = unsafe { (api.unregister_runtime)(self.key) };
+        api.take_status(status).map_err(SdkError::new)
     }
 }

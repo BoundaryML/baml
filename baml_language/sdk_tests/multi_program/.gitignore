@@ -1,0 +1,9 @@
+node_modules/
+.compiled/
+a_copy/
+__pycache__/
+.pytest_cache/
+a/python/
+a/typescript/
+b/python/
+b/typescript/

@@ -37,7 +37,8 @@ public static partial class BamlGeneratedContract
         ReadOnlyMemory<byte> bytecode,
         string fingerprint,
         string? embeddedBamlToml,
-        BamlGeneratedRegistry registry)
+        BamlGeneratedRegistry registry,
+        ulong? runtimeKey = null)
     {
         RequireContractVersion(contractVersion);
 
@@ -56,7 +57,7 @@ public static partial class BamlGeneratedContract
         }
 
         ProgramNativeState nativeState =
-            ProgramRegistrar.Register(bytecode.Span, fingerprint, embeddedBamlToml);
+            ProgramRegistrar.Register(bytecode.Span, fingerprint, embeddedBamlToml, runtimeKey);
         var program = new BamlGeneratedProgram(registry, nativeState);
         registry.AttachProgram(program);
         return program;

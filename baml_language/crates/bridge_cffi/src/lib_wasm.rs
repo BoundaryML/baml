@@ -1,6 +1,6 @@
 //! Wasm runtime implementation for `bridge_cffi`.
 
-use std::{cell::RefCell, sync::Arc};
+use std::sync::Arc;
 
 use bex_project::{Bex, BexArgs};
 use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
@@ -11,28 +11,6 @@ use crate::{
     function_call_context_builder,
 };
 
-thread_local! {
-    static RUNTIME: RefCell<Option<Arc<dyn Bex>>> = RefCell::new(None);
-}
-
-pub(crate) fn replace_runtime(runtime: Arc<dyn Bex>) -> Result<(), BridgeError> {
-    RUNTIME.with(|slot| {
-        let previous = slot.borrow_mut().replace(runtime);
-        if let Some(previous) = previous {
-            wasm_bindgen_futures::spawn_local(previous.shutdown());
-        }
-    });
-    Ok(())
-}
-
-pub(crate) fn take_runtime() -> Result<Option<Arc<dyn Bex>>, BridgeError> {
-    Ok(RUNTIME.with(|slot| slot.borrow_mut().take()))
-}
-
-pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
-    RUNTIME.with(|slot| slot.borrow().clone().ok_or(BridgeError::NotInitialized))
-}
-
 struct DecodedCall {
     runtime: Arc<dyn Bex>,
     target: bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget,
@@ -40,13 +18,14 @@ struct DecodedCall {
     context: bex_project::FunctionCallContext,
 }
 
-fn decode_call(encoded_args: &[u8]) -> Result<DecodedCall, BridgeError> {
+fn decode_call(runtime_key: Option<u64>, encoded_args: &[u8]) -> Result<DecodedCall, BridgeError> {
     use bridge_ctypes::baml_bridge::cffi::{CallFunctionArgs, call_function_args::CallTarget};
 
     let call = CallFunctionArgs::decode(encoded_args).map_err(bridge_ctypes::CtypesError::from)?;
     if call.call_id == 0 {
         return Err(BridgeError::InvalidCallId);
     }
+    let runtime = crate::runtime_for_call(runtime_key, &call)?;
     let target = call.call_target.ok_or(BridgeError::MissingCallTarget)?;
     if matches!(target, CallTarget::FunctionHandle(_)) && !call.type_args.is_empty() {
         return Err(BridgeError::FunctionHandleTypeArgs);
@@ -58,7 +37,7 @@ fn decode_call(encoded_args: &[u8]) -> Result<DecodedCall, BridgeError> {
         .with_type_defs(type_args.type_defs)
         .build();
     Ok(DecodedCall {
-        runtime: crate::get_runtime()?,
+        runtime,
         target,
         args: kwargs.into(),
         context,
@@ -66,9 +45,13 @@ fn decode_call(encoded_args: &[u8]) -> Result<DecodedCall, BridgeError> {
 }
 
 pub async fn call_function_in_wasm(encoded_args: &[u8]) -> Vec<u8> {
+    call_function_in_wasm_for_runtime(None, encoded_args).await
+}
+
+pub async fn call_function_in_wasm_for_runtime(key: Option<u64>, encoded_args: &[u8]) -> Vec<u8> {
     use bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget;
 
-    let call = match decode_call(encoded_args) {
+    let call = match decode_call(key, encoded_args) {
         Ok(call) => call,
         Err(error) => return error_to_outbound(error),
     };

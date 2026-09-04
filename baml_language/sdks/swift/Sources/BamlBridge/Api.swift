@@ -24,9 +24,17 @@ enum BamlApi {
                     + "(abi_version \(ptr.pointee.abi_version), struct_size \(ptr.pointee.struct_size))"
             )
         }
+        guard ptr.pointee.struct_size >= MemoryLayout<BamlApiV1>.size else {
+            fatalError("BAML native library lacks uint64 runtime registration support")
+        }
         return ptr.pointee
     }()
 
+    static let programKey = v1.program_key!
+    static let createRuntime = v1.create_runtime!
+    static let unregisterRuntime = v1.unregister_runtime!
+    static let registerProgram = v1.register_program!
+    static let callFunctionForRuntime = v1.call_function_for_runtime!
     static let version = v1.version!
     static let initializeRuntimeFromBytecode = v1.initialize_runtime_from_bytecode!
     static let freeBuffer = v1.free_buffer!

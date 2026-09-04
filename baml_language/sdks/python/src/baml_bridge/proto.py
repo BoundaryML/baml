@@ -36,7 +36,7 @@ from ._stream import BamlStream
 from ._function_spec import BamlFunctionSpec
 from ._runtime_value import BamlRuntimeValue
 from .errors import BamlCancelledError, BamlError, BamlPanic, attach_baml_traceback
-from .typemap import BamlTypeMap, get_type_map
+from .typemap import BamlTypeMap, get_type_map, runtime_bound
 
 
 def _is_pydantic_model(value: Any) -> bool:
@@ -464,7 +464,11 @@ def _set_inbound_value(
         and not isinstance(value, type)
         and not _is_pydantic_model(value)
     ):
-        key = register_host_callable(value)
+        from .typemap import bind_type_map
+        type_map = get_type_map()
+        callback = bind_type_map(value, lambda: type_map)
+        callback._baml_type_map = type_map
+        key = register_host_callable(callback)
         # Record the key so the encode path can release it if a later
         # kwarg fails to encode (the call never reaches the engine, so the
         # engine would never decode — and never release — this key).
@@ -1125,10 +1129,11 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
 class BamlClosure:
     """A reusable, engine-owned BAML callable."""
 
-    __slots__ = ("_handle", "_required_names", "_optional_names")
+    __slots__ = ("_type_map", "_handle", "_required_names", "_optional_names")
 
     def __init__(self, handle: BamlPyHandle, function_ty: Any):
         mode = baml_type_pb2.BamlTyFunctionParamMode
+        self._type_map = get_type_map()
         self._handle = handle
         self._required_names = [
             param.name if param.HasField("name") else f"arg{index}"
@@ -1141,6 +1146,7 @@ class BamlClosure:
             if param.mode == mode.BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL
         ]
 
+    @runtime_bound
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         if len(args) > len(self._required_names):
             raise TypeError(
@@ -1161,7 +1167,7 @@ class BamlClosure:
             call_id,
             function_handle=self._handle._key_for_call(),
         )
-        result_bytes = _get_runtime().call_function_sync(args_proto)
+        result_bytes = (self._type_map.runtime or _get_runtime()).call_function_sync(args_proto)
         return decode_call_result(result_bytes)
 
     def __repr__(self) -> str:

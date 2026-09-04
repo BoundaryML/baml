@@ -9,6 +9,7 @@ license.workspace = true
 crate-type = [ "cdylib", "rlib" ]
 
 [dependencies]
+futures.workspace = true
 baml_version = { workspace = true }
 bex_project = { workspace = true }
 bridge_cffi = { workspace = true, default-features = false }

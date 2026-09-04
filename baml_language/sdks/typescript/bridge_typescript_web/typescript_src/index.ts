@@ -1,3 +1,4 @@
+import { typeMapForRuntime, withTypeMap } from "./shared/typemap.js";
 import { BamlCallContext, BamlRuntime, Collector, HostSpanManager, cancelFunctionCall as nativeCancelFunctionCall, getRuntime, installHostCallableDispatchFactory, newFunctionCall as nativeNewFunctionCall } from "./native.js";
 import { decodeCallResult, encodeCallArgs, makeHostCallableDispatch } from "./shared/proto.js";
 import { attachCallContext } from "./shared/call_context.js";
@@ -18,12 +19,12 @@ export { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInv
 export { BamlPrompt, decodeCallResult, encodeCallArgs } from "./shared/proto.js";
 export type { BamlPromptCallOptions, BamlPromptMessage } from "./shared/proto.js";
 
-export function initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string): void {
-  BamlRuntime.initializeRuntimeFromBytecode(bytecode, embeddedBamlToml);
+export function initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string, runtimeKey?: bigint): BamlRuntime {
+  return BamlRuntime.initializeRuntimeFromBytecode(bytecode, embeddedBamlToml, runtimeKey);
 }
 
-export function initializeRuntime(srcDir: string, files: Record<string, string>): void {
-  BamlRuntime.initializeRuntime(srcDir, files);
+export function initializeRuntime(srcDir: string, files: Record<string, string>): BamlRuntime {
+  return BamlRuntime.initializeRuntime(srcDir, files);
 }
 
 export class FunctionResult {
@@ -33,22 +34,25 @@ export class FunctionResult {
 }
 
 export function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): FunctionResult {
+  const typeMap = typeMapForRuntime(rt);
   const callId = nativeNewFunctionCall();
-  const args = encodeCallArgs(kwargs, { syncMode: true, callId, functionName });
+  const args = withTypeMap(typeMap, () => encodeCallArgs(kwargs, { syncMode: true, callId, functionName }));
   const callCtxBinding = attachCallContext(callCtx, callId);
   try {
-    return new FunctionResult(decodeCallResult(rt.callFunctionSync(args, ctx ?? null, collectors ?? null)));
+    return withTypeMap(typeMap, () => new FunctionResult(decodeCallResult(rt.callFunctionSync(args, ctx ?? null, collectors ?? null))));
   } finally {
     callCtxBinding.detach();
   }
 }
 
 export async function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): Promise<FunctionResult> {
+  const typeMap = typeMapForRuntime(rt);
   const callId = nativeNewFunctionCall();
-  const args = encodeCallArgs(kwargs, { callId, functionName });
+  const args = withTypeMap(typeMap, () => encodeCallArgs(kwargs, { callId, functionName }));
   const callCtxBinding = attachCallContext(callCtx, callId);
   try {
-    return new FunctionResult(decodeCallResult(await rt.callFunction(args, ctx ?? null, collectors ?? null)));
+    const result = await rt.callFunction(args, ctx ?? null, collectors ?? null);
+    return withTypeMap(typeMap, () => new FunctionResult(decodeCallResult(result)));
   } finally {
     callCtxBinding.detach();
   }
