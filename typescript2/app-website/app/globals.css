@@ -530,7 +530,6 @@
 
   color: var(--vsc-text);
   color-scheme: light;
-
   background-color: var(--vsc-bg);
 }
 
@@ -586,7 +585,6 @@
 
   color: var(--vsc-text);
   color-scheme: dark;
-
   background-color: var(--vsc-bg);
 }
 
