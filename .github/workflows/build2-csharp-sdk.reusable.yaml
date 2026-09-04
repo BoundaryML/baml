@@ -1,0 +1,138 @@
+name: BAML C# - Assemble product package
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        required: true
+      source_sha:
+        description: "Exact repository commit whose product is under test"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  package:
+    name: Assemble one provenance-bound package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.301
+
+      - name: Install cross-platform package inspection tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends llvm-18
+          llvm_bin="/usr/lib/llvm-18/bin"
+          for tool in llvm-nm llvm-objdump llvm-readobj; do
+            test -x "$llvm_bin/$tool"
+          done
+          echo "$llvm_bin" >> "$GITHUB_PATH"
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: bridge-cffi-*
+          path: native-downloads
+          merge-multiple: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: csharp-neutral-preparation
+          path: neutral-preparation
+
+      - name: Stamp the frozen release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          diff -u \
+            <(jq -S . release-plan.json) \
+            <(jq -S . neutral-preparation/release-plan.json)
+          scripts/baml-language-version stamp --plan release-plan.json
+          canonical_version="$(jq -r .canonical_version release-plan.json)"
+          nuget_version="$(jq -r .registry_versions.nuget release-plan.json)"
+          test "$(sed -n \
+            's#^pub const CANONICAL_VERSION: &str = "\([^"]*\)";$#\1#p' \
+            baml_language/crates/baml_version/src/lib.rs)" = \
+            "$canonical_version"
+          test "$(sed -n \
+            's#^    <Version>\([^<]*\)</Version>$#\1#p' \
+            baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj)" = \
+            "$nuget_version"
+
+      - name: Stage and bind the required shared producers
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          RELEASE_VERSION: ${{ fromJSON(inputs.release_plan_json).canonical_version }}
+        run: |
+          set -euo pipefail
+          scripts/baml-csharp-release-contract stage-native \
+            --downloads native-downloads \
+            --staging staging \
+            --source-sha "$SOURCE_SHA" \
+            --release-version "$RELEASE_VERSION" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --provenance native-provenance.json \
+            --manifest native-manifest.sha256
+
+      - name: Assemble the exact product package
+        run: |
+          set -euo pipefail
+          product_root="$RUNNER_TEMP/csharp-product"
+          package_output="$product_root/packages"
+          generated_output="$PWD/neutral-preparation/baml_sdk"
+          mkdir -p "$package_output"
+          scripts/baml-csharp-release-contract verify-generated-sources \
+            --root "$generated_output" \
+            --manifest neutral-preparation/generated-sources.sha256
+          baml_language/sdks/csharp/bridge_csharp/tools/pack-product.sh \
+            staging \
+            native-manifest.sha256 \
+            native-provenance.json \
+            release-plan.json \
+            "$package_output"
+          package="$(find "$package_output" -maxdepth 1 \
+            -type f -name 'baml-bridge.*.nupkg' -print)"
+          test -n "$package"
+          test "$(printf '%s\n' "$package" | wc -l)" -eq 1
+          mkdir -p product-output
+          cp "$package" product-output/
+          cmp "$package" "product-output/$(basename "$package")"
+          cp native-manifest.sha256 product-output/
+          cp native-provenance.json product-output/
+          cp release-plan.json product-output/
+          cp neutral-preparation/generated-sources.sha256 product-output/
+          cp -R "$generated_output" product-output/
+          mkdir -p product-output/nuget-smoke
+          cp \
+            baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.NuGetPackageSmoke/Baml.Bridge.NuGetPackageSmoke.csproj \
+            baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.NuGetPackageSmoke/Program.cs \
+            product-output/nuget-smoke/
+          (
+            cd product-output
+            sha256sum "$(basename "$package")" > product-package.sha256
+          )
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: csharp-product-package
+          path: product-output
+          if-no-files-found: error
+          overwrite: true

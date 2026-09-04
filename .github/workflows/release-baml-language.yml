@@ -3,7 +3,7 @@ name: BAML Language Release
 run-name: "${{ inputs.channel }} release${{ inputs.dry_run && ' (dry run)' || '' }}: ${{ inputs.version || 'auto-version' }}"
 
 # Channel-aware replacement for the legacy BAML language release workflow.
-# Release workflows run packaging smoke tests only; the full suite runs in CI.
+# Packaging verification runs after release completion; the full suite runs in CI.
 
 # Dispatch-only, with exactly one production dispatcher per channel:
 #   - `CI - BAML Language` cuts the CANARY channel after a green push to canary
@@ -568,105 +568,20 @@ jobs:
           path: ${{ runner.temp }}/swift-sdk-mirror
           if-no-files-found: error
 
-  verify-swift-sdk:
-    name: Verify Swift SDK (release artifact links + runs)
-    # Consumes the RELEASE-form artifact build-swift-sdk produced (5 slices,
-    # release profile, panic = "unwind") from a clean SwiftPM project — catches
-    # release-only breakage the debug sdk-test gate can't (e.g. strict
-    # concurrency under the release toolchain). macos-15 for Swift 6.1.
-    needs: [plan, build-swift-sdk]
-    runs-on: macos-15
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: swift-xcframework
-          path: ${{ runner.temp }}/xcf
-      - uses: actions/download-artifact@v8
-        with:
-          name: swift-sdk-mirror
-          path: ${{ runner.temp }}/mirror
-      - name: Assemble a clean consumer and link the release binary
-        env:
-          EXPECTED_VERSION: ${{ needs.plan.outputs.version }}
-        run: |
-          set -euo pipefail
-          work="$RUNNER_TEMP/verify"
-          mkdir -p "$work/Sources/Verify"
-          (cd "$RUNNER_TEMP/xcf" && ditto -x -k BamlBridgeFFI-*.xcframework.zip "$work")
-          cp -R "$RUNNER_TEMP/mirror/Sources/BamlBridge" "$work/Sources/BamlBridge"
-          cat > "$work/Package.swift" <<'EOF'
-          // swift-tools-version: 6.1
-          import PackageDescription
-          let package = Package(
-              name: "Verify",
-              platforms: [.macOS(.v13)],
-              dependencies: [.package(url: "https://github.com/apple/swift-protobuf.git", from: "1.38.0")],
-              targets: [
-                  .binaryTarget(name: "BamlBridgeFFI", path: "BamlBridgeFFI.xcframework"),
-                  .target(name: "BamlBridge",
-                      dependencies: ["BamlBridgeFFI", .product(name: "SwiftProtobuf", package: "swift-protobuf")],
-                      linkerSettings: [
-                          .linkedFramework("CoreFoundation"), .linkedFramework("Security"),
-                          .linkedFramework("SystemConfiguration"), .linkedLibrary("resolv"),
-                      ]),
-                  .executableTarget(name: "Verify", dependencies: ["BamlBridge"]),
-              ]
-          )
-          EOF
-          cat > "$work/Sources/Verify/main.swift" <<'EOF'
-          import BamlBridge
-          import Foundation
-          let expected = ProcessInfo.processInfo.environment["BAML_EXPECTED_VERSION"]!
-          let actual = BamlRuntime.nativeVersion()
-          guard actual == expected else {
-              fatalError("native BAML version \(actual) != planned \(expected)")
-          }
-          print("executed release BamlBridge \(actual)")
-          EOF
-          cd "$work"
-          swift build -c release
-          bin=.build/release/Verify
-          # Runner AMFI can SIGKILL a freshly linked binary's ad-hoc signature.
-          codesign --force --sign - "$bin"
-          BAML_EXPECTED_VERSION="$EXPECTED_VERSION" "$bin"
-
-  # Verify-only: the C++ SDK ships no artifact (headers are vendored at
-  # generate time); it consumes the shared bridge_cffi artifacts.
-  verify-cpp-sdk:
-    name: Verify C++ SDK
-    needs: [plan, build-bridge-cffi]
-    uses: ./.github/workflows/verify-cpp-sdk.reusable.yaml
+  build-csharp-sdk:
+    name: Assemble C# SDK product package
+    needs: [plan, prepare-csharp-sdk, build-bridge-cffi]
+    uses: ./.github/workflows/build2-csharp-sdk.reusable.yaml
     permissions:
       contents: read
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
-
-  verify-csharp-sdk:
-    name: Verify C# SDK product package
-    needs: [plan, build-matrix, prepare-csharp-sdk, build-bridge-cffi]
-    uses: ./.github/workflows/verify-csharp-product-slice.reusable.yaml
-    permissions:
-      contents: read
-    with:
-      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
-      source_sha: ${{ needs.plan.outputs.source_sha }}
-      platform_matrix_json: ${{ needs.build-matrix.outputs.csharp }}
 
   build-rust-sdk:
     name: Build Rust SDK
     needs: [plan]
     uses: ./.github/workflows/build2-rust-sdk.reusable.yaml
-    permissions:
-      contents: read
-    with:
-      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
-      source_sha: ${{ needs.plan.outputs.source_sha }}
-
-  verify-rust-sdk:
-    name: Verify Rust SDK
-    needs: [plan, build-toolchain, build-bridge-cffi, build-rust-sdk]
-    uses: ./.github/workflows/verify-rust-sdk.reusable.yaml
     permissions:
       contents: read
     with:
@@ -690,15 +605,12 @@ jobs:
       - build-bridge-cffi
       - build-go-sdk
       - build-swift-sdk
-      - verify-swift-sdk
-      - verify-cpp-sdk
       - prepare-csharp-sdk
-      - verify-csharp-sdk
+      - build-csharp-sdk
       # The Rust SDK is production-ready (crates.io publisher live), so its
-      # build + consumer verification gate the release: a failure here blocks
+      # build gates the release: a failure here blocks
       # publishing rather than shipping a release the Rust SDK isn't part of.
       - build-rust-sdk
-      - verify-rust-sdk
     steps:
       - run: echo "all release build jobs completed"
 
@@ -767,7 +679,7 @@ jobs:
 
   publish-csharp-sdk:
     name: Publish C# NuGet
-    needs: [plan, verify-csharp-sdk, all-builds]
+    needs: [plan, all-builds]
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     uses: ./.github/workflows/publish2-csharp-sdk.yaml
     permissions:
@@ -1456,7 +1368,7 @@ jobs:
     # After the cffi asset publisher: the loader downloads the engine cdylib
     # from the `baml-language-<version>` GitHub release on first call, so those
     # assets must be live before the crate that fetches them lands on crates.io.
-    needs: [plan, all-builds, build-rust-sdk, verify-rust-sdk, publish-bridge-cffi-release]
+    needs: [plan, all-builds, build-rust-sdk, publish-bridge-cffi-release]
     # Publishes on every real canary release, like PyPI/npm above.
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     # crates.io trusted publishing is bound to this top-level workflow identity,
@@ -2190,6 +2102,20 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  verify-release:
+    name: Verify release artifacts
+    needs: [plan, build-matrix, all-builds, publish-pkg-channel, dry-run-summary]
+    # Production and dry-run completion are mutually exclusive. Explicitly
+    # allow the skipped branch, while requiring the active branch to succeed.
+    if: ${{ !cancelled() && needs.all-builds.result == 'success' && (needs.publish-pkg-channel.result == 'success' || needs.dry-run-summary.result == 'success') }}
+    uses: ./.github/workflows/verify-baml-language-release.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+      csharp_platform_matrix_json: ${{ needs.build-matrix.outputs.csharp }}
+
   notify-slack:
     name: Notify Slack
     needs:
@@ -2204,9 +2130,7 @@ jobs:
       - build-web-sdk
       - build-bridge-cffi
       - build-go-sdk
-      - verify-cpp-sdk
       - build-rust-sdk
-      - verify-rust-sdk
       - all-builds
       - publish-pypi
       - publish-nodejs-sdk
@@ -2226,14 +2150,14 @@ jobs:
       - dry-run-artifacts
       - dry-run-summary
       - build-swift-sdk
-      - verify-swift-sdk
       - prepare-csharp-sdk
-      - verify-csharp-sdk
+      - build-csharp-sdk
       - publish-csharp-sdk
       - release-prerequisites-complete
       - release-complete
       - publish-pkg-channel
       - smoke-swift-release
+      - verify-release
     # Use the dispatch input so a failure in plan itself is still reportable.
     # This job must run after failed dependencies. Every production release result notifies Slack, including successful nightlies.
     if: ${{ always() && inputs.dry_run == false && (needs.plan.outputs.source_branch == 'canary' || (needs.plan.result == 'failure' && github.ref_type == 'tag' && github.ref_name == format('baml-language-source-{0}', inputs.source_sha))) }}
