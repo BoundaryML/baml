@@ -9,13 +9,17 @@
 # runner tracks origin/canary, which the package is written against.
 #
 # Phase 2: re-exec under `infisical run` so the pipeline's secrets
-# (FEEDBACK_SUPABASE_*, ATB_SLACK_*, ATB_POSTHOG_*, ATB_GITHUB_TOKEN,
-# ANTHROPIC_API_KEY) are present, set up gh, and run the BAML expression
+# (FEEDBACK_SUPABASE_*, ATB_SLACK_*, ATB_POSTHOG_*, ATB_GITHUB_TOKEN) are
+# present, set up gh, and run the BAML expression
 # given as the command (runner_loop()). The machine holds one Fly secret,
 # INFISICAL_TOKEN; INFISICAL_PROJECT_ID and INFISICAL_ENV come from fly.toml.
 set -euo pipefail
 
 home="${ATB2_HOME:-/data}"
+# the CLI login (claude) lives under HOME; keep it on the volume so it
+# survives redeploys. atb2 never handles a Claude credential itself.
+export HOME="$home/home"
+mkdir -p "$HOME"
 repo="$home/repo"
 cli="$home/target/debug/baml-cli"
 built="$home/target/.baml-cli-rev"

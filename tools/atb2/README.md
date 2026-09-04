@@ -81,10 +81,7 @@ Fly restarts it; every stage is idempotent against the store.
 
 At boot the entrypoint builds canary's `baml-cli` on the volume before any
 secret is loaded, in an explicit environment, and rebuilds whenever the
-canary revision changed (`ATB2_CANARY_REV` in `fly.toml` pins one). The
-agent's Claude credential is the runner's own spend-capped one: the agent's
-Bash commands cannot see it in their environment (the CLI scrubs it) but
-share the CLI's uid, the same exposure as Claude Code with Bash on a laptop. The image
+canary revision changed (`ATB2_CANARY_REV` in `fly.toml` pins one). The image
 carries cargo, gh, node and the Claude Code CLI; the volume at `/data` holds
 the cached canary clone, the cargo target and the run dirs, and the first
 boot builds canary's `baml-cli` there.
@@ -98,10 +95,11 @@ The runner's secrets come from Infisical at start: the image carries the
 Infisical CLI and the entrypoint wraps the process in `infisical run` against
 boundary-tools `prod`, so the machine holds a single Fly secret,
 `INFISICAL_TOKEN`, and a rotation in Infisical takes effect on the next
-restart. The runner's GitHub identity is `ATB_GITHUB_TOKEN` (or `GH_TOKEN` when set)
-and the agent's credential is `CLAUDE_CODE_OAUTH_TOKEN` when set, else
-`ANTHROPIC_API_KEY`; all three are in that project already. None of it goes
-to CI.
+restart. The runner's GitHub identity is `ATB_GITHUB_TOKEN` (or `GH_TOKEN` when set),
+already in that project. The agent's Claude Code CLI runs on its own login,
+made once on the machine (`fly ssh console -a atb2-runner`, then `claude`)
+and kept under HOME on the volume; no Claude credential is stored anywhere
+or passed by atb2, on the runner or on a laptop. None of it goes to CI.
 
 By hand, from the repo root:
 

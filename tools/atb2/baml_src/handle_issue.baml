@@ -539,10 +539,10 @@ class CmdResult {
 /// The environment every child gets. It REPLACES the environment, so this
 /// is an allowlist of environment variables: none from this process leaks
 /// unless named here. The agent runs with `with_gh = false` and never sees
-/// GH_TOKEN, FEEDBACK_SUPABASE_KEY or anything else, except the one
-/// credential the Claude Code CLI itself needs on a host with no keychain
-/// login (a headless runner): CLAUDE_CODE_OAUTH_TOKEN, else
-/// ANTHROPIC_API_KEY. On a laptop neither is set and the CLI uses its login.
+/// GH_TOKEN, FEEDBACK_SUPABASE_KEY, ANTHROPIC_API_KEY or anything else.
+/// The Claude Code CLI runs on its own login, found through HOME: on a
+/// laptop the keychain, on the runner the login kept on the volume. No
+/// Claude credential ever passes through atb2.
 ///
 /// This guards the environment only. HOME is the host's, because the
 /// Claude Code CLI reads its login from there, so files under it
@@ -576,21 +576,6 @@ function sandbox_env(with_gh: bool) -> map<string, string> {
         env.set("GIT_CONFIG_SYSTEM", "/dev/null");
         env.set("GIT_CONFIG_NOSYSTEM", "1");
         env.set("GIT_TERMINAL_PROMPT", "0");
-        // the CLI's own credential on a headless host: one, never both, and
-        // the CLI scrubs it (and every other credential it knows) from the
-        // env of the Bash commands the agent runs. Accepted residual risk:
-        // those commands share the CLI's uid and could read its environment
-        // through /proc; the credential is therefore the runner's own,
-        // spend-capped Claude credential and nothing else, the same exposure
-        // as Claude Code with Bash on any developer machine.
-        match (agent_credential()) {
-            null => null,
-            let c: string[] => {
-                env.set(c.at(0) ?? "", c.at(1) ?? "");
-                env.set("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB", "1");
-                null
-            },
-        };
     }
     if (with_gh) {
         match (github_token()) {
@@ -605,20 +590,6 @@ function sandbox_env(with_gh: bool) -> map<string, string> {
 /// bot's ATB_GITHUB_TOKEN (Infisical boundary-tools).
 function github_token() -> string? {
     baml.env.get("GH_TOKEN") ?? baml.env.get("GITHUB_TOKEN") ?? baml.env.get("ATB_GITHUB_TOKEN")
-}
-
-/// [name, value] of the credential the Claude Code CLI runs with when the
-/// host has no keychain login: CLAUDE_CODE_OAUTH_TOKEN first (the CLI's own
-/// identity, from `claude setup-token`), else ANTHROPIC_API_KEY. Null on a
-/// laptop with neither set, where the CLI uses its login.
-function agent_credential() -> string[]? {
-    match (baml.env.get("CLAUDE_CODE_OAUTH_TOKEN")) {
-        let t: string => ["CLAUDE_CODE_OAUTH_TOKEN", t],
-        null => match (baml.env.get("ANTHROPIC_API_KEY")) {
-            let k: string => ["ANTHROPIC_API_KEY", k],
-            null => null,
-        },
-    }
 }
 
 /// Runs every sandbox process under `caffeinate -i` on macOS: a laptop that
@@ -2172,16 +2143,12 @@ testset "handle_issue" {
         let env = sandbox_env(false);
         assert.is_true(env.has("PATH") && env.has("HOME"));
         assert.equal(env.get("CARGO_INCREMENTAL") ?? "", "0");
-        assert.is_true(!env.has("GH_TOKEN") && !env.has("FEEDBACK_SUPABASE_KEY"));
-        // the CLI's credential reaches the agent only when the host has one set
-        if (
-            baml.env.get("CLAUDE_CODE_OAUTH_TOKEN") == null
-                && baml.env.get("ANTHROPIC_API_KEY") == null
-        ) {
-            assert.is_true(!env.has("ANTHROPIC_API_KEY") && !env.has("CLAUDE_CODE_OAUTH_TOKEN"));
-        } else {
-            assert.equal(env.get("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB") ?? "", "1");
-        };
+        assert.is_true(
+            !env.has("GH_TOKEN")
+                && !env.has("FEEDBACK_SUPABASE_KEY")
+                && !env.has("ANTHROPIC_API_KEY")
+                && !env.has("CLAUDE_CODE_OAUTH_TOKEN"),
+        );
         // no ambient git credentials or ssh agent for the agent, and the host
         // git config (osxkeychain helper, planted hooks) is neutralized
         assert.is_true(!env.has("SSH_AUTH_SOCK"));
