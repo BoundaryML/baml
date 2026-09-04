@@ -194,3 +194,54 @@ fn capabilities_keep_their_origin_and_reject_mixed_runtime_arguments() {
     assert!(HANDLE_TABLE.release(clone));
     bridge_cffi::unregister_runtime(bk).unwrap();
 }
+
+#[test]
+fn cancellation_before_dispatch_is_applied_only_to_the_originating_runtime() {
+    use bridge_ctypes::baml_bridge::cffi::{
+        BamlOutboundResult, baml_outbound_result::Result as Outcome,
+    };
+    use prost::Message;
+
+    let make_runtime = || {
+        bridge_cffi::initialize_runtime(
+            ".",
+            HashMap::from([("main.baml".into(), "function value() -> int { 9 }".into())]),
+        )
+        .unwrap()
+    };
+    let a = make_runtime();
+    let b = make_runtime();
+    let cancelled = bridge_cffi::new_function_call_id();
+    assert!(bridge_cffi::cancel_function_call_by_id(cancelled));
+    let invoke = |runtime, call_id| {
+        let context =
+            bridge_cffi::function_call_context_builder(bex_project::CallId(call_id)).build();
+        let bytes =
+            bridge_cffi::get_tokio_runtime()
+                .unwrap()
+                .block_on(bridge_cffi::call_and_encode(
+                    runtime,
+                    "value".into(),
+                    BexArgs {
+                        required: Default::default(),
+                        optional: Default::default(),
+                    },
+                    context,
+                ));
+        BamlOutboundResult::decode(bytes.as_slice()).unwrap()
+    };
+    assert!(matches!(
+        invoke(a.clone(), cancelled).result,
+        Some(Outcome::Panic(_))
+    ));
+    assert!(matches!(
+        invoke(b.clone(), bridge_cffi::new_function_call_id()).result,
+        Some(Outcome::Ok(_))
+    ));
+    assert!(matches!(
+        invoke(a.clone(), bridge_cffi::new_function_call_id()).result,
+        Some(Outcome::Ok(_))
+    ));
+    bridge_cffi::unregister_runtime(runtime_key(&a).unwrap()).unwrap();
+    bridge_cffi::unregister_runtime(runtime_key(&b).unwrap()).unwrap();
+}

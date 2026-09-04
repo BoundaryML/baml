@@ -63,6 +63,7 @@ private func bamlShutdownAtExit() {
 ///   though blocking the main thread is still rude (debug-asserted).
 public final class BamlRuntime: @unchecked Sendable {
     public static let shared = BamlRuntime()
+    @TaskLocal static var encodingRuntime: BamlRuntime = .shared
 
     private let lock = NSLock()
     private var pending: [UInt32: @Sendable (Result<Data, Error>) -> Void] = [:]
@@ -280,11 +281,13 @@ public final class BamlRuntime: @unchecked Sendable {
     ) throws -> Data {
         assertNotBlockingMainThreadInDebug(fqn)
         let protoCallId = BamlApi.newFunctionCall()
-        let payload = try encodeCallArgs(
+        let payload = try Self.$encodingRuntime.withValue(self) {
+            try encodeCallArgs(
             args,
             callId: protoCallId,
             callTarget: .functionName(fqn)
-        )
+            )
+        }
 
         let box = ResultBox()
         let semaphore = DispatchSemaphore(value: 0)
@@ -302,11 +305,13 @@ public final class BamlRuntime: @unchecked Sendable {
         args: [(String, (any BamlEncodable)?)]
     ) async throws -> Data {
         let protoCallId = BamlApi.newFunctionCall()
-        let payload = try encodeCallArgs(
+        let payload = try Self.$encodingRuntime.withValue(self) {
+            try encodeCallArgs(
             args,
             callId: protoCallId,
             callTarget: .functionName(fqn)
-        )
+            )
+        }
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -330,11 +335,13 @@ public final class BamlRuntime: @unchecked Sendable {
     ) async throws -> Data {
         precondition(handleKey != 0, "cannot invoke a zero BAML function handle")
         let protoCallId = BamlApi.newFunctionCall()
-        let payload = try encodeCallArgs(
+        let payload = try Self.$encodingRuntime.withValue(self) {
+            try encodeCallArgs(
             args,
             callId: protoCallId,
             callTarget: .functionHandle(handleKey)
-        )
+            )
+        }
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
