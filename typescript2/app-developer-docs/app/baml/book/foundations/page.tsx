@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { BamlProject } from '@/components/baml-snippet';
 import { DocsCard } from '@/components/docs-card';
 import { DocsShell } from '@/components/docs-shell';
 
@@ -38,6 +39,11 @@ export default function FoundationsPage() {
           relying on the new shape in application code.
         </p>
       </blockquote>
+      <p>
+        A project can split related types and functions across files while the
+        compiler checks them as one unit.
+      </p>
+      <BamlProject id="cross-file-types" />
       <h2 id="chapters">Chapters</h2>
       <div className="docs-card-grid">
         <DocsCard

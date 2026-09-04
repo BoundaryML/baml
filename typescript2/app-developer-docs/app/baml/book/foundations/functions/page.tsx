@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { BamlSnippet } from '@/components/baml-snippet';
 import { DocsShell } from '@/components/docs-shell';
 
 export const metadata = {
@@ -35,11 +36,7 @@ export default function FunctionsChapterPage() {
 
       <h2 id="anatomy">Anatomy of a function</h2>
       <p>The smallest useful function returns a typed value directly.</p>
-      <pre>
-        <code>{`function ReturnNumber(value: int) -> int {
-  value
-}`}</code>
-      </pre>
+      <BamlSnippet id="functions/return-number" />
       <p>
         <code>ReturnNumber</code> is the function name, <code>value</code> is a
         named parameter, and the arrow introduces the return type. The final
@@ -70,6 +67,12 @@ class Receipt {
           the application can genuinely handle a missing value.
         </p>
       </blockquote>
+      <p>
+        The compiler rejects a body whose value does not match the declared
+        return type. This deliberately invalid example is checked for the
+        expected <code>E0001</code> diagnostic during documentation validation.
+      </p>
+      <BamlSnippet id="errors/invalid-return-type" />
 
       <h2 id="model-backed">Model-backed functions</h2>
       <p>

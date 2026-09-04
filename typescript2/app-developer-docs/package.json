@@ -39,8 +39,13 @@
     "docs:db:migrate": "tsx scripts/migrate-generated-content.ts",
     "docs:db:populate": "tsx scripts/populate-generated-content.ts",
     "docs:db:verify": "tsx scripts/verify-generated-content.ts",
+    "docs:grammar:build": "pnpm --filter @b/pkg-grammar build",
+    "docs:snippets:validate": "tsx scripts/validate-snippets.ts",
     "lint": "biome check . && tsx node_modules/oxlint/bin/oxlint --config .oxlintrc.json .",
     "postinstall": "fumadocs-mdx",
+    "prebuild": "pnpm docs:grammar:build",
+    "pretest": "pnpm docs:grammar:build",
+    "pretypecheck": "pnpm docs:grammar:build",
     "start": "next start",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
