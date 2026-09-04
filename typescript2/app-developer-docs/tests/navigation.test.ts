@@ -106,3 +106,26 @@ test('the docs shell preserves the measured shadcn geometry', async () => {
   assert.doesNotMatch(headerSource, /border-b/);
   assert.doesNotMatch(globalStyles, /fumadocs-ui\/css/);
 });
+
+test('generated reference hubs, search, and sitemap share published release data', async () => {
+  const [packageHub, cliHub, cliContent, searchMenu, searchRoute, sitemap] =
+    await Promise.all([
+      readFile(resolve(process.cwd(), 'app/baml/packages/page.tsx'), 'utf8'),
+      readFile(resolve(process.cwd(), 'app/cli/page.tsx'), 'utf8'),
+      readFile(resolve(process.cwd(), 'content/cli/index.mdx'), 'utf8'),
+      readFile(resolve(process.cwd(), 'components/search-menu.tsx'), 'utf8'),
+      readFile(
+        resolve(process.cwd(), 'app/search-index.json/route.ts'),
+        'utf8',
+      ),
+      readFile(resolve(process.cwd(), 'app/sitemap.ts'), 'utf8'),
+    ]);
+
+  assert.match(packageHub, /listGeneratedReleaseSummaries/);
+  assert.doesNotMatch(packageHub, /const packages =/);
+  assert.match(cliHub, /listGeneratedReleaseSummaries/);
+  assert.match(cliContent, /<GeneratedReleaseCatalog \/>/);
+  assert.match(searchMenu, /fetch\('\/search-index\.json'/);
+  assert.match(searchRoute, /buildGeneratedSearchIndex/);
+  assert.match(sitemap, /listGeneratedSitemapRoutes/);
+});

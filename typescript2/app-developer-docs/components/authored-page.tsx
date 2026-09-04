@@ -1,8 +1,10 @@
+import type { MDXComponents } from 'mdx/types';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { DocsShell } from '@/components/docs-shell';
 import { authoredSource } from '@/lib/content/source';
+import { documentationMetadata } from '@/lib/metadata';
 import { useMDXComponents } from '@/mdx-components';
 
 function pageFromPath(path: string) {
@@ -13,13 +15,20 @@ function pageFromPath(path: string) {
 export function authoredMetadata(path: string): Metadata {
   const page = pageFromPath(path);
   if (!page) return {};
-  return {
+  return documentationMetadata({
     description: page.data.description,
+    path,
     title: page.data.title,
-  };
+  });
 }
 
-export function AuthoredPage({ path }: { path: string }) {
+export function AuthoredPage({
+  components = {},
+  path,
+}: {
+  components?: MDXComponents;
+  path: string;
+}) {
   const page = pageFromPath(path);
   if (!page) notFound();
   const Content = page.data.body;
@@ -33,7 +42,7 @@ export function AuthoredPage({ path }: { path: string }) {
         label: item.title,
       }))}
     >
-      <Content components={useMDXComponents({})} />
+      <Content components={useMDXComponents(components)} />
     </DocsShell>
   );
 }

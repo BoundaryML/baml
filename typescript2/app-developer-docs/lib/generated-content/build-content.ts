@@ -17,10 +17,17 @@ export interface GeneratedReleaseSnapshot {
   routeVersion: string;
 }
 
+export interface GeneratedReleaseSummary {
+  channels: ChannelPointerRow['channel'][];
+  release: ReleaseRow;
+  routeVersion: string;
+}
+
 const snapshotPromises = new Map<
   string,
   Promise<GeneratedReleaseSnapshot | null>
 >();
+let releaseSummariesPromise: Promise<GeneratedReleaseSummary[]> | undefined;
 
 export function canonicalVersionToRouteVersion(version: string): string {
   return `v${version}`;
@@ -35,16 +42,52 @@ export function routeVersionToCanonicalVersion(
   return routeVersion.slice(1);
 }
 
-export async function listGeneratedReleaseRouteVersions(): Promise<string[]> {
+async function readReleaseSummaries(): Promise<GeneratedReleaseSummary[]> {
   const reader = createGeneratedContentReader();
   try {
-    const releases = await reader.listReleases();
-    return releases.map((release) =>
-      canonicalVersionToRouteVersion(release.version),
-    );
+    const [releases, channels] = await Promise.all([
+      reader.listReleases(),
+      reader.listChannels(),
+    ]);
+    return releases.map((release) => ({
+      channels: channels
+        .filter((pointer) => pointer.release_version === release.version)
+        .map((pointer) => pointer.channel),
+      release,
+      routeVersion: canonicalVersionToRouteVersion(release.version),
+    }));
   } finally {
     await reader.close();
   }
+}
+
+export function listGeneratedReleaseSummaries(): Promise<
+  GeneratedReleaseSummary[]
+> {
+  releaseSummariesPromise ??= readReleaseSummaries();
+  return releaseSummariesPromise;
+}
+
+export async function listGeneratedReleaseRouteVersions(): Promise<string[]> {
+  return (await listGeneratedReleaseSummaries()).map(
+    (release) => release.routeVersion,
+  );
+}
+
+export function selectFeaturedGeneratedRelease(
+  releases: readonly GeneratedReleaseSummary[],
+): GeneratedReleaseSummary | null {
+  for (const channel of ['stable', 'canary', 'nightly'] as const) {
+    const release = releases.find((candidate) =>
+      candidate.channels.includes(channel),
+    );
+    if (release) return release;
+  }
+  return releases[0] ?? null;
+}
+
+export function isPrereleaseVersion(version: string): boolean {
+  return version.includes('-');
 }
 
 async function readSnapshot(
@@ -53,26 +96,26 @@ async function readSnapshot(
   const version = routeVersionToCanonicalVersion(routeVersion);
   if (!version) return null;
 
+  const releaseSummary = (await listGeneratedReleaseSummaries()).find(
+    (candidate) => candidate.release.version === version,
+  );
+  if (!releaseSummary) return null;
+
   const reader = createGeneratedContentReader();
   try {
-    const [releases, channels, packages, pages, cli] = await Promise.all([
-      reader.listReleases(),
-      reader.listChannels(),
+    const [packages, pages, cli] = await Promise.all([
       reader.listPackageExports(version),
       reader.listReferencePages(version),
       reader.getCliArtifact(version),
     ]);
-    const release = releases.find((candidate) => candidate.version === version);
-    if (!release || !cli) return null;
+    if (!cli) return null;
 
     return {
-      channels: channels
-        .filter((pointer) => pointer.release_version === version)
-        .map((pointer) => pointer.channel),
+      channels: releaseSummary.channels,
       cli,
       packages,
       pages,
-      release,
+      release: releaseSummary.release,
       routeVersion,
     };
   } finally {

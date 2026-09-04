@@ -1,17 +1,19 @@
 ---
 title: BAML CLI
-description: Install, configure, and use the exact BAML toolchain version that matches your project.
+description: Browse exact-version command reference generated from the BAML toolchain that matches your project.
 breadcrumbs:
   - label: BAML CLI
 ---
 
 ## Overview
 
-The CLI documentation covers installation, public commands, configuration, environment variables, and exit behavior. Command nesting mirrors the tokens accepted by the executable.
+The initial CLI reference covers the public command tree, arguments, flags, defaults, and allowed values exposed by the selected executable. Command nesting mirrors the tokens accepted by that exact toolchain version.
 
 ## Versioned reference
 
 Exact command pages are generated from the noncolored help emitted by the corresponding compiled wrapper and toolchain binaries. Unknown versions remain real 404s rather than silently falling forward.
+
+<GeneratedReleaseCatalog />
 
 <div className="docs-card-grid">
   <DocsCard description="Create a normal BAML project and check it with the toolchain." href="/baml/get-started" title="Get started with BAML" />
