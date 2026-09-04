@@ -283,9 +283,15 @@ class Float {
     ///   since `ln(1) == +0.0` and `±finite / +0.0 = ±∞`)
     /// - `base == 1`, `self == 1` → NaN (`0 / 0`)
     ///
+    /// The result is a ratio of two logarithms, so it is not correctly rounded
+    /// even when the exact answer is representable: `(1000.0).log(10.0)` yields
+    /// `2.9999999999999996` rather than `3.0`. Use `log10` (correctly rounded)
+    /// when the base is 10, or `ln` (exact, since `ln(e)` is `1.0`) for base
+    /// `e`.
+    ///
     /// # Examples
     /// ```
-    /// (1000.0).log(10.0)   // 3.0
+    /// (1000.0).log(10.0)   // 2.9999999999999996  (not 3.0 — see above)
     /// (8.0).log(2.0)       // 3.0
     /// (-1.0).log(10.0)     // NaN
     /// (0.0).log(10.0)      // -infinity
