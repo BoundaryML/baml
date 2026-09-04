@@ -50,10 +50,4 @@ package. Provenance deliberately excludes `github.run_attempt`, so rerunning
 failed jobs can reuse successful producers from an earlier attempt of the same
 run. Unrelated future CFFI-only artifacts are ignored.
 
-`prepare-csharp-sdk.reusable.yaml` prepares platform-neutral generated and ABI
-inputs in parallel with the CFFI matrix.
-`verify-csharp-product-slice.reusable.yaml` assembles and exercises the required
-RID set from the validated platform contract, and `publish2-csharp-sdk.yaml`
-publishes that exact verified package. On a repair rerun, the publisher removes
-only NuGet's repository signature from the comparison model and skips an
-identical existing package; a product-owned content mismatch remains fatal.
+`build2-csharp-sdk.reusable.yaml` assembles the package from the shared CFFI artifacts, and `publish2-csharp-sdk.yaml` publishes that exact artifact. After release completion, `verify-baml-language-release.reusable.yaml` calls `verify-csharp-product-slice.reusable.yaml` to prepare test fixtures and exercise the package ABI, deployment modes, and required RID set from the validated platform contract. Callback-vector checks, ABI bytecode generation, sample consumer generation, and the NuGet normalizer self-test run only in this verification phase; package assembly and publishing do not depend on them. On a repair rerun, the publisher removes only NuGet's repository signature from the comparison model and skips an identical existing package; a product-owned content mismatch remains fatal.
