@@ -35,6 +35,8 @@ export declare function initializeRuntime(srcDir: string, files: Record<string, 
 export declare function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array, embeddedBamlToml?: string, runtimeKey?: bigint): BamlRuntime;
 export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export declare function newFunctionCall(): bigint;
+/** Release an allocated ID when no call will be dispatched. */
+export declare function releaseFunctionCall(callId: bigint): void;
 export declare function cancelFunctionCall(callId: bigint): boolean;
 import './unhandled_spawn.js';
 export declare class FunctionResult {

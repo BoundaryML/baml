@@ -51,6 +51,7 @@ pub async fn call_function_in_wasm(encoded_args: &[u8]) -> Vec<u8> {
 pub async fn call_function_in_wasm_for_runtime(key: Option<u64>, encoded_args: &[u8]) -> Vec<u8> {
     use bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget;
 
+    let _reservation = crate::FunctionCallReservation::from_encoded(encoded_args);
     let call = match decode_call(key, encoded_args) {
         Ok(call) => call,
         Err(error) => return error_to_outbound(error),

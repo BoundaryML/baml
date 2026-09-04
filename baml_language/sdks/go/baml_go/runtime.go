@@ -381,6 +381,7 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	registerCallbackOnce.Do(nativeRegisterCallback)
 
 	engineCallID := nativeNewFunctionCall()
+	defer nativeReleaseFunctionCall(engineCallID)
 	if engineCallID == 0 {
 		return Value{}, errors.New("BAML returned an invalid zero call ID")
 	}
@@ -442,6 +443,7 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (V
 	registerCallbackOnce.Do(nativeRegisterCallback)
 
 	engineCallID := nativeNewFunctionCall()
+	defer nativeReleaseFunctionCall(engineCallID)
 	if engineCallID == 0 {
 		return Value{}, errors.New("BAML returned an invalid zero call ID")
 	}

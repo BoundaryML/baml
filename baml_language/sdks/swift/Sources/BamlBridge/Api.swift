@@ -41,6 +41,7 @@ enum BamlApi {
     static let registerCallback = v1.register_callback!
     static let callFunction = v1.call_function!
     static let newFunctionCall = v1.new_function_call!
+    static let releaseFunctionCall = v1.release_function_call!
     static let cancelFunctionCall = v1.cancel_function_call!
     static let registerHostDispatchCallback = v1.register_host_dispatch_callback!
     static let registerHostReleaseCallback = v1.register_host_release_callback!

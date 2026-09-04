@@ -470,7 +470,8 @@ type Package struct {
 
 func CompilePackage(ctx context.Context, files map[string]string) (*Package, error) {
 	if err := bootstrap.Ensure(); err != nil { return nil, err }
-	result, err := baml_go.Call(baml_go.WithRuntime(ctx, bootstrap.RuntimeKey), "reflect.Package.compile", map[string]baml_go.Input{
+	runtimeCtx := baml_go.WithRuntime(ctx, bootstrap.RuntimeKey)
+	result, err := baml_go.Call(runtimeCtx, "reflect.Package.compile", map[string]baml_go.Input{
 		"files": baml_go.Map(files, baml_go.String),
 	})
 	if err != nil { return nil, err }
@@ -480,7 +481,7 @@ func CompilePackage(ctx context.Context, files map[string]string) (*Package, err
 	if err != nil { return nil, err }
 	inner, err := innerValue.OpaqueHandle()
 	if err != nil { return nil, err }
-	return &Package{ctx: ctx, inner: inner}, nil
+	return &Package{ctx: runtimeCtx, inner: inner}, nil
 }
 
 func (pkg *Package) input() baml_go.Input {

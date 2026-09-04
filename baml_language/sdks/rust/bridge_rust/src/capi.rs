@@ -177,6 +177,8 @@ struct BamlApiV1 {
     create_runtime: Option<unsafe extern "C" fn(*const u8, usize, *mut u64) -> Buffer>,
     unregister_runtime: Option<unsafe extern "C" fn(u64) -> Buffer>,
     call_function_for_runtime: Option<unsafe extern "C" fn(u64, *const u8, usize, u32)>,
+    program_key: Option<unsafe extern "C" fn(*const u8, usize, *mut u64) -> Buffer>,
+    release_function_call: Option<unsafe extern "C" fn(u64)>,
 }
 
 #[repr(C)]

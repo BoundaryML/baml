@@ -34,11 +34,42 @@ public final class BamlProgram {
         return within(() -> BamlFfi.callAsync(fqn, names, args, desc, ctx, types));
     }
     static BamlProgram forArgs(Object[] args) {
-        for (var arg : args) {
-            if (arg instanceof BamlTypedValue typed) arg = typed.value();
-            BamlHandle handle = arg instanceof BamlHandle h ? h : arg instanceof BamlStream<?, ?> s ? s.bamlHandle() : arg instanceof BamlFunctionSpec<?> s ? s.bamlHandle() : null;
-            if (handle != null) return handle.program;
+        var owners = new java.util.LinkedHashMap<Long, BamlProgram>();
+        var seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Object, Boolean>());
+        for (var arg : args) collectOwners(arg, owners, seen);
+        if (owners.size() > 1) throw new IllegalArgumentException("BAML arguments belong to different runtime registrations");
+        var active = current();
+        if (owners.isEmpty()) return active;
+        var owner = owners.values().iterator().next();
+        if (active.runtimeKey != 0) {
+            if (active.runtimeKey != owner.runtimeKey) throw new IllegalArgumentException("BAML argument belongs to a different runtime registration");
+            return active;
         }
-        return current();
+        return owner;
+    }
+
+    private static void collectOwners(Object value, java.util.Map<Long, BamlProgram> owners, java.util.Set<Object> seen) {
+        if (value == null || !seen.add(value)) return;
+        BamlHandle handle = value instanceof BamlHandle h ? h : value instanceof BamlStream<?, ?> s ? s.bamlHandle() : value instanceof BamlFunctionSpec<?> s ? s.bamlHandle() : null;
+        if (handle != null) {
+            // Host values have their own namespace and carry no engine capability.
+            if (handle.handleType() != BamlHandle.HOST_VALUE_CALLABLE && handle.handleType() != BamlHandle.HOST_VALUE_OPAQUE) owners.putIfAbsent(handle.program.runtimeKey, handle.program);
+        } else if (value instanceof BamlTypedValue typed) {
+            collectOwners(typed.value(), owners, seen);
+        } else if (value instanceof java.util.List<?> list) {
+            for (var item : list) collectOwners(item, owners, seen);
+        } else if (value instanceof java.util.Map<?, ?> map) {
+            for (var item : map.values()) collectOwners(item, owners, seen);
+        } else if (value instanceof Object[] array) {
+            for (var item : array) collectOwners(item, owners, seen);
+        } else if (value.getClass().isRecord()) {
+            try {
+                for (var field : value.getClass().getRecordComponents()) collectOwners(field.getAccessor().invoke(value), owners, seen);
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalArgumentException("Cannot inspect BAML argument record", e);
+            }
+        } else {
+            for (var field : TypeRegistry.argumentFields(value)) collectOwners(field, owners, seen);
+        }
     }
 }

@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
-import { BamlRuntime, callFunctionSync, cancelFunctionCall, decodeCallResult, encodeCallArgs, newFunctionCall } from '@boundaryml/baml-bridge';
+import { BamlRuntime, callFunctionSync, cancelFunctionCall, decodeCallResult, encodeCallArgs, newFunctionCall, releaseFunctionCall } from '@boundaryml/baml-bridge';
 import * as a from './a/typescript/baml_sdk/index.js';
 import { BYTECODE as bytesA, PROGRAM_KEY as keyA } from './a/typescript/baml_sdk/_inlinedbaml.js';
 import { BYTECODE as bytesB, PROGRAM_KEY as keyB } from './b/typescript/baml_sdk/_inlinedbaml.js';
+
+const abandoned = newFunctionCall();
+releaseFunctionCall(abandoned);
+assert.equal(cancelFunctionCall(abandoned), false);
+const failedEncode = newFunctionCall();
+assert.throws(() => encodeCallArgs({ invalid: Symbol('unsupported') }, { callId: failedEncode, functionName: 'user.value' }));
+assert.equal(cancelFunctionCall(failedEncode), false);
 
 // Fail if native teardown terminates the process before the assertions finish.
 process.exitCode = 1;

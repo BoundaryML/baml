@@ -66,6 +66,7 @@ internal unsafe struct BamlApiV1
     internal delegate* unmanaged[Cdecl]<ulong, BamlBuffer> UnregisterRuntime;
     internal delegate* unmanaged[Cdecl]<ulong, byte*, nuint, uint, void> CallFunctionForRuntime;
     internal delegate* unmanaged[Cdecl]<byte*, nuint, ulong*, BamlBuffer> ProgramKey;
+    internal delegate* unmanaged[Cdecl]<ulong, void> ReleaseFunctionCall;
 }
 
 internal static unsafe class BamlApiV1Layout

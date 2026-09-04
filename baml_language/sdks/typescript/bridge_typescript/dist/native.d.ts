@@ -292,6 +292,8 @@ export declare function registerHostValueReleaseCallback(callback: (key: HandleK
 
 export declare function registerUnhandledSpawnErrorCallback(callback: (errorBytes: Buffer, cancelled: boolean) => void): void
 
+export declare function releaseFunctionCall(callId: string): void
+
 /**
  * Release a host callable the inbound encoder registered but never handed to
  * the engine — the encode-error rollback path.

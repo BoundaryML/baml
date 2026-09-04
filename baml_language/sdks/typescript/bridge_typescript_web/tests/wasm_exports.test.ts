@@ -21,6 +21,13 @@ beforeAll(async () => {
 });
 
 describe("raw WASM handle and media exports", () => {
+  it("releases abandoned call reservations without reviving them on late cancellation", () => {
+    const id = raw.newFunctionCall();
+    expect(raw.cancelFunctionCall(id)).toBe(true);
+    raw.releaseFunctionCall(id);
+    expect(raw.cancelFunctionCall(id)).toBe(false);
+    raw.releaseFunctionCall(id);
+  });
   it("exposes the same named handle/media contract", () => {
     for (const name of rawHandleMediaExports) expect(raw[name]).toBeTypeOf("function");
   });

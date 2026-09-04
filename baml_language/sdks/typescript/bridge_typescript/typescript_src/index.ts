@@ -13,6 +13,7 @@ import {
     LLMCall,
     cancelFunctionCall as nativeCancelFunctionCall,
     newFunctionCall as nativeNewFunctionCall,
+    releaseFunctionCall as nativeReleaseFunctionCall,
 } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 import { installFlushOnExit } from './exit_hook.js';
@@ -80,6 +81,11 @@ export {
 
 export function newFunctionCall(): bigint {
     return BigInt(nativeNewFunctionCall());
+}
+
+/** Release an allocated ID when no call will be dispatched. */
+export function releaseFunctionCall(callId: bigint): void {
+    nativeReleaseFunctionCall(callId.toString());
 }
 
 export function cancelFunctionCall(callId: bigint): boolean {

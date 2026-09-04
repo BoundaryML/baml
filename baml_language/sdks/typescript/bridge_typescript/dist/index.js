@@ -7,7 +7,7 @@
  */
 import { typeMapForRuntime, withTypeMap } from './typemap.js';
 // index.ts — mirrors bridge_python/python_src/baml_py/__init__.py
-import { BamlRuntime, Collector as NativeCollector, cancelFunctionCall as nativeCancelFunctionCall, newFunctionCall as nativeNewFunctionCall, } from './native.js';
+import { BamlRuntime, Collector as NativeCollector, cancelFunctionCall as nativeCancelFunctionCall, newFunctionCall as nativeNewFunctionCall, releaseFunctionCall as nativeReleaseFunctionCall, } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 import { installFlushOnExit } from './exit_hook.js';
 import { wrapNativeError } from './errors.js';
@@ -48,6 +48,10 @@ export function initializeRuntimeFromBytecode(bytecode, embeddedBamlToml, runtim
 export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export function newFunctionCall() {
     return BigInt(nativeNewFunctionCall());
+}
+/** Release an allocated ID when no call will be dispatched. */
+export function releaseFunctionCall(callId) {
+    nativeReleaseFunctionCall(callId.toString());
 }
 export function cancelFunctionCall(callId) {
     return nativeCancelFunctionCall(callId.toString());

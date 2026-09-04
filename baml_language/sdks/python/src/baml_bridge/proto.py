@@ -28,6 +28,7 @@ from .baml_py import (
     BamlVideo,
     get_runtime as _get_runtime,
     new_function_call,
+    release_function_call,
     register_host_callable,
     _release_wire_handle,
     release_host_callable,
@@ -790,6 +791,7 @@ def encode_call_args(
     if call_id == 0:
         raise ValueError("call_id must be a nonzero uint64")
     if function_name is not None and function_handle is not None:
+        release_function_call(call_id)
         raise ValueError("exactly one BAML call target may be set")
     registered: List[int] = []
     cloned_handles: List[int] = []
@@ -819,6 +821,7 @@ def encode_call_args(
                     entry.type_value.CopyFrom(wire_ty)
         return args.SerializeToString()
     except BaseException:
+        release_function_call(call_id)
         # Roll back any host callables registered before the failure.
         for key in registered:
             try:

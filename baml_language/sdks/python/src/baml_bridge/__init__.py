@@ -33,6 +33,7 @@ from .baml_py import (
     get_toolchain_version,
     get_version,
     new_function_call,
+    release_function_call,
     register_unhandled_spawn_error_callback,
     shutdown_runtime,
 )
@@ -627,6 +628,7 @@ __all__ = [
     "get_runtime",
     "get_version",
     "new_function_call",
+    "release_function_call",
     "cancel_function_call",
     "encode_call_args",
     "decode_call_result",

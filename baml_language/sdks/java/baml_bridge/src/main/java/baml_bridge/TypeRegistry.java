@@ -84,6 +84,7 @@ public final class TypeRegistry {
     // Host class tokens may be constructed before entering a call's program scope.
     // Only immutable nominal identities are shared here, keyed by the actual loader.
     // Values contain strings, so the weak keys do not retain unloaded SDK loaders.
+    private static final Map<ClassLoader, Map<String, String[]>> CLASS_FIELDS = new java.util.WeakHashMap<>();
     private static final Map<ClassLoader, Map<String, String>> CLASS_IDENTITIES = new java.util.WeakHashMap<>();
     private static final Map<ClassLoader, Map<String, String>> ENUM_IDENTITIES = new java.util.WeakHashMap<>();
 
@@ -152,6 +153,9 @@ public final class TypeRegistry {
                             + fieldOrder.length + " fields vs " + fieldDescs.length + " descriptors");
         }
         registerIdentity(CLASS_IDENTITIES, javaClassName, bamlFqn);
+        synchronized (TypeRegistry.class) {
+            CLASS_FIELDS.computeIfAbsent(BamlProgram.current().loader, ignored -> new HashMap<>()).putIfAbsent(javaClassName, fieldOrder.clone());
+        }
         ClassEntry entry = new ClassEntry(bamlFqn, javaClassName, fieldOrder, fieldDescs);
         if (maps().classesByFqn.putIfAbsent(bamlFqn, entry) == null) {
             maps().classesByJavaName.putIfAbsent(javaClassName, entry);
@@ -267,6 +271,10 @@ public final class TypeRegistry {
 
     /** Whether {@code bamlFqn} resolves to a registered generated class. */
     public static boolean isClass(String bamlFqn) {
+        if (bamlFqn.equals(baml_sdk.ai.stream.Done.FQN)
+                && !maps().classesByFqn.containsKey(bamlFqn)) {
+            registerClass(bamlFqn, "baml_sdk.ai.stream.Done", new String[0]);
+        }
         return maps().classesByFqn.containsKey(bamlFqn);
     }
 
@@ -406,6 +414,22 @@ public final class TypeRegistry {
      * The class-value wire payload for a host object, or {@code null} when the
      * object's class is not a registered generated class.
      */
+    static Object[] argumentFields(Object obj) {
+        String[] fields;
+        synchronized (TypeRegistry.class) {
+            var names = CLASS_FIELDS.get(obj.getClass().getClassLoader());
+            fields = names == null ? null : names.get(obj.getClass().getName());
+        }
+        if (fields == null) return new Object[0];
+        Object[] values = new Object[fields.length];
+        try {
+            for (int i = 0; i < fields.length; i++) values[i] = obj.getClass().getMethod(fields[i]).invoke(obj);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalArgumentException("Cannot inspect BAML argument fields", e);
+        }
+        return values;
+    }
+
     public static ClassWire classWire(Object obj) {
         ClassEntry entry = maps().classesByJavaName.get(obj.getClass().getName());
         return entry == null ? null : entry.encode(obj);

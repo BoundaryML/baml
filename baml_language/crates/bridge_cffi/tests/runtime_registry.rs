@@ -242,6 +242,24 @@ fn cancellation_before_dispatch_is_applied_only_to_the_originating_runtime() {
         invoke(a.clone(), bridge_cffi::new_function_call_id()).result,
         Some(Outcome::Ok(_))
     ));
+    assert!(!bridge_cffi::cancel_function_call_by_id(cancelled));
     bridge_cffi::unregister_runtime(runtime_key(&a).unwrap()).unwrap();
     bridge_cffi::unregister_runtime(runtime_key(&b).unwrap()).unwrap();
+}
+
+#[test]
+fn abandoned_call_ids_are_released_without_losing_dispatched_cancellation() {
+    let abandoned = bridge_cffi::new_function_call_id();
+    assert!(bridge_cffi::cancel_function_call_by_id(abandoned));
+    bridge_cffi::release_function_call_id(abandoned);
+    assert!(!bridge_cffi::cancel_function_call_by_id(abandoned));
+    bridge_cffi::release_function_call_id(abandoned);
+
+    let dispatched = bridge_cffi::new_function_call_id();
+    let reservation = bridge_cffi::FunctionCallReservation::new(dispatched);
+    bridge_cffi::release_function_call_id(dispatched);
+    assert!(bridge_cffi::cancel_function_call_by_id(dispatched));
+    drop(reservation); // preparation failed before registering an active route
+    assert!(!bridge_cffi::cancel_function_call_by_id(dispatched));
+    assert!(!bridge_cffi::cancel_function_call_by_id(u64::MAX));
 }

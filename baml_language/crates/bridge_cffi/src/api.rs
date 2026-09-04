@@ -200,6 +200,7 @@ pub struct BamlApiV1 {
     /// using `callback_id`.
     pub call_function: BamlCallFunctionFn,
     /// Allocate a nonzero process-unique BAML function-call identifier.
+    /// Dispatch it once or release it with `release_function_call` if abandoned.
     pub new_function_call: BamlNewFunctionCallFn,
     /// Request cancellation of a BAML function call.
     ///
@@ -278,10 +279,13 @@ pub struct BamlApiV1 {
     pub call_function_for_runtime: BamlCallFunctionForRuntimeFn,
     /// Compute a generated identity from canonical program contents.
     pub program_key: BamlCreateRuntimeFn,
+    /// Release a call ID abandoned before dispatch. Safe after completion.
+    pub release_function_call: extern "C" fn(u64),
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     program_key: crate::program_key_ffi,
+    release_function_call: crate::release_function_call,
     register_program: crate::register_program_ffi,
     create_runtime: crate::create_runtime_ffi,
     unregister_runtime: crate::unregister_runtime_ffi,

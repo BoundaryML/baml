@@ -49,7 +49,7 @@
 /**
  * Generated identities occupy the upper half; dynamic identities the lower half.
  */
-#define GENERATED_KEY_BIT (1ull << 63)
+#define BAML_GENERATED_KEY_BIT (1ull << 63)
 
 /**
  * Handle-type values returned by media constructors and carried on the wire.
@@ -400,6 +400,7 @@ typedef struct BamlApiV1 {
   BamlCallFunctionFn call_function;
   /**
    * Allocate a nonzero process-unique BAML function-call identifier.
+   * Dispatch it once or release it with `release_function_call` if abandoned.
    */
   BamlNewFunctionCallFn new_function_call;
   /**
@@ -522,6 +523,10 @@ typedef struct BamlApiV1 {
    * Compute a generated identity from canonical program contents.
    */
   BamlCreateRuntimeFn program_key;
+  /**
+   * Release a call ID abandoned before dispatch. Safe after completion.
+   */
+  void (*release_function_call)(uint64_t);
 } BamlApiV1;
 
 typedef const struct BamlApiV1 *(*BamlGetApiV1Fn)(void);

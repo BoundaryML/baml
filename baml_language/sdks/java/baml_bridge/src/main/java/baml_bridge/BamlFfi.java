@@ -216,6 +216,7 @@ public final class BamlFfi {
 
     /** Mint a process-unique, nonzero function-call id from the engine counter. */
     static native long nativeNewCallId();
+    static native void nativeReleaseCallId(long callId);
 
     /**
      * Cancel an in-flight function call by its {@code call_id}
@@ -334,9 +335,12 @@ public final class BamlFfi {
             throw new IllegalArgumentException("function handle argument names and values differ in length");
         }
         long callId = newCallId();
-        byte[] request =
-                ProtoWriter.encodeHandleCallFunctionArgs(handle.key(), names, args, callId);
-        return handle.program.within(() -> decodeResult(nativeCallSync(handle.program.runtimeKey, request), returnDesc));
+        try {
+            return handle.program.within(() -> {
+                byte[] request = ProtoWriter.encodeHandleCallFunctionArgs(handle.key(), names, args, callId);
+                return decodeResult(nativeCallSync(handle.program.runtimeKey, request), returnDesc);
+            });
+        } finally { nativeReleaseCallId(callId); }
     }
 
     public static <T> T returnedClosure(
@@ -464,6 +468,7 @@ public final class BamlFfi {
             byte[] response = nativeCallSync(BamlProgram.current().runtimeKey, request);
             return decodeResult(response, returnDesc);
         } finally {
+            nativeReleaseCallId(callId);
             if (ctx != null) {
                 ctx.detach(callId);
             }
@@ -557,6 +562,7 @@ public final class BamlFfi {
                 raw.completeExceptionally(t);
             }
         }
+        nativeReleaseCallId(callId);
         // Decode + settle the caller-visible future. `whenComplete` fires whether
         // `raw` was completed by the engine (completeCall) or by the catch above,
         // and runs immediately if `raw` is already done. `complete*` on an

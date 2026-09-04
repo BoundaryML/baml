@@ -201,6 +201,7 @@ internal sealed unsafe partial class NativeApi
             HostValueRegistry.Shared.CompleteFunctionCall(callId);
             throw;
         }
+        finally { table->ReleaseFunctionCall(callId); }
     }
 
     internal NativeFunctionCall StartOwnedHandle(
@@ -267,6 +268,7 @@ internal sealed unsafe partial class NativeApi
             HostValueRegistry.Shared.CompleteFunctionCall(callId);
             throw;
         }
+        finally { table->ReleaseFunctionCall(callId); }
     }
 
     internal static void ValidateTable(BamlApiV1* api)
@@ -295,6 +297,9 @@ internal sealed unsafe partial class NativeApi
         Require(api->RegisterCallback is not null, "register_callback");
         Require(api->CallFunction is not null, "call_function");
         Require(api->NewFunctionCall is not null, "new_function_call");
+        nuint required = (nuint)System.Runtime.InteropServices.Marshal.OffsetOf<BamlApiV1>(nameof(BamlApiV1.ReleaseFunctionCall)) + (nuint)IntPtr.Size;
+        if (api->StructSize < required) throw new BamlNativeLibraryLoadException("BamlApiV1 lacks call reservation cleanup.");
+        Require(api->ReleaseFunctionCall is not null, "release_function_call");
         Require(api->CancelFunctionCall is not null, "cancel_function_call");
         Require(api->RegisterHostDispatchCallback is not null, "register_host_dispatch_callback");
         Require(api->RegisterHostReleaseCallback is not null, "register_host_release_callback");

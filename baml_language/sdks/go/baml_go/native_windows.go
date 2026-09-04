@@ -59,7 +59,7 @@ static const char *baml_open_library(const wchar_t *path) {
 		FreeLibrary(handle);
 		return baml_loader_error;
 	}
-	const size_t required_size = offsetof(BamlApiV1, call_function_for_runtime) + sizeof(api->call_function_for_runtime);
+	const size_t required_size = offsetof(BamlApiV1, release_function_call) + sizeof(api->release_function_call);
 	if (api->struct_size < required_size) {
 		snprintf(baml_loader_error, sizeof(baml_loader_error), "truncated BAML ABI v1 table: got %zu bytes, need at least %zu", api->struct_size, required_size);
 		FreeLibrary(handle);
@@ -68,7 +68,7 @@ static const char *baml_open_library(const wchar_t *path) {
 	if (api->version == NULL || api->initialize_runtime_from_bytecode == NULL ||
 		api->free_buffer == NULL || api->register_callback == NULL ||
 		api->call_function == NULL || api->new_function_call == NULL ||
-		api->cancel_function_call == NULL ||
+		api->cancel_function_call == NULL || api->release_function_call == NULL ||
 		api->register_host_dispatch_callback == NULL ||
 		api->register_host_release_callback == NULL ||
 		api->complete_host_call == NULL || api->handle_clone == NULL ||
@@ -120,6 +120,7 @@ static void baml_register_go_callback(void) {
 static void baml_register_go_unhandled_spawn_error_callback(void) { baml_api->register_unhandled_spawn_error_callback(baml_go_unhandled_spawn_error_callback); }
 static BamlBuffer baml_shutdown(void) { return baml_api->shutdown_runtime(); }
 static uint64_t baml_new_function_call(void) { return baml_api->new_function_call(); }
+static void baml_release_function_call(uint64_t id) { baml_api->release_function_call(id); }
 static void baml_call_function(const uint8_t *args, size_t length, uint32_t callback_id) { baml_api->call_function(args, length, callback_id); }
 static int32_t baml_cancel_function_call(uint64_t call_id) { return baml_api->cancel_function_call(call_id); }
 static void baml_complete_host_call_go(uint32_t call_id, int32_t is_error, const uint8_t *content, size_t length) { baml_api->complete_host_call(call_id, is_error, (const int8_t *)content, length); }
@@ -235,8 +236,9 @@ func nativeShutdown() error {
 	return fmt.Errorf("shutdown BAML runtime: %s", C.GoBytes(unsafe.Pointer(buffer.ptr), C.int(buffer.len)))
 }
 
-func nativeRegisterCallback()       { C.baml_register_go_callback() }
-func nativeNewFunctionCall() uint64 { return uint64(C.baml_new_function_call()) }
+func nativeRegisterCallback()             { C.baml_register_go_callback() }
+func nativeNewFunctionCall() uint64       { return uint64(C.baml_new_function_call()) }
+func nativeReleaseFunctionCall(id uint64) { C.baml_release_function_call(C.uint64_t(id)) }
 
 func nativeCall(encoded []byte, callbackID uint32) {
 	var encodedPointer *C.uint8_t

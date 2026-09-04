@@ -94,10 +94,15 @@ struct ActiveCallRoute {
     runtime: Weak<dyn Bex>,
 }
 
-static ACTIVE_CALL_RUNTIMES: LazyLock<Mutex<HashMap<u64, Option<Arc<ActiveCallRoute>>>>> =
+enum CallRouteState {
+    Pending { cancelled: bool, dispatched: bool },
+    Active(Arc<ActiveCallRoute>),
+}
+
+static ACTIVE_CALL_RUNTIMES: LazyLock<Mutex<HashMap<u64, CallRouteState>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn active_call_runtimes() -> MutexGuard<'static, HashMap<u64, Option<Arc<ActiveCallRoute>>>> {
+fn active_call_runtimes() -> MutexGuard<'static, HashMap<u64, CallRouteState>> {
     ACTIVE_CALL_RUNTIMES
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -111,10 +116,7 @@ pub(crate) struct ActiveCallRouteGuard {
 impl Drop for ActiveCallRouteGuard {
     fn drop(&mut self) {
         let mut routes = active_call_runtimes();
-        if routes
-            .get(&self.call_id)
-            .and_then(Option::as_ref)
-            .is_some_and(|current| Arc::ptr_eq(current, &self.route))
+        if matches!(routes.get(&self.call_id), Some(CallRouteState::Active(current)) if Arc::ptr_eq(current, &self.route))
         {
             routes.remove(&self.call_id);
         }
@@ -130,15 +132,20 @@ pub(crate) fn register_active_call_runtime(
     });
     let mut routes = active_call_runtimes();
     match routes.get(&call_id) {
-        Some(Some(_)) => return Err(BridgeError::DuplicateCallId(call_id)),
-        Some(None) => {
+        Some(CallRouteState::Active(_)) => return Err(BridgeError::DuplicateCallId(call_id)),
+        Some(CallRouteState::Pending {
+            cancelled: true, ..
+        }) => {
             // Cancellation may arrive before async dispatch resolves its runtime.
             // Apply it only to the originating engine once that engine is known.
             runtime.cancel_function_call(bex_project::CallId(call_id))?;
         }
-        None => {}
+        Some(CallRouteState::Pending {
+            cancelled: false, ..
+        })
+        | None => {}
     }
-    routes.insert(call_id, Some(Arc::clone(&route)));
+    routes.insert(call_id, CallRouteState::Active(Arc::clone(&route)));
     Ok(ActiveCallRouteGuard { call_id, route })
 }
 
@@ -472,6 +479,7 @@ pub async fn shutdown_runtime() -> Result<(), BridgeError> {
     for runtime in runtime_registry::take_all()? {
         runtime.shutdown().await;
     }
+    active_call_runtimes().clear();
     Ok(())
 }
 
@@ -520,7 +528,72 @@ pub fn register_runtime_from_bytecode(
 
 /// Allocate a new process-unique function-call ID.
 pub fn new_function_call_id() -> u64 {
-    bex_project::CallId::next().0
+    let id = bex_project::CallId::next().0;
+    active_call_runtimes().insert(
+        id,
+        CallRouteState::Pending {
+            cancelled: false,
+            dispatched: false,
+        },
+    );
+    id
+}
+
+/// Release an allocated call ID that will not be dispatched. Active calls retain
+/// their own guard; releasing their caller's reservation does not cancel them.
+pub fn release_function_call_id(id: u64) {
+    let mut routes = active_call_runtimes();
+    if matches!(
+        routes.get(&id),
+        Some(CallRouteState::Pending {
+            dispatched: false,
+            ..
+        })
+    ) {
+        routes.remove(&id);
+    }
+}
+
+/// Own the reservation while preparing/dispatching encoded arguments. Failed
+/// preparation and abandoned async futures release the reservation automatically.
+pub struct FunctionCallReservation {
+    id: u64,
+    owns_pending: bool,
+}
+impl FunctionCallReservation {
+    pub fn new(id: u64) -> Self {
+        let owns_pending = match active_call_runtimes().get_mut(&id) {
+            Some(CallRouteState::Pending { dispatched, .. }) if !*dispatched => {
+                *dispatched = true;
+                true
+            }
+            _ => false,
+        };
+        Self { id, owns_pending }
+    }
+    pub fn from_encoded(bytes: &[u8]) -> Self {
+        use prost::Message;
+        Self::new(
+            bridge_ctypes::baml_bridge::cffi::CallFunctionArgs::decode(bytes)
+                .map_or(0, |args| args.call_id),
+        )
+    }
+}
+impl Drop for FunctionCallReservation {
+    fn drop(&mut self) {
+        if self.owns_pending {
+            let mut routes = active_call_runtimes();
+            if matches!(routes.get(&self.id), Some(CallRouteState::Pending { .. })) {
+                routes.remove(&self.id);
+            }
+        }
+    }
+}
+
+/// Release a call ID that will never be dispatched. Safe after completion too.
+#[unsafe(no_mangle)]
+pub extern "C" fn release_function_call(id: u64) {
+    release_function_call_id(id);
 }
 
 /// Build a function-call context builder for a CFFI-owned call id.
@@ -533,19 +606,23 @@ pub fn function_call_context_builder(
 /// Cancel an in-flight function call by ID.
 ///
 /// Cancellation before dispatch is retained until the originating runtime is known.
-/// Returns false for a zero ID or a runtime cancellation failure.
+/// Returns false for unknown, released, or completed IDs, or cancellation failure.
 pub fn cancel_function_call_by_id(id: u64) -> bool {
     if id == 0 {
         return false;
     }
     let mut routes = active_call_runtimes();
-    match routes.entry(id).or_insert(None) {
-        Some(route) => route.runtime.upgrade().is_some_and(|runtime| {
+    match routes.get_mut(&id) {
+        Some(CallRouteState::Active(route)) => route.runtime.upgrade().is_some_and(|runtime| {
             runtime
                 .cancel_function_call(bex_project::CallId(id))
                 .is_ok()
         }),
-        None => true,
+        Some(CallRouteState::Pending { cancelled, .. }) => {
+            *cancelled = true;
+            true
+        }
+        None => false,
     }
 }
 

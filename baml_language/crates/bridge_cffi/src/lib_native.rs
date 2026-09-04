@@ -146,6 +146,7 @@ fn call_function_inner(
     } else {
         unsafe { CallFunctionArgs::from_c_buffer(encoded_args, length) }?
     };
+    let reservation = crate::FunctionCallReservation::new(args.call_id);
     let runtime = crate::runtime_for_call(runtime_key, &args)?;
     let call_id = decoded_call_id(args.call_id)?;
     let target = args.call_target.ok_or(BridgeError::MissingCallTarget)?;
@@ -159,6 +160,7 @@ fn call_function_inner(
         .with_type_defs(type_args.type_defs);
 
     get_tokio_runtime()?.spawn(async move {
+        let _reservation = reservation;
         let encoded = AssertUnwindSafe(async move {
             match target {
                 CallTarget::FunctionName(function_name) => {

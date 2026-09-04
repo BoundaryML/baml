@@ -18,6 +18,7 @@ import initWasm, {
   mediaUrl as mediaWasmUrl,
   mintWebHostValueKey,
   newFunctionCall as newWasmFunctionCall,
+  releaseFunctionCall as releaseWasmFunctionCall,
   registerWebHostCallable,
   registerWebHostValueReleaseCallback,
   releaseHandle as releaseWasmHandle,
@@ -443,6 +444,7 @@ export function getRuntime(key?: bigint): BamlRuntime {
   return runtime;
 }
 export function newFunctionCall(): bigint { return newWasmFunctionCall(); }
+export function releaseFunctionCall(callId: bigint | string): void { releaseWasmFunctionCall(BigInt(callId)); }
 export function cancelFunctionCall(callId: bigint | string): boolean {
   const parsed = typeof callId === "bigint" ? callId : parseCallId(callId);
   if (parsed < 0n || parsed > MAX_UINT64) {

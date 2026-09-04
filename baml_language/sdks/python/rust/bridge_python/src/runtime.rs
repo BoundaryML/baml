@@ -146,6 +146,7 @@ impl BamlRuntime {
         // raise — they become a structured BamlOutboundResult envelope so the
         // future yields bytes that decode_call_result raises uniformly (same
         // BamlError(baml.errors.*) as an engine failure).
+        let reservation = bridge_cffi::FunctionCallReservation::from_encoded(args_proto.as_ref());
         let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
             let runtime = bridge_cffi::runtime_for_encoded_call(self.runtime_key, &args_proto)?;
             let decoded = decode_args(&args_proto)?;
@@ -160,6 +161,7 @@ impl BamlRuntime {
         // catch_unwind -> SdkPanic boundary) lives in bridge_cffi; we just
         // return the encoded envelope bytes for Python to decode + raise.
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let _reservation = reservation;
             let bytes = match prepared {
                 Ok((runtime, decoded)) => {
                     let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
@@ -200,6 +202,7 @@ impl BamlRuntime {
         // (uninitialized runtime, malformed call-args, no tokio runtime) don't
         // raise — they become a structured BamlOutboundResult envelope so the
         // returned bytes decode + raise uniformly via decode_call_result.
+        let reservation = bridge_cffi::FunctionCallReservation::from_encoded(args_proto.as_ref());
         let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
             let runtime = bridge_cffi::runtime_for_encoded_call(self.runtime_key, &args_proto)?;
             let decoded = decode_args(&args_proto)?;
@@ -207,6 +210,7 @@ impl BamlRuntime {
             Ok((runtime, decoded, rt))
         })();
 
+        let _reservation = reservation;
         let (runtime, decoded, rt) = match prepared {
             Ok(v) => v,
             Err(e) => return Ok(bridge_cffi::error_to_outbound(e)),

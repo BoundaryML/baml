@@ -5,7 +5,7 @@ import { attachCallContext } from "./shared/call_context.js";
 
 installHostCallableDispatchFactory(makeHostCallableDispatch);
 
-export { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, Collector, FunctionLog, HostSpanManager, Timing, Usage, _seedFunctionRefHandle, _seedGenericMediaHandle, flushEvents, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, newFunctionCall } from "./native.js";
+export { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, Collector, FunctionLog, HostSpanManager, Timing, Usage, _seedFunctionRefHandle, _seedGenericMediaHandle, flushEvents, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, newFunctionCall, releaseFunctionCall } from "./native.js";
 export { BamlStream } from "./shared/stream.js";
 export { BamlFunctionSpec } from "./shared/function_spec.js";
 export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from "./shared/function_spec.js";

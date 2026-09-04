@@ -28,6 +28,7 @@ __all__ = [
     "new_function_call",
     "register_host_callable",
     "register_unhandled_spawn_error_callback",
+    "release_function_call",
     "release_host_callable",
     "shutdown_runtime",
 ]
@@ -502,6 +503,8 @@ def register_host_callable(callable: typing.Any) -> builtins.int:
     """
 
 def register_unhandled_spawn_error_callback(callback: typing.Any) -> None: ...
+
+def release_function_call(call_id: builtins.int) -> None: ...
 
 def release_host_callable(host_value_key: builtins.int) -> None:
     r"""

@@ -157,7 +157,9 @@ final class HostCallableRegistry: @unchecked Sendable {
         } catch let thrown as BamlThrownValue {
             // Typed BAML throw: rides as the real class value so the
             // engine can match it against the declared contract.
-            let payload = (try? thrown.value._bamlEncode().raw.serializedData()) ?? Data()
+            let payload = (try? BamlRuntime.$encodingRuntime.withValue(runtime) {
+                try thrown.value._bamlEncode().raw.serializedData()
+            }) ?? Data()
             completeHostCall(callId: callId, isError: 1, payload: payload)
         } catch {
             // Any other Swift error → opaque baml.errors.HostCallable

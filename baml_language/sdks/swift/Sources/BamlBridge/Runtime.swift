@@ -281,11 +281,12 @@ public final class BamlRuntime: @unchecked Sendable {
     ) throws -> Data {
         assertNotBlockingMainThreadInDebug(fqn)
         let protoCallId = BamlApi.newFunctionCall()
+        defer { BamlApi.releaseFunctionCall(protoCallId) }
         let payload = try Self.$encodingRuntime.withValue(self) {
             try encodeCallArgs(
-            args,
-            callId: protoCallId,
-            callTarget: .functionName(fqn)
+                args,
+                callId: protoCallId,
+                callTarget: .functionName(fqn)
             )
         }
 
@@ -305,11 +306,12 @@ public final class BamlRuntime: @unchecked Sendable {
         args: [(String, (any BamlEncodable)?)]
     ) async throws -> Data {
         let protoCallId = BamlApi.newFunctionCall()
+        defer { BamlApi.releaseFunctionCall(protoCallId) }
         let payload = try Self.$encodingRuntime.withValue(self) {
             try encodeCallArgs(
-            args,
-            callId: protoCallId,
-            callTarget: .functionName(fqn)
+                args,
+                callId: protoCallId,
+                callTarget: .functionName(fqn)
             )
         }
 
@@ -335,11 +337,12 @@ public final class BamlRuntime: @unchecked Sendable {
     ) async throws -> Data {
         precondition(handleKey != 0, "cannot invoke a zero BAML function handle")
         let protoCallId = BamlApi.newFunctionCall()
+        defer { BamlApi.releaseFunctionCall(protoCallId) }
         let payload = try Self.$encodingRuntime.withValue(self) {
             try encodeCallArgs(
-            args,
-            callId: protoCallId,
-            callTarget: .functionHandle(handleKey)
+                args,
+                callId: protoCallId,
+                callTarget: .functionHandle(handleKey)
             )
         }
 

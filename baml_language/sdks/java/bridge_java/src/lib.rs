@@ -83,6 +83,7 @@ fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::Bridge
 /// error handling already lives in `bridge_cffi::call_and_encode`.
 fn call_sync_to_bytes(runtime_key: Option<u64>, args_proto: &[u8]) -> Vec<u8> {
     let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
+        let _reservation = bridge_cffi::FunctionCallReservation::from_encoded(args_proto);
         let runtime = bridge_cffi::runtime_for_encoded_call(runtime_key, args_proto)?;
         let decoded = decode_args(args_proto)?;
         let rt = bridge_cffi::get_tokio_runtime()?;
@@ -384,6 +385,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
 /// encoded into the same envelope and delivered immediately, so they decode +
 /// raise identically to a sync pre-call failure.
 fn spawn_async_call(runtime_key: Option<u64>, call_id: u64, args_proto: Vec<u8>) {
+    let reservation = bridge_cffi::FunctionCallReservation::from_encoded(&args_proto);
     let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
         let runtime = bridge_cffi::runtime_for_encoded_call(runtime_key, &args_proto)?;
         let decoded = decode_args(&args_proto)?;
@@ -414,6 +416,7 @@ fn spawn_async_call(runtime_key: Option<u64>, call_id: u64, args_proto: Vec<u8>)
         .build();
 
     rt.spawn(async move {
+        let _reservation = reservation;
         // Inner task so a panic during result *encoding* is caught (via the
         // JoinError) and still delivered as an SdkPanic envelope, rather than
         // silently dropping the task and hanging the future. `call_and_encode`
@@ -544,6 +547,16 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeNewCallId(
     // Call ids fit u64; JNI `long` is i64. The counter starts at 1 and the
     // low 63 bits are what the engine keys on, so the bit cast is faithful.
     bridge_cffi::new_function_call_id() as jlong
+}
+
+/// Release an undispatched call reservation.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeReleaseCallId(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    call_id: jlong,
+) {
+    bridge_cffi::release_function_call_id(call_id as u64);
 }
 
 /// `baml_bridge.BamlFfi.nativeCancelFunctionCall(long callId) -> boolean`.

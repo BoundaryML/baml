@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 
 import pytest
-from baml_bridge import BamlRuntime, decode_call_result, encode_call_args, new_function_call
+from baml_bridge import BamlRuntime, call_function_sync, decode_call_result, encode_call_args, new_function_call, release_function_call, cancel_function_call
 from baml_bridge.errors import BamlPanic
 
 def invoke(runtime, name):
@@ -41,6 +41,8 @@ def test_generated_programs_and_registration():
     assert type(av) is not type(bv)
     assert av.read() == 11 and bv.read() == 22
     assert isinstance(a.roundtrip(av), a.Result)
+    assert isinstance(call_function_sync(a._RUNTIME, "user.result", {}).result(), a.Result)
+    assert isinstance(call_function_sync(b._RUNTIME, "user.result", {}).result(), b.Result)
     again = load_sdk("sdk_a_again", "a")
     assert again._RUNTIME.runtime_key == a._RUNTIME.runtime_key
     assert isinstance(again.result(), again.Result)
@@ -134,3 +136,25 @@ def test_identical_dynamic_programs_have_independent_closure_state():
     second = call_function_sync(b, "counter", {}).result()
     assert [first(), first(), second(), first(), second()] == [1, 2, 1, 3, 2]
     a.close(); b.close()
+
+
+def test_generated_source_payload_imports():
+    a = load_sdk("source_sdk_a", "source_a")
+    b = load_sdk("source_sdk_b", "source_b")
+    again = load_sdk("source_sdk_a_again", "source_a")
+    assert a._RUNTIME.runtime_key == again._RUNTIME.runtime_key
+    assert a._RUNTIME.runtime_key != b._RUNTIME.runtime_key
+    assert invoke(a._RUNTIME, "user.value") == 11
+    assert invoke(b._RUNTIME, "user.value") == 22
+    assert invoke(again._RUNTIME, "user.value") == 11
+    assert "main.baml" in a.get_baml_source_files()
+
+
+def test_abandoned_and_failed_encoding_releases_call_ids():
+    abandoned = new_function_call()
+    release_function_call(abandoned)
+    assert not cancel_function_call(abandoned)
+    failed = new_function_call()
+    with pytest.raises((TypeError, ValueError)):
+        encode_call_args({"invalid": object()}, failed, function_name="user.value")
+    assert not cancel_function_call(failed)

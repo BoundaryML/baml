@@ -7,7 +7,7 @@ import functools
 import inspect
 import threading
 from contextlib import contextmanager
-from typing import Dict, Tuple, Type
+from typing import Dict, Optional, Tuple, Type
 
 from .errors import BamlError
 
@@ -175,8 +175,9 @@ class BamlTypeMap:
 
 _TYPE_MAP = BamlTypeMap()
 _SDK_MAP_LOCK = threading.RLock()
-_ACTIVE_MAP = contextvars.ContextVar("baml_type_map", default=None)
+_ACTIVE_MAP: contextvars.ContextVar[Optional[BamlTypeMap]] = contextvars.ContextVar("baml_type_map", default=None)
 _SDK_MAPS: Dict[str, BamlTypeMap] = {}
+_PROGRAM_MAPS: Dict[int, BamlTypeMap] = {}
 
 
 def set_type_map(m: BamlTypeMap, runtime=None, sdk_module: str | None = None) -> None:
@@ -187,6 +188,8 @@ def set_type_map(m: BamlTypeMap, runtime=None, sdk_module: str | None = None) ->
     else:
         with _SDK_MAP_LOCK:
             _SDK_MAPS[sdk_module] = m
+            if runtime is not None:
+                _PROGRAM_MAPS.setdefault(runtime.runtime_key, m)
 
 
 def get_type_map() -> BamlTypeMap:
@@ -250,6 +253,10 @@ def runtime_argument_bound(call):
         base = get_type_map()
         if base.runtime is not None and base.runtime.runtime_key == runtime.runtime_key:
             return base
+        with _SDK_MAP_LOCK:
+            registered = _PROGRAM_MAPS.get(runtime.runtime_key)
+        if registered is not None:
+            return registered
         bound = copy.copy(base)
         bound.runtime = runtime
         return bound

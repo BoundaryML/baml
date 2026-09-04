@@ -57,6 +57,7 @@ module Baml
           unregister_runtime
           call_function_for_runtime
           program_key
+          release_function_call
         ].freeze
 
         layout :abi_version, :uint32,
@@ -73,6 +74,7 @@ module Baml
         ],
         register_program: [Buffer.by_value, %i[uint64 pointer size_t pointer], { blocking: true }],
         program_key: [Buffer.by_value, %i[pointer size_t pointer]],
+        release_function_call: [:void, %i[uint64]],
         free_buffer: [:void, [Buffer.by_value]],
         register_callback: [:void, [:pointer]],
         register_bridge: [Buffer.by_value, [:pointer]]

@@ -17,6 +17,7 @@ import {
     releaseHostCallable,
     completeHostCall,
     newFunctionCall,
+    releaseFunctionCall,
 } from './native.js';
 import { attachCallContext } from './call_context.js';
 import { BamlStream } from './stream.js';
@@ -443,6 +444,7 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
         throw new TypeError('callId must be a nonzero uint64');
     }
     if (options.functionName !== undefined && options.functionHandle !== undefined) {
+        releaseFunctionCall(callId.toString());
         throw new TypeError('exactly one BAML call target may be set');
     }
     const ctx: EncodeCtx = { syncMode: options.syncMode ?? false, registered: [] };
@@ -467,6 +469,7 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
         });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     } catch (err) {
+        releaseFunctionCall(callId.toString());
         // Roll back any host callables registered before the failure so
         // they don't leak in the registry (and pin the libuv loop) for the
         // life of the process — the call never reaches the engine, so the

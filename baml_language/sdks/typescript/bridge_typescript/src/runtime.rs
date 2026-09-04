@@ -93,6 +93,7 @@ impl BamlRuntime {
         ctx: Option<&HostSpanManager>,
         collectors: Option<Vec<&Collector>>,
     ) -> napi::Result<Buffer> {
+        let reservation = bridge_cffi::FunctionCallReservation::from_encoded(args_proto.as_ref());
         let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
             let runtime = bridge_cffi::runtime_for_encoded_call(self.key, args_proto.as_ref())?;
             let decoded = decode_args(args_proto.as_ref())?;
@@ -101,6 +102,7 @@ impl BamlRuntime {
         })();
         let _ = (&ctx, &collectors);
 
+        let _reservation = reservation;
         let (runtime, decoded, rt) = match prepared {
             Ok(v) => v,
             Err(e) => return Ok(Buffer::from(bridge_cffi::error_to_outbound(e))),
@@ -145,6 +147,7 @@ impl BamlRuntime {
         ctx: Option<&HostSpanManager>,
         collectors: Option<Vec<&Collector>>,
     ) -> napi::Result<PromiseRaw<'e, Buffer>> {
+        let reservation = bridge_cffi::FunctionCallReservation::from_encoded(args_proto.as_ref());
         let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
             let runtime = bridge_cffi::runtime_for_encoded_call(self.key, args_proto.as_ref())?;
             let decoded = decode_args(args_proto.as_ref())?;
@@ -155,6 +158,7 @@ impl BamlRuntime {
         // Same shared call_and_encode as the sync + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes for the TS decoder.
         env.spawn_future(async move {
+            let _reservation = reservation;
             let bytes = match prepared {
                 Ok((runtime, decoded)) => {
                     let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
@@ -180,7 +184,11 @@ impl BamlRuntime {
 /// Resolve an explicit uint64 registration, or the only registered runtime.
 #[napi(js_name = "getRuntime")]
 pub fn get_runtime(runtime_key: Option<BigInt>) -> napi::Result<BamlRuntime> {
-    let runtime = match runtime_key { Some(key) => bridge_cffi::get_runtime_by_key(checked_key(key)?), None => bridge_cffi::get_runtime() }.map_err(|e| match e {
+    let selected = match runtime_key {
+        Some(key) => bridge_cffi::get_runtime_by_key(checked_key(key)?),
+        None => bridge_cffi::get_runtime(),
+    };
+    let runtime = selected.map_err(|e| match e {
         bridge_cffi::BridgeError::NotInitialized => napi::Error::new(
             napi::Status::GenericFailure,
             "BamlError: BAML runtime has not been initialized — call BamlRuntime.initializeRuntime first.",

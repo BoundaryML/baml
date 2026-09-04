@@ -61,7 +61,7 @@ func Test_runtime_class_definition_preserves_nested_metadata(t *testing.T) {
 
 func Test_compiled_package_returns_class_graph(t *testing.T) {
 	ctx := context.Background()
-	pkg, err := bamlreflect.CompilePackage(ctx, map[string]string{
+	pkg, err := bamlreflect.CompilePackage(baml_go.WithRuntime(ctx, ^uint64(0)), map[string]string{
 		"runtime.baml": "class CompiledRow { amount int note string? }",
 	})
 	if err != nil {

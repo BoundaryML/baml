@@ -796,7 +796,8 @@ struct InlinedEntry {
 fn render_inlinedbaml(payload: RuntimePayload<'_>) -> String {
     match payload {
         RuntimePayload::SourceFiles(_) => {
-            "from __future__ import annotations\n\nfrom ._baml_sources import FILES\n".to_string()
+            "from __future__ import annotations\n\nfrom ._baml_sources import FILES, PROGRAM_KEY\n"
+                .to_string()
         }
         RuntimePayload::Bytecode(bytecode, embedded_baml_toml, _) => {
             render_inlinedbaml_bytecode(bytecode, embedded_baml_toml)
@@ -2045,7 +2046,7 @@ mod tests {
 
         let inl = &out[&PathBuf::from("_inlinedbaml.py")];
         assert!(inl.starts_with(HEADER));
-        assert!(inl.contains("from ._baml_sources import FILES"));
+        assert!(inl.contains("from ._baml_sources import FILES, PROGRAM_KEY"));
 
         let sources = &out[&PathBuf::from("_baml_sources.py")];
         assert!(sources.starts_with(HEADER));

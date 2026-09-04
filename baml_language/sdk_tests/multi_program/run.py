@@ -33,6 +33,7 @@ def main():
         keys.append(re.search(r"PROGRAM_KEY\s*=\s*(\d+)n", source).group(1))
     assert keys[0] == keys[1], "relocating identical sources changed the generated program identity"
     if args.language in ("python", "all"):
+        run(["cargo", "run", "-q", "-p", "sdkgen_python_pydantic2", "--example", "multi_program_source", "--", ROOT])
         run([PYTHON, "-m", "pytest", "-q", "-n", "0", ROOT / "test_python.py"])
     if args.language == "python":
         return

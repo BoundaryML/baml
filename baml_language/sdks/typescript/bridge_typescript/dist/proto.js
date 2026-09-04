@@ -11,7 +11,7 @@
 // Decodes the BamlOutboundResult envelope → TS objects (call results), and
 // bare BamlOutboundValue bytes → TS objects (host-callable args).
 import { baml_bridge } from './proto/baml_cffi.js';
-import { BamlHandle, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, newFunctionCall, } from './native.js';
+import { BamlHandle, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, newFunctionCall, releaseFunctionCall, } from './native.js';
 import { attachCallContext } from './call_context.js';
 import { BamlStream } from './stream.js';
 import { BamlFunctionSpec } from './function_spec.js';
@@ -371,6 +371,7 @@ export function encodeCallArgs(kwargs, options) {
         throw new TypeError('callId must be a nonzero uint64');
     }
     if (options.functionName !== undefined && options.functionHandle !== undefined) {
+        releaseFunctionCall(callId.toString());
         throw new TypeError('exactly one BAML call target may be set');
     }
     const ctx = { syncMode: options.syncMode ?? false, registered: [] };
@@ -396,6 +397,7 @@ export function encodeCallArgs(kwargs, options) {
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     }
     catch (err) {
+        releaseFunctionCall(callId.toString());
         // Roll back any host callables registered before the failure so
         // they don't leak in the registry (and pin the libuv loop) for the
         // life of the process — the call never reaches the engine, so the
