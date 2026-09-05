@@ -24,23 +24,25 @@ pnpm dev
 
 We use [mise](https://mise.jdx.dev/) (formerly rtx) as our polyglot tool version manager. This ensures all developers use the exact same versions of tools, preventing "works on my machine" issues.
 
+### Toolchain
+
+Three tools manage the dev environment:
+
+- **mise** — versions of every tool except Rust, declared in `mise.toml`.
+- **direnv** — loads `.envrc`, which activates mise and sets the build
+  environment.
+- **rustup** — the Rust toolchain. Rust is not in `mise.toml`; each workspace
+  pins its own version in `rust-toolchain.toml` and rustup installs it on
+  first use. See [Rust workspace toolchains](#rust-workspace-toolchains).
+
 ### What is mise?
 
-mise is a tool version manager that can handle multiple programming languages and tools in one place. It replaces the need for nvm, rbenv, pyenv, rustup, and other version managers.
+mise is a tool version manager that can handle multiple programming languages and tools in one place. It replaces the need for nvm, rbenv, pyenv, and other version managers, except rustup.
 
 ### Configuration
 
-Our tool versions are defined in `mise.toml`:
-
-```toml
-[tools]
-rust = "1.88.0"
-go = "1.23"
-python = "3.12"
-ruby = "3.2.2"
-node = "lts"
-# ... and more
-```
+Tool versions are declared in [`mise.toml`](./mise.toml); see that file for the
+current set.
 
 ### Common mise Commands
 
@@ -71,11 +73,10 @@ If you prefer to install tools manually or need to understand what the setup scr
 
 ### Required Tools
 
-1. **Rust** (1.88.0)
+1. **Rust** — install rustup; each workspace's `rust-toolchain.toml` pins
+   the version.
    ```bash
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-   rustup install 1.88.0
-   rustup default 1.88.0
    ```
 
 2. **Go** (1.23)
@@ -251,7 +252,7 @@ pnpm build              # TypeScript components
 **IntelliJ/RustRover:**
 - Configure SDK paths to use mise-installed versions
 - Go: `~/.local/share/mise/installs/go/1.23/`
-- Rust: `~/.local/share/mise/installs/rust/1.88.0/`
+- Rust: managed by rustup, not mise (`rustup show home`)
 - Python: `~/.local/share/mise/installs/python/3.12/`
 - Ruby: `~/.local/share/mise/installs/ruby/3.2.2/`
 
