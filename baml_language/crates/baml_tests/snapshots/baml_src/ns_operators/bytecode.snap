@@ -471,8 +471,6 @@ function operators.<(user.operators.Boom as baml.ops.Compare)>.cmp(self: operato
     load_type baml.ops.Compare
     load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -527,8 +525,6 @@ function operators.<(user.operators.OddOrder as baml.ops.Compare)>.cmp(self: ope
     load_type baml.ops.Compare
     load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -572,8 +568,6 @@ function operators.<(user.operators.Ranked as baml.ops.Compare)>.cmp(self: opera
     load_type baml.ops.Compare
     load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -634,8 +628,6 @@ function operators.<(user.operators.Tier as baml.ops.Compare)>.cmp(self: operato
     load_type baml.ops.Compare
     load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -682,8 +674,6 @@ function operators.<(user.operators.Wrapped<#0> as baml.ops.Compare)>.cmp(self: 
     load_type baml.ops.Compare
     load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -701,8 +691,6 @@ function operators.Ordered.precedes(self: operators.Ordered, other: #0) -> bool 
     load_type baml.ops.Compare
     load_const "lt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -743,20 +731,17 @@ function operators.drv_catch_add_overflow() -> int {
     call baml.Int.max_value
     load_const 1
     call user.operators.drv_int_add
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.IntegerOverflow
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
@@ -764,20 +749,17 @@ function operators.drv_catch_bigint_div_zero() -> bigint {
     load_const 1n
     load_const 0n
     call user.operators.drv_bigint_div
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1n
 
-  L2:
+  L1:
     return
 }
 
@@ -785,20 +767,17 @@ function operators.drv_catch_div_min_by_minus_one() -> int {
     call baml.Int.min_value
     load_const -1
     call user.operators.drv_int_div
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.IntegerOverflow
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
@@ -806,20 +785,17 @@ function operators.drv_catch_int_div_zero() -> int {
     load_const 1
     load_const 0
     call user.operators.drv_int_div
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
@@ -827,20 +803,17 @@ function operators.drv_catch_int_rem_zero() -> int {
     load_const 1
     load_const 0
     call user.operators.drv_int_rem
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
@@ -848,40 +821,34 @@ function operators.drv_catch_mul_overflow() -> int {
     call baml.Int.max_value
     load_const 2
     call user.operators.drv_int_mul
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.IntegerOverflow
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
 function operators.drv_catch_neg_overflow() -> int {
     call baml.Int.min_value
     call user.operators.drv_int_neg
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.IntegerOverflow
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
@@ -923,30 +890,23 @@ function operators.drv_float_div_zero_is_infinite() -> bool {
     load_const 0.0
     call user.operators.drv_float_div
     call baml.Float.is_infinite
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_const 1.0
     load_const 0.0
     div_float
     call baml.Float.is_infinite
-
-  L0:
-    jump_if_false L1
-    pop 1
+    jump_if_false_or_pop L0
     load_const 1
     load_const 0.0
     bin_op /
     call baml.Float.is_infinite
-
-  L1:
-    jump_if_false L2
-    pop 1
+    jump_if_false_or_pop L0
     load_const 1.0
     load_const 0
     bin_op /
     call baml.Float.is_infinite
 
-  L2:
+  L0:
     return
 }
 
@@ -1065,8 +1025,6 @@ function operators.ops_counter_add(c: operators.Counter, n: int) -> int {
 
 function operators.ops_double_neg_var() -> int {
     load_const -10
-    unary_op -
-    unary_op -
     return
 }
 
@@ -1094,17 +1052,14 @@ function operators.ops_pick_int_or_float(n: int) -> int | float {
     load_var n
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const 2.5
     jump L1
 
   L0:
-    load_const 2.5
-    jump L2
-
-  L1:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
@@ -1169,19 +1124,14 @@ function operators.ord_as_if_cond() -> int {
     load_type baml.ops.Compare
     load_const "lt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const 20
     jump L1
 
   L0:
-    load_const 20
-    jump L2
-
-  L1:
     load_const 10
 
-  L2:
+  L1:
     return
 }
 
@@ -1195,16 +1145,11 @@ function operators.ord_as_while_cond() -> int {
     load_type baml.ops.Compare
     load_const "lt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var n
     return
 
-  L2:
+  L1:
     load_var n
     load_const 1
     add_int
@@ -1225,8 +1170,6 @@ function operators.ord_bool_ge(a: bool, b: bool) -> bool {
     load_type baml.ops.Compare
     load_const "ge"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1235,8 +1178,6 @@ function operators.ord_bool_gt(a: bool, b: bool) -> bool {
     load_type baml.ops.Compare
     load_const "gt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1245,8 +1186,6 @@ function operators.ord_bool_le(a: bool, b: bool) -> bool {
     load_type baml.ops.Compare
     load_const "le"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1255,8 +1194,6 @@ function operators.ord_bool_lt(a: bool, b: bool) -> bool {
     load_type baml.ops.Compare
     load_const "lt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1268,20 +1205,17 @@ function operators.ord_catch_ge() -> bool {
     load_type baml.ops.Compare
     load_const "ge"
     virtual_call nargs=2 ntypeargs=0
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const true
 
-  L2:
+  L1:
     return
 }
 
@@ -1293,20 +1227,17 @@ function operators.ord_catch_gt() -> bool {
     load_type baml.ops.Compare
     load_const "gt"
     virtual_call nargs=2 ntypeargs=0
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const true
 
-  L2:
+  L1:
     return
 }
 
@@ -1318,20 +1249,17 @@ function operators.ord_catch_le() -> bool {
     load_type baml.ops.Compare
     load_const "le"
     virtual_call nargs=2 ntypeargs=0
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const true
 
-  L2:
+  L1:
     return
 }
 
@@ -1343,20 +1271,17 @@ function operators.ord_catch_lt() -> bool {
     load_type baml.ops.Compare
     load_const "lt"
     virtual_call nargs=2 ntypeargs=0
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const true
 
-  L2:
+  L1:
     return
 }
 
@@ -1366,8 +1291,6 @@ function operators.ord_clamp(v: #0, lo: #0, hi: #0) -> #0 {
     load_type baml.ops.Compare
     load_const "clamp"
     virtual_call nargs=3 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1390,8 +1313,6 @@ function operators.ord_ge(a: #0, b: #0) -> bool {
     load_type baml.ops.Compare
     load_const "ge"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1400,8 +1321,6 @@ function operators.ord_generic_int(a: operators.Wrapped<int>, b: operators.Wrapp
     load_type baml.ops.Compare
     load_const "lt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1410,8 +1329,6 @@ function operators.ord_generic_string(a: operators.Wrapped<string>, b: operators
     load_type baml.ops.Compare
     load_const "lt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1420,8 +1337,6 @@ function operators.ord_gt(a: #0, b: #0) -> bool {
     load_type baml.ops.Compare
     load_const "gt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1433,10 +1348,7 @@ function operators.ord_in_short_circuit() -> bool {
     load_type baml.ops.Compare
     load_const "lt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _1
-    load_var _1
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_const true
     load_const false
     load_type baml.ops.Compare
@@ -1559,8 +1471,6 @@ function operators.ord_le(a: #0, b: #0) -> bool {
     load_type baml.ops.Compare
     load_const "le"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1569,8 +1479,6 @@ function operators.ord_lt(a: #0, b: #0) -> bool {
     load_type baml.ops.Compare
     load_const "lt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1579,8 +1487,6 @@ function operators.ord_max(a: #0, b: #0) -> #0 {
     load_type baml.ops.Compare
     load_const "max"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1589,8 +1495,6 @@ function operators.ord_min(a: #0, b: #0) -> #0 {
     load_type baml.ops.Compare
     load_const "min"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1599,8 +1503,6 @@ function operators.ord_odd_gt(a: operators.OddOrder, b: operators.OddOrder) -> b
     load_type baml.ops.Compare
     load_const "gt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1609,8 +1511,6 @@ function operators.ord_odd_le(a: operators.OddOrder, b: operators.OddOrder) -> b
     load_type baml.ops.Compare
     load_const "le"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1627,8 +1527,6 @@ function operators.ord_rank_ge(a: operators.Ranked, b: operators.Ranked) -> bool
     load_type baml.ops.Compare
     load_const "ge"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1644,8 +1542,6 @@ function operators.ord_rank_gt(a: operators.Ranked, b: operators.Ranked) -> bool
     load_type baml.ops.Compare
     load_const "gt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1654,8 +1550,6 @@ function operators.ord_rank_le(a: operators.Ranked, b: operators.Ranked) -> bool
     load_type baml.ops.Compare
     load_const "le"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1664,8 +1558,6 @@ function operators.ord_rank_lt(a: operators.Ranked, b: operators.Ranked) -> bool
     load_type baml.ops.Compare
     load_const "lt"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1681,8 +1573,6 @@ function operators.ord_self_in_default(a: operators.Tier, b: operators.Tier) -> 
     load_type operators.Ordered
     load_const "precedes"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 

@@ -458,10 +458,7 @@ function iter.<(user.iter.FlakyIterator as baml.iter.Iterator)>.next(self: iter.
     load_var self
     load_field .fail_at
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L4
-
-  L0:
+    pop_jump_if_true L2
     load_var self
     load_field .pos
     store_var _7
@@ -471,10 +468,7 @@ function iter.<(user.iter.FlakyIterator as baml.iter.Iterator)>.next(self: iter.
     store_var _8
     load_var2 2 3
     cmp_int_op >=
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var self
     load_field .values
     load_var self
@@ -488,15 +482,15 @@ function iter.<(user.iter.FlakyIterator as baml.iter.Iterator)>.next(self: iter.
     bin_op +
     store_field .pos
     load_var item
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     alloc_instance baml.iter.Done
 
-  L3:
+  L1:
     return
 
-  L4:
+  L2:
     load_var self
     load_const -1
     store_field .fail_at
@@ -516,10 +510,7 @@ function iter.<(user.iter.ResumableIterator as baml.iter.Iterator)>.next(self: i
     load_var self
     load_field .done_at
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var self
     load_field .pos
     store_var _6
@@ -529,10 +520,7 @@ function iter.<(user.iter.ResumableIterator as baml.iter.Iterator)>.next(self: i
     store_var _7
     load_var2 2 3
     cmp_int_op >=
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var self
     load_field .values
     load_var self
@@ -546,19 +534,19 @@ function iter.<(user.iter.ResumableIterator as baml.iter.Iterator)>.next(self: i
     bin_op +
     store_field .pos
     load_var item
-    jump L4
+    jump L2
 
-  L2:
+  L0:
     alloc_instance baml.iter.Done
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_var self
     load_const -1
     store_field .done_at
     alloc_instance baml.iter.Done
 
-  L4:
+  L2:
     return
 }
 
@@ -598,13 +586,9 @@ function iter.iter_array_as_iterable_param_inner(xs: baml.iter.Iterable<Error = 
     load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _2
-    load_var _2
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -626,13 +610,9 @@ function iter.iter_array_chain_fluent() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "chain"
     virtual_call nargs=2 ntypeargs=1
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -647,32 +627,25 @@ function iter.iter_array_collect_count() -> bool {
     load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _4
-    load_var _4
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _3
-    load_var _3
+    store_var _4
+    load_var _4
     load_const 4
     load_const 5
     load_const 6
     load_type int
     alloc_array 3
     call baml.ops.equals_equals
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var xs
     load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _7
-    load_var _7
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "count"
     virtual_call nargs=1 ntypeargs=0
-    store_var _6
-    load_var _6
     load_const 3
     cmp_int_op ==
 
@@ -734,13 +707,9 @@ function iter.iter_array_filter_map_fluent() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "filter_map"
     virtual_call nargs=2 ntypeargs=2
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -762,26 +731,20 @@ function iter.iter_array_filter_step_by() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "filter"
     virtual_call nargs=2 ntypeargs=1
-    store_var _2
-    load_var _2
     load_const 2
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "step_by"
     virtual_call nargs=2 ntypeargs=0
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
 function iter.iter_array_first_adapter_defaults() -> bool {
-    load_var ?12
+    load_var ?10
     make_cell
-    store_var ?12
+    store_var ?10
     load_type int
     load_const 1
     load_const 2
@@ -805,8 +768,6 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "map"
     virtual_call nargs=2 ntypeargs=2
-    store_var _2
-    load_var _2
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
@@ -834,8 +795,6 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "flat_map"
     virtual_call nargs=2 ntypeargs=3
-    store_var _13
-    load_var _13
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
@@ -867,7 +826,7 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     store_var reduced
     load_type int
     alloc_array 0
-    store_deref ?12
+    store_deref ?10
     load_type int
     load_const 1
     load_const 2
@@ -884,7 +843,7 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     virtual_call nargs=2 ntypeargs=1
     store_var _36
     load_type never
-    load_var2 13 12
+    load_var2 11 10
     make_closure .<lambda(iter_array_first_adapter_defaults, 7)>, 1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "for_each"
@@ -896,8 +855,7 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     load_type int
     alloc_array 2
     call baml.ops.equals_equals
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var flattened
     load_const 1
     load_const 11
@@ -906,25 +864,19 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     load_type int
     alloc_array 4
     call baml.ops.equals_equals
-
-  L0:
-    jump_if_false L1
-    pop 1
+    jump_if_false_or_pop L0
     load_var reduced
     load_const 9
     cmp_int_op ==
-
-  L1:
-    jump_if_false L2
-    pop 1
-    load_deref ?12
+    jump_if_false_or_pop L0
+    load_deref ?10
     load_const 3
     load_const 9
     load_type int
     alloc_array 2
     call baml.ops.equals_equals
 
-  L2:
+  L0:
     return
 }
 
@@ -970,8 +922,7 @@ function iter.iter_array_first_native_methods() -> bool {
     load_type int
     alloc_array 3
     call baml.ops.equals_equals
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var flat_mapped
     load_const 1
     load_const 11
@@ -980,15 +931,12 @@ function iter.iter_array_first_native_methods() -> bool {
     load_type int
     alloc_array 4
     call baml.ops.equals_equals
-
-  L0:
-    jump_if_false L1
-    pop 1
+    jump_if_false_or_pop L0
     load_var reduced
     load_const 10
     cmp_int_op ==
 
-  L1:
+  L0:
     return
 }
 
@@ -1023,13 +971,9 @@ function iter.iter_array_iter() -> int[] {
     load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1050,18 +994,16 @@ function iter.iter_array_iter_lazy_over_source_details() -> int[] {
     virtual_call nargs=1 ntypeargs=0
     store_var _4
     load_type never
-    load_var2 4 2
+    load_var2 3 2
     make_closure .<lambda(iter_array_iter_lazy_over_source_details, 0)>, 1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "filter"
     virtual_call nargs=2 ntypeargs=1
-    store_var it
     load_type int
     load_var xs
     load_const 3
     call baml.Array.push
     pop 1
-    load_var it
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
@@ -1088,17 +1030,14 @@ function iter.iter_array_iter_lazy_over_source_details() -> int[] {
     store_var _15
     load_var _15
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_type int
-    load_var2 6 9
+    load_var2 5 8
     call baml.Array.push
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var details
     return
 }
@@ -1128,13 +1067,9 @@ function iter.iter_array_lazy_filter_map_collect() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "map"
     virtual_call nargs=2 ntypeargs=2
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1165,10 +1100,7 @@ function iter.iter_array_nullable_elements_details() -> int[] {
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L2
     load_var _7
     store_var x
     load_var visited
@@ -1178,23 +1110,20 @@ function iter.iter_array_nullable_elements_details() -> int[] {
     load_var x
     load_const null
     cmp_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var2 4 7
     add_int
     store_var sum
     jump L0
 
-  L3:
+  L1:
     load_var nulls
     load_const 1
     add_int
     store_var nulls
     jump L0
 
-  L4:
+  L2:
     load_var visited
     store_var _14
     load_var nulls
@@ -1205,8 +1134,6 @@ function iter.iter_array_nullable_elements_details() -> int[] {
     load_type baml.iter.Iterable<Error = never, Item = int | null>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _18
-    load_var _18
     load_type baml.iter.Iterator<Error = never, Item = int | null>
     load_const "count"
     virtual_call nargs=1 ntypeargs=0
@@ -1226,8 +1153,6 @@ function iter.iter_array_peekable_fluent() -> int[] {
     load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _2
-    load_var _2
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "peekable"
     virtual_call nargs=1 ntypeargs=0
@@ -1242,12 +1167,23 @@ function iter.iter_array_peekable_fluent() -> int[] {
     store_var _6
     load_var _6
     is_type baml.iter.Done
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L0
+    load_type int
+    load_var2 2 3
+    call baml.Array.push
+    pop 1
 
   L0:
+    load_var p
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _14
+    load_var _14
+    is_type baml.iter.Done
+    pop_jump_if_true L1
     load_type int
-    load_var2 3 4
+    load_var2 2 4
     call baml.Array.push
     pop 1
 
@@ -1256,36 +1192,16 @@ function iter.iter_array_peekable_fluent() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _14
-    load_var _14
-    is_type baml.iter.Done
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_type int
-    load_var2 3 5
-    call baml.Array.push
-    pop 1
-
-  L3:
-    load_var p
-    load_type baml.iter.Iterator<Error = never, Item = int>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
     store_var _20
     load_var _20
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L2
     load_type int
-    load_var2 3 6
+    load_var2 2 5
     call baml.Array.push
     pop 1
 
-  L5:
+  L2:
     load_var out
     return
 }
@@ -1306,17 +1222,13 @@ function iter.iter_chain() -> int[] {
     call baml.iter.ArrayIterator.new
     store_var b
     load_type never
-    load_var2 2 3
+    load_var2 1 2
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "chain"
     virtual_call nargs=2 ntypeargs=1
-    store_var _7
-    load_var _7
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1331,8 +1243,6 @@ function iter.iter_collect() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1347,8 +1257,6 @@ function iter.iter_count() -> int {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "count"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1371,8 +1279,6 @@ function iter.iter_explicit_map_coerces_to_iterator() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1392,13 +1298,9 @@ function iter.iter_filter() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "filter"
     virtual_call nargs=2 ntypeargs=1
-    store_var _4
-    load_var _4
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1418,13 +1320,9 @@ function iter.iter_filter_implicit_source() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "filter"
     virtual_call nargs=2 ntypeargs=1
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1445,13 +1343,9 @@ function iter.iter_filter_map() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "filter_map"
     virtual_call nargs=2 ntypeargs=2
-    store_var _4
-    load_var _4
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1472,13 +1366,9 @@ function iter.iter_filter_map_implicit_source() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "filter_map"
     virtual_call nargs=2 ntypeargs=2
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1498,13 +1388,9 @@ function iter.iter_flat_map() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "flat_map"
     virtual_call nargs=2 ntypeargs=3
-    store_var _4
-    load_var _4
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1524,13 +1410,9 @@ function iter.iter_flat_map_implicit_source() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "flat_map"
     virtual_call nargs=2 ntypeargs=3
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1550,7 +1432,7 @@ function iter.iter_flatten() -> int[] {
     call baml.iter.ArrayIterator.new
     store_var _5
     load_type baml.iter.ArrayIterator<int>
-    load_var2 2 3
+    load_var2 1 2
     load_type baml.iter.ArrayIterator<int>
     alloc_array 2
     call baml.iter.ArrayIterator.new
@@ -1564,8 +1446,6 @@ function iter.iter_flatten() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1593,17 +1473,14 @@ function iter.iter_for_in_array_iterator() -> int[] {
     store_var _6
     load_var _6
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_type int
     load_var2 1 3
     call baml.Array.push
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var out
     return
 }
@@ -1629,17 +1506,14 @@ function iter.iter_for_in_array_literal() -> int[] {
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_type int
     load_var2 1 3
     call baml.Array.push
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var out
     return
 }
@@ -1666,17 +1540,14 @@ function iter.iter_for_in_array_of_classes() -> int {
     store_var _6
     load_var _6
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 1 3
     load_field .value
     add_int
     store_var total
     jump L0
 
-  L2:
+  L1:
     load_var total
     return
 }
@@ -1702,20 +1573,14 @@ function iter.iter_for_in_array_of_unions() -> int {
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L2
     load_var _5
     store_var x
     load_var x
     store_var _9
     load_var _9
     narrow_bind int, slot=5
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var x
     load_const "two"
     cmp_op ==
@@ -1726,13 +1591,13 @@ function iter.iter_for_in_array_of_unions() -> int {
     store_var total
     jump L0
 
-  L3:
+  L1:
     load_var2 1 5
     add_int
     store_var total
     jump L0
 
-  L4:
+  L2:
     load_var total
     return
 }
@@ -1758,17 +1623,14 @@ function iter.iter_for_in_range() -> int[] {
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_type int
     load_var2 1 3
     call baml.Array.push
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var out
     return
 }
@@ -1794,17 +1656,14 @@ function iter.iter_for_in_repeat() -> int[] {
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_type int
     load_var2 1 3
     call baml.Array.push
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var out
     return
 }
@@ -1834,10 +1693,7 @@ function iter.iter_for_loop_pop_during_iteration() -> int[] {
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_type int
     load_var2 2 4
     call baml.Array.push
@@ -1848,7 +1704,7 @@ function iter.iter_for_loop_pop_during_iteration() -> int[] {
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var visited
     return
 }
@@ -1876,10 +1732,7 @@ function iter.iter_for_loop_sees_push_during_iteration() -> int[] {
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _5
     store_var x
     load_type int
@@ -1897,7 +1750,7 @@ function iter.iter_for_loop_sees_push_during_iteration() -> int[] {
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var visited
     return
 }
@@ -1918,13 +1771,9 @@ function iter.iter_map() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "map"
     virtual_call nargs=2 ntypeargs=2
-    store_var _4
-    load_var _4
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1944,13 +1793,9 @@ function iter.iter_map_implicit_source() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "map"
     virtual_call nargs=2 ntypeargs=2
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1975,12 +1820,23 @@ function iter.iter_peekable() -> int[] {
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_type int
     load_var2 2 3
+    call baml.Array.push
+    pop 1
+
+  L0:
+    load_var p
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _15
+    load_var _15
+    is_type baml.iter.Done
+    pop_jump_if_true L1
+    load_type int
+    load_var2 2 4
     call baml.Array.push
     pop 1
 
@@ -1989,36 +1845,16 @@ function iter.iter_peekable() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _15
-    load_var _15
-    is_type baml.iter.Done
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_type int
-    load_var2 2 4
-    call baml.Array.push
-    pop 1
-
-  L3:
-    load_var p
-    load_type baml.iter.Iterator<Error = never, Item = int>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
     store_var _21
     load_var _21
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L2
     load_type int
     load_var2 2 5
     call baml.Array.push
     pop 1
 
-  L5:
+  L2:
     load_type int
     load_type never
     load_var p
@@ -2026,24 +1862,21 @@ function iter.iter_peekable() -> int[] {
     store_var _27
     load_var _27
     is_type baml.iter.Done
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
+    pop_jump_if_true L3
     load_type int
     load_var2 2 6
     call baml.Array.push
     pop 1
-    jump L8
+    jump L4
 
-  L7:
+  L3:
     load_type int
     load_var out
     load_const 99
     call baml.Array.push
     pop 1
 
-  L8:
+  L4:
     load_var out
     return
 }
@@ -2056,8 +1889,6 @@ function iter.iter_range() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2079,8 +1910,6 @@ function iter.iter_reduce() -> int {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "reduce"
     virtual_call nargs=3 ntypeargs=2
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2092,8 +1921,6 @@ function iter.iter_repeat() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2118,17 +1945,14 @@ function iter.iter_shadowed_param_for_in(source: baml.iter.Iterable<Error = neve
     store_var _6
     load_var _6
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_type string
     load_var2 2 4
     call baml.Array.push
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var out
     return
 }
@@ -2148,13 +1972,9 @@ function iter.iter_skip() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "skip"
     virtual_call nargs=2 ntypeargs=0
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2193,10 +2013,7 @@ function iter.iter_skip_does_not_respend_quota_after_done() -> int[] {
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L2
     load_var _7
     store_var i
     load_var s
@@ -2206,17 +2023,14 @@ function iter.iter_skip_does_not_respend_quota_after_done() -> int[] {
     store_var _12
     load_var _12
     is_type baml.iter.Done
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_type int
     load_var2 2 6
     call baml.Array.push
     pop 1
     jump L0
 
-  L3:
+  L1:
     load_type int
     load_var out
     load_const -1
@@ -2224,7 +2038,7 @@ function iter.iter_skip_does_not_respend_quota_after_done() -> int[] {
     pop 1
     jump L0
 
-  L4:
+  L2:
     load_var out
     return
 }
@@ -2240,13 +2054,9 @@ function iter.iter_skip_past_end() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "skip"
     virtual_call nargs=2 ntypeargs=0
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2273,19 +2083,14 @@ function iter.iter_skip_quota_survives_source_error() -> int[] {
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     pop 1
-    jump L1
+    jump L0
     load_var e
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
-    load_const true
-    pop_jump_if_false L3
+  L0:
     load_var s
     load_type baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int>
     load_const "next"
@@ -2293,17 +2098,14 @@ function iter.iter_skip_quota_survives_source_error() -> int[] {
     store_var _9
     load_var _9
     is_type baml.iter.Done
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_type int
     load_var2 2 4
     call baml.Array.push
     pop 1
-    jump L1
+    jump L0
 
-  L3:
+  L1:
     load_var out
     return
 }
@@ -2317,19 +2119,13 @@ function iter.iter_skip_then_take() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "skip"
     virtual_call nargs=2 ntypeargs=0
-    store_var _2
-    load_var _2
     load_const 4
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "take"
     virtual_call nargs=2 ntypeargs=0
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2350,13 +2146,9 @@ function iter.iter_skip_while() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "skip_while"
     virtual_call nargs=2 ntypeargs=1
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2374,13 +2166,9 @@ function iter.iter_skip_while_all_match() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "skip_while"
     virtual_call nargs=2 ntypeargs=1
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2399,13 +2187,9 @@ function iter.iter_skip_while_none_match() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "skip_while"
     virtual_call nargs=2 ntypeargs=1
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2418,13 +2202,9 @@ function iter.iter_skip_zero() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "skip"
     virtual_call nargs=2 ntypeargs=0
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2476,18 +2256,14 @@ function iter.iter_some_every_find() -> bool {
     virtual_call nargs=2 ntypeargs=1
     store_var found
     load_var some_large
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var every_small
-
-  L0:
-    jump_if_false L1
-    pop 1
+    jump_if_false_or_pop L0
     load_var found
     load_const 2
     call baml.ops.equals_equals
 
-  L1:
+  L0:
     return
 }
 
@@ -2500,13 +2276,9 @@ function iter.iter_step_by() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "step_by"
     virtual_call nargs=2 ntypeargs=0
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2519,13 +2291,9 @@ function iter.iter_take_bounds_infinite_repeat() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "take"
     virtual_call nargs=2 ntypeargs=0
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2540,13 +2308,9 @@ function iter.iter_take_more_than_available() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "take"
     virtual_call nargs=2 ntypeargs=0
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2575,34 +2339,26 @@ function iter.iter_take_quota_survives_source_error() -> int[] {
     store_var _6
     load_var _6
     is_type baml.iter.Done
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_type int
     load_var2 2 3
     call baml.Array.push
     pop 1
 
-  L1:
+  L0:
     load_var t
     load_type baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     pop 1
-    jump L3
+    jump L1
     load_var e
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var e
     rethrow
 
-  L3:
-    load_const true
-    pop_jump_if_false L5
+  L1:
     load_var t
     load_type baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int>
     load_const "next"
@@ -2610,17 +2366,14 @@ function iter.iter_take_quota_survives_source_error() -> int[] {
     store_var _15
     load_var _15
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L2
     load_type int
     load_var2 2 5
     call baml.Array.push
     pop 1
-    jump L3
+    jump L1
 
-  L5:
+  L2:
     load_var out
     return
 }
@@ -2660,10 +2413,7 @@ function iter.iter_take_stays_done_after_source_done() -> int[] {
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L2
     load_var _7
     store_var i
     load_var t
@@ -2673,17 +2423,14 @@ function iter.iter_take_stays_done_after_source_done() -> int[] {
     store_var _12
     load_var _12
     is_type baml.iter.Done
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_type int
     load_var2 2 6
     call baml.Array.push
     pop 1
     jump L0
 
-  L3:
+  L1:
     load_type int
     load_var out
     load_const -1
@@ -2691,7 +2438,7 @@ function iter.iter_take_stays_done_after_source_done() -> int[] {
     pop 1
     jump L0
 
-  L4:
+  L2:
     load_var out
     return
 }
@@ -2705,13 +2452,9 @@ function iter.iter_take_stops_early() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "take"
     virtual_call nargs=2 ntypeargs=0
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2732,13 +2475,9 @@ function iter.iter_take_while() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "take_while"
     virtual_call nargs=2 ntypeargs=1
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2754,13 +2493,9 @@ function iter.iter_take_while_bounds_infinite() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "take_while"
     virtual_call nargs=2 ntypeargs=1
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2778,13 +2513,9 @@ function iter.iter_take_while_none_match() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "take_while"
     virtual_call nargs=2 ntypeargs=1
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2805,13 +2536,9 @@ function iter.iter_take_while_stops_not_filters() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "take_while"
     virtual_call nargs=2 ntypeargs=1
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2824,12 +2551,8 @@ function iter.iter_take_zero() -> int[] {
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "take"
     virtual_call nargs=2 ntypeargs=0
-    store_var _1
-    load_var _1
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }

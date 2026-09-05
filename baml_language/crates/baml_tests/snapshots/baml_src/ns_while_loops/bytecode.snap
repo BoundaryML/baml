@@ -94,22 +94,14 @@ function while_loops.while_loops_break_at_two() -> int {
 function while_loops.while_loops_break_nested() -> int {
     load_const 5
     store_var a
-    load_const true
-    pop_jump_if_false L1
-    load_const true
-    pop_jump_if_false L0
     load_var a
     load_const 1
     add_int
     store_var a
-
-  L0:
     load_var a
     load_const 1
     add_int
     store_var a
-
-  L1:
     load_var a
     return
 }
@@ -139,30 +131,14 @@ function while_loops.while_loops_break_nested_var(x: bool, y: bool) -> int {
 
 function while_loops.while_loops_continue_nested() -> int {
     load_const true
-    store_var execute
 
   L0:
-    load_var execute
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_const 5
     return
 
-  L2:
+  L1:
     load_const false
-    pop_jump_if_false L3
-    jump L2
-
-  L3:
-    load_const false
-    pop_jump_if_false L4
-    jump L0
-
-  L4:
-    load_const false
-    store_var execute
     jump L0
 }
 
@@ -171,8 +147,6 @@ function while_loops.while_loops_count_down(n: int) -> int {
     store_var result
 
   L0:
-    load_const true
-    pop_jump_if_false L1
     load_var2 2 1
     add_int
     store_var result
@@ -183,8 +157,6 @@ function while_loops.while_loops_count_down(n: int) -> int {
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
-
-  L1:
     load_var result
     return
 }
@@ -194,15 +166,10 @@ function while_loops.while_loops_factorial_break(limit: int) -> int {
     store_var result
 
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var limit
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 2 1
     mul_int
     store_var result
@@ -212,7 +179,7 @@ function while_loops.while_loops_factorial_break(limit: int) -> int {
     store_var limit
     jump L0
 
-  L2:
+  L1:
     load_var result
     return
 }
@@ -225,14 +192,11 @@ function while_loops.while_loops_factorial_continue(limit: int) -> int {
 
   L0:
     load_var should_continue
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var result
     return
 
-  L2:
+  L1:
     load_var2 2 1
     mul_int
     store_var result
@@ -242,10 +206,7 @@ function while_loops.while_loops_factorial_continue(limit: int) -> int {
     store_var_load_var limit
     load_const 0
     cmp_int_op !=
-    pop_jump_if_false L3
-    jump L0
-
-  L3:
+    pop_jump_if_true L0
     load_const false
     store_var should_continue
     jump L0
@@ -261,14 +222,11 @@ function while_loops.while_loops_fib(n: int) -> int {
     load_var n
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var a
     return
 
-  L2:
+  L1:
     load_var n
     load_const 1
     sub_int
@@ -287,26 +245,20 @@ function while_loops.while_loops_gcd(a: int, b: int) -> int {
   L0:
     load_var2 1 2
     cmp_int_op !=
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var a
     return
 
-  L2:
+  L1:
     load_var2 1 2
     cmp_int_op >
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var2 2 1
     sub_int
     store_var b
     jump L0
 
-  L4:
+  L2:
     load_var2 1 2
     sub_int
     store_var a

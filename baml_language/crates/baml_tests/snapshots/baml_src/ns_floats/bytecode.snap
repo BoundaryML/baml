@@ -1482,15 +1482,11 @@ function floats.<(user.floats.FixedFloatRng as baml.random.Rng)>.random_int(self
 }
 
 function floats.float_max_via_local() -> float {
-    call baml.Float.nan
-    store_var _2
     load_const 3.0
-    load_var _2
+    call baml.Float.nan
     load_type baml.ops.Compare
     load_const "max"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1506,34 +1502,31 @@ function floats.float_random_distinct_values() -> bool {
     load_var i
     load_const 100
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 2 1
     sub_float
     load_const 0.5
     cmp_float_op >
     return
 
-  L2:
+  L1:
     load_const <omitted>
     call baml.Float.random
     store_var r
     load_var2 4 1
     cmp_float_op <
-    pop_jump_if_false L3
+    pop_jump_if_false L2
     load_var r
     store_var min_seen
 
-  L3:
+  L2:
     load_var2 4 2
     cmp_float_op >
-    pop_jump_if_false L4
+    pop_jump_if_false L3
     load_var r
     store_var max_seen
 
-  L4:
+  L3:
     load_var i
     load_const 1
     add_int
@@ -1555,69 +1548,55 @@ function floats.float_random_in_unit_interval_and_covers_both_halves() -> bool {
     load_var i
     load_const 1000
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L2
     load_var ok
-    jump_if_false L2
-    pop 1
+    jump_if_false_or_pop L1
     load_var below
     load_const 350
     cmp_int_op >=
-
-  L2:
-    jump_if_false L3
-    pop 1
+    jump_if_false_or_pop L1
     load_var above
     load_const 350
     cmp_int_op >=
 
-  L3:
+  L1:
     return
 
-  L4:
+  L2:
     load_const <omitted>
     call baml.Float.random
     store_var r
     load_var r
     load_const 0.0
     cmp_float_op <
-    jump_if_false L5
-    jump L6
-
-  L5:
-    pop 1
+    pop_jump_if_true L3
     load_var r
     load_const 1.0
     cmp_float_op >=
+    pop_jump_if_false L4
 
-  L6:
-    pop_jump_if_false L7
+  L3:
     load_const false
     store_var ok
 
-  L7:
+  L4:
     load_var r
     load_const 0.5
     cmp_float_op <
-    pop_jump_if_false L8
-    jump L9
-
-  L8:
+    pop_jump_if_true L5
     load_var above
     load_const 1
     add_int
     store_var above
-    jump L10
+    jump L6
 
-  L9:
+  L5:
     load_var below
     load_const 1
     add_int
     store_var below
 
-  L10:
+  L6:
     load_var i
     load_const 1
     add_int
@@ -1632,8 +1611,7 @@ function floats.float_random_returns_a_float() -> bool {
     load_var r
     load_const 0.0
     cmp_float_op >=
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var r
     load_const 1.0
     cmp_float_op <

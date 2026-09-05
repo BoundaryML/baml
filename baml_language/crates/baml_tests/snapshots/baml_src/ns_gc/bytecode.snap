@@ -47,14 +47,11 @@ function gc.gc_heavy_allocation_loop() -> int {
     load_var i
     load_const 1000
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var sum
     return
 
-  L2:
+  L1:
     load_var2 1 2
     load_var i
     load_const 2
@@ -85,15 +82,12 @@ function gc.gc_map_survives_pressure() -> int {
     load_var i
     load_const 500
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var m
     container_len
     return
 
-  L2:
+  L1:
     load_var i
     load_const 1
     add_int

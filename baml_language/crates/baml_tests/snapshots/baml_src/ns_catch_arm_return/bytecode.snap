@@ -45,14 +45,11 @@ function catch_arm_return.car_throws(x: int) -> int {
     load_var x
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var x
     return
 
-  L1:
+  L0:
     load_const "boom"
     throw
 }
@@ -60,28 +57,25 @@ function catch_arm_return.car_throws(x: int) -> int {
 function catch_arm_return.catch_arm_return_mixed(x: int) -> int {
     load_var x
     call user.catch_arm_return.car_throws
-    jump L2
+    jump L1
     load_var e
     store_var _4
     load_var _4
     narrow_bind string, slot=3
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var _4
     call baml.String.length
-    jump L3
+    jump L2
 
-  L2:
+  L1:
     load_const 100
     add_int
 
-  L3:
+  L2:
     return
 }
 

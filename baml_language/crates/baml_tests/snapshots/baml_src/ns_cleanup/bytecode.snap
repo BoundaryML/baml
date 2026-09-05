@@ -45,21 +45,18 @@ function cleanup.CleanupResource.cleanup(self: cleanup.CleanupResource) -> void 
     load_type cleanup.CleanupResource
     load_var self
     call baml._cleanup_begin
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const null
     jump L1
 
   L0:
-    load_const null
-    jump L2
-
-  L1:
     load_type string
     load_var self
     load_field .log
     load_const "cleaned"
     call baml.Array.push
 
-  L2:
+  L1:
     return
 }
 
@@ -67,21 +64,18 @@ function cleanup.CleanupThrowsNeverR.cleanup(self: cleanup.CleanupThrowsNeverR) 
     load_type cleanup.CleanupThrowsNeverR
     load_var self
     call baml._cleanup_begin
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const null
     jump L1
 
   L0:
-    load_const null
-    jump L2
-
-  L1:
     load_type string
     load_var self
     load_field .log
     load_const "cleaned"
     call baml.Array.push
 
-  L2:
+  L1:
     return
 }
 

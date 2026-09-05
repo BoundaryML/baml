@@ -136,10 +136,7 @@ function while_let.Counter.next(self: while_let.Counter) -> int | null {
     load_field .n
     load_const 0
     cmp_int_op <=
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var self
     load_field .n
     store_var cur
@@ -149,12 +146,12 @@ function while_let.Counter.next(self: while_let.Counter) -> int | null {
     bin_op -
     store_field .n
     load_var cur
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const null
 
-  L2:
+  L1:
     return
 }
 
@@ -172,22 +169,16 @@ function while_let.alternate() -> int {
     store_var _4
     load_var _4
     narrow_bind while_let.WlA, slot=4
-    pop_jump_if_false L1
-    jump L3
-
-  L1:
+    pop_jump_if_true L1
     load_var _3
     store_var _5
     load_var _5
     narrow_bind while_let.WlB, slot=5
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var total
     return
 
-  L3:
+  L1:
     load_var _3
     store_var x
     load_var2 2 6
@@ -200,10 +191,7 @@ function while_let.alternate() -> int {
     virtual_load_field .v
     load_const 1
     cmp_int_op <=
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L2
     load_var x
     load_type while_let.WlHasV
     virtual_load_field .v
@@ -213,7 +201,7 @@ function while_let.alternate() -> int {
     store_var cur
     jump L0
 
-  L5:
+  L2:
     alloc_instance user.while_let.WlStop
     store_var cur
     jump L0
@@ -221,48 +209,36 @@ function while_let.alternate() -> int {
 
 function while_let.body_local() -> int {
     load_const 2
-    store_var cur
 
   L0:
-    load_var cur
-    store_var _3
-    load_var _3
-    narrow_bind int, slot=2
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    store_var _2
+    load_var _2
+    narrow_bind int, slot=1
+    pop_jump_if_true L1
     load_const 50
     return
 
-  L2:
-    load_var _3
+  L1:
+    load_var _2
     store_var_load_var v
     load_const 10
     mul_int
     load_const 1000000
     cmp_int_op >
-    pop_jump_if_false L3
-    load_const null
-    store_var cur
+    pop_jump_if_true L2
 
-  L3:
+  L2:
     load_var v
     load_const 1
     cmp_int_op <=
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L3
     load_var v
     load_const 1
     sub_int
-    store_var cur
     jump L0
 
-  L5:
+  L3:
     load_const null
-    store_var cur
     jump L0
 }
 
@@ -285,27 +261,21 @@ function while_let.check(x: int | null) -> int {
   L0:
     load_var x
     store_var _3
-    load_var _3
+    load_var x
     narrow_bind int, slot=3
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L2
     load_var touched
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var touched
     return
 
-  L3:
+  L1:
     alloc_instance user.while_let.Empty
     throw
 
-  L4:
+  L2:
     load_var _3
     store_var v
     load_var touched
@@ -335,17 +305,14 @@ function while_let.collect() -> int {
     store_var _4
     load_var _4
     narrow_bind int, slot=3
-    pop_jump_if_false L1
-    jump L5
-
-  L1:
+    pop_jump_if_true L3
     load_var fns
     load_type baml.iter.Iterable<Error = never, Item = () -> void throws never>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _13
 
-  L2:
+  L1:
     load_var _13
     load_type baml.iter.Iterator<Error = never, Item = () -> void throws never>
     load_const "next"
@@ -353,20 +320,17 @@ function while_let.collect() -> int {
     store_var _14
     load_var _14
     is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var _14
     call_indirect
     pop 1
-    jump L2
+    jump L1
 
-  L4:
+  L2:
     load_deref ?1
     return
 
-  L5:
+  L3:
     load_const null
     make_cell
     store_var v
@@ -381,16 +345,13 @@ function while_let.collect() -> int {
     load_deref ?4
     load_const 1
     cmp_int_op <=
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
+    pop_jump_if_true L4
     load_deref ?4
     load_const 1
     sub_int
     jump L0
 
-  L7:
+  L4:
     load_const null
     jump L0
 }
@@ -409,15 +370,12 @@ function while_let.count_evals() -> int {
     store_var _4
     load_var _4
     narrow_bind int, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var c
     load_field .calls
     return
 
-  L2:
+  L1:
     load_var2 2 3
     add_int
     store_var total
@@ -433,14 +391,11 @@ function while_let.countdown(n: int) -> int {
     store_var _4
     load_var _4
     narrow_bind int, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var total
     return
 
-  L2:
+  L1:
     load_var _4
     store_var v
     load_var2 2 4
@@ -449,16 +404,13 @@ function while_let.countdown(n: int) -> int {
     load_var v
     load_const 1
     cmp_int_op <=
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var v
     load_const 1
     sub_int
     jump L0
 
-  L4:
+  L2:
     load_const null
     jump L0
 }
@@ -473,14 +425,11 @@ function while_let.drain(start: int) -> int {
   L0:
     load_var cur
     is_type while_let.Item
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var total
     return
 
-  L2:
+  L1:
     load_var cur
     load_field .0
     store_var value
@@ -490,10 +439,7 @@ function while_let.drain(start: int) -> int {
     load_var value
     load_const 1
     cmp_int_op <=
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var value
     load_const 1
     sub_int
@@ -501,7 +447,7 @@ function while_let.drain(start: int) -> int {
     store_var cur
     jump L0
 
-  L4:
+  L2:
     load_const null
     store_var cur
     jump L0
@@ -528,8 +474,7 @@ function while_let.drain_array() -> int {
     store_var_load_var _4
     load_const 1
     cmp_int_op >=
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_true L2
 
   L1:
     load_var total
@@ -563,8 +508,7 @@ function while_let.drain_nested() -> int {
     load_var cur
     load_field .0
     is_type while_let.WlInner
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_true L2
 
   L1:
     load_var total
@@ -581,10 +525,7 @@ function while_let.drain_nested() -> int {
     load_var value
     load_const 1
     cmp_int_op <=
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L3
     load_var value
     load_const 1
     sub_int
@@ -593,7 +534,7 @@ function while_let.drain_nested() -> int {
     store_var cur
     jump L0
 
-  L4:
+  L3:
     load_const null
     store_var cur
     jump L0
@@ -606,31 +547,25 @@ function while_let.early(start: int) -> int {
     store_var _3
     load_var _3
     narrow_bind int, slot=2
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_true L1
+    load_const -1
+    jump L3
 
   L1:
-    load_const -1
-    jump L5
-
-  L2:
     load_var _3
     store_var_load_var v
     load_const 2
     cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var v
     load_const 1
     sub_int
     jump L0
 
-  L4:
+  L2:
     load_const 99
 
-  L5:
+  L3:
     return
 }
 
@@ -645,26 +580,23 @@ function while_let.find_five(start: int) -> int {
     store_var _4
     load_var _4
     narrow_bind int, slot=4
-    pop_jump_if_false L3
+    pop_jump_if_false L2
     load_var _4
     store_var_load_var v
     load_const 5
     cmp_int_op >=
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var v
     load_const 1
     add_int
     store_var cur
     jump L0
 
-  L2:
+  L1:
     load_var v
     store_var found
 
-  L3:
+  L2:
     load_var found
     return
 }
@@ -676,28 +608,22 @@ function while_let.loop_throws(start: int) -> int {
     store_var _3
     load_var _3
     narrow_bind int, slot=2
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_const 0
     return
 
-  L2:
+  L1:
     load_var _3
     store_var_load_var v
     load_const 2
     cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var v
     load_const 1
     sub_int
     jump L0
 
-  L4:
+  L2:
     alloc_instance user.while_let.WlBoom
     throw
 }
@@ -709,28 +635,22 @@ function while_let.loop_throws2(start: int) -> int {
     store_var _3
     load_var _3
     narrow_bind int, slot=2
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_const 0
     return
 
-  L2:
+  L1:
     load_var _3
     store_var_load_var v
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var v
     load_const 1
     sub_int
     jump L0
 
-  L4:
+  L2:
     alloc_instance user.while_let.WlBoom2
     throw
 }
@@ -746,23 +666,20 @@ function while_let.nested() -> int {
     store_var _3
     load_var _3
     narrow_bind int, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var result
     return
 
-  L2:
+  L1:
     load_var _3
     store_var o
     load_const 10
 
-  L3:
+  L2:
     store_var _6
     load_var _6
     narrow_bind int, slot=5
-    pop_jump_if_false L5
+    pop_jump_if_false L3
     load_var _6
     store_var i
     load_var result
@@ -772,16 +689,13 @@ function while_let.nested() -> int {
     load_var i
     load_const 8
     cmp_int_op <=
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L3
     load_var i
     load_const 1
     sub_int
-    jump L3
+    jump L2
 
-  L5:
+  L3:
     load_var result
     load_const 100
     add_int
@@ -789,17 +703,14 @@ function while_let.nested() -> int {
     load_var o
     load_const 1
     cmp_int_op <=
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
+    pop_jump_if_true L4
     load_var o
     load_const 1
     sub_int
     store_var outer
     jump L0
 
-  L7:
+  L4:
     load_const null
     store_var outer
     jump L0
@@ -816,16 +727,13 @@ function while_let.run() -> int {
     store_var _3
     load_var _3
     narrow_bind int, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var total
     load_const 7
     add_int
     return
 
-  L2:
+  L1:
     load_var2 2 3
     add_int
     store_var total
@@ -840,20 +748,17 @@ function while_let.scope() -> int {
     load_const 3
 
   L0:
-    store_var _4
-    load_var _4
+    store_var _3
+    load_var _3
     narrow_bind int, slot=2
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var acc
     load_const 999
     add_int
     return
 
-  L2:
-    load_var _4
+  L1:
+    load_var _3
     store_var v
     load_var2 1 3
     add_int
@@ -861,16 +766,13 @@ function while_let.scope() -> int {
     load_var v
     load_const 1
     cmp_int_op <=
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var v
     load_const 1
     sub_int
     jump L0
 
-  L4:
+  L2:
     load_const null
     jump L0
 }
@@ -886,22 +788,16 @@ function while_let.sum_odds_below(n: int) -> int {
     store_var _4
     load_var _4
     narrow_bind int, slot=4
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var total
     return
 
-  L2:
+  L1:
     load_var _4
     store_var_load_var v
     load_var n
     cmp_int_op >=
-    pop_jump_if_false L3
-    jump L5
-
-  L3:
+    pop_jump_if_true L2
     load_var v
     load_const 1
     add_int
@@ -911,16 +807,13 @@ function while_let.sum_odds_below(n: int) -> int {
     mod_int
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L4
-    jump L0
-
-  L4:
+    pop_jump_if_true L0
     load_var2 3 5
     add_int
     store_var total
     jump L0
 
-  L5:
+  L2:
     load_const null
     store_var cur
     jump L0

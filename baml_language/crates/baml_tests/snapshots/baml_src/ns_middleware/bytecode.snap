@@ -103,11 +103,10 @@ function middleware.chained_transformers_apply_left_to_right() -> int {
     init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
     load_var _4
     call_indirect
-    store_var _6
     load_type never
     call user.middleware.withAddOne
     store_var _7
-    load_var2 3 4
+    load_var _7
     call_indirect
     store_var _9
     load_var _2
@@ -136,24 +135,24 @@ function middleware.custom_with_retry() -> int {
     load_type string
     load_const 5
     call user.middleware.withRetry
-    store_var _6
+    store_var _5
     load_var _3
     load_const "retry-test"
     load_const null
     load_const null
     load_const false
     init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
-    load_var _6
+    load_var _5
     call_indirect
-    store_var _9
+    store_var _8
     load_var _3
     load_const "retry-test"
-    load_var _9
+    load_var _8
     load_type int
     load_type string
     spawn
-    store_var _10
-    load_var _10
+    store_var _9
+    load_var _9
     await
     return
 }
@@ -162,14 +161,11 @@ function middleware.flaky(n: int) -> int {
     load_var n
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var n
     return
 
-  L1:
+  L0:
     load_const "boom"
     throw
 }
@@ -186,14 +182,11 @@ function middleware.flaky_then_42(calls: int[]) -> int {
     load_var _5
     load_const 3
     cmp_int_op <
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 42
     return
 
-  L1:
+  L0:
     load_const "flaky"
     throw
 }
@@ -242,24 +235,24 @@ function middleware.options_as_transformer() -> int {
     load_const <omitted>
     load_const false
     call baml.spawn.options
-    store_var _5
+    store_var _4
     load_var _2
     load_const "opted"
     load_const null
     load_const null
     load_const false
     init_instance baml.spawn.Params .body, .name, .group, .cancel, .detach
-    load_var _5
+    load_var _4
     call_indirect
-    store_var _8
+    store_var _7
     load_var _2
     load_const "opted"
-    load_var _8
+    load_var _7
     load_type int
     load_type never
     spawn
-    store_var _9
-    load_var _9
+    store_var _8
+    load_var _8
     await
     return
 }
@@ -280,23 +273,20 @@ function middleware.throwing_transformer_throws_at_spawn_site() -> string {
     load_var _5
     call_indirect
     store_var _8
-    jump L2
+    jump L1
     load_var e
     store_var _10
     load_var _10
     narrow_bind string, slot=6
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var _10
-    jump L3
+    jump L2
 
-  L2:
+  L1:
     load_var _3
     load_const null
     load_var _8
@@ -306,21 +296,18 @@ function middleware.throwing_transformer_throws_at_spawn_site() -> string {
     store_var _9
     load_var _9
 
-  L3:
+  L2:
     store_var _12
     load_var _12
     narrow_bind string, slot=7
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L3
     load_const "wrong"
-    jump L6
+    jump L4
 
-  L5:
+  L3:
     load_var _12
 
-  L6:
+  L4:
     return
 }
 

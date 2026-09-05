@@ -57,21 +57,18 @@ function property_shorthand.$init_test_ns_property_shorthand_property_shorthand(
 
 function property_shorthand.property_shorthand_catch() -> string {
     call user.property_shorthand.property_shorthand_throw
-    jump L2
+    jump L1
     load_var error
     is_type property_shorthand.PropertyShorthandError
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var error
     rethrow
 
-  L1:
+  L0:
     load_var error
     load_field .message
 
-  L2:
+  L1:
     return
 }
 
@@ -91,19 +88,16 @@ function property_shorthand.property_shorthand_class_if_let(input: string | null
     store_var _2
     load_var _2
     narrow_bind string, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const ""
     jump L1
 
   L0:
-    load_const ""
-    jump L2
-
-  L1:
     load_var _2
     init_instance user.property_shorthand.PropertyShorthandBinder .value
     load_field .value
 
-  L2:
+  L1:
     return
 }
 
@@ -119,15 +113,10 @@ function property_shorthand.property_shorthand_destructure() -> string {
     alloc_map 1
     load_const "value"
     call baml.Map.get
-    store_var_load_var _6
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
+    jump_if_not_null_or_pop L0
     load_const ""
-    store_var _6
 
   L0:
-    load_var _6
     return
 }
 
@@ -148,10 +137,7 @@ function property_shorthand.property_shorthand_for(names: string[]) -> string {
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L3
-
-  L1:
+    pop_jump_if_true L4
     load_var output
     store_var _10
     load_type string
@@ -163,20 +149,24 @@ function property_shorthand.property_shorthand_for(names: string[]) -> string {
     alloc_map 1
     load_const "name"
     call baml.Map.get
-    store_var_load_var _12
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
+    jump_if_not_null_or_pop L1
+    jump L2
+
+  L1:
+    store_var _12
+    jump L3
+
+  L2:
     load_const ""
     store_var _12
 
-  L2:
+  L3:
     load_var2 5 6
     bin_op +
     store_var output
     jump L0
 
-  L3:
+  L4:
     load_var output
     return
 }
@@ -186,14 +176,11 @@ function property_shorthand.property_shorthand_if_let(input: string | null) -> s
     store_var _2
     load_var _2
     narrow_bind string, slot=2
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L0
+    load_const ""
+    jump L5
 
   L0:
-    load_const ""
-    jump L4
-
-  L1:
     load_var _2
     store_var_load_var name
     load_const "name"
@@ -210,33 +197,32 @@ function property_shorthand.property_shorthand_if_let(input: string | null) -> s
     alloc_map 1
     load_const "name"
     call baml.Map.get
-    store_var_load_var _9
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
+    jump_if_not_null_or_pop L1
     load_const ""
-    store_var _9
 
-  L2:
-    load_var _9
+  L1:
     store_var _8
     load_type string
     load_type string
     load_var shorthand
     load_const "name"
     call baml.Map.get
-    store_var_load_var _15
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L3
-    load_const ""
-    store_var _15
+    jump_if_not_null_or_pop L2
+    jump L3
+
+  L2:
+    store_var _14
+    jump L4
 
   L3:
-    load_var2 5 7
-    bin_op +
+    load_const ""
+    store_var _14
 
   L4:
+    load_var2 5 6
+    bin_op +
+
+  L5:
     return
 }
 
@@ -255,14 +241,11 @@ function property_shorthand.property_shorthand_match(input: string | null) -> st
     store_var _2
     load_var _2
     narrow_bind string, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const ""
     jump L1
 
   L0:
-    load_const ""
-    jump L3
-
-  L1:
     load_type string
     load_type string
     load_var _2
@@ -272,17 +255,10 @@ function property_shorthand.property_shorthand_match(input: string | null) -> st
     alloc_map 1
     load_const "name"
     call baml.Map.get
-    store_var_load_var _6
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
+    jump_if_not_null_or_pop L1
     load_const ""
-    store_var _6
 
-  L2:
-    load_var _6
-
-  L3:
+  L1:
     return
 }
 
@@ -319,15 +295,10 @@ function property_shorthand.property_shorthand_nested_block() -> string {
     alloc_map 1
     load_const "name"
     call baml.Map.get
-    store_var_load_var _4
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
+    jump_if_not_null_or_pop L0
     load_const ""
-    store_var _4
 
   L0:
-    load_var _4
     return
 }
 

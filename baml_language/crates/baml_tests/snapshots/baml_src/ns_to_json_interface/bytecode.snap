@@ -192,8 +192,6 @@ function to_json_interface.point_via_method_str() -> string {
     load_type baml.ToJson
     load_const "to_json"
     virtual_call nargs=1 ntypeargs=0
-    store_var _2
-    load_var _2
     call baml.json.stringify
     return
 }

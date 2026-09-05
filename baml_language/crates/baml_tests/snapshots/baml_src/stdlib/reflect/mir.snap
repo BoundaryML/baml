@@ -222,44 +222,42 @@ fn reflect.AnyClass.get(self: reflect.AnyClass, name: string) -> null | T {
     let _1: reflect.AnyClass // self // param
     let _2: string // name // param
     let _3: bool
-    let _4: bool
+    let _4: null | reflect.class.Field
     let _5: null | reflect.class.Field
-    let _6: null | reflect.class.Field
-    let _7: reflect.class.Field // field
-    let _8: reflect.Type
+    let _6: reflect.class.Field // field
+    let _7: reflect.Type
 
     bb0: {
-        _4 = virtual_call has_field as reflect.AnyClass(copy _1, copy _2) -> [bb1];
+        _3 = virtual_call has_field as reflect.AnyClass(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
-        _3 = !copy _4;
-        branch copy _3 -> [bb6, bb2];
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _5 = virtual_call get_field as reflect.AnyClass(copy _1, copy _2) -> [bb3];
+        _0 = const null;
+        goto -> bb7;
     }
 
     bb3: {
-        _6 = copy _5;
-        _6 = narrow_bind copy _6 as Class(QualifiedTypeName { pkg: Dep("reflect"), namespace: ["class"], name: "Field" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb5, bb4];
+        _4 = virtual_call get_field as reflect.AnyClass(copy _1, copy _2) -> [bb4];
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb7;
+        _5 = copy _4;
+        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("reflect"), namespace: ["class"], name: "Field" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb6, bb5];
     }
 
     bb5: {
-        _7 = copy _6;
-        _8 = load_type(#1);
-        _0 = call const fn reflect.class.Field.value<copy _8>(copy _7) -> [bb7];
+        _0 = const null;
+        goto -> bb7;
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb7;
+        _6 = copy _5;
+        _7 = load_type(#1);
+        _0 = call const fn reflect.class.Field.value<copy _7>(copy _6) -> [bb7];
     }
 
     bb7: {

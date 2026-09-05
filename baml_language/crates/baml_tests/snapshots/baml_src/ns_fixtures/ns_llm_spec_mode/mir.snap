@@ -169,24 +169,26 @@ fn user.fixtures.llm_spec_mode.PlainChat@spec(q: string) -> ai.FunctionSpec<stri
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // q // param [captured]
     let _2: map<string, unknown>
-    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _4: ai.tools.Toolbox
-    let _5: ai.tools.Tool[]
-    let _6: openai.ResponsesClient
+    let _3: string
+    let _4: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
+    let _7: openai.ResponsesClient
 
     bb0: {
-        _2 = { const "q": copy _1 }: map<string, unknown>;
-        _3 = make_closure lambda[0](copy _1);
-        _5 = []: ai.tools.Tool[];
-        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+        _3 = copy _1;
+        _2 = { const "q": copy _3 }: map<string, unknown>;
+        _4 = make_closure lambda[0](copy _1);
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
     }
 
     bb1: {
-        _6 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+        _7 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {
-        _0 = ai.FunctionSpec<string> { const "PlainChat", copy _2, copy _3, copy _4, copy _6 };
+        _0 = ai.FunctionSpec<string> { const "PlainChat", copy _2, copy _4, copy _5, copy _7 };
         goto -> bb3;
     }
 
@@ -250,7 +252,6 @@ fn .<lambda(PlainChat@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Pr
     }
 
     bb1: {
-        _7 = const "";
         _14 = copy _6;
         _15 = copy capture[0];
         _16 = load_type(unknown);
@@ -489,29 +490,31 @@ fn user.fixtures.llm_spec_mode.SpecAgent@spec(q: string) -> ai.FunctionSpec<fixt
     let _0: ai.FunctionSpec<fixtures.llm_spec_mode.Answer> // _0 // return
     let _1: string // q // param [captured]
     let _2: map<string, unknown>
-    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _4: ai.tools.Toolbox
-    let _5: ai.tools.Tool[]
-    let _6: ai.tools.Tool
-    let _7: openai.ResponsesClient
+    let _3: string
+    let _4: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
+    let _7: ai.tools.Tool
+    let _8: openai.ResponsesClient
 
     bb0: {
-        _2 = { const "q": copy _1 }: map<string, unknown>;
-        _3 = make_closure lambda[0](copy _1);
-        _6 = call const fn ai.tools.tool(const fn user.fixtures.llm_spec_mode.double_it, const <omitted>, const <omitted>, const <omitted>) -> [bb1];
+        _3 = copy _1;
+        _2 = { const "q": copy _3 }: map<string, unknown>;
+        _4 = make_closure lambda[0](copy _1);
+        _7 = call const fn ai.tools.tool(const fn user.fixtures.llm_spec_mode.double_it, const <omitted>, const <omitted>, const <omitted>) -> [bb1];
     }
 
     bb1: {
-        _5 = [copy _6]: ai.tools.Tool[];
-        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb2];
+        _6 = [copy _7]: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb2];
     }
 
     bb2: {
-        _7 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
+        _8 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
-        _0 = ai.FunctionSpec<fixtures.llm_spec_mode.Answer> { const "SpecAgent", copy _2, copy _3, copy _4, copy _7 };
+        _0 = ai.FunctionSpec<fixtures.llm_spec_mode.Answer> { const "SpecAgent", copy _2, copy _4, copy _5, copy _8 };
         goto -> bb4;
     }
 
@@ -572,7 +575,6 @@ fn .<lambda(SpecAgent@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Pr
     }
 
     bb1: {
-        _7 = const "";
         _13 = copy _6;
         _14 = copy capture[0];
         _15 = load_type(unknown);
@@ -764,27 +766,29 @@ fn user.fixtures.llm_spec_mode.NamedTools@spec(q: string) -> ai.FunctionSpec<fix
     let _0: ai.FunctionSpec<fixtures.llm_spec_mode.Answer> // _0 // return
     let _1: string // q // param [captured]
     let _2: map<string, unknown>
-    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _4: ai.tools.Toolbox
-    let _5: ai.tools.Tool[]
-    let _6: anthropic.Client
+    let _3: string
+    let _4: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
+    let _7: anthropic.Client
 
     bb0: {
-        _2 = { const "q": copy _1 }: map<string, unknown>;
-        _3 = make_closure lambda[0](copy _1);
-        _5 = call const fn user.fixtures.llm_spec_mode.more_tools() -> [bb1];
+        _3 = copy _1;
+        _2 = { const "q": copy _3 }: map<string, unknown>;
+        _4 = make_closure lambda[0](copy _1);
+        _6 = call const fn user.fixtures.llm_spec_mode.more_tools() -> [bb1];
     }
 
     bb1: {
-        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb2];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb2];
     }
 
     bb2: {
-        _6 = call const fn anthropic.Client.new(const "claude-haiku-4-5", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
+        _7 = call const fn anthropic.Client.new(const "claude-haiku-4-5", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
-        _0 = ai.FunctionSpec<fixtures.llm_spec_mode.Answer> { const "NamedTools", copy _2, copy _3, copy _4, copy _6 };
+        _0 = ai.FunctionSpec<fixtures.llm_spec_mode.Answer> { const "NamedTools", copy _2, copy _4, copy _5, copy _7 };
         goto -> bb4;
     }
 
@@ -845,7 +849,6 @@ fn .<lambda(NamedTools@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.P
     }
 
     bb1: {
-        _7 = const "";
         _13 = copy _6;
         _14 = copy capture[0];
         _15 = load_type(unknown);

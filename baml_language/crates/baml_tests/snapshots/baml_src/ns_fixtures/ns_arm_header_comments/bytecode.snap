@@ -9,24 +9,21 @@ function fixtures.arm_header_comments._thrower() -> int {
 
 function fixtures.arm_header_comments.catch_with_headers() -> int {
     call user.fixtures.arm_header_comments._thrower
-    jump L2
+    jump L1
     load_var e
     store_var _2
     load_var _2
     narrow_bind baml.errors.ParseError, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 0
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 

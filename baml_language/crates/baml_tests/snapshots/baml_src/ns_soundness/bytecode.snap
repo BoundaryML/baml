@@ -70,11 +70,9 @@ function soundness.$init_test_ns_soundness_soundness(registry: testing.TestColle
 }
 
 function soundness.call_result_right_operand_sub() -> int {
+    load_const 1
     load_const 2
     call user.soundness.sound_id
-    store_var _1
-    load_const 1
-    load_var _1
     sub_int
     return
 }
@@ -95,10 +93,6 @@ function soundness.cross_block_field_mutation_helper() -> int {
     load_var b
     load_field .v
     store_var t
-    load_const true
-    pop_jump_if_false L0
-
-  L0:
     load_var b
     load_const 2
     store_field .v
@@ -107,17 +101,11 @@ function soundness.cross_block_field_mutation_helper() -> int {
 }
 
 function soundness.cross_block_let_mutation_true(c: bool) -> int {
-    load_const 1
-    store_var a
-    load_var a
-    store_var b
     load_var c
-    pop_jump_if_false L0
-    load_const 2
-    store_var a
+    pop_jump_if_true L0
 
   L0:
-    load_var b
+    load_const 1
     return
 }
 
@@ -144,23 +132,7 @@ function soundness.multiple_defs_preserve_side_effects_helper() -> int {
 }
 
 function soundness.phi_right_operand_sub() -> int {
-    load_const true
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const 3
-    store_var _1
-    jump L2
-
-  L1:
-    load_const 7
-    store_var _1
-
-  L2:
-    load_const 100
-    load_var _1
-    bin_op -
+    load_const 93
     return
 }
 

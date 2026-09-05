@@ -373,24 +373,30 @@ fn user.fixtures.optional_function_parameters.AskDocs@spec(query: string, max_re
     let _2: int // max_results // param [captured]
     let _3: string // filter // param [captured]
     let _4: map<string, unknown>
-    let _5: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _6: ai.tools.Toolbox
-    let _7: ai.tools.Tool[]
-    let _8: ai.Client
+    let _5: string
+    let _6: int
+    let _7: string
+    let _8: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _9: ai.tools.Toolbox
+    let _10: ai.tools.Tool[]
+    let _11: ai.Client
 
     bb0: {
-        _4 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
-        _5 = make_closure lambda[0](copy _1, copy _2, copy _3);
-        _7 = []: ai.tools.Tool[];
-        _6 = call const fn ai.tools.Toolbox.new(copy _7) -> [bb1];
+        _5 = copy _1;
+        _6 = copy _2;
+        _7 = copy _3;
+        _4 = { const "query": copy _5, const "max_results": copy _6, const "filter": copy _7 }: map<string, unknown>;
+        _8 = make_closure lambda[0](copy _1, copy _2, copy _3);
+        _10 = []: ai.tools.Tool[];
+        _9 = call const fn ai.tools.Toolbox.new(copy _10) -> [bb1];
     }
 
     bb1: {
-        _8 = call const fn ai.clients.resolve(const item user.fixtures.optional_function_parameters.TestClient) -> [bb2];
+        _11 = call const fn ai.clients.resolve(const item user.fixtures.optional_function_parameters.TestClient) -> [bb2];
     }
 
     bb2: {
-        _0 = ai.FunctionSpec<string> { const "AskDocs", copy _4, copy _5, copy _6, copy _8 };
+        _0 = ai.FunctionSpec<string> { const "AskDocs", copy _4, copy _8, copy _9, copy _11 };
         goto -> bb3;
     }
 
@@ -457,7 +463,6 @@ fn .<lambda(AskDocs@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prom
     }
 
     bb1: {
-        _6 = const "";
         _12 = copy _5;
         _13 = copy capture[0];
         _14 = load_type(unknown);
@@ -473,7 +478,6 @@ fn .<lambda(AskDocs@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prom
     }
 
     bb3: {
-        _6 = const "";
         _20 = copy _5;
         _21 = copy capture[1];
         _22 = load_type(unknown);

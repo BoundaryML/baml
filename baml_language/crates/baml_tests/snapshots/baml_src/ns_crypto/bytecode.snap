@@ -294,8 +294,6 @@ function crypto.feed_hasher(h: baml.crypto.Hasher, data: uint8array) -> void {
     load_type baml.crypto.Hasher
     load_const "update"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -307,12 +305,11 @@ function crypto.seal_and_open(cipher: baml.crypto.Aead, nonce: uint8array, messa
     virtual_call nargs=4 ntypeargs=0
     store_var _6
     load_var2 1 2
-    load_var2 6 4
+    load_var2 5 4
     load_type baml.crypto.Aead
     load_const "decrypt"
     virtual_call nargs=4 ntypeargs=0
-    store_var _5
-    load_var2 5 3
+    load_var message
     call baml.ops.equals_equals
     return
 }

@@ -42,12 +42,10 @@ function fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: a
     call user.fixtures.testset_vibes_nested.ClassifySentiment@spec
     store_var _9
     load_type fixtures.testset_vibes_nested.Sentiment
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -81,12 +79,10 @@ function fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: 
     call user.fixtures.testset_vibes_nested.ClassifySentiment2@spec
     store_var _9
     load_type string
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -133,10 +129,10 @@ function fixtures.testset_vibes_nested.ClassifySentiment2@spec(text: string) -> 
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_global user.fixtures.testset_vibes_nested.GPT4o
     call ai.clients.resolve
-    store_var _6
+    store_var _7
     load_const "ClassifySentiment2"
     load_deref ?1
     load_const "text"
@@ -221,10 +217,10 @@ function fixtures.testset_vibes_nested.ClassifySentiment@spec(text: string) -> a
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_global user.fixtures.testset_vibes_nested.GPT4o
     call ai.clients.resolve
-    store_var _6
+    store_var _7
     load_const "ClassifySentiment"
     load_deref ?1
     load_const "text"
@@ -277,14 +273,11 @@ function fixtures.testset_vibes_nested.Foo() -> string | image {
     load_var i
     load_const 2
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var x
     return
 
-  L2:
+  L1:
     load_const "hi:  "
     load_var x
     bin_op +
@@ -325,12 +318,10 @@ function fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, 
     call user.fixtures.testset_vibes_nested.GenerateTests@spec
     store_var _10
     load_type string[]
-    load_var2 6 7
+    load_var2 5 6
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _7
-    load_var _7
     load_field .value
     return
 }
@@ -380,10 +371,10 @@ function fixtures.testset_vibes_nested.GenerateTests@spec(count: int, topic: str
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _5
+    store_var _7
     load_global user.fixtures.testset_vibes_nested.GPT4o
     call ai.clients.resolve
-    store_var _7
+    store_var _9
     load_const "GenerateTests"
     load_deref ?1
     load_deref ?2

@@ -12,19 +12,16 @@ function fixtures.closures.Calculator.compute(self: fixtures.closures.Calculator
     load_field .op
     load_const "add"
     cmp_op ==
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var2 2 3
+    mul_int
     jump L1
 
   L0:
     load_var2 2 3
-    mul_int
-    jump L2
-
-  L1:
-    load_var2 2 3
     add_int
 
-  L2:
+  L1:
     return
 }
 
@@ -85,8 +82,7 @@ function fixtures.closures.RangeCheck.is_valid(self: fixtures.closures.RangeChec
     load_var2 2 1
     load_field .min
     cmp_int_op >=
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var2 2 1
     load_field .max
     cmp_int_op <=

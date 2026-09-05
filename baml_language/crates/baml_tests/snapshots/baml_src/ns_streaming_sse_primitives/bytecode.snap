@@ -191,21 +191,18 @@ function streaming_sse_primitives.sse_custom_headers_fn() -> bool {
     load_var events
     load_const null
     call baml.ops.equals_equals
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var events
     load_const "\"data\":\"authed\""
     call assert.contains
     pop 1
     load_const true
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const false
 
-  L2:
+  L1:
     return
 }
 
@@ -252,17 +249,14 @@ function streaming_sse_primitives.sse_empty_stream_returns_null_fn() -> string {
     load_var first
     load_const null
     call baml.ops.equals_equals
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "unexpected-data"
     jump L1
 
   L0:
-    load_const "unexpected-data"
-    jump L2
-
-  L1:
     load_const "got-null"
 
-  L2:
+  L1:
     return
 }
 
@@ -309,10 +303,7 @@ function streaming_sse_primitives.sse_event_fields_in_json_fn() -> bool {
     load_var events
     load_const null
     call baml.ops.equals_equals
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_type streaming_sse_primitives.SseJsonEvent[]
     load_var events
     call baml.json.from_string
@@ -346,12 +337,12 @@ function streaming_sse_primitives.sse_event_fields_in_json_fn() -> bool {
     call assert.equal
     pop 1
     load_const true
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const false
 
-  L2:
+  L1:
     return
 }
 
@@ -398,10 +389,7 @@ function streaming_sse_primitives.sse_event_id_null_when_not_set_fn() -> bool {
     load_var events
     load_const null
     call baml.ops.equals_equals
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_type streaming_sse_primitives.SseJsonEvent[]
     load_var events
     call baml.json.from_string
@@ -422,12 +410,12 @@ function streaming_sse_primitives.sse_event_id_null_when_not_set_fn() -> bool {
     call assert.is_true
     pop 1
     load_const true
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const false
 
-  L2:
+  L1:
     return
 }
 
@@ -479,10 +467,7 @@ function streaming_sse_primitives.sse_fetch_and_next_returns_events_fn() -> bool
     load_var events
     load_const null
     call baml.ops.equals_equals
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var events
     load_const "\"data\":\"hello\""
     call assert.contains
@@ -492,12 +477,12 @@ function streaming_sse_primitives.sse_fetch_and_next_returns_events_fn() -> bool
     call assert.contains
     pop 1
     load_const true
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const false
 
-  L2:
+  L1:
     return
 }
 
@@ -535,19 +520,16 @@ function streaming_sse_primitives.sse_fetch_error_on_bad_status_fn() -> bool {
     load_const "expected fetch_sse on a 500 response to throw"
     call baml.sys.panic
     store_var ok
-    jump L2
+    jump L1
     load_var e
     store_var _13
     load_var _13
     narrow_bind baml.errors.Io, slot=6
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var _13
     load_field .message
     load_const "500"
@@ -556,7 +538,7 @@ function streaming_sse_primitives.sse_fetch_error_on_bad_status_fn() -> bool {
     load_const true
     store_var ok
 
-  L2:
+  L1:
     load_var _4
     call baml.future.Future.cancel
     pop 1
@@ -598,19 +580,16 @@ function streaming_sse_primitives.sse_http_4xx_error_fn() -> bool {
     load_const "expected fetch_sse on a 403 response to throw"
     call baml.sys.panic
     store_var ok
-    jump L2
+    jump L1
     load_var e
     store_var _13
     load_var _13
     narrow_bind baml.errors.Io, slot=6
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var _13
     load_field .message
     load_const "403"
@@ -619,7 +598,7 @@ function streaming_sse_primitives.sse_http_4xx_error_fn() -> bool {
     load_const true
     store_var ok
 
-  L2:
+  L1:
     load_var _4
     call baml.future.Future.cancel
     pop 1
@@ -683,20 +662,17 @@ function streaming_sse_primitives.sse_large_event_payload_fn() -> bool {
     load_var events
     load_const null
     call baml.ops.equals_equals
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var2 6 1
     call assert.contains
     pop 1
     load_const true
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const false
 
-  L2:
+  L1:
     return
 }
 
@@ -746,17 +722,14 @@ function streaming_sse_primitives.sse_next_after_close_returns_null_fn() -> stri
     load_var after_close
     load_const null
     call baml.ops.equals_equals
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "unexpected-data"
     jump L1
 
   L0:
-    load_const "unexpected-data"
-    jump L2
-
-  L1:
     load_const "null-after-close"
 
-  L2:
+  L1:
     return
 }
 
@@ -811,10 +784,7 @@ function streaming_sse_primitives.sse_next_returns_null_when_done_fn() -> bool {
     load_var first
     load_const null
     call baml.ops.equals_equals
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var second
     load_const null
     call baml.ops.equals_equals
@@ -825,12 +795,12 @@ function streaming_sse_primitives.sse_next_returns_null_when_done_fn() -> bool {
     call assert.contains
     pop 1
     load_const true
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const false
 
-  L2:
+  L1:
     return
 }
 
@@ -877,20 +847,17 @@ function streaming_sse_primitives.sse_post_with_body_fn() -> bool {
     load_var events
     load_const null
     call baml.ops.equals_equals
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var events
     load_const "\"data\":\"ok\""
     call assert.contains
     pop 1
     load_const true
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const false
 
-  L2:
+  L1:
     return
 }

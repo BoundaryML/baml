@@ -55,14 +55,16 @@ fn user.fixtures.backtick_dedent.WithInterps(name: string, count: int) -> string
     let _6: reflect.Type
     let _7: string
     let _8: reflect.Type
+    let _9: string
 
     bb0: {
         _6 = load_type(string);
+        _9 = const "name:  ";
         _5 = call const fn baml.String.from<copy _6>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = const "name:  " + copy _5;
+        _4 = copy _9 + copy _5;
         _3 = copy _4 + const "\ncount: ";
         _8 = load_type(int);
         _7 = call const fn baml.String.from<copy _8>(copy _2) -> [bb2];
@@ -108,6 +110,7 @@ fn user.fixtures.backtick_dedent.ForLoopVerbatim(xs: string[]) -> string {
     let _11: string
     let _12: string
     let _13: reflect.Type
+    let _14: string
 
     bb0: {
         _2 = const "";
@@ -130,11 +133,12 @@ fn user.fixtures.backtick_dedent.ForLoopVerbatim(xs: string[]) -> string {
         _8 = copy _2;
         _12 = copy _7;
         _13 = load_type(string);
+        _14 = const "- ";
         _11 = call const fn baml.String.from<copy _13>(copy _12) -> [bb4];
     }
 
     bb4: {
-        _10 = const "- " + copy _11;
+        _10 = copy _14 + copy _11;
         _9 = copy _10 + const "\n";
         _2 = copy _8 + copy _9;
         goto -> bb1;
@@ -155,14 +159,16 @@ fn user.fixtures.backtick_dedent.MultilineInterpVerbatim() -> string {
     let _0: string // _0 // return
     let _1: string
     let _2: reflect.Type
+    let _3: string
 
     bb0: {
         _2 = load_type(string);
+        _3 = const "value: ";
         _1 = call const fn baml.String.from<copy _2>(const "x") -> [bb1];
     }
 
     bb1: {
-        _0 = const "value: " + copy _1;
+        _0 = copy _3 + copy _1;
         goto -> bb2;
     }
 

@@ -5,42 +5,24 @@ function assert.approx_equal(actual: float, expected: float, eps: float) -> void
     load_var eps
     load_const 0.0
     cmp_float_op <
-    jump_if_false L0
-    jump L1
-
-  L0:
-    pop 1
+    pop_jump_if_true L1
     load_var eps
     call baml.Float.is_nan
-
-  L1:
-    pop_jump_if_false L2
-    jump L7
-
-  L2:
+    pop_jump_if_true L1
     load_var2 1 2
     sub_float
     call baml.Float.abs
     store_var delta
     load_var delta
     call baml.Float.is_nan
-    jump_if_false L3
-    jump L4
-
-  L3:
-    pop 1
+    pop_jump_if_true L0
     load_var2 4 3
     cmp_float_op >
-
-  L4:
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
+    pop_jump_if_true L0
     load_const null
     return
 
-  L6:
+  L0:
     load_type float
     load_var delta
     call baml.String.from
@@ -77,7 +59,7 @@ function assert.approx_equal(actual: float, expected: float, eps: float) -> void
     init_instance baml.panics.AssertionFailed .message
     throw
 
-  L7:
+  L1:
     load_const "assertion failed: epsilon must be a non-negative number"
     init_instance baml.panics.AssertionFailed .message
     throw
@@ -86,82 +68,65 @@ function assert.approx_equal(actual: float, expected: float, eps: float) -> void
 function assert.contains(haystack: string, needle: string) -> void {
     load_var2 1 2
     call baml.String.includes
-    unary_op !
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L0
+    load_const "assertion failed: string does not contain expected substring"
+    init_instance baml.panics.AssertionFailed .message
+    throw
 
   L0:
     load_const null
     return
-
-  L1:
-    load_const "assertion failed: string does not contain expected substring"
-    init_instance baml.panics.AssertionFailed .message
-    throw
 }
 
 function assert.equal(actual: unknown, expected: unknown) -> void {
     load_var2 1 2
     call baml.ops.equals_equals
     unary_op !
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const null
     return
 
-  L1:
+  L0:
     load_var actual
     is_type string
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_type unknown
     load_var actual
     call baml.String.from
     store_var actual_str
+    jump L2
+
+  L1:
+    load_const "\""
+    load_type string
+    load_var actual
+    call baml.String.from
+    bin_op +
+    load_const "\""
+    bin_op +
+    store_var actual_str
+
+  L2:
+    load_var expected
+    is_type string
+    pop_jump_if_true L3
+    load_type unknown
+    load_var expected
+    call baml.String.from
+    store_var expected_str
     jump L4
 
   L3:
+    load_const "\""
     load_type string
-    load_var actual
+    load_var expected
     call baml.String.from
-    store_var _8
-    load_const "\""
-    load_var _8
     bin_op +
     load_const "\""
     bin_op +
-    store_var actual_str
+    store_var expected_str
 
   L4:
-    load_var expected
-    is_type string
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
-    load_type unknown
-    load_var expected
-    call baml.String.from
-    store_var expected_str
-    jump L7
-
-  L6:
-    load_type string
-    load_var expected
-    call baml.String.from
-    store_var _14
-    load_const "\""
-    load_var _14
-    bin_op +
-    load_const "\""
-    bin_op +
-    store_var expected_str
-
-  L7:
     load_type string
     load_var actual_str
     call baml.String.from
@@ -183,27 +148,20 @@ function assert.equal(actual: unknown, expected: unknown) -> void {
 
 function assert.is_true(condition: bool) -> void {
     load_var condition
-    unary_op !
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L0
+    load_const "assertion failed: expected true"
+    init_instance baml.panics.AssertionFailed .message
+    throw
 
   L0:
     load_const null
     return
-
-  L1:
-    load_const "assertion failed: expected true"
-    init_instance baml.panics.AssertionFailed .message
-    throw
 }
 
 function assert.is_type(actual: unknown) -> #0 {
     load_var actual
     is_type #0
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_type reflect.Type
     load_type #0
     call baml.String.from
@@ -224,7 +182,7 @@ function assert.is_type(actual: unknown) -> #0 {
     init_instance baml.panics.AssertionFailed .message
     throw
 
-  L1:
+  L0:
     load_var actual
     return
 }
@@ -233,14 +191,11 @@ function assert.not_null(value: unknown | null) -> void {
     load_var value
     load_const null
     call baml.ops.equals_equals
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const null
     return
 
-  L1:
+  L0:
     load_const "assertion failed: expected non-null value"
     init_instance baml.panics.AssertionFailed .message
     throw

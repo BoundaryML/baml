@@ -66,8 +66,7 @@ function ops_index.direct_ops() -> bool {
     load_array_element
     load_const 20
     cmp_int_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_const 1
     load_const "a"
     load_type string
@@ -77,10 +76,7 @@ function ops_index.direct_ops() -> bool {
     load_map_element
     load_const 1
     cmp_int_op ==
-
-  L0:
-    jump_if_false L1
-    pop 1
+    jump_if_false_or_pop L0
     load_const b"\x41\x42"
     call baml.deep_copy
     load_const 0
@@ -88,7 +84,7 @@ function ops_index.direct_ops() -> bool {
     load_const 65
     cmp_int_op ==
 
-  L1:
+  L0:
     return
 }
 
@@ -97,7 +93,5 @@ function ops_index.nth(c: #0, i: int) -> (#0 as baml.ops.Index<int>).Output {
     load_type baml.ops.Index<int>
     load_const "index"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }

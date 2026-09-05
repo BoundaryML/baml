@@ -526,16 +526,12 @@ fn .<lambda(test_map_multi_statement, 0)>(x: int) -> int {
     let _0: int // _0 // return
     let _1: int // x // param
     let _2: int // doubled
-    let _3: int // offset
-    let _4: int
-    let _5: int
+    let _3: int
 
     bb0: {
         _2 = copy _1 * const 2_i64;
-        _3 = const 100_i64;
-        _4 = copy _2;
-        _5 = copy _3;
-        _0 = copy _4 + copy _5;
+        _3 = copy _2;
+        _0 = copy _3 + const 100_i64;
         goto -> bb1;
     }
 
@@ -1213,41 +1209,39 @@ fn .<lambda(test_two_transforms_inferred, 2)>(x: int) -> int {
 fn user.fixtures.lambda_advanced.test_lambda_in_match_inferred() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: string // op
-    let _2: (int) -> int throws never // f
+    let _1: (int) -> int throws never // f
+    let _2: bool
     let _3: bool
-    let _4: bool
-    let _5: (int) -> int throws never
+    let _4: (int) -> int throws never
 
     bb0: {
-        _1 = const "double";
-        _3 = is_type(copy _1, "double");
-        branch copy _3 -> [bb4, bb1];
+        _2 = is_type(const "double", "double");
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _4 = is_type(copy _1, "negate");
-        branch copy _4 -> [bb3, bb2];
+        _3 = is_type(const "double", "negate");
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _2 = make_closure lambda[2]();
+        _1 = make_closure lambda[2]();
         goto -> bb5;
     }
 
     bb3: {
-        _2 = make_closure lambda[1]();
+        _1 = make_closure lambda[1]();
         goto -> bb5;
     }
 
     bb4: {
-        _2 = make_closure lambda[0]();
+        _1 = make_closure lambda[0]();
         goto -> bb5;
     }
 
     bb5: {
-        _5 = copy _2;
-        _0 = call copy _5(const 21_i64) -> [bb6];
+        _4 = copy _1;
+        _0 = call copy _4(const 21_i64) -> [bb6];
     }
 
     bb6: {

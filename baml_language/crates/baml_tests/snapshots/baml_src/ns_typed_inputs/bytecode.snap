@@ -169,16 +169,13 @@ function typed_inputs.sum(arr: int[]) -> int {
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 2 4
     add_int
     store_var total
     jump L0
 
-  L2:
+  L1:
     load_var total
     return
 }

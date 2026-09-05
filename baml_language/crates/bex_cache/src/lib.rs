@@ -106,7 +106,10 @@ use sha2::{Digest, Sha256};
 /// as the `CompilationUnit`'s link-internal export/import key; compile
 /// boundaries read coordinates from the declaration-keyed placement
 /// registry, with a Pass-1 slot replay only at the stdlib-splice boundary.
-pub const FORMAT_VERSION: u32 = 11;
+///
+/// Version 12: appended `PopJumpIfTrue`, `JumpIfFalseOrPop`,
+/// `JumpIfTrueOrPop`, and `JumpIfNotNullOrPop` to the instruction/opcode sets.
+pub const FORMAT_VERSION: u32 = 12;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

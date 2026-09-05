@@ -79,17 +79,6 @@ function generic_match_typevar.$init_test_ns_generic_match_typevar_generic_match
 function generic_match_typevar.is_t(x: #0 | string) -> bool {
     load_var x
     is_type #0
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -112,25 +101,22 @@ function generic_match_typevar.pick(x: #0 | string) -> string {
     store_var _2
     load_var _2
     narrow_bind #0, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var x
     store_var _3
     load_var _3
     narrow_bind string, slot=3
-    pop_jump_if_false L3
+    pop_jump_if_false L2
     load_const "string"
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const "T"
 
-  L2:
+  L1:
     return
 
-  L3:
+  L2:
     unreachable
 }
 
@@ -153,25 +139,22 @@ function generic_match_typevar.pick_list(x: #0[] | string[]) -> string {
     store_var _2
     load_var _2
     narrow_bind #0[], slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var x
     store_var _3
     load_var _3
     narrow_bind string[], slot=3
-    pop_jump_if_false L3
+    pop_jump_if_false L2
     load_const "string[]"
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const "T[]"
 
-  L2:
+  L1:
     return
 
-  L3:
+  L2:
     unreachable
 }
 
@@ -210,25 +193,22 @@ function generic_match_typevar.pick_map(x: map<string, #0> | map<string, string>
     store_var _2
     load_var _2
     narrow_bind map<string, #0>, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var x
     store_var _3
     load_var _3
     narrow_bind map<string, string>, slot=3
-    pop_jump_if_false L3
+    pop_jump_if_false L2
     load_const "map<string>"
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const "map<T>"
 
-  L2:
+  L1:
     return
 
-  L3:
+  L2:
     unreachable
 }
 

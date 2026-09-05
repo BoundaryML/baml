@@ -118,8 +118,6 @@ function generic_match_subtype.generic_match_falls_through_on_non_fn() -> int {
     load_type generic_match_subtype.Shape
     load_const "area"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -137,8 +135,6 @@ function generic_match_subtype.generic_match_subtype_narrow_default_fn() -> int 
     load_type generic_match_subtype.Shape
     load_const "area"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -156,8 +152,6 @@ function generic_match_subtype.generic_match_widened_default_fn() -> int {
     load_type generic_match_subtype.Shape
     load_const "area"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -173,17 +167,14 @@ function generic_match_subtype.pick_concrete(x: generic_match_subtype.Foo<int> |
     store_var _2
     load_var _2
     narrow_bind generic_match_subtype.Foo<...>, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "string"
     jump L1
 
   L0:
-    load_const "string"
-    jump L2
-
-  L1:
     load_const "int"
 
-  L2:
+  L1:
     return
 }
 
@@ -192,53 +183,41 @@ function generic_match_subtype.pick_concrete_switch(x: generic_match_subtype.Foo
     store_var _2
     load_var _2
     narrow_bind generic_match_subtype.Foo<...>, slot=2
-    pop_jump_if_false L0
-    jump L7
-
-  L0:
+    pop_jump_if_true L3
     load_var x
     store_var _3
     load_var _3
     narrow_bind generic_match_subtype.Foo<...>, slot=3
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
+    pop_jump_if_true L2
     load_var x
     store_var _4
     load_var _4
     narrow_bind int, slot=4
-    pop_jump_if_false L2
-    jump L5
-
-  L2:
+    pop_jump_if_true L1
     load_var x
     store_var _5
     load_var _5
     narrow_bind string, slot=5
-    pop_jump_if_false L3
+    pop_jump_if_true L0
+    load_const "prim bool"
+    jump L4
+
+  L0:
+    load_const "prim string"
+    jump L4
+
+  L1:
+    load_const "prim int"
+    jump L4
+
+  L2:
+    load_const "string"
     jump L4
 
   L3:
-    load_const "prim bool"
-    jump L8
-
-  L4:
-    load_const "prim string"
-    jump L8
-
-  L5:
-    load_const "prim int"
-    jump L8
-
-  L6:
-    load_const "string"
-    jump L8
-
-  L7:
     load_const "int"
 
-  L8:
+  L4:
     return
 }
 
@@ -247,17 +226,14 @@ function generic_match_subtype.unwrap_or(o: generic_match_subtype.Opt<#0> | gene
     store_var _3
     load_var _3
     narrow_bind generic_match_subtype.Opt<...>, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var default
     jump L1
 
   L0:
-    load_var default
-    jump L2
-
-  L1:
     load_var _3
     load_field .value
 
-  L2:
+  L1:
     return
 }

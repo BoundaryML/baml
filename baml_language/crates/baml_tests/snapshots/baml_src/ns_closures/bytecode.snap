@@ -87,19 +87,16 @@ function closures.ClsCalculator.compute(self: closures.ClsCalculator, a: int, b:
     load_field .op
     load_const "add"
     cmp_op ==
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var2 2 3
+    mul_int
     jump L1
 
   L0:
     load_var2 2 3
-    mul_int
-    jump L2
-
-  L1:
-    load_var2 2 3
     add_int
 
-  L2:
+  L1:
     return
 }
 
@@ -160,8 +157,7 @@ function closures.ClsRangeCheck.is_valid(self: closures.ClsRangeCheck, n: int) -
     load_var2 2 1
     load_field .min
     cmp_int_op >=
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var2 2 1
     load_field .max
     cmp_int_op <=
@@ -174,17 +170,14 @@ function closures.ClsWorker.risky(self: closures.ClsWorker, value: int) -> int {
     load_var value
     load_const 0
     cmp_int_op <
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var self
     load_field .factor
     load_var value
     mul_int
     return
 
-  L1:
+  L0:
     load_const "negative"
     throw
 }
@@ -235,22 +228,19 @@ function closures.closures_bound_throwing_method_reference_catches_error() -> in
     init_instance user.closures.ClsWorker .factor
     make_bound_method user.closures.ClsWorker.risky
     call_indirect
-    jump L2
+    jump L1
     load_var e
     is_type "negative"
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const -2
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 

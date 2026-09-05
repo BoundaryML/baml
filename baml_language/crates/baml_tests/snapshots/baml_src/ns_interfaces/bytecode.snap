@@ -1696,16 +1696,13 @@ function interfaces.<(user.interfaces.Fz38MyFetcher as user.interfaces.Fz38DataF
     load_var key
     load_const "net"
     cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "data:"
     load_var key
     bin_op +
     return
 
-  L1:
+  L0:
     load_const "connection refused"
     init_instance user.interfaces.Fz38NetworkError .msg
     throw
@@ -1805,13 +1802,11 @@ function interfaces.<(user.interfaces.GoopBox<#0> as user.interfaces.GoopDescrib
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _4
     load_type #1
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
-    load_var _4
     load_const ":"
     bin_op +
     load_var _6
@@ -1978,8 +1973,6 @@ function interfaces.<(user.interfaces.SapcPolite as user.interfaces.SapcFarewell
     load_type interfaces.SapcGreeter
     load_const "greet"
     virtual_call nargs=1 ntypeargs=0
-    store_var _2
-    load_var _2
     load_const " — and goodbye!"
     bin_op +
     return
@@ -2217,8 +2210,6 @@ function interfaces.CridEquals.neq(self: interfaces.CridEquals, other: #0) -> bo
     load_type interfaces.CridEquals
     load_const "eq"
     virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
     unary_op !
     return
 }
@@ -2364,8 +2355,6 @@ function interfaces.Fz16Container.get_or(self: interfaces.Fz16Container<#1>, fal
     load_type interfaces.Fz16Container<#1>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2407,8 +2396,6 @@ function interfaces.IdmcEquatable.neq(self: interfaces.IdmcEquatable, other: #0)
     load_type interfaces.IdmcEquatable
     load_const "eq"
     virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
     unary_op !
     return
 }
@@ -2460,8 +2447,6 @@ function interfaces.W301Sub.sub_get(self: interfaces.W301Sub<#1>) -> #1 {
     load_type interfaces.W301Base<#1>
     load_const "base_get"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2480,8 +2465,6 @@ function interfaces.apss_main() -> string {
     load_type interfaces.ApssSerializer
     load_const "encode"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2490,8 +2473,6 @@ function interfaces.apwu_main() -> string {
     load_type interfaces.ApwuAnimal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2504,8 +2485,7 @@ function interfaces.ausi_main() -> bool {
     virtual_load_field .name
     load_const "widget"
     cmp_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var i
     load_type interfaces.AusiLabeled
     virtual_load_field .name
@@ -2520,29 +2500,21 @@ function interfaces.b1180_optional_get(value: interfaces.B1180Getter<int> | null
     load_var value
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var value
     load_type interfaces.B1180Getter<int>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0
-    jump L2
+    jump L1
+
+  L0:
+    load_const null
 
   L1:
-    load_const null
+    jump_if_not_null_or_pop L2
+    load_const -1
 
   L2:
-    store_var_load_var _2
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L3
-    load_const -1
-    store_var _2
-
-  L3:
-    load_var _2
     return
 }
 
@@ -2550,29 +2522,21 @@ function interfaces.b1180_optional_name(value: interfaces.B1180Named | null) -> 
     load_var value
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var value
     load_type interfaces.B1180Named
     load_const "name"
     virtual_call nargs=1 ntypeargs=0
-    jump L2
+    jump L1
+
+  L0:
+    load_const null
 
   L1:
-    load_const null
+    jump_if_not_null_or_pop L2
+    load_const "nobody"
 
   L2:
-    store_var_load_var _2
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L3
-    load_const "nobody"
-    store_var _2
-
-  L3:
-    load_var _2
     return
 }
 
@@ -2596,8 +2560,6 @@ function interfaces.bgfb_same(x: #0) -> bool {
     load_type interfaces.BgfbEquatable
     load_const "eq"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2605,43 +2567,30 @@ function interfaces.birr_main() -> bool {
     load_type interfaces.BirrContainer<int>
     load_type interfaces.BirrPrintable<int>
     call reflect.Type.implements
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_type interfaces.BirrContainer<string>
     load_type interfaces.BirrPrintable<string>
     call reflect.Type.implements
+    jump_if_false_or_pop L0
+    load_type interfaces.BirrPrintable<int>
+    load_type interfaces.BirrContainer<int>
+    call reflect.Type.implemented_by
+    jump_if_false_or_pop L0
+    load_type interfaces.BirrPrintable<string>
+    load_type interfaces.BirrContainer<string>
+    call reflect.Type.implemented_by
+    jump_if_false_or_pop L0
+    load_type interfaces.BirrPrintable<int>
+    load_type interfaces.BirrContainer<string>
+    call reflect.Type.implemented_by
+    unary_op !
+    jump_if_false_or_pop L0
+    load_type interfaces.BirrPrintable<string>
+    load_type interfaces.BirrContainer<int>
+    call reflect.Type.implemented_by
+    unary_op !
 
   L0:
-    jump_if_false L1
-    pop 1
-    load_type interfaces.BirrPrintable<int>
-    load_type interfaces.BirrContainer<int>
-    call reflect.Type.implemented_by
-
-  L1:
-    jump_if_false L2
-    pop 1
-    load_type interfaces.BirrPrintable<string>
-    load_type interfaces.BirrContainer<string>
-    call reflect.Type.implemented_by
-
-  L2:
-    jump_if_false L3
-    pop 1
-    load_type interfaces.BirrPrintable<int>
-    load_type interfaces.BirrContainer<string>
-    call reflect.Type.implemented_by
-    unary_op !
-
-  L3:
-    jump_if_false L4
-    pop 1
-    load_type interfaces.BirrPrintable<string>
-    load_type interfaces.BirrContainer<int>
-    call reflect.Type.implemented_by
-    unary_op !
-
-  L4:
     return
 }
 
@@ -2669,8 +2618,6 @@ function interfaces.btvi_f(x: #0) -> string {
     load_type interfaces.BtviPrintable
     load_const "display"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2687,8 +2634,6 @@ function interfaces.btvs_f(x: #0) -> string {
     load_type interfaces.BtvsPrintable
     load_const "display"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2706,8 +2651,6 @@ function interfaces.cimd_main() -> string {
     load_type interfaces.CimdGreeter
     load_const "greet"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2719,8 +2662,7 @@ function interfaces.cofs_main() -> bool {
     load_field .host
     load_const 0
     cmp_int_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var s
     load_type interfaces.CofsConfig
     virtual_load_field .host
@@ -2737,8 +2679,6 @@ function interfaces.comc_main() -> string {
     load_type interfaces.ComcConfigurable
     load_const "configure"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2750,8 +2690,6 @@ function interfaces.crid_main() -> bool {
     load_type interfaces.CridEquals
     load_const "neq"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2769,13 +2707,11 @@ function interfaces.dapc_main() -> string {
     load_type interfaces.DapcLeft
     load_const "foo"
     virtual_call nargs=1 ntypeargs=0
-    store_var _3
     load_var d
     load_type interfaces.DapcRight
     load_const "foo"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
-    load_var _3
     load_const ":"
     bin_op +
     load_var _5
@@ -2790,8 +2726,6 @@ function interfaces.dcfo_main() -> string {
     load_type interfaces.DcfoLogger
     load_const "log"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2804,8 +2738,6 @@ function interfaces.dcgo_main() -> string {
     load_type interfaces.DcgoLogger
     load_const "log"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2814,23 +2746,15 @@ function interfaces.dcmr_main() -> string {
     load_type interfaces.DcmrAnimal
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _5
-    load_var _5
     load_type interfaces.DcmrAnimal
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _4
-    load_var _4
     load_type interfaces.DcmrAnimal
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _3
-    load_var _3
     load_type interfaces.DcmrAnimal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2841,8 +2765,6 @@ function interfaces.dcob_main() -> string {
     load_type interfaces.DcobLogger
     load_const "log"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2858,8 +2780,6 @@ function interfaces.dctf_main() -> string {
     load_type interfaces.DctfAnimal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2894,8 +2814,6 @@ function interfaces.dctio_main() -> string {
     load_type interfaces.DctioLogger
     load_const "log"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2906,8 +2824,6 @@ function interfaces.dcwc_main() -> string {
     load_type interfaces.DcwcWrapper
     load_const "decorate"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2918,12 +2834,10 @@ function interfaces.ddti_main() -> string {
     load_type interfaces.DdtiLeft
     load_const "left_tag"
     virtual_call nargs=1 ntypeargs=0
-    store_var _4
     load_var h
     load_type interfaces.DdtiRight
     load_const "right_tag"
     virtual_call nargs=1 ntypeargs=0
-    store_var _5
     load_var h
     load_type interfaces.DdtiX
     load_const "x_note"
@@ -2934,7 +2848,6 @@ function interfaces.ddti_main() -> string {
     load_const "y_note"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
-    load_var2 2 3
     bin_op +
     load_var _6
     bin_op +
@@ -2966,10 +2879,7 @@ function interfaces.dflo_main() -> string {
     store_var _10
     load_var _10
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var acc
     store_var _15
     load_var _10
@@ -2984,7 +2894,7 @@ function interfaces.dflo_main() -> string {
     store_var acc
     jump L0
 
-  L2:
+  L1:
     load_var acc
     return
 }
@@ -2995,8 +2905,6 @@ function interfaces.dksl_main() -> string {
     load_type interfaces.DkslLogger
     load_const "log"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3006,8 +2914,6 @@ function interfaces.dmdt_main() -> string {
     load_type interfaces.DmdtAnimal
     load_const "describe"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3016,8 +2922,6 @@ function interfaces.drtc_main() -> string {
     load_type interfaces.DrtcA
     load_const "tag"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3100,17 +3004,14 @@ function interfaces.dtba_main() -> string {
 
 function interfaces.dtba_pick(use_dog: bool) -> interfaces.DtbaAnimal {
     load_var use_dog
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    alloc_instance user.interfaces.DtbaCat
     jump L1
 
   L0:
-    alloc_instance user.interfaces.DtbaCat
-    jump L2
-
-  L1:
     alloc_instance user.interfaces.DtbaDog
 
-  L2:
+  L1:
     return
 }
 
@@ -3121,8 +3022,6 @@ function interfaces.dtfa_main() -> string {
     load_type interfaces.DtfaAnimal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3136,8 +3035,6 @@ function interfaces.dtfc_main() -> string {
     load_type interfaces.DtfcAnimal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3156,8 +3053,6 @@ function interfaces.dtfl_main() -> string {
     load_type interfaces.DtflAnimal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3173,8 +3068,6 @@ function interfaces.dtfo_main() -> string {
     load_type interfaces.DtfoAnimal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3189,8 +3082,6 @@ function interfaces.dtmv_main() -> string {
     load_type interfaces.DtmvAnimal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3213,7 +3104,6 @@ function interfaces.dtna_main() -> string {
     load_type interfaces.DtnaAnimal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _9
     load_var pack
     load_const 1
     load_array_element
@@ -3223,7 +3113,6 @@ function interfaces.dtna_main() -> string {
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
     store_var _15
-    load_var _9
     load_const ":"
     bin_op +
     load_var _15
@@ -3267,8 +3156,6 @@ function interfaces.f1bg_main() -> string {
     load_type interfaces.F1bgPrintable
     load_const "display"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3279,8 +3166,6 @@ function interfaces.f1d_main() -> string {
     load_type interfaces.F1dPrintable
     load_const "display"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3314,8 +3199,6 @@ function interfaces.f1g_main() -> int {
     load_type interfaces.F1gContainer<int>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3328,8 +3211,6 @@ function interfaces.f1sa_main() -> string {
     load_type interfaces.F1saDescribable
     load_const "describe"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3360,8 +3241,6 @@ function interfaces.f2d_main() -> string {
     load_type interfaces.F2dPrintable
     load_const "display"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3378,8 +3257,7 @@ function interfaces.f2rs_main() -> bool {
     load_var printable
     load_type interfaces.F2rsPerson
     call reflect.Type.implemented_by
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var printable
     load_type interfaces.F2rsTeam
     call reflect.Type.implemented_by
@@ -3394,8 +3272,6 @@ function interfaces.f2sa_main() -> string {
     load_type interfaces.F2saLabeled
     load_const "label"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3404,20 +3280,17 @@ function interfaces.fz03_accepts_optional(a: interfaces.Fz03Animal | null) -> st
     load_const null
     call baml.ops.equals_equals
     unary_op !
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "none"
     jump L1
 
   L0:
-    load_const "none"
-    jump L2
-
-  L1:
     load_var a
     load_type interfaces.Fz03Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
 
-  L2:
+  L1:
     return
 }
 
@@ -3428,23 +3301,10 @@ function interfaces.fz03_main() -> string {
 }
 
 function interfaces.fz04_main() -> string {
-    load_const true
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    alloc_instance user.interfaces.Fz04Cat
-    jump L2
-
-  L1:
     alloc_instance user.interfaces.Fz04Dog
-
-  L2:
     load_type interfaces.Fz04Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3453,8 +3313,6 @@ function interfaces.fz05_main() -> string {
     load_type interfaces.Fz05A
     load_const "foo"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3464,8 +3322,6 @@ function interfaces.fz07_main() -> int {
     load_type interfaces.Fz07Echo<int>
     load_const "echo"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3482,8 +3338,6 @@ function interfaces.fz10_read(b: interfaces.Fz10Box<#0>) -> #0 {
     load_type interfaces.Fz10Box<#0>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3497,8 +3351,6 @@ function interfaces.fz15_main() -> string {
     load_type interfaces.Fz15Container<int>
     load_const "describe_with_self_call"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3512,8 +3364,6 @@ function interfaces.fz17_main() -> string {
     load_type interfaces.Fz17Greetable
     load_const "greet"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3561,11 +3411,9 @@ function interfaces.fz21_main() -> string {
     init_instance user.interfaces.Fz21D .a_label, .b_label
     store_var_load_var d
     call user.interfaces.fz21_get_from_a
-    store_var _3
     load_var d
     call user.interfaces.fz21_get_from_b
     store_var _5
-    load_var _3
     load_const "|"
     bin_op +
     load_var _5
@@ -3578,8 +3426,6 @@ function interfaces.fz23_main() -> string {
     load_type interfaces.Fz23Speaker
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3593,8 +3439,6 @@ function interfaces.fz24_main() -> int {
     load_type interfaces.Fz24Container<int>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3603,18 +3447,15 @@ function interfaces.fz29_describe(a: interfaces.Fz29Animal) -> string {
     store_var _2
     load_var _2
     narrow_bind interfaces.Fz29Dog, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_var _2
     load_field .breed
 
-  L2:
+  L1:
     return
 }
 
@@ -3628,22 +3469,17 @@ function interfaces.fz29_main() -> string {
 function interfaces.fz31_main() -> string {
     load_const true
     is_type true
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    alloc_instance user.interfaces.Fz31Cat
     jump L1
 
   L0:
-    alloc_instance user.interfaces.Fz31Cat
-    jump L2
-
-  L1:
     alloc_instance user.interfaces.Fz31Dog
 
-  L2:
+  L1:
     load_type interfaces.Fz31Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3667,8 +3503,7 @@ function interfaces.fz33_main() -> bool {
     load_const null
     call baml.ops.equals_equals
     unary_op !
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var n
     load_const null
     call baml.ops.equals_equals
@@ -3679,18 +3514,15 @@ function interfaces.fz33_main() -> bool {
 
 function interfaces.fz33_maybe_dog(want_dog: bool) -> interfaces.Fz33Animal | null {
     load_var want_dog
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const null
     jump L1
 
   L0:
-    load_const null
-    jump L2
-
-  L1:
     load_const "Lab"
     init_instance user.interfaces.Fz33Dog .breed
 
-  L2:
+  L1:
     return
 }
 
@@ -3715,31 +3547,26 @@ function interfaces.fz38_main() -> bool {
 
 function interfaces.fz39_main() -> string {
     call user.interfaces.fz39_risky
-    jump L2
+    jump L1
     load_var e
     store_var _2
     load_var _2
     narrow_bind interfaces.Fz39IError, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const "wildcard-caught"
-    jump L2
+    jump L1
 
-  L1:
+  L0:
+    load_const "interface-caught: "
     load_var _2
     load_type interfaces.Fz39IError
     load_const "describe"
     virtual_call nargs=1 ntypeargs=0
-    store_var _4
-    load_const "interface-caught: "
-    load_var _4
     bin_op +
 
-  L2:
+  L1:
     return
 }
 
@@ -3771,20 +3598,17 @@ function interfaces.fz41_maybe_speak(a: interfaces.Fz41Animal | null) -> string 
     store_var _2
     load_var _2
     narrow_bind interfaces.Fz41Animal, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "silent"
     jump L1
 
   L0:
-    load_const "silent"
-    jump L2
-
-  L1:
     load_var _2
     load_type interfaces.Fz41Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
 
-  L2:
+  L1:
     return
 }
 
@@ -3793,8 +3617,6 @@ function interfaces.fz42_main() -> string {
     load_type interfaces.Fz42Printable
     load_const "print"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3803,8 +3625,6 @@ function interfaces.fz43_get_value(p: interfaces.Fz43Producer<#0>) -> #0 {
     load_type interfaces.Fz43Producer<#0>
     load_const "produce"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3822,8 +3642,6 @@ function interfaces.fz44_main() -> int {
     load_type interfaces.Fz44Wrapper<int>
     load_const "wrap"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3832,20 +3650,17 @@ function interfaces.fz45_describe(x: interfaces.Fz45Animal | string) -> string {
     store_var _2
     load_var _2
     narrow_bind interfaces.Fz45Animal, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var x
     jump L1
 
   L0:
-    load_var x
-    jump L2
-
-  L1:
     load_var _2
     load_type interfaces.Fz45Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
 
-  L2:
+  L1:
     return
 }
 
@@ -3868,8 +3683,6 @@ function interfaces.gbap_read_int(m: #0) -> int {
     load_type interfaces.GbapConverter<int>
     load_const "convert"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3886,8 +3699,6 @@ function interfaces.gbdm_read_int(m: #0) -> int {
     load_type interfaces.GbdmConverter<int>
     load_const "convert"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -3922,9 +3733,6 @@ function interfaces.gbr_first_name(items: #0[]) -> string {
 }
 
 function interfaces.gbr_main() -> string {
-    load_const "Rex"
-    init_instance user.interfaces.GbrDog .name
-    store_var mydog
     load_type interfaces.GbrDog
     load_const "Rex"
     init_instance user.interfaces.GbrDog .name
@@ -3951,8 +3759,6 @@ function interfaces.gbsp_same(x: #0, y: #0) -> bool {
     load_type interfaces.GbspEquatable
     load_const "eq"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4001,8 +3807,6 @@ function interfaces.gict_main() -> int {
     load_type interfaces.GictContainer<int>
     load_const "size"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4014,8 +3818,7 @@ function interfaces.gif_main() -> bool {
     call user.interfaces.gif_read
     load_const "one"
     cmp_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_const "x"
     load_const "ex"
     load_type string
@@ -4042,8 +3845,6 @@ function interfaces.gimp_main() -> string {
     load_type interfaces.GimpEcho<int>
     load_const "echo"
     virtual_call nargs=2 ntypeargs=1
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4056,8 +3857,6 @@ function interfaces.goop_main() -> string {
     load_type interfaces.GoopDescriber<int>
     load_const "describe"
     virtual_call nargs=2 ntypeargs=1
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4070,8 +3869,6 @@ function interfaces.grlr_main() -> string {
     load_type interfaces.GrlrLabel
     load_const "label"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4084,8 +3881,6 @@ function interfaces.grmr_main() -> string {
     load_type interfaces.GrmrLabel
     load_const "label"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4094,8 +3889,6 @@ function interfaces.grpa_main() -> string {
     load_type interfaces.GrpaParent<int>
     load_const "describe"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4120,8 +3913,6 @@ function interfaces.grpt_main() -> string {
     load_type interfaces.GrptParent<int>
     load_const "describeGrpt"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4136,15 +3927,12 @@ function interfaces.hiad_main() -> string {
     load_type interfaces.HiadAnimal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _4
     load_var animals
     load_const 1
     load_array_element
     load_type interfaces.HiadAnimal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _8
-    load_var2 2 3
     bin_op +
     return
 }
@@ -4154,8 +3942,6 @@ function interfaces.idmc_differ(x: #0, y: #0) -> bool {
     load_type interfaces.IdmcEquatable
     load_const "neq"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4191,31 +3977,24 @@ function interfaces.ifcc_main() -> bool {
     virtual_load_field .host
     load_const "localhost"
     cmp_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var c
     load_type interfaces.IfccConfig
     virtual_load_field .port
     load_const 8080
     cmp_int_op ==
-
-  L0:
-    jump_if_false L1
-    pop 1
+    jump_if_false_or_pop L0
     load_var s
     load_field .host
     load_const "localhost"
     cmp_op ==
-
-  L1:
-    jump_if_false L2
-    pop 1
+    jump_if_false_or_pop L0
     load_var s
     load_field .max_connections
     load_const 50
     cmp_int_op ==
 
-  L2:
+  L0:
     return
 }
 
@@ -4274,8 +4053,7 @@ function interfaces.ifw_main() -> bool {
     load_type interfaces.IfwCounter
     virtual_store_field .count
     load_var after_assign
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var b
     load_field .count
     load_const 15
@@ -4307,18 +4085,13 @@ function interfaces.itamp_main() -> bool {
     load_type interfaces.ItampConv<int, string>
     load_const "tag"
     virtual_call nargs=1 ntypeargs=0
-    store_var _5
-    load_var _5
     load_const "int->string"
     cmp_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var p
     load_type interfaces.ItampConv<string, int>
     load_const "tag"
     virtual_call nargs=1 ntypeargs=0
-    store_var _6
-    load_var _6
     load_const "string->int"
     cmp_op ==
 
@@ -4331,20 +4104,17 @@ function interfaces.itic_main() -> string {
     store_var _3
     load_var _3
     narrow_bind interfaces.IticDog, slot=1
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "not a swimmer"
     jump L1
 
   L0:
-    load_const "not a swimmer"
-    jump L2
-
-  L1:
     load_var _3
     load_type interfaces.IticSwimmer
     load_const "swim"
     virtual_call nargs=1 ntypeargs=0
 
-  L2:
+  L1:
     return
 }
 
@@ -4353,35 +4123,27 @@ function interfaces.itvd_main() -> string {
     load_type interfaces.ItvdAnimal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
 function interfaces.mdci_describe(a: interfaces.MdciAnimal) -> string {
     load_var a
     is_type interfaces.MdciDog
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var a
     is_type interfaces.MdciCat
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    load_const "other"
     jump L2
 
-  L1:
-    load_const "other"
-    jump L4
-
-  L2:
+  L0:
     load_var a
     load_field .0
     load_const " the cat"
     bin_op +
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_var a
     load_field .0
     load_const " the "
@@ -4390,7 +4152,7 @@ function interfaces.mdci_describe(a: interfaces.MdciAnimal) -> string {
     load_field .1
     bin_op +
 
-  L4:
+  L2:
     return
 }
 
@@ -4434,18 +4196,15 @@ function interfaces.mdif_main() -> string {
     store_var _2
     load_var _2
     narrow_bind interfaces.MdifDog, slot=1
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_var _2
     load_field .name
 
-  L2:
+  L1:
     return
 }
 
@@ -4457,8 +4216,7 @@ function interfaces.midr_describe(s: interfaces.MidrSwitch) -> string {
     load_type interfaces.MidrSwitch
     virtual_load_field .active
     is_type true
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const "off"
@@ -4484,18 +4242,15 @@ function interfaces.mntc_main() -> string {
     store_var _2
     load_var _2
     narrow_bind interfaces.MntcDog, slot=1
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_var _2
     load_field .breed
 
-  L2:
+  L1:
     return
 }
 
@@ -4504,17 +4259,14 @@ function interfaces.moiw_main() -> string {
     store_var _2
     load_var _2
     narrow_bind interfaces.MoiwDog, slot=1
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_const "dog"
 
-  L2:
+  L1:
     return
 }
 
@@ -4526,8 +4278,6 @@ function interfaces.msma_main() -> bool {
     load_type interfaces.MsmaEquatable
     load_const "same"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4537,8 +4287,6 @@ function interfaces.odnd_main() -> string {
     load_type interfaces.OdndAnimal
     load_const "describe"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4547,16 +4295,14 @@ function interfaces.oobp_main() -> string {
     load_type interfaces.OobpDebuggable
     load_const "debugOobp"
     virtual_call nargs=1 ntypeargs=0
-    store_var _4
     load_const 1
     load_type interfaces.OobpDebuggable
     load_const "debugOobp"
     virtual_call nargs=1 ntypeargs=0
-    store_var _6
-    load_var _4
+    store_var _3
     load_const ":"
     bin_op +
-    load_var _6
+    load_var _3
     bin_op +
     return
 }
@@ -4565,8 +4311,7 @@ function interfaces.oobv_main() -> bool {
     load_type interfaces.OobvDog
     load_type interfaces.OobvAnimal
     call reflect.Type.implements
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_type interfaces.OobvAnimal
     load_type interfaces.OobvDog
     call reflect.Type.implemented_by
@@ -4583,8 +4328,6 @@ function interfaces.ptu_main() -> string {
     load_type interfaces.PtuPipe<interfaces.PtuErrA | interfaces.PtuErrB>
     load_const "run"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4602,8 +4345,6 @@ function interfaces.rcfl_main() -> string {
     load_type interfaces.RcflA
     load_const "tag"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4614,8 +4355,6 @@ function interfaces.rcpf_main() -> string {
     load_type interfaces.RcpfPerson
     load_const "introduce"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4625,18 +4364,13 @@ function interfaces.rcpm_main() -> bool {
     load_type interfaces.RcpmParent<int>
     load_const "describe"
     virtual_call nargs=1 ntypeargs=0
-    store_var _3
-    load_var _3
     load_const "int"
     cmp_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var both
     load_type interfaces.RcpmParent<string>
     load_const "describe"
     virtual_call nargs=1 ntypeargs=0
-    store_var _5
-    load_var _5
     load_const "string"
     cmp_op ==
 
@@ -4682,8 +4416,7 @@ function interfaces.riig_is_animal() -> bool {
 function interfaces.riig_main() -> bool {
     load_type interfaces.RiigDog
     call user.interfaces.riig_is_animal
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_type int
     call user.interfaces.riig_is_animal
     load_const false
@@ -4712,8 +4445,6 @@ function interfaces.rtit_main() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4723,8 +4454,6 @@ function interfaces.sapc_main() -> string {
     load_type interfaces.SapcFarewell
     load_const "bye"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4737,8 +4466,7 @@ function interfaces.sfnd_main() -> bool {
     virtual_load_field .id
     load_const "abc"
     cmp_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var t
     load_type interfaces.SfndHasNumId
     virtual_load_field .id
@@ -4758,8 +4486,7 @@ function interfaces.sgid_main() -> bool {
     call user.interfaces.sgid_read_int
     load_const 42
     cmp_int_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_type interfaces.SgidMultiFormat
     load_var m
     call user.interfaces.sgid_read_float
@@ -4775,8 +4502,6 @@ function interfaces.sgid_read_float(m: #0) -> float {
     load_type interfaces.SgidConverter<float>
     load_const "convert"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4785,8 +4510,6 @@ function interfaces.sgid_read_int(m: #0) -> int {
     load_type interfaces.SgidConverter<int>
     load_const "convert"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4799,8 +4522,7 @@ function interfaces.sgif_main() -> bool {
     virtual_load_field .value
     load_const 7
     cmp_int_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var p
     load_type interfaces.SgifSlot<string>
     virtual_load_field .value
@@ -4828,8 +4550,7 @@ function interfaces.sgif_symbolic_main() -> bool {
     call user.interfaces.sgif_read
     load_const 7
     cmp_int_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_type string
     load_var p
     call user.interfaces.sgif_read
@@ -4845,8 +4566,6 @@ function interfaces.spma_combine(x: #0, ys: #0[]) -> int {
     load_type interfaces.SpmaAdder
     load_const "addAll"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4881,8 +4600,6 @@ function interfaces.srtc_main() -> int {
     load_type interfaces.SrtcCloneable
     load_const "clone"
     virtual_call nargs=1 ntypeargs=0
-    store_var c
-    load_var c
     load_field .value
     return
 }
@@ -4892,23 +4609,20 @@ function interfaces.tidu_main() -> string {
     load_type interfaces.TiduFallible
     load_const "run"
     virtual_call nargs=1 ntypeargs=0
-    jump L2
+    jump L1
     load_var e
     store_var _3
     load_var _3
     narrow_bind interfaces.TiduBoom, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var _3
     load_field .message
 
-  L2:
+  L1:
     return
 }
 
@@ -4921,8 +4635,7 @@ function interfaces.tisf_main() -> bool {
     virtual_load_field .name
     load_const "widget"
     cmp_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var i
     load_type interfaces.TisfLabeled
     virtual_load_field .name
@@ -4952,21 +4665,18 @@ function interfaces.uf02_addOne(x: interfaces.Uf02Slot<int> | interfaces.Uf02Slo
     store_var _2
     load_var _2
     narrow_bind interfaces.Uf02Slot<int>, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const 0
     jump L1
 
   L0:
-    load_const 0
-    jump L2
-
-  L1:
     load_var _2
     load_type interfaces.Uf02Slot<int>
     virtual_load_field .value
     load_const 1
     add_int
 
-  L2:
+  L1:
     return
 }
 
@@ -4982,17 +4692,14 @@ function interfaces.uf05_go(x: interfaces.Uf05Slot<int> | interfaces.Uf05Slot<st
     store_var _2
     load_var _2
     narrow_bind interfaces.Uf05Slot<int>, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_const "int"
 
-  L2:
+  L1:
     return
 }
 
@@ -5074,13 +4781,11 @@ function interfaces.uf08_main() -> string {
     store_var d
     load_var d
     call user.interfaces.Uf08Dog.fetch
-    store_var _5
     load_var d
     load_type interfaces.Uf08Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
-    load_var _5
     load_const "/"
     bin_op +
     load_var _6
@@ -5093,20 +4798,17 @@ function interfaces.uf09_main() -> string {
     store_var _2
     load_var _2
     narrow_bind interfaces.Uf09Animal, slot=1
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "none"
     jump L1
 
   L0:
-    load_const "none"
-    jump L2
-
-  L1:
     load_var _2
     load_type interfaces.Uf09Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
 
-  L2:
+  L1:
     return
 }
 
@@ -5115,8 +4817,6 @@ function interfaces.uf10_main() -> string {
     load_type interfaces.Uf10Debuggable
     load_const "debugUf10"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5125,8 +4825,6 @@ function interfaces.ufp1_describe(x: interfaces.Ufp1Dog | interfaces.Ufp1Cat) ->
     load_type interfaces.Ufp1Greeter
     load_const "greet"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5204,19 +4902,16 @@ function interfaces.ufp4_readName(x: interfaces.Ufp4Dog | interfaces.Ufp4Named |
     load_var x
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var x
     load_type interfaces.Ufp4Named
     virtual_load_field .name
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const null
 
-  L2:
+  L1:
     return
 }
 
@@ -5267,8 +4962,6 @@ function interfaces.urdm_main() -> string {
     load_type interfaces.UrdmPrintable
     load_const "display"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5277,8 +4970,6 @@ function interfaces.uric_f(x: #0) -> string {
     load_type interfaces.UricPrintable
     load_const "display"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5296,8 +4987,6 @@ function interfaces.urii_f(x: #0) -> string {
     load_type interfaces.UriiPrintable
     load_const "display"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5315,8 +5004,6 @@ function interfaces.uris_f(x: #0) -> string {
     load_type interfaces.UrisPrintable
     load_const "display"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5340,8 +5027,6 @@ function interfaces.urni_main() -> int {
     load_type interfaces.UrniContainer<int[]>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0
-    store_var _3
-    load_var _3
     container_len
     return
 }
@@ -5359,8 +5044,6 @@ function interfaces.urrc_take(child: interfaces.UrrcChild<int>) -> int {
     load_type interfaces.UrrcParent<int>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5368,8 +5051,7 @@ function interfaces.urrs_main() -> bool {
     load_type interfaces.UrrsBox<int>
     load_type interfaces.UrrsPrintable
     call reflect.Type.implements
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_type interfaces.UrrsBox<string>
     load_type interfaces.UrrsPrintable
     call reflect.Type.implements
@@ -5387,8 +5069,6 @@ function interfaces.urrt_main() -> string {
     load_type interfaces.UrrtSame
     load_const "tag"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5398,12 +5078,10 @@ function interfaces.vdc_dispatch_distinguishes_instantiations() -> string {
     load_type interfaces.VdcAnimal
     load_var value
     call user.interfaces.vdc_read_tag
-    store_var _3
     load_type interfaces.VdcAnimal | interfaces.VdcDog
     load_var value
     call user.interfaces.vdc_read_tag
     store_var _6
-    load_var _3
     load_const "|"
     bin_op +
     load_var _6
@@ -5416,8 +5094,6 @@ function interfaces.vdc_read_tag(value: interfaces.VdcTagged<#0>) -> string {
     load_type interfaces.VdcTagged<#0>
     load_const "tag"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5427,8 +5103,6 @@ function interfaces.w301_main() -> int {
     load_type interfaces.W301Sub<int>
     load_const "sub_get"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5438,8 +5112,6 @@ function interfaces.w302_main() -> string {
     load_type interfaces.W302Loud
     load_const "shout"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5449,8 +5121,6 @@ function interfaces.w304_main() -> string {
     load_type interfaces.W304Named
     load_const "describe"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5498,28 +5168,21 @@ function interfaces.w307_box_impls_stringbox() -> bool {
 function interfaces.w307_main() -> bool {
     load_type int
     call user.interfaces.w307_box_impls_intbox
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_type string
     call user.interfaces.w307_box_impls_intbox
     load_const false
     cmp_op ==
-
-  L0:
-    jump_if_false L1
-    pop 1
+    jump_if_false_or_pop L0
     load_type string
     call user.interfaces.w307_box_impls_stringbox
-
-  L1:
-    jump_if_false L2
-    pop 1
+    jump_if_false_or_pop L0
     load_type int
     call user.interfaces.w307_box_impls_stringbox
     load_const false
     cmp_op ==
 
-  L2:
+  L0:
     return
 }
 
@@ -5528,8 +5191,6 @@ function interfaces.w311_main() -> string {
     load_type interfaces.W311Base
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5544,8 +5205,6 @@ function interfaces.w312_main() -> string {
     load_type interfaces.W312Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5559,22 +5218,18 @@ function interfaces.w315_main() -> int {
     call reflect.Type.implemented_by
     store_var b
     load_var a
-    jump_if_false L0
-    pop 1
+    pop_jump_if_false L0
     load_var b
+    pop_jump_if_true L1
 
   L0:
-    pop_jump_if_false L1
+    load_const 0
     jump L2
 
   L1:
-    load_const 0
-    jump L3
-
-  L2:
     load_const 1001
 
-  L3:
+  L2:
     return
 }
 
@@ -5584,8 +5239,7 @@ function interfaces.w3bg_main() -> bool {
     load_var int_box
     load_type interfaces.W3bgIntBox
     call reflect.Type.implemented_by
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var int_box
     load_type interfaces.W3bgStringBox
     call reflect.Type.implemented_by
@@ -5602,8 +5256,6 @@ function interfaces.w3bm_main() -> string {
     load_type interfaces.W3bmPrintable
     load_const "display"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5620,8 +5272,6 @@ function interfaces.w3oo_main() -> string {
     load_type interfaces.W3ooDebuggable
     load_const "debugW3oo"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5631,8 +5281,6 @@ function interfaces.w3sp_main() -> string {
     load_type interfaces.W3spNamed
     load_const "greet"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5641,8 +5289,6 @@ function interfaces.w3um_describe(x: interfaces.W3umDog | interfaces.W3umCat) ->
     load_type interfaces.W3umAnimal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 

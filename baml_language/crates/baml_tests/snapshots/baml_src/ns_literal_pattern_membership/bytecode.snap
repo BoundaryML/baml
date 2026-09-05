@@ -163,148 +163,63 @@ function literal_pattern_membership.$init_test_ns_literal_pattern_membership_lit
 function literal_pattern_membership.bigint_pattern(x: int | bigint) -> bool {
     load_var x
     is_type 1n
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
 function literal_pattern_membership.bool_pattern(x: int | bool) -> bool {
     load_var x
     is_type true
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
 function literal_pattern_membership.int_pattern_over_bigint(x: int | bigint) -> bool {
     load_var x
     is_type 1
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
 function literal_pattern_membership.int_pattern_over_bool(x: int | bool) -> bool {
     load_var x
     is_type 1
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
 function literal_pattern_membership.string_pattern(x: string) -> int {
     load_var x
     is_type "go"
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var x
     is_type "stop"
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    load_const 0
+    jump L2
+
+  L0:
+    load_const 2
     jump L2
 
   L1:
-    load_const 0
-    jump L4
-
-  L2:
-    load_const 2
-    jump L4
-
-  L3:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function literal_pattern_membership.via_alias(x: int) -> bool {
     load_var x
     is_type 1
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
 function literal_pattern_membership.via_guarded_match(x: int | float) -> bool {
     load_var x
     is_type 1
-    pop_jump_if_false L0
-    load_const true
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
 function literal_pattern_membership.via_is(x: int | float) -> bool {
     load_var x
     is_type 1
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 

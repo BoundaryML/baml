@@ -5,28 +5,17 @@ source: crates/baml_tests/src/corpus.rs
 fn user.fixtures.literal_union_arithmetic.ifElseAdd() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: 2 | 3
 
     bb0: {
-        branch const true -> [bb2, bb1];
+        goto -> bb1;
     }
 
     bb1: {
-        _1 = const 3_i64;
-        goto -> bb3;
+        _0 = const 3_i64;
+        goto -> bb2;
     }
 
     bb2: {
-        _1 = const 2_i64;
-        goto -> bb3;
-    }
-
-    bb3: {
-        _0 = const 1_i64 + copy _1;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -69,43 +58,17 @@ fn user.fixtures.literal_union_arithmetic.matchAdd(x: int) -> int {
 fn user.fixtures.literal_union_arithmetic.bothSidesUnion() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: 1 | 2
-    let _2: 3 | 4
 
     bb0: {
-        branch const true -> [bb2, bb1];
+        goto -> bb1;
     }
 
     bb1: {
-        _1 = const 2_i64;
-        goto -> bb3;
+        _0 = const 5_i64;
+        goto -> bb2;
     }
 
     bb2: {
-        _1 = const 1_i64;
-        goto -> bb3;
-    }
-
-    bb3: {
-        branch const false -> [bb5, bb4];
-    }
-
-    bb4: {
-        _2 = const 4_i64;
-        goto -> bb6;
-    }
-
-    bb5: {
-        _2 = const 3_i64;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _0 = copy _1 + copy _2;
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -113,28 +76,17 @@ fn user.fixtures.literal_union_arithmetic.bothSidesUnion() -> int {
 fn user.fixtures.literal_union_arithmetic.subtractUnion() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: 3 | 7
 
     bb0: {
-        branch const true -> [bb2, bb1];
+        goto -> bb1;
     }
 
     bb1: {
-        _1 = const 3_i64;
-        goto -> bb3;
+        _0 = const 93_i64;
+        goto -> bb2;
     }
 
     bb2: {
-        _1 = const 7_i64;
-        goto -> bb3;
-    }
-
-    bb3: {
-        _0 = const 100_i64 - copy _1;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }

@@ -23,14 +23,11 @@ function const_bindings.const_bindings_with_const() -> int {
     load_var i
     load_const 4
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var sum
     return
 
-  L2:
+  L1:
     load_var2 1 2
     add_int
     store_var sum
@@ -51,14 +48,11 @@ function const_bindings.const_bindings_with_let() -> int {
     load_var i
     load_const 4
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var sum
     return
 
-  L2:
+  L1:
     load_var2 1 2
     add_int
     store_var sum

@@ -30,12 +30,10 @@ function fixtures.o1_allowed_roles.AskGpt4o(question: string, client: ai.Client 
     call user.fixtures.o1_allowed_roles.AskGpt4o@spec
     store_var _9
     load_type string
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -82,10 +80,10 @@ function fixtures.o1_allowed_roles.AskGpt4o@spec(question: string) -> ai.Functio
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_global user.fixtures.o1_allowed_roles.Gpt4oClient
     call ai.clients.resolve
-    store_var _6
+    store_var _7
     load_const "AskGpt4o"
     load_deref ?1
     load_const "question"
@@ -157,12 +155,10 @@ function fixtures.o1_allowed_roles.AskO1(question: string, client: ai.Client | n
     call user.fixtures.o1_allowed_roles.AskO1@spec
     store_var _9
     load_type string
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -209,10 +205,10 @@ function fixtures.o1_allowed_roles.AskO1@spec(question: string) -> ai.FunctionSp
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_global user.fixtures.o1_allowed_roles.O1Client
     call ai.clients.resolve
-    store_var _6
+    store_var _7
     load_const "AskO1"
     load_deref ?1
     load_const "question"

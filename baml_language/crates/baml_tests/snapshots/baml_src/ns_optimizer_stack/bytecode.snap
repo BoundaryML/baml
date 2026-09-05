@@ -1,0 +1,839 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function optimizer_stack.$init_test_ns_optimizer_stack_optimizer_stack(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.optimizer_stack"
+    load_const "optimized value and predicate paths preserve behavior"
+    make_closure .<lambda($init_test_ns_optimizer_stack_optimizer_stack, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function optimizer_stack.<(user.optimizer_stack.Sequence as user.optimizer_stack.Source)>.next(self: optimizer_stack.Sequence) -> int {
+    load_var self
+    load_field .counter
+    call user.optimizer_stack.tick
+    return
+}
+
+function optimizer_stack.and_value(a: bool, b: bool, c: bool) -> bool {
+    load_var a
+    jump_if_false_or_pop L0
+    load_var b
+    jump_if_false_or_pop L0
+    load_var c
+
+  L0:
+    return
+}
+
+function optimizer_stack.array_effects() -> int[] {
+    load_const 0
+    init_instance user.optimizer_stack.Counter .value
+    store_var_load_var counter
+    call user.optimizer_stack.tick
+    load_const 42
+    load_var counter
+    call user.optimizer_stack.tick
+    load_var counter
+    load_field .value
+    load_type int
+    alloc_array 4
+    return
+}
+
+function optimizer_stack.array_mixed() -> int[] {
+    load_const 1
+    call user.optimizer_stack.number
+    load_const 2
+    load_const 3
+    call user.optimizer_stack.number
+    load_type int
+    alloc_array 3
+    return
+}
+
+function optimizer_stack.binary_effects() -> int {
+    load_const 0
+    init_instance user.optimizer_stack.Counter .value
+    store_var_load_var counter
+    call user.optimizer_stack.tick
+    load_var counter
+    call user.optimizer_stack.tick
+    sub_int
+    return
+}
+
+function optimizer_stack.call_effects() -> int {
+    load_const 0
+    init_instance user.optimizer_stack.Counter .value
+    store_var_load_var counter
+    call user.optimizer_stack.tick
+    load_var counter
+    call user.optimizer_stack.tick
+    call user.optimizer_stack.combine
+    return
+}
+
+function optimizer_stack.coalesce(value: int | null) -> int {
+    load_var value
+    jump_if_not_null_or_pop L0
+    load_const 42
+
+  L0:
+    return
+}
+
+function optimizer_stack.coalesce_effect(value: int | null) -> int {
+    load_const 0
+    init_instance user.optimizer_stack.Counter .value
+    store_var counter
+    load_var value
+    jump_if_not_null_or_pop L0
+    load_var counter
+    call user.optimizer_stack.tick
+
+  L0:
+    load_const 10
+    mul_int
+    load_var counter
+    load_field .value
+    add_int
+    return
+}
+
+function optimizer_stack.coalesce_mutable(value: int | null) -> int {
+    load_var value
+    jump_if_not_null_or_pop L0
+    load_const 42
+
+  L0:
+    return
+}
+
+function optimizer_stack.combine(a: int, b: int) -> int {
+    load_var a
+    load_const 10
+    mul_int
+    load_var b
+    add_int
+    return
+}
+
+function optimizer_stack.condition_effects(a: bool, b: bool) -> int {
+    load_const 0
+    init_instance user.optimizer_stack.Counter .value
+    store_var counter
+    load_var a
+    pop_jump_if_false L0
+    load_var counter
+    call user.optimizer_stack.tick
+    pop 1
+    load_var b
+    pop_jump_if_false L0
+    load_var counter
+    call user.optimizer_stack.tick
+    pop 1
+    load_var counter
+    call user.optimizer_stack.tick
+    pop 1
+
+  L0:
+    load_var counter
+    load_field .value
+    return
+}
+
+function optimizer_stack.constant_overflow() -> int {
+    load_const 4611686018427387903
+    load_const 1
+    add_int
+
+  L0:
+    return
+    load_var e
+    is_type baml.panics.IntegerOverflow
+    pop_jump_if_true L1
+    load_var e
+    rethrow
+
+  L1:
+    load_const 7
+    jump L0
+}
+
+function optimizer_stack.constants() -> int {
+    load_const 13
+    return
+}
+
+function optimizer_stack.failing_operand(counter: optimizer_stack.Counter, divisor: int) -> int {
+    load_var counter
+    call user.optimizer_stack.tick
+    pop 1
+    load_const 1
+    load_var divisor
+    div_int
+    return
+}
+
+function optimizer_stack.generic_effects() -> int {
+    load_const 0
+    init_instance user.optimizer_stack.Counter .value
+    store_var_load_var counter
+    call user.optimizer_stack.tick
+    store_var _3
+    load_type int
+    load_var _3
+    call user.optimizer_stack.identity
+    load_var counter
+    call user.optimizer_stack.tick
+    store_var _7
+    load_type int
+    load_var _7
+    call user.optimizer_stack.identity
+    call user.optimizer_stack.combine
+    return
+}
+
+function optimizer_stack.handler_observes_store(divisor: int) -> int {
+    load_const 1
+    store_var result
+    load_const 2
+    store_var result
+    load_const 1
+    load_var divisor
+    div_int
+    pop 1
+    load_const 3
+    store_var result
+    load_var result
+
+  L0:
+    return
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_true L1
+    load_var e
+    rethrow
+
+  L1:
+    load_var result
+    jump L0
+}
+
+function optimizer_stack.identity(value: #0) -> #0 {
+    load_var value
+    return
+}
+
+function optimizer_stack.indirect_effects() -> int {
+    load_const 0
+    init_instance user.optimizer_stack.Counter .value
+    store_var_load_var counter
+    call user.optimizer_stack.tick
+    load_var counter
+    call user.optimizer_stack.tick
+    make_closure .<lambda(indirect_effects, 0)>, 0
+    call_indirect
+    return
+}
+
+function optimizer_stack.iterator_sum(values: int[]) -> int {
+    load_const 0
+    store_var sum
+    load_var values
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_true L1
+    load_var2 2 4
+    add_int
+    store_var sum
+    jump L0
+
+  L1:
+    load_var sum
+    return
+}
+
+function optimizer_stack.loop_values(count: int) -> int {
+    load_const 0
+    store_var index
+    load_const 0
+    store_var total
+
+  L0:
+    load_var2 2 1
+    cmp_int_op <
+    pop_jump_if_false L1
+    load_var total
+    load_const 20000
+    cmp_int_op <
+    pop_jump_if_true L2
+
+  L1:
+    load_var total
+    return
+
+  L2:
+    load_var index
+    load_const 500
+    cmp_int_op <
+    jump_if_false_or_pop L3
+    load_var index
+    load_const 250
+    cmp_int_op <
+
+  L3:
+    jump_if_true_or_pop L4
+    load_var index
+    load_const 750
+    cmp_int_op >=
+
+  L4:
+    pop_jump_if_false L5
+    load_var total
+    load_const 1
+    add_int
+    store_var total
+
+  L5:
+    load_var index
+    load_const 1
+    add_int
+    store_var index
+    jump L0
+}
+
+function optimizer_stack.mixed_value(a: bool, b: bool, c: bool) -> bool {
+    load_var a
+    jump_if_false_or_pop L0
+    load_var b
+
+  L0:
+    jump_if_true_or_pop L1
+    load_var c
+
+  L1:
+    return
+}
+
+function optimizer_stack.mutable_value(a: bool, b: bool, c: bool) -> bool {
+    load_const false
+    store_var value
+    load_var c
+    pop_jump_if_false L1
+    load_var a
+    jump_if_false_or_pop L0
+    load_var b
+
+  L0:
+    store_var value
+
+  L1:
+    load_var value
+    return
+}
+
+function optimizer_stack.negated_truthiness(value: string | null) -> int {
+    load_var value
+    unary_op truthy
+    pop_jump_if_true L0
+    load_const 1
+    jump L1
+
+  L0:
+    load_const 2
+
+  L1:
+    return
+}
+
+function optimizer_stack.number(value: int) -> int {
+    load_var value
+    return
+}
+
+function optimizer_stack.or_value(a: bool, b: bool, c: bool) -> bool {
+    load_var a
+    jump_if_true_or_pop L0
+    load_var b
+    jump_if_true_or_pop L0
+    load_var c
+
+  L0:
+    return
+}
+
+function optimizer_stack.overwritten(a: bool) -> int {
+    load_var a
+    pop_jump_if_true L0
+    load_const 2
+    jump L1
+
+  L0:
+    load_const 1
+
+  L1:
+    return
+}
+
+function optimizer_stack.overwritten_panic(divisor: int) -> int {
+    load_const 1
+    load_var divisor
+    div_int
+    store_var result
+    load_const 42
+    store_var result
+    load_var result
+
+  L0:
+    return
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_true L1
+    load_var e
+    rethrow
+
+  L1:
+    load_const 7
+    jump L0
+}
+
+function optimizer_stack.parameter_copy(value: int) -> int {
+    load_var value
+    store_var before
+    load_const 8
+    store_var value
+    load_var before
+    return
+}
+
+function optimizer_stack.predicate(a: bool, b: bool, c: bool) -> bool {
+    load_var a
+    pop_jump_if_false L0
+    load_var b
+    pop_jump_if_true L1
+
+  L0:
+    load_const true
+    jump L2
+
+  L1:
+    load_var c
+
+  L2:
+    return
+}
+
+function optimizer_stack.prefix_unwind(divisor: int) -> int {
+    load_const 0
+    init_instance user.optimizer_stack.Counter .value
+    store_var_load_var counter
+    call user.optimizer_stack.tick
+    load_const 42
+    load_var2 2 1
+    call user.optimizer_stack.failing_operand
+    jump L1
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_true L0
+    load_var e
+    rethrow
+
+  L0:
+    load_var counter
+    load_field .value
+    jump L2
+
+  L1:
+    load_type int
+    alloc_array 3
+    store_var_load_var values
+    load_const 0
+    load_array_element
+    load_var values
+    load_const 1
+    load_array_element
+    add_int
+    load_var values
+    load_const 2
+    load_array_element
+    add_int
+
+  L2:
+    return
+}
+
+function optimizer_stack.tick(counter: optimizer_stack.Counter) -> int {
+    load_var2 1 1
+    load_field .value
+    load_const 1
+    bin_op +
+    store_field .value
+    load_var counter
+    load_field .value
+    return
+}
+
+function optimizer_stack.truth_tables() -> bool {
+    load_const 0
+    store_var bits
+
+  L0:
+    load_var bits
+    load_const 8
+    cmp_int_op <
+    pop_jump_if_true L1
+    load_const true
+    jump L13
+
+  L1:
+    load_var bits
+    load_const 1
+    bin_op &
+    load_const 0
+    cmp_int_op !=
+    store_var a
+    load_var bits
+    load_const 2
+    bin_op &
+    load_const 0
+    cmp_int_op !=
+    store_var b
+    load_var bits
+    load_const 4
+    bin_op &
+    load_const 0
+    cmp_int_op !=
+    store_var c
+    load_var2 2 3
+    load_var c
+    call user.optimizer_stack.and_value
+    load_var bits
+    load_const 7
+    cmp_int_op ==
+    cmp_op !=
+    pop_jump_if_true L12
+    load_var2 2 3
+    load_var c
+    call user.optimizer_stack.or_value
+    load_var bits
+    load_const 0
+    cmp_int_op !=
+    cmp_op !=
+    pop_jump_if_true L11
+    load_var2 2 3
+    load_var c
+    call user.optimizer_stack.mixed_value
+    store_var _28
+    load_var bits
+    load_const 3
+    bin_op &
+    load_const 3
+    cmp_int_op ==
+    jump_if_true_or_pop L2
+    jump L3
+
+  L2:
+    store_var _33
+    jump L4
+
+  L3:
+    load_var c
+    store_var _33
+
+  L4:
+    load_var2 5 6
+    cmp_op !=
+    pop_jump_if_true L10
+    load_var2 2 3
+    load_var c
+    call user.optimizer_stack.predicate
+    store_var _38
+    load_var bits
+    load_const 3
+    bin_op &
+    load_const 3
+    cmp_int_op !=
+    jump_if_true_or_pop L5
+    jump L6
+
+  L5:
+    store_var _43
+    jump L7
+
+  L6:
+    load_var c
+    store_var _43
+
+  L7:
+    load_var2 7 8
+    cmp_op !=
+    pop_jump_if_true L9
+    load_var2 2 3
+    load_var c
+    call user.optimizer_stack.mutable_value
+    load_var bits
+    load_const 7
+    cmp_int_op ==
+    cmp_op !=
+    pop_jump_if_true L8
+    load_var bits
+    load_const 1
+    add_int
+    store_var bits
+    jump L0
+
+  L8:
+    load_const false
+    jump L13
+
+  L9:
+    load_const false
+    jump L13
+
+  L10:
+    load_const false
+    jump L13
+
+  L11:
+    load_const false
+    jump L13
+
+  L12:
+    load_const false
+
+  L13:
+    return
+}
+
+function optimizer_stack.verify_all() -> bool {
+    call user.optimizer_stack.truth_tables
+    jump_if_false_or_pop L0
+    load_const "hi"
+    call user.optimizer_stack.negated_truthiness
+    load_const 2
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const ""
+    call user.optimizer_stack.negated_truthiness
+    load_const 1
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const null
+    call user.optimizer_stack.negated_truthiness
+    load_const 1
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const false
+    load_const true
+    call user.optimizer_stack.condition_effects
+    load_const 0
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const true
+    load_const false
+    call user.optimizer_stack.condition_effects
+    load_const 1
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const true
+    load_const true
+    call user.optimizer_stack.condition_effects
+    load_const 3
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const null
+    call user.optimizer_stack.coalesce
+    load_const 42
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const 0
+    call user.optimizer_stack.coalesce
+    load_const 0
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const null
+    call user.optimizer_stack.coalesce_effect
+    load_const 11
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const 0
+    call user.optimizer_stack.coalesce_effect
+    load_const 0
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const null
+    call user.optimizer_stack.coalesce_mutable
+    load_const 42
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const 9
+    call user.optimizer_stack.coalesce_mutable
+    load_const 9
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    call user.optimizer_stack.array_mixed
+    store_var _79
+    load_var _79
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    call baml.ops.equals_equals
+    jump_if_false_or_pop L0
+    call user.optimizer_stack.array_effects
+    store_var _81
+    load_var _81
+    load_const 1
+    load_const 42
+    load_const 2
+    load_const 2
+    load_type int
+    alloc_array 4
+    call baml.ops.equals_equals
+    jump_if_false_or_pop L0
+    load_const 0
+    call user.optimizer_stack.prefix_unwind
+    load_const 2
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const 1
+    call user.optimizer_stack.prefix_unwind
+    load_const 44
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    call user.optimizer_stack.call_effects
+    load_const 12
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    call user.optimizer_stack.indirect_effects
+    load_const 12
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    call user.optimizer_stack.binary_effects
+    load_const -1
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    call user.optimizer_stack.virtual_effects
+    store_var _88
+    load_var _88
+    load_const 1
+    load_const 42
+    load_const 2
+    load_type int
+    alloc_array 3
+    call baml.ops.equals_equals
+    jump_if_false_or_pop L0
+    call user.optimizer_stack.generic_effects
+    load_const 12
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    call user.optimizer_stack.constants
+    load_const 13
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const true
+    call user.optimizer_stack.overwritten
+    load_const 1
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const false
+    call user.optimizer_stack.overwritten
+    load_const 2
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const 0
+    call user.optimizer_stack.overwritten_panic
+    load_const 7
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const 1
+    call user.optimizer_stack.overwritten_panic
+    load_const 42
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const 0
+    call user.optimizer_stack.handler_observes_store
+    load_const 2
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const 1
+    call user.optimizer_stack.handler_observes_store
+    load_const 3
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    call user.optimizer_stack.constant_overflow
+    load_const 7
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const 3
+    call user.optimizer_stack.parameter_copy
+    load_const 3
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const 1000
+    call user.optimizer_stack.loop_values
+    load_const 500
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_const 1
+    load_const 2
+    load_const 3
+    load_const 4
+    load_type int
+    alloc_array 4
+    call user.optimizer_stack.iterator_sum
+    load_const 10
+    cmp_int_op ==
+    jump_if_false_or_pop L0
+    load_type int
+    alloc_array 0
+    call user.optimizer_stack.iterator_sum
+    load_const 0
+    cmp_int_op ==
+
+  L0:
+    return
+}
+
+function optimizer_stack.virtual_effects() -> int[] {
+    load_const 0
+    init_instance user.optimizer_stack.Counter .value
+    init_instance user.optimizer_stack.Sequence .counter
+    store_var_load_var source
+    call user.optimizer_stack.virtual_result
+    load_const 42
+    load_var source
+    load_type optimizer_stack.Source
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    load_type int
+    alloc_array 3
+    return
+}
+
+function optimizer_stack.virtual_result(source: optimizer_stack.Source) -> int {
+    load_var source
+    load_type optimizer_stack.Source
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    return
+}

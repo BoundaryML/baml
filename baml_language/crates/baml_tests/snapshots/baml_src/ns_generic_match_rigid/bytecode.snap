@@ -189,17 +189,6 @@ function generic_match_rigid.<(user.generic_match_rigid.RigidTagged as user.gene
 function generic_match_rigid.RigidBox.is_own(self: generic_match_rigid.RigidBox<#0>, other: generic_match_rigid.RigidBox<int> | int) -> bool {
     load_var other
     is_type generic_match_rigid.RigidBox<...>
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -208,17 +197,14 @@ function generic_match_rigid.RigidBox.match_own(self: generic_match_rigid.RigidB
     store_var _3
     load_var _3
     narrow_bind generic_match_rigid.RigidBox<...>, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_const "box"
 
-  L2:
+  L1:
     return
 }
 
@@ -294,17 +280,6 @@ function generic_match_rigid.fn_generic_is_value_miss_fn() -> bool {
 function generic_match_rigid.is_rigid_box(x: generic_match_rigid.RigidBox<int> | int) -> bool {
     load_var x
     is_type generic_match_rigid.RigidBox<...>
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -313,17 +288,14 @@ function generic_match_rigid.pick_bounded(x: generic_match_rigid.RigidTagged | s
     store_var _2
     load_var _2
     narrow_bind #0, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_const "bounded"
 
-  L2:
+  L1:
     return
 }
 
@@ -347,19 +319,16 @@ function generic_match_rigid.pick_concrete(x: #0) -> string {
     store_var _2
     load_var _2
     narrow_bind string, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_var _2
     load_const "!"
     bin_op +
 
-  L2:
+  L1:
     return
 }
 
@@ -382,41 +351,32 @@ function generic_match_rigid.pick_mixed_union(x: #0 | bool) -> string {
     store_var _2
     load_var _2
     narrow_bind #0, slot=2
-    pop_jump_if_false L0
-    jump L4
-
-  L0:
+    pop_jump_if_true L1
     load_var x
     store_var _3
     load_var _3
     narrow_bind string, slot=3
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var x
     is_type true
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_var x
     is_type false
-    pop_jump_if_false L6
+    pop_jump_if_false L3
     load_const "f"
-    jump L5
+    jump L2
 
-  L3:
+  L0:
     load_const "t"
-    jump L5
+    jump L2
 
-  L4:
+  L1:
     load_const "p"
 
-  L5:
+  L2:
     return
 
-  L6:
+  L3:
     unreachable
 }
 
@@ -439,17 +399,14 @@ function generic_match_rigid.pick_rigid(x: int | string) -> string {
     store_var _2
     load_var _2
     narrow_bind #0, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "fallthrough"
     jump L1
 
   L0:
-    load_const "fallthrough"
-    jump L2
-
-  L1:
     load_const "T"
 
-  L2:
+  L1:
     return
 }
 
@@ -479,25 +436,19 @@ function generic_match_rigid.pick_written_union(x: #0 | int) -> string {
     store_var _2
     load_var _2
     narrow_bind int, slot=2
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var x
     store_var _3
     load_var _3
     narrow_bind string, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_const "other"
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_const "int-or-string"
 
-  L3:
+  L1:
     return
 }
 
@@ -556,8 +507,7 @@ function generic_match_rigid.rigid_cell_split(c: generic_match_rigid.RigidCell<i
     load_var c
     load_field .v
     is_type 1
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_var c
@@ -622,8 +572,7 @@ function generic_match_rigid.rigid_row_split(r: generic_match_rigid.RigidRow) ->
     load_var r
     load_field .n
     is_type 1
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const "slice"

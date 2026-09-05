@@ -10,13 +10,12 @@ fn user.f(xs: int[]) -> int {
     let _4: bool
     let _5: int
     let _6: int
-    let _7: int
-    let _8: int // a
-    let _9: int[]
-    let _10: int
-    let _11: int[] // r
+    let _7: int // a
+    let _8: int[]
+    let _9: int
+    let _10: int[] // r
+    let _11: int
     let _12: int
-    let _13: int
 
     bb0: {
         _2 = is_type_tag(copy _1, LIST);
@@ -31,35 +30,30 @@ fn user.f(xs: int[]) -> int {
 
     bb2: {
         _0 = const 0_i64;
-        goto -> bb7;
+        goto -> bb6;
     }
 
     bb3: {
         _5 = const 0_i64;
-        goto -> bb4;
+        _6 = copy _1[_5];
+        _7 = copy _6;
+        _9 = len(_1);
+        _8 = call const fn baml.Array.slice(copy _1, const 1_i64, copy _9) -> [bb4];
     }
 
     bb4: {
-        _6 = const 0_i64;
-        _7 = copy _1[_6];
-        _8 = copy _7;
-        _10 = len(_1);
-        _9 = call const fn baml.Array.slice(copy _1, const 1_i64, copy _10) -> [bb5];
+        _10 = copy _8;
+        _11 = len(_10);
+        goto -> bb5;
     }
 
     bb5: {
-        _11 = copy _9;
-        _12 = len(_11);
+        _12 = copy _7;
+        _0 = copy _11 + copy _12;
         goto -> bb6;
     }
 
     bb6: {
-        _13 = copy _8;
-        _0 = copy _12 + copy _13;
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }

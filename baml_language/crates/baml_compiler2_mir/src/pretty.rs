@@ -434,12 +434,16 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
         }
         Terminator::ShortCircuit {
             operand,
-            is_and,
+            kind,
             destination,
             eval_rhs,
             join,
         } => {
-            let op = if *is_and { "&&" } else { "||" };
+            let op = match kind {
+                crate::ShortCircuitKind::And => "&&",
+                crate::ShortCircuitKind::Or => "||",
+                crate::ShortCircuitKind::Coalesce => "??",
+            };
             write!(f, "{destination} = short_circuit({op}) ")?;
             write_operand(f, operand)?;
             write!(f, " -> [eval: {eval_rhs}, join: {join}];")

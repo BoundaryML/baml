@@ -5,14 +5,11 @@ function fixtures.catch_arm_return.may_throw(x: int) -> int {
     load_var x
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var x
     return
 
-  L1:
+  L0:
     load_const "boom"
     throw
 }

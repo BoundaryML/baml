@@ -81,8 +81,6 @@ function class_type_args_at_runtime.Box.describe(self: class_type_args_at_runtim
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -95,34 +93,12 @@ function class_type_args_at_runtime.Box2.make_describer(self: class_type_args_at
 function class_type_args_at_runtime.check_foo(f: class_type_args_at_runtime.Foo<int> | class_type_args_at_runtime.Foo<string>) -> bool {
     load_var f
     is_type class_type_args_at_runtime.Foo<...>
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
 function class_type_args_at_runtime.check_foo_bare(f: class_type_args_at_runtime.Foo<int> | string) -> bool {
     load_var f
     is_type class_type_args_at_runtime.Foo<...>
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -148,15 +124,12 @@ function class_type_args_at_runtime.closure_inside_method_survives_gc_fn() -> st
     load_var i
     load_const 500
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var describe
     call_indirect
     return
 
-  L2:
+  L1:
     load_var i
     load_const 1
     add_int
@@ -220,17 +193,14 @@ function class_type_args_at_runtime.method_sees_composite_class_type_arg_fn() ->
 function class_type_args_at_runtime.pick(x: class_type_args_at_runtime.Foo<int> | class_type_args_at_runtime.Foo<string>) -> string {
     load_var x
     is_type class_type_args_at_runtime.Foo<...>
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "string"
     jump L1
 
   L0:
-    load_const "string"
-    jump L2
-
-  L1:
     load_const "int"
 
-  L2:
+  L1:
     return
 }
 

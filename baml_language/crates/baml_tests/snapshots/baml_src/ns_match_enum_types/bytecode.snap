@@ -53,17 +53,14 @@ function match_enum_types.classify(x: match_enum_types.Color | match_enum_types.
     store_var _2
     load_var _2
     narrow_bind match_enum_types.Color, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "status"
     jump L1
 
   L0:
-    load_const "status"
-    jump L2
-
-  L1:
     load_const "color"
 
-  L2:
+  L1:
     return
 }
 
@@ -79,41 +76,32 @@ function match_enum_types.classify_one_enum(x: match_enum_types.Color | int | st
     store_var _2
     load_var _2
     narrow_bind match_enum_types.Color, slot=2
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var x
     store_var _3
     load_var _3
     narrow_bind int, slot=3
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var x
     store_var _4
     load_var _4
     narrow_bind string, slot=4
-    pop_jump_if_false L2
+    pop_jump_if_true L0
+    load_const "bool"
+    jump L3
+
+  L0:
+    load_const "string"
+    jump L3
+
+  L1:
+    load_const "int"
     jump L3
 
   L2:
-    load_const "bool"
-    jump L6
-
-  L3:
-    load_const "string"
-    jump L6
-
-  L4:
-    load_const "int"
-    jump L6
-
-  L5:
     load_const "color"
 
-  L6:
+  L3:
     return
 }
 
@@ -136,53 +124,41 @@ function match_enum_types.classify_switch(x: match_enum_types.Color | match_enum
     store_var _2
     load_var _2
     narrow_bind match_enum_types.Color, slot=2
-    pop_jump_if_false L0
-    jump L7
-
-  L0:
+    pop_jump_if_true L3
     load_var x
     store_var _3
     load_var _3
     narrow_bind match_enum_types.Status, slot=3
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
+    pop_jump_if_true L2
     load_var x
     store_var _4
     load_var _4
     narrow_bind int, slot=4
-    pop_jump_if_false L2
-    jump L5
-
-  L2:
+    pop_jump_if_true L1
     load_var x
     store_var _5
     load_var _5
     narrow_bind string, slot=5
-    pop_jump_if_false L3
+    pop_jump_if_true L0
+    load_const "bool"
+    jump L4
+
+  L0:
+    load_const "string"
+    jump L4
+
+  L1:
+    load_const "int"
+    jump L4
+
+  L2:
+    load_const "status"
     jump L4
 
   L3:
-    load_const "bool"
-    jump L8
-
-  L4:
-    load_const "string"
-    jump L8
-
-  L5:
-    load_const "int"
-    jump L8
-
-  L6:
-    load_const "status"
-    jump L8
-
-  L7:
     load_const "color"
 
-  L8:
+  L4:
     return
 }
 
@@ -203,16 +179,5 @@ function match_enum_types.status_is_color_fn() -> bool {
     load_const user.match_enum_types.Status.Active
     alloc_variant user.match_enum_types.Status
     is_type match_enum_types.Color
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }

@@ -83,18 +83,15 @@ function json_alias.json_array_len() -> int {
     store_var _2
     load_var _2
     narrow_bind baml.json.json[], slot=1
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const -1
     jump L1
 
   L0:
-    load_const -1
-    jump L2
-
-  L1:
     load_var _2
     container_len
 
-  L2:
+  L1:
     return
 }
 
@@ -107,14 +104,11 @@ function json_alias.json_map_has_key() -> bool {
     store_var _2
     load_var _2
     narrow_bind map<string, baml.json.json>, slot=1
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const false
     jump L1
 
   L0:
-    load_const false
-    jump L2
-
-  L1:
     load_var _2
     container_len
     store_var _4
@@ -122,7 +116,7 @@ function json_alias.json_map_has_key() -> bool {
     load_const 1
     cmp_int_op ==
 
-  L2:
+  L1:
     return
 }
 
@@ -133,8 +127,6 @@ function json_alias.json_wrap_tag() -> string {
     load_type json_alias.JsonTagged
     load_const "tag"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -142,76 +134,58 @@ function json_alias.match_json(j: baml.json.json) -> string {
     load_var j
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L11
-
-  L0:
+    pop_jump_if_true L5
     load_var j
     store_var _3
     load_var _3
     narrow_bind bool, slot=2
-    pop_jump_if_false L1
-    jump L10
-
-  L1:
+    pop_jump_if_true L4
     load_var j
     store_var _4
     load_var _4
     narrow_bind int, slot=3
-    pop_jump_if_false L2
-    jump L9
-
-  L2:
+    pop_jump_if_true L3
     load_var j
     store_var _5
     load_var _5
     narrow_bind float, slot=4
-    pop_jump_if_false L3
-    jump L8
-
-  L3:
+    pop_jump_if_true L2
     load_var j
     store_var _6
     load_var _6
     narrow_bind string, slot=5
-    pop_jump_if_false L4
-    jump L7
-
-  L4:
+    pop_jump_if_true L1
     load_var j
     store_var _7
     load_var _7
     narrow_bind baml.json.json[], slot=6
-    pop_jump_if_false L5
+    pop_jump_if_true L0
+    load_const "map"
+    jump L6
+
+  L0:
+    load_const "array"
+    jump L6
+
+  L1:
+    load_const "string"
+    jump L6
+
+  L2:
+    load_const "float"
+    jump L6
+
+  L3:
+    load_const "int"
+    jump L6
+
+  L4:
+    load_const "bool"
     jump L6
 
   L5:
-    load_const "map"
-    jump L12
-
-  L6:
-    load_const "array"
-    jump L12
-
-  L7:
-    load_const "string"
-    jump L12
-
-  L8:
-    load_const "float"
-    jump L12
-
-  L9:
-    load_const "int"
-    jump L12
-
-  L10:
-    load_const "bool"
-    jump L12
-
-  L11:
     load_const "null"
 
-  L12:
+  L6:
     return
 }

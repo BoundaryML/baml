@@ -448,24 +448,26 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment@spec(text: string) -> ai
     let _0: ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment> // _0 // return
     let _1: string // text // param [captured]
     let _2: map<string, unknown>
-    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _4: ai.tools.Toolbox
-    let _5: ai.tools.Tool[]
-    let _6: ai.Client
+    let _3: string
+    let _4: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
+    let _7: ai.Client
 
     bb0: {
-        _2 = { const "text": copy _1 }: map<string, unknown>;
-        _3 = make_closure lambda[0](copy _1);
-        _5 = []: ai.tools.Tool[];
-        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+        _3 = copy _1;
+        _2 = { const "text": copy _3 }: map<string, unknown>;
+        _4 = make_closure lambda[0](copy _1);
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
     }
 
     bb1: {
-        _6 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb2];
+        _7 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb2];
     }
 
     bb2: {
-        _0 = ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment> { const "ClassifySentiment", copy _2, copy _3, copy _4, copy _6 };
+        _0 = ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment> { const "ClassifySentiment", copy _2, copy _4, copy _5, copy _7 };
         goto -> bb3;
     }
 
@@ -743,24 +745,28 @@ fn user.fixtures.testset_vibes_nested.GenerateTests@spec(count: int, topic: stri
     let _1: int // count // param [captured]
     let _2: string // topic // param [captured]
     let _3: map<string, unknown>
-    let _4: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _5: ai.tools.Toolbox
-    let _6: ai.tools.Tool[]
-    let _7: ai.Client
+    let _4: int
+    let _5: string
+    let _6: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _7: ai.tools.Toolbox
+    let _8: ai.tools.Tool[]
+    let _9: ai.Client
 
     bb0: {
-        _3 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
-        _4 = make_closure lambda[0](copy _1, copy _2);
-        _6 = []: ai.tools.Tool[];
-        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
+        _4 = copy _1;
+        _5 = copy _2;
+        _3 = { const "count": copy _4, const "topic": copy _5 }: map<string, unknown>;
+        _6 = make_closure lambda[0](copy _1, copy _2);
+        _8 = []: ai.tools.Tool[];
+        _7 = call const fn ai.tools.Toolbox.new(copy _8) -> [bb1];
     }
 
     bb1: {
-        _7 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb2];
+        _9 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb2];
     }
 
     bb2: {
-        _0 = ai.FunctionSpec<string[]> { const "GenerateTests", copy _3, copy _4, copy _5, copy _7 };
+        _0 = ai.FunctionSpec<string[]> { const "GenerateTests", copy _3, copy _6, copy _7, copy _9 };
         goto -> bb3;
     }
 
@@ -822,7 +828,6 @@ fn .<lambda(GenerateTests@spec, 0)>( __spec_output_format: ai.OutputFormat) -> a
     }
 
     bb1: {
-        _6 = const "";
         _13 = copy _5;
         _14 = copy capture[0];
         _15 = load_type(unknown);
@@ -930,25 +935,21 @@ fn user.fixtures.testset_vibes_nested.Foo() -> string | image {
     // Locals:
     let _0: string | image // _0 // return
     let _1: string // x
-    let _2: int // y
-    let _3: int // i
-    let _4: bool
-    let _5: int
-    let _6: int
-    let _7: string
+    let _2: int // i
+    let _3: bool
+    let _4: int
+    let _5: string
 
     bb0: {
         _1 = const "foo";
-        _2 = const 2_i64;
-        _3 = const 0_i64;
+        _2 = const 0_i64;
         goto -> bb1;
     }
 
     bb1: {
-        _5 = copy _3;
-        _6 = copy _2;
-        _4 = copy _5 < copy _6;
-        branch copy _4 -> [bb4, bb2];
+        _4 = copy _2;
+        _3 = copy _4 < const 2_i64;
+        branch copy _3 -> [bb4, bb2];
     }
 
     bb2: {
@@ -961,13 +962,13 @@ fn user.fixtures.testset_vibes_nested.Foo() -> string | image {
     }
 
     bb4: {
-        _7 = copy _1;
-        _1 = const "hi:  " + copy _7;
+        _5 = copy _1;
+        _1 = const "hi:  " + copy _5;
         goto -> bb5;
     }
 
     bb5: {
-        _3 = copy _3 + const 1_i64;
+        _2 = copy _2 + const 1_i64;
         goto -> bb1;
     }
 }
@@ -1105,24 +1106,26 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2@spec(text: string) -> a
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // text // param [captured]
     let _2: map<string, unknown>
-    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _4: ai.tools.Toolbox
-    let _5: ai.tools.Tool[]
-    let _6: ai.Client
+    let _3: string
+    let _4: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
+    let _7: ai.Client
 
     bb0: {
-        _2 = { const "text": copy _1 }: map<string, unknown>;
-        _3 = make_closure lambda[0](copy _1);
-        _5 = []: ai.tools.Tool[];
-        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+        _3 = copy _1;
+        _2 = { const "text": copy _3 }: map<string, unknown>;
+        _4 = make_closure lambda[0](copy _1);
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
     }
 
     bb1: {
-        _6 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb2];
+        _7 = call const fn ai.clients.resolve(const item user.fixtures.testset_vibes_nested.GPT4o) -> [bb2];
     }
 
     bb2: {
-        _0 = ai.FunctionSpec<string> { const "ClassifySentiment2", copy _2, copy _3, copy _4, copy _6 };
+        _0 = ai.FunctionSpec<string> { const "ClassifySentiment2", copy _2, copy _4, copy _5, copy _7 };
         goto -> bb3;
     }
 

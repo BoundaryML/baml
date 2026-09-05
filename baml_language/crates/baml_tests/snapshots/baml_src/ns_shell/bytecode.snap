@@ -105,10 +105,8 @@ function shell.$init_test_ns_shell_shell(registry: testing.TestCollector) -> nul
 }
 
 function shell.b251_concat_println_shell_fn() -> bool {
-    call user.shell.b251_payload
-    store_var _2
     load_const "echo "
-    load_var _2
+    call user.shell.b251_payload
     bin_op +
     store_var cmd
     load_const "-> "
@@ -128,8 +126,7 @@ function shell.b251_concat_println_shell_fn() -> bool {
     call baml.String.length
     load_const 0
     cmp_int_op >
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var out
     load_const "hello_world"
     call baml.String.includes
@@ -162,8 +159,7 @@ function shell.b251_multi_let_fn() -> bool {
     call baml.String.length
     load_const 0
     cmp_int_op >
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var out
     load_const "hello_world"
     call baml.String.includes
@@ -178,10 +174,8 @@ function shell.b251_payload() -> string {
 }
 
 function shell.b251_println_discarded_fn() -> bool {
-    call user.shell.b251_payload
-    store_var _2
     load_const "echo "
-    load_var _2
+    call user.shell.b251_payload
     bin_op +
     store_var cmd
     load_const "-> "
@@ -201,8 +195,7 @@ function shell.b251_println_discarded_fn() -> bool {
     call baml.String.length
     load_const 0
     cmp_int_op >
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var out
     load_const "hello_world"
     call baml.String.includes
@@ -212,10 +205,8 @@ function shell.b251_println_discarded_fn() -> bool {
 }
 
 function shell.b251_println_twice_fn() -> bool {
-    call user.shell.b251_payload
-    store_var _2
     load_const "echo "
-    load_var _2
+    call user.shell.b251_payload
     bin_op +
     store_var cmd
     load_const "-> "
@@ -240,8 +231,7 @@ function shell.b251_println_twice_fn() -> bool {
     call baml.String.length
     load_const 0
     cmp_int_op >
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var out
     load_const "hello_world"
     call baml.String.includes
@@ -261,8 +251,6 @@ function shell.exec_echo_fn() -> bool {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _1
-    load_var _1
     load_const "Hello From Exec!"
     call baml.String.includes
     return
@@ -276,8 +264,6 @@ function shell.shell_echo_fn() -> bool {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _1
-    load_var _1
     load_const "hello_from_shell"
     call baml.String.includes
     return
@@ -325,8 +311,6 @@ function shell.shell_stdout_bytes_fn() -> bool {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _1
-    load_var _1
     load_const "hello"
     call baml.String.includes
     return
@@ -340,8 +324,6 @@ function shell.shell_with_variable_fn() -> bool {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _2
-    load_var _2
     load_const "dynamic_value"
     call baml.String.includes
     return

@@ -796,40 +796,34 @@ function glob.scan_propagates_permission_errors_fn() -> bool {
     load_const null
     sys_op baml.sys.shell
     call baml.sys.ShellOutput.ok
-    pop_jump_if_false L0
-    jump L4
-
-  L0:
+    pop_jump_if_true L2
     load_const "**/*.txt"
     sys_op baml.glob.new
     load_var root
     sys_op baml.glob.Glob.scan
     pop 1
-    jump L3
+    jump L1
     load_var e
     is_type baml.errors.Io
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
+
+  L0:
+    load_const true
+    store_var threw
+    jump L3
+
+  L1:
+    load_const false
+    store_var threw
+    jump L3
 
   L2:
     load_const true
     store_var threw
-    jump L5
 
   L3:
-    load_const false
-    store_var threw
-    jump L5
-
-  L4:
-    load_const true
-    store_var threw
-
-  L5:
     load_const "chmod 755 "
     load_var locked
     bin_op +
@@ -970,26 +964,23 @@ function glob.scan_throws_on_broken_symlink_when_opted_in_fn() -> bool {
     init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
     sys_op baml.glob.Glob.scan
     pop 1
-    jump L2
+    jump L1
     load_var e
     is_type baml.errors.Io
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const true
     store_var threw
-    jump L3
+    jump L2
 
-  L2:
+  L1:
     load_const false
     store_var threw
 
-  L3:
+  L2:
     load_const "rm -rf "
     load_var root
     bin_op +

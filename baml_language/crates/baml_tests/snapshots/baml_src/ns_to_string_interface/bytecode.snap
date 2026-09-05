@@ -106,18 +106,16 @@ function to_string_interface.<(user.to_string_interface.DmcGreeter as baml.ToStr
 }
 
 function to_string_interface.<(user.to_string_interface.IouPoint as baml.ToString)>.to_string(self: to_string_interface.IouPoint) -> string {
+    load_const "("
     load_type int
     load_var self
     load_field .x
     call baml.String.from
-    store_var _5
     load_type int
     load_var self
     load_field .y
     call baml.String.from
     store_var _8
-    load_const "("
-    load_var _5
     bin_op +
     load_const ", "
     bin_op +
@@ -129,18 +127,16 @@ function to_string_interface.<(user.to_string_interface.IouPoint as baml.ToStrin
 }
 
 function to_string_interface.<(user.to_string_interface.OvrPoint as baml.ToString)>.to_string(self: to_string_interface.OvrPoint) -> string {
+    load_const "("
     load_type int
     load_var self
     load_field .x
     call baml.String.from
-    store_var _5
     load_type int
     load_var self
     load_field .y
     call baml.String.from
     store_var _8
-    load_const "("
-    load_var _5
     bin_op +
     load_const ", "
     bin_op +
@@ -157,8 +153,6 @@ function to_string_interface.dmc_render() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 

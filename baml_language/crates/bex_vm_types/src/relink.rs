@@ -102,6 +102,10 @@ macro_rules! visit_bytecode_index_operands {
             | I::Jump(..)
             | I::PopJumpIfFalse(..)
             | I::JumpIfFalse(..)
+            | I::PopJumpIfTrue(..)
+            | I::JumpIfFalseOrPop(..)
+            | I::JumpIfTrueOrPop(..)
+            | I::JumpIfNotNullOrPop(..)
             | I::BinOp(..)
             | I::CmpOp(..)
             | I::AddInt

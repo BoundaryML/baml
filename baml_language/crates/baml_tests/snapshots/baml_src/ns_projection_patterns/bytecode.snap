@@ -157,51 +157,26 @@ function projection_patterns.Holder.classify(self: projection_patterns.Holder, v
     store_var _3
     load_var _3
     narrow_bind (#0 as projection_patterns.Holder).Item, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_const "item"
 
-  L2:
+  L1:
     return
 }
 
 function projection_patterns.Holder.is_item(self: projection_patterns.Holder, v: unknown) -> bool {
     load_var v
     is_type (#0 as projection_patterns.Holder).Item
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
 function projection_patterns.Labeled.is_label(self: projection_patterns.Labeled, v: unknown) -> bool {
     load_var v
     is_type (#0 as projection_patterns.Labeled).Label
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -210,8 +185,6 @@ function projection_patterns.Labeled.label_name(self: projection_patterns.Labele
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -220,8 +193,7 @@ function projection_patterns.bound_defaulted_default_fn() -> bool {
     alloc_instance user.projection_patterns.Plain
     load_const "x"
     call user.projection_patterns.is_label_of
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_type projection_patterns.Plain
     alloc_instance user.projection_patterns.Plain
     load_const 5
@@ -237,8 +209,7 @@ function projection_patterns.bound_defaulted_pin_fn() -> bool {
     alloc_instance user.projection_patterns.Pinned
     load_const 5
     call user.projection_patterns.is_label_of
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_type projection_patterns.Pinned
     alloc_instance user.projection_patterns.Pinned
     load_const "x"
@@ -294,17 +265,14 @@ function projection_patterns.classify_for(h: #0, v: unknown) -> string {
     store_var _3
     load_var _3
     narrow_bind (#0 as projection_patterns.Holder).Item, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_const "item"
 
-  L2:
+  L1:
     return
 }
 
@@ -314,8 +282,6 @@ function projection_patterns.default_label_accepts_fn() -> bool {
     load_type projection_patterns.Labeled<Label = string>
     load_const "is_label"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -324,8 +290,6 @@ function projection_patterns.default_label_reflects_fn() -> string {
     load_type projection_patterns.Labeled<Label = string>
     load_const "label_name"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -335,42 +299,18 @@ function projection_patterns.default_label_rejects_fn() -> bool {
     load_type projection_patterns.Labeled<Label = string>
     load_const "is_label"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
 function projection_patterns.is_item_of(h: #0, v: unknown) -> bool {
     load_var v
     is_type (#0 as projection_patterns.Holder).Item
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
 function projection_patterns.is_label_of(t: #0, v: unknown) -> bool {
     load_var v
     is_type (#0 as projection_patterns.Labeled).Label
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -380,8 +320,6 @@ function projection_patterns.pinned_label_accepts_fn() -> bool {
     load_type projection_patterns.Labeled<Label = int>
     load_const "is_label"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -390,8 +328,6 @@ function projection_patterns.pinned_label_reflects_fn() -> string {
     load_type projection_patterns.Labeled<Label = int>
     load_const "label_name"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -401,8 +337,6 @@ function projection_patterns.pinned_label_rejects_default_fn() -> bool {
     load_type projection_patterns.Labeled<Label = int>
     load_const "is_label"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -412,8 +346,6 @@ function projection_patterns.self_item_accepts_own_fn() -> bool {
     load_type projection_patterns.Holder<Item = int>
     load_const "is_item"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -423,8 +355,6 @@ function projection_patterns.self_item_match_arm_fn() -> string {
     load_type projection_patterns.Holder<Item = int>
     load_const "classify"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -434,8 +364,6 @@ function projection_patterns.self_item_match_falls_through_fn() -> string {
     load_type projection_patterns.Holder<Item = int>
     load_const "classify"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -445,8 +373,6 @@ function projection_patterns.self_item_per_receiver_fn() -> bool {
     load_type projection_patterns.Holder<Item = string>
     load_const "is_item"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -456,7 +382,5 @@ function projection_patterns.self_item_rejects_other_fn() -> bool {
     load_type projection_patterns.Holder<Item = int>
     load_const "is_item"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }

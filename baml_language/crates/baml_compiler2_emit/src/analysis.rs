@@ -81,15 +81,15 @@ pub(crate) enum LocalClassification {
     /// At def sites: emit rvalue but NOT store (leave on stack).
     /// At Return: don't emit `LoadVar` for _0 (value already on stack).
     ReturnPhi,
-    /// Call result immediate: defined by Call/Await/SysOp, used exactly once
+    /// Call result immediate: defined by Call/VirtualCall/Await/SysOp, used exactly once
     /// immediately in the continuation block.
     /// At def site (after Call): don't emit Store (leave on stack).
     /// At use site: don't emit `LoadVar` (value already on stack from Call).
     CallResultImmediate,
-    /// Call/Await/SysOp result carried as part of a map/array aggregate prefix.
+    /// A value carried as part of an aggregate, binary, or call operand prefix.
     ///
     /// At def site: don't store the result; leave it on the stack.
-    /// At aggregate use site: don't emit `LoadVar`; the aggregate consumes the
+    /// At use site: don't emit `LoadVar`; the operation consumes the
     /// already-stacked value in operand order.
     AggregateOperand,
     /// Copy of another local: `_X = copy _Y` where _Y is a parameter or simple local.
@@ -1067,6 +1067,15 @@ fn classify_locals(
                 copy_sources.insert(local, source);
                 LocalClassification::CopyOf
             }
+        } else if !(opt == OptLevel::Zero && is_user_local)
+            && is_call_result_aggregate_operand(local, du, body, def_use)
+        {
+            stack_carry_candidates.insert(local, stack_carry::StackCarryKind::AggregateOperand);
+            if can_be_virtual(du, dominators, body, arity, def_use, predecessors) {
+                LocalClassification::Virtual
+            } else {
+                LocalClassification::Real
+            }
         } else if can_be_virtual(du, dominators, body, arity, def_use, predecessors) {
             if opt == OptLevel::Zero && is_user_local {
                 LocalClassification::Real
@@ -1080,10 +1089,6 @@ fn classify_locals(
         } else if is_return_phi(local, body, def_use, redirect_targets) {
             // Stack-carry candidate validated in a later stack simulation pass.
             stack_carry_candidates.insert(local, stack_carry::StackCarryKind::ReturnPhi);
-            LocalClassification::Real
-        } else if is_call_result_aggregate_operand(local, du, body, def_use) {
-            // Stack-carry candidate validated in a later stack simulation pass.
-            stack_carry_candidates.insert(local, stack_carry::StackCarryKind::AggregateOperand);
             LocalClassification::Real
         } else if is_call_result_immediate(local, du, body) {
             // Stack-carry candidate validated in a later stack simulation pass.
@@ -1101,6 +1106,7 @@ fn classify_locals(
         def_use,
         &stack_carry_candidates,
         &mut classifications,
+        predecessors,
     );
 
     (classifications, copy_sources)
@@ -2022,11 +2028,11 @@ fn ty_could_be_int(ty: &RuntimeTy) -> bool {
     }
 }
 
-/// Check if a local is a "call result immediate": defined by Call/Await/SysOp,
+/// Check if a local is a "call result immediate": defined by a call-like terminator,
 /// used exactly once in the continuation block.
 ///
 /// Call result immediate applies when:
-/// 1. The local is defined by a Call/Await/SysOp terminator
+/// 1. The local has exactly one definition, from Call/VirtualCall/Await/SysOp
 /// 2. It has exactly one use
 /// 3. The use is in the continuation block (target of the Call)
 ///
@@ -2037,7 +2043,7 @@ fn ty_could_be_int(ty: &RuntimeTy) -> bool {
 /// This eliminates the redundant `StoreVar("_X"); LoadVar("_X")` pattern for call results.
 fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBody<'_>) -> bool {
     // Must have exactly one use
-    if du.uses.len() != 1 {
+    if du.uses.len() != 1 || du.all_defs.len() != 1 {
         return false;
     }
 
@@ -2066,7 +2072,7 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
         return false;
     }
 
-    // Must have a definition from a terminator (Call/Await/SysOp)
+    // Must have a definition from a call-like terminator.
     let Some(def) = &du.def else {
         return false;
     };
@@ -2076,11 +2082,13 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
         return false;
     }
 
-    // Get the defining block and check that its terminator is Call/Await/SysOp
+    // Get the defining block and check that its terminator is call-like
     // that defines this local.
     let def_block = body.block(def.block);
     match &def_block.terminator {
-        Some(Terminator::Call { destination, .. }) => {
+        Some(
+            Terminator::Call { destination, .. } | Terminator::VirtualCall { destination, .. },
+        ) => {
             matches!(destination, Place::Local(l) if *l == local)
         }
         Some(Terminator::Await { destination, .. }) => {
@@ -2092,12 +2100,6 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
         // into an indexed `await futures[i]`; carrying the result on the stack
         // across that combination misaligns the stack. Always store it to a
         // local instead (correct, marginally less optimal).
-        //
-        // `VirtualCall` is likewise excluded: its result lands on the stack like
-        // `Call`, but the open-world dispatch first pushes the interface type +
-        // method-name operands, and the carry-result/store-elision path is not
-        // wired for that shape. Storing to a local is correct and only
-        // marginally less optimal; carrying can be enabled later.
         Some(Terminator::SysOp { destination, .. }) => {
             matches!(destination, Place::Local(l) if *l == local)
         }
@@ -2123,18 +2125,7 @@ fn is_call_result_aggregate_operand(
     let [use_loc] = du.uses.as_slice() else {
         return false;
     };
-    let StatementRef::Statement(stmt_idx) = use_loc.statement_ref else {
-        return false;
-    };
-    let Some(StatementKind::Assign { value, .. }) = body
-        .block(use_loc.block)
-        .statements
-        .get(stmt_idx)
-        .map(|stmt| &stmt.kind)
-    else {
-        return false;
-    };
-    let Some(operands) = aggregate_stack_prefix_operands(value) else {
+    let Some(operands) = stack_prefix_operands(body, use_loc) else {
         return false;
     };
 
@@ -2146,7 +2137,7 @@ fn is_call_result_aggregate_operand(
 
         if operand_local == local {
             found_local = true;
-            continue;
+            break;
         }
 
         let Some(operand_du) = def_use.get(&operand_local) else {
@@ -2167,10 +2158,30 @@ fn is_call_result_aggregate_operand(
     found_local
 }
 
+pub(crate) fn stack_prefix_operands<'a, 'db>(
+    body: &'a MirFunctionBody<'db>,
+    use_loc: &UseLocation,
+) -> Option<Vec<&'a Operand<'db>>> {
+    let block = body.block(use_loc.block);
+    match use_loc.statement_ref {
+        StatementRef::Statement(index) => match &block.statements.get(index)?.kind {
+            StatementKind::Assign { value, .. } => aggregate_stack_prefix_operands(value),
+            _ => None,
+        },
+        StatementRef::Terminator => match block.terminator.as_ref()? {
+            Terminator::Call { args, .. } | Terminator::VirtualCall { args, .. } => {
+                Some(args.iter().collect())
+            }
+            _ => None,
+        },
+    }
+}
+
 fn aggregate_stack_prefix_operands<'a, 'db>(
     rvalue: &'a Rvalue<'db>,
 ) -> Option<Vec<&'a Operand<'db>>> {
     match rvalue {
+        Rvalue::BinaryOp { left, right, .. } => Some(vec![left, right]),
         Rvalue::Array(_, elements) => Some(elements.iter().collect()),
         // Map lowering emits all values first, then all keys, because the VM
         // consumes maps as `[v1, v2, ..., k1, k2, ...]`. A carried key would sit
@@ -2208,7 +2219,7 @@ fn operand_local(operand: &Operand<'_>) -> Option<Local> {
 }
 
 fn is_call_like_result_local(local: Local, du: &LocalDefUse, body: &MirFunctionBody<'_>) -> bool {
-    if du.uses.len() != 1 {
+    if du.uses.len() != 1 || du.all_defs.len() != 1 {
         return false;
     }
 
@@ -2216,13 +2227,24 @@ fn is_call_like_result_local(local: Local, du: &LocalDefUse, body: &MirFunctionB
         return false;
     };
     if def.statement_ref != StatementRef::Terminator {
-        return false;
+        return def.block != du.uses[0].block
+            && matches!(
+                def.rvalue,
+                Rvalue::Use(Operand::Constant(
+                    Constant::Int(_)
+                        | Constant::Bool(_)
+                        | Constant::Float(_)
+                        | Constant::String(_)
+                        | Constant::Null
+                ))
+            );
     }
 
     let def_block = body.block(def.block);
     match &def_block.terminator {
         Some(
             Terminator::Call { destination, .. }
+            | Terminator::VirtualCall { destination, .. }
             | Terminator::Await { destination, .. }
             // `AwaitAny` deliberately excluded — see the note in the sibling
             // call-result-immediate check above.
@@ -2333,7 +2355,7 @@ mod tests {
     }
 
     #[test]
-    fn aggregate_operand_requires_all_prefix_operands_to_be_stack_carried() {
+    fn aggregate_operand_allows_non_carried_trailing_operands() {
         let target = Local(1);
         let body = MirFunctionBody {
             blocks: vec![
@@ -2391,7 +2413,7 @@ mod tests {
         };
         let def_use = HashMap::from([(target, du.clone())]);
 
-        assert!(!is_call_result_aggregate_operand(
+        assert!(is_call_result_aggregate_operand(
             target, &du, &body, &def_use,
         ));
     }
@@ -2503,7 +2525,7 @@ mod tests {
                     statements: prior_definition.into_iter().collect(),
                     terminator: Some(Terminator::ShortCircuit {
                         operand: Operand::Constant(Constant::Bool(true)),
-                        is_and: true,
+                        kind: baml_compiler2_mir::ShortCircuitKind::And,
                         destination: Place::Local(destination),
                         eval_rhs: BlockId(1),
                         join: BlockId(4),
@@ -2516,7 +2538,7 @@ mod tests {
                     statements: vec![],
                     terminator: Some(Terminator::ShortCircuit {
                         operand: Operand::Constant(Constant::Bool(true)),
-                        is_and: true,
+                        kind: baml_compiler2_mir::ShortCircuitKind::And,
                         destination: Place::Local(destination),
                         eval_rhs: BlockId(2),
                         join: BlockId(3),
@@ -2604,6 +2626,31 @@ mod tests {
     }
 
     #[test]
+    fn named_scalar_prefix_stays_in_a_slot_at_o0() {
+        let mut entry = BasicBlock::new(BlockId(0));
+        entry.statements.push(assign_bool(Local(1), true));
+        entry.terminator = Some(Terminator::Goto { target: BlockId(1) });
+        let mut result = return_local_block(BlockId(1), Local(1));
+        result.statements[0].kind = StatementKind::Assign {
+            destination: Place::Local(Local(0)),
+            value: Rvalue::BinaryOp {
+                op: baml_compiler2_mir::BinOp::Eq,
+                left: Operand::copy_local(Local(1)),
+                right: Operand::Constant(Constant::Bool(true)),
+            },
+        };
+        let body = bool_body(vec![entry, result], Some("first"));
+        assert_eq!(
+            AnalysisResult::analyze(&body, 0, OptLevel::Zero).classifications[&Local(1)],
+            LocalClassification::Real
+        );
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::AggregateOperand
+        );
+    }
+
+    #[test]
     fn nested_short_circuit_definitions_are_stack_carried() {
         let body = nested_short_circuit_body(None, false);
 
@@ -2676,7 +2723,7 @@ mod tests {
                     statements: vec![],
                     terminator: Some(Terminator::ShortCircuit {
                         operand: Operand::Constant(Constant::Bool(true)),
-                        is_and: true,
+                        kind: baml_compiler2_mir::ShortCircuitKind::And,
                         destination: Place::Local(destination),
                         eval_rhs: BlockId(2),
                         join: BlockId(3),
@@ -2727,7 +2774,7 @@ mod tests {
                     statements: vec![],
                     terminator: Some(Terminator::ShortCircuit {
                         operand: Operand::Constant(Constant::Bool(true)),
-                        is_and: true,
+                        kind: baml_compiler2_mir::ShortCircuitKind::And,
                         destination: Place::Local(destination),
                         eval_rhs: BlockId(2),
                         join: BlockId(4),
@@ -2772,7 +2819,7 @@ mod tests {
                     statements: vec![],
                     terminator: Some(Terminator::ShortCircuit {
                         operand: Operand::Constant(Constant::Bool(true)),
-                        is_and: true,
+                        kind: baml_compiler2_mir::ShortCircuitKind::And,
                         destination: Place::Local(destination),
                         eval_rhs: BlockId(1),
                         join: BlockId(2),
@@ -2821,6 +2868,51 @@ mod tests {
             destination: Place::Local(Local(1)),
             target,
             unwind: None,
+        }
+    }
+
+    #[test]
+    fn virtual_call_result_carries_only_on_single_entry_continuations() {
+        let mut entry = BasicBlock::new(BlockId(0));
+        entry.terminator = Some(virtual_call_into(BlockId(1)));
+        let body = bool_body(
+            vec![entry.clone(), return_local_block(BlockId(1), Local(1))],
+            None,
+        );
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::CallResultImmediate
+        );
+
+        let mut header = BasicBlock::new(BlockId(1));
+        header.terminator = Some(Terminator::Branch {
+            condition: Operand::copy_local(Local(1)),
+            then_block: BlockId(2),
+            else_block: BlockId(3),
+        });
+        let mut backedge = BasicBlock::new(BlockId(2));
+        backedge.terminator = Some(Terminator::Goto { target: BlockId(1) });
+        let mut exit = BasicBlock::new(BlockId(3));
+        exit.statements.push(assign_bool(Local(0), false));
+        exit.terminator = Some(Terminator::Return);
+        let loop_body = bool_body(vec![entry, header, backedge, exit], None);
+        assert_eq!(
+            analyzed_classification(&loop_body, Local(1)),
+            LocalClassification::Real
+        );
+    }
+
+    #[test]
+    fn call_result_with_a_prior_definition_is_not_carried() {
+        for call in [call_into(BlockId(1), None), virtual_call_into(BlockId(1))] {
+            let mut entry = BasicBlock::new(BlockId(0));
+            entry.statements.push(assign_bool(Local(1), false));
+            entry.terminator = Some(call);
+            let body = bool_body(vec![entry, return_local_block(BlockId(1), Local(1))], None);
+            assert_eq!(
+                analyzed_classification(&body, Local(1)),
+                LocalClassification::Real
+            );
         }
     }
 

@@ -115,8 +115,7 @@ function http_server.server_bind_resolves_ephemeral_port() -> bool {
     load_field .addr
     load_const ""
     cmp_op !=
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var server
     load_field .addr
     load_const "127.0.0.1:0"
@@ -248,8 +247,7 @@ function http_server.server_isolates_handler_panic() -> bool {
     load_field .status_code
     load_const 500
     cmp_int_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var good
     load_field .status_code
     load_const 200
@@ -515,14 +513,11 @@ function http_server.tls_config_handshake_timeout_arg() -> bool {
 function http_server.tls_config_handshake_timeout_bad_pem() -> bool {
     load_const "not a cert"
     call baml.String.to_utf8
-    store_var _2
     load_const "not a key"
     call baml.String.to_utf8
-    store_var _3
     load_const 3n
     call baml.time.Duration.from_seconds
     store_var _4
-    load_var2 1 2
     load_const <omitted>
     load_var _4
     call baml.http.TlsConfig.new
@@ -534,11 +529,8 @@ function http_server.tls_config_handshake_timeout_bad_pem() -> bool {
 function http_server.tls_config_new_bad_pem() -> bool {
     load_const "not a cert"
     call baml.String.to_utf8
-    store_var _2
     load_const "not a key"
     call baml.String.to_utf8
-    store_var _3
-    load_var2 1 2
     load_const <omitted>
     load_const <omitted>
     call baml.http.TlsConfig.new

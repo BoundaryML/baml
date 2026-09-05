@@ -77,10 +77,7 @@ function string_regressions.strregr_iterate_by_character() -> string {
     store_var _3
     load_var _3
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var out
     load_const "["
     load_var _3
@@ -91,7 +88,7 @@ function string_regressions.strregr_iterate_by_character() -> string {
     store_var out
     jump L0
 
-  L2:
+  L1:
     load_var out
     return
 }

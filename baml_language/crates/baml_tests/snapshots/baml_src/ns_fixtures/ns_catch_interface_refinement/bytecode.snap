@@ -14,63 +14,49 @@ function fixtures.catch_interface_refinement.<(user.fixtures.catch_interface_ref
 function fixtures.catch_interface_refinement.app(mode: int) -> string {
     load_var mode
     call user.fixtures.catch_interface_refinement.provider_call
-    jump L8
+    jump L4
     load_var e
     store_var _3
     load_var _3
     narrow_bind fixtures.catch_interface_refinement.QuotaExceeded, slot=3
-    pop_jump_if_false L0
-    jump L7
-
-  L0:
+    pop_jump_if_true L3
     load_var e
     store_var _4
     load_var _4
     narrow_bind fixtures.catch_interface_refinement.Failure, slot=4
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var e
     store_var _5
     load_var _5
     narrow_bind baml.errors.UnknownError, slot=5
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L3:
+  L0:
     load_const "unknown"
-    jump L8
+    jump L4
 
-  L4:
+  L1:
     load_var _4
     load_type fixtures.catch_interface_refinement.Failure
     load_const "is_transient"
     virtual_call nargs=1 ntypeargs=0
-    store_var _9
-    load_var _9
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
+    pop_jump_if_true L2
     load_const "fail"
-    jump L8
+    jump L4
 
-  L6:
+  L2:
     load_const "retry"
-    jump L8
+    jump L4
 
-  L7:
+  L3:
     load_const "quota: "
     load_var _3
     load_field .quota_name
     bin_op +
 
-  L8:
+  L4:
     return
 }
 
@@ -79,17 +65,14 @@ function fixtures.catch_interface_refinement.local_throw() -> string {
     init_instance user.fixtures.catch_interface_refinement.Throttled .retry_after_ms
     throw
     load_var e
-    store_var _4
-    load_var _4
+    store_var _3
+    load_var _3
     narrow_bind fixtures.catch_interface_refinement.Failure, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const "classified"
     return
 }
@@ -98,17 +81,11 @@ function fixtures.catch_interface_refinement.provider_call(mode: int) -> string 
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_const "socket reset"
     load_const "transport"
     load_type string
@@ -116,12 +93,12 @@ function fixtures.catch_interface_refinement.provider_call(mode: int) -> string 
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L2:
+  L0:
     load_const "daily"
     init_instance user.fixtures.catch_interface_refinement.QuotaExceeded .quota_name
     throw
 
-  L3:
+  L1:
     load_const 250
     init_instance user.fixtures.catch_interface_refinement.Throttled .retry_after_ms
     throw

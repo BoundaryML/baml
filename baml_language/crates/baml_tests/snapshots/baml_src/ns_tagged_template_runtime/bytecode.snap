@@ -120,14 +120,11 @@ function tagged_template_runtime.tt_cap(body: () -> baml.TaggedString throws nev
     store_var _6
     load_var _6
     narrow_bind string, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "?"
     jump L1
 
   L0:
-    load_const "?"
-    jump L2
-
-  L1:
     load_var t
     load_field .parts
     load_const 0
@@ -140,7 +137,7 @@ function tagged_template_runtime.tt_cap(body: () -> baml.TaggedString throws nev
     load_array_element
     bin_op +
 
-  L2:
+  L1:
     return
 }
 
@@ -174,14 +171,11 @@ function tagged_template_runtime.tt_fmt(body: (string) -> baml.TaggedString thro
     store_var _6
     load_var _6
     narrow_bind string, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "?"
     jump L1
 
   L0:
-    load_const "?"
-    jump L2
-
-  L1:
     load_var t
     load_field .parts
     load_const 0
@@ -194,7 +188,7 @@ function tagged_template_runtime.tt_fmt(body: (string) -> baml.TaggedString thro
     load_array_element
     bin_op +
 
-  L2:
+  L1:
     return
 }
 
@@ -396,10 +390,7 @@ function tagged_template_runtime.tt_render(body: () -> baml.TaggedString throws 
     store_var _7
     load_var2 5 6
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var out
     store_var _22
     load_var t
@@ -415,7 +406,7 @@ function tagged_template_runtime.tt_render(body: () -> baml.TaggedString throws 
     bin_op +
     return
 
-  L2:
+  L1:
     load_var t
     load_field .values
     load_var i
@@ -423,19 +414,16 @@ function tagged_template_runtime.tt_render(body: () -> baml.TaggedString throws 
     store_var _13
     load_var _13
     narrow_bind string, slot=8
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_const "?"
     store_var v
-    jump L5
+    jump L3
 
-  L4:
+  L2:
     load_var _13
     store_var v
 
-  L5:
+  L3:
     load_var2 3 2
     load_field .parts
     load_var i

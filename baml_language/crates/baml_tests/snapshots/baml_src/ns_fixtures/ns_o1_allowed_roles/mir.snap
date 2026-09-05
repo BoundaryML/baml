@@ -135,24 +135,26 @@ fn user.fixtures.o1_allowed_roles.AskO1@spec(question: string) -> ai.FunctionSpe
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // question // param [captured]
     let _2: map<string, unknown>
-    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _4: ai.tools.Toolbox
-    let _5: ai.tools.Tool[]
-    let _6: ai.Client
+    let _3: string
+    let _4: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
+    let _7: ai.Client
 
     bb0: {
-        _2 = { const "question": copy _1 }: map<string, unknown>;
-        _3 = make_closure lambda[0](copy _1);
-        _5 = []: ai.tools.Tool[];
-        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+        _3 = copy _1;
+        _2 = { const "question": copy _3 }: map<string, unknown>;
+        _4 = make_closure lambda[0](copy _1);
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
     }
 
     bb1: {
-        _6 = call const fn ai.clients.resolve(const item user.fixtures.o1_allowed_roles.O1Client) -> [bb2];
+        _7 = call const fn ai.clients.resolve(const item user.fixtures.o1_allowed_roles.O1Client) -> [bb2];
     }
 
     bb2: {
-        _0 = ai.FunctionSpec<string> { const "AskO1", copy _2, copy _3, copy _4, copy _6 };
+        _0 = ai.FunctionSpec<string> { const "AskO1", copy _2, copy _4, copy _5, copy _7 };
         goto -> bb3;
     }
 
@@ -423,24 +425,26 @@ fn user.fixtures.o1_allowed_roles.AskGpt4o@spec(question: string) -> ai.Function
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // question // param [captured]
     let _2: map<string, unknown>
-    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _4: ai.tools.Toolbox
-    let _5: ai.tools.Tool[]
-    let _6: ai.Client
+    let _3: string
+    let _4: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
+    let _7: ai.Client
 
     bb0: {
-        _2 = { const "question": copy _1 }: map<string, unknown>;
-        _3 = make_closure lambda[0](copy _1);
-        _5 = []: ai.tools.Tool[];
-        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+        _3 = copy _1;
+        _2 = { const "question": copy _3 }: map<string, unknown>;
+        _4 = make_closure lambda[0](copy _1);
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
     }
 
     bb1: {
-        _6 = call const fn ai.clients.resolve(const item user.fixtures.o1_allowed_roles.Gpt4oClient) -> [bb2];
+        _7 = call const fn ai.clients.resolve(const item user.fixtures.o1_allowed_roles.Gpt4oClient) -> [bb2];
     }
 
     bb2: {
-        _0 = ai.FunctionSpec<string> { const "AskGpt4o", copy _2, copy _3, copy _4, copy _6 };
+        _0 = ai.FunctionSpec<string> { const "AskGpt4o", copy _2, copy _4, copy _5, copy _7 };
         goto -> bb3;
     }
 

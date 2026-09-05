@@ -911,29 +911,20 @@ function bigints.<(user.bigints.BigintRejectionThenAcceptedRng as baml.random.Rn
     load_const 1
     bin_op +
     store_field .calls
-    load_const b""
-    call baml.deep_copy
-    store_var draw
     load_var self
     load_field .calls
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
+    pop_jump_if_true L1
+    load_const b"\x00\x04"
+    call baml.deep_copy
     jump L2
 
   L1:
-    load_const b"\x00\x04"
-    call baml.deep_copy
-    store_var draw
-    jump L3
-
-  L2:
     load_const b"\x01\x01"
     call baml.deep_copy
-    store_var draw
 
-  L3:
-    load_var draw
+  L2:
     return
 }
 
@@ -1118,8 +1109,7 @@ function bigints.bigint_random_in_range_fn() -> bool {
     load_var r
     load_const 10n
     cmp_bigint_op >=
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var r
     load_const 20n
     cmp_bigint_op <

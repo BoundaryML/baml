@@ -36,20 +36,17 @@ function with_timeout.with_timeout_expires() -> string {
     load_var _2
     make_closure .<lambda(with_timeout_expires, 0)>, 0
     call baml.future.with_timeout
-    jump L2
+    jump L1
     load_var e
     is_type baml.errors.Timeout
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const "timed out"
 
-  L2:
+  L1:
     return
 }
 
@@ -62,30 +59,24 @@ function with_timeout.with_timeout_preserves_body_error() -> string {
     load_var _2
     make_closure .<lambda(with_timeout_preserves_body_error, 0)>, 0
     call baml.future.with_timeout
-    jump L4
+    jump L2
     load_var e
     is_type baml.errors.Timeout
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type baml.errors.Io
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_const "io"
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const "timed out"
 
-  L4:
+  L2:
     return
 }
 

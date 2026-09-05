@@ -5,28 +5,22 @@ function fixtures.parser_statements.ConditionalLogic(age: int) -> string {
     load_var age
     load_const 18
     cmp_int_op <
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var age
     load_const 65
     cmp_int_op <
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    load_const "senior"
+    jump L2
+
+  L0:
+    load_const "adult"
     jump L2
 
   L1:
-    load_const "senior"
-    jump L4
-
-  L2:
-    load_const "adult"
-    jump L4
-
-  L3:
     load_const "minor"
 
-  L4:
+  L2:
     return
 }
 
@@ -51,14 +45,11 @@ function fixtures.parser_statements.assign_in_loop() -> int {
     load_var i
     load_const 5
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var sum
     return
 
-  L2:
+  L1:
     load_var2 1 2
     add_int
     store_var sum
@@ -70,31 +61,16 @@ function fixtures.parser_statements.assign_in_loop() -> int {
 }
 
 function fixtures.parser_statements.block_with_tail() -> int {
-    load_const 1
-    load_const 2
-    add_int
+    load_const 3
     return
 }
 
 function fixtures.parser_statements.break_in_for() -> int {
-    load_const 0
-    load_const 10
-    cmp_int_op <
-    pop_jump_if_false L0
-
-  L0:
     load_const 1
     return
 }
 
 function fixtures.parser_statements.break_with_locals() -> int {
-  L0:
-    load_const true
-    pop_jump_if_false L1
-    load_const true
-    pop_jump_if_false L0
-
-  L1:
     load_const 4
     return
 }
@@ -109,14 +85,11 @@ function fixtures.parser_statements.c_style_for_loop() -> int {
     load_var i
     load_const 10
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var result
     return
 
-  L2:
+  L1:
     load_var2 1 2
     add_int
     store_var result
@@ -135,14 +108,11 @@ function fixtures.parser_statements.continue_in_for() -> int {
     load_var i
     load_const 10
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_const 2
     return
 
-  L2:
+  L1:
     load_var i
     load_const 1
     add_int
@@ -152,23 +122,14 @@ function fixtures.parser_statements.continue_in_for() -> int {
 
 function fixtures.parser_statements.continue_with_locals() -> int {
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const 5
-    return
-
-  L2:
-    load_const true
-    pop_jump_if_false L0
     jump L0
 }
 
 function fixtures.parser_statements.edge_call_then_index(foo: () -> int[] throws never) -> int {
     load_var foo
     call_indirect
+    load_const 0
+    load_array_element
     pop 1
     load_const 1
     return
@@ -230,35 +191,24 @@ function fixtures.parser_statements.iterator_style_for_loop() -> int {
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 1 3
     add_int
     store_var result
     jump L0
 
-  L2:
+  L1:
     load_var result
     return
 }
 
 function fixtures.parser_statements.let_mixed_semicolons() -> int {
-    load_const 1
-    load_const 2
-    add_int
-    load_const 3
-    add_int
-    load_const 4
-    add_int
+    load_const 10
     return
 }
 
 function fixtures.parser_statements.let_no_semicolons() -> int {
-    load_const 1
-    load_const 2
-    add_int
+    load_const 3
     return
 }
 
@@ -291,12 +241,6 @@ function fixtures.parser_statements.multi_assign() -> int {
 }
 
 function fixtures.parser_statements.nested_break() -> int {
-    load_const true
-    pop_jump_if_false L0
-    load_const true
-    pop_jump_if_false L0
-
-  L0:
     load_const 3
     return
 }
@@ -322,10 +266,7 @@ function fixtures.parser_statements.nested_for_loop() -> int {
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L2
     load_const 4
     load_const 5
     load_const 6
@@ -336,7 +277,7 @@ function fixtures.parser_statements.nested_for_loop() -> int {
     virtual_call nargs=1 ntypeargs=0
     store_var _9
 
-  L2:
+  L1:
     load_var _9
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "next"
@@ -344,18 +285,15 @@ function fixtures.parser_statements.nested_for_loop() -> int {
     store_var _10
     load_var _10
     is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L0
-
-  L3:
+    pop_jump_if_true L0
     load_var2 1 3
     load_var _10
     mul_int
     add_int
     store_var result
-    jump L2
+    jump L1
 
-  L4:
+  L2:
     load_var result
     return
 }
@@ -363,20 +301,9 @@ function fixtures.parser_statements.nested_for_loop() -> int {
 function fixtures.parser_statements.nested_while_loop() -> int {
   L0:
     load_const 0
-    load_const 10
-    cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const 0
-    return
-
-  L2:
-    load_const 0
     store_var j
 
-  L3:
+  L1:
     load_var j
     load_const 10
     cmp_int_op <
@@ -385,36 +312,22 @@ function fixtures.parser_statements.nested_while_loop() -> int {
     load_const 1
     add_int
     store_var j
-    jump L3
+    jump L1
 }
 
 function fixtures.parser_statements.simple_assign() -> int {
-    load_const 1
-    store_var x
     load_const 5
-    store_var x
-    load_var x
     return
 }
 
 function fixtures.parser_statements.simple_break() -> int {
-    load_const true
-    pop_jump_if_false L0
-
-  L0:
     load_const 42
     return
 }
 
 function fixtures.parser_statements.simple_continue() -> int {
   L0:
-    load_const true
-    pop_jump_if_false L1
     jump L0
-
-  L1:
-    load_const 0
-    return
 }
 
 function fixtures.parser_statements.simple_while_loop() -> int {
@@ -425,14 +338,11 @@ function fixtures.parser_statements.simple_while_loop() -> int {
     load_var i
     load_const 10
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var i
     return
 
-  L2:
+  L1:
     load_var i
     load_const 1
     add_int

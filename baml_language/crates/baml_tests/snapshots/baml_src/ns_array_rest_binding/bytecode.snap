@@ -165,8 +165,7 @@ function array_rest_binding.arb_grab(xs: int[]) -> int {
     store_var_load_var _3
     load_const 1
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const -1
@@ -175,19 +174,19 @@ function array_rest_binding.arb_grab(xs: int[]) -> int {
   L1:
     load_var xs
     container_len
-    store_var _10
+    store_var _9
     load_var xs
     load_const 1
-    load_var _10
+    load_var _9
     call baml.Array.slice
     load_var xs
     load_const 0
     load_array_element
     load_const 10
     mul_int
-    store_var _12
+    store_var _11
     container_len
-    store_var _14
+    store_var _13
     load_var2 4 5
     add_int
 
@@ -198,41 +197,37 @@ function array_rest_binding.arb_grab(xs: int[]) -> int {
 function array_rest_binding.arb_pick(v: array_rest_binding.ArbNumberBag | int[][]) -> int {
     load_var v
     is_type array_rest_binding.ArbNumberBag
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L2
     load_var v
     is_type _[]
-    pop_jump_if_false L1
+    pop_jump_if_false L0
     load_var v
     container_len
     store_var_load_var _8
     load_const 1
     cmp_int_op >=
-    pop_jump_if_false L1
+    pop_jump_if_false L0
     load_var v
     load_const 0
     load_array_element
     store_var_load_var _11
     is_type int[]
-    pop_jump_if_false L1
+    pop_jump_if_false L0
     load_var _11
     is_type int[]
-    pop_jump_if_false L1
+    pop_jump_if_false L0
     load_var _11
     container_len
     store_var_load_var _14
     load_const 0
     cmp_int_op >=
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_true L1
+
+  L0:
+    load_const 0
+    jump L3
 
   L1:
-    load_const 0
-    jump L4
-
-  L2:
     load_var v
     load_const 0
     load_array_element
@@ -246,15 +241,15 @@ function array_rest_binding.arb_pick(v: array_rest_binding.ArbNumberBag | int[][
     call baml.Array.slice
     load_const 0
     load_array_element
-    jump L4
+    jump L3
 
-  L3:
+  L2:
     load_var v
     load_field .0
     load_const 0
     load_array_element
 
-  L4:
+  L3:
     return
 }
 
@@ -272,8 +267,7 @@ function array_rest_binding.arb_pushing_to_rest_does_not_mutate_source() -> int 
     store_var_load_var _3
     load_const 1
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const -1
@@ -282,10 +276,10 @@ function array_rest_binding.arb_pushing_to_rest_does_not_mutate_source() -> int 
   L1:
     load_var xs
     container_len
-    store_var _9
+    store_var _6
     load_var xs
     load_const 1
-    load_var _9
+    load_var _6
     call baml.Array.slice
     store_var r
     load_type int
@@ -295,14 +289,14 @@ function array_rest_binding.arb_pushing_to_rest_does_not_mutate_source() -> int 
     pop 1
     load_var xs
     container_len
-    store_var _14
-    load_var _14
+    store_var _11
+    load_var _11
     load_const 10
     mul_int
-    store_var _13
+    store_var _10
     load_var r
     container_len
-    store_var _15
+    store_var _12
     load_var2 5 7
     add_int
 
@@ -324,8 +318,7 @@ function array_rest_binding.arb_pushing_to_source_does_not_mutate_rest() -> int 
     store_var_load_var _3
     load_const 1
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const -1
@@ -334,18 +327,18 @@ function array_rest_binding.arb_pushing_to_source_does_not_mutate_rest() -> int 
   L1:
     load_var xs
     container_len
-    store_var _9
+    store_var _6
     load_var xs
     load_const 1
-    load_var _9
+    load_var _6
     call baml.Array.slice
-    store_var _8
+    store_var _5
     load_type int
     load_var xs
     load_const 7
     call baml.Array.push
     pop 1
-    load_var _8
+    load_var _5
     container_len
 
   L2:
@@ -458,8 +451,7 @@ function array_rest_binding.arb_rest_binding_in_nested_element_pattern() -> int 
     store_var_load_var _10
     load_const 0
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const -1
@@ -509,8 +501,7 @@ function array_rest_binding.arb_rest_binds_middle_values() -> int {
     store_var_load_var _3
     load_const 2
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const -1
@@ -519,20 +510,17 @@ function array_rest_binding.arb_rest_binds_middle_values() -> int {
   L1:
     load_var _1
     container_len
-    store_var _6
-    load_var _1
-    container_len
-    store_var _12
+    store_var _9
     load_var _1
     load_const 1
-    load_var _12
+    load_var _9
     load_const 1
     sub_int
     call baml.Array.slice
     store_var r
     load_var _1
     container_len
-    store_var _15
+    store_var _12
     load_var r
     load_const 0
     load_array_element
@@ -554,7 +542,7 @@ function array_rest_binding.arb_rest_binds_middle_values() -> int {
     load_const 1000
     mul_int
     add_int
-    load_var2 1 6
+    load_var2 1 5
     load_const 1
     sub_int
     load_array_element
@@ -583,8 +571,7 @@ function array_rest_binding.arb_rest_copy_is_shallow_elements_are_shared() -> in
     store_var_load_var _6
     load_const 1
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const -1
@@ -593,10 +580,10 @@ function array_rest_binding.arb_rest_copy_is_shallow_elements_are_shared() -> in
   L1:
     load_var xs
     container_len
-    store_var _12
+    store_var _9
     load_var xs
     load_const 1
-    load_var _12
+    load_var _9
     call baml.Array.slice
     load_var c
     load_const 5
@@ -622,8 +609,7 @@ function array_rest_binding.arb_rest_is_empty_between_exact_prefix_and_suffix() 
     store_var_load_var _3
     load_const 2
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const -1
@@ -632,22 +618,19 @@ function array_rest_binding.arb_rest_is_empty_between_exact_prefix_and_suffix() 
   L1:
     load_var _1
     container_len
-    store_var _6
-    load_var _1
-    container_len
-    store_var _12
+    store_var _9
     load_var _1
     load_const 1
-    load_var _12
+    load_var _9
     load_const 1
     sub_int
     call baml.Array.slice
     load_var _1
     container_len
-    store_var _15
+    store_var _12
     container_len
-    store_var _21
-    load_var _21
+    store_var _18
+    load_var _18
     load_const 100
     mul_int
     load_var _1
@@ -656,7 +639,7 @@ function array_rest_binding.arb_rest_is_empty_between_exact_prefix_and_suffix() 
     load_const 10
     mul_int
     add_int
-    load_var2 1 5
+    load_var2 1 4
     load_const 1
     sub_int
     load_array_element
@@ -678,8 +661,7 @@ function array_rest_binding.arb_rest_is_empty_when_nothing_remains() -> int {
     store_var_load_var _3
     load_const 1
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const -1
@@ -688,10 +670,10 @@ function array_rest_binding.arb_rest_is_empty_when_nothing_remains() -> int {
   L1:
     load_var _1
     container_len
-    store_var _9
+    store_var _6
     load_var _1
     load_const 1
-    load_var _9
+    load_var _6
     call baml.Array.slice
     container_len
 
@@ -727,10 +709,7 @@ function array_rest_binding.arb_rest_only_binding_in_for_loop() -> int {
     store_var _9
     load_var _9
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _9
     store_var _11
     load_var _11
@@ -747,7 +726,7 @@ function array_rest_binding.arb_rest_only_binding_in_for_loop() -> int {
     store_var total
     jump L0
 
-  L2:
+  L1:
     load_var total
     return
 }
@@ -800,8 +779,7 @@ function array_rest_binding.arb_rest_with_no_suffix_takes_tail() -> int {
     store_var_load_var _3
     load_const 1
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const -1
@@ -810,16 +788,16 @@ function array_rest_binding.arb_rest_with_no_suffix_takes_tail() -> int {
   L1:
     load_var _1
     container_len
-    store_var _10
+    store_var _9
     load_var _1
     load_const 1
-    load_var _10
+    load_var _9
     call baml.Array.slice
     store_var r
     load_var r
     container_len
-    store_var _14
-    load_var _14
+    store_var _13
+    load_var _13
     load_const 10
     mul_int
     load_var r
@@ -844,8 +822,7 @@ function array_rest_binding.arb_tail_len(xs: #0[]) -> int {
     store_var_load_var _3
     load_const 1
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const -1
@@ -854,10 +831,10 @@ function array_rest_binding.arb_tail_len(xs: #0[]) -> int {
   L1:
     load_var xs
     container_len
-    store_var _9
+    store_var _6
     load_var xs
     load_const 1
-    load_var _9
+    load_var _6
     call baml.Array.slice
     container_len
 
@@ -877,8 +854,7 @@ function array_rest_binding.arb_too_short_array_falls_through_rest_arm() -> int 
     store_var_load_var _3
     load_const 2
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const 2
@@ -889,18 +865,20 @@ function array_rest_binding.arb_too_short_array_falls_through_rest_arm() -> int 
     container_len
     store_var _6
     load_var _1
-    container_len
-    store_var _11
-    load_var _1
     load_const 1
-    load_var _11
+    load_var _6
     load_const 1
     sub_int
     call baml.Array.slice
     pop 1
     load_var _1
     container_len
-    store_var _13
+    store_var _8
+    load_var2 1 4
+    load_const 1
+    sub_int
+    load_array_element
+    pop 1
     load_const 1
 
   L2:

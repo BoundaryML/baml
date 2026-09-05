@@ -168,27 +168,10 @@ function type_value_narrowing.classify_mixed_list() -> string {
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L7
-
-  L1:
+    pop_jump_if_true L2
     load_var _7
     is_type reflect.Type
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_const false
-    jump L4
-
-  L3:
-    load_const true
-
-  L4:
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
+    pop_jump_if_true L1
     load_type string
     load_var out
     load_const "S"
@@ -196,7 +179,7 @@ function type_value_narrowing.classify_mixed_list() -> string {
     pop 1
     jump L0
 
-  L6:
+  L1:
     load_type string
     load_var out
     load_const "T"
@@ -204,7 +187,7 @@ function type_value_narrowing.classify_mixed_list() -> string {
     pop 1
     jump L0
 
-  L7:
+  L2:
     load_type string
     load_var out
     load_const ","
@@ -213,74 +196,32 @@ function type_value_narrowing.classify_mixed_list() -> string {
 }
 
 function type_value_narrowing.non_type_is_not_type() -> string {
+    load_type bool
     load_const 7
     is_type reflect.Type
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    store_var _8
-    jump L2
-
-  L1:
-    load_const true
-    store_var _8
-
-  L2:
-    load_type bool
-    load_var _8
     call baml.String.from
-    store_var _7
+    store_var _5
+    load_type bool
     load_const "int"
     is_type reflect.Type
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_const false
-    store_var _12
-    jump L5
-
-  L4:
-    load_const true
-    store_var _12
-
-  L5:
-    load_type bool
-    load_var _12
     call baml.String.from
-    store_var _11
+    store_var _9
+    load_type bool
     load_const 1
     load_const 2
     load_type int
     alloc_array 2
     is_type reflect.Type
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
-    load_const false
-    store_var _16
-    jump L8
-
-  L7:
-    load_const true
-    store_var _16
-
-  L8:
-    load_type bool
-    load_var _16
     call baml.String.from
-    store_var _15
-    load_var _7
+    store_var _13
+    load_var _5
     load_const "|"
     bin_op +
-    load_var _11
+    load_var _9
     bin_op +
     load_const "|"
     bin_op +
-    load_var _15
+    load_var _13
     bin_op +
     return
 }
@@ -288,57 +229,40 @@ function type_value_narrowing.non_type_is_not_type() -> string {
 function type_value_narrowing.optional_type_absent() -> string {
     load_const null
     is_type reflect.Type
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
     store_var is_t
-    jump L2
-
-  L1:
-    load_const true
-    store_var is_t
-
-  L2:
     load_const null
-    store_var _4
-    load_var _4
+    store_var _3
+    load_var _3
     narrow_bind reflect.Type, slot=2
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L0
     load_type bool
     load_var is_t
     call baml.String.from
     load_const "|none"
     bin_op +
-    jump L5
+    jump L1
 
-  L4:
-    load_var _4
+  L0:
+    load_var _3
     store_var t
     load_type bool
     load_var is_t
     call baml.String.from
-    store_var _7
     load_var t
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _11
-    load_type string
-    load_var _11
-    call baml.String.from
     store_var _10
-    load_var _7
+    load_type string
+    load_var _10
+    call baml.String.from
+    store_var _9
     load_const "|"
     bin_op +
-    load_var _10
+    load_var _9
     bin_op +
 
-  L5:
+  L1:
     return
 }
 
@@ -347,41 +271,25 @@ function type_value_narrowing.optional_type_present() -> string {
     store_var v
     load_var v
     is_type reflect.Type
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
     store_var is_t
-    jump L2
-
-  L1:
-    load_const true
-    store_var is_t
-
-  L2:
     load_var v
     store_var _4
     load_var _4
     narrow_bind reflect.Type, slot=3
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L0
     load_type bool
     load_var is_t
     call baml.String.from
     load_const "|none"
     bin_op +
-    jump L5
+    jump L1
 
-  L4:
+  L0:
     load_var _4
     store_var t
     load_type bool
     load_var is_t
     call baml.String.from
-    store_var _7
     load_var t
     load_type baml.ToString
     load_const "to_string"
@@ -391,13 +299,12 @@ function type_value_narrowing.optional_type_present() -> string {
     load_var _11
     call baml.String.from
     store_var _10
-    load_var _7
     load_const "|"
     bin_op +
     load_var _10
     bin_op +
 
-  L5:
+  L1:
     return
 }
 
@@ -423,27 +330,21 @@ function type_value_narrowing.render_mixed_list() -> string {
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L2
     load_var _7
     store_var item
     load_var item
     store_var _12
     load_var _12
     narrow_bind reflect.Type, slot=5
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_type string
     load_var2 1 4
     call baml.Array.push
     pop 1
     jump L0
 
-  L3:
+  L1:
     load_var _12
     load_type baml.ToString
     load_const "to_string"
@@ -455,7 +356,7 @@ function type_value_narrowing.render_mixed_list() -> string {
     pop 1
     jump L0
 
-  L4:
+  L2:
     load_type string
     load_var out
     load_const ","
@@ -475,7 +376,6 @@ function type_value_narrowing.type_equality() -> string {
     load_type bool
     load_var _8
     call baml.String.from
-    store_var _7
     load_var2 1 2
     call baml.ops.equals_equals
     store_var _13
@@ -491,7 +391,6 @@ function type_value_narrowing.type_equality() -> string {
     unary_op !
     call baml.String.from
     store_var _17
-    load_var _7
     load_const "|"
     bin_op +
     load_var _12
@@ -506,64 +405,20 @@ function type_value_narrowing.type_equality() -> string {
 function type_value_narrowing.type_is_type() -> string {
     load_type int
     store_var v
+    load_type bool
     load_var v
     is_type reflect.Type
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    store_var _6
-    jump L2
-
-  L1:
-    load_const true
-    store_var _6
-
-  L2:
-    load_type bool
-    load_var _6
     call baml.String.from
-    store_var _5
+    load_type bool
     load_var v
     is_type int
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_const false
-    store_var _10
-    jump L5
-
-  L4:
-    load_const true
-    store_var _10
-
-  L5:
-    load_type bool
-    load_var _10
     call baml.String.from
     store_var _9
+    load_type bool
     load_var v
     is_type string
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
-    load_const false
-    store_var _14
-    jump L8
-
-  L7:
-    load_const true
-    store_var _14
-
-  L8:
-    load_type bool
-    load_var _14
     call baml.String.from
     store_var _13
-    load_var _5
     load_const "|"
     bin_op +
     load_var _9
@@ -576,64 +431,20 @@ function type_value_narrowing.type_is_type() -> string {
 }
 
 function type_value_narrowing.type_of_various_is_type() -> string {
+    load_type bool
     load_type string
     is_type reflect.Type
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    store_var _8
-    jump L2
-
-  L1:
-    load_const true
-    store_var _8
-
-  L2:
-    load_type bool
-    load_var _8
     call baml.String.from
-    store_var _7
+    load_type bool
     load_type int[]
     is_type reflect.Type
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_const false
-    store_var _12
-    jump L5
-
-  L4:
-    load_const true
-    store_var _12
-
-  L5:
-    load_type bool
-    load_var _12
     call baml.String.from
     store_var _11
+    load_type bool
     load_type map<string, int>
     is_type reflect.Type
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
-    load_const false
-    store_var _16
-    jump L8
-
-  L7:
-    load_const true
-    store_var _16
-
-  L8:
-    load_type bool
-    load_var _16
     call baml.String.from
     store_var _15
-    load_var _7
     load_const "|"
     bin_op +
     load_var _11
@@ -650,66 +461,33 @@ function type_value_narrowing.type_to_string_after_narrowing() -> string {
     store_var _2
     load_var _2
     narrow_bind reflect.Type, slot=1
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "unreachable"
     jump L1
 
   L0:
-    load_const "unreachable"
-    jump L2
-
-  L1:
     load_var _2
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
 
-  L2:
+  L1:
     return
 }
 
 function type_value_narrowing.union_holding_int_is() -> string {
+    load_type bool
     load_const 42
     is_type reflect.Type
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    store_var _4
-    jump L2
-
-  L1:
-    load_const true
-    store_var _4
-
-  L2:
-    load_type bool
-    load_var _4
     call baml.String.from
-    store_var _3
+    load_type bool
     load_const 42
     is_type int
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_const false
-    store_var _8
-    jump L5
-
-  L4:
-    load_const true
-    store_var _8
-
-  L5:
-    load_type bool
-    load_var _8
     call baml.String.from
-    store_var _7
-    load_var _3
+    store_var _6
     load_const "|"
     bin_op +
-    load_var _7
+    load_var _6
     bin_op +
     return
 }
@@ -717,45 +495,15 @@ function type_value_narrowing.union_holding_int_is() -> string {
 function type_value_narrowing.union_holding_type_is() -> string {
     load_type int
     store_var v
+    load_type bool
     load_var v
     is_type reflect.Type
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    store_var _4
-    jump L2
-
-  L1:
-    load_const true
-    store_var _4
-
-  L2:
-    load_type bool
-    load_var _4
     call baml.String.from
-    store_var _3
+    load_type bool
     load_var v
     is_type int
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_const false
-    store_var _8
-    jump L5
-
-  L4:
-    load_const true
-    store_var _8
-
-  L5:
-    load_type bool
-    load_var _8
     call baml.String.from
     store_var _7
-    load_var _3
     load_const "|"
     bin_op +
     load_var _7
@@ -765,31 +513,26 @@ function type_value_narrowing.union_holding_type_is() -> string {
 
 function type_value_narrowing.union_if_let_int() -> string {
     load_const 9
-    store_var _2
-    load_var _2
+    store_var _1
+    load_var _1
     narrow_bind reflect.Type, slot=1
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "not-a-type"
     jump L1
 
   L0:
-    load_const "not-a-type"
-    jump L2
-
-  L1:
-    load_var _2
+    load_var _1
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _5
-    load_type string
-    load_var _5
-    call baml.String.from
     store_var _4
     load_const "type:"
+    load_type string
     load_var _4
+    call baml.String.from
     bin_op +
 
-  L2:
+  L1:
     return
 }
 
@@ -798,28 +541,23 @@ function type_value_narrowing.union_if_let_type() -> string {
     store_var _2
     load_var _2
     narrow_bind reflect.Type, slot=1
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "not-a-type"
     jump L1
 
   L0:
-    load_const "not-a-type"
-    jump L2
-
-  L1:
     load_var _2
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
+    load_const "type:"
     load_type string
     load_var _5
     call baml.String.from
-    store_var _4
-    load_const "type:"
-    load_var _4
     bin_op +
 
-  L2:
+  L1:
     return
 }
 
@@ -828,34 +566,27 @@ function type_value_narrowing.union_match_int_first(v: reflect.Type | int) -> st
     store_var _2
     load_var _2
     narrow_bind int, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var v
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
+    load_const "type:"
     load_type string
     load_var _9
     call baml.String.from
-    store_var _8
-    load_const "type:"
-    load_var _8
     bin_op +
-    jump L2
+    jump L1
 
-  L1:
+  L0:
+    load_const "int:"
     load_type int
     load_var _2
     call baml.String.from
-    store_var _4
-    load_const "int:"
-    load_var _4
     bin_op +
 
-  L2:
+  L1:
     return
 }
 
@@ -864,34 +595,27 @@ function type_value_narrowing.union_match_type_first(v: reflect.Type | int) -> s
     store_var _2
     load_var _2
     narrow_bind reflect.Type, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
+    load_const "int:"
     load_type int
     load_var v
     call baml.String.from
-    store_var _8
-    load_const "int:"
-    load_var _8
     bin_op +
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var _2
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
+    load_const "type:"
     load_type string
     load_var _5
     call baml.String.from
-    store_var _4
-    load_const "type:"
-    load_var _4
     bin_op +
 
-  L2:
+  L1:
     return
 }
 
@@ -900,51 +624,39 @@ function type_value_narrowing.union_three_way(v: reflect.Type | int | string) ->
     store_var _2
     load_var _2
     narrow_bind reflect.Type, slot=2
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var v
     store_var _7
     load_var _7
-    narrow_bind string, slot=5
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    narrow_bind string, slot=4
+    pop_jump_if_true L0
+    load_const "int:"
     load_type int
     load_var v
     call baml.String.from
-    store_var _13
-    load_const "int:"
-    load_var _13
     bin_op +
-    jump L4
+    jump L2
 
-  L2:
+  L0:
+    load_const "string:"
     load_type string
     load_var _7
     call baml.String.from
-    store_var _9
-    load_const "string:"
-    load_var _9
     bin_op +
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_var _2
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
+    load_const "type:"
     load_type string
     load_var _5
     call baml.String.from
-    store_var _4
-    load_const "type:"
-    load_var _4
     bin_op +
 
-  L4:
+  L2:
     return
 }

@@ -55,70 +55,48 @@ function fixtures.type_kinds.exercise_all_kinds() -> bool {
     call user.fixtures.type_kinds.classify
     load_const "class"
     cmp_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_type fixtures.type_kinds.Color
     call user.fixtures.type_kinds.classify
     load_const "enum"
     cmp_op ==
-
-  L0:
-    jump_if_false L1
-    pop 1
+    jump_if_false_or_pop L0
     load_type int | string
     call user.fixtures.type_kinds.classify
     load_const "union"
     cmp_op ==
-
-  L1:
-    jump_if_false L2
-    pop 1
+    jump_if_false_or_pop L0
     load_type "fixed"
     call user.fixtures.type_kinds.classify
     load_const "literal"
     cmp_op ==
-
-  L2:
-    jump_if_false L3
-    pop 1
+    jump_if_false_or_pop L0
     load_type fixtures.type_kinds.Foo[]
     call user.fixtures.type_kinds.classify
     load_const "array"
     cmp_op ==
-
-  L3:
-    jump_if_false L4
-    pop 1
+    jump_if_false_or_pop L0
     load_type map<string, fixtures.type_kinds.Foo>
     call user.fixtures.type_kinds.classify
     load_const "map"
     cmp_op ==
-
-  L4:
-    jump_if_false L5
-    pop 1
+    jump_if_false_or_pop L0
     load_type fixtures.type_kinds.Marker
     call user.fixtures.type_kinds.classify
     load_const "interface"
     cmp_op ==
-
-  L5:
-    jump_if_false L6
-    pop 1
+    jump_if_false_or_pop L0
     load_type int
     call user.fixtures.type_kinds.classify
     load_const "primitive"
     cmp_op ==
-
-  L6:
-    jump_if_false L7
-    pop 1
+    jump_if_false_or_pop L0
     load_type (int) -> bool throws never
     call user.fixtures.type_kinds.classify
     load_const "function"
     cmp_op ==
 
-  L7:
+  L0:
     return
 }
 
@@ -127,7 +105,5 @@ function fixtures.type_kinds.read_class(view: reflect.class.Type) -> reflect.Typ
     load_type reflect.TypeView
     load_const "as_type"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }

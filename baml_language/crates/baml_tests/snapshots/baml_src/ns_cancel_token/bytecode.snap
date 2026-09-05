@@ -67,20 +67,17 @@ function cancel_token.await_token_cancelled_catches() -> int {
     pop 1
     load_var _10
     await
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.Cancelled
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const 0
 
-  L2:
+  L1:
     return
 }
 

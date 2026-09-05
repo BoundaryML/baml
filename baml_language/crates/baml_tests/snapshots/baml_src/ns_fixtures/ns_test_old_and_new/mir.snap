@@ -28,13 +28,9 @@ fn user.fixtures.test_old_and_new.$init_test_ns_fixtures_ns_test_old_and_new_mai
 fn .<lambda($init_test_ns_fixtures_ns_test_old_and_new_main, 0)>() -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: string // result
-    let _2: string
 
     bb0: {
-        _1 = const "hello";
-        _2 = copy _1;
-        _0 = call const fn assert.not_null(copy _2) -> [bb1];
+        _0 = call const fn assert.not_null(const "hello") -> [bb1];
     }
 
     bb1: {

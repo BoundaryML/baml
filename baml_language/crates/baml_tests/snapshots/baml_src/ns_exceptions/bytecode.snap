@@ -737,194 +737,158 @@ function exceptions.$init_test_ns_exceptions_exceptions(registry: testing.TestCo
 function exceptions.bare_class_dispatch_first_fn() -> int {
     load_const 0
     call user.exceptions.s3b_fails_19
-    jump L4
+    jump L2
     load_var e
     is_type exceptions.NetworkError
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type exceptions.ParseError
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_const 2
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.bare_class_dispatch_second_fn() -> int {
     load_const 1
     call user.exceptions.s3b_fails_19
-    jump L4
+    jump L2
     load_var e
     is_type exceptions.NetworkError
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type exceptions.ParseError
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_const 2
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.bare_class_plus_wildcard_fn() -> int {
     load_const 0
     call user.exceptions.s3b_fails_21
-    jump L2
+    jump L1
     load_var e
     is_type exceptions.NetworkError
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 2
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.bare_class_plus_wildcard_wildcard_fires_fn() -> int {
     load_const 1
     call user.exceptions.s3b_fails_21
-    jump L2
+    jump L1
     load_var e
     is_type exceptions.NetworkError
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 2
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.bare_class_single_arm_fn() -> int {
     call user.exceptions.s3b_fails_18
-    jump L2
+    jump L1
     load_var e
     is_type exceptions.NetworkError
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.catch_division_by_zero_fn() -> int {
     call user.exceptions.s5_divides_1
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.catch_four_literal_arms_fn() -> int {
     load_const 1
     call user.exceptions.s15_fails_lits
-    jump L8
+    jump L4
     load_var e
     is_type "boom"
-    pop_jump_if_false L0
-    jump L7
-
-  L0:
+    pop_jump_if_true L3
     load_var e
     is_type "bang"
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
+    pop_jump_if_true L2
     load_var e
     is_type "crash"
-    pop_jump_if_false L2
-    jump L5
-
-  L2:
+    pop_jump_if_true L1
     load_var e
     is_type "other"
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 0
-    jump L8
+    jump L4
 
-  L4:
+  L0:
     load_const 40
-    jump L8
+    jump L4
 
-  L5:
+  L1:
     load_const 30
-    jump L8
+    jump L4
 
-  L6:
+  L2:
     load_const 20
-    jump L8
+    jump L4
 
-  L7:
+  L3:
     load_const 10
 
-  L8:
+  L4:
     return
 }
 
@@ -1094,100 +1058,85 @@ function exceptions.catch_four_user_classes_instanceof_chain_fn() -> int {
 
 function exceptions.catch_index_out_of_bounds_fn() -> int {
     call user.exceptions.s5_oob_1
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.IndexOutOfBounds
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.catch_integer_overflow_add_fn() -> int {
     call baml.Int.max_value
     call user.exceptions.s5_add_overflow
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.IntegerOverflow
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.catch_integer_overflow_mul_fn() -> int {
     call baml.Int.max_value
     call user.exceptions.s5_mul_overflow
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.IntegerOverflow
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.catch_integer_overflow_neg_fn() -> int {
     call baml.Int.min_value
     call user.exceptions.s5_neg_overflow
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.IntegerOverflow
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.catch_integer_overflow_sub_fn() -> int {
     call baml.Int.min_value
     call user.exceptions.s5_sub_overflow
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.IntegerOverflow
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
@@ -1238,205 +1187,169 @@ function exceptions.catch_literal_int_match_fn() -> int {
 
 function exceptions.catch_literal_string_match_fn() -> int {
     call user.exceptions.s1_fails_1
-    jump L2
+    jump L1
     load_var e
     is_type "boom"
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 2
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.catch_literal_string_no_match_falls_to_wildcard_fn() -> int {
     call user.exceptions.s1_fails_2
-    jump L2
+    jump L1
     load_var e
     is_type "boom"
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 2
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.catch_map_key_not_found_fn() -> int {
     call user.exceptions.s5_bad_1
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.MapKeyNotFound
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.catch_mixed_literal_and_typed_no_switch_fn() -> int {
     load_const 0
     call user.exceptions.s16_fails_lit_typed
-    jump L4
+    jump L2
     load_var e
     is_type "boom"
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type exceptions.AppError2
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 3
-    jump L4
+    jump L2
 
-  L2:
+  L0:
     load_const 2
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.catch_mixed_named_and_anonymous_bindings_fn() -> string {
     call user.exceptions.s15_fails_mixed
-    jump L8
+    jump L4
     load_var e
     store_var _2
     load_var _2
     narrow_bind exceptions.NetErr, slot=2
-    pop_jump_if_false L0
-    jump L7
-
-  L0:
+    pop_jump_if_true L3
     load_var e
     store_var _3
     load_var _3
     narrow_bind exceptions.AuthErr, slot=3
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
+    pop_jump_if_true L2
     load_var e
     store_var _4
     load_var _4
     narrow_bind exceptions.NotFoundErr, slot=4
-    pop_jump_if_false L2
-    jump L5
-
-  L2:
+    pop_jump_if_true L1
     load_var e
     is_type exceptions.RateLimitErr
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const "unknown"
-    jump L8
+    jump L4
 
-  L4:
+  L0:
     load_const "rate limited"
-    jump L8
+    jump L4
 
-  L5:
+  L1:
     load_var _4
     load_field .path
-    jump L8
+    jump L4
 
-  L6:
+  L2:
     load_var _3
     load_field .reason
-    jump L8
+    jump L4
 
-  L7:
+  L3:
     load_var _2
     load_field .url
 
-  L8:
+  L4:
     return
 }
 
 function exceptions.catch_multiple_literals_dispatch_fn() -> int {
     load_const 1
     call user.exceptions.s1_fails_4
-    jump L4
+    jump L2
     load_var e
     is_type "alpha"
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type "beta"
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 3
-    jump L4
+    jump L2
 
-  L2:
+  L0:
     load_const 2
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.catch_negative_index_as_index_out_of_bounds_fn() -> int {
     call user.exceptions.s5_bad_2
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.IndexOutOfBounds
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
@@ -1444,910 +1357,736 @@ function exceptions.catch_negative_shift_fn() -> int {
     load_const 1
     load_const -1
     call user.exceptions.s5_shl
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.NegativeBitShift
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.catch_three_type_arms_bool_throw_fn() -> int {
     call user.exceptions.s15_fails_opt_3
-    jump L6
+    jump L3
     load_var e
     is_type string
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var e
     is_type int
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var e
     is_type bool
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 0
-    jump L6
+    jump L3
 
-  L3:
+  L0:
     load_const 3
-    jump L6
+    jump L3
 
-  L4:
+  L1:
     load_const 2
-    jump L6
+    jump L3
 
-  L5:
+  L2:
     load_const 1
 
-  L6:
+  L3:
     return
 }
 
 function exceptions.catch_three_user_classes_plus_wildcard_fn() -> int {
     load_const 2
     call user.exceptions.s3_api_1
-    jump L6
+    jump L3
     load_var e
     is_type exceptions.AuthError
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var e
     is_type exceptions.NotFound
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var e
     is_type exceptions.RateLimit
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 4
-    jump L6
+    jump L3
 
-  L3:
+  L0:
     load_const 3
-    jump L6
+    jump L3
 
-  L4:
+  L1:
     load_const 2
-    jump L6
+    jump L3
 
-  L5:
+  L2:
     load_const 1
 
-  L6:
+  L3:
     return
 }
 
 function exceptions.catch_two_typed_arms_sequential_chain_fn() -> int {
     load_const 1
     call user.exceptions.s16_fails_chain
-    jump L4
+    jump L2
     load_var e
     is_type exceptions.NetworkError3
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type exceptions.ParseError3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_const 2
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.catch_two_user_classes_dispatch_first_fn() -> int {
     load_const 0
     call user.exceptions.s3_fails_13
-    jump L4
+    jump L2
     load_var e
     is_type exceptions.NetworkError
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type exceptions.ParseError
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_const 2
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.catch_two_user_classes_dispatch_second_fn() -> int {
     load_const 1
     call user.exceptions.s3_fails_13
-    jump L4
+    jump L2
     load_var e
     is_type exceptions.NetworkError
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type exceptions.ParseError
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_const 2
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.catch_user_class_plus_wildcard_fn() -> int {
     load_const 1
     call user.exceptions.s3_fails_15
-    jump L2
+    jump L1
     load_var e
     is_type exceptions.NetworkError
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 2
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.catch_user_class_single_arm_fn() -> int {
     call user.exceptions.s3_fails_12
-    jump L2
+    jump L1
     load_var e
     is_type exceptions.NetworkError
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.catch_without_stack_trace_still_works_fn() -> string {
     call user.exceptions.s17_inner_st
-    jump L2
+    jump L1
     load_var e
     is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var e
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.four_arms_division_by_zero_fires_fn() -> int {
     load_const 0
     call user.exceptions.s10_four_arms_risky
-    jump L6
+    jump L3
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var e
     is_type baml.panics.IndexOutOfBounds
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 4
-    jump L6
+    jump L3
 
-  L3:
+  L0:
     load_const 3
-    jump L6
+    jump L3
 
-  L4:
+  L1:
     load_const 2
-    jump L6
+    jump L3
 
-  L5:
+  L2:
     load_const 1
 
-  L6:
+  L3:
     return
 }
 
 function exceptions.four_arms_index_out_of_bounds_fires_fn() -> int {
     load_const 1
     call user.exceptions.s10_four_arms_risky
-    jump L6
+    jump L3
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var e
     is_type baml.panics.IndexOutOfBounds
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 4
-    jump L6
+    jump L3
 
-  L3:
+  L0:
     load_const 3
-    jump L6
+    jump L3
 
-  L4:
+  L1:
     load_const 2
-    jump L6
+    jump L3
 
-  L5:
+  L2:
     load_const 1
 
-  L6:
+  L3:
     return
 }
 
 function exceptions.four_arms_no_error_fn() -> int {
     load_const 4
     call user.exceptions.s10_four_arms_no_error_risky
-    jump L6
+    jump L3
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var e
     is_type baml.panics.IndexOutOfBounds
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 4
-    jump L6
+    jump L3
 
-  L3:
+  L0:
     load_const 3
-    jump L6
+    jump L3
 
-  L4:
+  L1:
     load_const 2
-    jump L6
+    jump L3
 
-  L5:
+  L2:
     load_const 1
 
-  L6:
+  L3:
     return
 }
 
 function exceptions.four_arms_user_class_fires_fn() -> int {
     load_const 2
     call user.exceptions.s10_four_arms_risky
-    jump L6
+    jump L3
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var e
     is_type baml.panics.IndexOutOfBounds
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 4
-    jump L6
+    jump L3
 
-  L3:
+  L0:
     load_const 3
-    jump L6
+    jump L3
 
-  L4:
+  L1:
     load_const 2
-    jump L6
+    jump L3
 
-  L5:
+  L2:
     load_const 1
 
-  L6:
+  L3:
     return
 }
 
 function exceptions.four_arms_wildcard_fires_fn() -> int {
     load_const 3
     call user.exceptions.s10_four_arms_risky
-    jump L6
+    jump L3
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var e
     is_type baml.panics.IndexOutOfBounds
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 4
-    jump L6
+    jump L3
 
-  L3:
+  L0:
     load_const 3
-    jump L6
+    jump L3
 
-  L4:
+  L1:
     load_const 2
-    jump L6
+    jump L3
 
-  L5:
+  L2:
     load_const 1
 
-  L6:
+  L3:
     return
 }
 
 function exceptions.mixed_union_alias_plus_wildcard_error_fires_fn() -> int {
     load_const 0
     call user.exceptions.s9_risky_14
-    jump L3
+    jump L1
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 99
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_const 1
 
-  L3:
+  L1:
     return
 }
 
 function exceptions.mixed_union_alias_plus_wildcard_handles_both_domains_fn() -> int {
     load_const 1
     call user.exceptions.s9_risky_13
-    jump L3
+    jump L1
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 99
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_const 1
 
-  L3:
+  L1:
     return
 }
 
 function exceptions.mixed_union_arm_plus_wildcard_fallback_error_fires_fn() -> int {
     load_const 2
     call user.exceptions.s9_risky_10
-    jump L3
+    jump L1
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 99
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_const 1
 
-  L3:
+  L1:
     return
 }
 
 function exceptions.mixed_union_arm_plus_wildcard_panic_fires_fn() -> int {
     load_const 1
     call user.exceptions.s9_risky_9
-    jump L3
+    jump L1
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 99
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_const 1
 
-  L3:
+  L1:
     return
 }
 
 function exceptions.mixed_union_arm_plus_wildcard_user_error_fires_fn() -> int {
     load_const 0
     call user.exceptions.s9_risky_10
-    jump L3
+    jump L1
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 99
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_const 1
 
-  L3:
+  L1:
     return
 }
 
 function exceptions.mixed_union_no_wildcard_error_fires_fn() -> int {
     load_const 0
     call user.exceptions.s9b_risky_15
-    jump L3
+    jump L1
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_const 1
 
-  L3:
+  L1:
     return
 }
 
 function exceptions.mixed_union_no_wildcard_panic_fires_fn() -> int {
     load_const 1
     call user.exceptions.s9b_risky_15
-    jump L3
+    jump L1
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_const 1
 
-  L3:
+  L1:
     return
 }
 
 function exceptions.named_binding_int_access_value_fn() -> int {
     load_const 1
     call user.exceptions.s2b_fails_11
-    jump L4
+    jump L2
     load_var e
     is_type string
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     store_var _3
     load_var _3
     narrow_bind int, slot=2
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_var _3
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const -1
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.named_binding_string_access_value_fn() -> string {
     load_const 0
     call user.exceptions.s2b_fails_10
-    jump L4
+    jump L2
     load_var e
     store_var _2
     load_var _2
     narrow_bind string, slot=2
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type int
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_const "was int"
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_var _2
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.named_class_binding_access_field_fn() -> string {
     call user.exceptions.s3a_fails_16
-    jump L2
+    jump L1
     load_var e
     store_var _2
     load_var _2
     narrow_bind exceptions.NetworkError, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var _2
     load_field .url
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.named_class_binding_dispatch_access_fields_fn() -> string {
     load_const 1
     call user.exceptions.s3a_fails_17
-    jump L4
+    jump L2
     load_var e
     store_var _2
     load_var _2
     narrow_bind exceptions.NetworkError, slot=2
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     store_var _3
     load_var _3
     narrow_bind exceptions.ParseError, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_var _3
     load_field .message
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_var _2
     load_field .url
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.named_panic_binding_division_by_zero_field_fn() -> int | bigint {
     call user.exceptions.s5b_divides_2
-    jump L2
+    jump L1
     load_var e
     store_var _2
     load_var _2
     narrow_bind baml.panics.DivisionByZero, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var _2
     load_field .dividend
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.named_panic_binding_index_out_of_bounds_fields_fn() -> int {
     call user.exceptions.s5b_oob_2
-    jump L2
+    jump L1
     load_var e
     store_var _2
     load_var _2
     narrow_bind baml.panics.IndexOutOfBounds, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var _2
     load_field .index
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.named_panic_binding_index_out_of_bounds_length_fn() -> int {
     call user.exceptions.s5b_oob_2
-    jump L2
+    jump L1
     load_var e
     store_var _2
     load_var _2
     narrow_bind baml.panics.IndexOutOfBounds, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var _2
     load_field .length
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.named_panic_binding_integer_overflow_message_fn() -> string {
     call baml.Int.max_value
     call user.exceptions.s5b_overflow_to_string
-    jump L2
+    jump L1
     load_var e
     store_var _3
     load_var _3
     narrow_bind baml.panics.IntegerOverflow, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var _3
     load_field .message
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.named_panic_binding_map_key_not_found_field_fn() -> string {
     call user.exceptions.s5b_bad_3
-    jump L2
+    jump L1
     load_var e
     store_var _2
     load_var _2
     narrow_bind baml.panics.MapKeyNotFound, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var _2
     load_field .key
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.named_wrapper_value_catches_callback_throw_fn() -> string {
     load_const user.exceptions.s17_risky_cb
     call user.exceptions.s17_forward_cb
-    jump L2
+    jump L1
     load_var e
     is_type "boom"
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const "other"
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const "caught"
 
-  L2:
+  L1:
     return
 }
 
@@ -2415,150 +2154,123 @@ function exceptions.panic_alias_plus_wildcard_dispatch_fn() -> int {
 function exceptions.panic_arm_plus_wildcard_no_error_fn() -> int {
     load_const 5
     call user.exceptions.s7_risky_5
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const -2
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.panic_arm_plus_wildcard_panic_fires_fn() -> int {
     load_const 0
     call user.exceptions.s7_risky_3
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 2
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.panic_arm_plus_wildcard_user_error_fires_fn() -> int {
     load_const 999
     call user.exceptions.s7_risky_3
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 2
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.panic_union_plus_wildcard_division_fires_fn() -> int {
     load_const 0
     call user.exceptions.s9c_risky_19
-    jump L3
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.IndexOutOfBounds
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 99
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_const 1
 
-  L3:
+  L1:
     return
 }
 
 function exceptions.panic_union_plus_wildcard_error_falls_to_wildcard_fn() -> int {
     load_const 1
     call user.exceptions.s9c_risky_21
-    jump L3
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.IndexOutOfBounds
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 99
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_const 1
 
-  L3:
+  L1:
     return
 }
 
 function exceptions.panic_union_plus_wildcard_index_fires_fn() -> int {
     load_const 1
     call user.exceptions.s9c_risky_19
-    jump L3
+    jump L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.IndexOutOfBounds
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 99
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_const 1
 
-  L3:
+  L1:
     return
 }
 
@@ -2582,51 +2294,39 @@ function exceptions.s10_four_arms_no_error_risky(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L7
-
-  L0:
+    pop_jump_if_true L3
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
+    pop_jump_if_true L2
     load_var mode
     load_const 2
     cmp_int_op ==
-    pop_jump_if_false L2
-    jump L5
-
-  L2:
+    pop_jump_if_true L1
     load_var mode
     load_const 3
     cmp_int_op ==
-    pop_jump_if_false L3
+    pop_jump_if_true L0
+    load_const 99
     jump L4
 
-  L3:
-    load_const 99
-    jump L8
-
-  L4:
+  L0:
     load_const "unknown"
     throw
 
-  L5:
+  L1:
     load_const 404
     init_instance user.exceptions.AppError .code
     throw
 
-  L6:
+  L2:
     call user.exceptions.s10_do_oob_1
-    jump L8
+    jump L4
 
-  L7:
+  L3:
     call user.exceptions.s10_do_div_4
 
-  L8:
+  L4:
     return
 }
 
@@ -2634,40 +2334,31 @@ function exceptions.s10_four_arms_risky(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var mode
     load_const 2
     cmp_int_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_const "unknown"
     throw
 
-  L3:
+  L0:
     load_const 404
     init_instance user.exceptions.AppError .code
     throw
 
-  L4:
+  L1:
     call user.exceptions.s10_do_oob_1
-    jump L6
+    jump L3
 
-  L5:
+  L2:
     call user.exceptions.s10_do_div_4
 
-  L6:
+  L3:
     return
 }
 
@@ -2705,16 +2396,13 @@ function exceptions.s12_risky_22(x: int) -> int {
     load_var x
     load_const 100
     cmp_int_op >
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 1
     load_var x
     div_int
     return
 
-  L1:
+  L0:
     load_const "too big"
     throw
 }
@@ -2760,21 +2448,14 @@ function exceptions.s13_middle_1() -> int {
 function exceptions.s13_middle_2() -> int {
     call user.exceptions.s13_divides_3
     store_var x
-    jump L2
+    jump L0
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
-    load_const -1
-    store_var x
-
-  L2:
+  L0:
     load_const "recovered but failing"
     throw
 }
@@ -2806,50 +2487,38 @@ function exceptions.s15_api_opt(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L7
-
-  L0:
+    pop_jump_if_true L3
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
+    pop_jump_if_true L2
     load_var mode
     load_const 2
     cmp_int_op ==
-    pop_jump_if_false L2
-    jump L5
-
-  L2:
+    pop_jump_if_true L1
     load_var mode
     load_const 3
     cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L0
     load_const "unknown"
     throw
 
-  L4:
+  L0:
     load_const 5000
     init_instance user.exceptions.Timeout .ms
     throw
 
-  L5:
+  L1:
     load_const 30
     init_instance user.exceptions.RateLimit .retryAfter
     throw
 
-  L6:
+  L2:
     load_const "/users"
     init_instance user.exceptions.NotFound .path
     throw
 
-  L7:
+  L3:
     load_const "expired"
     init_instance user.exceptions.AuthError .reason
     throw
@@ -2859,36 +2528,27 @@ function exceptions.s15_fails_lits(x: int) -> int {
     load_var x
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var x
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var x
     load_const 2
     cmp_int_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_const "other"
     throw
 
-  L3:
+  L0:
     load_const "crash"
     throw
 
-  L4:
+  L1:
     load_const "bang"
     throw
 
-  L5:
+  L2:
     load_const "boom"
     throw
 }
@@ -2925,15 +2585,12 @@ function exceptions.s16_fails_chain(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "bad"
     init_instance user.exceptions.ParseError3 .msg
     throw
 
-  L1:
+  L0:
     load_const "http://x"
     init_instance user.exceptions.NetworkError3 .url
     throw
@@ -2943,15 +2600,12 @@ function exceptions.s16_fails_lit_typed(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 404
     init_instance user.exceptions.AppError2 .code
     throw
 
-  L1:
+  L0:
     load_const "boom"
     throw
 }
@@ -2960,39 +2614,30 @@ function exceptions.s16_risky_jump(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var mode
     load_const 2
     cmp_int_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_const 4
     init_instance user.exceptions.ErrD .x
     throw
 
-  L3:
+  L0:
     load_const 3
     init_instance user.exceptions.ErrC .x
     throw
 
-  L4:
+  L1:
     load_const 2
     init_instance user.exceptions.ErrB .x
     throw
 
-  L5:
+  L2:
     load_const 1
     init_instance user.exceptions.ErrA .x
     throw
@@ -3002,50 +2647,38 @@ function exceptions.s16_risky_jump2(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L7
-
-  L0:
+    pop_jump_if_true L3
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
+    pop_jump_if_true L2
     load_var mode
     load_const 2
     cmp_int_op ==
-    pop_jump_if_false L2
-    jump L5
-
-  L2:
+    pop_jump_if_true L1
     load_var mode
     load_const 3
     cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L0
     load_const "unknown"
     throw
 
-  L4:
+  L0:
     load_const 4
     init_instance user.exceptions.ErrD .x
     throw
 
-  L5:
+  L1:
     load_const 3
     init_instance user.exceptions.ErrC .x
     throw
 
-  L6:
+  L2:
     load_const 2
     init_instance user.exceptions.ErrB .x
     throw
 
-  L7:
+  L3:
     load_const 1
     init_instance user.exceptions.ErrA .x
     throw
@@ -3099,25 +2732,19 @@ function exceptions.s1_fails_4(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_const "gamma"
     throw
 
-  L2:
+  L0:
     load_const "beta"
     throw
 
-  L3:
+  L1:
     load_const "alpha"
     throw
 }
@@ -3129,14 +2756,11 @@ function exceptions.s20_defer_guard_throw_fn(n: int) -> string {
     load_var n
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L6
-
-  L0:
+    pop_jump_if_true L4
     load_var n
     call user.exceptions.s20_may_throw
     store_var r
-    jump L1
+    jump L0
     load_type string
     load_var log
     load_const "deferred"
@@ -3148,36 +2772,33 @@ function exceptions.s20_defer_guard_throw_fn(n: int) -> string {
     throw_if_panic
     load_const "caught"
     store_var r
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_type string
     load_var log
     load_const "deferred"
     call baml.Array.push
     pop 1
 
-  L2:
+  L1:
     load_var log
     container_len
     store_var _14
     load_var _14
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_const "defer-did-not-run"
-    jump L5
+    jump L3
 
-  L4:
+  L2:
     load_var r
 
-  L5:
+  L3:
     return
 
-  L6:
+  L4:
     load_const "guard"
     init_instance baml.errors.InvalidArgument .message
     throw
@@ -3187,27 +2808,24 @@ function exceptions.s20_div_panic_beside_call_fn(n: int) -> int {
     load_var n
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L1
     load_var n
     call user.exceptions.s20_may_throw
     pop 1
-    jump L1
+    jump L0
     load_const -1
-    jump L3
+    jump L2
+
+  L0:
+    load_const 7
+    jump L2
 
   L1:
-    load_const 7
-    jump L3
-
-  L2:
     load_const 100
     load_var n
     div_int
 
-  L3:
+  L2:
     return
 }
 
@@ -3215,21 +2833,18 @@ function exceptions.s20_guard_throw_plus_call_fn(n: int) -> string {
     load_var n
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L1
     load_var n
     call user.exceptions.s20_may_throw
-    jump L1
+    jump L0
     load_var e
     throw_if_panic
     load_const "caught"
 
-  L1:
+  L0:
     return
 
-  L2:
+  L1:
     load_const "guard"
     init_instance baml.errors.InvalidArgument .message
     throw
@@ -3239,41 +2854,32 @@ function exceptions.s20_guard_throw_typed_catch_fn(n: int) -> string {
     load_var n
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L6
-
-  L0:
+    pop_jump_if_true L3
     load_var n
     call user.exceptions.s20_may_throw
-    jump L5
+    jump L2
     load_var e
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var e
     is_type baml.errors.Io
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const "other"
-    jump L5
+    jump L2
 
-  L3:
+  L0:
     load_const "io-caught"
-    jump L5
+    jump L2
 
-  L4:
+  L1:
     load_const "guard-caught"
 
-  L5:
+  L2:
     return
 
-  L6:
+  L3:
     load_const "guard"
     init_instance baml.errors.InvalidArgument .message
     throw
@@ -3283,22 +2889,19 @@ function exceptions.s20_index_panic_beside_call_fn(n: int) -> int {
     load_var n
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L1
     load_var n
     call user.exceptions.s20_may_throw
     pop 1
-    jump L1
+    jump L0
     load_const -1
-    jump L3
+    jump L2
+
+  L0:
+    load_const 7
+    jump L2
 
   L1:
-    load_const 7
-    jump L3
-
-  L2:
     load_const 1
     load_type int
     alloc_array 1
@@ -3307,7 +2910,7 @@ function exceptions.s20_index_panic_beside_call_fn(n: int) -> int {
     add_int
     load_array_element
 
-  L3:
+  L2:
     return
 }
 
@@ -3315,14 +2918,11 @@ function exceptions.s20_may_throw(n: int) -> string {
     load_var n
     load_const 42
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "ok"
     return
 
-  L1:
+  L0:
     load_const "io"
     init_instance baml.errors.Io .message
     throw
@@ -3342,14 +2942,11 @@ function exceptions.s2_fails_7(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 42
     throw
 
-  L1:
+  L0:
     load_const "boom"
     throw
 }
@@ -3358,14 +2955,11 @@ function exceptions.s2_fails_9(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 42
     throw
 
-  L1:
+  L0:
     load_const "boom"
     throw
 }
@@ -3374,14 +2968,11 @@ function exceptions.s2b_fails_10(mode: int) -> string {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 42
     throw
 
-  L1:
+  L0:
     load_const "boom"
     throw
 }
@@ -3390,14 +2981,11 @@ function exceptions.s2b_fails_11(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 42
     throw
 
-  L1:
+  L0:
     load_const "boom"
     throw
 }
@@ -3406,38 +2994,29 @@ function exceptions.s3_api_1(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var mode
     load_const 2
     cmp_int_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_const "unknown"
     throw
 
-  L3:
+  L0:
     load_const 30
     init_instance user.exceptions.RateLimit .retryAfter
     throw
 
-  L4:
+  L1:
     load_const "/users"
     init_instance user.exceptions.NotFound .path
     throw
 
-  L5:
+  L2:
     load_const "expired"
     init_instance user.exceptions.AuthError .reason
     throw
@@ -3453,15 +3032,12 @@ function exceptions.s3_fails_13(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "bad json"
     init_instance user.exceptions.ParseError .message
     throw
 
-  L1:
+  L0:
     load_const "http://x"
     init_instance user.exceptions.NetworkError .url
     throw
@@ -3471,14 +3047,11 @@ function exceptions.s3_fails_15(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "plain string error"
     throw
 
-  L1:
+  L0:
     load_const "http://x"
     init_instance user.exceptions.NetworkError .url
     throw
@@ -3494,15 +3067,12 @@ function exceptions.s3a_fails_17(mode: int) -> string {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "bad json"
     init_instance user.exceptions.ParseError .message
     throw
 
-  L1:
+  L0:
     load_const "http://x"
     init_instance user.exceptions.NetworkError .url
     throw
@@ -3518,15 +3088,12 @@ function exceptions.s3b_fails_19(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "bad"
     init_instance user.exceptions.ParseError .message
     throw
 
-  L1:
+  L0:
     load_const "http://x"
     init_instance user.exceptions.NetworkError .url
     throw
@@ -3536,14 +3103,11 @@ function exceptions.s3b_fails_21(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "plain string"
     throw
 
-  L1:
+  L0:
     load_const "http://x"
     init_instance user.exceptions.NetworkError .url
     throw
@@ -3656,17 +3220,14 @@ function exceptions.s5b_overflow_to_string(x: int) -> string {
     add_int
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "non-positive"
     jump L1
 
   L0:
-    load_const "non-positive"
-    jump L2
-
-  L1:
     load_const "positive"
 
-  L2:
+  L1:
     return
 }
 
@@ -3674,16 +3235,13 @@ function exceptions.s6_risky_1(x: int) -> int {
     load_var x
     load_const 100
     cmp_int_op >
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 1
     load_var x
     div_int
     return
 
-  L1:
+  L0:
     load_const "too big"
     throw
 }
@@ -3692,10 +3250,7 @@ function exceptions.s6_risky_2(x: int) -> int {
     load_var x
     load_const 100
     cmp_int_op >
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 1
     load_const 2
     load_const 3
@@ -3705,7 +3260,7 @@ function exceptions.s6_risky_2(x: int) -> int {
     load_array_element
     return
 
-  L1:
+  L0:
     load_const "too big"
     throw
 }
@@ -3714,16 +3269,13 @@ function exceptions.s7_risky_3(x: int) -> int {
     load_var x
     load_const 100
     cmp_int_op >
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 1
     load_var x
     div_int
     return
 
-  L1:
+  L0:
     load_const "too big"
     throw
 }
@@ -3732,16 +3284,13 @@ function exceptions.s7_risky_5(x: int) -> int {
     load_var x
     load_const 100
     cmp_int_op >
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 1000
     load_var x
     div_int
     return
 
-  L1:
+  L0:
     load_const "too big"
     throw
 }
@@ -3757,20 +3306,21 @@ function exceptions.s8_risky_6(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L1
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
+    pop_jump_if_false L0
+    load_const 1
+    load_const 0
+    div_int
+    pop 1
 
-  L1:
+  L0:
     load_const "fallback"
     throw
 
-  L2:
+  L1:
     load_const 500
     init_instance user.exceptions.AppError .code
     throw
@@ -3780,25 +3330,19 @@ function exceptions.s8_risky_7(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_const "fallback"
     throw
 
-  L2:
+  L0:
     call user.exceptions.s8_do_div_1
     return
 
-  L3:
+  L1:
     load_const 500
     init_instance user.exceptions.AppError .code
     throw
@@ -3815,20 +3359,21 @@ function exceptions.s9_risky_10(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L1
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
+    pop_jump_if_false L0
+    load_const 1
+    load_const 0
+    div_int
+    pop 1
 
-  L1:
+  L0:
     load_const "fallback"
     throw
 
-  L2:
+  L1:
     load_const 7
     init_instance user.exceptions.AppError .code
     throw
@@ -3838,10 +3383,7 @@ function exceptions.s9_risky_12(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 1
     load_type int
     alloc_array 1
@@ -3849,7 +3391,7 @@ function exceptions.s9_risky_12(mode: int) -> int {
     load_array_element
     return
 
-  L1:
+  L0:
     load_const "fallback"
     throw
 }
@@ -3858,25 +3400,19 @@ function exceptions.s9_risky_13(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_const "fallback"
     throw
 
-  L2:
+  L0:
     call user.exceptions.s9_do_div_2
     return
 
-  L3:
+  L1:
     load_const 7
     init_instance user.exceptions.AppError .code
     throw
@@ -3886,16 +3422,13 @@ function exceptions.s9_risky_14(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 1
     load_const 0
     div_int
     return
 
-  L1:
+  L0:
     load_const 7
     init_instance user.exceptions.AppError .code
     throw
@@ -3905,42 +3438,33 @@ function exceptions.s9_risky_9(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L6
-
-  L0:
+    pop_jump_if_true L3
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var mode
     load_const 2
     cmp_int_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L0
     load_const 1
     load_type int
     alloc_array 1
     load_const 5
     load_array_element
-    jump L5
+    jump L2
 
-  L3:
+  L0:
     load_const "fallback"
     throw
 
-  L4:
+  L1:
     call user.exceptions.s9_do_div_2
 
-  L5:
+  L2:
     return
 
-  L6:
+  L3:
     load_const 7
     init_instance user.exceptions.AppError .code
     throw
@@ -3950,14 +3474,11 @@ function exceptions.s9b_risky_15(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     call user.exceptions.s9_do_div_2
     return
 
-  L1:
+  L0:
     load_const 7
     init_instance user.exceptions.AppError .code
     throw
@@ -3988,32 +3509,26 @@ function exceptions.s9c_risky_19(mode: int) -> int {
     load_var mode
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var mode
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_const "fallback"
     throw
 
-  L2:
+  L0:
     load_const 1
     load_type int
     alloc_array 1
     load_const 5
     load_array_element
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     call user.exceptions.s9c_do_div_3
 
-  L4:
+  L2:
     return
 }
 
@@ -4022,6 +3537,10 @@ function exceptions.s9c_risky_21(mode: int) -> int {
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
+    load_const 1
+    load_const 0
+    div_int
+    pop 1
 
   L0:
     load_const "fallback"
@@ -4055,215 +3574,176 @@ function exceptions.sequential_catches_both_recover_fn() -> int {
 function exceptions.typed_binding_dispatch_int_vs_string_fn() -> int {
     load_const 1
     call user.exceptions.s2_fails_7
-    jump L4
+    jump L2
     load_var e
     is_type string
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type int
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_const 2
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.typed_binding_dispatch_string_vs_int_fn() -> int {
     load_const 0
     call user.exceptions.s2_fails_7
-    jump L4
+    jump L2
     load_var e
     is_type string
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type int
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_const 2
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.typed_binding_int_fn() -> int {
     call user.exceptions.s2_fails_6
-    jump L2
+    jump L1
     load_var e
     is_type int
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.typed_binding_plus_wildcard_fn() -> int {
     load_const 1
     call user.exceptions.s2_fails_9
-    jump L2
+    jump L1
     load_var e
     is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 2
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.typed_binding_string_fn() -> int {
     call user.exceptions.s2_fails_5
-    jump L2
+    jump L1
     load_var e
     is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function exceptions.user_class_plus_panic_plus_wildcard_class_fires_fn() -> int {
     load_const 0
     call user.exceptions.s8_risky_6
-    jump L4
+    jump L2
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 3
-    jump L4
+    jump L2
 
-  L2:
+  L0:
     load_const 2
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.user_class_plus_panic_plus_wildcard_panic_fires_fn() -> int {
     load_const 1
     call user.exceptions.s8_risky_7
-    jump L4
+    jump L2
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 3
-    jump L4
+    jump L2
 
-  L2:
+  L0:
     load_const 2
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function exceptions.user_class_plus_panic_plus_wildcard_string_fires_fn() -> int {
     load_const 2
     call user.exceptions.s8_risky_7
-    jump L4
+    jump L2
     load_var e
     is_type exceptions.AppError
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const 3
-    jump L4
+    jump L2
 
-  L2:
+  L0:
     load_const 2
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const 1
 
-  L4:
+  L2:
     return
 }

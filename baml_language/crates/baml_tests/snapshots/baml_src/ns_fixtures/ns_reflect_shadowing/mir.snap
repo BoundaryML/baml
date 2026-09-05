@@ -175,13 +175,9 @@ fn user.fixtures.reflect_shadowing.unbound_user_method() -> string {
 fn user.fixtures.reflect_shadowing.local_shadows_package() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // reflect
-    let _2: int
 
     bb0: {
-        _1 = const 1_i64;
-        _2 = copy _1;
-        _0 = copy _2 + const 1_i64;
+        _0 = const 2_i64;
         goto -> bb1;
     }
 

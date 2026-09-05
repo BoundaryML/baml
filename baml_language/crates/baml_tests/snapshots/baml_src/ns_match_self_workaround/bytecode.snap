@@ -72,17 +72,6 @@ function match_self_workaround.$init_test_ns_match_self_workaround_match_self_wo
 function match_self_workaround.BoxG.is_own_instantiation(self: match_self_workaround.BoxG<#0>, other: unknown) -> bool {
     load_var other
     is_type match_self_workaround.BoxG<...>
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -91,34 +80,20 @@ function match_self_workaround.BoxG.same_box(self: match_self_workaround.BoxG<#0
     store_var _3
     load_var _3
     narrow_bind match_self_workaround.BoxG<...>, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_const "box"
 
-  L2:
+  L1:
     return
 }
 
 function match_self_workaround.Shape.is_shape(self: match_self_workaround.Shape, other: match_self_workaround.Shape | int) -> bool {
     load_var other
     is_type match_self_workaround.Shape
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -127,17 +102,14 @@ function match_self_workaround.Shape.same_kind(self: match_self_workaround.Shape
     store_var _3
     load_var _3
     narrow_bind match_self_workaround.Shape, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_const "shape"
 
-  L2:
+  L1:
     return
 }
 

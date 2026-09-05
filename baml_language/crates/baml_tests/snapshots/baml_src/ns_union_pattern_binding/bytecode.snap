@@ -56,27 +56,21 @@ function union_pattern_binding.upb_let_else_first_member() -> int {
     store_var _4
     load_var _4
     narrow_bind union_pattern_binding.WlA, slot=2
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var _3
     store_var _5
     load_var _5
     narrow_bind union_pattern_binding.WlB, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_const 0
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_var _3
     load_type union_pattern_binding.WlHasV
     virtual_load_field .v
 
-  L3:
+  L1:
     return
 }
 
@@ -87,27 +81,21 @@ function union_pattern_binding.upb_let_else_non_member() -> int {
     store_var _4
     load_var _4
     narrow_bind union_pattern_binding.WlA, slot=2
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var _3
     store_var _5
     load_var _5
     narrow_bind union_pattern_binding.WlB, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_const -1
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_var _3
     load_type union_pattern_binding.WlHasV
     virtual_load_field .v
 
-  L3:
+  L1:
     return
 }
 
@@ -119,27 +107,21 @@ function union_pattern_binding.upb_let_else_second_member() -> int {
     store_var _4
     load_var _4
     narrow_bind union_pattern_binding.WlA, slot=2
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var _3
     store_var _5
     load_var _5
     narrow_bind union_pattern_binding.WlB, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_const 0
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_var _3
     load_type union_pattern_binding.WlHasV
     virtual_load_field .v
 
-  L3:
+  L1:
     return
 }
 
@@ -151,27 +133,21 @@ function union_pattern_binding.upb_match_arm_first_member() -> int {
     store_var _3
     load_var _3
     narrow_bind union_pattern_binding.WlA, slot=2
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var _2
     store_var _4
     load_var _4
     narrow_bind union_pattern_binding.WlB, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_const 0
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_var _2
     load_type union_pattern_binding.WlHasV
     virtual_load_field .v
 
-  L3:
+  L1:
     return
 }
 
@@ -183,27 +159,21 @@ function union_pattern_binding.upb_match_arm_second_member() -> int {
     store_var _3
     load_var _3
     narrow_bind union_pattern_binding.WlA, slot=2
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var _2
     store_var _4
     load_var _4
     narrow_bind union_pattern_binding.WlB, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_const 0
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_var _2
     load_type union_pattern_binding.WlHasV
     virtual_load_field .v
 
-  L3:
+  L1:
     return
 }
 
@@ -213,17 +183,14 @@ function union_pattern_binding.upb_single_typed_let_else() -> int {
     store_var _3
     load_var _3
     narrow_bind union_pattern_binding.WlA, slot=1
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const 0
     jump L1
 
   L0:
-    load_const 0
-    jump L2
-
-  L1:
     load_var _3
     load_field .v
 
-  L2:
+  L1:
     return
 }

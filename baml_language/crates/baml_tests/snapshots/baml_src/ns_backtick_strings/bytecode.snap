@@ -583,24 +583,19 @@ function backtick_strings.bt_bangs(n: int) -> string {
     load_var n
     load_const 0
     cmp_int_op <=
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
+    load_const "!"
     load_var n
     load_const 1
     sub_int
     call user.backtick_strings.bt_bangs
-    store_var _3
-    load_const "!"
-    load_var _3
     bin_op +
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const ""
 
-  L2:
+  L1:
     return
 }
 
@@ -610,14 +605,10 @@ function backtick_strings.bt_blank_line_before_closer() -> string {
 }
 
 function backtick_strings.bt_block_body_tail() -> string {
-    load_type string
-    load_const "hi "
-    load_const "there"
-    bin_op +
-    call baml.String.from
-    store_var _2
     load_const "result: "
-    load_var _2
+    load_type string
+    load_const "hi there"
+    call baml.String.from
     bin_op +
     load_const "!"
     bin_op +
@@ -625,12 +616,10 @@ function backtick_strings.bt_block_body_tail() -> string {
 }
 
 function backtick_strings.bt_block_comment_interp() -> string {
+    load_const "hi "
     load_type string
     load_const "Ada"
     call baml.String.from
-    store_var _2
-    load_const "hi "
-    load_var _2
     bin_op +
     return
 }
@@ -665,12 +654,9 @@ function backtick_strings.bt_case_f() -> string {
     load_type string
     load_const "ab"
     call baml.String.from
-    store_var _3
     load_type string
     load_const "cd"
     call baml.String.from
-    store_var _6
-    load_var2 1 2
     bin_op +
     return
 }
@@ -685,23 +671,19 @@ function backtick_strings.bt_case_g() -> string {
 }
 
 function backtick_strings.bt_case_h() -> string {
+    load_const "!"
     load_type string
     load_const "hi"
     call baml.String.from
-    store_var _2
-    load_const "!"
-    load_var _2
     bin_op +
     return
 }
 
 function backtick_strings.bt_case_i() -> string {
+    load_const "X "
     load_type string
     load_const "Y"
     call baml.String.from
-    store_var _3
-    load_const "X "
-    load_var _3
     bin_op +
     load_const " Z"
     bin_op +
@@ -752,12 +734,10 @@ function backtick_strings.bt_case_m() -> string {
 }
 
 function backtick_strings.bt_case_n() -> string {
+    load_const "Hello "
     load_type string
     load_const "Ada"
     call baml.String.from
-    store_var _3
-    load_const "Hello "
-    load_var _3
     bin_op +
     call user.backtick_strings.bt_case_n_shout
     return
@@ -791,12 +771,10 @@ function backtick_strings.bt_case_p() -> string {
     load_const "hello"
     call baml.String.to_upper_case
     store_var r
+    load_const "upper: "
     load_type string
     load_var r
     call baml.String.from
-    store_var _2
-    load_const "upper: "
-    load_var _2
     bin_op +
     return
 }
@@ -821,14 +799,11 @@ function backtick_strings.bt_cstyle_for_basic() -> string {
     load_var i
     load_const 3
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     return
 
-  L2:
+  L1:
     load_var  __m3_for
     store_var _5
     load_type int
@@ -860,20 +835,17 @@ function backtick_strings.bt_cstyle_for_outer_local() -> string {
     load_var i
     load_const 4
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     return
 
-  L2:
+  L1:
     load_var  __m3_for
-    store_var _7
+    store_var _5
     load_type int
     load_var i
     call baml.String.from
-    store_var _9
+    store_var _7
     load_var2 3 4
     load_const ","
     bin_op +
@@ -896,14 +868,11 @@ function backtick_strings.bt_cstyle_for_step_two() -> string {
     load_var i
     load_const 6
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     return
 
-  L2:
+  L1:
     load_var  __m3_for
     store_var _5
     load_type int
@@ -951,10 +920,10 @@ function backtick_strings.bt_icf_main() -> string {
     load_const "hi"
     call user.backtick_strings.bt_icf_shout
     store_var _4
+    load_const "Loud: "
     load_type string
     load_var _4
     call baml.String.from
-    store_var _3
     load_const "bye"
     call user.backtick_strings.bt_icf_shout
     store_var _7
@@ -962,8 +931,6 @@ function backtick_strings.bt_icf_main() -> string {
     load_var _7
     call baml.String.from
     store_var _6
-    load_const "Loud: "
-    load_var _3
     bin_op +
     load_const " and "
     bin_op +
@@ -983,19 +950,16 @@ function backtick_strings.bt_inline_if_classify(x: int) -> string {
     load_var x
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "neg"
+    store_var _2
     jump L1
 
   L0:
-    load_const "neg"
-    store_var _2
-    jump L2
-
-  L1:
     load_const "pos"
     store_var _2
 
-  L2:
+  L1:
     load_type string
     load_var _2
     call baml.String.from
@@ -1005,11 +969,9 @@ function backtick_strings.bt_inline_if_classify(x: int) -> string {
 function backtick_strings.bt_inline_if_int_main() -> string {
     load_const 5
     call user.backtick_strings.bt_inline_if_int_pick
-    store_var _2
     load_const -1
     call user.backtick_strings.bt_inline_if_int_pick
     store_var _3
-    load_var _2
     load_const "/"
     bin_op +
     load_var _3
@@ -1021,19 +983,16 @@ function backtick_strings.bt_inline_if_int_pick(x: int) -> string {
     load_var x
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const 2
+    store_var _2
     jump L1
 
   L0:
-    load_const 2
-    store_var _2
-    jump L2
-
-  L1:
     load_const 1
     store_var _2
 
-  L2:
+  L1:
     load_type int
     load_var _2
     call baml.String.from
@@ -1043,11 +1002,9 @@ function backtick_strings.bt_inline_if_int_pick(x: int) -> string {
 function backtick_strings.bt_inline_if_main() -> string {
     load_const 5
     call user.backtick_strings.bt_inline_if_classify
-    store_var _2
     load_const -1
     call user.backtick_strings.bt_inline_if_classify
     store_var _3
-    load_var _2
     load_const "/"
     bin_op +
     load_var _3
@@ -1056,69 +1013,61 @@ function backtick_strings.bt_inline_if_main() -> string {
 }
 
 function backtick_strings.bt_interp_bool() -> string {
+    load_const "status: "
     load_type bool
     load_const true
     call baml.String.from
-    store_var _2
-    load_const "status: "
-    load_var _2
     bin_op +
     return
 }
 
 function backtick_strings.bt_interp_float() -> string {
+    load_const "pi ~ "
     load_type float
     load_const 3.14
     call baml.String.from
-    store_var _2
-    load_const "pi ~ "
-    load_var _2
     bin_op +
     return
 }
 
 function backtick_strings.bt_interp_int() -> string {
+    load_const "count: "
     load_type int
     load_const 42
     call baml.String.from
-    store_var _2
-    load_const "count: "
-    load_var _2
     bin_op +
     return
 }
 
 function backtick_strings.bt_interp_mixed() -> string {
+    load_const "n="
     load_type int
     load_const 7
     call baml.String.from
-    store_var _11
     load_type bool
     load_const false
     call baml.String.from
-    store_var _14
+    store_var _9
     load_type float
     load_const 1.5
     call baml.String.from
-    store_var _17
+    store_var _11
     load_type string
     load_const "test"
     call baml.String.from
-    store_var _20
-    load_const "n="
-    load_var _11
+    store_var _13
     bin_op +
     load_const ", ok="
     bin_op +
-    load_var _14
+    load_var _9
     bin_op +
     load_const ", r="
     bin_op +
-    load_var _17
+    load_var _11
     bin_op +
     load_const ", name="
     bin_op +
-    load_var _20
+    load_var _13
     bin_op +
     return
 }
@@ -1138,37 +1087,19 @@ function backtick_strings.bt_keeps_trailing_escaped_newline() -> string {
 }
 
 function backtick_strings.bt_let_bound_if_else() -> string {
-    load_const true
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "guest"
-    store_var r
-    jump L2
-
-  L1:
-    load_const "user"
-    store_var r
-
-  L2:
-    load_type string
-    load_var r
-    call baml.String.from
-    store_var _2
     load_const "welcome "
-    load_var _2
+    load_type string
+    load_const "user"
+    call baml.String.from
     bin_op +
     return
 }
 
 function backtick_strings.bt_line_comment_interp() -> string {
+    load_const "hi "
     load_type string
     load_const "Ada"
     call baml.String.from
-    store_var _2
-    load_const "hi "
-    load_var _2
     bin_op +
     return
 }
@@ -1183,22 +1114,17 @@ function backtick_strings.bt_loop_in_block() -> string {
     load_var i
     load_const 3
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
+    load_const "loop result: "
     load_type string
     load_var acc
     call baml.String.from
-    store_var _2
-    load_const "loop result: "
-    load_var _2
     bin_op +
     load_const "!"
     bin_op +
     return
 
-  L2:
+  L1:
     load_var acc
     load_const "x"
     bin_op +
@@ -1214,12 +1140,10 @@ function backtick_strings.bt_m3_block_tag_after_interp() -> string {
     load_const "Alice"
     load_const true
     call user.backtick_strings.bt_m3_block_tag_after_interp_greet
-    store_var _2
     load_const "Bob"
     load_const false
     call user.backtick_strings.bt_m3_block_tag_after_interp_greet
     store_var _3
-    load_var _2
     load_const "|"
     bin_op +
     load_var _3
@@ -1233,19 +1157,16 @@ function backtick_strings.bt_m3_block_tag_after_interp_greet(name: string, extra
     call baml.String.from
     store_var _4
     load_var extra
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const ""
+    store_var _6
     jump L1
 
   L0:
-    load_const ""
-    store_var _6
-    jump L2
-
-  L1:
     load_const "!"
     store_var _6
 
-  L2:
+  L1:
     load_const "Hi "
     load_var _4
     bin_op +
@@ -1264,37 +1185,34 @@ function backtick_strings.bt_m3_for_accumulator_no_capture() -> string {
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _5
+    store_var _4
 
   L0:
-    load_var _5
+    load_var _4
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _6
-    load_var _6
+    store_var _5
+    load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
-    store_var _10
+    store_var _9
     load_type string
-    load_var _6
+    load_var _5
     call baml.String.from
-    store_var _15
+    store_var _14
     load_type string
     load_const "OUTER"
     call baml.String.from
-    store_var _18
-    load_var _10
+    store_var _17
+    load_var _9
     load_const "<"
-    load_var _15
+    load_var _14
     bin_op +
     load_const ":"
     bin_op +
-    load_var _18
+    load_var _17
     bin_op +
     load_const ">"
     bin_op +
@@ -1302,7 +1220,7 @@ function backtick_strings.bt_m3_for_accumulator_no_capture() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_var  __m3_for
     return
 }
@@ -1328,10 +1246,7 @@ function backtick_strings.bt_m3_for_array_literal() -> string {
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     store_var _8
     load_type int
@@ -1345,7 +1260,7 @@ function backtick_strings.bt_m3_for_array_literal() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_var  __m3_for
     return
 }
@@ -1371,10 +1286,7 @@ function backtick_strings.bt_m3_for_basic() -> string {
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     store_var _9
     load_type string
@@ -1391,7 +1303,7 @@ function backtick_strings.bt_m3_for_basic() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_var  __m3_for
     return
 }
@@ -1417,10 +1329,7 @@ function backtick_strings.bt_m3_for_empty_body() -> string {
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _7
     store_var _x
     load_var  __m3_for
@@ -1429,7 +1338,7 @@ function backtick_strings.bt_m3_for_empty_body() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_const "["
     load_var  __m3_for
     bin_op +
@@ -1456,10 +1365,7 @@ function backtick_strings.bt_m3_for_empty_collection() -> string {
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     store_var _11
     load_type string
@@ -1476,7 +1382,7 @@ function backtick_strings.bt_m3_for_empty_collection() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_const "before|"
     load_var  __m3_for
     bin_op +
@@ -1510,14 +1416,11 @@ function backtick_strings.bt_m3_for_inside_if() -> string {
 
 function backtick_strings.bt_m3_for_inside_if_render(show: bool, xs: string[]) -> string {
     load_var show
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L0
+    load_const "hidden"
+    jump L3
 
   L0:
-    load_const "hidden"
-    jump L5
-
-  L1:
     load_const ""
     store_var  __m3_for
     load_var xs
@@ -1526,7 +1429,7 @@ function backtick_strings.bt_m3_for_inside_if_render(show: bool, xs: string[]) -
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
-  L2:
+  L1:
     load_var _4
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
@@ -1534,10 +1437,7 @@ function backtick_strings.bt_m3_for_inside_if_render(show: bool, xs: string[]) -
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var  __m3_for
     store_var _9
     load_type string
@@ -1552,12 +1452,12 @@ function backtick_strings.bt_m3_for_inside_if_render(show: bool, xs: string[]) -
     bin_op +
     bin_op +
     store_var  __m3_for
-    jump L2
+    jump L1
 
-  L4:
+  L2:
     load_var  __m3_for
 
-  L5:
+  L3:
     return
 }
 
@@ -1582,10 +1482,7 @@ function backtick_strings.bt_m3_for_interp_body() -> string {
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     store_var _9
     load_type int
@@ -1599,7 +1496,7 @@ function backtick_strings.bt_m3_for_interp_body() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_var  __m3_for
     return
 }
@@ -1614,26 +1511,23 @@ function backtick_strings.bt_m3_for_shadows_outer_let() -> string {
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _6
+    store_var _5
 
   L0:
-    load_var _6
+    load_var _5
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _7
-    load_var _7
+    store_var _6
+    load_var _6
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
-    store_var _11
+    store_var _10
     load_type string
-    load_var _7
+    load_var _6
     call baml.String.from
-    store_var _13
+    store_var _12
     load_var2 4 5
     load_const ","
     bin_op +
@@ -1641,7 +1535,7 @@ function backtick_strings.bt_m3_for_shadows_outer_let() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_var  __m3_for
     load_const "|"
     bin_op +
@@ -1670,10 +1564,7 @@ function backtick_strings.bt_m3_for_text_around() -> string {
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     store_var _11
     load_type string
@@ -1687,7 +1578,7 @@ function backtick_strings.bt_m3_for_text_around() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_const "header\n"
     load_var  __m3_for
     bin_op +
@@ -1699,11 +1590,9 @@ function backtick_strings.bt_m3_for_text_around() -> string {
 function backtick_strings.bt_m3_if_bare_cond() -> string {
     load_const true
     call user.backtick_strings.bt_m3_if_bare_cond_gate
-    store_var _2
     load_const false
     call user.backtick_strings.bt_m3_if_bare_cond_gate
     store_var _3
-    load_var _2
     load_const "|"
     bin_op +
     load_var _3
@@ -1713,17 +1602,14 @@ function backtick_strings.bt_m3_if_bare_cond() -> string {
 
 function backtick_strings.bt_m3_if_bare_cond_gate(enabled: bool) -> string {
     load_var enabled
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "off"
     jump L1
 
   L0:
-    load_const "off"
-    jump L2
-
-  L1:
     load_const "on"
 
-  L2:
+  L1:
     return
 }
 
@@ -1731,7 +1617,6 @@ function backtick_strings.bt_m3_if_complex_cond() -> string {
     load_const 1
     load_const 1
     call user.backtick_strings.bt_m3_if_complex_cond_f
-    store_var _4
     load_const -1
     load_const 0
     call user.backtick_strings.bt_m3_if_complex_cond_f
@@ -1740,7 +1625,6 @@ function backtick_strings.bt_m3_if_complex_cond() -> string {
     load_const 0
     call user.backtick_strings.bt_m3_if_complex_cond_f
     store_var _6
-    load_var _4
     load_const "|"
     bin_op +
     load_var _5
@@ -1756,45 +1640,32 @@ function backtick_strings.bt_m3_if_complex_cond_f(a: int, b: int) -> string {
     load_var a
     load_const 0
     cmp_int_op >
-    jump_if_false L0
-    pop 1
+    pop_jump_if_false L0
     load_var b
     load_const 0
     cmp_int_op >
+    pop_jump_if_true L2
 
   L0:
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
     load_var a
     load_const 0
     cmp_int_op <
-    jump_if_false L2
-    jump L3
-
-  L2:
-    pop 1
+    pop_jump_if_true L1
     load_var b
     load_const 0
     cmp_int_op <
-
-  L3:
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L1
     load_const "zero"
-    jump L7
+    jump L3
 
-  L5:
+  L1:
     load_const "neg"
-    jump L7
+    jump L3
 
-  L6:
+  L2:
     load_const "pos"
 
-  L7:
+  L3:
     return
 }
 
@@ -1823,10 +1694,7 @@ function backtick_strings.bt_m3_if_else_branch_for() -> string {
 
 function backtick_strings.bt_m3_if_else_branch_for_render(empty: bool, xs: string[]) -> string {
     load_var empty
-    pop_jump_if_false L0
-    jump L4
-
-  L0:
+    pop_jump_if_true L2
     load_const ""
     store_var  __m3_for
     load_var xs
@@ -1835,7 +1703,7 @@ function backtick_strings.bt_m3_if_else_branch_for_render(empty: bool, xs: strin
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
-  L1:
+  L0:
     load_var _4
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
@@ -1843,10 +1711,7 @@ function backtick_strings.bt_m3_if_else_branch_for_render(empty: bool, xs: strin
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var  __m3_for
     store_var _9
     load_type string
@@ -1858,30 +1723,28 @@ function backtick_strings.bt_m3_if_else_branch_for_render(empty: bool, xs: strin
     bin_op +
     bin_op +
     store_var  __m3_for
-    jump L1
+    jump L0
 
-  L3:
+  L1:
     load_var  __m3_for
-    jump L5
+    jump L3
 
-  L4:
+  L2:
     load_const "<none>"
 
-  L5:
+  L3:
     return
 }
 
 function backtick_strings.bt_m3_if_else_chain() -> string {
     load_const 5
     call user.backtick_strings.bt_m3_if_else_chain_classify
-    store_var _4
     load_const -3
     call user.backtick_strings.bt_m3_if_else_chain_classify
     store_var _5
     load_const 0
     call user.backtick_strings.bt_m3_if_else_chain_classify
     store_var _6
-    load_var _4
     load_const " "
     bin_op +
     load_var _5
@@ -1897,98 +1760,41 @@ function backtick_strings.bt_m3_if_else_chain_classify(n: int) -> string {
     load_var n
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var n
     load_const 0
     cmp_int_op <
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    load_const "zero"
+    jump L2
+
+  L0:
+    load_const "neg"
     jump L2
 
   L1:
-    load_const "zero"
-    jump L4
-
-  L2:
-    load_const "neg"
-    jump L4
-
-  L3:
     load_const "pos"
 
-  L4:
+  L2:
     return
 }
 
 function backtick_strings.bt_m3_if_empty_true_body() -> string {
-    load_const false
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const ""
-    store_var _3
-    jump L2
-
-  L1:
-    load_const "should_not_appear"
-    store_var _3
-
-  L2:
-    load_const "[|"
-    load_var _3
-    bin_op +
-    load_const "]"
-    bin_op +
+    load_const "[|]"
     return
 }
 
 function backtick_strings.bt_m3_if_false() -> string {
-    load_const false
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const ""
-    jump L2
-
-  L1:
-    load_const "welcome"
-
-  L2:
     load_const "!"
-    bin_op +
     return
 }
 
 function backtick_strings.bt_m3_if_true() -> string {
-    load_const true
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const ""
-    jump L2
-
-  L1:
     load_const "welcome"
-
-  L2:
     return
 }
 
 function backtick_strings.bt_m3_nested_for_in_if() -> string {
-    load_const true
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const ""
-    jump L5
-
-  L1:
     load_const ""
     store_var  __m3_for
     load_const "a"
@@ -1998,40 +1804,35 @@ function backtick_strings.bt_m3_nested_for_in_if() -> string {
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _6
+    store_var _4
 
-  L2:
-    load_var _6
+  L0:
+    load_var _4
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _7
-    load_var _7
+    store_var _5
+    load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L1
     load_var  __m3_for
-    store_var _11
+    store_var _9
     load_type string
-    load_var _7
+    load_var _5
     call baml.String.from
-    store_var _14
-    load_var _11
+    store_var _12
+    load_var _9
     load_const "- "
-    load_var _14
+    load_var _12
     bin_op +
     load_const "\n"
     bin_op +
     bin_op +
     store_var  __m3_for
-    jump L2
+    jump L0
 
-  L4:
+  L1:
     load_var  __m3_for
-
-  L5:
     return
 }
 
@@ -2075,40 +1876,30 @@ function backtick_strings.bt_m3_nested_if_in_for_go(flag: bool, xs: string[]) ->
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L5
-
-  L1:
+    pop_jump_if_true L3
     load_var _5
     store_var x
     load_var  __m3_for
     store_var _9
     load_var flag
-    pop_jump_if_false L2
-    jump L3
+    pop_jump_if_true L1
+    load_const "-"
+    load_type string
+    load_var x
+    call baml.String.from
+    bin_op +
+    store_var _11
+    jump L2
+
+  L1:
+    load_const "+"
+    load_type string
+    load_var x
+    call baml.String.from
+    bin_op +
+    store_var _11
 
   L2:
-    load_type string
-    load_var x
-    call baml.String.from
-    store_var _15
-    load_const "-"
-    load_var _15
-    bin_op +
-    store_var _11
-    jump L4
-
-  L3:
-    load_type string
-    load_var x
-    call baml.String.from
-    store_var _12
-    load_const "+"
-    load_var _12
-    bin_op +
-    store_var _11
-
-  L4:
     load_var2 7 8
     load_const " "
     bin_op +
@@ -2116,7 +1907,7 @@ function backtick_strings.bt_m3_nested_if_in_for_go(flag: bool, xs: string[]) ->
     store_var  __m3_for
     jump L0
 
-  L5:
+  L3:
     load_var  __m3_for
     return
 }
@@ -2142,10 +1933,7 @@ function backtick_strings.bt_m3_ws_case1() -> string {
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     store_var _9
     load_type string
@@ -2162,7 +1950,7 @@ function backtick_strings.bt_m3_ws_case1() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_var  __m3_for
     return
 }
@@ -2188,10 +1976,7 @@ function backtick_strings.bt_m3_ws_case2() -> string {
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     store_var _9
     load_type string
@@ -2203,7 +1988,7 @@ function backtick_strings.bt_m3_ws_case2() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_var  __m3_for
     return
 }
@@ -2229,10 +2014,7 @@ function backtick_strings.bt_m3_ws_case3() -> string {
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     store_var _9
     load_type string
@@ -2249,7 +2031,7 @@ function backtick_strings.bt_m3_ws_case3() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_var  __m3_for
     return
 }
@@ -2275,10 +2057,7 @@ function backtick_strings.bt_m3_ws_case4() -> string {
     store_var _6
     load_var _6
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     store_var _10
     load_type string
@@ -2295,7 +2074,7 @@ function backtick_strings.bt_m3_ws_case4() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_var  __m3_for
     load_const "\nFooter"
     bin_op +
@@ -2305,11 +2084,9 @@ function backtick_strings.bt_m3_ws_case4() -> string {
 function backtick_strings.bt_m3_ws_case5() -> string {
     load_const true
     call user.backtick_strings.bt_m3_ws_case5_greet
-    store_var _2
     load_const false
     call user.backtick_strings.bt_m3_ws_case5_greet
     store_var _3
-    load_var _2
     load_const "|"
     bin_op +
     load_var _3
@@ -2319,19 +2096,16 @@ function backtick_strings.bt_m3_ws_case5() -> string {
 
 function backtick_strings.bt_m3_ws_case5_greet(formal: bool) -> string {
     load_var formal
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const ""
+    store_var _3
     jump L1
 
   L0:
-    load_const ""
-    store_var _3
-    jump L2
-
-  L1:
     load_const ", sir"
     store_var _3
 
-  L2:
+  L1:
     load_const "Hello"
     load_var _3
     bin_op +
@@ -2343,11 +2117,9 @@ function backtick_strings.bt_m3_ws_case5_greet(formal: bool) -> string {
 function backtick_strings.bt_m3_ws_case6() -> string {
     load_const true
     call user.backtick_strings.bt_m3_ws_case6_classify
-    store_var _2
     load_const false
     call user.backtick_strings.bt_m3_ws_case6_classify
     store_var _3
-    load_var _2
     load_const "|"
     bin_op +
     load_var _3
@@ -2357,19 +2129,16 @@ function backtick_strings.bt_m3_ws_case6() -> string {
 
 function backtick_strings.bt_m3_ws_case6_classify(extra: bool) -> string {
     load_var extra
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const ""
+    store_var _3
     jump L1
 
   L0:
-    load_const ""
-    store_var _3
-    jump L2
-
-  L1:
     load_const "Extra\n"
     store_var _3
 
-  L2:
+  L1:
     load_const "Header\n"
     load_var _3
     bin_op +
@@ -2381,11 +2150,9 @@ function backtick_strings.bt_m3_ws_case6_classify(extra: bool) -> string {
 function backtick_strings.bt_m3_ws_case7() -> string {
     load_const true
     call user.backtick_strings.bt_m3_ws_case7_show
-    store_var _2
     load_const false
     call user.backtick_strings.bt_m3_ws_case7_show
     store_var _3
-    load_var _2
     load_const "|"
     bin_op +
     load_var _3
@@ -2395,19 +2162,16 @@ function backtick_strings.bt_m3_ws_case7() -> string {
 
 function backtick_strings.bt_m3_ws_case7_show(extra: bool) -> string {
     load_var extra
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const ""
+    store_var _3
     jump L1
 
   L0:
-    load_const ""
-    store_var _3
-    jump L2
-
-  L1:
     load_const "\nExtra line"
     store_var _3
 
-  L2:
+  L1:
     load_const "Header"
     load_var _3
     bin_op +
@@ -2445,10 +2209,7 @@ function backtick_strings.bt_m3_ws_case8() -> string {
     store_var _9
     load_var _9
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L5
-
-  L1:
+    pop_jump_if_true L3
     load_var _9
     store_var g
     load_var  __m3_for
@@ -2467,7 +2228,7 @@ function backtick_strings.bt_m3_ws_case8() -> string {
     virtual_call nargs=1 ntypeargs=0
     store_var _23
 
-  L2:
+  L1:
     load_var _23
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
@@ -2475,10 +2236,7 @@ function backtick_strings.bt_m3_ws_case8() -> string {
     store_var _24
     load_var _24
     is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var  __m3_for
     store_var _28
     load_type string
@@ -2493,9 +2251,9 @@ function backtick_strings.bt_m3_ws_case8() -> string {
     bin_op +
     bin_op +
     store_var  __m3_for
-    jump L2
+    jump L1
 
-  L4:
+  L2:
     load_var _13
     load_const "Group: "
     load_var _17
@@ -2508,7 +2266,7 @@ function backtick_strings.bt_m3_ws_case8() -> string {
     store_var  __m3_for
     jump L0
 
-  L5:
+  L3:
     load_var  __m3_for
     return
 }
@@ -2534,10 +2292,7 @@ function backtick_strings.bt_m3_ws_mid_line_indented_for() -> string {
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     store_var _11
     load_type string
@@ -2551,7 +2306,7 @@ function backtick_strings.bt_m3_ws_mid_line_indented_for() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_const "Prefix:\n    "
     load_var  __m3_for
     bin_op +
@@ -2580,10 +2335,7 @@ function backtick_strings.bt_m3_ws_tag_at_literal_start() -> string {
     store_var _6
     load_var _6
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     store_var _10
     load_type string
@@ -2597,7 +2349,7 @@ function backtick_strings.bt_m3_ws_tag_at_literal_start() -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_var  __m3_for
     load_const "done"
     bin_op +
@@ -2608,15 +2360,13 @@ function backtick_strings.bt_multi_interp() -> string {
     load_type string
     load_const "ada"
     call baml.String.from
-    store_var _5
     load_type string
     load_const "lovelace"
     call baml.String.from
-    store_var _8
-    load_var _5
+    store_var _5
     load_const " "
     bin_op +
-    load_var _8
+    load_var _5
     bin_op +
     load_const " writes code"
     bin_op +
@@ -2643,14 +2393,12 @@ function backtick_strings.bt_nested_interp() -> string {
     load_const "x"
     call baml.String.from
     store_var _2
+    load_const "outer["
     load_type string
     load_const "inner-"
     load_var _2
     bin_op +
     call baml.String.from
-    store_var _5
-    load_const "outer["
-    load_var _5
     bin_op +
     load_const "]"
     bin_op +
@@ -2679,23 +2427,19 @@ function backtick_strings.bt_recursive_main() -> string {
     load_const 5
     call user.backtick_strings.bt_bangs
     store_var _2
+    load_const "done"
     load_type string
     load_var _2
     call baml.String.from
-    store_var _1
-    load_const "done"
-    load_var _1
     bin_op +
     return
 }
 
 function backtick_strings.bt_simple_interp() -> string {
+    load_const "Hello, "
     load_type string
     load_const "world"
     call baml.String.from
-    store_var _3
-    load_const "Hello, "
-    load_var _3
     bin_op +
     load_const "!"
     bin_op +
@@ -2713,10 +2457,6 @@ function backtick_strings.bt_void_tail() -> string {
     load_const "a"
     bin_op +
     store_var  __m3_concat
-    load_const false
-    pop_jump_if_false L0
-
-  L0:
     load_var  __m3_concat
     load_const "b"
     bin_op +
@@ -2735,11 +2475,11 @@ function backtick_strings.bt_xslet_chain() -> string {
     bin_op +
     store_var  __m3_concat
     load_var  __m3_concat
-    store_var _5
+    store_var _4
     load_type string
     load_const "X"
     call baml.String.from
-    store_var _6
+    store_var _5
     load_var2 2 3
     bin_op +
     store_var_load_var  __m3_concat
@@ -2750,13 +2490,11 @@ function backtick_strings.bt_xslet_chain() -> string {
     bin_op +
     store_var  __m3_concat
     load_var  __m3_concat
-    store_var _13
+    store_var _9
     load_type string
-    load_const "X"
-    load_const "Y"
-    bin_op +
+    load_const "XY"
     call baml.String.from
-    store_var _14
+    store_var _10
     load_var2 4 5
     bin_op +
     store_var_load_var  __m3_concat
@@ -2771,11 +2509,11 @@ function backtick_strings.bt_xslet_concat_scope() -> string {
     load_const ""
     store_var  __m3_concat
     load_var  __m3_concat
-    store_var _3
+    store_var _2
     load_type string
     load_const "hi"
     call baml.String.from
-    store_var _4
+    store_var _3
     load_var2 2 3
     bin_op +
     store_var  __m3_concat

@@ -175,10 +175,6 @@ function control_flow.$init_test_ns_control_flow_control_flow(registry: testing.
 }
 
 function control_flow.break_loop(x: int) -> int {
-    load_const 0
-    store_var result
-    load_const true
-    pop_jump_if_false L2
     load_var x
     load_const 1
     cmp_int_op ==
@@ -187,15 +183,12 @@ function control_flow.break_loop(x: int) -> int {
 
   L0:
     load_const 2
-    store_var result
     jump L2
 
   L1:
     load_const 40
-    store_var result
 
   L2:
-    load_var result
     return
 }
 
@@ -204,28 +197,22 @@ function control_flow.chain_two(a: control_flow.Ok | control_flow.Err, b: contro
     store_var _3
     load_var _3
     narrow_bind control_flow.Ok, slot=3
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L0
+    load_const "a-failed"
+    jump L2
 
   L0:
-    load_const "a-failed"
-    jump L4
-
-  L1:
     load_var _3
     store_var oa
     load_var b
     store_var _5
     load_var _5
     narrow_bind control_flow.Ok, slot=5
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_const "b-failed"
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_var oa
     load_field .value
     load_const "-"
@@ -234,7 +221,7 @@ function control_flow.chain_two(a: control_flow.Ok | control_flow.Err, b: contro
     load_field .value
     bin_op +
 
-  L4:
+  L2:
     return
 }
 
@@ -248,14 +235,11 @@ function control_flow.concat_oks(items: (control_flow.Ok | control_flow.Err)[]) 
     load_var i
     load_const 3
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var acc
     return
 
-  L2:
+  L1:
     load_var2 1 3
     load_array_element
     store_var item
@@ -283,28 +267,25 @@ function control_flow.continue_loop(x: int) -> int {
     load_var i
     load_const 3
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var i
     return
 
-  L2:
+  L1:
     load_var x
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
+    pop_jump_if_false L2
+    jump L3
 
-  L3:
+  L2:
     load_var i
     load_const 10
     add_int
     store_var i
     jump L0
 
-  L4:
+  L3:
     load_var i
     load_const 1
     add_int
@@ -317,19 +298,16 @@ function control_flow.describe_else_message(r: control_flow.Ok | control_flow.Er
     store_var _2
     load_var _2
     narrow_bind control_flow.Ok, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var r
+    load_field .0
     jump L1
 
   L0:
-    load_var r
-    load_field .0
-    jump L2
-
-  L1:
     load_var _2
     load_field .value
 
-  L2:
+  L1:
     return
 }
 
@@ -338,28 +316,22 @@ function control_flow.describe_or_pattern(r: control_flow.Ok | control_flow.Warn
     store_var _2
     load_var _2
     narrow_bind control_flow.Ok, slot=2
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L0
     load_var r
     store_var _3
     load_var _3
     narrow_bind control_flow.Warn, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var r
     load_field .0
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_var r
     load_type control_flow.HasValue
     virtual_load_field .value
 
-  L3:
+  L1:
     return
 }
 
@@ -368,18 +340,15 @@ function control_flow.describe_then_default(r: control_flow.Ok | control_flow.Er
     store_var _2
     load_var _2
     narrow_bind control_flow.Ok, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "no match"
     jump L1
 
   L0:
-    load_const "no match"
-    jump L2
-
-  L1:
     load_var _2
     load_field .value
 
-  L2:
+  L1:
     return
 }
 
@@ -388,18 +357,15 @@ function control_flow.first_value_statement(r: control_flow.Ok | control_flow.Er
     store_var _2
     load_var _2
     narrow_bind control_flow.Ok, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "fell through"
     jump L1
 
   L0:
-    load_const "fell through"
-    jump L2
-
-  L1:
     load_var _2
     load_field .value
 
-  L2:
+  L1:
     return
 }
 
@@ -408,54 +374,45 @@ function control_flow.get_value_or_fallback(r: control_flow.Ok | control_flow.Er
     store_var _2
     load_var _2
     narrow_bind control_flow.Ok, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "fallback"
     jump L1
 
   L0:
-    load_const "fallback"
-    jump L2
-
-  L1:
     load_var _2
     load_field .value
 
-  L2:
+  L1:
     return
 }
 
 function control_flow.greet_if_let(u: control_flow.User | control_flow.Admin) -> string {
     load_var u
     is_type control_flow.User
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "admin"
     jump L1
 
   L0:
-    load_const "admin"
-    jump L2
-
-  L1:
     load_var u
     load_field .0
 
-  L2:
+  L1:
     return
 }
 
 function control_flow.greet_let_else(u: control_flow.User | control_flow.Admin) -> string {
     load_var u
     is_type control_flow.User
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "admin"
     jump L1
 
   L0:
-    load_const "admin"
-    jump L2
-
-  L1:
     load_var u
     load_field .0
 
-  L2:
+  L1:
     return
 }
 
@@ -464,18 +421,15 @@ function control_flow.if_let_call() -> string {
     store_var _2
     load_var _2
     narrow_bind control_flow.Ok, slot=1
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "no match"
     jump L1
 
   L0:
-    load_const "no match"
-    jump L2
-
-  L1:
     load_var _2
     load_field .value
 
-  L2:
+  L1:
     return
 }
 
@@ -484,14 +438,11 @@ function control_flow.inner_throws(r: control_flow.Ok | control_flow.Err) -> str
     store_var _2
     load_var _2
     narrow_bind control_flow.Ok, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     alloc_instance user.control_flow.NoMatch
     throw
 
-  L1:
+  L0:
     load_var _2
     load_field .value
     return
@@ -501,20 +452,17 @@ function control_flow.main_caught() -> string {
     load_const "ignored"
     init_instance user.control_flow.Err .message
     call user.control_flow.inner_throws
-    jump L2
+    jump L1
     load_var e
     is_type control_flow.NoMatch
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const "caught"
 
-  L2:
+  L1:
     return
 }
 
@@ -540,8 +488,7 @@ function control_flow.pick_first_ok(items: (control_flow.Ok | control_flow.Err)[
     store_var _10
     load_var _10
     narrow_bind control_flow.Ok, slot=4
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_true L2
 
   L1:
     load_var result
@@ -560,30 +507,24 @@ function control_flow.pick_first_ok(items: (control_flow.Ok | control_flow.Err)[
 
 function control_flow.pick_let_else(r: control_flow.Ok | control_flow.Warn | control_flow.Err) -> string {
     load_var r
+    store_var _2
+    load_var _2
+    narrow_bind control_flow.Ok, slot=2
+    pop_jump_if_true L0
+    load_var r
     store_var _3
     load_var _3
-    narrow_bind control_flow.Ok, slot=2
-    pop_jump_if_false L0
-    jump L2
+    narrow_bind control_flow.Warn, slot=3
+    pop_jump_if_true L0
+    load_const "err"
+    jump L1
 
   L0:
-    load_var r
-    store_var _4
-    load_var _4
-    narrow_bind control_flow.Warn, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const "err"
-    jump L3
-
-  L2:
     load_var r
     load_type control_flow.HasValue
     virtual_load_field .value
 
-  L3:
+  L1:
     return
 }
 
@@ -592,33 +533,27 @@ function control_flow.pick_nested(outer: control_flow.Wrapper, inner: control_fl
     store_var _3
     load_var _3
     narrow_bind control_flow.Wrapper, slot=3
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L0
+    load_const "none"
+    jump L2
 
   L0:
-    load_const "none"
-    jump L4
-
-  L1:
     load_var _3
     store_var w
     load_var inner
     store_var _5
     load_var _5
     narrow_bind control_flow.Wrapper, slot=5
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var w
     load_field .payload
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_var _5
     load_field .payload
 
-  L4:
+  L2:
     return
 }
 
@@ -627,31 +562,25 @@ function control_flow.pick_ok_err_empty(r: control_flow.Ok | control_flow.Err | 
     store_var _2
     load_var _2
     narrow_bind control_flow.Ok, slot=2
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var r
     store_var _4
     load_var _4
     narrow_bind control_flow.Err, slot=3
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    load_const "empty"
+    jump L2
+
+  L0:
+    load_var _4
+    load_field .message
     jump L2
 
   L1:
-    load_const "empty"
-    jump L4
-
-  L2:
-    load_var _4
-    load_field .message
-    jump L4
-
-  L3:
     load_var _2
     load_field .value
 
-  L4:
+  L2:
     return
 }
 
@@ -660,18 +589,15 @@ function control_flow.pick_optional(item: control_flow.Item | null) -> string {
     store_var _2
     load_var _2
     narrow_bind control_flow.Item, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "none"
     jump L1
 
   L0:
-    load_const "none"
-    jump L2
-
-  L1:
     load_var _2
     load_field .name
 
-  L2:
+  L1:
     return
 }
 

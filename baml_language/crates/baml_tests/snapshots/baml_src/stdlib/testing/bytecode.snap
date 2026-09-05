@@ -19,22 +19,18 @@ function testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testi
     load_deref ?1
     load_const 0.0
     cmp_float_op <
-    jump_if_false L0
-    jump L1
-
-  L0:
-    pop 1
+    pop_jump_if_true L0
     load_deref ?1
     load_const 1.0
     cmp_float_op >
+    pop_jump_if_false L1
 
-  L1:
-    pop_jump_if_false L2
+  L0:
     load_const "testing.PassRate requires 0.0 <= threshold <= 1.0"
     call baml.sys.panic
     pop 1
 
-  L2:
+  L1:
     load_var threshold
     make_closure .<lambda(PassRate, 0)>, 1
     return
@@ -50,35 +46,28 @@ function testing.Quorum(n: int, m: int) -> (() -> testing.TestReport throws neve
     load_deref ?1
     load_const 0
     cmp_int_op <=
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_deref ?2
     load_const 0
     cmp_int_op <
-    jump_if_false L1
-    jump L2
-
-  L1:
-    pop 1
+    pop_jump_if_true L0
     load_deref ?2
     load_deref ?1
     cmp_int_op >
+    pop_jump_if_false L2
 
-  L2:
-    pop_jump_if_false L4
+  L0:
     load_const "testing.Quorum requires 0 <= m <= n"
     call baml.sys.panic
     pop 1
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const "testing.Quorum requires n > 0"
     call baml.sys.panic
     pop 1
 
-  L4:
+  L2:
     load_var2 1 2
     make_closure .<lambda(Quorum, 0)>, 2
     return
@@ -123,10 +112,7 @@ function testing.TestCollector._find_test(self: testing.TestCollector, name: str
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _5
     store_var_load_var t
     load_field .name
@@ -136,7 +122,7 @@ function testing.TestCollector._find_test(self: testing.TestCollector, name: str
     load_var t
     return
 
-  L2:
+  L1:
     load_const "Test not found: "
     load_var name
     bin_op +
@@ -159,10 +145,7 @@ function testing.TestCollector._find_testset(self: testing.TestCollector, name: 
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _5
     store_var_load_var ts
     load_field .name
@@ -172,7 +155,7 @@ function testing.TestCollector._find_testset(self: testing.TestCollector, name: 
     load_var ts
     return
 
-  L2:
+  L1:
     load_const "TestSet not found: "
     load_var name
     bin_op +
@@ -193,18 +176,12 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     load_var name
     load_const "::"
     call baml.String.includes
-    pop_jump_if_false L0
-    jump L12
-
-  L0:
+    pop_jump_if_true L7
     load_var self
     load_field .prefix
     load_const ""
     cmp_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var self
     load_field .prefix
     load_const "::"
@@ -212,13 +189,13 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     load_var name
     bin_op +
     store_var full_name
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_var name
     store_var full_name
 
-  L3:
+  L1:
     load_const 0
     store_var count
     load_var full_name
@@ -232,7 +209,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     virtual_call nargs=1 ntypeargs=0
     store_var _17
 
-  L4:
+  L2:
     load_var _17
     load_type baml.iter.Iterator<Error = never, Item = testing.TestRegistration>
     load_const "next"
@@ -240,46 +217,36 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     store_var _18
     load_var _18
     is_type baml.iter.Done
-    pop_jump_if_false L5
-    jump L8
-
-  L5:
+    pop_jump_if_true L4
     load_var _18
     store_var_load_var t
     load_field .name
     load_var full_name
     cmp_op ==
-    jump_if_false L6
-    jump L7
-
-  L6:
-    pop 1
+    pop_jump_if_true L3
     load_var t
     load_field .name
     load_var hash_prefix
     call baml.String.starts_with
+    pop_jump_if_false L2
 
-  L7:
-    pop_jump_if_false L4
+  L3:
     load_var count
     load_const 1
     add_int
     store_var count
-    jump L4
+    jump L2
 
-  L8:
+  L4:
     load_var count
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
+    pop_jump_if_true L5
     load_var full_name
     store_var final_name
-    jump L11
+    jump L6
 
-  L10:
+  L5:
     load_var full_name
     load_const "#"
     bin_op +
@@ -294,7 +261,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     bin_op +
     store_var final_name
 
-  L11:
+  L6:
     load_type testing.TestRegistration
     load_var self
     load_field .tests
@@ -306,7 +273,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     load_const null
     return
 
-  L12:
+  L7:
     load_const "test name may not contain reserved separator `::`: "
     load_var name
     bin_op +
@@ -330,18 +297,12 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     load_var name
     load_const "::"
     call baml.String.includes
-    pop_jump_if_false L0
-    jump L12
-
-  L0:
+    pop_jump_if_true L7
     load_var self
     load_field .prefix
     load_const ""
     cmp_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var self
     load_field .prefix
     load_const "::"
@@ -349,13 +310,13 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     load_var name
     bin_op +
     store_var full_name
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_var name
     store_var full_name
 
-  L3:
+  L1:
     load_const 0
     store_var count
     load_var full_name
@@ -369,7 +330,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     virtual_call nargs=1 ntypeargs=0
     store_var _17
 
-  L4:
+  L2:
     load_var _17
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
@@ -377,46 +338,36 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     store_var _18
     load_var _18
     is_type baml.iter.Done
-    pop_jump_if_false L5
-    jump L8
-
-  L5:
+    pop_jump_if_true L4
     load_var _18
     store_var_load_var ts
     load_field .name
     load_var full_name
     cmp_op ==
-    jump_if_false L6
-    jump L7
-
-  L6:
-    pop 1
+    pop_jump_if_true L3
     load_var ts
     load_field .name
     load_var hash_prefix
     call baml.String.starts_with
+    pop_jump_if_false L2
 
-  L7:
-    pop_jump_if_false L4
+  L3:
     load_var count
     load_const 1
     add_int
     store_var count
-    jump L4
+    jump L2
 
-  L8:
+  L4:
     load_var count
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
+    pop_jump_if_true L5
     load_var full_name
     store_var final_name
-    jump L11
+    jump L6
 
-  L10:
+  L5:
     load_var full_name
     load_const "#"
     bin_op +
@@ -431,7 +382,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     bin_op +
     store_var final_name
 
-  L11:
+  L6:
     load_type testing.TestSetRegistration
     load_var self
     load_field .testsets
@@ -443,7 +394,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     load_const null
     return
 
-  L12:
+  L7:
     load_const "testset name may not contain reserved separator `::`: "
     load_var name
     bin_op +
@@ -474,10 +425,7 @@ function testing.TestRegistry._expand_testset_registry(self: testing.TestRegistr
     store_var _8
     load_var _8
     narrow_bind testing.TestRegistry, slot=3
-    pop_jump_if_false L0
-    jump L4
-
-  L0:
+    pop_jump_if_true L2
     sys_op baml.time.Instant.now
     store_var start
     load_var ts
@@ -497,17 +445,14 @@ function testing.TestRegistry._expand_testset_registry(self: testing.TestRegistr
     call baml.time.Duration.to_milliseconds
     call baml.Bigint.to_int
     store_var elapsed
-    jump L3
+    jump L1
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var _
     rethrow
 
-  L2:
+  L0:
     load_const "testing: expansion duration: "
     load_var _
     load_field .0
@@ -515,7 +460,7 @@ function testing.TestRegistry._expand_testset_registry(self: testing.TestRegistr
     call baml.sys.panic
     store_var elapsed
 
-  L3:
+  L1:
     load_var sub_collector
     load_type string
     load_type testing.TestRegistry
@@ -533,12 +478,12 @@ function testing.TestRegistry._expand_testset_registry(self: testing.TestRegistr
     call baml.Map.set
     pop 1
     load_var sub_registry
-    jump L5
+    jump L3
 
-  L4:
+  L2:
     load_var _8
 
-  L5:
+  L3:
     return
 }
 
@@ -588,10 +533,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _5
     store_var_load_var ts
     load_field .name
@@ -603,9 +545,9 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     pop 1
     load_var self
     call testing.TestRegistry.serialize
-    jump L5
+    jump L3
 
-  L2:
+  L1:
     load_type string
     load_type testing.TestRegistry
     load_var self
@@ -616,7 +558,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     virtual_call nargs=1 ntypeargs=0
     store_var _17
 
-  L3:
+  L2:
     load_var _17
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
@@ -624,10 +566,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     store_var _18
     load_var _18
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L6
-
-  L4:
+    pop_jump_if_true L4
     load_var _18
     store_var k
     load_var self
@@ -639,14 +578,14 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     load_const "::"
     bin_op +
     call baml.String.starts_with
-    pop_jump_if_false L3
+    pop_jump_if_false L2
     load_var2 9 2
     call testing.TestRegistry.expand_set
 
-  L5:
+  L3:
     return
 
-  L6:
+  L4:
     load_const "TestSet not found for expansion: "
     load_var name
     bin_op +
@@ -691,54 +630,44 @@ function testing.TestRegistry.run_filtered(self: testing.TestRegistry, profile_i
     store_var pool
     load_var profile_include
     container_len
-    store_var _14
-    load_var _14
+    store_var _11
+    load_var _11
     load_const 0
     cmp_int_op ==
-    jump_if_false L0
-    pop 1
+    pop_jump_if_false L0
     load_var profile_exclude
+    container_len
+    store_var _13
+    load_var _13
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    load_var cli_include
     container_len
     store_var _15
     load_var _15
     load_const 0
     cmp_int_op ==
-
-  L0:
-    jump_if_false L1
-    pop 1
-    load_var cli_include
-    container_len
-    store_var _16
-    load_var _16
-    load_const 0
-    cmp_int_op ==
-
-  L1:
-    jump_if_false L2
-    pop 1
+    pop_jump_if_false L0
     load_var cli_exclude
     container_len
     store_var _17
     load_var _17
     load_const 0
     cmp_int_op ==
+    pop_jump_if_true L1
 
-  L2:
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+  L0:
     load_var2 1 7
     load_var pool
     call testing.TestRegistry._run_selected_pooled
-    jump L5
+    jump L2
 
-  L4:
+  L1:
     load_var2 1 8
     call testing.TestRegistry._run_all_pooled
 
-  L5:
+  L2:
     load_var selected_names
     call testing._flatten_with_tolerated
     return
@@ -761,10 +690,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _5
     store_var_load_var t
     load_field .name
@@ -776,9 +702,9 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     load_var t
     load_field .runner
     call testing._run_test
-    jump L5
+    jump L3
 
-  L2:
+  L1:
     load_type string
     load_type testing.TestRegistry
     load_var self
@@ -789,7 +715,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     virtual_call nargs=1 ntypeargs=0
     store_var _17
 
-  L3:
+  L2:
     load_var _17
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
@@ -797,10 +723,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     store_var _18
     load_var _18
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L6
-
-  L4:
+    pop_jump_if_true L4
     load_var _18
     store_var k
     load_var self
@@ -812,14 +735,14 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     load_const "::"
     bin_op +
     call baml.String.starts_with
-    pop_jump_if_false L3
+    pop_jump_if_false L2
     load_var2 9 2
     call testing.TestRegistry.run_test
 
-  L5:
+  L3:
     return
 
-  L6:
+  L4:
     load_const "Test not found: "
     load_var name
     bin_op +
@@ -843,10 +766,7 @@ function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: stri
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _5
     store_var_load_var ts
     load_field .name
@@ -864,9 +784,9 @@ function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: stri
     load_field .runner
     load_var pool
     call testing._run_testset
-    jump L5
+    jump L3
 
-  L2:
+  L1:
     load_type string
     load_type testing.TestRegistry
     load_var self
@@ -877,7 +797,7 @@ function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: stri
     virtual_call nargs=1 ntypeargs=0
     store_var _22
 
-  L3:
+  L2:
     load_var _22
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
@@ -885,10 +805,7 @@ function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: stri
     store_var _23
     load_var _23
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L6
-
-  L4:
+    pop_jump_if_true L4
     load_var _23
     store_var k
     load_var self
@@ -900,14 +817,14 @@ function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: stri
     load_const "::"
     bin_op +
     call baml.String.starts_with
-    pop_jump_if_false L3
+    pop_jump_if_false L2
     load_var2 10 2
     call testing.TestRegistry.run_testset
 
-  L5:
+  L3:
     return
 
-  L6:
+  L4:
     load_const "TestSet not found: "
     load_var name
     bin_op +
@@ -934,10 +851,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_type testing.SerializedTest | testing.SerializedTestSet
     load_var items
     load_const "test"
@@ -948,7 +862,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var self
     load_field .collector
     load_field .testsets
@@ -957,7 +871,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     virtual_call nargs=1 ntypeargs=0
     store_var _14
 
-  L3:
+  L2:
     load_var _14
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
@@ -965,10 +879,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     store_var _15
     load_var _15
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L7
-
-  L4:
+    pop_jump_if_true L4
     load_var _15
     store_var ts
     load_type string
@@ -981,10 +892,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     store_var _25
     load_var _25
     narrow_bind testing.TestRegistry, slot=8
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
+    pop_jump_if_true L3
     load_type testing.SerializedTest | testing.SerializedTestSet
     load_var items
     load_const "lazyTestSet"
@@ -993,9 +901,9 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     init_instance testing.SerializedTest .type, .name
     call baml.Array.push
     pop 1
-    jump L3
+    jump L2
 
-  L6:
+  L3:
     load_var _25
     store_var sub
     load_var ts
@@ -1011,24 +919,15 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     init_instance testing.SerializedTestSet .name, .items, .loadingTimeMs
     call baml.Array.push
     pop 1
-    jump L3
+    jump L2
 
-  L7:
+  L4:
     load_var items
     return
 }
 
 function testing._TestPool.acquire(self: testing._TestPool) -> null {
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const null
-    jump L5
-
-  L2:
     load_type int
     load_var self
     load_field .tokens
@@ -1036,10 +935,7 @@ function testing._TestPool.acquire(self: testing._TestPool) -> null {
     store_var _5
     load_var _5
     narrow_bind int, slot=2
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L1
     load_const 10
     call baml.time.Duration.from_milliseconds
     sys_op baml.sys.sleep
@@ -1049,10 +945,8 @@ function testing._TestPool.acquire(self: testing._TestPool) -> null {
     throw_if_panic
     jump L0
 
-  L4:
+  L1:
     load_const null
-
-  L5:
     return
 }
 
@@ -1097,10 +991,7 @@ function testing._aggregate_reports(named_results: testing._NamedChildReport[]) 
     store_var _9
     load_var _9
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L15
-
-  L1:
+    pop_jump_if_true L9
     load_var _9
     store_var named_result
     load_var named_result
@@ -1119,28 +1010,22 @@ function testing._aggregate_reports(named_results: testing._NamedChildReport[]) 
     store_var _21
     load_var _21
     narrow_bind testing.TestReport, slot=13
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var result
     load_field .outcome
     store_var outcome
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_var _21
     load_field .outcome
     store_var outcome
 
-  L4:
+  L2:
     load_var outcome
     load_const "pass"
     call baml.ops.equals_equals
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
+    pop_jump_if_true L8
     load_var failed
     load_const 1
     add_int
@@ -1149,10 +1034,7 @@ function testing._aggregate_reports(named_results: testing._NamedChildReport[]) 
     store_var _27
     load_var _27
     narrow_bind testing.TestReport, slot=14
-    pop_jump_if_false L6
-    jump L9
-
-  L6:
+    pop_jump_if_true L4
     load_var result
     store_var_load_var report
     load_field .failed_names
@@ -1161,34 +1043,31 @@ function testing._aggregate_reports(named_results: testing._NamedChildReport[]) 
     load_var _31
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L7
-    jump L8
-
-  L7:
+    pop_jump_if_true L3
     load_var named_result
     load_field .name
     load_type string
     alloc_array 1
-    jump L10
+    jump L5
 
-  L8:
+  L3:
     load_var report
     load_field .failed_names
-    jump L10
+    jump L5
 
-  L9:
+  L4:
     load_var named_result
     load_field .name
     load_type string
     alloc_array 1
 
-  L10:
+  L5:
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _35
 
-  L11:
+  L6:
     load_var _35
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
@@ -1196,17 +1075,14 @@ function testing._aggregate_reports(named_results: testing._NamedChildReport[]) 
     store_var _36
     load_var _36
     is_type baml.iter.Done
-    pop_jump_if_false L12
-    jump L13
-
-  L12:
+    pop_jump_if_true L7
     load_type string
     load_var2 5 18
     call baml.Array.push
     pop 1
-    jump L11
+    jump L6
 
-  L13:
+  L7:
     load_var outcome
     load_const "error"
     call baml.ops.equals_equals
@@ -1215,37 +1091,31 @@ function testing._aggregate_reports(named_results: testing._NamedChildReport[]) 
     store_var has_error
     jump L0
 
-  L14:
+  L8:
     load_var passed
     load_const 1
     add_int
     store_var passed
     jump L0
 
-  L15:
+  L9:
     load_var has_error
-    pop_jump_if_false L16
-    jump L19
-
-  L16:
+    pop_jump_if_true L11
     load_var failed
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L17
-    jump L18
-
-  L17:
+    pop_jump_if_true L10
     load_const "fail"
-    jump L20
+    jump L12
 
-  L18:
+  L10:
     load_const "pass"
-    jump L20
+    jump L12
 
-  L19:
+  L11:
     load_const "error"
 
-  L20:
+  L12:
     store_var _49
     load_var passed
     store_var _50
@@ -1277,20 +1147,17 @@ function testing._any_pattern_matches(pats: string[], canonical_id: string) -> b
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 2 4
     call testing._glob_match
     pop_jump_if_false L0
     load_const true
-    jump L3
+    jump L2
 
-  L2:
+  L1:
     load_const false
 
-  L3:
+  L2:
     return
 }
 
@@ -1323,18 +1190,12 @@ function testing._classify_selected_names(selected_names: string[], hard_failed_
     store_var _12
     load_var _12
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
+    pop_jump_if_true L3
     load_var _12
     store_var_load_var name
     load_var all_failed_names
     call testing._failure_matches_selected
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_type string
     load_var out
     load_field .passed
@@ -1343,13 +1204,10 @@ function testing._classify_selected_names(selected_names: string[], hard_failed_
     pop 1
     jump L0
 
-  L3:
+  L1:
     load_var2 7 2
     call testing._failure_matches_selected
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L2
     load_type string
     load_var out
     load_field .tolerated
@@ -1358,7 +1216,7 @@ function testing._classify_selected_names(selected_names: string[], hard_failed_
     pop 1
     jump L0
 
-  L5:
+  L2:
     load_type string
     load_var out
     load_field .failed
@@ -1367,7 +1225,7 @@ function testing._classify_selected_names(selected_names: string[], hard_failed_
     pop 1
     jump L0
 
-  L6:
+  L3:
     load_var out
     return
 }
@@ -1388,55 +1246,45 @@ function testing._collect_all_failed_names(report: testing.TestSetReport, out: s
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _5
     store_var_load_var name
     load_var out
     call testing._name_in
-    unary_op !
-    pop_jump_if_false L0
+    pop_jump_if_true L0
     load_type string
     load_var2 2 5
     call baml.Array.push
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var report
     load_field .results
     load_type baml.iter.Iterable<Error = never, Item = testing.TestReport | testing.TestSetReport>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _16
+    store_var _15
 
-  L3:
-    load_var _16
+  L2:
+    load_var _15
     load_type baml.iter.Iterator<Error = never, Item = testing.TestReport | testing.TestSetReport>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _17
-    load_var _17
+    store_var _16
+    load_var _16
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L6
-
-  L4:
-    load_var _17
+    pop_jump_if_true L3
+    load_var _16
     store_var_load_var child
     is_type testing.TestReport
-    pop_jump_if_false L5
-    jump L3
-
-  L5:
+    pop_jump_if_true L2
     load_var2 8 2
     call testing._collect_all_failed_names
     pop 1
-    jump L3
+    jump L2
 
-  L6:
+  L3:
     load_const null
     return
 }
@@ -1447,10 +1295,7 @@ function testing._collect_leaf_identities(report: testing.TestSetReport, tolerat
     store_var_load_var _5
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L28
-
-  L0:
+    pop_jump_if_true L16
     load_var _5
     store_var names
     load_var names
@@ -1462,36 +1307,30 @@ function testing._collect_leaf_identities(report: testing.TestSetReport, tolerat
     store_var _11
     load_var2 8 9
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var report
     load_field .results
     container_len
     store_var limit
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_var names
     container_len
     store_var limit
 
-  L3:
+  L1:
     load_const 0
     store_var i
 
-  L4:
+  L2:
     load_var2 10 7
     cmp_int_op <
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
+    pop_jump_if_true L3
     load_const null
-    jump L29
+    jump L17
 
-  L6:
+  L3:
     load_var2 6 10
     load_array_element
     store_var name
@@ -1504,87 +1343,67 @@ function testing._collect_leaf_identities(report: testing.TestSetReport, tolerat
     store_var _25
     load_var _25
     narrow_bind testing.TestReport, slot=13
-    pop_jump_if_false L7
-    jump L19
-
-  L7:
+    pop_jump_if_true L10
     load_var _22
     store_var nested
     load_var tolerated_by_parent
-    jump_if_false L8
-    store_var nested_tolerated
-    jump L9
-
-  L8:
-    pop 1
+    jump_if_true_or_pop L4
     load_var nested
     load_field .outcome
     load_const "pass"
     call baml.ops.equals_equals
-    store_var nested_tolerated
 
-  L9:
+  L4:
+    store_var nested_tolerated
     load_var nested
     load_field .results
     container_len
-    store_var _61
-    load_var _61
+    store_var _62
+    load_var _62
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L10
-    jump L18
-
-  L10:
+    pop_jump_if_true L9
     load_var nested
     load_field .failed
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L27
+    pop_jump_if_false L15
     load_var name
     load_const "::(failed to expand)"
     bin_op +
     store_var_load_var sentinel
     load_var selected_names
     call testing._name_in
-    pop_jump_if_false L11
-    jump L14
-
-  L11:
+    pop_jump_if_true L6
     load_var nested
     load_field .failed_names
     container_len
-    store_var _73
-    load_var _73
+    store_var _74
+    load_var _74
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L12
-    jump L13
-
-  L12:
+    pop_jump_if_true L5
     load_var name
     load_const "::(testset error)"
     bin_op +
     store_var identity
-    jump L15
+    jump L7
 
-  L13:
+  L5:
     load_var nested
     load_field .failed_names
     load_const 0
     load_array_element
     store_var identity
-    jump L15
+    jump L7
 
-  L14:
+  L6:
     load_var sentinel
     store_var identity
 
-  L15:
+  L7:
     load_var nested_tolerated
-    pop_jump_if_false L16
-    jump L17
-
-  L16:
+    pop_jump_if_true L8
     load_type string
     load_var out
     load_field .failed
@@ -1597,9 +1416,9 @@ function testing._collect_leaf_identities(report: testing.TestSetReport, tolerat
     load_const -1
     call baml.Array.push
     pop 1
-    jump L27
+    jump L15
 
-  L17:
+  L8:
     load_type string
     load_var out
     load_field .tolerated
@@ -1612,16 +1431,16 @@ function testing._collect_leaf_identities(report: testing.TestSetReport, tolerat
     load_const -1
     call baml.Array.push
     pop 1
-    jump L27
+    jump L15
 
-  L18:
+  L9:
     load_var2 17 18
     load_var2 3 4
     call testing._collect_leaf_identities
     pop 1
-    jump L27
+    jump L15
 
-  L19:
+  L10:
     load_var _25
     store_var_load_var leaf
     load_field .runs
@@ -1630,15 +1449,12 @@ function testing._collect_leaf_identities(report: testing.TestSetReport, tolerat
     load_var _29
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L20
-    jump L21
-
-  L20:
+    pop_jump_if_true L11
     load_const -1
     store_var leaf_ms
-    jump L22
+    jump L12
 
-  L21:
+  L11:
     load_var leaf
     load_field .runs
     load_const 0
@@ -1646,20 +1462,14 @@ function testing._collect_leaf_identities(report: testing.TestSetReport, tolerat
     load_field .duration_ms
     store_var leaf_ms
 
-  L22:
+  L12:
     load_var leaf
     load_field .outcome
     load_const "pass"
     call baml.ops.equals_equals
-    pop_jump_if_false L23
-    jump L26
-
-  L23:
+    pop_jump_if_true L14
     load_var tolerated_by_parent
-    pop_jump_if_false L24
-    jump L25
-
-  L24:
+    pop_jump_if_true L13
     load_type string
     load_var out
     load_field .failed
@@ -1672,9 +1482,9 @@ function testing._collect_leaf_identities(report: testing.TestSetReport, tolerat
     load_var leaf_ms
     call baml.Array.push
     pop 1
-    jump L27
+    jump L15
 
-  L25:
+  L13:
     load_type string
     load_var out
     load_field .tolerated
@@ -1687,9 +1497,9 @@ function testing._collect_leaf_identities(report: testing.TestSetReport, tolerat
     load_var leaf_ms
     call baml.Array.push
     pop 1
-    jump L27
+    jump L15
 
-  L26:
+  L14:
     load_type string
     load_var out
     load_field .passed
@@ -1703,17 +1513,17 @@ function testing._collect_leaf_identities(report: testing.TestSetReport, tolerat
     call baml.Array.push
     pop 1
 
-  L27:
+  L15:
     load_var i
     load_const 1
     add_int
     store_var i
-    jump L4
+    jump L2
 
-  L28:
+  L16:
     load_const null
 
-  L29:
+  L17:
     return
 }
 
@@ -1732,20 +1542,14 @@ function testing._collect_leaf_messages(results: (testing.TestReport | testing.T
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
+    pop_jump_if_true L3
     load_var _4
     store_var r
     load_var r
     store_var _8
     load_var _8
     narrow_bind testing.TestReport, slot=6
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var r
     load_field .results
     load_var out
@@ -1753,7 +1557,7 @@ function testing._collect_leaf_messages(results: (testing.TestReport | testing.T
     pop 1
     jump L0
 
-  L3:
+  L1:
     load_var _8
     load_field .runs
     load_type baml.iter.Iterable<Error = never, Item = testing.RunReport>
@@ -1761,7 +1565,7 @@ function testing._collect_leaf_messages(results: (testing.TestReport | testing.T
     virtual_call nargs=1 ntypeargs=0
     store_var _11
 
-  L4:
+  L2:
     load_var _11
     load_type baml.iter.Iterator<Error = never, Item = testing.RunReport>
     load_const "next"
@@ -1769,30 +1573,27 @@ function testing._collect_leaf_messages(results: (testing.TestReport | testing.T
     store_var _12
     load_var _12
     is_type baml.iter.Done
-    pop_jump_if_false L5
-    jump L0
-
-  L5:
+    pop_jump_if_true L0
     load_var _12
     store_var_load_var run
     load_field .outcome
     load_const "pass"
     call baml.ops.equals_equals
     unary_op !
-    pop_jump_if_false L4
+    pop_jump_if_false L2
     load_var run
     load_field .message
     store_var _20
     load_var _20
     narrow_bind string, slot=10
-    pop_jump_if_false L4
+    pop_jump_if_false L2
     load_type string
     load_var2 2 10
     call baml.Array.push
     pop 1
-    jump L4
+    jump L2
 
-  L6:
+  L3:
     load_const null
     return
 }
@@ -1817,10 +1618,7 @@ function testing._collect_leaf_names(registry: testing.TestRegistry) -> string[]
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_type string
     load_var2 2 4
     load_field .name
@@ -1828,7 +1626,7 @@ function testing._collect_leaf_names(registry: testing.TestRegistry) -> string[]
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var registry
     load_field .collector
     load_field .testsets
@@ -1837,7 +1635,7 @@ function testing._collect_leaf_names(registry: testing.TestRegistry) -> string[]
     virtual_call nargs=1 ntypeargs=0
     store_var _13
 
-  L3:
+  L2:
     load_var _13
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
@@ -1845,10 +1643,7 @@ function testing._collect_leaf_names(registry: testing.TestRegistry) -> string[]
     store_var _14
     load_var _14
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L7
-
-  L4:
+    pop_jump_if_true L4
     load_var2 1 6
     call testing._collect_subtree_names
     load_type baml.iter.Iterable<Error = never, Item = string>
@@ -1856,7 +1651,7 @@ function testing._collect_leaf_names(registry: testing.TestRegistry) -> string[]
     virtual_call nargs=1 ntypeargs=0
     store_var _20
 
-  L5:
+  L3:
     load_var _20
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
@@ -1864,17 +1659,14 @@ function testing._collect_leaf_names(registry: testing.TestRegistry) -> string[]
     store_var _21
     load_var _21
     is_type baml.iter.Done
-    pop_jump_if_false L6
-    jump L3
-
-  L6:
+    pop_jump_if_true L2
     load_type string
     load_var2 2 8
     call baml.Array.push
     pop 1
-    jump L5
+    jump L3
 
-  L7:
+  L4:
     load_var out
     return
 }
@@ -1883,111 +1675,60 @@ function testing._collect_subtree_names(registry: testing.TestRegistry, ts: test
     load_var2 1 2
     call testing.TestRegistry._expand_testset_registry
     call testing._collect_leaf_names
-    jump L19
+    jump L2
     load_var e
     store_var _5
     load_var _5
     narrow_bind testing.InvalidTestName, slot=4
-    pop_jump_if_false L0
-    jump L18
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L1
-    jump L17
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.IndexOutOfBounds
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.InvalidFieldAccess
-    pop_jump_if_false L3
-    jump L17
-
-  L3:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.MapKeyNotFound
-    pop_jump_if_false L4
-    jump L17
-
-  L4:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.StackOverflow
-    pop_jump_if_false L5
-    jump L17
-
-  L5:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.AssertionFailed
-    pop_jump_if_false L6
-    jump L17
-
-  L6:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.Unreachable
-    pop_jump_if_false L7
-    jump L17
-
-  L7:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.Cancelled
-    pop_jump_if_false L8
-    jump L17
-
-  L8:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.UserPanic
-    pop_jump_if_false L9
-    jump L17
-
-  L9:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.Exit
-    pop_jump_if_false L10
-    jump L17
-
-  L10:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.AllocFailure
-    pop_jump_if_false L11
-    jump L17
-
-  L11:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.HostUnavailable
-    pop_jump_if_false L12
-    jump L17
-
-  L12:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.NegativeBitShift
-    pop_jump_if_false L13
-    jump L17
-
-  L13:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.SdkPanic
-    pop_jump_if_false L14
-    jump L17
-
-  L14:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.HostContractViolation
-    pop_jump_if_false L15
-    jump L17
-
-  L15:
+    pop_jump_if_true L0
     load_var e
     is_type baml.panics.IntegerOverflow
-    pop_jump_if_false L16
-    jump L17
-
-  L16:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_var ts
@@ -1996,22 +1737,22 @@ function testing._collect_subtree_names(registry: testing.TestRegistry, ts: test
     bin_op +
     load_type string
     alloc_array 1
-    jump L19
+    jump L2
 
-  L17:
+  L0:
     load_var ts
     load_field .name
     load_const "::(failed to expand)"
     bin_op +
     load_type string
     alloc_array 1
-    jump L19
+    jump L2
 
-  L18:
+  L1:
     load_var _5
     throw
 
-  L19:
+  L2:
     return
 }
 
@@ -2021,111 +1762,60 @@ function testing._collect_subtree_names_layered(registry: testing.TestRegistry, 
     load_var2 3 4
     load_var2 5 6
     call testing._select_names_layered
-    jump L23
+    jump L4
     load_var e
     store_var _9
     load_var _9
     narrow_bind testing.InvalidTestName, slot=8
-    pop_jump_if_false L0
-    jump L22
-
-  L0:
+    pop_jump_if_true L3
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L1
-    jump L19
-
-  L1:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.IndexOutOfBounds
-    pop_jump_if_false L2
-    jump L19
-
-  L2:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.InvalidFieldAccess
-    pop_jump_if_false L3
-    jump L19
-
-  L3:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.MapKeyNotFound
-    pop_jump_if_false L4
-    jump L19
-
-  L4:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.StackOverflow
-    pop_jump_if_false L5
-    jump L19
-
-  L5:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.AssertionFailed
-    pop_jump_if_false L6
-    jump L19
-
-  L6:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.Unreachable
-    pop_jump_if_false L7
-    jump L19
-
-  L7:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.Cancelled
-    pop_jump_if_false L8
-    jump L19
-
-  L8:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.UserPanic
-    pop_jump_if_false L9
-    jump L19
-
-  L9:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.Exit
-    pop_jump_if_false L10
-    jump L19
-
-  L10:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.AllocFailure
-    pop_jump_if_false L11
-    jump L19
-
-  L11:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.HostUnavailable
-    pop_jump_if_false L12
-    jump L19
-
-  L12:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.NegativeBitShift
-    pop_jump_if_false L13
-    jump L19
-
-  L13:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.SdkPanic
-    pop_jump_if_false L14
-    jump L19
-
-  L14:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.HostContractViolation
-    pop_jump_if_false L15
-    jump L19
-
-  L15:
+    pop_jump_if_true L1
     load_var e
     is_type baml.panics.IntegerOverflow
-    pop_jump_if_false L16
-    jump L19
-
-  L16:
+    pop_jump_if_true L1
     load_var e
     throw_if_panic
     load_var ts
@@ -2136,21 +1826,18 @@ function testing._collect_subtree_names_layered(registry: testing.TestRegistry, 
     load_var2 3 4
     load_var2 5 6
     call testing._leaf_selected_layered
-    pop_jump_if_false L17
-    jump L18
-
-  L17:
+    pop_jump_if_true L0
     load_type string
     alloc_array 0
-    jump L23
+    jump L4
 
-  L18:
+  L0:
     load_var sentinel
     load_type string
     alloc_array 1
-    jump L23
+    jump L4
 
-  L19:
+  L1:
     load_var ts
     load_field .name
     load_const "::(failed to expand)"
@@ -2159,25 +1846,22 @@ function testing._collect_subtree_names_layered(registry: testing.TestRegistry, 
     load_var2 3 4
     load_var2 5 6
     call testing._leaf_selected_layered
-    pop_jump_if_false L20
-    jump L21
-
-  L20:
+    pop_jump_if_true L2
     load_type string
     alloc_array 0
-    jump L23
+    jump L4
 
-  L21:
+  L2:
     load_var sentinel
     load_type string
     alloc_array 1
-    jump L23
+    jump L4
 
-  L22:
+  L3:
     load_var _9
     throw
 
-  L23:
+  L4:
     return
 }
 
@@ -2204,64 +1888,47 @@ function testing._count_leaves(results: (testing.TestReport | testing.TestSetRep
     store_var _8
     load_var _8
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L15
-
-  L1:
+    pop_jump_if_true L8
     load_var _8
     store_var r
     load_var r
     store_var _13
     load_var _13
     narrow_bind testing.TestReport, slot=11
-    pop_jump_if_false L2
-    jump L9
-
-  L2:
+    pop_jump_if_true L4
     load_var r
     store_var tsr
     load_var tolerated_by_parent
-    jump_if_false L3
-    store_var ft
-    jump L4
-
-  L3:
-    pop 1
+    jump_if_true_or_pop L1
     load_var tsr
     load_field .outcome
     load_const "pass"
     call baml.ops.equals_equals
-    store_var ft
 
-  L4:
+  L1:
+    store_var ft
     load_var tsr
     load_field .results
     container_len
-    store_var _21
-    load_var _21
+    store_var _22
+    load_var _22
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L5
-    jump L8
-
-  L5:
+    pop_jump_if_true L3
     load_var ft
-    pop_jump_if_false L6
+    pop_jump_if_true L2
+    load_var tsr
+    load_field .passed
+    load_var tsr
+    load_field .failed
+    load_const 0
+    load_var tsr
+    load_field .total
+    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
+    store_var delta
     jump L7
 
-  L6:
-    load_var tsr
-    load_field .passed
-    load_var tsr
-    load_field .failed
-    load_const 0
-    load_var tsr
-    load_field .total
-    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
-    store_var delta
-    jump L14
-
-  L7:
+  L2:
     load_var tsr
     load_field .passed
     load_const 0
@@ -2271,48 +1938,42 @@ function testing._count_leaves(results: (testing.TestReport | testing.TestSetRep
     load_field .total
     init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
     store_var delta
-    jump L14
+    jump L7
 
-  L8:
+  L3:
     load_var tsr
     load_field .results
     load_var ft
     call testing._count_leaves
     store_var delta
-    jump L14
+    jump L7
 
-  L9:
+  L4:
     load_var _13
     load_field .outcome
     load_const "pass"
     call baml.ops.equals_equals
-    pop_jump_if_false L10
-    jump L13
-
-  L10:
+    pop_jump_if_true L6
     load_var tolerated_by_parent
-    pop_jump_if_false L11
-    jump L12
-
-  L11:
+    pop_jump_if_true L5
     load_const 0
     load_const 1
     load_const 0
     load_const 1
     init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
     store_var delta
-    jump L14
+    jump L7
 
-  L12:
+  L5:
     load_const 0
     load_const 0
     load_const 1
     load_const 1
     init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
     store_var delta
-    jump L14
+    jump L7
 
-  L13:
+  L6:
     load_const 1
     load_const 0
     load_const 0
@@ -2320,7 +1981,7 @@ function testing._count_leaves(results: (testing.TestReport | testing.TestSetRep
     init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
     store_var delta
 
-  L14:
+  L7:
     load_var2 3 10
     load_field .passed
     add_int
@@ -2339,7 +2000,7 @@ function testing._count_leaves(results: (testing.TestReport | testing.TestSetRep
     store_var total
     jump L0
 
-  L15:
+  L8:
     load_var2 3 4
     load_var2 5 6
     init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
@@ -2367,60 +2028,54 @@ function testing._expansion_error_report(name: string) -> testing.TestSetReport 
 function testing._failure_matches_selected(selected: string, failed_names: string[]) -> bool {
     load_var2 1 2
     call testing._name_in
-    pop_jump_if_false L0
-    jump L4
-
-  L0:
+    pop_jump_if_true L2
     load_var selected
     load_const "::(failed to expand)"
     call baml.String.ends_with
-    pop_jump_if_false L3
+    pop_jump_if_false L1
     load_var selected
     call baml.String.length
-    store_var _10
+    store_var _8
     load_const "::(failed to expand)"
     call baml.String.length
-    store_var _11
+    store_var _9
     load_var selected
     load_const 0
     load_var2 4 5
     sub_int
     call baml.String.slice
-    store_var _8
+    store_var _6
     load_var failed_names
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _12
+    store_var _10
 
-  L1:
-    load_var _12
+  L0:
+    load_var _10
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _13
-    load_var _13
+    store_var _11
+    load_var _11
     is_type baml.iter.Done
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var2 7 3
     load_const "::"
     bin_op +
     call baml.String.starts_with
-    pop_jump_if_false L1
+    pop_jump_if_false L0
     load_const true
-    jump L5
+    jump L3
+
+  L1:
+    load_const false
+    jump L3
+
+  L2:
+    load_const true
 
   L3:
-    load_const false
-    jump L5
-
-  L4:
-    load_const true
-
-  L5:
     return
 }
 
@@ -2437,46 +2092,40 @@ function testing._flatten_with_tolerated(report: testing.TestSetReport, selected
     load_var _7
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L0
-    jump L3
+    pop_jump_if_true L1
+    load_var top_tolerated
+    pop_jump_if_true L0
+    load_var report
+    load_field .passed
+    load_var report
+    load_field .failed
+    load_const 0
+    load_var report
+    load_field .total
+    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
+    store_var counts
+    jump L2
 
   L0:
-    load_var top_tolerated
-    pop_jump_if_false L1
+    load_var report
+    load_field .passed
+    load_const 0
+    load_var report
+    load_field .failed
+    load_var report
+    load_field .total
+    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
+    store_var counts
     jump L2
 
   L1:
-    load_var report
-    load_field .passed
-    load_var report
-    load_field .failed
-    load_const 0
-    load_var report
-    load_field .total
-    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
-    store_var counts
-    jump L4
-
-  L2:
-    load_var report
-    load_field .passed
-    load_const 0
-    load_var report
-    load_field .failed
-    load_var report
-    load_field .total
-    init_instance testing._LeafCounts .passed, .failed, .tolerated, .total
-    store_var counts
-    jump L4
-
-  L3:
     load_var report
     load_field .results
     load_var top_tolerated
     call testing._count_leaves
     store_var counts
 
-  L4:
+  L2:
     load_type string
     alloc_array 0
     store_var messages
@@ -2512,23 +2161,19 @@ function testing._flatten_with_tolerated(report: testing.TestSetReport, selected
     load_var executed
     load_field .passed
     container_len
-    store_var _39
+    store_var _37
     load_var2 10 4
     load_field .passed
     cmp_int_op ==
-    jump_if_false L5
-    pop 1
+    pop_jump_if_false L3
     load_var executed
     load_field .failed
     container_len
-    store_var _42
+    store_var _41
     load_var2 11 4
     load_field .failed
     cmp_int_op ==
-
-  L5:
-    jump_if_false L6
-    pop 1
+    pop_jump_if_false L3
     load_var executed
     load_field .tolerated
     container_len
@@ -2536,22 +2181,16 @@ function testing._flatten_with_tolerated(report: testing.TestSetReport, selected
     load_var2 12 4
     load_field .tolerated
     cmp_int_op ==
+    pop_jump_if_true L5
 
-  L6:
-    pop_jump_if_false L7
-    jump L10
-
-  L7:
+  L3:
     load_var selected_names
     container_len
     store_var _49
     load_var2 13 4
     load_field .total
     cmp_int_op ==
-    pop_jump_if_false L8
-    jump L9
-
-  L8:
+    pop_jump_if_true L4
     load_type string
     alloc_array 0
     load_type string
@@ -2566,21 +2205,21 @@ function testing._flatten_with_tolerated(report: testing.TestSetReport, selected
     alloc_array 0
     init_instance testing._LeafIdentities .passed, .failed, .tolerated, .passed_ms, .failed_ms, .tolerated_ms
     store_var identities
-    jump L11
+    jump L6
 
-  L9:
+  L4:
     load_var2 2 1
     load_field .failed_names
     load_var all_failed_names
     call testing._classify_selected_names
     store_var identities
-    jump L11
+    jump L6
 
-  L10:
+  L5:
     load_var executed
     store_var identities
 
-  L11:
+  L6:
     load_var report
     load_field .outcome
     load_var counts
@@ -2619,10 +2258,7 @@ function testing._glob_match(subject: string, pattern: string) -> bool {
     load_var n
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L13
-
-  L0:
+    pop_jump_if_true L7
     load_var parts
     load_const 0
     load_array_element
@@ -2634,144 +2270,118 @@ function testing._glob_match(subject: string, pattern: string) -> bool {
     store_var last
     load_var2 1 5
     call baml.String.starts_with
-    unary_op !
-    pop_jump_if_false L1
-    jump L12
+    pop_jump_if_true L0
+    load_const false
+    jump L8
 
-  L1:
+  L0:
     load_var2 1 6
     call baml.String.ends_with
-    unary_op !
-    pop_jump_if_false L2
-    jump L11
+    pop_jump_if_true L1
+    load_const false
+    jump L8
 
-  L2:
+  L1:
     load_var first
     call baml.String.length
     store_var start
     load_var subject
     call baml.String.length
-    store_var _24
     load_var last
     call baml.String.length
-    store_var _25
-    load_var2 9 10
     sub_int
     store_var end_limit
     load_var2 7 8
     cmp_int_op >
-    pop_jump_if_false L3
-    jump L10
-
-  L3:
+    pop_jump_if_true L6
     load_var start
     store_var pos
     load_const 1
     store_var i
 
-  L4:
-    load_var2 12 4
+  L2:
+    load_var2 10 4
     load_const 1
     sub_int
     cmp_int_op <
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
+    pop_jump_if_true L3
     load_const true
-    jump L14
+    jump L8
 
-  L6:
-    load_var2 3 12
+  L3:
+    load_var2 3 10
     load_array_element
     store_var_load_var part
     load_const ""
     cmp_op !=
-    pop_jump_if_false L9
-    load_var2 1 11
+    pop_jump_if_false L5
+    load_var2 1 9
     load_var end_limit
     call baml.String.slice
     load_var part
     call baml.String.index_of
-    store_var _45
-    load_var _45
-    narrow_bind int, slot=14
-    pop_jump_if_false L7
+    store_var _43
+    load_var _43
+    narrow_bind int, slot=12
+    pop_jump_if_true L4
+    load_const false
     jump L8
 
-  L7:
-    load_const false
-    jump L14
-
-  L8:
-    load_var2 11 14
+  L4:
+    load_var2 9 12
     add_int
-    store_var _47
+    store_var _45
     load_var part
     call baml.String.length
-    load_var _47
+    load_var _45
     add_int
     store_var pos
 
-  L9:
+  L5:
     load_var i
     load_const 1
     add_int
     store_var i
-    jump L4
+    jump L2
 
-  L10:
+  L6:
     load_const false
-    jump L14
+    jump L8
 
-  L11:
-    load_const false
-    jump L14
-
-  L12:
-    load_const false
-    jump L14
-
-  L13:
+  L7:
     load_var2 1 2
     call baml.String.index_of
     load_const null
     call baml.ops.equals_equals
     unary_op !
 
-  L14:
+  L8:
     return
 }
 
 function testing._leaf_selected(name: string, include: string[], exclude: string[]) -> bool {
     load_var2 3 1
     call testing._any_pattern_matches
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var include
     container_len
     store_var _6
     load_var _6
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    load_var2 2 1
+    call testing._any_pattern_matches
+    jump L2
+
+  L0:
+    load_const true
     jump L2
 
   L1:
-    load_var2 2 1
-    call testing._any_pattern_matches
-    jump L4
-
-  L2:
-    load_const true
-    jump L4
-
-  L3:
     load_const false
 
-  L4:
+  L2:
     return
 }
 
@@ -2779,8 +2389,7 @@ function testing._leaf_selected_layered(name: string, profile_include: string[],
     load_var2 1 2
     load_var profile_exclude
     call testing._leaf_selected
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var2 1 4
     load_var cli_exclude
     call testing._leaf_selected
@@ -2804,20 +2413,17 @@ function testing._name_in(name: string, names: string[]) -> bool {
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 4 1
     cmp_op ==
     pop_jump_if_false L0
     load_const true
-    jump L3
+    jump L2
 
-  L2:
+  L1:
     load_const false
 
-  L3:
+  L2:
     return
 }
 
@@ -2833,10 +2439,7 @@ function testing._pattern_may_match_descendant(pattern: string, prefix: string) 
     load_var _4
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L1
     load_var pattern
     load_const 0
     load_var _4
@@ -2844,19 +2447,17 @@ function testing._pattern_may_match_descendant(pattern: string, prefix: string) 
     store_var literal
     load_var2 3 5
     call baml.String.starts_with
-    jump_if_false L1
-    jump L3
-
-  L1:
-    pop 1
+    jump_if_true_or_pop L0
     load_var2 5 3
     call baml.String.starts_with
-    jump L3
 
-  L2:
+  L0:
+    jump L2
+
+  L1:
     load_const true
 
-  L3:
+  L2:
     return
 }
 
@@ -2884,10 +2485,7 @@ function testing._run_children_parallel(children: testing.TestSetChild[], pool: 
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L2
     load_const null
     make_cell
     store_var child
@@ -2895,10 +2493,7 @@ function testing._run_children_parallel(children: testing.TestSetChild[], pool: 
     store_deref ?6
     load_deref ?6
     load_field .is_container
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_deref ?2
     call testing._TestPool.acquire
     pop 1
@@ -2916,7 +2511,7 @@ function testing._run_children_parallel(children: testing.TestSetChild[], pool: 
     pop 1
     jump L0
 
-  L3:
+  L1:
     load_var child
     make_closure .<lambda(_run_children_parallel, 0)>, 1
     load_const null
@@ -2931,7 +2526,7 @@ function testing._run_children_parallel(children: testing.TestSetChild[], pool: 
     pop 1
     jump L0
 
-  L4:
+  L2:
     load_type testing._NamedChildReport
     load_type never
     load_var futures
@@ -2959,10 +2554,7 @@ function testing._run_children_sequential(children: testing.TestSetChild[], fail
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
+    pop_jump_if_true L3
     load_var _5
     store_var_load_var child
     load_field .run
@@ -2979,40 +2571,34 @@ function testing._run_children_sequential(children: testing.TestSetChild[], fail
     store_var _17
     load_var _17
     narrow_bind testing.TestReport, slot=9
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var report
     load_field .outcome
     store_var outcome
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_var _17
     load_field .outcome
     store_var outcome
 
-  L4:
+  L2:
     load_var fail_fast
-    jump_if_false L5
-    pop 1
+    pop_jump_if_false L0
     load_var outcome
     load_const "pass"
     call baml.ops.equals_equals
     unary_op !
-
-  L5:
     pop_jump_if_false L0
     load_var named_results
     call testing._aggregate_reports
-    jump L7
+    jump L4
 
-  L6:
+  L3:
     load_var named_results
     call testing._aggregate_reports
 
-  L7:
+  L4:
     return
 }
 
@@ -3026,14 +2612,11 @@ function testing._run_test(body: () -> void throws unknown, runner: ((() -> test
     load_var runner
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var2 3 2
     call_indirect
     call_indirect
-    jump L2
+    jump L1
     load_var e
     throw_if_panic
     load_var _8
@@ -3051,13 +2634,13 @@ function testing._run_test(body: () -> void throws unknown, runner: ((() -> test
     load_type testing.RunReport
     alloc_array 1
     init_instance testing.TestReport .outcome, .runs
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var base_run
     call_indirect
 
-  L2:
+  L1:
     return
 }
 
@@ -3065,19 +2648,16 @@ function testing._run_testset(children: testing.TestSetChild[], runner: ((testin
     load_var runner
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var2 1 2
+    call_indirect
     jump L1
 
   L0:
-    load_var2 1 2
-    call_indirect
-    jump L2
-
-  L1:
     load_var2 1 3
     call testing._run_children_parallel
 
-  L2:
+  L1:
     return
 }
 
@@ -3112,10 +2692,7 @@ function testing._select_names_layered(registry: testing.TestRegistry, profile_i
     store_var _9
     load_var _9
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _9
     store_var_load_var t
     load_field .name
@@ -3130,7 +2707,7 @@ function testing._select_names_layered(registry: testing.TestRegistry, profile_i
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var registry
     load_field .collector
     load_field .testsets
@@ -3139,7 +2716,7 @@ function testing._select_names_layered(registry: testing.TestRegistry, profile_i
     virtual_call nargs=1 ntypeargs=0
     store_var _19
 
-  L3:
+  L2:
     load_var _19
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
@@ -3147,24 +2724,18 @@ function testing._select_names_layered(registry: testing.TestRegistry, profile_i
     store_var _20
     load_var _20
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L8
-
-  L4:
+    pop_jump_if_true L4
     load_var _20
     store_var_load_var ts
     load_field .name
     load_var2 2 3
     call testing._subtree_may_be_selected
-    jump_if_false L5
-    pop 1
+    pop_jump_if_false L2
     load_var ts
     load_field .name
     load_var2 4 5
     call testing._subtree_may_be_selected
-
-  L5:
-    pop_jump_if_false L3
+    pop_jump_if_false L2
     load_var2 1 12
     load_var2 2 3
     load_var2 4 5
@@ -3174,7 +2745,7 @@ function testing._select_names_layered(registry: testing.TestRegistry, profile_i
     virtual_call nargs=1 ntypeargs=0
     store_var _31
 
-  L6:
+  L3:
     load_var _31
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
@@ -3182,17 +2753,14 @@ function testing._select_names_layered(registry: testing.TestRegistry, profile_i
     store_var _32
     load_var _32
     is_type baml.iter.Done
-    pop_jump_if_false L7
-    jump L3
-
-  L7:
+    pop_jump_if_true L2
     load_type string
     load_var2 6 14
     call baml.Array.push
     pop 1
-    jump L6
+    jump L3
 
-  L8:
+  L4:
     load_var out
     return
 }
@@ -3216,10 +2784,7 @@ function testing._subtree_excluded(prefix: string, excludes: string[]) -> bool {
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
+    pop_jump_if_true L3
     load_var _5
     store_var pattern
     load_var pattern
@@ -3227,67 +2792,54 @@ function testing._subtree_excluded(prefix: string, excludes: string[]) -> bool {
     call baml.String.index_of
     load_const null
     call baml.ops.equals_equals
-    jump_if_false L2
-    pop 1
+    pop_jump_if_false L1
     load_var2 3 6
     call baml.String.index_of
     load_const null
     call baml.ops.equals_equals
     unary_op !
+    pop_jump_if_true L2
 
-  L2:
-    pop_jump_if_false L3
-    jump L5
-
-  L3:
+  L1:
     load_var pattern
     load_const "*"
     call baml.String.ends_with
-    jump_if_false L4
-    pop 1
+    pop_jump_if_false L0
     load_var2 3 6
     call testing._glob_match
-
-  L4:
     pop_jump_if_false L0
     load_const true
-    jump L7
+    jump L4
 
-  L5:
+  L2:
     load_const true
-    jump L7
+    jump L4
 
-  L6:
+  L3:
     load_const false
 
-  L7:
+  L4:
     return
 }
 
 function testing._subtree_may_be_selected(prefix: string, include: string[], exclude: string[]) -> bool {
     load_var2 1 3
     call testing._subtree_excluded
-    pop_jump_if_false L0
-    jump L6
-
-  L0:
+    pop_jump_if_true L3
     load_var include
     container_len
     store_var _6
     load_var _6
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L5
-
-  L1:
+    pop_jump_if_true L2
     load_var include
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
 
-  L2:
+  L0:
     load_var _7
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
@@ -3295,28 +2847,25 @@ function testing._subtree_may_be_selected(prefix: string, include: string[], exc
     store_var _8
     load_var _8
     is_type baml.iter.Done
-    pop_jump_if_false L3
+    pop_jump_if_true L1
+    load_var2 6 1
+    call testing._pattern_may_match_descendant
+    pop_jump_if_false L0
+    load_const true
+    jump L4
+
+  L1:
+    load_const false
+    jump L4
+
+  L2:
+    load_const true
     jump L4
 
   L3:
-    load_var2 6 1
-    call testing._pattern_may_match_descendant
-    pop_jump_if_false L2
-    load_const true
-    jump L7
+    load_const false
 
   L4:
-    load_const false
-    jump L7
-
-  L5:
-    load_const true
-    jump L7
-
-  L6:
-    load_const false
-
-  L7:
     return
 }
 
@@ -3339,37 +2888,31 @@ function testing._test_pool(max_concurrency: int) -> testing._TestPool {
     load_var max_concurrency
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const 64
+    store_var limit
     jump L1
 
   L0:
-    load_const 64
-    store_var limit
-    jump L2
-
-  L1:
     load_var max_concurrency
     store_var limit
 
-  L2:
+  L1:
     load_type int
     alloc_array 0
     store_var tokens
     load_const 0
     store_var i
 
-  L3:
+  L2:
     load_var2 4 2
     cmp_int_op <
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L3
     load_var tokens
     init_instance testing._TestPool .tokens
     return
 
-  L5:
+  L3:
     load_type int
     load_var tokens
     load_const 1
@@ -3379,7 +2922,7 @@ function testing._test_pool(max_concurrency: int) -> testing._TestPool {
     load_const 1
     add_int
     store_var i
-    jump L3
+    jump L2
 }
 
 function testing._testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegistration, pool: testing._TestPool) -> testing.TestSetChild {
@@ -3445,10 +2988,7 @@ function testing._testset_children(registry: testing.TestRegistry, pool: testing
     store_var _6
     load_var _6
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _6
     store_var_load_var t
     load_field .name
@@ -3464,7 +3004,7 @@ function testing._testset_children(registry: testing.TestRegistry, pool: testing
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var registry
     load_field .collector
     load_field .testsets
@@ -3473,7 +3013,7 @@ function testing._testset_children(registry: testing.TestRegistry, pool: testing
     virtual_call nargs=1 ntypeargs=0
     store_var _17
 
-  L3:
+  L2:
     load_var _17
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
@@ -3481,10 +3021,7 @@ function testing._testset_children(registry: testing.TestRegistry, pool: testing
     store_var _18
     load_var _18
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L3
     load_var2 1 9
     load_var pool
     call testing._testset_child
@@ -3493,9 +3030,9 @@ function testing._testset_children(registry: testing.TestRegistry, pool: testing
     load_var2 3 10
     call baml.Array.push
     pop 1
-    jump L3
+    jump L2
 
-  L5:
+  L3:
     load_var children
     return
 }
@@ -3523,10 +3060,7 @@ function testing._testset_children_selected(registry: testing.TestRegistry, name
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _7
     store_var t
     load_type string
@@ -3548,7 +3082,7 @@ function testing._testset_children_selected(registry: testing.TestRegistry, name
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var registry
     load_field .collector
     load_field .testsets
@@ -3557,7 +3091,7 @@ function testing._testset_children_selected(registry: testing.TestRegistry, name
     virtual_call nargs=1 ntypeargs=0
     store_var _21
 
-  L3:
+  L2:
     load_var _21
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
@@ -3565,10 +3099,7 @@ function testing._testset_children_selected(registry: testing.TestRegistry, name
     store_var _22
     load_var _22
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L3
     load_var _22
     store_var ts
     load_type string
@@ -3583,7 +3114,7 @@ function testing._testset_children_selected(registry: testing.TestRegistry, name
     load_var2 2 12
     make_closure .<lambda(_testset_children_selected, 0)>, 1
     call baml.Array.some
-    pop_jump_if_false L3
+    pop_jump_if_false L2
     load_var2 1 11
     load_var2 2 3
     call testing._testset_child_selected
@@ -3592,9 +3123,9 @@ function testing._testset_children_selected(registry: testing.TestRegistry, name
     load_var2 4 13
     call baml.Array.push
     pop 1
-    jump L3
+    jump L2
 
-  L5:
+  L3:
     load_var children
     return
 }

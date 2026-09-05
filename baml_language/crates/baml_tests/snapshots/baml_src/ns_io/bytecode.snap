@@ -65,27 +65,21 @@ function io.<(user.io.ChunkReader as baml.io.Read)>.read(self: io.ChunkReader, l
     store_var _5
     load_var2 3 4
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L7
-
-  L0:
+    pop_jump_if_true L4
     load_var2 2 1
     load_field .chunk_size
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var self
     load_field .chunk_size
     store_var count
-    jump L3
+    jump L1
 
-  L2:
+  L0:
     load_var limit
     store_var count
 
-  L3:
+  L1:
     load_var self
     load_field .cursor
     load_var count
@@ -97,24 +91,21 @@ function io.<(user.io.ChunkReader as baml.io.Read)>.read(self: io.ChunkReader, l
     store_var _15
     load_var2 7 8
     cmp_int_op <
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L2
     load_var self
     load_field .data
     container_len
     store_var end
-    jump L6
+    jump L3
 
-  L5:
+  L2:
     load_var self
     load_field .cursor
     load_var count
     add_int
     store_var end
 
-  L6:
+  L3:
     load_var self
     load_field .data
     load_var self
@@ -123,12 +114,12 @@ function io.<(user.io.ChunkReader as baml.io.Read)>.read(self: io.ChunkReader, l
     call baml.Uint8Array.slice
     load_var2 1 6
     store_field .cursor
-    jump L8
+    jump L5
 
-  L7:
+  L4:
     load_const null
 
-  L8:
+  L5:
     return
 }
 
@@ -144,21 +135,18 @@ function io.<(user.io.ChunkWriter as baml.io.Write)>.write_some(self: io.ChunkWr
     load_var2 4 1
     load_field .chunk_size
     cmp_int_op <
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var self
     load_field .chunk_size
     store_var count
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var data
     container_len
     store_var count
 
-  L2:
+  L1:
     load_var self
     load_field .data
     store_var _7

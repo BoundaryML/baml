@@ -63,15 +63,18 @@ async fn catch_stale_field_slot_invalid_field_access() {
         panic!("user.oob should be a function");
     };
 
-    func.bytecode.instructions = vec![
-        Instruction::AllocInstance {
-            class_obj: ObjectIndex::from_raw(class_idx),
-            ntypeargs: 0,
-        },
-        Instruction::LoadField(1),
-        Instruction::Return,
-    ];
-    func.bytecode.compact = None;
+    // Replacing the instruction stream also invalidates its PC-indexed metadata.
+    func.bytecode = bex_vm_types::Bytecode {
+        instructions: vec![
+            Instruction::AllocInstance {
+                class_obj: ObjectIndex::from_raw(class_idx),
+                ntypeargs: 0,
+            },
+            Instruction::LoadField(1),
+            Instruction::Return,
+        ],
+        ..Default::default()
+    };
 
     let engine = Arc::new(
         BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
