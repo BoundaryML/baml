@@ -3,10 +3,17 @@ set -euo pipefail
 
 if [[ -n "${BAML_SCCACHE_R2_ACCESS_KEY_ID:-}" ]]; then
     export AWS_ACCESS_KEY_ID="${BAML_SCCACHE_R2_ACCESS_KEY_ID}"
+elif [[ -n "${BAML_SCCACHE_R2_ACCESS_KEY:-}" ]]; then
+    # Deprecated compatibility alias. The canonical name includes `_ID`.
+    export AWS_ACCESS_KEY_ID="${BAML_SCCACHE_R2_ACCESS_KEY}"
 fi
 
 if [[ -n "${BAML_SCCACHE_R2_SECRET_ACCESS_KEY:-}" ]]; then
     export AWS_SECRET_ACCESS_KEY="${BAML_SCCACHE_R2_SECRET_ACCESS_KEY}"
 fi
+
+# sccache only needs the mapped AWS names. In particular, never leak a
+# short-lived Infisical session token into the sccache server.
+unset BAML_SCCACHE_R2_ACCESS_KEY_ID BAML_SCCACHE_R2_ACCESS_KEY BAML_SCCACHE_R2_SECRET_ACCESS_KEY INFISICAL_TOKEN
 
 exec sccache "$@"

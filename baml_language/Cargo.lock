@@ -584,7 +584,7 @@ dependencies = [
  "anyhow",
  "baml_release",
  "console",
- "reqwest",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tempfile",
@@ -696,7 +696,7 @@ dependencies = [
  "mime_guess",
  "rayon",
  "regex",
- "reqwest",
+ "reqwest 0.13.4",
  "sdkgen_cpp",
  "sdkgen_csharp",
  "sdkgen_go",
@@ -1047,7 +1047,7 @@ dependencies = [
  "notify",
  "num-bigint",
  "parking_lot",
- "reqwest",
+ "reqwest 0.13.4",
  "rustls",
  "serde",
  "serde_json",
@@ -1123,7 +1123,7 @@ version = "0.0.0-beta"
 dependencies = [
  "anyhow",
  "flate2",
- "reqwest",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sha2",
@@ -1254,7 +1254,7 @@ dependencies = [
  "baml_version",
  "bex_vm_types",
  "borsh",
- "reqwest",
+ "reqwest 0.13.4",
  "rustls",
  "sha2",
  "tempfile",
@@ -1742,7 +1742,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "prost",
- "reqwest",
+ "reqwest 0.13.4",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -3814,6 +3814,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tower-service",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -4040,6 +4041,21 @@ dependencies = [
  "unicode-width 0.2.0",
  "unit-prefix",
  "web-time",
+]
+
+[[package]]
+name = "infisical"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdf5b1e1089d886395e20cbe4f6ef6a8023c10313055581fce3bcc28598ec001"
+dependencies = [
+ "base64",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "url",
 ]
 
 [[package]]
@@ -5934,6 +5950,47 @@ checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
 name = "reqwest"
+version = "0.12.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
+dependencies = [
+ "base64",
+ "bytes",
+ "futures-channel",
+ "futures-core",
+ "futures-util",
+ "h2",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "hyper-rustls",
+ "hyper-util",
+ "js-sys",
+ "log",
+ "percent-encoding",
+ "pin-project-lite",
+ "quinn",
+ "rustls",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sync_wrapper",
+ "tokio",
+ "tokio-rustls",
+ "tower",
+ "tower-http",
+ "tower-service",
+ "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "webpki-roots",
+]
+
+[[package]]
+name = "reqwest"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
@@ -6515,6 +6572,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "secrecy"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e891af845473308773346dc847b2c23ee78fe442e0472ac50e22a18a93d3ae5a"
+dependencies = [
+ "zeroize",
+]
+
+[[package]]
 name = "security-framework"
 version = "3.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6976,7 +7042,7 @@ dependencies = [
  "num-bigint",
  "once_cell",
  "prost",
- "reqwest",
+ "reqwest 0.13.4",
  "rustls",
  "rustls-pemfile",
  "serde_json",
@@ -7258,6 +7324,7 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
+ "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
@@ -7432,6 +7499,13 @@ checksum = "756daf9b1013ebe47a8776667b466417e2d4c5679d441c26230efd9ef78692db"
 [[package]]
 name = "tools_sccache"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "infisical",
+ "reqwest 0.12.28",
+ "secrecy",
+ "tokio",
+]
 
 [[package]]
 name = "tower"
