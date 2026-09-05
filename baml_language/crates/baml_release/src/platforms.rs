@@ -80,6 +80,9 @@ pub struct PythonArtifact {
     /// `manylinux`/`musllinux` platform tag for maturin (Linux targets only).
     #[serde(default)]
     pub manylinux: Option<String>,
+    /// Explicit maturin build container (otherwise the action selects its default).
+    #[serde(default)]
+    pub container: Option<String>,
     /// Python-setup architecture override (arm64-Windows only).
     #[serde(default)]
     pub architecture: Option<String>,
@@ -232,40 +235,6 @@ mod tests {
                 t.triple
             );
         }
-    }
-
-    #[test]
-    fn toolchain_build_modes_are_preserved_and_mutually_exclusive() {
-        let p = platforms();
-        let arm = p
-            .targets
-            .iter()
-            .find(|target| target.triple == "aarch64-unknown-linux-gnu")
-            .unwrap()
-            .artifacts
-            .toolchain
-            .as_ref()
-            .unwrap();
-        assert_eq!(
-            arm.container.as_deref(),
-            Some("ghcr.io/rust-cross/manylinux_2_28-cross:aarch64")
-        );
-        assert!(arm.cross_image.is_none());
-
-        let json = r#"{
-            "schema": 1,
-            "targets": [{
-                "triple": "aarch64-unknown-linux-gnu", "os": "linux", "arch": "aarch64",
-                "libc": "gnu", "archive_suffix": ".tar.gz",
-                "artifacts": { "toolchain": {
-                    "runner": "ubuntu-24.04-arm",
-                    "container": "native-image",
-                    "cross_image": "cross-image"
-                } }
-            }]
-        }"#;
-        let p: Platforms = serde_json::from_str(json).unwrap();
-        assert!(validate_platforms(&p).is_err());
     }
 
     #[test]

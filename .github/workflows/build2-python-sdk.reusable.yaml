@@ -28,8 +28,8 @@ defaults:
     shell: bash
 
 jobs:
-  # Target set + per-target runner/manylinux/architecture come from the platform
-  # contract (`release/platforms.json`), not a hand-copied matrix list.
+  # Targets and their runner/manylinux/architecture/container come from
+  # `release/platforms.json`, not a hand-copied matrix list.
   matrix:
     name: Compute target matrix
     runs-on: ubuntu-latest
@@ -45,13 +45,15 @@ jobs:
         run: |
           set -euo pipefail
           # target + python runner (as `runs_on`) + optional manylinux tag +
-          # optional python-setup architecture. maturin/setup-python treat an
-          # absent field as empty, so only-when-set matches the old matrix.
+          # optional python-setup architecture and build container.
+          # maturin/setup-python treat an absent field as empty, so
+          # only-when-set matches the old matrix.
           include="$(jq -c '[.targets[]
             | select(.artifacts.python != null)
             | .artifacts.python as $p
             | {target: .triple, runs_on: $p.runner}
               + (if $p.manylinux then {manylinux: $p.manylinux} else {} end)
+              + (if $p.container then {container: $p.container} else {} end)
               + (if $p.architecture then {architecture: $p.architecture} else {} end)]' release/platforms.json)"
           echo "include=$include" >> "$GITHUB_OUTPUT"
           jq . <<<"$include"
@@ -134,6 +136,8 @@ jobs:
           # baml_language/Cargo.toml.
           args: --release --strip --out dist
           manylinux: ${{ matrix._.manylinux }}
+          # Explicit musl images bypass maturin-action's implicit GHCR defaults.
+          container: ${{ matrix._.container }}
           before-script-linux: |
             if command -v yum &> /dev/null; then
                 yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic

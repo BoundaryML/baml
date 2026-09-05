@@ -29,6 +29,9 @@ on:
       # Node build matrix can be exercised on a branch before release.
       - sam/publish-nodejs
 
+permissions:
+  contents: read
+
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
   group: ${{ github.workflow }}-${{ github.ref }}-build-nodejs-sdk
@@ -53,7 +56,7 @@ jobs:
             # This is newer than the ideal glibc floor; our users still need the oldest
             # practical compatible baseline we can support for this target.
             # See https://github.com/BoundaryML/baml/issues/2736
-            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
+            container: us-central1-docker.pkg.dev/baml-infra/ghcr-cache/rust-cross/manylinux_2_28-cross:aarch64
             before: |
               echo "CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" >> "$GITHUB_ENV"
           - target: aarch64-apple-darwin
