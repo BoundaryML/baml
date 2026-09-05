@@ -131,6 +131,43 @@ impl BamlClassInt for PackageBamlImpl {
         })))
     }
 
+    fn div_euclid(int: i64, other: i64) -> Result<i64, VmRustFnError> {
+        if other == 0 {
+            return Err(VmPanic::DivisionByZero {
+                left: Value::int(int),
+                right: Value::int(other),
+            }
+            .into());
+        }
+        // `i64::div_euclid` panics on exactly these two conditions: a zero
+        // divisor (checked above), or `Value::INT_MIN.div_euclid(-1)` (Rust's
+        // own documented overflow case, identical to plain `/`'s
+        // `INT_MIN / -1`). Precheck both so a raw Rust panic never reaches the
+        // VM; only a `VmPanic` should.
+        if int == Value::INT_MIN && other == -1 {
+            return Err(VmPanic::IntegerOverflow {
+                message: format!("{int}.div_euclid({other}) overflows int"),
+            }
+            .into());
+        }
+        Ok(int.div_euclid(other))
+    }
+
+    fn rem_euclid(int: i64, other: i64) -> Result<i64, VmRustFnError> {
+        if other == 0 {
+            return Err(VmPanic::DivisionByZero {
+                left: Value::int(int),
+                right: Value::int(other),
+            }
+            .into());
+        }
+        // Never overflows once the zero-divisor case is out of the way: the
+        // result satisfies 0 <= r < |other|, and |other| <= 2^62, so r always
+        // fits i63 — including `Value::INT_MIN.rem_euclid(-1)` (`0`, since
+        // dividing by ±1 always leaves remainder 0).
+        Ok(int.rem_euclid(other))
+    }
+
     // ── Bit operations ────────────────────────────────────────────────────────
 
     fn leading_zeros(int: i64) -> i64 {

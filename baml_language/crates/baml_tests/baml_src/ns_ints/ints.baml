@@ -573,6 +573,136 @@ test "int_ilog_base_negative_throws" {
     }
 }
 
+// ─── div_euclid / rem_euclid ────────────────────────────────────────────────────
+//
+// `div_euclid`/`rem_euclid` satisfy `a == a.div_euclid(b) * b + a.rem_euclid(b)`
+// with `0 <= a.rem_euclid(b) < b.abs()` always — unlike `/`/`%`, which truncate
+// toward zero and can leave a negative remainder.
+
+// The classic footgun this pair exists to fix: truncating `%` gives a negative
+// remainder for a negative dividend, which is wrong for anything treating the
+// result as an index or a position in a cycle.
+test "int_rem_euclid_negative_dividend_is_never_negative" {
+    assert.equal((-7) % 3, -1);              // truncating `%`: negative
+    assert.equal((-7).rem_euclid(3), 2)      // rem_euclid: never negative
+}
+
+test "int_div_euclid_positive_divides_evenly" {
+    assert.equal((7).div_euclid(3), 2);
+    assert.equal((7).rem_euclid(3), 1)
+}
+
+test "int_div_euclid_negative_dividend" {
+    assert.equal((-7).div_euclid(3), -3);
+    assert.equal((-7).rem_euclid(3), 2)
+}
+
+test "int_div_euclid_negative_divisor" {
+    assert.equal((7).div_euclid(-3), -2);
+    assert.equal((7).rem_euclid(-3), 1)
+}
+
+test "int_div_euclid_both_negative" {
+    assert.equal((-7).div_euclid(-3), 3);
+    assert.equal((-7).rem_euclid(-3), 2)
+}
+
+test "int_div_euclid_exact_division" {
+    assert.equal((8).div_euclid(4), 2);
+    assert.equal((-8).div_euclid(4), -2);
+    assert.equal((8).div_euclid(-4), -2);
+    assert.equal((-8).div_euclid(-4), 2);
+    // Exact division always has zero remainder, regardless of sign.
+    assert.equal((8).rem_euclid(4), 0);
+    assert.equal((-8).rem_euclid(4), 0);
+    assert.equal((8).rem_euclid(-4), 0);
+    assert.equal((-8).rem_euclid(-4), 0)
+}
+
+test "int_div_euclid_zero_dividend" {
+    assert.equal((0).div_euclid(5), 0);
+    assert.equal((0).rem_euclid(5), 0);
+    assert.equal((0).div_euclid(-5), 0);
+    assert.equal((0).rem_euclid(-5), 0)
+}
+
+test "int_div_euclid_by_one_and_negative_one" {
+    assert.equal((1).div_euclid(-1), -1);
+    assert.equal((1).rem_euclid(-1), 0);
+    assert.equal((-1).div_euclid(-1), 1);
+    assert.equal((-1).rem_euclid(-1), 0)
+}
+
+test "int_div_euclid_zero_divisor_panics" {
+    {
+        (10).div_euclid(0);
+        baml.sys.panic("expected (10).div_euclid(0) to panic")
+    } catch (e) {
+        baml.panics.DivisionByZero => null
+    }
+}
+
+test "int_rem_euclid_zero_divisor_panics" {
+    {
+        (10).rem_euclid(0);
+        baml.sys.panic("expected (10).rem_euclid(0) to panic")
+    } catch (e) {
+        baml.panics.DivisionByZero => null
+    }
+}
+
+// int.min_value() / -1 already panics (2^62 overflows int.max_value()) --
+// div_euclid must panic the same way rather than let a raw Rust panic escape.
+test "int_div_euclid_min_value_by_negative_one_panics" {
+    {
+        int.min_value().div_euclid(-1);
+        baml.sys.panic("expected int.min_value().div_euclid(-1) to panic")
+    } catch (e) {
+        baml.panics.IntegerOverflow => null
+    }
+}
+
+// rem_euclid has no equivalent overflow case: dividing by +-1 always leaves
+// remainder 0, so int.min_value().rem_euclid(-1) is fine.
+test "int_rem_euclid_min_value_by_negative_one_succeeds" {
+    assert.equal(int.min_value().rem_euclid(-1), 0)
+}
+
+test "int_div_euclid_min_value_by_one_succeeds" {
+    assert.equal(int.min_value().div_euclid(1), -4611686018427387904);
+    assert.equal(int.min_value().rem_euclid(1), 0)
+}
+
+test "int_div_euclid_max_value_by_negative_one_succeeds" {
+    // Unlike min_value(), max_value() / -1 fits (it's -max_value()).
+    assert.equal(int.max_value().div_euclid(-1), -4611686018427387903);
+    assert.equal(int.max_value().rem_euclid(-1), 0)
+}
+
+test "int_rem_euclid_bound_near_widest_divisor" {
+    // The widest possible dividend magnitude (int.min_value(), 2^62), divided
+    // by the largest positive divisor (int.max_value()): rem_euclid must
+    // still land in [0, int.max_value()), never overflowing int.
+    assert.equal(int.min_value().div_euclid(int.max_value()), -2);
+    assert.equal(int.min_value().rem_euclid(int.max_value()), 4611686018427387902)
+}
+
+// Two cases with int.min_value() as the *divisor* (2^62 in magnitude, the
+// widest possible divisor). Both are kept: the first is a trivial sanity
+// check (|5| < |int.min_value()|, so the remainder is just 5 and no sign
+// adjustment ever fires); the second, with a negative dividend, is the one
+// that actually exercises the euclidean sign-adjustment against the widest
+// possible divisor magnitude.
+test "int_div_euclid_divisor_is_min_value_trivial" {
+    assert.equal((5).div_euclid(int.min_value()), 0);
+    assert.equal((5).rem_euclid(int.min_value()), 5)
+}
+
+test "int_div_euclid_divisor_is_min_value_with_adjustment" {
+    assert.equal((-5).div_euclid(int.min_value()), 1);
+    assert.equal((-5).rem_euclid(int.min_value()), 4611686018427387899)
+}
+
 // ─── Bit operations ───────────────────────────────────────────────────────────
 
 test "int_leading_zeros_zero" {

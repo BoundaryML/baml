@@ -1251,6 +1251,10 @@ fn baml.Int.pow = builtin(vm)
 
 fn baml.Int.ilog = builtin(vm)
 
+fn baml.Int.div_euclid = builtin(vm)
+
+fn baml.Int.rem_euclid = builtin(vm)
+
 fn baml.Int.leading_zeros = builtin(vm)
 
 fn baml.Int.leading_ones = builtin(vm)

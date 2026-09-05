@@ -823,6 +823,9 @@ function baml.Int.count_ones(self: int) -> int {
 function baml.Int.count_zeros(self: int) -> int {
 }
 
+function baml.Int.div_euclid(self: int, other: int) -> int {
+}
+
 function baml.Int.ilog(self: int, base: int) -> int {
 }
 
@@ -908,6 +911,9 @@ function baml.Int.random(lower: int, upper: int, rng: baml.random.Rng) -> int {
     bin_op +
     init_instance baml.errors.InvalidArgument .message
     throw
+}
+
+function baml.Int.rem_euclid(self: int, other: int) -> int {
 }
 
 function baml.Int.trailing_ones(self: int) -> int {
