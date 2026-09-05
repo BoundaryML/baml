@@ -29,26 +29,6 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileThrowFacts(pub Vec<FunctionThrowFacts>);
 
-// Safety: comparison-based replacement for Salsa early cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for FileThrowFacts {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: pointer is Salsa-owned and valid for replacement.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
 /// Extract throw-analysis facts for every function defined in `file`
 /// (top-level functions and class methods; interface default methods are
 /// package-level defaults handled by the interface machinery, not solver

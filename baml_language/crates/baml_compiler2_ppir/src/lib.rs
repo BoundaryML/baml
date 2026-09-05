@@ -149,30 +149,6 @@ pub struct ProjectExpansionMaps {
     pub alias_bodies: FxHashMap<Vec<Name>, PpirTy>,
 }
 
-/// # Safety
-///
-/// Mirrors [`baml_compiler2_hir::package::PackageItems`]'s impl. The contained
-/// maps hold no Salsa-interned (`'db`) data, so storing them by value is sound;
-/// `maybe_update` uses `PartialEq` for proper Salsa early-cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for ProjectExpansionMaps {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
 /// Compute the project-wide [`ProjectExpansionMaps`] once, memoized by Salsa.
 ///
 /// `roots` (the database's one [`baml_base::SourceRootTable`]) is only the

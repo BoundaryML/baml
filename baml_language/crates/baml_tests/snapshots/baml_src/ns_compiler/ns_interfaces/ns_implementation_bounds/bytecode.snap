@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function compiler.interfaces.implementation_bounds.$init_test_ns_compiler_ns_interfaces_ns_implementation_bounds_required_interfaces(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.compiler.interfaces.implementation_bounds"
+    load_const "required interface checks symbolic implementation bounds"
+    make_closure .<lambda($init_test_ns_compiler_ns_interfaces_ns_implementation_bounds_required_interfaces, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}

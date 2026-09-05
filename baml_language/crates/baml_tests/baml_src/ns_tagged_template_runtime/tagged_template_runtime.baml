@@ -218,3 +218,25 @@ function tt_nested_for_in_if_main() -> string {
 test "tagged_template_nested_for_in_if" {
     assert.equal(tt_nested_for_in_if_main(), "<p><q>")
 }
+
+//baml:tagged_string
+function tt_invoke_body(body: () -> baml.TaggedString) -> baml.TaggedString {
+    body()
+}
+
+function tt_return_with_parent_defer(log: string[]) -> baml.TaggedString {
+    defer { log.push("cleanup") }
+    let value = tt_invoke_body`${{ return baml.TaggedString { parts: ["early"], values: [] } }}`
+    log.push("after")
+    value
+}
+
+function tt_parent_defer_log() -> string[] {
+    let log: string[] = []
+    tt_return_with_parent_defer(log)
+    log
+}
+
+test "tagged_template_return_keeps_parent_defer_in_parent" {
+    assert.equal(tt_parent_defer_log(), ["after", "cleanup"])
+}

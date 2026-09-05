@@ -12,8 +12,7 @@
 
 use baml_base::SourceFile;
 use baml_compiler2_hir::loc::{
-    ClassLoc, ClientLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
-    TemplateStringLoc, TypeAliasLoc,
+    ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, LetLoc, TemplateStringLoc, TypeAliasLoc,
 };
 
 /// Declare an enumeration query: `file_<plural>(file) -> Vec<XLoc>`, ordered by
@@ -126,32 +125,4 @@ pub fn class_impls<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> Vec<Imp
         .get(&class.id(db))
         .map(|impls| impls.iter().map(|id| ImplLoc::new(db, file, *id)).collect())
         .unwrap_or_default()
-}
-
-// `Client` and `RetryPolicy` have no span in the `ItemTree`, so they
-// cannot be ordered by source position like the rest. They are unordered sets;
-// sort by name so iteration is at least deterministic.
-
-/// Every client declared in `file`, ordered by name.
-#[salsa::tracked(returns(ref))]
-pub fn file_clients(db: &dyn crate::Db, file: SourceFile) -> Vec<ClientLoc<'_>> {
-    let item_tree = crate::file_item_tree(db, file);
-    let mut items: Vec<_> = item_tree.clients.iter().collect();
-    items.sort_by(|(_, a), (_, b)| a.name.cmp(&b.name));
-    items
-        .into_iter()
-        .map(|(id, _)| ClientLoc::new(db, file, *id))
-        .collect()
-}
-
-/// Every retry policy declared in `file`, ordered by name.
-#[salsa::tracked(returns(ref))]
-pub fn file_retry_policies(db: &dyn crate::Db, file: SourceFile) -> Vec<RetryPolicyLoc<'_>> {
-    let item_tree = crate::file_item_tree(db, file);
-    let mut items: Vec<_> = item_tree.retry_policies.iter().collect();
-    items.sort_by(|(_, a), (_, b)| a.name.cmp(&b.name));
-    items
-        .into_iter()
-        .map(|(id, _)| RetryPolicyLoc::new(db, file, *id))
-        .collect()
 }

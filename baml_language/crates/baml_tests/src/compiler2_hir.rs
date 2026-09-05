@@ -362,12 +362,12 @@ mod tests {
         }
     }
 
-    /// The canonical `get_implements_block` resolver enforces a blanket impl's
+    /// The canonical `resolve_impl` resolver enforces a blanket impl's
     /// generic bounds and restricts a bare blanket `for T` to concrete
     /// receivers: a receiver that fails the bound resolves to no impl, and an
     /// interface-existential never binds a bare blanket.
     #[test]
-    fn get_implements_block_enforces_bounds_and_blanket_concreteness() {
+    fn resolve_impl_enforces_bounds_and_blanket_concreteness() {
         use baml_compiler2_hir::contributions::Definition;
         use baml_type::{Ty, TyAttr};
 
@@ -391,9 +391,6 @@ mod tests {
             "#,
         );
 
-        let pkg_id = PackageId::new(&db, Name::new("user"));
-        let aliases = std::collections::HashMap::new();
-
         let class_ty = |class_name: &str| {
             let loc = *baml_compiler2_ppir::item_data::file_classes(&db, file)
                 .iter()
@@ -405,7 +402,7 @@ mod tests {
             let data = baml_compiler2_ppir::item_data::class_data(&db, loc);
             let qtn =
                 baml_compiler2_hir_ty::lower::qualify_def(&db, Definition::Class(loc), &data.name);
-            Ty::Class(qtn, Box::new([]), TyAttr::default())
+            baml_type::interned::Ty::from_plain(&Ty::Class(qtn, Box::new([]), TyAttr::default()))
         };
         let iface = |iface_name: &str| {
             let loc = *baml_compiler2_ppir::item_data::file_interfaces(&db, file)
@@ -417,7 +414,7 @@ mod tests {
                 .expect("interface in item tree");
             let qtn = baml_compiler2_hir_ty::interfaces::interface_loc_qtn(&db, loc)
                 .expect("interface loc resolves to a qtn");
-            baml_type::Interface {
+            baml_type::interned::InferInterface {
                 name: qtn,
                 generics: Box::new([]),
                 associated_types: Box::new([]),
@@ -429,28 +426,14 @@ mod tests {
         // H2: Widget implements Printable, so the bounded blanket
         // `Loud for T extends Printable` applies.
         assert!(
-            baml_compiler2_hir_ty::interfaces::get_implements_block(
-                &db,
-                pkg_id,
-                &class_ty("Widget"),
-                &loud,
-                &aliases,
-            )
-            .is_some(),
+            baml_compiler2_hir_ty::impls::resolve_impl(&db, &class_ty("Widget"), &loud).is_some(),
             "Widget satisfies `T extends Printable`, so the blanket Loud impl applies"
         );
 
         // H2: Plain does not implement Printable, so the bound fails and the
         // blanket must not apply.
         assert!(
-            baml_compiler2_hir_ty::interfaces::get_implements_block(
-                &db,
-                pkg_id,
-                &class_ty("Plain"),
-                &loud,
-                &aliases,
-            )
-            .is_none(),
+            baml_compiler2_hir_ty::impls::resolve_impl(&db, &class_ty("Plain"), &loud).is_none(),
             "Plain does not implement Printable, so the bounded blanket Loud impl is rejected"
         );
 
@@ -458,21 +441,10 @@ mod tests {
         // interface-existential is typevar-free (so it passes the realized
         // precondition) yet must not bind the blanket.
         let printable = iface("Printable");
-        let printable_existential = Ty::Interface(
-            printable.name,
-            printable.generics,
-            printable.associated_types,
-            TyAttr::default(),
-        );
+        let printable_existential = printable.existential();
         assert!(
-            baml_compiler2_hir_ty::interfaces::get_implements_block(
-                &db,
-                pkg_id,
-                &printable_existential,
-                &loud,
-                &aliases,
-            )
-            .is_none(),
+            baml_compiler2_hir_ty::impls::resolve_impl(&db, &printable_existential, &loud)
+                .is_none(),
             "a bare blanket `for T` must not bind an interface-existential receiver"
         );
     }

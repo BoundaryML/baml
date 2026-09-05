@@ -15,7 +15,10 @@
 //! canonical form) and the pre-normalized package alias map
 //! (`normalized_alias_map`) — and the shared [`TypeBindings`] substitution map.
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    hash::{BuildHasher, RandomState},
+};
 
 use baml_base::{Literal, Name, TyAttr};
 use rustc_hash::FxHashMap;
@@ -57,9 +60,9 @@ use crate::{
 /// simplifications that hold regardless of nominal facts (`never` removal,
 /// `1 | int == int`, `unknown` absorption, invariant container recursion) while
 /// treating enums, interfaces, type variables, and projections as opaque leaves.
-pub struct AliasEquivCtx<'a>(pub &'a HashMap<QualifiedTypeName, Ty>);
+pub struct AliasEquivCtx<'a, S = RandomState>(pub &'a HashMap<QualifiedTypeName, Ty, S>);
 
-impl crate::normalize::TypeContext for AliasEquivCtx<'_> {
+impl<S: BuildHasher> crate::normalize::TypeContext for AliasEquivCtx<'_, S> {
     /// A name-based context represents a declaration by its own name, so this
     /// is the identity — no resolution step, and never `None`.
     fn head_lookup(&self, qtn: &QualifiedTypeName) -> Option<QualifiedTypeName> {
@@ -493,7 +496,7 @@ fn fold_finite_bases(flat: &mut Vec<Ty>, enum_variants: EnumVariants) {
 /// resolved — aliases nested under a constructor are handled by `is_same_normalized_type`.
 /// Mirrors `expand_type_alias` in the diagnostics layer so the coherence valid-subject
 /// gate sees through the same aliases the E0138 concreteness gate does.
-pub fn expand_alias_head(ty: &Ty, aliases: &std::collections::HashMap<TypeName, Ty>) -> Ty {
+pub fn expand_alias_head(ty: &Ty, aliases: &HashMap<TypeName, Ty, impl BuildHasher>) -> Ty {
     let mut current = ty.clone();
     for _ in 0..64 {
         let Ty::TypeAlias(qtn, _) = &current else {
@@ -528,7 +531,7 @@ pub fn unify_into(
     x: &Ty,
     y: &Ty,
     vars: &[ParamTy],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, Ty, impl BuildHasher>,
     bindings: &mut TypeBindings,
 ) -> Overlap {
     unify_into_at(x, y, vars, aliases, bindings, 0)
@@ -542,7 +545,7 @@ fn unify_into_at(
     x: &Ty,
     y: &Ty,
     vars: &[ParamTy],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, Ty, impl BuildHasher>,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -758,7 +761,7 @@ fn unify_all(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[ParamTy],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, Ty, impl BuildHasher>,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -782,7 +785,7 @@ fn unify_associated_bindings(
     xb: &[(Name, Ty)],
     yb: &[(Name, Ty)],
     vars: &[ParamTy],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, Ty, impl BuildHasher>,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -828,7 +831,7 @@ fn unify_union_members_at(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[ParamTy],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, Ty, impl BuildHasher>,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -1033,7 +1036,7 @@ fn unify_union_members(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[ParamTy],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, Ty, impl BuildHasher>,
     bindings: &mut TypeBindings,
 ) -> Overlap {
     unify_union_members_at(xs, ys, vars, aliases, bindings, 0)
@@ -1045,7 +1048,7 @@ fn try_union_set_equality(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[ParamTy],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, Ty, impl BuildHasher>,
 ) -> Option<Overlap> {
     let has_var = |members: &[Ty]| members.iter().any(|m| contains_bound_typevar(m, vars));
     if has_var(xs) || has_var(ys) {
@@ -1079,7 +1082,7 @@ fn is_bare_var(m: &Ty, vars: &[ParamTy]) -> bool {
 fn unions_set_equal(
     xs: &[Ty],
     ys: &[Ty],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, Ty, impl BuildHasher>,
 ) -> bool {
     xs.len() == ys.len()
         && xs
@@ -1105,7 +1108,7 @@ fn cover_at(
     member: &Ty,
     candidate: &Ty,
     vars: &[ParamTy],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, Ty, impl BuildHasher>,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -1126,7 +1129,7 @@ fn cover(
     member: &Ty,
     candidate: &Ty,
     vars: &[ParamTy],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, Ty, impl BuildHasher>,
     bindings: &mut TypeBindings,
 ) -> Overlap {
     cover_at(member, candidate, vars, aliases, bindings, 0)
@@ -1178,7 +1181,7 @@ fn needs_conservative_membership(a: &Ty, b: &Ty) -> bool {
 fn cover_search(
     obligations: &[(Ty, Vec<Ty>)],
     vars: &[ParamTy],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, Ty, impl BuildHasher>,
     bindings: &mut TypeBindings,
     budget: &mut usize,
     depth: usize,
@@ -1269,7 +1272,7 @@ fn bind_unify_var(
     n: &ParamTy,
     t: &Ty,
     vars: &[ParamTy],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, Ty, impl BuildHasher>,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -1440,7 +1443,7 @@ mod tests {
         // Each bare variable can absorb the other side, so a common instance
         // always exists.
         let vars = vec![param("T"), param("V")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let xs = vec![Ty::int(), Ty::type_var("T")];
         let ys = vec![Ty::string(), Ty::type_var("V")];
@@ -1455,7 +1458,7 @@ mod tests {
         // `{int, T}` vs `{int, string, Foo}`: instantiating `T = string | Foo`
         // makes them the same union — a *provable* overlap, not indeterminate.
         let vars = vec![param("T")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let xs = vec![Ty::int(), Ty::type_var("T")];
         let ys = vec![Ty::int(), Ty::string(), Ty::class("Foo")];
@@ -1470,7 +1473,7 @@ mod tests {
         // `{int, T}` vs `{string, Foo}`: `int` matches no member on the right and
         // `T` cannot make it appear there, so there is no common instance.
         let vars = vec![param("T")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let xs = vec![Ty::int(), Ty::type_var("T")];
         let ys = vec![Ty::string(), Ty::class("Foo")];
@@ -1486,7 +1489,7 @@ mod tests {
         // so unit propagation peels them with no search and `T` absorbs the rest —
         // a proven overlap even though the candidate set is large.
         let vars = vec![param("T")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let xs = vec![Ty::class("A1"), Ty::class("A2"), Ty::type_var("T")];
         let ys: Vec<Ty> = (1..=9).map(|i| Ty::class(&format!("A{i}"))).collect();
@@ -1503,7 +1506,7 @@ mod tests {
         // exists (e.g. `T=U=A1`, with `V` absorbing the rest) — a *provable* overlap,
         // not an NP-hard cap. The search finds it in a few steps.
         let vars = vec![param("T"), param("U"), param("V")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let xs = vec![
             Ty::list(Ty::type_var("T")),
@@ -1526,7 +1529,7 @@ mod tests {
         // equal. An injective matcher (the old model) wrongly rejected this; covering
         // (many-to-one, mutual) accepts it.
         let vars = vec![param("T"), param("U"), param("W")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let xs = vec![
             Ty::list(Ty::type_var("T")),
@@ -1548,7 +1551,7 @@ mod tests {
         // works — but just scanning the huge candidate list exhausts the step budget
         // before the search can prove it ⇒ Unknown.
         let vars = vec![param("T")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let pair = |a: Ty, b: Ty| Ty::user_class_with_args("Pair", vec![a, b]);
         let a1 = || Ty::class("A1");
@@ -1570,7 +1573,7 @@ mod tests {
         // `{1, T}` vs `{int, string}`: the literal `1` is a *subtype* of `int`, so it is
         // covered (covering uses subtype, not equality), and `T` absorbs the rest.
         let vars = vec![param("T")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let xs = vec![int_literal(1), Ty::type_var("T")];
         let ys = vec![Ty::int(), Ty::string()];
@@ -1585,7 +1588,7 @@ mod tests {
         // `{int, T}` vs `{1, string}`: subtyping is directional — `int` is *not* a
         // subtype of the literal `1`, and `T` is on the left, so nothing covers `int`.
         let vars = vec![param("T")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let xs = vec![Ty::int(), Ty::type_var("T")];
         let ys = vec![int_literal(1), Ty::string()];
@@ -1600,7 +1603,7 @@ mod tests {
         // `I<Item=int>` and `I<Item=string>` are distinct existential types — the
         // associated binding is part of the type's identity (one `impl I` per concrete
         // type ⇒ one `Item`), so they are provably disjoint.
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let a = interface_with_assoc("I", vec![("Item", Ty::int())]);
         let b = interface_with_assoc("I", vec![("Item", Ty::string())]);
@@ -1614,7 +1617,7 @@ mod tests {
     fn interface_associated_binding_unifies_variable() {
         // `I<Item=int>` unifies with `I<Item=T>` by binding `T = int`.
         let vars = vec![param("T")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let a = interface_with_assoc("I", vec![("Item", Ty::int())]);
         let b = interface_with_assoc("I", vec![("Item", Ty::type_var("T"))]);
@@ -1637,7 +1640,7 @@ mod tests {
         // rejection, now for the right reason.
         let r = TypeName::local(Name::new("R"));
         let s = TypeName::local(Name::new("S"));
-        let mut aliases = std::collections::HashMap::default();
+        let mut aliases = HashMap::new();
         aliases.insert(
             r.clone(),
             Ty::user_class_with_args("Box", vec![Ty::TypeAlias(r.clone(), TyAttr::default())]),
@@ -1665,7 +1668,7 @@ mod tests {
         // same subject: `nf` folds the complete literal pair, so unification
         // reports the overlap that the (normalize-aligned) coherence gate now
         // forwards here instead of dropping on the raw union head.
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         assert_eq!(
             unify_into(
@@ -1692,7 +1695,7 @@ mod tests {
         // `distinct_recursive_alias_subjects_overlap`).
         let r = TypeName::local(Name::new("R"));
         let s = TypeName::local(Name::new("S"));
-        let mut aliases = std::collections::HashMap::default();
+        let mut aliases = HashMap::new();
         aliases.insert(
             r.clone(),
             Ty::user_class_with_args("Box", vec![Ty::TypeAlias(r.clone(), TyAttr::default())]),
@@ -1724,7 +1727,7 @@ mod tests {
     fn cover_distinct_interface_binding_is_not_conservative() {
         // Same-name interfaces are decided precisely by `unify_into`, so `cover` does not
         // fall back to the conservative `Yes` — `I<Item=int>` does not cover `I<Item=string>`.
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let a = interface_with_assoc("I", vec![("Item", Ty::int())]);
         let b = interface_with_assoc("I", vec![("Item", Ty::string())]);
@@ -1736,7 +1739,7 @@ mod tests {
         // Whether a concrete class implements an interface needs the impl registry, which
         // the solver does not yet consult here, so `cover` conservatively reports a
         // possible overlap (`Yes`) — never a wrong `No`.
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let a = Ty::class("A");
         let b = interface("I", vec![]);
@@ -1768,7 +1771,7 @@ mod tests {
         // `bool`) must unify with `bool` — otherwise `Bar<TF>` vs `Bar<bool>` is
         // judged disjoint and both impls are admitted (fails open).
         let tf = TypeName::local(Name::new("TF"));
-        let mut aliases = std::collections::HashMap::new();
+        let mut aliases = FxHashMap::default();
         aliases.insert(
             tf.clone(),
             Ty::union(vec![bool_literal(true), bool_literal(false)]),
@@ -1804,7 +1807,7 @@ mod tests {
             }
         }
         let vars = vec![param("T")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         assert_eq!(
             unify_into(
@@ -1834,7 +1837,7 @@ mod tests {
             member: Name::new("Item"),
             attr: TyAttr::default(),
         };
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         assert_eq!(
             unify_into(&proj, &Ty::int(), &[], &aliases, &mut bindings),
@@ -1904,7 +1907,7 @@ mod tests {
         // `Cmp.Less | T` opposite `Cmp`: the var could complete the enum
         // (`T = Cmp.Equal | Cmp.More`), so it is conservatively a possible overlap.
         let vars = vec![param("T")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let u = Ty::union(vec![enum_variant("Cmp", "Less"), Ty::type_var("T")]);
         assert_eq!(
@@ -1917,7 +1920,7 @@ mod tests {
     fn ground_partial_enum_union_is_disjoint_from_enum() {
         // No bare variable to complete the enum, and the partial variant set is a strict
         // subset of `Cmp`, so the two are disjoint.
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let u = Ty::union(vec![
             enum_variant("Cmp", "Less"),
@@ -1936,7 +1939,7 @@ mod tests {
         // analogue of `union_overlap_collapsing_members_is_yes`; routing the non-union
         // operand through covering (as the singleton `{C}`) is what catches it.
         let vars = vec![param("T")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let c = || Ty::class("C");
         let u = Ty::union(vec![c(), Ty::type_var("T")]);
@@ -1951,7 +1954,7 @@ mod tests {
         // `1 | T` opposite `int`: at `T = int` the literal `1 <: int` collapses, so the
         // union equals `int` — decided precisely by `cover`'s `literal <: base` oracle.
         let vars = vec![param("T")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let u = Ty::union(vec![int_literal(1), Ty::type_var("T")]);
         assert_eq!(
@@ -1966,7 +1969,7 @@ mod tests {
         // instantiation of `T` removes, so it can never equal `C`. Routing through
         // covering keeps this precise (`No`), not a conservative over-reject.
         let vars = vec![param("T")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let u = Ty::union(vec![Ty::class("D"), Ty::type_var("T")]);
         let c = Ty::class("C");
@@ -1982,7 +1985,7 @@ mod tests {
         // blanket `Box<T>` overlaps `Box<unknown>` at `T = unknown`. The old bail that
         // lumped `Unknown` in with the error sentinel wrongly rejected this.
         let vars = vec![param("T")];
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         assert_eq!(
             unify_into(
@@ -2001,7 +2004,7 @@ mod tests {
         // `unknown` is a distinct atomic type under invariance, compared by equality:
         // `Box<unknown>` and `Box<int>` do not overlap, matching how the runtime
         // resolver matches `unknown` (only an `unknown` value inhabits `Box<unknown>`).
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         assert_eq!(
             unify_into(&Ty::unknown(), &Ty::int(), &[], &aliases, &mut bindings),
@@ -2014,7 +2017,7 @@ mod tests {
         let vars: Vec<ParamTy> = (0..holes)
             .map(|i| ParamTy::new(0, Name::new(format!("T{i}"))))
             .collect();
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let pair = |a: Ty, b: Ty| Ty::user_class_with_args("Pair", vec![a, b]);
         let xs: Vec<Ty> = (0..holes)
@@ -2057,7 +2060,7 @@ mod tests {
     /// candidate pool. The unions overlap iff the formula is satisfiable.
     /// `clauses[j] = [(var, positive?); 3]`.
     fn three_sat_overlap(num_vars: usize, clauses: &[[(usize, bool); 3]]) -> Overlap {
-        let aliases = std::collections::HashMap::default();
+        let aliases = HashMap::new();
         let mut bindings = TypeBindings::default();
         let v = |i: usize| Ty::type_var(&format!("V{i}"));
         let val = |b: bool| Ty::class(if b { "Pos" } else { "Neg" });

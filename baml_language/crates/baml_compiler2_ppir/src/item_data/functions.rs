@@ -7,8 +7,7 @@ use baml_compiler2_hir::{
 use text_size::TextRange;
 
 use crate::item_data::common::{
-    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FunctionParamData, GenericParamData,
-    lower_generic_params,
+    AssociatedTypeBindingData, FunctionParamData, GenericParamData, lower_generic_params,
 };
 
 /// Span-free semantic data for a function's *signature*.
@@ -318,37 +317,12 @@ pub struct MethodInterfaceTarget {
     pub associated_type_bindings: Vec<AssociatedTypeBindingData>,
 }
 
-/// Spans for a [`MethodInterfaceTarget`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MethodInterfaceTargetSourceMap {
-    pub type_refs: TypeRefSourceMap,
-    /// Parallel to `MethodInterfaceTarget::associated_type_bindings`.
-    pub associated_type_bindings: Vec<AssociatedTypeBindingSourceMap>,
-}
-
-/// See [`MethodInterfaceTarget`]. Span-free.
+/// The unresolved interface target and bindings of an `implements` method.
 #[salsa::tracked(returns(ref))]
 pub fn method_interface_target<'db>(
     db: &'db dyn crate::Db,
     method: FunctionLoc<'db>,
 ) -> Option<MethodInterfaceTarget> {
-    lower_interface_target(db, method).map(|(data, _)| data)
-}
-
-/// Spans for [`method_interface_target`]. Kept separate so that a
-/// whitespace-only edit invalidates this but not the semantic data.
-#[salsa::tracked(returns(ref))]
-pub fn method_interface_target_source_map<'db>(
-    db: &'db dyn crate::Db,
-    method: FunctionLoc<'db>,
-) -> Option<MethodInterfaceTargetSourceMap> {
-    lower_interface_target(db, method).map(|(_, source_map)| source_map)
-}
-
-fn lower_interface_target<'db>(
-    db: &'db dyn crate::Db,
-    method: FunctionLoc<'db>,
-) -> Option<(MethodInterfaceTarget, MethodInterfaceTargetSourceMap)> {
     let item_tree = crate::file_item_tree(db, method.file(db));
     let target_expr = item_tree.method_to_iface_target.get(&method.id(db))?;
     let bindings = item_tree
@@ -366,25 +340,12 @@ fn lower_interface_target<'db>(
             type_ref: binding.type_expr.as_ref().map(|te| type_refs.lower(te)),
         })
         .collect();
-    let (store, spans) = type_refs.finish();
-
-    Some((
-        MethodInterfaceTarget {
-            type_refs: store,
-            target,
-            associated_type_bindings,
-        },
-        MethodInterfaceTargetSourceMap {
-            type_refs: spans,
-            associated_type_bindings: bindings
-                .iter()
-                .map(|binding| AssociatedTypeBindingSourceMap {
-                    span: binding.span,
-                    name_span: binding.name_span,
-                })
-                .collect(),
-        },
-    ))
+    let (store, _) = type_refs.finish();
+    Some(MethodInterfaceTarget {
+        type_refs: store,
+        target,
+        associated_type_bindings,
+    })
 }
 
 /// The `*_data` and `*_source_map` queries each call this and keep one half, so

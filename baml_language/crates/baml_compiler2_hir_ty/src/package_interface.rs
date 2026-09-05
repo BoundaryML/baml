@@ -270,7 +270,7 @@ pub(crate) fn resolved_exported_function(
 /// other `returns(ref)` queries here made incremental invalidation unsound
 /// under rapid edits, because the cached context could outlive the referenced
 /// query storage across revisions.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, salsa::Update)]
 pub struct PackageResolutionContext<'db> {
     pub own_items: PackageItems<'db>,
     pub dep_interfaces: Vec<(Name, PackageInterface)>,
@@ -278,60 +278,6 @@ pub struct PackageResolutionContext<'db> {
 }
 
 // ── Salsa Update impls ─────────────────────────────────────────────────────
-
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for PackageInterface {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for FileInterfaceFragment {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for PackageResolutionContext<'_> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
 
 // ── PackageInterface lookup helpers ────────────────────────────────────────
 
@@ -1157,26 +1103,6 @@ pub type ThrowFact = Ty;
 pub struct FunctionThrowSets {
     pub direct: BTreeMap<Name, BTreeSet<ThrowFact>>,
     pub transitive: BTreeMap<Name, BTreeSet<ThrowFact>>,
-}
-
-// Safety: comparison-based replacement for Salsa early cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for FunctionThrowSets {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: pointer is Salsa-owned and valid for replacement.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
 }
 
 impl FunctionThrowSets {
