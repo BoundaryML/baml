@@ -157,7 +157,7 @@ jobs:
         uses: ./.github/actions/setup-java
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Build plugin artifact
         run: ./gradlew --no-daemon --stacktrace clean buildPlugin -PpluginVersion="${VERSION}"

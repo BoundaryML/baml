@@ -87,7 +87,7 @@ jobs:
       - name: Setup Go
         uses: ./.github/actions/setup-go
 
-      - uses: jdx/mise-action@v4.2.4
+      - uses: jdx/mise-action@v4.3.0
         if: matrix._.os != 'windows-2022'
         with:
           install_args: "protoc-gen-go"
