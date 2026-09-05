@@ -1,0 +1,7 @@
+/.next/
+/.source/
+/node_modules/
+/.turbo/
+/.vercel/
+*.tsbuildinfo
+next-env.d.ts

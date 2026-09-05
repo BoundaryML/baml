@@ -1,0 +1,4 @@
+{
+  "title": "Boundary Developer Documentation",
+  "pages": ["index", "baml", "cli", "bcs", "tutorials", "examples", "integrations"]
+}
