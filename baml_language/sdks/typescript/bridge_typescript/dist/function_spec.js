@@ -5,8 +5,9 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
+import { getRuntime, getTypeMap, withTypeMap } from './typemap.js';
 // Host proxy for a live ai.FunctionSpec<Out> value.
-import { getRuntime, newFunctionCall as nativeNewFunctionCall } from './native.js';
+import { newFunctionCall as nativeNewFunctionCall } from './native.js';
 import { decodeCallResult, encodeCallArgs } from './proto.js';
 function newFunctionCall() {
     return BigInt(nativeNewFunctionCall());
@@ -16,6 +17,9 @@ function suppliedOptions(options) {
 }
 /** An opaque, bound LLM recipe owned by the engine that created it. */
 export class BamlFunctionSpec {
+    _typeMap = getTypeMap();
+    _encodeCallArgs(...args) { return withTypeMap(this._typeMap, () => encodeCallArgs(...args)); }
+    _decodeCallResult(...args) { return withTypeMap(this._typeMap, () => decodeCallResult(...args)); }
     handle;
     constructor(handle) {
         this.handle = handle;
@@ -83,12 +87,12 @@ export class BamlFunctionSpec {
         return await this._callAsync('ai.FunctionSpec.call', suppliedOptions(options));
     }
     _callSync(fqn, kwargs = {}) {
-        const argsProto = encodeCallArgs({ self: this, ...kwargs }, { syncMode: true, callId: newFunctionCall(), functionName: fqn });
-        return decodeCallResult(getRuntime().callFunctionSync(argsProto, null, null));
+        const argsProto = this._encodeCallArgs({ self: this, ...kwargs }, { syncMode: true, callId: newFunctionCall(), functionName: fqn });
+        return this._decodeCallResult((this._typeMap.runtime ?? getRuntime()).callFunctionSync(argsProto, null, null));
     }
     async _callAsync(fqn, kwargs = {}) {
-        const argsProto = encodeCallArgs({ self: this, ...kwargs }, { callId: newFunctionCall(), functionName: fqn });
-        return decodeCallResult(await getRuntime().callFunction(argsProto, null, null));
+        const argsProto = this._encodeCallArgs({ self: this, ...kwargs }, { callId: newFunctionCall(), functionName: fqn });
+        return this._decodeCallResult(await (this._typeMap.runtime ?? getRuntime()).callFunction(argsProto, null, null));
     }
     toString() {
         return '<BamlFunctionSpec>';

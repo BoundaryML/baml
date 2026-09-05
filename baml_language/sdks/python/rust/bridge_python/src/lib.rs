@@ -55,6 +55,12 @@ fn new_function_call() -> u64 {
 
 #[gen_stub_pyfunction]
 #[pyfunction]
+fn release_function_call(call_id: u64) {
+    bridge_cffi::release_function_call_id(call_id);
+}
+
+#[gen_stub_pyfunction]
+#[pyfunction]
 fn cancel_function_call(call_id: u64) -> bool {
     bridge_cffi::cancel_function_call_by_id(call_id)
 }
@@ -89,6 +95,7 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(get_bridge_runtime_version))?;
     m.add_wrapped(wrap_pyfunction!(flush_events))?;
     m.add_wrapped(wrap_pyfunction!(new_function_call))?;
+    m.add_wrapped(wrap_pyfunction!(release_function_call))?;
     m.add_wrapped(wrap_pyfunction!(cancel_function_call))?;
     m.add_wrapped(wrap_pyfunction!(
         unhandled_spawn::register_unhandled_spawn_error_callback

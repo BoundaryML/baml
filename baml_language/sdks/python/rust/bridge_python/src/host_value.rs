@@ -331,30 +331,36 @@ fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
 /// presence is guaranteed (missing-key faults surface as `BridgeFailure`
 /// earlier in `host_dispatch_callback`).
 fn dispatch_in_python(callable: Py<PyAny>, call_id: u32, args_bytes: Vec<u8>) {
-    let result = Python::attach(|py| -> PyResult<Vec<u8>> {
-        // Decode the engine-side `BamlToHostCall` into the callable's
-        // positional args + supplied-optional kwargs.
-        let (positional, kwargs) = decode_args(py, &args_bytes)?;
-
-        // Invoke the user callable: required args positionally, supplied
-        // optionals by keyword. Omitted optionals are absent, so the callable's
-        // own defaults apply.
-        let result_obj = callable.call(py, &positional, Some(&kwargs))?;
-
-        // If the callable returned a coroutine (async function), run it to
-        // completion on a fresh asyncio loop. Sync callables fall through.
-        let final_result = run_if_coroutine(py, result_obj)?;
-
-        // Encode the result as an `InboundValue` via `baml_bridge.proto`.
-        encode_result_inbound(py, final_result)
+    Python::attach(|py| {
+        // Native callbacks may enter on another thread. Scope all conversion, including errors.
+        let scope = (|| -> PyResult<_> {
+            let module = py.import("baml_bridge.typemap")?;
+            let map = callable
+                .getattr(py, "_baml_type_map")
+                .or_else(|_| module.getattr("get_type_map")?.call0().map(Bound::unbind))?;
+            let scope = module.getattr("type_map_scope")?.call1((map,))?;
+            scope.call_method0("__enter__")?;
+            Ok(scope)
+        })();
+        let scope = match scope {
+            Ok(scope) => scope,
+            Err(error) => {
+                send_dispatch_error_from_pyerr(call_id, py, &error);
+                return;
+            }
+        };
+        let result = (|| -> PyResult<Vec<u8>> {
+            let (positional, kwargs) = decode_args(py, &args_bytes)?;
+            let result_obj = callable.call(py, &positional, Some(&kwargs))?;
+            let final_result = run_if_coroutine(py, result_obj)?;
+            encode_result_inbound(py, final_result)
+        })();
+        match result {
+            Ok(bytes) => send_dispatch_success(call_id, &bytes),
+            Err(error) => send_dispatch_error_from_pyerr(call_id, py, &error),
+        }
+        let _ = scope.call_method1("__exit__", (py.None(), py.None(), py.None()));
     });
-
-    match result {
-        Ok(bytes) => send_dispatch_success(call_id, &bytes),
-        Err(py_err) => Python::attach(|py| {
-            send_dispatch_error_from_pyerr(call_id, py, &py_err);
-        }),
-    }
 }
 
 /// Decode the protobuf `BamlToHostCall` into the callable's positional args

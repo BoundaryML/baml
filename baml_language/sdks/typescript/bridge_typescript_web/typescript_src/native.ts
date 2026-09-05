@@ -18,6 +18,7 @@ import initWasm, {
   mediaUrl as mediaWasmUrl,
   mintWebHostValueKey,
   newFunctionCall as newWasmFunctionCall,
+  releaseFunctionCall as releaseWasmFunctionCall,
   registerWebHostCallable,
   registerWebHostValueReleaseCallback,
   releaseHandle as releaseWasmHandle,
@@ -26,6 +27,7 @@ import initWasm, {
   seedGenericMediaHandle as seedWasmGenericMediaHandle,
   stageRuntimeBytecode,
   stageRuntimeSources,
+  unregisterRuntime,
 } from "./wasm/bridge_web_core.js";
 import { BamlClientError, wrapNativeError } from "./shared/errors.js";
 await initWasm();
@@ -386,50 +388,70 @@ export class Collector {
 }
 
 export class BamlRuntime {
-  static initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string): BamlRuntime {
+  private constructor(readonly runtimeKey: bigint) {}
+  /** Close a dynamic registration; generated process-owned keys reject close. */
+  close(): void { unregisterRuntime(this.runtimeKey); runtimes.delete(this.runtimeKey); }
+  static initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string, runtimeKey?: bigint): BamlRuntime {
     ensureWebSysopsConfigured();
     try {
-      stageRuntimeBytecode(bytecode, embeddedBamlToml);
+      if (runtimeKey !== undefined) validateRuntimeKey(runtimeKey);
+      const key = stageRuntimeBytecode(bytecode, embeddedBamlToml, runtimeKey);
+      const runtime = new BamlRuntime(key);
+      runtimes.set(key, runtime);
+      return runtime;
     } catch (error) {
       throw wrapNativeError(error);
     }
-    runtime = new BamlRuntime();
-    return runtime;
   }
   static initializeRuntime(rootPath: string, files: Record<string, string>): BamlRuntime {
     ensureWebSysopsConfigured();
     try {
-      stageRuntimeSources(rootPath, files);
+      const key = stageRuntimeSources(rootPath, files);
+      const runtime = new BamlRuntime(key);
+      runtimes.set(key, runtime);
+      return runtime;
     } catch (error) {
       throw wrapNativeError(error);
     }
-    runtime = new BamlRuntime();
-    return runtime;
   }
   callFunctionSync(encodedArgs: Uint8Array, _ctx?: HostSpanManager | null, _collectors?: Collector[] | null): Uint8Array {
     try {
-      return callWasmFunctionSync(encodedArgs);
+      return callWasmFunctionSync(this.runtimeKey, encodedArgs);
     } catch (error) {
       throw wrapNativeError(error);
     }
   }
   async callFunction(encodedArgs: Uint8Array, _ctx?: HostSpanManager | null, _collectors?: Collector[] | null): Promise<Uint8Array> {
     try {
-      return await callWasmFunction(encodedArgs);
+      return await callWasmFunction(this.runtimeKey, encodedArgs);
     } catch (error) {
       throw wrapNativeError(error);
     }
   }
 }
 
-let runtime: BamlRuntime | undefined;
+const runtimes = new Map<bigint, BamlRuntime>();
 let hostRelease: ((key: HandleKey) => void) | undefined;
 
-export function getRuntime(): BamlRuntime {
-  if (!runtime) throw new BamlClientError("BAML runtime has not been initialized");
+function validateRuntimeKey(key: bigint): void {
+  if (typeof key !== "bigint" || key < 0n || key > 0xffffffffffffffffn) throw new RangeError("BAML runtime key must be a uint64 bigint");
+}
+
+export function getRuntime(key?: bigint): BamlRuntime {
+  if (key !== undefined) validateRuntimeKey(key);
+  if (key === undefined && runtimes.size !== 1) throw new BamlClientError("Supply the originating BAML runtime key");
+  const runtime = key === undefined ? runtimes.values().next().value : runtimes.get(key);
+  if (!runtime) throw new BamlClientError("Unknown BAML runtime key");
   return runtime;
 }
 export function newFunctionCall(): bigint { return newWasmFunctionCall(); }
+export function releaseFunctionCall(callId: bigint | string): void {
+  const parsed = typeof callId === "bigint" ? callId : parseCallId(callId);
+  if (parsed < 0n || parsed > MAX_UINT64) {
+    throw new TypeError("callId must be a decimal uint64 string");
+  }
+  releaseWasmFunctionCall(parsed);
+}
 export function cancelFunctionCall(callId: bigint | string): boolean {
   const parsed = typeof callId === "bigint" ? callId : parseCallId(callId);
   if (parsed < 0n || parsed > MAX_UINT64) {

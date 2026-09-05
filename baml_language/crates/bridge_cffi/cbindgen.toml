@@ -96,6 +96,7 @@ include = [
 exclude = [
   "call_function",
   "new_function_call",
+  "release_function_call",
   "cancel_function_call",
   "register_callback",
   "baml_handle_clone",

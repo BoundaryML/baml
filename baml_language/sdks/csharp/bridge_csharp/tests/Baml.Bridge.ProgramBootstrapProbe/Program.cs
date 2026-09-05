@@ -241,7 +241,8 @@ internal static class Program
             () => ProgramProbeRuntime.RegisterProgram(
                 conflicting,
                 conflictingFingerprint,
-                BamlGeneratedProgram.GeneratedWithVersion));
+                BamlGeneratedProgram.GeneratedWithVersion,
+                ProgramProbeRuntime.KeyForFingerprint(BamlGeneratedProgram.ProgramFingerprint)));
         Require(
             native.Calls == 1,
             "conflicting fingerprint reached native initialization");

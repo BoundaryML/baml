@@ -62,9 +62,11 @@ internal static class ProgramProbeRuntime
 
     private static readonly object Gate = new();
     private static Func<byte[], string>? initializer;
-    private static ProgramProbe? program;
-    private static string? registeredFingerprint;
+    private static readonly Dictionary<ulong, ProgramProbe> programs = new();
     private static int initializationCount;
+
+    internal static ulong KeyForFingerprint(string fingerprint) =>
+        Convert.ToUInt64(fingerprint[..16], 16) | (1UL << 63);
 
     internal static int InitializationCount =>
         Volatile.Read(ref initializationCount);
@@ -76,8 +78,7 @@ internal static class ProgramProbeRuntime
         lock (Gate)
         {
             if (initializer is not null
-                || program is not null
-                || registeredFingerprint is not null)
+                || programs.Count != 0)
             {
                 throw new InvalidOperationException(
                     "program runtime is already configured or initialized");
@@ -90,7 +91,8 @@ internal static class ProgramProbeRuntime
     internal static ProgramProbe RegisterProgram(
         byte[] bytecode,
         string fingerprint,
-        string generatedVersion)
+        string generatedVersion,
+        ulong? runtimeKey = null)
     {
         ArgumentNullException.ThrowIfNull(bytecode);
         ArgumentException.ThrowIfNullOrWhiteSpace(fingerprint);
@@ -117,19 +119,12 @@ internal static class ProgramProbeRuntime
 
         lock (Gate)
         {
-            if (registeredFingerprint is not null
-                && !StringComparer.Ordinal.Equals(
-                    registeredFingerprint,
-                    fingerprint))
+            ulong key = runtimeKey ?? KeyForFingerprint(fingerprint);
+            if (programs.TryGetValue(key, out ProgramProbe? registered))
             {
-                throw new ProgramProbeConflictException(
-                    registeredFingerprint,
-                    fingerprint);
-            }
-
-            if (program is not null)
-            {
-                return program;
+                if (!StringComparer.Ordinal.Equals(registered.Fingerprint, fingerprint))
+                    throw new ProgramProbeConflictException(registered.Fingerprint, fingerprint);
+                return registered;
             }
 
             Func<byte[], string> initialize = initializer
@@ -143,8 +138,8 @@ internal static class ProgramProbeRuntime
                     diagnostic);
             }
 
-            registeredFingerprint = fingerprint;
-            program = new ProgramProbe(fingerprint);
+            var program = new ProgramProbe(fingerprint);
+            programs.Add(key, program);
             return program;
         }
     }

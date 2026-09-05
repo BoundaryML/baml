@@ -16,8 +16,8 @@ import {
     registerHostCallable,
     releaseHostCallable,
     completeHostCall,
-    getRuntime,
     newFunctionCall,
+    releaseFunctionCall,
 } from './native.js';
 import { attachCallContext } from './call_context.js';
 import { BamlStream } from './stream.js';
@@ -29,7 +29,7 @@ import {
     releaseHostOpaque,
     tryRehydrateHostValueByKey,
 } from './host_value_registry.js';
-import { BamlTypeMap, getTypeMap } from './typemap.js';
+import { BamlTypeMap, getTypeMap, getRuntime, withTypeMap } from './typemap.js';
 import {
     BamlType,
     BamlTypeMetadataRow,
@@ -123,6 +123,9 @@ export interface BamlPromptMessage {
  * same prompt remains reusable across repeated calls and runtimes.
  */
 export class BamlPrompt {
+    private readonly _typeMap = getTypeMap();
+    private _encodeCallArgs(...args: Parameters<typeof encodeCallArgs>) { return withTypeMap(this._typeMap, () => encodeCallArgs(...args)); }
+    private _decodeCallResult(data: Buffer | Uint8Array) { return withTypeMap(this._typeMap, () => decodeCallResult(data)); }
     private constructor(private readonly wire: baml_bridge.cffi.v1.IBamlValuePromptAst) {}
 
     static _fromWire(wire: baml_bridge.cffi.v1.IBamlValuePromptAst): BamlPrompt {
@@ -169,13 +172,13 @@ export class BamlPrompt {
 
     private _callSync(fqn: string, options?: BamlPromptCallOptions): unknown {
         const callId = BigInt(newFunctionCall());
-        const argsProto = encodeCallArgs(
+        const argsProto = this._encodeCallArgs(
             { self: this },
             { syncMode: true, callId, functionName: fqn },
         );
         const callCtxBinding = attachCallContext(options?.$ctx, callId);
         try {
-            return decodeCallResult(getRuntime().callFunctionSync(argsProto, null, null));
+            return this._decodeCallResult((this._typeMap.runtime ?? getRuntime()).callFunctionSync(argsProto, null, null));
         } finally {
             callCtxBinding.detach();
         }
@@ -183,13 +186,13 @@ export class BamlPrompt {
 
     private async _callAsync(fqn: string, options?: BamlPromptCallOptions): Promise<unknown> {
         const callId = BigInt(newFunctionCall());
-        const argsProto = encodeCallArgs(
+        const argsProto = this._encodeCallArgs(
             { self: this },
             { callId, functionName: fqn },
         );
         const callCtxBinding = attachCallContext(options?.$ctx, callId);
         try {
-            return decodeCallResult(await getRuntime().callFunction(argsProto, null, null));
+            return this._decodeCallResult(await (this._typeMap.runtime ?? getRuntime()).callFunction(argsProto, null, null));
         } finally {
             callCtxBinding.detach();
         }
@@ -431,11 +434,9 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
  * host-value table and is normally released only when the engine GCs the
  * `HostClosure` it allocated and fires the C release callback (a GC-timed
  * release, drained by the engine after collection).
- * Because the Node tsfn is built with `weak::<false>` it keeps a strong libuv
- * ref, so a *leaked* registry entry can also keep the Node process from
- * exiting — which is exactly why the encode-error rollback below matters: if a
- * later kwarg fails, the engine never sees (and so never releases) the keys we
- * already registered, so we release them here.
+ * Dispatch registrations retain their JavaScript function but do not pin the
+ * event loop. Pending native calls and the shutdown hook own execution lifetime.
+ * Encode failures still roll back registrations the engine never received.
  */
 export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): Buffer {
     const callId = options.callId;
@@ -443,6 +444,7 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
         throw new TypeError('callId must be a nonzero uint64');
     }
     if (options.functionName !== undefined && options.functionHandle !== undefined) {
+        releaseFunctionCall(callId.toString());
         throw new TypeError('exactly one BAML call target may be set');
     }
     const ctx: EncodeCtx = { syncMode: options.syncMode ?? false, registered: [] };
@@ -467,6 +469,7 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
         });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     } catch (err) {
+        releaseFunctionCall(callId.toString());
         // Roll back any host callables registered before the failure so
         // they don't leak in the registry (and pin the libuv loop) for the
         // life of the process — the call never reaches the engine, so the
@@ -631,6 +634,7 @@ function decodeBamlClosure(
     handle: BamlHandle,
     functionTy: baml_bridge.cffi.v1.IBamlTyFunction | null | undefined,
 ): (...args: unknown[]) => unknown {
+    const typeMap = getTypeMap();
     const params = functionTy?.params ?? [];
     const required = params.filter(
         (param) => param.mode !== baml_bridge.cffi.v1.BamlTyFunctionParamMode.BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL,
@@ -641,7 +645,7 @@ function decodeBamlClosure(
     const requiredNames = required.map((param, index) => param.name ?? `arg${index}`);
     const optionalNames = new Set(optional.map((param, index) => param.name ?? `arg${required.length + index}`));
 
-    return (...args: unknown[]): unknown => {
+    return (...args: unknown[]): unknown => withTypeMap(typeMap, () => {
         if (args.length > requiredNames.length + 1) {
             throw new TypeError(
                 `got ${args.length} arguments but this BAML closure accepts ` +
@@ -673,7 +677,7 @@ function decodeBamlClosure(
             functionHandle: handle.key,
         });
         return decodeCallResult(runtime.callFunctionSync(encodedArgs));
-    };
+    });
 }
 
 /**
@@ -974,6 +978,7 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
 // through a JS-side wrapper. Node's tsfn model makes the wrapper natural.
 
 export function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown) {
+    const typeMap = getTypeMap();
     return (callId: number, argsBytes: Buffer): void => {
         // Every reachable exit from this wrapper must complete `callId`
         // exactly once — if it doesn't, the engine awaits the in-flight call
@@ -989,17 +994,17 @@ export function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown
                 // `args` list. Partition it into the positional run and the
                 // supplied optionals, then reshape into the `$opts` calling
                 // convention the callback's type advertises.
-                const { positional, optional } = decodeHostCall(argsBytes);
+                const { positional, optional } = withTypeMap(typeMap, () => decodeHostCall(argsBytes));
                 args = reshapeHostArgs(positional, optional);
             } catch (err) {
-                sendHostCallableError(callId, err);
+                withTypeMap(typeMap, () => sendHostCallableError(callId, err));
                 return;
             }
             let result: unknown;
             try {
                 result = userFn(...args);
             } catch (err) {
-                sendHostCallableError(callId, err);
+                withTypeMap(typeMap, () => sendHostCallableError(callId, err));
                 return;
             }
             // Async callables: the wrapper resolves the promise on the libuv
@@ -1014,11 +1019,11 @@ export function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown
                 // exactly once. The handlers only call the defended send*
                 // helpers (they can't throw synchronously).
                 Promise.resolve(result).then(
-                    (resolved) => sendHostCallableResult(callId, resolved),
-                    (err) => sendHostCallableError(callId, err)
+                    (resolved) => withTypeMap(typeMap, () => sendHostCallableResult(callId, resolved)),
+                    (err) => withTypeMap(typeMap, () => sendHostCallableError(callId, err))
                 );
             } else {
-                sendHostCallableResult(callId, result);
+                withTypeMap(typeMap, () => sendHostCallableResult(callId, result));
             }
         } catch (err) {
             // Reached only if a send* helper or the promise plumbing threw

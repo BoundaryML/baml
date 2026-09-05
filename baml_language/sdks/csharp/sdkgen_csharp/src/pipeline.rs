@@ -286,7 +286,13 @@ fn render_program_carrier(
     }
     Ok(template
         .replace(PROGRAM_BYTES_PLACEHOLDER, &byte_literals)
-        .replace(PROGRAM_FINGERPRINT_PLACEHOLDER, fingerprint))
+        .replace(PROGRAM_FINGERPRINT_PLACEHOLDER, fingerprint)
+        .replace(
+            "__BAML_PROGRAM_KEY__",
+            &baml_program_identity::program_key(program_bytes)
+                .unwrap_or_else(|_| baml_program_identity::key_from_canonical(program_bytes))
+                .to_string(),
+        ))
 }
 
 fn sha256(bytes: &[u8]) -> String {

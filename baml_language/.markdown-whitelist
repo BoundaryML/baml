@@ -58,3 +58,5 @@ sdks/cpp/STYLE.md
 # C# SDK documentation
 sdks/csharp/ABI.md
 sdks/csharp/DEVELOPMENT.md
+
+architecture/multiple-runtime-registrations.md

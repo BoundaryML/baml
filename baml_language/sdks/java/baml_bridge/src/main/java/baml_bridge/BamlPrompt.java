@@ -18,6 +18,7 @@ public final class BamlPrompt {
             BamlType.list(BamlType.classByFqn("ai.PromptMessage"));
 
     private final byte[] wire;
+    private final BamlProgram program = BamlProgram.current();
 
     private BamlPrompt(byte[] wire) {
         if (wire == null || wire.length == 0) {
@@ -37,26 +38,26 @@ public final class BamlPrompt {
     }
 
     public String text() {
-        return (String) BamlFfi.callSync("ai.Prompt.text", SELF_NAMES, new Object[] {this}, BamlType.STRING);
+        return (String) program.callSync("ai.Prompt.text", SELF_NAMES, new Object[] {this}, BamlType.STRING);
     }
 
     public String text(BamlCallContext ctx) {
         return (String)
-                BamlFfi.callSync(
+                program.callSync(
                         "ai.Prompt.text", SELF_NAMES, new Object[] {this}, BamlType.STRING, ctx);
     }
 
     @SuppressWarnings("unchecked")
     public CompletableFuture<String> text_async() {
         return (CompletableFuture<String>) (CompletableFuture<?>)
-                BamlFfi.callAsync(
+                program.callAsync(
                         "ai.Prompt.text", SELF_NAMES, new Object[] {this}, BamlType.STRING);
     }
 
     @SuppressWarnings("unchecked")
     public CompletableFuture<String> text_async(BamlCallContext ctx) {
         return (CompletableFuture<String>) (CompletableFuture<?>)
-                BamlFfi.callAsync(
+                program.callAsync(
                         "ai.Prompt.text", SELF_NAMES, new Object[] {this}, BamlType.STRING, ctx);
     }
 
@@ -67,28 +68,28 @@ public final class BamlPrompt {
     @SuppressWarnings("unchecked")
     public <T> List<T> messages() {
         return (List<T>)
-                BamlFfi.callSync(
+                program.callSync(
                         "ai.Prompt.messages", SELF_NAMES, new Object[] {this}, MESSAGE_LIST);
     }
 
     @SuppressWarnings("unchecked")
     public <T> List<T> messages(BamlCallContext ctx) {
         return (List<T>)
-                BamlFfi.callSync(
+                program.callSync(
                         "ai.Prompt.messages", SELF_NAMES, new Object[] {this}, MESSAGE_LIST, ctx);
     }
 
     @SuppressWarnings("unchecked")
     public <T> CompletableFuture<List<T>> messages_async() {
         return (CompletableFuture<List<T>>) (CompletableFuture<?>)
-                BamlFfi.callAsync(
+                program.callAsync(
                         "ai.Prompt.messages", SELF_NAMES, new Object[] {this}, MESSAGE_LIST);
     }
 
     @SuppressWarnings("unchecked")
     public <T> CompletableFuture<List<T>> messages_async(BamlCallContext ctx) {
         return (CompletableFuture<List<T>>) (CompletableFuture<?>)
-                BamlFfi.callAsync(
+                program.callAsync(
                         "ai.Prompt.messages", SELF_NAMES, new Object[] {this}, MESSAGE_LIST, ctx);
     }
 }

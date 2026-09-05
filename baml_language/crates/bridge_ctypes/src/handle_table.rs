@@ -39,15 +39,29 @@ pub enum CffiHandleTableEntry {
     RustData(BexRustData),
 }
 
+#[derive(Clone)]
+pub struct RuntimeOwner {
+    pub key: u64,
+    pub runtime: Arc<dyn bex_project::Bex>,
+}
+
 pub struct CffiHandleTableOptions<'a> {
+    pub(crate) runtime_owner: Option<RuntimeOwner>,
     pub(crate) table: &'a CffiHandleTable,
     pub(crate) serialize_media: bool,
     pub(crate) serialize_prompt_ast: bool,
 }
 
 impl CffiHandleTableOptions<'_> {
+    #[must_use]
+    pub fn with_runtime(mut self, key: u64, runtime: Arc<dyn bex_project::Bex>) -> Self {
+        self.runtime_owner = Some(RuntimeOwner { key, runtime });
+        self
+    }
+
     pub fn for_wire() -> Self {
         Self {
+            runtime_owner: None,
             table: &HANDLE_TABLE,
             serialize_media: true,
             serialize_prompt_ast: true,
@@ -56,6 +70,7 @@ impl CffiHandleTableOptions<'_> {
 
     pub fn for_in_process() -> Self {
         Self {
+            runtime_owner: None,
             table: &HANDLE_TABLE,
             serialize_media: false,
             serialize_prompt_ast: false,
@@ -150,6 +165,7 @@ impl From<CffiHandleTableEntry> for BexExternalValue {
 /// breaking that contract: the Nth crossing bumps the count, the Nth release
 /// balances it, and the row dies at zero.
 struct CffiHandleTableRow {
+    runtime_owner: Option<RuntimeOwner>,
     value: Arc<CffiHandleTableEntry>,
     refcount: u64,
 }
@@ -182,6 +198,32 @@ impl CffiHandleTable {
     /// that key (host-side `==` on keys is an identity compare); every other
     /// value gets a fresh key. Either way the caller now owes one release.
     pub fn insert(&self, value: CffiHandleTableEntry) -> u64 {
+        self.insert_for_runtime(value, None)
+    }
+
+    pub fn runtime_owner(&self, key: u64) -> Option<RuntimeOwner> {
+        self.entries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&key)
+            .and_then(|row| row.runtime_owner.clone())
+    }
+
+    pub fn insert_for_runtime(
+        &self,
+        value: CffiHandleTableEntry,
+        origin: Option<RuntimeOwner>,
+    ) -> u64 {
+        let runtime_owner = if matches!(
+            &value,
+            CffiHandleTableEntry::BexHeapHandle(_)
+                | CffiHandleTableEntry::FunctionRef { .. }
+                | CffiHandleTableEntry::Adt(BexExternalAdt::TaggedHeapHandle { .. })
+        ) {
+            origin
+        } else {
+            None
+        };
         let mut entries = self
             .entries
             .write()
@@ -203,6 +245,7 @@ impl CffiHandleTable {
             entries.insert(
                 key,
                 CffiHandleTableRow {
+                    runtime_owner,
                     value: Arc::new(value),
                     refcount: 1,
                 },
@@ -213,6 +256,7 @@ impl CffiHandleTable {
         entries.insert(
             key,
             CffiHandleTableRow {
+                runtime_owner,
                 value: Arc::new(value),
                 refcount: 1,
             },
@@ -237,8 +281,16 @@ impl CffiHandleTable {
             return Some(key);
         }
         let value = row.value.clone();
+        let runtime_owner = row.runtime_owner.clone();
         let new_key = self.next_key.fetch_add(1, Ordering::Relaxed);
-        entries.insert(new_key, CffiHandleTableRow { value, refcount: 1 });
+        entries.insert(
+            new_key,
+            CffiHandleTableRow {
+                value,
+                runtime_owner,
+                refcount: 1,
+            },
+        );
         Some(new_key)
     }
 

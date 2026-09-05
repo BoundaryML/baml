@@ -40,22 +40,22 @@ public final class BamlStream<Partial: BamlDecodable, Final: BamlDecodable>: @un
 
     public func next() throws -> BamlStreamNext<Partial> {
         try Self.interpretNext(
-            BamlRuntime.shared.callRawSync(nextFQN, args: [("self", handle)])
+            handle.runtime.callRawSync(nextFQN, args: [("self", handle)])
         )
     }
 
     public func nextAsync() async throws -> BamlStreamNext<Partial> {
         try Self.interpretNext(
-            await BamlRuntime.shared.callRaw(nextFQN, args: [("self", handle)])
+            await handle.runtime.callRaw(nextFQN, args: [("self", handle)])
         )
     }
 
     public func final() throws -> Final {
-        try BamlRuntime.shared.callSync(finalFQN, args: [("self", handle)])
+        try handle.runtime.callSync(finalFQN, args: [("self", handle)])
     }
 
     public func finalAsync() async throws -> Final {
-        try await BamlRuntime.shared.call(finalFQN, args: [("self", handle)])
+        try await handle.runtime.call(finalFQN, args: [("self", handle)])
     }
 
     private static func interpretNext(_ raw: BamlOutboundValue) throws -> BamlStreamNext<Partial> {

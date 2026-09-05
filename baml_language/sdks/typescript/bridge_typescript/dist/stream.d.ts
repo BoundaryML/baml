@@ -7,6 +7,9 @@
  */
 import { BamlHandle } from './native.js';
 export declare class BamlStream<TStream, TFinal> {
+    private readonly _typeMap;
+    private _encodeCallArgs;
+    private _decodeCallResult;
     private _handle;
     private _classFqn;
     constructor(handle: BamlHandle, classFqn: string);

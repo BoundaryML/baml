@@ -29,14 +29,14 @@ public struct BamlHostArgs: Sendable {
     let positional: [BamlOutboundValue]
     let named: [String: BamlOutboundValue]
 
-    init(_ call: BamlBridge_Cffi_V1_BamlToHostCall) {
+    init(_ call: BamlBridge_Cffi_V1_BamlToHostCall, runtime: BamlRuntime) {
         var positional: [BamlOutboundValue] = []
         var named: [String: BamlOutboundValue] = [:]
         for arg in call.args {
             if arg.isOptionalArg {
-                named[arg.argName] = BamlOutboundValue(arg.value)
+                named[arg.argName] = BamlOutboundValue(arg.value, runtime: runtime)
             } else {
-                positional.append(BamlOutboundValue(arg.value))
+                positional.append(BamlOutboundValue(arg.value, runtime: runtime))
             }
         }
         self.positional = positional
@@ -91,7 +91,7 @@ public struct BamlHostCallable: BamlEncodable, Sendable {
     }
 
     public func _bamlEncode() -> BamlInboundValue {
-        let key = HostCallableRegistry.shared.register(.callable(body))
+        let key = HostCallableRegistry.shared.register(.callable(body, BamlRuntime.encodingRuntime))
         var handle = BamlBridge_Cffi_V1_BamlHandle()
         handle.key = key
         handle.handleType = .hostValueCallable
@@ -109,7 +109,7 @@ final class HostCallableRegistry: @unchecked Sendable {
     static let shared = HostCallableRegistry()
 
     enum Entry {
-        case callable(@Sendable (BamlHostArgs) async throws -> BamlInboundValue)
+        case callable(@Sendable (BamlHostArgs) async throws -> BamlInboundValue, BamlRuntime)
         case opaqueError(any Error)
     }
 
@@ -141,7 +141,7 @@ final class HostCallableRegistry: @unchecked Sendable {
     /// Engine → host invocation, already off the engine thread.
     /// Resolves the call_id exactly once on every path.
     func dispatch(key: UInt64, callId: UInt32, argsData: Data) async {
-        guard case .callable(let body) = lookup(key) else {
+        guard case .callable(let body, let runtime) = lookup(key) else {
             // Missing callable = bridge fault. An empty error payload
             // is itself a BridgeFailure engine-side, which is the
             // correct surfacing (SdkPanic).
@@ -150,12 +150,16 @@ final class HostCallableRegistry: @unchecked Sendable {
         }
         do {
             let call = try BamlBridge_Cffi_V1_BamlToHostCall(serializedBytes: argsData)
-            let result = try await body(BamlHostArgs(call))
+            let result = try await BamlRuntime.$encodingRuntime.withValue(runtime) {
+                try await body(BamlHostArgs(call, runtime: runtime))
+            }
             completeHostCall(callId: callId, isError: 0, payload: try result.raw.serializedData())
         } catch let thrown as BamlThrownValue {
             // Typed BAML throw: rides as the real class value so the
             // engine can match it against the declared contract.
-            let payload = (try? thrown.value._bamlEncode().raw.serializedData()) ?? Data()
+            let payload = (try? BamlRuntime.$encodingRuntime.withValue(runtime) {
+                try thrown.value._bamlEncode().raw.serializedData()
+            }) ?? Data()
             completeHostCall(callId: callId, isError: 1, payload: payload)
         } catch {
             // Any other Swift error → opaque baml.errors.HostCallable

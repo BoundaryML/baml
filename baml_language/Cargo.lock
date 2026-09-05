@@ -1087,6 +1087,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_program_identity"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_artifact",
+ "baml_base",
+ "bex_vm_types",
+ "borsh",
+ "sha2",
+]
+
+[[package]]
 name = "baml_query"
 version = "0.0.0-beta"
 dependencies = [
@@ -1390,6 +1401,7 @@ dependencies = [
  "baml_db",
  "baml_fmt",
  "baml_path",
+ "baml_program_identity",
  "baml_type",
  "baml_version",
  "bex_cache",
@@ -1601,7 +1613,10 @@ checksum = "36f64beae40a84da1b4b26ff2761a5b895c12adc41dc25aaee1c4f2bbfe97a6e"
 name = "bridge_cffi"
 version = "0.218.1"
 dependencies = [
+ "async-trait",
  "baml_artifact",
+ "baml_program_identity",
+ "baml_tests",
  "baml_version",
  "bex_events",
  "bex_project",
@@ -1709,6 +1724,7 @@ dependencies = [
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
+ "futures",
  "js-sys",
  "serde-wasm-bindgen",
  "sys_wasm",
@@ -6431,6 +6447,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_codegen_types",
+ "baml_program_identity",
  "baml_version",
  "flate2",
  "protoc-bin-vendored",
@@ -6444,6 +6461,7 @@ dependencies = [
  "baml_artifact",
  "baml_base",
  "baml_codegen_types",
+ "baml_program_identity",
  "bex_vm_types",
  "serde",
  "serde_json",
@@ -6457,6 +6475,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_codegen_types",
+ "baml_program_identity",
  "baml_type",
 ]
 
@@ -6466,6 +6485,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_codegen_types",
+ "baml_program_identity",
 ]
 
 [[package]]
@@ -6475,6 +6495,7 @@ dependencies = [
  "askama",
  "baml_base",
  "baml_codegen_types",
+ "baml_program_identity",
  "indexmap",
  "pretty_assertions",
 ]
@@ -6485,6 +6506,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_codegen_types",
+ "baml_program_identity",
  "indexmap",
  "pretty_assertions",
  "prettyplease",
@@ -6499,6 +6521,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_codegen_types",
+ "baml_program_identity",
  "baml_version",
  "base64",
  "indexmap",
@@ -6511,6 +6534,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_codegen_types",
+ "baml_program_identity",
  "base64",
 ]
 

@@ -312,6 +312,12 @@ inline const loaded_api& load_api() {
         table->call_function == nullptr ||
         table->new_function_call == nullptr ||
         table->cancel_function_call == nullptr ||
+        table->release_function_call == nullptr ||
+        table->register_program == nullptr ||
+        table->create_runtime == nullptr ||
+        table->unregister_runtime == nullptr ||
+        table->call_function_for_runtime == nullptr ||
+        table->program_key == nullptr ||
         table->register_host_dispatch_callback == nullptr ||
         table->register_host_release_callback == nullptr ||
         table->complete_host_call == nullptr ||

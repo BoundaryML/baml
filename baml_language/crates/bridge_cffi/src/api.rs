@@ -127,6 +127,17 @@ pub type BamlMediaConstructorFn = unsafe extern "C" fn(
 pub type BamlMediaAccessorFn =
     unsafe extern "C" fn(key: u64, handle_type: i32, out: *mut Buffer) -> BamlCffiStatus;
 pub type BamlRegisterBridgeFn = unsafe extern "C" fn(info: *const BamlBridgeInfoV1) -> Buffer;
+pub type BamlRegisterProgramFn = unsafe extern "C" fn(
+    key: u64,
+    bytecode: *const u8,
+    length: usize,
+    metadata: *const libc::c_char,
+) -> Buffer;
+pub type BamlCreateRuntimeFn =
+    unsafe extern "C" fn(bytecode: *const u8, length: usize, out_key: *mut u64) -> Buffer;
+pub type BamlUnregisterRuntimeFn = extern "C" fn(key: u64) -> Buffer;
+pub type BamlCallFunctionForRuntimeFn =
+    extern "C" fn(key: u64, encoded_args: *const u8, length: usize, callback_id: u32);
 pub type BamlGetApiV1Fn = extern "C" fn() -> *const BamlApiV1;
 
 /// First version of the shared BAML C API.
@@ -189,6 +200,7 @@ pub struct BamlApiV1 {
     /// using `callback_id`.
     pub call_function: BamlCallFunctionFn,
     /// Allocate a nonzero process-unique BAML function-call identifier.
+    /// Dispatch it once or release it with `release_function_call` if abandoned.
     pub new_function_call: BamlNewFunctionCallFn,
     /// Request cancellation of a BAML function call.
     ///
@@ -257,9 +269,27 @@ pub struct BamlApiV1 {
     /// Replace the runtime from bytecode after validating embedded generation metadata.
     pub initialize_runtime_from_bytecode_with_metadata:
         BamlInitializeRuntimeFromBytecodeWithMetadataFn,
+    /// Append-only keyed API. Generated keys are process-owned and idempotent for identical contents.
+    pub register_program: BamlRegisterProgramFn,
+    /// Allocate an independent dynamic registration; out_key is written only on success.
+    pub create_runtime: BamlCreateRuntimeFn,
+    /// Remove a dynamic registration. In-flight calls retain their engine.
+    pub unregister_runtime: BamlUnregisterRuntimeFn,
+    /// Route a call using all 64 bits of its originating registration key.
+    pub call_function_for_runtime: BamlCallFunctionForRuntimeFn,
+    /// Compute a generated identity from canonical program contents.
+    pub program_key: BamlCreateRuntimeFn,
+    /// Release a call ID abandoned before dispatch. Safe after completion.
+    pub release_function_call: extern "C" fn(u64),
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
+    program_key: crate::program_key_ffi,
+    release_function_call: crate::release_function_call,
+    register_program: crate::register_program_ffi,
+    create_runtime: crate::create_runtime_ffi,
+    unregister_runtime: crate::unregister_runtime_ffi,
+    call_function_for_runtime: crate::call_function_for_runtime,
     abi_version: BAML_API_V1_ABI_VERSION,
     struct_size: std::mem::size_of::<BamlApiV1>(),
     version: crate::version,
@@ -332,6 +362,15 @@ mod tests {
         assert_same_function!(api.register_callback, crate::register_callback);
         assert_same_function!(api.call_function, crate::call_function);
         assert_same_function!(api.new_function_call, crate::new_function_call);
+        assert_same_function!(api.register_program, crate::register_program_ffi);
+        assert_same_function!(api.create_runtime, crate::create_runtime_ffi);
+        assert_same_function!(api.unregister_runtime, crate::unregister_runtime_ffi);
+        assert_same_function!(
+            api.call_function_for_runtime,
+            crate::call_function_for_runtime
+        );
+        assert_same_function!(api.program_key, crate::program_key_ffi);
+        assert_same_function!(api.release_function_call, crate::release_function_call);
         assert_same_function!(api.cancel_function_call, crate::cancel_function_call);
         assert_same_function!(
             api.register_host_dispatch_callback,
@@ -372,6 +411,12 @@ mod tests {
         let _: BamlRegisterCallbackFn = api.register_callback;
         let _: BamlCallFunctionFn = api.call_function;
         let _: BamlNewFunctionCallFn = api.new_function_call;
+        let _: BamlRegisterProgramFn = api.register_program;
+        let _: BamlCreateRuntimeFn = api.create_runtime;
+        let _: BamlUnregisterRuntimeFn = api.unregister_runtime;
+        let _: BamlCallFunctionForRuntimeFn = api.call_function_for_runtime;
+        let _: BamlCreateRuntimeFn = api.program_key;
+        let _: extern "C" fn(u64) = api.release_function_call;
         let _: BamlCancelFunctionCallFn = api.cancel_function_call;
         let _: BamlRegisterHostDispatchCallbackFn = api.register_host_dispatch_callback;
         let _: BamlRegisterHostReleaseCallbackFn = api.register_host_release_callback;

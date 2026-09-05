@@ -63,6 +63,7 @@ private func bamlShutdownAtExit() {
 ///   though blocking the main thread is still rude (debug-asserted).
 public final class BamlRuntime: @unchecked Sendable {
     public static let shared = BamlRuntime()
+    @TaskLocal static var encodingRuntime: BamlRuntime = .shared
 
     private let lock = NSLock()
     private var pending: [UInt32: @Sendable (Result<Data, Error>) -> Void] = [:]
@@ -70,7 +71,27 @@ public final class BamlRuntime: @unchecked Sendable {
     private var initialized = false
     private var shutdownHookRegistered = false
 
-    private init() {}
+    public private(set) var runtimeKey: UInt64?
+    private init(runtimeKey: UInt64? = nil) { self.runtimeKey = runtimeKey }
+
+    public static func registerProgram(key: UInt64, bytecode: Data, embeddedBamlToml: String? = nil) -> BamlRuntime {
+        let runtime = BamlRuntime(runtimeKey: key)
+        runtime.initialize(bytecode: bytecode, embeddedBamlToml: embeddedBamlToml)
+        return runtime
+    }
+
+    public static func createRuntime(bytecode: Data) -> BamlRuntime {
+        let runtime = BamlRuntime()
+        runtime.initialize(bytecode: bytecode)
+        return runtime
+    }
+
+    /// Closes a dynamic registration. Generated process-owned registrations throw.
+    public func close() throws {
+        guard let runtimeKey else { return }
+        let diagnostic = String(decoding: BamlApi.takeBuffer(BamlApi.unregisterRuntime(runtimeKey)), as: UTF8.self)
+        if !diagnostic.isEmpty { throw BamlDecodeError.unsupported(diagnostic) }
+    }
 
     /// Version string reported by the native bridge.
     public static func nativeVersion() -> String {
@@ -131,17 +152,25 @@ public final class BamlRuntime: @unchecked Sendable {
         BamlApi.registerUnhandledSpawnErrorCallback(bamlGlobalUnhandledSpawnError)
 
         let errorBuffer = bytecode.withUnsafeBytes { buf -> BamlBuffer in
-            if let embeddedBamlToml {
-                return embeddedBamlToml.withCString { manifest in
-                    BamlApi.initializeRuntimeFromBytecodeWithMetadata(
-                        buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                        buf.count,
-                        manifest
-                    )
-                }
+            if runtimeKey == nil, embeddedBamlToml != nil {
+                var key: UInt64 = 0
+                let status = BamlApi.programKey(buf.baseAddress?.assumingMemoryBound(to: UInt8.self), buf.count, &key)
+                if status.len != 0 { return status }
+                _ = BamlApi.takeBuffer(status)
+                runtimeKey = key
             }
-            return BamlApi.initializeRuntimeFromBytecode(
-                buf.baseAddress?.assumingMemoryBound(to: UInt8.self), buf.count)
+            if let runtimeKey {
+                if let embeddedBamlToml {
+                    return embeddedBamlToml.withCString { manifest in
+                        BamlApi.registerProgram(runtimeKey, buf.baseAddress?.assumingMemoryBound(to: UInt8.self), buf.count, manifest)
+                    }
+                }
+                return BamlApi.registerProgram(runtimeKey, buf.baseAddress?.assumingMemoryBound(to: UInt8.self), buf.count, nil)
+            }
+            var key: UInt64 = 0
+            let status = BamlApi.createRuntime(buf.baseAddress?.assumingMemoryBound(to: UInt8.self), buf.count, &key)
+            if status.len == 0 { runtimeKey = key }
+            return status
         }
         let initError = String(decoding: BamlApi.takeBuffer(errorBuffer), as: UTF8.self)
         if !initError.isEmpty {
@@ -178,7 +207,7 @@ public final class BamlRuntime: @unchecked Sendable {
         _ fqn: String,
         args: [(String, (any BamlEncodable)?)]
     ) throws -> R {
-        try R._bamlDecode(unwrapEnvelope(invokeSync(fqn, args: args)))
+        try R._bamlDecode(unwrapEnvelope(invokeSync(fqn, args: args), runtime: self))
     }
 
     /// Undecoded ok-value variants — for callers that interpret the
@@ -188,7 +217,7 @@ public final class BamlRuntime: @unchecked Sendable {
         _ fqn: String,
         args: [(String, (any BamlEncodable)?)]
     ) throws -> BamlOutboundValue {
-        try unwrapEnvelope(invokeSync(fqn, args: args))
+        try unwrapEnvelope(invokeSync(fqn, args: args), runtime: self)
     }
 
     public func callRaw(
@@ -196,7 +225,7 @@ public final class BamlRuntime: @unchecked Sendable {
         args: [(String, (any BamlEncodable)?)]
     ) async throws -> BamlOutboundValue {
         do {
-            return try unwrapEnvelope(await invokeAsync(fqn, args: args))
+            return try unwrapEnvelope(await invokeAsync(fqn, args: args), runtime: self)
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             throw CancellationError()
         }
@@ -207,7 +236,7 @@ public final class BamlRuntime: @unchecked Sendable {
         args: [(String, (any BamlEncodable)?)]
     ) async throws -> BamlOutboundValue {
         do {
-            return try unwrapEnvelope(await invokeHandleAsync(handleKey, args: args))
+            return try unwrapEnvelope(await invokeHandleAsync(handleKey, args: args), runtime: self)
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             throw CancellationError()
         }
@@ -217,7 +246,7 @@ public final class BamlRuntime: @unchecked Sendable {
         _ fqn: String,
         args: [(String, (any BamlEncodable)?)]
     ) throws {
-        _ = try unwrapEnvelope(invokeSync(fqn, args: args))
+        _ = try unwrapEnvelope(invokeSync(fqn, args: args), runtime: self)
     }
 
     public func call<R: BamlDecodable>(
@@ -225,7 +254,7 @@ public final class BamlRuntime: @unchecked Sendable {
         args: [(String, (any BamlEncodable)?)]
     ) async throws -> R {
         do {
-            return try R._bamlDecode(unwrapEnvelope(await invokeAsync(fqn, args: args)))
+            return try R._bamlDecode(unwrapEnvelope(await invokeAsync(fqn, args: args), runtime: self))
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             // Engine-confirmed cancellation surfaces as Swift's native
             // cancellation error (Python maps it to asyncio.CancelledError
@@ -239,7 +268,7 @@ public final class BamlRuntime: @unchecked Sendable {
         args: [(String, (any BamlEncodable)?)]
     ) async throws {
         do {
-            _ = try unwrapEnvelope(await invokeAsync(fqn, args: args))
+            _ = try unwrapEnvelope(await invokeAsync(fqn, args: args), runtime: self)
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             throw CancellationError()
         }
@@ -253,11 +282,14 @@ public final class BamlRuntime: @unchecked Sendable {
     ) throws -> Data {
         assertNotBlockingMainThreadInDebug(fqn)
         let protoCallId = BamlApi.newFunctionCall()
-        let payload = try encodeCallArgs(
-            args,
-            callId: protoCallId,
-            callTarget: .functionName(fqn)
-        )
+        defer { BamlApi.releaseFunctionCall(protoCallId) }
+        let payload = try Self.$encodingRuntime.withValue(self) {
+            try encodeCallArgs(
+                args,
+                callId: protoCallId,
+                callTarget: .functionName(fqn)
+            )
+        }
 
         let box = ResultBox()
         let semaphore = DispatchSemaphore(value: 0)
@@ -275,11 +307,14 @@ public final class BamlRuntime: @unchecked Sendable {
         args: [(String, (any BamlEncodable)?)]
     ) async throws -> Data {
         let protoCallId = BamlApi.newFunctionCall()
-        let payload = try encodeCallArgs(
-            args,
-            callId: protoCallId,
-            callTarget: .functionName(fqn)
-        )
+        defer { BamlApi.releaseFunctionCall(protoCallId) }
+        let payload = try Self.$encodingRuntime.withValue(self) {
+            try encodeCallArgs(
+                args,
+                callId: protoCallId,
+                callTarget: .functionName(fqn)
+            )
+        }
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -303,11 +338,14 @@ public final class BamlRuntime: @unchecked Sendable {
     ) async throws -> Data {
         precondition(handleKey != 0, "cannot invoke a zero BAML function handle")
         let protoCallId = BamlApi.newFunctionCall()
-        let payload = try encodeCallArgs(
-            args,
-            callId: protoCallId,
-            callTarget: .functionHandle(handleKey)
-        )
+        defer { BamlApi.releaseFunctionCall(protoCallId) }
+        let payload = try Self.$encodingRuntime.withValue(self) {
+            try encodeCallArgs(
+                args,
+                callId: protoCallId,
+                callTarget: .functionHandle(handleKey)
+            )
+        }
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -324,6 +362,7 @@ public final class BamlRuntime: @unchecked Sendable {
     private func registerPending(
         _ completion: @escaping @Sendable (Result<Data, Error>) -> Void
     ) -> UInt32 {
+        if self !== BamlRuntime.shared { return BamlRuntime.shared.registerPending(completion) }
         lock.lock()
         defer { lock.unlock() }
         let id = nextCallbackId
@@ -348,6 +387,10 @@ public final class BamlRuntime: @unchecked Sendable {
         // returns (verified in bridge_cffi::call_function_inner), so
         // scoping the pointers to this call is sound.
         payload.withUnsafeBytes { buf in
+            if let runtimeKey {
+                BamlApi.callFunctionForRuntime(runtimeKey, buf.baseAddress?.assumingMemoryBound(to: UInt8.self), buf.count, callbackId)
+                return
+            }
             BamlApi.callFunction(
                 buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
                 buf.count,
