@@ -181,7 +181,7 @@ pub struct RunArgs {
     )]
     pub functions: Vec<String>,
 
-    /// Evaluate a BAML expression.
+    /// Evaluate a BAML expression; not compatible with `--file`.
     ///
     /// Use `-e @file` to read an expression from a file or `-e -` for standard
     /// input. Mutually exclusive with `<TARGET>` and `--function`.
@@ -193,7 +193,7 @@ pub struct RunArgs {
     )]
     pub expression: Option<String>,
 
-    /// Load one standalone source file instead of discovering a project.
+    /// Load one standalone source file; not compatible with `--expression`.
     ///
     /// Runs its `main` function when no target is supplied. Mutually exclusive
     /// with `--project`.
@@ -1936,6 +1936,19 @@ mod tests {
         );
         assert!(!help.contains("Usage: run "), "{help}");
         assert!(!help.contains("Usage: baml-cli run"), "{help}");
+    }
+
+    #[test]
+    fn test_run_help_documents_expression_file_incompatibility() {
+        let mut command = crate::commands::RuntimeCli::command();
+        command.build();
+        let mut run = command.find_subcommand("run").unwrap().clone();
+        let help = run.render_help().to_string();
+        assert!(help.contains("not compatible with `--file`"), "{help}");
+        assert!(
+            help.contains("not compatible with `--expression`"),
+            "{help}"
+        );
     }
 
     /// BEP-027 Appendix A: the flag is `--output-format`, not `--output`.
