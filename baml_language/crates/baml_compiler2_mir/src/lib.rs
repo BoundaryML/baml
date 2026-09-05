@@ -1,5 +1,5 @@
 mod builder;
-mod inference_provider;
+mod inference;
 mod ir;
 mod lower;
 mod optimize;

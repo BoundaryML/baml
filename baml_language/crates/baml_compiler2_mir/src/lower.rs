@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
+use baml_compiler2_hir_ty::infer::{
+    self as inference, CallTypeArgPlan, MemberResolution, RuntimeCheck,
+};
 use baml_type::{
     ParamTy, PrimitiveType, RealizedTy, ResolvedAliases, RuntimeGenericLayout, RuntimeTy, TyAttr,
     TyTemplate, TyTemplateInterface, TypeName,
@@ -1302,11 +1305,10 @@ fn method_item_ref<'db>(
 /// `Field` and `Variant` variants before calling this function.
 fn resolution_to_item_ref<'db>(
     db: &'db dyn crate::Db,
-    res: &crate::inference_provider::MemberResolution<'db>,
+    res: &MemberResolution<'db>,
 ) -> Option<ItemRef<'db>> {
-    use crate::inference_provider::MemberResolution;
     match res {
-        MemberResolution::Free { func_loc } => {
+        MemberResolution::Free { func: func_loc } => {
             let pkg_info = file_package(db, func_loc.file(db));
             let func_data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);
             Some(ItemRef::Free {
@@ -1316,14 +1318,17 @@ fn resolution_to_item_ref<'db>(
             })
         }
         MemberResolution::BoundMethod {
-            class_loc,
-            func_loc,
+            class: class_loc,
+            func: func_loc,
         }
         | MemberResolution::UnboundMethod {
-            class_loc,
-            func_loc,
+            class: class_loc,
+            func: func_loc,
         } => Some(method_item_ref(db, *class_loc, *func_loc)),
-        MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
+        MemberResolution::InterfaceVirtualMethod {
+            interface: iface_loc,
+            method,
+        } => {
             // A virtual interface-method call: the ItemRef names the interface + method, and
             // the runtime dispatches on the receiver's actual impl.
             let pkg_info = file_package(db, iface_loc.file(db));
@@ -1335,7 +1340,7 @@ fn resolution_to_item_ref<'db>(
                 name: method.clone(),
             })
         }
-        MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
+        MemberResolution::InterfaceConcreteMethod { func: func_loc, .. } => {
             // A statically-resolved interface-method call: the callee IS the
             // resolved body — the impl's override or the interface's default
             // — and the resolution carries the owner frame it expects
@@ -1389,14 +1394,13 @@ fn resolution_to_item_ref<'db>(
 /// carries its resolved `func_loc`. Field / variant / virtual-field resolutions are not
 /// callable. Centralizes the `func_loc` extraction the call-lowering paths share.
 fn resolution_func_loc<'db>(
-    res: &crate::inference_provider::MemberResolution<'db>,
+    res: &MemberResolution<'db>,
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
-    use crate::inference_provider::MemberResolution;
     match res {
-        MemberResolution::Free { func_loc }
-        | MemberResolution::BoundMethod { func_loc, .. }
-        | MemberResolution::UnboundMethod { func_loc, .. }
-        | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => Some(*func_loc),
+        MemberResolution::Free { func: func_loc }
+        | MemberResolution::BoundMethod { func: func_loc, .. }
+        | MemberResolution::UnboundMethod { func: func_loc, .. }
+        | MemberResolution::InterfaceConcreteMethod { func: func_loc, .. } => Some(*func_loc),
         MemberResolution::External(_)
         | MemberResolution::InterfaceVirtualMethod { .. }
         | MemberResolution::Field { .. }
@@ -1409,10 +1413,10 @@ fn resolution_func_loc<'db>(
 }
 
 fn resolution_external_callable<'a>(
-    res: &'a crate::inference_provider::MemberResolution<'_>,
+    res: &'a MemberResolution<'_>,
 ) -> Option<&'a baml_compiler2_hir_ty::callable::ExternalCallable> {
     match res {
-        crate::inference_provider::MemberResolution::External(external) => Some(external),
+        MemberResolution::External(external) => Some(external),
         _ => None,
     }
 }
@@ -1769,11 +1773,8 @@ struct LoweringContext<'db> {
     catch_rethrow_locals: Vec<Local>,
     exit_block: BlockId,
 
-    // THE inference table store: converted once at construction into
-    // MIR's own consumption vocabulary, whichever engine produced them.
-    // Scopes outside this function answer `None`, and at least one caller
-    // (`try_lower_to_value_fallback`) keys behavior on that absence.
-    tables: crate::inference_provider::ProviderTables<'db>,
+    // Inference results are borrowed from Salsa; body and defaults have separate arenas.
+    tables: crate::inference::InferenceTables<'db>,
     // Function generic bounds, lowered in TIR space. MIR uses these to keep
     // bounded type variables ABI-erased while still lowering bound-member
     // access through the interface dispatch machinery. A bound *is* an interface
@@ -2373,14 +2374,7 @@ impl<'db> LoweringContext<'db> {
             .expect("every item-tree function has a recorded scope")
             .file_scope_id(db);
 
-        // --- Collect per-scope TIR inference views (func + all descendants) ---
-        // Borrows the Salsa-cached `infer_scope_types` results instead of
-        // deep-copying every table into merged per-function maps (the old
-        // scheme cloned the whole inference output of every function on each
-        // construction). Lookups dispatch through the `tir_*` accessors.
-        // Under the hir_ty provider this map stays EMPTY (TIR unconsulted);
-        // the accessors read the converted tables instead.
-        let tables = crate::inference_provider::ProviderTables::for_function(db, func_loc);
+        let tables = crate::inference::InferenceTables::for_function(db, func_loc);
 
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_info = file_package(db, file);
@@ -2502,13 +2496,7 @@ impl<'db> LoweringContext<'db> {
             .expect("every item-tree let has a recorded scope")
             .file_scope_id(db);
 
-        // --- Collect per-scope TIR inference views (let + all descendants) ---
-        // Borrows the Salsa-cached `infer_scope_types` results instead of
-        // deep-copying every table into merged per-function maps (the old
-        // scheme cloned the whole inference output of every let initializer on each
-        // construction). Lookups dispatch through the `tir_*` accessors.
-        // Under the hir_ty provider this map stays EMPTY (TIR unconsulted).
-        let tables = crate::inference_provider::ProviderTables::for_let(db, let_loc);
+        let tables = crate::inference::InferenceTables::for_let(db, let_loc);
 
         // --- Build class_fields / enum_variants from PackageItems ---
         let pkg_id = PackageId::new(db, file_package(db, file).package);
@@ -2821,116 +2809,131 @@ impl<'db> LoweringContext<'db> {
         (self.current_metadata_scope, pat_id)
     }
 
-    // --- Inference views ---
-    //
-    // Point lookups into the one converted table store (MIR's own
-    // consumption vocabulary, built at construction from whichever engine
-    // backs this run). `MetadataScope::Body` reads a scope's body tables;
-    // `MetadataScope::ParameterDefault` its default-parameter tables.
-
-    fn tir_expr_type(&self, key: ExprMetadataKey) -> Option<&Tir2Ty> {
-        self.tables.for_scope(key.scope).expr_type(key.expr)
+    fn inference(&self, scope: MetadataScope) -> Option<&'db inference::InferenceResult<'db>> {
+        Some(self.tables.for_scope(scope)?.result)
     }
 
-    fn tir_pat_type(&self, key: PatMetadataKey) -> Option<&Tir2Ty> {
-        self.tables.for_scope(key.0).pat_type(key.1)
+    fn inferred_expr_type(&self, key: ExprMetadataKey) -> Option<&Tir2Ty> {
+        self.inference(key.scope)?.type_of_expr.get(&key.expr)
     }
 
-    fn tir_resolution(
+    fn inferred_pat_type(&self, key: PatMetadataKey) -> Option<&Tir2Ty> {
+        self.inference(key.0)?.type_of_pat.get(&key.1)
+    }
+
+    fn inferred_resolution(&self, key: ExprMetadataKey) -> Option<&MemberResolution<'db>> {
+        self.inference(key.scope)?.member_resolutions.get(&key.expr)
+    }
+
+    fn inferred_virtual_field_view(
         &self,
         key: ExprMetadataKey,
-    ) -> Option<&crate::inference_provider::MemberResolution<'db>> {
-        self.tables.for_scope(key.scope).resolution(key.expr)
-    }
-
-    /// The recorded resolution for a virtual interface-field access: the realized
-    /// declaring-interface view plus the field's index in it.
-    ///
-    /// Authoritative, and preferred over re-deriving a view from the receiver's type.
-    /// It is what the type checker actually resolved through — which is the only
-    /// thing that answers a *union* receiver, where the serving interface is the one
-    /// every arm shares and is not recoverable from the receiver type alone.
-    fn tir_virtual_field_view(&self, key: ExprMetadataKey) -> Option<(InterfaceTypeView, u32)> {
-        use crate::inference_provider::MemberResolution;
-        let (interface, field_index) = match self.tir_resolution(key)? {
+    ) -> Option<(InterfaceTypeView, u32)> {
+        let (view, field_index) = match self.inferred_resolution(key)? {
             MemberResolution::InterfaceVirtualField {
-                interface,
-                field_index,
-                ..
+                view, field_index, ..
             }
             | MemberResolution::ExternalInterfaceVirtualField {
-                interface,
-                field_index,
-                ..
-            } => (interface, *field_index),
+                view, field_index, ..
+            } => (view, *field_index),
             _ => return None,
         };
-        let Tir2Ty::Interface(tn, args, assoc, _) = interface else {
+        let Tir2Ty::Interface(tn, args, assoc, _) = view else {
             return None;
         };
         Some(((tn.clone(), args.clone(), assoc.clone()), field_index))
     }
 
-    fn tir_is_exhaustive_match(&self, key: ExprMetadataKey) -> bool {
-        self.tables
-            .for_scope(key.scope)
-            .is_exhaustive_match(key.expr)
+    fn inferred_is_exhaustive_match(&self, key: ExprMetadataKey) -> bool {
+        self.inference(key.scope)
+            .is_none_or(|result| !result.non_exhaustive_matches.contains(&key.expr))
     }
 
-    fn tir_path_root_type(&self, key: ExprMetadataKey) -> Option<&Tir2Ty> {
-        self.tables.for_scope(key.scope).path_root_type(key.expr)
+    fn inferred_path_root_type(&self, key: ExprMetadataKey) -> Option<&Tir2Ty> {
+        self.inferred_path_segment_type((key.scope, key.expr, 0))
     }
 
-    fn tir_path_segment_type(&self, key: (MetadataScope, AstExprId, usize)) -> Option<&Tir2Ty> {
-        self.tables.for_scope(key.0).path_segment_type(key.1, key.2)
+    fn inferred_path_segment_type(
+        &self,
+        key: (MetadataScope, AstExprId, usize),
+    ) -> Option<&Tir2Ty> {
+        Some(
+            &self
+                .inference(key.0)?
+                .path_resolutions
+                .get(&key.1)?
+                .segments
+                .get(key.2)?
+                .ty,
+        )
     }
 
-    fn tir_path_member_resolutions(
+    fn inferred_path_member_resolution(
         &self,
         key: ExprMetadataKey,
-    ) -> Option<&[crate::inference_provider::MemberResolution<'db>]> {
-        self.tables
-            .for_scope(key.scope)
-            .path_member_resolutions(key.expr)
+    ) -> Option<&MemberResolution<'db>> {
+        let members = self
+            .inference(key.scope)?
+            .path_resolutions
+            .get(&key.expr)?
+            .segments
+            .get(1..)?;
+        if members.iter().any(|segment| segment.resolution.is_none()) {
+            return None;
+        }
+        members.last()?.resolution.as_ref()
     }
 
-    fn tir_call_plan(&self, key: ExprMetadataKey) -> Option<&crate::inference_provider::CallPlan> {
-        self.tables.for_scope(key.scope).call_plan(key.expr)
+    fn inferred_call_plan(&self, key: ExprMetadataKey) -> Option<&inference::CallPlan> {
+        self.inference(key.scope)?.call_plans.get(&key.expr)
     }
 
-    fn tir_type_binding(
-        &self,
-        stmt: AstStmtId,
-    ) -> Option<&crate::inference_provider::ScopedTypeBinding> {
-        self.tables
-            .for_scope(self.current_metadata_scope)
-            .type_binding(stmt)
+    fn inferred_type_binding(&self, stmt: AstStmtId) -> Option<&inference::ScopedTypeBinding> {
+        self.inference(self.current_metadata_scope)?
+            .type_bindings
+            .get(&stmt)
     }
 
-    fn tir_runtime_type_binding(
+    fn inferred_runtime_type_binding(
         &self,
         operand: AstExprId,
-    ) -> Option<&crate::inference_provider::ScopedTypeBinding> {
+    ) -> Option<&inference::ScopedTypeBinding> {
+        self.tables
+            .for_scope(self.current_metadata_scope)?
+            .runtime_type_bindings
+            .get(&operand)
+            .copied()
+    }
+
+    fn inferred_runtime_type_params(&self) -> &[ParamTy] {
         self.tables
             .for_scope(self.current_metadata_scope)
-            .runtime_type_binding(operand)
+            .map_or(&[], |body| &body.runtime_type_params)
     }
 
-    fn tir_runtime_type_params(&self) -> &[ParamTy] {
-        self.tables
-            .for_scope(self.current_metadata_scope)
-            .runtime_type_params()
+    fn inferred_function_adapter(&self, key: ExprMetadataKey) -> Option<&Tir2Ty> {
+        self.inference(key.scope)?
+            .expr_adjustments
+            .get(&key.expr)?
+            .iter()
+            .rev()
+            .find(|adjustment| adjustment.kind == inference::Adjust::FunctionAdapter)
+            .map(|adjustment| &adjustment.target)
     }
 
-    fn tir_function_coercion(
-        &self,
-        key: ExprMetadataKey,
-    ) -> Option<&crate::inference_provider::FunctionCoercion> {
-        self.tables.for_scope(key.scope).function_coercion(key.expr)
+    fn inferred_truthy_condition(&self, key: ExprMetadataKey) -> bool {
+        self.inference(key.scope)
+            .and_then(|result| result.expr_adjustments.get(&key.expr))
+            .is_some_and(|adjustments| {
+                adjustments
+                    .iter()
+                    .any(|adjustment| adjustment.kind == inference::Adjust::Truthy)
+            })
     }
 
-    fn tir_truthy_condition(&self, key: ExprMetadataKey) -> bool {
-        self.tables.for_scope(key.scope).truthy_condition(key.expr)
+    fn is_desugared_callee(&self, callee: AstExprId) -> bool {
+        self.inference(self.current_metadata_scope)
+            .is_some_and(|result| result.desugared_callees.contains(&callee))
     }
 
     fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> RuntimeTy {
@@ -3181,7 +3184,7 @@ impl<'db> LoweringContext<'db> {
     ) -> Option<InterfaceTypeView> {
         self.source_param_interface_view_for_expr(expr_id, member)
             .or_else(|| {
-                self.tir_expr_type(self.expr_metadata_key(expr_id))
+                self.inferred_expr_type(self.expr_metadata_key(expr_id))
                     .and_then(|ty| self.interface_dispatch_target_for_member(ty, member))
             })
             .or_else(|| {
@@ -3204,7 +3207,7 @@ impl<'db> LoweringContext<'db> {
             &self.body.exprs[access],
             AstExpr::OptionalMemberAccess { .. }
         ) {
-            self.tir_expr_type(self.expr_metadata_key(base))
+            self.inferred_expr_type(self.expr_metadata_key(base))
                 .map(Tir2Ty::strip_null)
         } else {
             None
@@ -3218,7 +3221,7 @@ impl<'db> LoweringContext<'db> {
             })
             .or_else(|| self.interface_dispatch_target_for_expr_member(base, member))
             .or_else(|| {
-                self.tir_expr_type(self.expr_metadata_key(base))
+                self.inferred_expr_type(self.expr_metadata_key(base))
                     .and_then(|ty| self.dispatch_target_for_concrete(ty, member))
             })
     }
@@ -3229,7 +3232,7 @@ impl<'db> LoweringContext<'db> {
     /// [`Self::dispatch_target_for_member_access`] applies to `x?.field`.
     /// `access` is the callee expression (`x.m` or `x?.m`).
     fn call_receiver_tir_ty(&self, access: AstExprId, base: AstExprId) -> Option<Tir2Ty> {
-        let ty = self.tir_expr_type(self.expr_metadata_key(base))?;
+        let ty = self.inferred_expr_type(self.expr_metadata_key(base))?;
         if matches!(
             &self.body.exprs[access],
             AstExpr::OptionalMemberAccess { .. }
@@ -3354,7 +3357,6 @@ impl<'db> LoweringContext<'db> {
         runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> bool {
-        use crate::inference_provider::MemberResolution;
         // Spelling gate: UFCS forms only. A member-access callee carries its
         // receiver in the base and is routed by the member roads; a
         // local-rooted path is a member chain; `default.m(..)` is the
@@ -3383,8 +3385,12 @@ impl<'db> LoweringContext<'db> {
         if !is_ufcs {
             return false;
         }
-        let Some(MemberResolution::InterfaceVirtualMethod { iface_loc, method }) =
-            self.tir_resolution(self.expr_metadata_key(callee)).cloned()
+        let Some(MemberResolution::InterfaceVirtualMethod {
+            interface: iface_loc,
+            method,
+        }) = self
+            .inferred_resolution(self.expr_metadata_key(callee))
+            .cloned()
         else {
             return false;
         };
@@ -3404,7 +3410,10 @@ impl<'db> LoweringContext<'db> {
             // only the interface VIEW (the static frame prefix); the method's
             // own type args — runtime `unreflect` operands included — are
             // lowered by the virtual-call machinery itself.
-            let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned() else {
+            let Some(plan) = self
+                .inferred_call_plan(self.expr_metadata_key(expr_id))
+                .cloned()
+            else {
                 return false;
             };
             if plan.type_args.len() != shape.frame_len {
@@ -3466,21 +3475,20 @@ impl<'db> LoweringContext<'db> {
 
     /// Whether the method a member resolution names takes a `self` receiver.
     /// `None` for resolutions that are not methods at all.
-    fn resolution_takes_self(
-        &self,
-        resolution: &crate::inference_provider::MemberResolution<'db>,
-    ) -> Option<bool> {
-        use crate::inference_provider::MemberResolution;
+    fn resolution_takes_self(&self, resolution: &MemberResolution<'db>) -> Option<bool> {
         match resolution {
-            MemberResolution::BoundMethod { func_loc, .. }
-            | MemberResolution::UnboundMethod { func_loc, .. }
-            | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => Some(
+            MemberResolution::BoundMethod { func: func_loc, .. }
+            | MemberResolution::UnboundMethod { func: func_loc, .. }
+            | MemberResolution::InterfaceConcreteMethod { func: func_loc, .. } => Some(
                 baml_compiler2_ppir::function_signature(self.db, *func_loc)
                     .params
                     .first()
                     .is_some_and(|param| param.name.as_str() == "self"),
             ),
-            MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
+            MemberResolution::InterfaceVirtualMethod {
+                interface: iface_loc,
+                method,
+            } => {
                 let iface_data =
                     baml_compiler2_ppir::item_data::interface_data(self.db, *iface_loc);
                 let pkg_info = file_package(self.db, iface_loc.file(self.db));
@@ -3510,7 +3518,7 @@ impl<'db> LoweringContext<'db> {
         shape: &InterfaceMethodShape,
     ) -> Option<(Vec<Tir2Ty>, Vec<Operand<'db>>)> {
         let plan = self
-            .tir_call_plan(self.expr_metadata_key(expr_id))
+            .inferred_call_plan(self.expr_metadata_key(expr_id))
             .cloned()?;
         if plan.type_args.len() != shape.frame_len {
             return None;
@@ -4020,7 +4028,7 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn expr_ty(&self, expr_id: AstExprId) -> RuntimeTy {
-        self.tir_expr_type(self.expr_metadata_key(expr_id))
+        self.inferred_expr_type(self.expr_metadata_key(expr_id))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
             .unwrap_or(RuntimeTy::Void {
                 attr: TyAttr::default(),
@@ -4033,7 +4041,7 @@ impl<'db> LoweringContext<'db> {
     /// Returns `vec![]` for non-generic (or unresolved) classes.
     fn class_type_arg_templates(&self, expr_id: AstExprId) -> Vec<TyTemplate> {
         let generic_params = self.enclosing_generic_params();
-        match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
+        match self.inferred_expr_type(self.expr_metadata_key(expr_id)) {
             Some(Tir2Ty::Class(_, type_args, _)) if !type_args.is_empty() => type_args
                 .iter()
                 .map(|t| self.ty_to_template(t, &generic_params))
@@ -4049,7 +4057,7 @@ impl<'db> LoweringContext<'db> {
     /// recovery).
     fn array_element_template(&self, expr_id: AstExprId) -> TyTemplate {
         let generic_params = self.enclosing_generic_params();
-        match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
+        match self.inferred_expr_type(self.expr_metadata_key(expr_id)) {
             Some(Tir2Ty::List(elem, _)) => self.ty_to_template(elem, &generic_params),
             _ => TyTemplate::from(RealizedTy::unknown()),
         }
@@ -4061,7 +4069,7 @@ impl<'db> LoweringContext<'db> {
     /// recovery); map keys are always strings.
     fn map_kv_templates(&self, expr_id: AstExprId) -> (TyTemplate, TyTemplate) {
         let generic_params = self.enclosing_generic_params();
-        match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
+        match self.inferred_expr_type(self.expr_metadata_key(expr_id)) {
             Some(Tir2Ty::Map { key, value, .. }) => (
                 self.ty_to_template(key, &generic_params),
                 self.ty_to_template(value, &generic_params),
@@ -4080,7 +4088,7 @@ impl<'db> LoweringContext<'db> {
     /// is not a future (error recovery).
     fn spawn_future_ty(&self, expr_id: AstExprId) -> Box<crate::ir::SpawnFutureTy> {
         let generic_params = self.enclosing_generic_params();
-        let (returns, throws) = match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
+        let (returns, throws) = match self.inferred_expr_type(self.expr_metadata_key(expr_id)) {
             Some(Tir2Ty::Future(value, error, _)) => (
                 self.ty_to_template(value, &generic_params),
                 self.ty_to_template(error, &generic_params),
@@ -4098,7 +4106,9 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         explicit_type_args: &[AstTypeExpr],
     ) -> Vec<TyTemplate> {
-        if let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned()
+        if let Some(plan) = self
+            .inferred_call_plan(self.expr_metadata_key(expr_id))
+            .cloned()
             && !plan.slots.is_empty()
         {
             let generic_params = self.enclosing_generic_params();
@@ -4106,7 +4116,7 @@ impl<'db> LoweringContext<'db> {
                 .slots
                 .iter()
                 .filter_map(|slot| match slot {
-                    crate::inference_provider::CallTypeArgPlan::Static {
+                    CallTypeArgPlan::Static {
                         emission_ty,
                         runtime_bindings,
                         ..
@@ -4116,7 +4126,7 @@ impl<'db> LoweringContext<'db> {
                         }
                         Some(self.ty_to_template(emission_ty, &generic_params))
                     }
-                    crate::inference_provider::CallTypeArgPlan::Runtime { .. } => None,
+                    CallTypeArgPlan::Runtime { .. } => None,
                 })
                 .collect();
         }
@@ -4149,7 +4159,7 @@ impl<'db> LoweringContext<'db> {
 
     /// Get the `baml_type::RuntimeTy` for a pattern binding
     fn pat_ty(&self, pat_id: AstPatId) -> RuntimeTy {
-        self.tir_pat_type(self.pat_metadata_key(pat_id))
+        self.inferred_pat_type(self.pat_metadata_key(pat_id))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
             .unwrap_or(RuntimeTy::Void {
                 attr: TyAttr::default(),
@@ -4163,7 +4173,7 @@ impl<'db> LoweringContext<'db> {
     /// Get the TIR-inferred root segment type for a multi-segment Path expression.
     /// Returns `None` if no root type was recorded (e.g. single-segment paths).
     fn path_root_ty(&self, expr_id: AstExprId) -> Option<RuntimeTy> {
-        self.tir_path_root_type(self.expr_metadata_key(expr_id))
+        self.inferred_path_root_type(self.expr_metadata_key(expr_id))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
     }
 
@@ -4240,7 +4250,7 @@ impl<'db> LoweringContext<'db> {
     /// local-rooted Path expression. Returns `None` if not recorded.
     #[allow(dead_code)]
     fn path_segment_ty(&self, expr_id: AstExprId, seg_idx: usize) -> Option<RuntimeTy> {
-        self.tir_path_segment_type((self.current_metadata_scope, expr_id, seg_idx))
+        self.inferred_path_segment_type((self.current_metadata_scope, expr_id, seg_idx))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
     }
 
@@ -4576,9 +4586,28 @@ impl<'db> LoweringContext<'db> {
     fn lower_optional_function_adapter(
         &mut self,
         expr_id: AstExprId,
-        coercion: &crate::inference_provider::FunctionCoercion,
+        target_ty: &Tir2Ty,
         dest: Place,
     ) {
+        let Some(Tir2Ty::Function {
+            params: source_params,
+            ..
+        }) = self
+            .inferred_expr_type(self.expr_metadata_key(expr_id))
+            .cloned()
+        else {
+            self.lower_expr_without_function_coercion(expr_id, dest);
+            return;
+        };
+        let Tir2Ty::Function {
+            params: target_params,
+            ret: target_return,
+            ..
+        } = target_ty
+        else {
+            self.lower_expr_without_function_coercion(expr_id, dest);
+            return;
+        };
         let original_ty = self.expr_ty(expr_id);
         let original_local = self.builder.temp(original_ty);
         self.lower_expr_without_function_coercion(expr_id, Place::Local(original_local));
@@ -4593,13 +4622,12 @@ impl<'db> LoweringContext<'db> {
         *adapter_count += 1;
         let adapter_name = format!("<optional-adapter({parent_name}, {adapter_idx})>");
 
-        let mut adapter_builder =
-            MirBuilder::new(Name::new(&adapter_name), coercion.target_params.len());
+        let mut adapter_builder = MirBuilder::new(Name::new(&adapter_name), target_params.len());
 
-        let ret_ty = self.resolved_aliases.convert(&coercion.target_return);
+        let ret_ty = self.resolved_aliases.convert(target_return);
         let ret = adapter_builder.declare_local(Some(Name::new("_0")), ret_ty, None);
 
-        for param in &coercion.target_params {
+        for param in target_params {
             let param_ty = self.resolved_aliases.convert(&param.ty);
             adapter_builder.declare_local(param.name.clone(), param_ty, None);
         }
@@ -4609,12 +4637,11 @@ impl<'db> LoweringContext<'db> {
         adapter_builder.set_current_block(entry);
 
         let mut next_required_target = 0usize;
-        let mut source_args = Vec::with_capacity(coercion.source_params.len());
-        for source_param in &coercion.source_params {
+        let mut source_args = Vec::with_capacity(source_params.len());
+        for source_param in &source_params {
             match source_param.mode {
                 FunctionParamMode::Required => {
-                    let target_index = coercion
-                        .target_params
+                    let target_index = target_params
                         .iter()
                         .enumerate()
                         .filter(|(_, param)| param.is_required())
@@ -4626,7 +4653,7 @@ impl<'db> LoweringContext<'db> {
                 }
                 FunctionParamMode::Optional => {
                     let target_index = source_param.name.as_ref().and_then(|name| {
-                        coercion.target_params.iter().position(|param| {
+                        target_params.iter().position(|param| {
                             param.is_optional() && param.name.as_ref() == Some(name)
                         })
                     });
@@ -4842,7 +4869,7 @@ impl<'db> LoweringContext<'db> {
         // Cloned out: the accessor's borrow is tied to `self` since the
         // dual provider, and the signature pieces outlive mutations below.
         let inferred_sig = match self
-            .tir_expr_type(ExprMetadataKey::new(saved_metadata_scope, expr_id))
+            .inferred_expr_type(ExprMetadataKey::new(saved_metadata_scope, expr_id))
             .cloned()
         {
             Some(Tir2Ty::Function {
@@ -5133,15 +5160,14 @@ impl<'db> LoweringContext<'db> {
         let key = self.expr_metadata_key(callee);
         match &self.body.exprs[callee] {
             AstExpr::Path(segments) if segments.len() >= 2 => self
-                .tir_path_member_resolutions(key)
-                .and_then(|resolutions| resolutions.last())
+                .inferred_path_member_resolution(key)
                 .and_then(resolution_external_callable)
                 .or_else(|| {
-                    self.tir_resolution(key)
+                    self.inferred_resolution(key)
                         .and_then(resolution_external_callable)
                 }),
             AstExpr::MemberAccess { .. } => self
-                .tir_resolution(key)
+                .inferred_resolution(key)
                 .and_then(resolution_external_callable),
             _ => None,
         }
@@ -5181,7 +5207,7 @@ impl<'db> LoweringContext<'db> {
         // the bare last segment (`prompt`) in the user's scope would miss it.
         // Fall back to bare-name resolution for unqualified, in-file tags.
         let tag_func_loc = self
-            .tir_resolution(self.expr_metadata_key(tag))
+            .inferred_resolution(self.expr_metadata_key(tag))
             .and_then(|r| resolution_func_loc(r))
             .or_else(|| {
                 let tag_name = match &self.body.exprs[tag] {
@@ -5825,7 +5851,7 @@ impl<'db> LoweringContext<'db> {
 
     fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) {
         if let Some(coercion) = self
-            .tir_function_coercion(self.expr_metadata_key(expr_id))
+            .inferred_function_adapter(self.expr_metadata_key(expr_id))
             .cloned()
         {
             self.lower_optional_function_adapter(expr_id, &coercion, dest);
@@ -5840,8 +5866,8 @@ impl<'db> LoweringContext<'db> {
         args: &[CallArg],
     ) -> (Vec<AstExprId>, Option<AstExprId>) {
         let runtime_id = self
-            .tir_call_plan(self.expr_metadata_key(expr_id))
-            .and_then(|plan| plan.side_channels.runtime_id);
+            .inferred_call_plan(self.expr_metadata_key(expr_id))
+            .and_then(|plan| plan.runtime_id);
         let ordinary_args = args
             .iter()
             .filter_map(|arg| (Some(arg.expr) != runtime_id).then_some(arg.expr))
@@ -5962,8 +5988,6 @@ impl<'db> LoweringContext<'db> {
             AstExpr::QualifiedPath {
                 qself, interface, ..
             } => {
-                use crate::inference_provider::MemberResolution;
-
                 self.emit_type_expr_runtime_bindings(&qself);
                 self.emit_type_expr_runtime_bindings(&interface);
                 // `(Base as I).m` as a VALUE: an unbound callable resolved
@@ -5971,8 +5995,11 @@ impl<'db> LoweringContext<'db> {
                 // other spelling takes (the frame realizes associated types
                 // the written qualifier omits). `self`, if the method takes
                 // one, stays an ordinary first parameter.
-                if let Some(MemberResolution::InterfaceVirtualMethod { iface_loc, method }) = self
-                    .tir_resolution(self.expr_metadata_key(expr_id))
+                if let Some(MemberResolution::InterfaceVirtualMethod {
+                    interface: iface_loc,
+                    method,
+                }) = self
+                    .inferred_resolution(self.expr_metadata_key(expr_id))
                     .cloned()
                     && let Some(rvalue) = self.virtual_function_rvalue(expr_id, iface_loc, &method)
                 {
@@ -6335,23 +6362,13 @@ impl<'db> LoweringContext<'db> {
     fn lower_path_expr(&mut self, expr_id: AstExprId, segments: &[Name], dest: Place) {
         // Multi-segment paths (e.g. baml.http.fetch, self.field, obj.method) — check TIR resolution first
         if segments.len() > 1 {
-            // Check path_member_resolutions first (set by infer_local_rooted_path for local-rooted paths).
-            // This takes priority over the flat resolutions map since infer_local_rooted_path
-            // moves resolutions from the flat map into path_member_resolutions.
-            if let Some(member_resolutions) = self
-                .tir_path_member_resolutions(self.expr_metadata_key(expr_id))
-                .map(<[_]>::to_vec)
+            // Value-rooted paths carry their resolution on the final segment.
+            if let Some(resolution) = self
+                .inferred_path_member_resolution(self.expr_metadata_key(expr_id))
+                .cloned()
             {
-                use crate::inference_provider::MemberResolution;
-                // The last resolution corresponds to the final segment of the path.
-                // - If the last resolution is a BoundMethod/UnboundMethod/Free, this path is a
-                //   callee reference; emit a function constant. The receiver will be prepended
-                //   by lower_call.
-                // - If the last resolution is a Field, this is a pure field-chain access.
-                // Note: for paths like `user.profile.items.slice`, the member_resolutions
-                // are [Field{profile}, Field{items}, BoundMethod{slice}], so we check last().
-                match member_resolutions.last() {
-                    Some(MemberResolution::BoundMethod { func_loc, .. }) => {
+                match &resolution {
+                    MemberResolution::BoundMethod { func: func_loc, .. } => {
                         // A `self`-less method referenced through a receiver
                         // (`let m = f.make`): nothing to bind — currying the
                         // receiver would smuggle it into the first REAL
@@ -6365,7 +6382,6 @@ impl<'db> LoweringContext<'db> {
                                 .first()
                                 .is_some_and(|param| param.name.as_str() == "self");
                         // Bound method reference: lower receiver and emit MakeBoundMethod.
-                        let resolution = member_resolutions.into_iter().last().unwrap();
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             if !takes_self {
                                 // TIR admitted the reference, so a missing
@@ -6416,10 +6432,10 @@ impl<'db> LoweringContext<'db> {
                     // method) does not exist. A `self`-LESS member has no receiver
                     // to bind: it resolves type-keyed on the receiver's static
                     // type instead.
-                    Some(
-                        resolution @ (MemberResolution::InterfaceVirtualMethod { .. }
-                        | MemberResolution::InterfaceConcreteMethod { .. }),
-                    ) if self.binding_id_for_path(expr_id, &segments[0]).is_some() => {
+                    resolution @ (MemberResolution::InterfaceVirtualMethod { .. }
+                    | MemberResolution::InterfaceConcreteMethod { .. })
+                        if self.binding_id_for_path(expr_id, &segments[0]).is_some() =>
+                    {
                         if self.resolution_takes_self(resolution) == Some(false) {
                             // TIR rejects a `self`-less method reached through a value,
                             // so this is unreachable in a compiling program.
@@ -6430,12 +6446,12 @@ impl<'db> LoweringContext<'db> {
                             return;
                         }
                     }
-                    Some(MemberResolution::External(external))
+                    MemberResolution::External(external)
                         if matches!(
                             external.target,
                             baml_compiler2_hir_ty::callable::ExternalCallTarget::Interface { .. }
                         ) && self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
-                    Some(MemberResolution::External(external))
+                    MemberResolution::External(external)
                         if external.takes_self
                             && matches!(
                                 external.target,
@@ -6443,7 +6459,6 @@ impl<'db> LoweringContext<'db> {
                             )
                             && self.binding_id_for_path(expr_id, &segments[0]).is_some() =>
                     {
-                        let resolution = member_resolutions.into_iter().last().unwrap();
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             let receiver_segments = &segments[..segments.len() - 1];
                             let receiver_op = if receiver_segments.len() == 1 {
@@ -6471,15 +6486,12 @@ impl<'db> LoweringContext<'db> {
                             return;
                         }
                     }
-                    Some(
-                        MemberResolution::UnboundMethod { .. }
-                        | MemberResolution::Free { .. }
-                        | MemberResolution::InterfaceVirtualMethod { .. }
-                        | MemberResolution::InterfaceConcreteMethod { .. }
-                        | MemberResolution::External(_),
-                    ) => {
+                    MemberResolution::UnboundMethod { .. }
+                    | MemberResolution::Free { .. }
+                    | MemberResolution::InterfaceVirtualMethod { .. }
+                    | MemberResolution::InterfaceConcreteMethod { .. }
+                    | MemberResolution::External(_) => {
                         // Unbound method or free function reference — emit a plain function constant.
-                        let resolution = member_resolutions.into_iter().last().unwrap();
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             self.builder.assign(
                                 dest,
@@ -6488,33 +6500,27 @@ impl<'db> LoweringContext<'db> {
                             return;
                         }
                     }
-                    Some(
-                        MemberResolution::Field { .. } | MemberResolution::ExternalField { .. },
-                    ) => {
+                    MemberResolution::Field { .. } | MemberResolution::ExternalField { .. } => {
                         // Local-rooted field access — chain field projections.
                         self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
                         return;
                     }
-                    Some(
-                        MemberResolution::Variant { .. }
-                        | MemberResolution::InterfaceVirtualField { .. }
-                        | MemberResolution::ExternalVariant { .. }
-                        | MemberResolution::ExternalInterfaceVirtualField { .. },
-                    ) => {
+                    MemberResolution::Variant { .. }
+                    | MemberResolution::InterfaceVirtualField { .. }
+                    | MemberResolution::ExternalVariant { .. }
+                    | MemberResolution::ExternalInterfaceVirtualField { .. } => {
                         // Handled by expr_types check below (a virtual field read on an
                         // existential falls through to the general member-access lowering).
                     }
-                    None => {}
                 }
             }
 
             // Check flat resolutions (set by infer_multi_segment_path for package-rooted paths
             // like baml.fs.open, baml.env.get, etc.).
             if let Some(resolution) = self
-                .tir_resolution(self.expr_metadata_key(expr_id))
+                .inferred_resolution(self.expr_metadata_key(expr_id))
                 .cloned()
             {
-                use crate::inference_provider::MemberResolution;
                 match &resolution {
                     MemberResolution::BoundMethod { .. } => {
                         // Bound method reference via flat resolutions: emit MakeBoundMethod.
@@ -6557,7 +6563,10 @@ impl<'db> LoweringContext<'db> {
                     // type-keyed road the qualified spelling takes. An
                     // interface method has no global function symbol, so the
                     // bare-constant road below can never serve it.
-                    MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
+                    MemberResolution::InterfaceVirtualMethod {
+                        interface: iface_loc,
+                        method,
+                    } => {
                         let method = method.clone();
                         let iface_loc = *iface_loc;
                         if let Some(rvalue) =
@@ -6665,7 +6674,11 @@ impl<'db> LoweringContext<'db> {
                     segments.len() - 2
                 };
                 let recv_tir_ty = self
-                    .tir_path_segment_type((self.current_metadata_scope, expr_id, recv_seg_idx))
+                    .inferred_path_segment_type((
+                        self.current_metadata_scope,
+                        expr_id,
+                        recv_seg_idx,
+                    ))
                     .cloned();
                 if let Some(view) = recv_tir_ty
                     .as_ref()
@@ -6701,7 +6714,7 @@ impl<'db> LoweringContext<'db> {
             }
             // Check for enum variant (e.g. Status.Active lowered to Path(["Status","Active"]))
             if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) = self
-                .tir_expr_type(self.expr_metadata_key(expr_id))
+                .inferred_expr_type(self.expr_metadata_key(expr_id))
                 .cloned()
                 .as_ref()
             {
@@ -6766,7 +6779,7 @@ impl<'db> LoweringContext<'db> {
             }
             ResolvedName::Local { .. } | ResolvedName::Unknown => {
                 if self
-                    .tir_expr_type(self.expr_metadata_key(expr_id))
+                    .inferred_expr_type(self.expr_metadata_key(expr_id))
                     .is_some()
                 {
                     // If TIR recorded a type for this expr, it was handled as a
@@ -7022,7 +7035,7 @@ impl<'db> LoweringContext<'db> {
         let item = def_to_item_ref(self.db, def);
         // Check if this expression's type is EnumVariant
         if let Some(Tir2Ty::EnumVariant(_qtn, variant, _)) = self
-            .tir_expr_type(self.expr_metadata_key(expr_id))
+            .inferred_expr_type(self.expr_metadata_key(expr_id))
             .cloned()
             .as_ref()
         {
@@ -7567,7 +7580,7 @@ impl<'db> LoweringContext<'db> {
         // The stored result must be the COERCED bool (`a && b` is
         // bool-typed even when its operands are not), so a truthy-marked
         // rhs re-assigns through the coercion in place.
-        if self.tir_truthy_condition(self.expr_metadata_key(rhs)) {
+        if self.inferred_truthy_condition(self.expr_metadata_key(rhs)) {
             self.builder.assign(
                 sc_dest.clone(),
                 Rvalue::UnaryOp {
@@ -7988,7 +8001,10 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         args: &[AstExprId],
     ) -> Vec<Operand<'db>> {
-        let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned() else {
+        let Some(plan) = self
+            .inferred_call_plan(self.expr_metadata_key(expr_id))
+            .cloned()
+        else {
             // No call plan: lower each arg in order (the type checker would
             // have already flagged any mismatch).
             return args.iter().map(|&a| self.lower_to_operand(a)).collect();
@@ -8029,17 +8045,15 @@ impl<'db> LoweringContext<'db> {
         plan.bindings
             .into_iter()
             .map(|binding| match binding {
-                crate::inference_provider::ParamBinding::Provided { arg, .. } => lowered_args
+                inference::ParamBinding::Provided { arg, .. } => lowered_args
                     .remove(&arg)
                     .expect("call plan referenced an argument outside the call expression"),
-                crate::inference_provider::ParamBinding::OmittedDefault { param_index, .. } => {
-                    match sysop_callee {
-                        Some(callee_loc) => {
-                            self.sysop_default_operand(callee_loc, param_index + sysop_self_offset)
-                        }
-                        None => Operand::Constant(Constant::OmittedArg),
+                inference::ParamBinding::OmittedDefault { param_index, .. } => match sysop_callee {
+                    Some(callee_loc) => {
+                        self.sysop_default_operand(callee_loc, param_index + sysop_self_offset)
                     }
-                }
+                    None => Operand::Constant(Constant::OmittedArg),
+                },
             })
             .collect()
     }
@@ -8098,18 +8112,15 @@ impl<'db> LoweringContext<'db> {
         } else {
             return false;
         };
-        // A real method takes precedence. Nullable receivers can leave
-        // `Error | null`; generic receivers can retain a placeholder resolution.
-        let callee_untyped = self
-            .tir_expr_type(self.expr_metadata_key(callee))
-            .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
-        if !callee_untyped {
+        if !self.is_desugared_callee(callee) {
             return false;
         }
         let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match &callee_expr {
             AstExpr::MemberAccess { base, .. } => {
                 let base_id = *base;
-                let ty = self.tir_expr_type(self.expr_metadata_key(base_id)).cloned();
+                let ty = self
+                    .inferred_expr_type(self.expr_metadata_key(base_id))
+                    .cloned();
                 (self.lower_to_operand(base_id), ty)
             }
             AstExpr::Path(segments) => {
@@ -8117,8 +8128,8 @@ impl<'db> LoweringContext<'db> {
                 // Lower the receiver, mirroring normal path-method receiver
                 // handling: a single-segment root may be a local OR a closure
                 // capture; a multi-segment receiver is a field chain off either.
-                // (Can't reuse `lower_path_receiver_to_local`: it assumes a local
-                // root and `expr_ty(callee)` would ICE on the untyped callee.)
+                // `lower_path_receiver_to_local` assumes a local root; captures
+                // must retain their parent closure slot.
                 let recv_op = if receiver_segments.len() == 1 {
                     let Some(place) = self.place_for_path(callee, &receiver_segments[0]) else {
                         return false;
@@ -8126,7 +8137,7 @@ impl<'db> LoweringContext<'db> {
                     Operand::Copy(place)
                 } else {
                     let recv_ty = self
-                        .tir_path_segment_type((
+                        .inferred_path_segment_type((
                             self.current_metadata_scope,
                             callee,
                             receiver_segments.len() - 1,
@@ -8146,7 +8157,7 @@ impl<'db> LoweringContext<'db> {
                 };
                 let prefix_idx = segments.len() - 2;
                 let ty = self
-                    .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
+                    .inferred_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
                     .cloned();
                 (recv_op, ty)
             }
@@ -8234,28 +8245,7 @@ impl<'db> LoweringContext<'db> {
         if !is_sugar_callee(&callee_expr, "from_json") {
             return false;
         }
-        // Fire only for a type-name receiver (`Type.from_json`), never a value
-        // call (`x.from_json`) — rewriting the latter would silently drop `x`.
-        // Mirrors the guard in the TIR sugar that types this call.
-        let static_receiver = match &callee_expr {
-            AstExpr::MemberAccess { base, .. } => match &self.body.exprs[*base] {
-                AstExpr::Path(segs) if !segs.is_empty() => {
-                    self.binding_id_for_path(*base, &segs[0]).is_none()
-                }
-                _ => false,
-            },
-            AstExpr::Path(segs) if segs.len() >= 2 => {
-                self.binding_id_for_path(callee, &segs[0]).is_none()
-            }
-            _ => false,
-        };
-        if !static_receiver {
-            return false;
-        }
-        let callee_untyped = self
-            .tir_expr_type(self.expr_metadata_key(callee))
-            .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
-        if !callee_untyped {
+        if !self.is_desugared_callee(callee) {
             return false;
         }
 
@@ -8263,8 +8253,9 @@ impl<'db> LoweringContext<'db> {
         // type arg so `baml.json.to<T>` binds `T` under monomorphization; an
         // out-of-scope typevar / unknown safely drops to ntypeargs=0 (the shim
         // resolves on the runtime value when no static type is supplied).
-        let recv_tir_ty: Option<Tir2Ty> =
-            self.tir_expr_type(self.expr_metadata_key(expr_id)).cloned();
+        let recv_tir_ty: Option<Tir2Ty> = self
+            .inferred_expr_type(self.expr_metadata_key(expr_id))
+            .cloned();
         let type_arg_ops = self.fallback_type_arg_ops(recv_tir_ty.as_ref());
         let arg_op = self.lower_to_operand(args[0]);
         self.emit_conversion_call(
@@ -8425,8 +8416,6 @@ impl<'db> LoweringContext<'db> {
     ) {
         use baml_compiler2_hir_ty::callable::ExternalCallTarget;
 
-        use crate::inference_provider::MemberResolution;
-
         // A UFCS interface-item call, whatever its spelling — the resolution
         // record, not the syntax, routes it.
         if self.try_lower_interface_item_call(expr_id, callee, args, runtime_id, &dest) {
@@ -8474,7 +8463,7 @@ impl<'db> LoweringContext<'db> {
             // rooted path spells UFCS, and therefore supplies `self` explicitly.
             && self.binding_id_for_path(callee, &segments[0]).is_none()
             && let Some(MemberResolution::External(external)) =
-                self.tir_resolution(self.expr_metadata_key(callee)).cloned()
+                self.inferred_resolution(self.expr_metadata_key(callee)).cloned()
             && let ExternalCallTarget::Interface { method, .. } = &external.target
             && external.takes_self
             && let Some(&receiver) = args.first()
@@ -8634,7 +8623,7 @@ impl<'db> LoweringContext<'db> {
                 let prefix_idx = segments.len() - 2;
                 let recv_seg_idx = if segments.len() == 2 { 0 } else { prefix_idx };
                 let recv_tir_ty = self
-                    .tir_path_segment_type((self.current_metadata_scope, callee, recv_seg_idx))
+                    .inferred_path_segment_type((self.current_metadata_scope, callee, recv_seg_idx))
                     .cloned()
                     .or_else(|| {
                         if segments.len() == 2
@@ -8744,7 +8733,7 @@ impl<'db> LoweringContext<'db> {
                 // A union receiver is callable only through an interface shared by
                 // every arm.
                 else if let Some(members) = self
-                    .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
+                    .inferred_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
                     .and_then(Self::tir_union_members)
                 {
                     let receiver_segments = &segments[..segments.len() - 1];
@@ -8801,7 +8790,7 @@ impl<'db> LoweringContext<'db> {
         let (callee_operand, arg_operands) = if let AstExpr::MemberAccess { base, .. } = callee_expr
         {
             if self
-                .tir_resolution(self.expr_metadata_key(callee))
+                .inferred_resolution(self.expr_metadata_key(callee))
                 .is_some_and(|r| {
                     matches!(
                         r,
@@ -8825,18 +8814,22 @@ impl<'db> LoweringContext<'db> {
                         self.binding_id_for_path(*base, &segments[0]).is_some()
                             || self.path_root_is_top_level_let(*base, &segments[0])
                     }
-                    _ => self.tir_expr_type(self.expr_metadata_key(*base)).is_some(),
+                    _ => self
+                        .inferred_expr_type(self.expr_metadata_key(*base))
+                        .is_some(),
                 };
                 // Check if the resolved method expects a `self` receiver.
                 // Static methods (e.g. _ParseCache._new) have no `self` param
                 // and must not get the class reference prepended as an argument.
                 let method_takes_self = {
-                    self.tir_resolution(self.expr_metadata_key(callee))
+                    self.inferred_resolution(self.expr_metadata_key(callee))
                         .is_some_and(|r| match r {
-                            MemberResolution::BoundMethod { func_loc, .. }
-                            | MemberResolution::UnboundMethod { func_loc, .. }
-                            | MemberResolution::Free { func_loc }
-                            | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
+                            MemberResolution::BoundMethod { func: func_loc, .. }
+                            | MemberResolution::UnboundMethod { func: func_loc, .. }
+                            | MemberResolution::Free { func: func_loc }
+                            | MemberResolution::InterfaceConcreteMethod {
+                                func: func_loc, ..
+                            } => {
                                 let sig =
                                     baml_compiler2_ppir::function_signature(self.db, *func_loc);
                                 sig.params
@@ -8857,8 +8850,9 @@ impl<'db> LoweringContext<'db> {
                     let receiver_op = self.lower_to_operand(*base);
                     receiver_base_for_class_type_args = Some(*base);
                     let callee_op = {
-                        let resolution =
-                            self.tir_resolution(self.expr_metadata_key(callee)).cloned();
+                        let resolution = self
+                            .inferred_resolution(self.expr_metadata_key(callee))
+                            .cloned();
                         if let Some(MemberResolution::InterfaceConcreteMethod {
                             frame_type_args,
                             ..
@@ -8893,8 +8887,9 @@ impl<'db> LoweringContext<'db> {
                         receiver_base_for_class_type_args = Some(*base);
                     }
                     let callee_op = {
-                        let resolution =
-                            self.tir_resolution(self.expr_metadata_key(callee)).cloned();
+                        let resolution = self
+                            .inferred_resolution(self.expr_metadata_key(callee))
+                            .cloned();
                         if let Some(MemberResolution::InterfaceConcreteMethod {
                             frame_type_args,
                             ..
@@ -8923,8 +8918,7 @@ impl<'db> LoweringContext<'db> {
             // [Field{profile}, Field{items}, Method{slice}] — last() is Method).
             let is_local_method = segments.len() >= 2
                 && self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
+                    .inferred_path_member_resolution(self.expr_metadata_key(callee))
                     .is_some_and(|r| {
                         matches!(
                             r,
@@ -8938,7 +8932,7 @@ impl<'db> LoweringContext<'db> {
             let is_pkg_method = !is_local_method
                 && segments.len() >= 2
                 && self
-                    .tir_resolution(self.expr_metadata_key(callee))
+                    .inferred_resolution(self.expr_metadata_key(callee))
                     .is_some_and(|r| {
                         matches!(
                             r,
@@ -8958,8 +8952,7 @@ impl<'db> LoweringContext<'db> {
                 // (not MakeBoundMethod) since the receiver is passed explicitly as self.
                 let receiver_segments = &segments[..segments.len() - 1];
                 let method_resolution = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
+                    .inferred_path_member_resolution(self.expr_metadata_key(callee))
                     .cloned();
                 if let Some(MemberResolution::InterfaceConcreteMethod {
                     frame_type_args, ..
@@ -8975,9 +8968,9 @@ impl<'db> LoweringContext<'db> {
                     None => self.lower_to_operand(callee),
                 };
                 let method_takes_self = method_resolution.as_ref().is_some_and(|r| match r {
-                    MemberResolution::BoundMethod { func_loc, .. }
-                    | MemberResolution::UnboundMethod { func_loc, .. }
-                    | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
+                    MemberResolution::BoundMethod { func: func_loc, .. }
+                    | MemberResolution::UnboundMethod { func: func_loc, .. }
+                    | MemberResolution::InterfaceConcreteMethod { func: func_loc, .. } => {
                         let sig = baml_compiler2_ppir::function_signature(self.db, *func_loc);
                         sig.params
                             .first()
@@ -8992,7 +8985,11 @@ impl<'db> LoweringContext<'db> {
                     // receiver prefix's static type fills the callee frame.
                     let prefix_idx = segments.len() - 2;
                     receiver_path_tir_ty = self
-                        .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
+                        .inferred_path_segment_type((
+                            self.current_metadata_scope,
+                            callee,
+                            prefix_idx,
+                        ))
                         .cloned();
                     (callee_op, self.lower_call_arg_operands(expr_id, args))
                 } else {
@@ -9020,7 +9017,11 @@ impl<'db> LoweringContext<'db> {
                     };
                     let prefix_idx = segments.len() - 2;
                     receiver_path_tir_ty = self
-                        .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
+                        .inferred_path_segment_type((
+                            self.current_metadata_scope,
+                            callee,
+                            prefix_idx,
+                        ))
                         .cloned();
                     let mut all_args = vec![receiver_op];
                     all_args.extend(self.lower_call_arg_operands(expr_id, args));
@@ -9030,7 +9031,9 @@ impl<'db> LoweringContext<'db> {
                 // Package-path method call (via flat resolutions): same treatment.
                 // For immediate calls, emit the callee as a plain function constant
                 // (not MakeBoundMethod) since the receiver is passed explicitly as self.
-                let flat_resolution = self.tir_resolution(self.expr_metadata_key(callee)).cloned();
+                let flat_resolution = self
+                    .inferred_resolution(self.expr_metadata_key(callee))
+                    .cloned();
                 if let Some(MemberResolution::InterfaceConcreteMethod {
                     frame_type_args, ..
                 }) = flat_resolution.as_ref()
@@ -9054,7 +9057,11 @@ impl<'db> LoweringContext<'db> {
                 if let Some(receiver_op) = receiver_op {
                     let prefix_idx = segments.len() - 2;
                     receiver_path_tir_ty = self
-                        .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
+                        .inferred_path_segment_type((
+                            self.current_metadata_scope,
+                            callee,
+                            prefix_idx,
+                        ))
                         .cloned();
                     let mut all_args = vec![receiver_op];
                     all_args.extend(self.lower_call_arg_operands(expr_id, args));
@@ -9379,21 +9386,18 @@ impl<'db> LoweringContext<'db> {
     /// `callee_uses_method_call_convention`, which strips `self` so the call
     /// plan's `param_index` becomes receiver-relative.
     fn callee_uses_method_convention(&self, callee: AstExprId) -> bool {
-        use crate::inference_provider::MemberResolution;
         let key = self.expr_metadata_key(callee);
         matches!(
-            self.tir_resolution(key),
+            self.inferred_resolution(key),
             Some(MemberResolution::BoundMethod { .. })
         ) || matches!(
-            self.tir_resolution(key),
+            self.inferred_resolution(key),
             Some(MemberResolution::External(external)) if external.takes_self
         ) || matches!(
-            self.tir_path_member_resolutions(key)
-                .and_then(|resolutions| resolutions.last()),
+            self.inferred_path_member_resolution(key),
             Some(MemberResolution::BoundMethod { .. })
         ) || matches!(
-            self.tir_path_member_resolutions(key)
-                .and_then(|resolutions| resolutions.last()),
+            self.inferred_path_member_resolution(key),
             Some(MemberResolution::External(external)) if external.takes_self
         )
     }
@@ -9421,17 +9425,16 @@ impl<'db> LoweringContext<'db> {
             }
         } else {
             let key = self.expr_metadata_key(callee);
-            self.tir_path_member_resolutions(key)
-                .and_then(|resolutions| resolutions.last())
+            self.inferred_path_member_resolution(key)
                 .and_then(resolution_func_loc)
-                .or_else(|| self.tir_resolution(key).and_then(resolution_func_loc))
+                .or_else(|| self.inferred_resolution(key).and_then(resolution_func_loc))
         }
     }
 
     fn sys_op_callee(&self, callee: AstExprId) -> Option<FunctionLoc<'db>> {
         let func = match &self.body.exprs[callee] {
             AstExpr::MemberAccess { .. } | AstExpr::OptionalMemberAccess { .. } => self
-                .tir_resolution(self.expr_metadata_key(callee))
+                .inferred_resolution(self.expr_metadata_key(callee))
                 .and_then(resolution_func_loc),
             _ => self.path_callee(callee),
         }?;
@@ -9467,7 +9470,7 @@ impl<'db> LoweringContext<'db> {
         }
         let func = match &self.body.exprs[callee] {
             AstExpr::MemberAccess { .. } => self
-                .tir_resolution(self.expr_metadata_key(callee))
+                .inferred_resolution(self.expr_metadata_key(callee))
                 .and_then(resolution_func_loc),
             _ => self.path_callee(callee),
         }?;
@@ -9629,12 +9632,12 @@ impl<'db> LoweringContext<'db> {
         // rigid parameters in TIR. Use that authoritative emission type so
         // the template loads the slots bound just above instead of trying to
         // lower the raw `unreflect(...)` syntax as a static type.
-        if let Some(crate::inference_provider::CallTypeArgPlan::Static {
+        if let Some(CallTypeArgPlan::Static {
             emission_ty,
             runtime_bindings,
             ..
         }) = self
-            .tir_call_plan(self.expr_metadata_key(call_expr_id))
+            .inferred_call_plan(self.expr_metadata_key(call_expr_id))
             .and_then(|plan| plan.slots.first())
             && !runtime_bindings.is_empty()
         {
@@ -9785,7 +9788,7 @@ impl<'db> LoweringContext<'db> {
             .map(|fl| baml_compiler2_hir_ty::lower::function_generic_frame(self.db, fl))
             .unwrap_or_default();
         params.extend(self.lambda_generic_params.iter().cloned());
-        params.extend(self.tir_runtime_type_params().iter().cloned());
+        params.extend(self.inferred_runtime_type_params().iter().cloned());
         params.extend(self.runtime_type_binding_params.iter().cloned());
         params
     }
@@ -9835,7 +9838,7 @@ impl<'db> LoweringContext<'db> {
             .collect()
     }
 
-    fn emit_scoped_type_binding(&mut self, binding: &crate::inference_provider::ScopedTypeBinding) {
+    fn emit_scoped_type_binding(&mut self, binding: &inference::ScopedTypeBinding) {
         let value = if let Some(operand) = binding.operand {
             let key = self.expr_metadata_key(operand);
             if !self.emitted_runtime_type_binding_operands.insert(key) {
@@ -9868,7 +9871,7 @@ impl<'db> LoweringContext<'db> {
         let mut operands = Vec::new();
         ty.unreflect_operands(&mut operands);
         for operand in operands {
-            if let Some(binding) = self.tir_runtime_type_binding(operand).cloned() {
+            if let Some(binding) = self.inferred_runtime_type_binding(operand).cloned() {
                 self.emit_scoped_type_binding(&binding);
             }
         }
@@ -9942,7 +9945,7 @@ impl<'db> LoweringContext<'db> {
             return Vec::new();
         }
         let Some(plan) = self
-            .tir_call_plan(self.expr_metadata_key(call_expr_id))
+            .inferred_call_plan(self.expr_metadata_key(call_expr_id))
             .cloned()
         else {
             return Vec::new();
@@ -9958,7 +9961,7 @@ impl<'db> LoweringContext<'db> {
             let mut operands = Vec::with_capacity(plan.slots.len().min(limit));
             for slot in plan.slots.iter().take(limit) {
                 match slot {
-                    crate::inference_provider::CallTypeArgPlan::Static {
+                    CallTypeArgPlan::Static {
                         emission_ty,
                         runtime_bindings,
                         ..
@@ -9972,7 +9975,7 @@ impl<'db> LoweringContext<'db> {
                             .assign(Place::local(temp), Rvalue::LoadType(template));
                         operands.push(Operand::Copy(Place::local(temp)));
                     }
-                    crate::inference_provider::CallTypeArgPlan::Runtime { operand, .. } => {
+                    CallTypeArgPlan::Runtime { operand, .. } => {
                         operands.push(self.lower_to_operand(*operand));
                     }
                 }
@@ -10022,10 +10025,10 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn call_requires_runtime_type_check(&self, call_expr_id: AstExprId) -> bool {
-        use crate::inference_provider::{CallTypeArgPlan, RuntimeCheck};
-
-        let scope = self.tables.for_scope(self.current_metadata_scope);
-        let Some(plan) = scope.call_plan(call_expr_id) else {
+        let Some(scope) = self.inference(self.current_metadata_scope) else {
+            return false;
+        };
+        let Some(plan) = scope.call_plans.get(&call_expr_id) else {
             return false;
         };
         if plan.slots.iter().any(|slot| match slot {
@@ -10042,7 +10045,7 @@ impl<'db> LoweringContext<'db> {
         // ledger rather than in one call plan. Associate argument checks back
         // to this call through its parameter bindings; a bound check is active
         // for the current lexical frame as a whole.
-        scope.runtime_checks().iter().any(|check| match check {
+        scope.runtime_checks.iter().any(|check| match check {
             RuntimeCheck::Argument { arg, .. } => plan.provided_args().any(|it| it == *arg),
             RuntimeCheck::Bound { .. } => !self.runtime_type_binding_params.is_empty(),
         })
@@ -10115,7 +10118,6 @@ impl<'db> LoweringContext<'db> {
     /// function or static/interface method). `None` for bound methods, lambdas,
     /// or anything that is not a function path.
     fn try_resolve_generic_apply_base(&self, base: AstExprId) -> Option<ItemRef<'db>> {
-        use crate::inference_provider::MemberResolution;
         let is_fn = |r: &MemberResolution<'_>| {
             matches!(
                 r,
@@ -10128,8 +10130,7 @@ impl<'db> LoweringContext<'db> {
         let key = self.expr_metadata_key(base);
         // Multi-segment paths: static methods, qualified free fns (e.g. baml.json.from_string).
         if let Some(item) = self
-            .tir_path_member_resolutions(key)
-            .and_then(|rs| rs.last())
+            .inferred_path_member_resolution(key)
             .filter(|r| is_fn(r))
             .and_then(|r| resolution_to_item_ref(self.db, r))
         {
@@ -10137,7 +10138,7 @@ impl<'db> LoweringContext<'db> {
         }
         // Flat / package resolutions.
         if let Some(item) = self
-            .tir_resolution(key)
+            .inferred_resolution(key)
             .filter(|r| is_fn(r))
             .and_then(|r| resolution_to_item_ref(self.db, r))
         {
@@ -10185,7 +10186,9 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         type_args: &[AstTypeExpr],
     ) -> Vec<TyTemplate> {
-        if let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned()
+        if let Some(plan) = self
+            .inferred_call_plan(self.expr_metadata_key(expr_id))
+            .cloned()
             && !plan.slots.is_empty()
         {
             let binding_scope_start = self.runtime_type_binding_params.len();
@@ -10193,7 +10196,7 @@ impl<'db> LoweringContext<'db> {
                 .slots
                 .iter()
                 .map(|slot| match slot {
-                    crate::inference_provider::CallTypeArgPlan::Runtime { .. } => {
+                    CallTypeArgPlan::Runtime { .. } => {
                         let count = self
                             .synthetic_name_counts
                             .entry("__generic_apply_runtime_type".to_string())
@@ -10204,7 +10207,7 @@ impl<'db> LoweringContext<'db> {
                         let name = Name::new(format!("$generic_apply${identity:08x}"));
                         Some(ParamTy::new(0xb000_0000 | (identity & 0x0fff_ffff), name))
                     }
-                    crate::inference_provider::CallTypeArgPlan::Static { .. } => None,
+                    CallTypeArgPlan::Static { .. } => None,
                 })
                 .collect();
             self.runtime_type_binding_params
@@ -10215,7 +10218,7 @@ impl<'db> LoweringContext<'db> {
                 .iter()
                 .zip(&runtime_params)
                 .map(|(slot, runtime_param)| match slot {
-                    crate::inference_provider::CallTypeArgPlan::Static {
+                    CallTypeArgPlan::Static {
                         emission_ty,
                         runtime_bindings,
                         ..
@@ -10225,7 +10228,7 @@ impl<'db> LoweringContext<'db> {
                         }
                         self.ty_to_template(emission_ty, &generic_params)
                     }
-                    crate::inference_provider::CallTypeArgPlan::Runtime {
+                    CallTypeArgPlan::Runtime {
                         operand,
                         occurrence_ty,
                         ..
@@ -10233,7 +10236,7 @@ impl<'db> LoweringContext<'db> {
                         let parameter = runtime_param
                             .as_ref()
                             .expect("runtime slots have synthesized frame parameters");
-                        let binding = crate::inference_provider::ScopedTypeBinding {
+                        let binding = inference::ScopedTypeBinding {
                             name: parameter.name().clone(),
                             parameter: parameter.clone(),
                             operand: Some(*operand),
@@ -10342,7 +10345,7 @@ impl<'db> LoweringContext<'db> {
     /// lowers exactly as before; the branch terminators stay strict-bool.
     fn lower_condition_operand(&mut self, condition: AstExprId) -> Operand<'db> {
         let op = self.lower_to_operand(condition);
-        if !self.tir_truthy_condition(self.expr_metadata_key(condition)) {
+        if !self.inferred_truthy_condition(self.expr_metadata_key(condition)) {
             return op;
         }
         let coerced = self.builder.temp(RuntimeTy::Bool {
@@ -10666,10 +10669,9 @@ impl<'db> LoweringContext<'db> {
         // (unbound) or MakeBoundMethod (bound). Field and Variant resolutions fall through to the
         // existing lowering paths below.
         if let Some(resolution) = self
-            .tir_resolution(self.expr_metadata_key(expr_id))
+            .inferred_resolution(self.expr_metadata_key(expr_id))
             .cloned()
         {
-            use crate::inference_provider::MemberResolution;
             match &resolution {
                 MemberResolution::BoundMethod { .. } => {
                     // A `self`-less method has no receiver to bind: the base
@@ -10786,7 +10788,7 @@ impl<'db> LoweringContext<'db> {
 
         // Check if TIR resolved this to an enum variant (e.g. baml.HttpMethod.Get via package path)
         if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) = self
-            .tir_expr_type(self.expr_metadata_key(expr_id))
+            .inferred_expr_type(self.expr_metadata_key(expr_id))
             .cloned()
             .as_ref()
         {
@@ -10843,7 +10845,7 @@ impl<'db> LoweringContext<'db> {
             // *checked* through, including the shared interface of a union receiver,
             // which no inspection of the receiver's type can recover.
             let handled_interface_field = if let Some(((tn, args, assoc), _index)) =
-                self.tir_virtual_field_view(self.expr_metadata_key(expr_id))
+                self.inferred_virtual_field_view(self.expr_metadata_key(expr_id))
             {
                 self.try_lower_interface_field_access(base_local, &tn, &args, &assoc, field, &dest)
             } else {
@@ -10927,14 +10929,14 @@ impl<'db> LoweringContext<'db> {
         current_ty: &RuntimeTy,
     ) -> Option<InterfaceTypeView> {
         if let Some(target) = self
-            .tir_path_segment_type((self.current_metadata_scope, expr_id, prefix_idx))
+            .inferred_path_segment_type((self.current_metadata_scope, expr_id, prefix_idx))
             .and_then(|ty| self.interface_dispatch_target_for_member(ty, member))
         {
             return Some(target);
         }
         if prefix_idx == 0
             && let Some(target) = self
-                .tir_path_root_type(self.expr_metadata_key(expr_id))
+                .inferred_path_root_type(self.expr_metadata_key(expr_id))
                 .and_then(|ty| self.interface_dispatch_target_for_member(ty, member))
         {
             return Some(target);
@@ -10958,9 +10960,9 @@ impl<'db> LoweringContext<'db> {
         current_ty: &RuntimeTy,
     ) -> Option<(TypeName, Vec<RuntimeTy>)> {
         let tir_prefix_ty = if prefix_idx == 0 {
-            self.tir_path_root_type(self.expr_metadata_key(expr_id))
+            self.inferred_path_root_type(self.expr_metadata_key(expr_id))
         } else {
-            self.tir_path_segment_type((self.current_metadata_scope, expr_id, prefix_idx))
+            self.inferred_path_segment_type((self.current_metadata_scope, expr_id, prefix_idx))
         };
         if let Some(target) = tir_prefix_ty.and_then(|ty| self.class_dispatch_target_for_tir_ty(ty))
         {
@@ -11119,7 +11121,7 @@ impl<'db> LoweringContext<'db> {
         let dispatch_target = self
             .interface_dispatch_target_for_expr_member(receiver, method)
             .or_else(|| {
-                self.tir_expr_type(self.expr_metadata_key(receiver))
+                self.inferred_expr_type(self.expr_metadata_key(receiver))
                     .and_then(|ty| self.dispatch_target_for_concrete(ty, method))
             });
         let Some((iface_tn, iface_type_args, iface_assoc)) = dispatch_target else {
@@ -11350,7 +11352,7 @@ impl<'db> LoweringContext<'db> {
         }
         let recv_ty_idx = receiver_segments.len() - 1;
         let recv_ty = self
-            .tir_path_segment_type((self.current_metadata_scope, callee, recv_ty_idx))
+            .inferred_path_segment_type((self.current_metadata_scope, callee, recv_ty_idx))
             .cloned()
             .map(|t| self.convert_tir_ty_for_runtime(&t))
             .unwrap_or_else(|| RuntimeTy::Unknown {
@@ -11606,7 +11608,9 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         field: &Name,
     ) -> Option<InterfaceTypeView> {
-        if let Some((view, _index)) = self.tir_virtual_field_view(self.expr_metadata_key(target)) {
+        if let Some((view, _index)) =
+            self.inferred_virtual_field_view(self.expr_metadata_key(target))
+        {
             return Some(view);
         }
         let base_ty = self.expr_ty(base).strip_null();
@@ -11645,7 +11649,7 @@ impl<'db> LoweringContext<'db> {
                 let field = segments.last().expect("checked non-empty").clone();
                 let prefix_idx = segments.len() - 2;
                 let prefix_ty = self
-                    .tir_path_segment_type((self.current_metadata_scope, target, prefix_idx))
+                    .inferred_path_segment_type((self.current_metadata_scope, target, prefix_idx))
                     .cloned()
                     .map(|t| self.convert_tir_ty_for_runtime(&t))?;
                 let view = self
@@ -12019,7 +12023,7 @@ impl LoweringContext<'_> {
 
             AstStmt::TypeBinding { name, value } => {
                 let binding = self
-                    .tir_type_binding(stmt_id)
+                    .inferred_type_binding(stmt_id)
                     .cloned()
                     .expect("a typed TypeBinding statement has a durable binding plan");
                 debug_assert_eq!(binding.name, name);
@@ -12335,7 +12339,7 @@ impl LoweringContext<'_> {
                 body,
             } => {
                 let coll_tir_ty = self
-                    .tir_expr_type(self.expr_metadata_key(collection))
+                    .inferred_expr_type(self.expr_metadata_key(collection))
                     .cloned();
                 let iterable_view = coll_tir_ty
                     .as_ref()
@@ -12791,7 +12795,7 @@ impl<'db> LoweringContext<'db> {
         arm_ids: &[baml_compiler2_ast::MatchArmId],
         dest: Place,
     ) {
-        let is_exhaustive = self.tir_is_exhaustive_match(self.expr_metadata_key(expr_id));
+        let is_exhaustive = self.inferred_is_exhaustive_match(self.expr_metadata_key(expr_id));
 
         let scrutinee_local = self.try_resolve_to_local(scrutinee).unwrap_or_else(|| {
             let op = self.lower_to_operand(scrutinee);
@@ -12954,12 +12958,12 @@ impl<'db> LoweringContext<'db> {
                         kind: AstTypeExprKind::Path { .. },
                         ..
                     }) if matches!(
-                        this.tir_pat_type(this.pat_metadata_key(atom_id)),
+                        this.inferred_pat_type(this.pat_metadata_key(atom_id)),
                         Some(Tir2Ty::EnumVariant(_, _, _))
                     ) =>
                     {
                         let Some(Tir2Ty::EnumVariant(qtn, variant, _)) =
-                            this.tir_pat_type(this.pat_metadata_key(atom_id))
+                            this.inferred_pat_type(this.pat_metadata_key(atom_id))
                         else {
                             unreachable!("guarded by matches! above");
                         };
@@ -13452,7 +13456,7 @@ impl<'db> LoweringContext<'db> {
             | AstPattern::Unreflect(_)
             | AstPattern::Class { .. }
             | AstPattern::Array { .. } => {
-                let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)) else {
+                let Some(tir_ty) = self.inferred_pat_type(self.pat_metadata_key(pat_id)) else {
                     return false;
                 };
                 // Typevar-carrying patterns route through the dispatch-guard
@@ -13847,7 +13851,7 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn class_pattern_type_name(&self, pat_id: AstPatId) -> Option<TypeName> {
-        let tir_ty = self.tir_pat_type(self.pat_metadata_key(pat_id))?;
+        let tir_ty = self.inferred_pat_type(self.pat_metadata_key(pat_id))?;
         match self.resolved_aliases.convert(tir_ty) {
             RuntimeTy::Class(tn, _, _) => Some(tn),
             _ => None,
@@ -13855,7 +13859,7 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn class_pattern_field_ty(&self, pat_id: AstPatId, field: &Name) -> Option<RuntimeTy> {
-        let tir_ty = self.tir_pat_type(self.pat_metadata_key(pat_id))?;
+        let tir_ty = self.inferred_pat_type(self.pat_metadata_key(pat_id))?;
         let Tir2Ty::Class(qtn, type_args, _) = tir_ty else {
             return None;
         };
@@ -13876,7 +13880,7 @@ impl<'db> LoweringContext<'db> {
         // positional field layout. Branch on the raw TIR type so interface
         // patterns project through field-view dispatch instead of class slots.
         if matches!(
-            self.tir_pat_type(self.pat_metadata_key(class_pat_id)),
+            self.inferred_pat_type(self.pat_metadata_key(class_pat_id)),
             Some(Tir2Ty::Interface(..))
         ) {
             return self.project_interface_pattern_field(
@@ -13927,7 +13931,7 @@ impl<'db> LoweringContext<'db> {
         field: &Name,
     ) -> Option<Local> {
         let tir_ty = self
-            .tir_pat_type(self.pat_metadata_key(class_pat_id))?
+            .inferred_pat_type(self.pat_metadata_key(class_pat_id))?
             .clone();
         let (iface_tn, iface_args, iface_assoc) =
             self.interface_dispatch_target_for_member(&tir_ty, field)?;
@@ -14139,7 +14143,7 @@ impl<'db> LoweringContext<'db> {
         {
             let after_ascription = self.builder.create_block();
             if let Some(tir_ty) = self
-                .tir_pat_type(self.pat_metadata_key(pat_id))
+                .inferred_pat_type(self.pat_metadata_key(pat_id))
                 .filter(|ty| !matches!(ty, Tir2Ty::Never { .. }))
                 .cloned()
             {
@@ -14214,12 +14218,12 @@ impl<'db> LoweringContext<'db> {
                 }
                 AstTypeExprKind::Path { .. }
                     if matches!(
-                        self.tir_pat_type(self.pat_metadata_key(pat_id)),
+                        self.inferred_pat_type(self.pat_metadata_key(pat_id)),
                         Some(Tir2Ty::EnumVariant(_, _, _))
                     ) =>
                 {
                     let Some(Tir2Ty::EnumVariant(qtn, variant, _)) =
-                        self.tir_pat_type(self.pat_metadata_key(pat_id))
+                        self.inferred_pat_type(self.pat_metadata_key(pat_id))
                     else {
                         unreachable!("guarded by matches! above");
                     };
@@ -14247,7 +14251,7 @@ impl<'db> LoweringContext<'db> {
                     // the subpattern, so fall back to lowering the annotation
                     // itself with the enclosing generic params in scope.
                     let pat_tir_ty = self
-                        .tir_pat_type(self.pat_metadata_key(pat_id))
+                        .inferred_pat_type(self.pat_metadata_key(pat_id))
                         .cloned()
                         .unwrap_or_else(|| self.lower_type_annotation_tir(ty_expr));
                     // A generic-interface pattern (`Slot<int>`) needs the
@@ -14350,7 +14354,10 @@ impl<'db> LoweringContext<'db> {
                     self.builder.create_block()
                 };
 
-                if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)).cloned() {
+                if let Some(tir_ty) = self
+                    .inferred_pat_type(self.pat_metadata_key(pat_id))
+                    .cloned()
+                {
                     self.emit_is_tir_type_branch(scrutinee, &tir_ty, class_success, failure);
                 } else if class_success == success {
                     self.builder.goto(success);
@@ -14391,7 +14398,10 @@ impl<'db> LoweringContext<'db> {
             } => {
                 let array_success = self.builder.create_block();
 
-                if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)).cloned() {
+                if let Some(tir_ty) = self
+                    .inferred_pat_type(self.pat_metadata_key(pat_id))
+                    .cloned()
+                {
                     self.emit_is_tir_type_branch(scrutinee, &tir_ty, array_success, failure);
                 } else {
                     self.builder.goto(array_success);
@@ -14567,7 +14577,7 @@ impl<'db> LoweringContext<'db> {
                 let ty = if let Some(narrow) = &narrow {
                     self.resolve_type_annotation(narrow)
                 } else {
-                    self.tir_pat_type(self.pat_metadata_key(pat_id))
+                    self.inferred_pat_type(self.pat_metadata_key(pat_id))
                         .map(|ty| self.resolved_aliases.convert(ty))
                         .unwrap_or_else(|| self.builder.local_ty(scrutinee))
                 };
@@ -14837,7 +14847,7 @@ impl LoweringContext<'_> {
         // match-chain runtime test — which filters implementors by the specific
         // instantiation — is used instead.
         if self
-            .tir_pat_type(self.pat_metadata_key(pat_id))
+            .inferred_pat_type(self.pat_metadata_key(pat_id))
             .is_some_and(Self::tir_ty_needs_interface_shape_test)
         {
             return None;
@@ -14859,7 +14869,7 @@ impl LoweringContext<'_> {
             _ => None,
         };
         if let Some(ty_expr) = ascription_ty {
-            if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)) {
+            if let Some(tir_ty) = self.inferred_pat_type(self.pat_metadata_key(pat_id)) {
                 let resolved = self.resolved_aliases.convert(tir_ty);
                 return self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty);
             }
@@ -14869,12 +14879,12 @@ impl LoweringContext<'_> {
         match pat {
             AstPattern::Wildcard => None,
             AstPattern::Bind { .. } => {
-                let tir_ty = self.tir_pat_type(self.pat_metadata_key(pat_id))?;
+                let tir_ty = self.inferred_pat_type(self.pat_metadata_key(pat_id))?;
                 let resolved = self.resolved_aliases.convert(tir_ty);
                 self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty)
             }
             AstPattern::Type(_) => {
-                if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)) {
+                if let Some(tir_ty) = self.inferred_pat_type(self.pat_metadata_key(pat_id)) {
                     let resolved = self.resolved_aliases.convert(tir_ty);
                     return self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty);
                 }
