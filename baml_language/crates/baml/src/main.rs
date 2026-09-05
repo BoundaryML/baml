@@ -1,5 +1,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+#[cfg(windows)]
+use std::io::{Read, Seek, SeekFrom};
 use std::{
     collections::{BTreeMap, hash_map::DefaultHasher},
     env, fs,
@@ -105,6 +107,15 @@ struct ResolvedSelector {
     source: SelectorSource,
 }
 
+#[derive(Debug, Serialize)]
+struct ToolchainResolution {
+    selector: String,
+    version: String,
+    wrapper_path: PathBuf,
+    toolchain_path: PathBuf,
+    installed: bool,
+}
+
 #[derive(Clone, Copy)]
 enum FetchPolicy {
     CacheAllowed,
@@ -120,6 +131,7 @@ Commands:
   use <canary|nightly|version|path>  Install if needed and select as default
   pin <canary|nightly|version|path>  Select in the nearest baml.toml
   install <canary|nightly|version>   Download without selecting
+  resolve [--install] [--json]       Resolve the active managed toolchain
   update                             Advance the active channel
   status                             Check latest remote version without installing
   list                               Show installed toolchains, local only
@@ -377,6 +389,7 @@ fn toolchain(args: Vec<String>) -> Result<()> {
             }
             pin_toolchain(selector, manifest_base_url.as_deref())
         }
+        Some("resolve") => resolve_toolchain(&args[1..], manifest_base_url.as_deref()),
         Some("update") => update_toolchain(manifest_base_url.as_deref()),
         Some("status") => status_toolchain(manifest_base_url.as_deref()),
         Some("list") => {
@@ -393,6 +406,87 @@ fn toolchain(args: Vec<String>) -> Result<()> {
             "unknown toolchain command {other:?}\n\n{TOOLCHAIN_HELP}"
         )),
     }
+}
+
+fn resolve_toolchain(args: &[String], override_url: Option<&str>) -> Result<()> {
+    if args.iter().any(|arg| is_help_arg(arg)) {
+        println!(
+            "Resolve the active managed BAML toolchain\n\nUsage:\n  baml toolchain resolve [--install] [--json]\n\nOptions:\n  --install  Install the resolved toolchain if needed\n  --json     Emit stable machine-readable JSON"
+        );
+        return Ok(());
+    }
+    let install = args.iter().any(|arg| arg == "--install");
+    let json = args.iter().any(|arg| arg == "--json");
+    let unexpected: Vec<_> = args
+        .iter()
+        .filter(|arg| arg.as_str() != "--install" && arg.as_str() != "--json")
+        .collect();
+    if !unexpected.is_empty() {
+        return Err(anyhow!(
+            "usage: baml toolchain resolve [--install] [--json]\nunexpected arguments: {}",
+            unexpected
+                .into_iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .join(" ")
+        ));
+    }
+
+    let selector = active_selector()?;
+    if is_path_selector(&selector.selector) {
+        return Err(anyhow!(
+            "active selector {} is a local path and cannot be resolved as a managed toolchain.{}\nSelect canary, nightly, or an exact version for automated setup.",
+            selector.selector,
+            path_selector_origin(&selector.source)
+        ));
+    }
+
+    let unresolved_channel =
+        is_channel(&selector.selector) && !read_state().channels.contains_key(&selector.selector);
+    let version = if install && unresolved_channel {
+        install_toolchain_with_policy(
+            &selector.selector,
+            true,
+            override_url,
+            false,
+            FetchPolicy::CacheAllowed,
+        )?
+    } else {
+        concrete_version_for_selector_with_base(&selector, &manifest_base_url(override_url))?
+    };
+
+    let toolchain_path = toolchain_cli_path(&version);
+    if install && verify_managed_toolchain(&version).is_err() {
+        install_toolchain_with_policy(
+            &version,
+            false,
+            override_url,
+            true,
+            FetchPolicy::CacheAllowed,
+        )?;
+    }
+    let installed = verify_managed_toolchain(&version).is_ok();
+    if install {
+        verify_managed_toolchain(&version)?;
+    }
+    let resolution = ToolchainResolution {
+        selector: selector.selector,
+        version,
+        wrapper_path: env::current_exe().context("failed to resolve the baml wrapper path")?,
+        toolchain_path,
+        installed,
+    };
+
+    if json {
+        println!("{}", serde_json::to_string(&resolution)?);
+    } else {
+        println!("active selector: {}", resolution.selector);
+        println!("resolved version: {}", resolution.version);
+        println!("wrapper path: {}", resolution.wrapper_path.display());
+        println!("toolchain path: {}", resolution.toolchain_path.display());
+        println!("installed: {}", resolution.installed);
+    }
+    Ok(())
 }
 
 fn is_help_arg(arg: &str) -> bool {
@@ -688,6 +782,15 @@ fn verify_toolchain_version_file(version: &str) -> Result<()> {
     Ok(())
 }
 
+fn verify_managed_toolchain(version: &str) -> Result<()> {
+    verify_path_toolchain(&toolchain_cli_path(version), "").with_context(|| {
+        format!(
+            "BAML toolchain {version} is not usable.\nRun: baml toolchain install {version} --force"
+        )
+    })?;
+    verify_toolchain_version_file(version)
+}
+
 fn is_channel(selector: &str) -> bool {
     selector == "canary" || selector == "nightly"
 }
@@ -942,6 +1045,33 @@ fn verify_path_toolchain(cli: &Path, origin: &str) -> Result<()> {
             ));
         }
     }
+    #[cfg(windows)]
+    verify_windows_executable(cli, origin)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn verify_windows_executable(cli: &Path, origin: &str) -> Result<()> {
+    let mut file = fs::File::open(cli)
+        .with_context(|| format!("failed to read toolchain binary: {}{origin}", cli.display()))?;
+    let mut dos_header = [0_u8; 64];
+    if file.read_exact(&mut dos_header).is_err() || &dos_header[..2] != b"MZ" {
+        return Err(anyhow!(
+            "toolchain binary is not a valid Windows executable: {}{origin}",
+            cli.display()
+        ));
+    }
+
+    let pe_offset = u32::from_le_bytes(dos_header[60..64].try_into().expect("four-byte slice"));
+    file.seek(SeekFrom::Start(u64::from(pe_offset)))
+        .with_context(|| format!("failed to read toolchain binary: {}{origin}", cli.display()))?;
+    let mut pe_signature = [0_u8; 4];
+    if file.read_exact(&mut pe_signature).is_err() || pe_signature != *b"PE\0\0" {
+        return Err(anyhow!(
+            "toolchain binary is not a valid Windows executable: {}{origin}",
+            cli.display()
+        ));
+    }
     Ok(())
 }
 
@@ -1176,13 +1306,15 @@ fn install_toolchain(
             "{selector} is a local path; there is nothing to install.\nRun: baml toolchain use {selector}"
         ));
     }
-    install_toolchain_with_policy(
+    let version = install_toolchain_with_policy(
         selector,
         activate_channel,
         override_url,
         force,
         FetchPolicy::CacheAllowed,
-    )
+    )?;
+    println!("installed BAML toolchain {version}");
+    Ok(())
 }
 
 fn install_toolchain_with_policy(
@@ -1191,7 +1323,7 @@ fn install_toolchain_with_policy(
     override_url: Option<&str>,
     force: bool,
     policy: FetchPolicy,
-) -> Result<()> {
+) -> Result<String> {
     let manifest = fetch_manifest(selector, override_url, policy)?;
     let target = baml_release::release_host_target_triple()?;
     let artifact = manifest.artifact_for_target(target)?.clone();
@@ -1213,8 +1345,7 @@ fn install_toolchain_with_policy(
         );
         write_state(&state)?;
     }
-    println!("installed BAML toolchain {}", manifest.version);
-    Ok(())
+    Ok(manifest.version)
 }
 
 fn install_manifest_artifact(
@@ -1360,7 +1491,7 @@ fn update_toolchain(override_url: Option<&str>) -> Result<()> {
         );
         return Ok(());
     }
-    install_toolchain_with_policy(
+    let version = install_toolchain_with_policy(
         &config.default.selector,
         true,
         override_url,
@@ -1373,6 +1504,7 @@ fn update_toolchain(override_url: Option<&str>) -> Result<()> {
             config.default.selector
         )
     })?;
+    println!("installed BAML toolchain {version}");
     Ok(())
 }
 
