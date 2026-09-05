@@ -1,9 +1,10 @@
 //! Post-lowering MIR optimization passes.
 //!
 //! Runs after `MirBuilder::build()` and performs:
-//! 1. Dead block elimination (reachability-based)
-//! 2. Copy propagation + dead local elimination
-//! 3. RPO block reordering
+//! 1. CFG cleanup, copy propagation, and dead store/local elimination to convergence
+//! 2. Scalar constant folding and branch simplification at O2, within that loop
+//! 3. Infallible operand-prefix materialization at O1 and above
+//! 4. RPO block reordering
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -15,17 +16,15 @@ use crate::{
     Operand, Place, Terminator,
 };
 
+mod effects;
+mod values;
+
 /// Run all optimization passes on a MIR function.
-pub(crate) fn optimize_function(func: &mut MirFunction) {
+pub(crate) fn optimize_function(func: &mut MirFunction, opt: crate::OptLevel) {
     let MirFunctionKind::Bytecode(body) = &mut func.kind else {
         return; // nothing to clean up on builtins
     };
-    eliminate_dead_blocks(body);
-    merge_passthrough_blocks(body);
-    propagate_copies(body, func.arity);
-    eliminate_dead_locals(body, func.arity);
-    merge_passthrough_blocks(body); // catch blocks emptied by copy-prop / dead-local elim
-    reorder_blocks_rpo(body);
+    optimize_body(body, func.arity, opt);
 
     #[cfg(debug_assertions)]
     verify_mir(body, &func.item_ref);
@@ -35,13 +34,8 @@ pub(crate) fn optimize_function(func: &mut MirFunction) {
 ///
 /// Used for let-binding initializers, which are lowered as bodies without
 /// the enclosing `MirFunction` wrapper (arity = 0).
-pub(crate) fn optimize_function_body(body: &mut MirFunctionBody) {
-    eliminate_dead_blocks(body);
-    merge_passthrough_blocks(body);
-    propagate_copies(body, 0);
-    eliminate_dead_locals(body, 0);
-    merge_passthrough_blocks(body); // catch blocks emptied by copy-prop / dead-local elim
-    reorder_blocks_rpo(body);
+pub(crate) fn optimize_function_body(body: &mut MirFunctionBody, opt: crate::OptLevel) {
+    optimize_body(body, 0, opt);
 
     #[cfg(debug_assertions)]
     verify_mir(
@@ -52,6 +46,40 @@ pub(crate) fn optimize_function_body(body: &mut MirFunctionBody) {
             name: Name::new("_"),
         },
     );
+}
+
+fn optimize_body(body: &mut MirFunctionBody, arity: usize, opt: crate::OptLevel) {
+    loop {
+        let size = |body: &MirFunctionBody| {
+            (
+                body.blocks.len(),
+                body.locals.len(),
+                body.blocks
+                    .iter()
+                    .map(|b| b.statements.len())
+                    .sum::<usize>(),
+            )
+        };
+        let before = size(body);
+        eliminate_dead_blocks(body);
+        merge_passthrough_blocks(body);
+        if opt >= crate::OptLevel::Two {
+            values::fold_constants(body, arity);
+            eliminate_dead_blocks(body);
+        }
+        effects::remove_trivial_drops(body);
+        values::eliminate_dead_stores(body, arity, opt);
+        propagate_copies(body, arity);
+        eliminate_dead_locals(body, arity);
+        merge_passthrough_blocks(body);
+        if before == size(body) {
+            break;
+        }
+    }
+    if opt >= crate::OptLevel::One {
+        values::materialize_operand_prefixes(body);
+    }
+    reorder_blocks_rpo(body);
 }
 
 // ============================================================================
@@ -327,14 +355,12 @@ fn merge_passthrough_blocks(body: &mut MirFunctionBody) {
 // Phase 2a: Copy propagation
 // ============================================================================
 
-/// Count uses of each Local across all blocks and catch region error locals.
-/// Collect all locals that appear inside a `Place` projection.
+/// Collect reads in positions that require a `Place` rather than an `Operand`.
 ///
 /// This includes locals used as `Place::Local` bases of field/index projections
-/// and locals used as the `index` field of `Place::Index`. These positions are
-/// typed as `Local` (not `Operand`), so they cannot be replaced by a `Constant`
-/// during copy propagation.
-fn collect_place_index_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
+/// and locals used as the `index` field of `Place::Index`, as well as direct
+/// place reads such as `Len(local)`. A constant cannot replace these reads.
+fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
     fn scan_place(p: &Place, set: &mut HashSet<Local>) {
         match p {
             Place::Local(_) => {}
@@ -354,6 +380,13 @@ fn collect_place_index_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                 scan_place(base, set);
             }
         }
+    }
+
+    fn scan_place_read(p: &Place, set: &mut HashSet<Local>) {
+        if let Place::Local(local) = p {
+            set.insert(*local);
+        }
+        scan_place(p, set);
     }
 
     fn scan_operand(op: &Operand<'_>, set: &mut HashSet<Local>) {
@@ -389,7 +422,7 @@ fn collect_place_index_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                 }
             }
             crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
-                scan_place(p, set);
+                scan_place_read(p, set);
             }
             crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
                 scan_operand(operand, set);
@@ -447,7 +480,7 @@ fn collect_place_index_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                         scan_operand(arg, &mut set);
                     }
                 }
-                crate::StatementKind::Drop(p) => scan_place(p, &mut set),
+                crate::StatementKind::Drop(p) => scan_place_read(p, &mut set),
                 // Exhaustive for the same reason the substitution walk is: a
                 // projected operand missed here lets copy propagation pick a
                 // constant for a local that `apply_subst_to_place_locals` then
@@ -546,7 +579,7 @@ fn collect_place_index_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                     // The awaited place can be a `Place::Index` (e.g.
                     // `await xs[_i]`): its index local is typed `Local` in the
                     // bytecode and cannot be rewritten to a constant.
-                    scan_place(future, &mut set);
+                    scan_place_read(future, &mut set);
                     scan_place(destination, &mut set);
                 }
                 Terminator::AwaitAny {
@@ -880,13 +913,11 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
 
 /// Phase 2a: Propagate trivial copies and single-use constants.
 fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
+    propagate_block_param_copies(body, arity);
     // Build substitution map: Local -> replacement Operand
     let uses = count_local_uses(body);
     let defs = count_local_defs(body);
-    // Locals used as the `index` field of a `Place::Index` cannot be replaced
-    // with constants — that field is typed `Local`, not `Operand`. Collect them
-    // so we can exclude them from constant inlining below.
-    let used_as_place_index = collect_place_index_locals(body);
+    let place_bound = collect_place_bound_locals(body);
     let mut subst: HashMap<Local, Operand<'_>> = HashMap::new();
 
     // Scan for copy-of-param: `_X = copy _Y` where Y is a param (1..=arity)
@@ -927,19 +958,20 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
 
                 match operand {
                     Operand::Copy(Place::Local(src))
-                        if src.0 >= 1 && src.0 <= arity && !used_as_place_index.contains(dest) =>
+                        if src.0 >= 1
+                            && src.0 <= arity
+                            && defs[src.0] == 0
+                            && !body.locals[src.0].is_captured
+                            && !place_bound.contains(dest) =>
                     {
                         // Copy of param — substitute. Skip locals that appear
                         // as a Place::Index index, since removing the copy would
                         // leave the destination Place referencing a dead local.
                         subst.insert(*dest, Operand::Copy(Place::Local(*src)));
                     }
-                    Operand::Constant(c)
-                        if uses[dest.0] == 1 && !used_as_place_index.contains(dest) =>
-                    {
-                        // Single-use, single-definition constant — inline. Skip
-                        // locals that appear as a Place::Index index, since that
-                        // position can only hold a Local, not a Constant.
+                    Operand::Constant(c) if uses[dest.0] == 1 && !place_bound.contains(dest) => {
+                        // Only erase the definition when every read can accept
+                        // the constant substitution, including direct Place reads.
                         subst.insert(*dest, Operand::Constant(c.clone()));
                     }
                     _ => {}
@@ -992,6 +1024,50 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                 true
             }
         });
+    }
+}
+
+/// Extend parameter-copy propagation to reassigned parameters within a block,
+/// up to the next write to either slot. Other values are left for stackification:
+/// substituting their temporaries can destroy profitable single-use carry chains.
+fn propagate_block_param_copies(body: &mut MirFunctionBody<'_>, arity: usize) {
+    let defs = count_local_defs(body);
+    for block in &mut body.blocks {
+        let mut copies = HashMap::new();
+        for statement in &mut block.statements {
+            apply_subst_to_statement(statement, &copies);
+            let destination = match &statement.kind {
+                crate::StatementKind::Assign {
+                    destination: Place::Local(local),
+                    ..
+                }
+                | crate::StatementKind::FreshCell(local) => *local,
+                _ => continue,
+            };
+            copies.retain(|local, value| {
+                *local != destination
+                    && !matches!(value, Operand::Copy(Place::Local(source)) if *source == destination)
+            });
+            if let crate::StatementKind::Assign {
+                value:
+                    crate::Rvalue::Use(
+                        Operand::Copy(Place::Local(source)) | Operand::Move(Place::Local(source)),
+                    ),
+                ..
+            } = &statement.kind
+                && *source != destination
+                && (1..=arity).contains(&source.0)
+                && defs[source.0] > 0
+                && body.locals[destination.0].name.is_none()
+                && !body.locals[destination.0].is_captured
+                && !body.locals[source.0].is_captured
+            {
+                copies.insert(destination, Operand::copy_local(*source));
+            }
+        }
+        if let Some(terminator) = &mut block.terminator {
+            apply_subst_to_terminator(terminator, &copies);
+        }
     }
 }
 
@@ -1227,34 +1303,52 @@ fn apply_subst_to_terminator<'db>(
 
 /// Phase 2b: Remove dead locals and renumber densely.
 fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
+    let effects = effects::Analysis::new(body);
     let mut uses = count_local_uses(body);
 
     for block in &mut body.blocks {
         if let Some(Terminator::ShortCircuit {
             operand,
-            is_and,
+            kind,
             destination: Place::Local(local),
             eval_rhs,
             join,
         }) = &block.terminator
             && local.0 > arity
             && uses[local.0] == 0
+            && *kind != crate::ShortCircuitKind::Coalesce
         {
             // Discard the result, not the conditional execution of the RHS.
             block.terminator = Some(Terminator::Branch {
                 condition: operand.clone(),
-                then_block: if *is_and { *eval_rhs } else { *join },
-                else_block: if *is_and { *join } else { *eval_rhs },
+                then_block: if *kind == crate::ShortCircuitKind::And {
+                    *eval_rhs
+                } else {
+                    *join
+                },
+                else_block: if *kind == crate::ShortCircuitKind::And {
+                    *join
+                } else {
+                    *eval_rhs
+                },
             });
         }
 
         let mut statements = Vec::with_capacity(block.statements.len());
-        for statement in std::mem::take(&mut block.statements) {
+        for (index, statement) in std::mem::take(&mut block.statements)
+            .into_iter()
+            .enumerate()
+        {
             let discard = match &statement.kind {
                 crate::StatementKind::Assign {
                     destination: Place::Local(local),
-                    value,
-                } if local.0 > arity && uses[local.0] == 0 && !value.can_discard() => Some(*local),
+                    ..
+                } if local.0 > arity
+                    && uses[local.0] == 0
+                    && !effects.discardable[block.id.0][index] =>
+                {
+                    Some(*local)
+                }
                 _ => None,
             };
             let span = statement.span;
@@ -1282,10 +1376,12 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
                 Terminator::VirtualCall { destination, .. } => destination.base_local(),
                 Terminator::Await { destination, .. } => destination.base_local(),
                 Terminator::AwaitAny { destination, .. } => destination.base_local(),
+                Terminator::Spawn { future, .. } => future.base_local(),
                 Terminator::SysOp { destination, .. } => destination.base_local(),
                 Terminator::NarrowBind { destination, .. } => Some(*destination),
-                // ShortCircuit is side-effect-free (pure control flow), so its
-                // destination can be dead-eliminated like any other local.
+                // Discarded boolean short circuits became Branch above. Keep
+                // coalescing's destination until its null test has executed.
+                Terminator::ShortCircuit { destination, .. } => destination.base_local(),
                 _ => None,
             };
             if let Some(l) = dest_local {
@@ -1995,4 +2091,64 @@ fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
     rewrite_catch_region_blocks(&mut body.catch_regions, &old_to_new);
 
     body.blocks = new_blocks;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Constant, LocalDecl, Rvalue, Statement, StatementKind};
+
+    #[test]
+    fn reassigned_parameter_copies_stop_at_source_or_destination_writes() {
+        for write in [None, Some(Local(1)), Some(Local(2))] {
+            let assign = |local, operand| Statement {
+                kind: StatementKind::Assign {
+                    destination: Place::Local(local),
+                    value: Rvalue::Use(operand),
+                },
+                span: None,
+            };
+            let mut block = BasicBlock::new(BlockId(0));
+            block.statements = vec![
+                assign(Local(1), Operand::Constant(Constant::Int(7))),
+                assign(Local(2), Operand::copy_local(Local(1))),
+            ];
+            if let Some(local) = write {
+                block
+                    .statements
+                    .push(assign(local, Operand::Constant(Constant::Int(9))));
+            }
+            block
+                .statements
+                .push(assign(Local(0), Operand::copy_local(Local(2))));
+            block.terminator = Some(Terminator::Return);
+            let mut body = MirFunctionBody {
+                blocks: vec![block],
+                entry: BlockId(0),
+                locals: [None, Some("parameter"), None]
+                    .into_iter()
+                    .map(|name| LocalDecl {
+                        name: name.map(baml_base::Name::new),
+                        ty: baml_type::RuntimeTy::int(),
+                        span: None,
+                        scope_span: None,
+                        is_captured: false,
+                    })
+                    .collect(),
+                catch_regions: vec![],
+            };
+            propagate_block_param_copies(&mut body, 1);
+            let expected = if write.is_none() { Local(1) } else { Local(2) };
+            assert!(
+                matches!(
+                    &body.blocks[0].statements.last().unwrap().kind,
+                    StatementKind::Assign {
+                        value: Rvalue::Use(Operand::Copy(Place::Local(local))),
+                        ..
+                    } if *local == expected
+                ),
+                "write to {write:?}"
+            );
+        }
+    }
 }

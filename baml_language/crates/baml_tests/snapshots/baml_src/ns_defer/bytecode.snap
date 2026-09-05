@@ -144,14 +144,11 @@ function defer.defer_armed_only_maybe_throw(x: int) -> void {
     load_var x
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const null
     return
 
-  L1:
+  L0:
     load_const "boom"
     throw
 }
@@ -319,16 +316,13 @@ function defer.defer_call_throws_risky(log: string[]) -> void {
 
 function defer.defer_early_return_helper(log: string[], early: bool) -> int {
     load_var early
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L1
     load_type string
     load_var log
     load_const "after"
     call baml.Array.push
     pop 1
-    jump L1
+    jump L0
     load_type string
     load_var log
     load_const "cleanup"
@@ -337,7 +331,7 @@ function defer.defer_early_return_helper(log: string[], early: bool) -> int {
     load_var _3
     rethrow
 
-  L1:
+  L0:
     load_const 2
     store_var _0
     load_type string
@@ -345,9 +339,9 @@ function defer.defer_early_return_helper(log: string[], early: bool) -> int {
     load_const "cleanup"
     call baml.Array.push
     pop 1
-    jump L3
+    jump L2
 
-  L2:
+  L1:
     load_const 1
     store_var _0
     load_type string
@@ -356,7 +350,7 @@ function defer.defer_early_return_helper(log: string[], early: bool) -> int {
     call baml.Array.push
     pop 1
 
-  L3:
+  L2:
     load_var _0
     return
 }
@@ -453,23 +447,17 @@ function defer.defer_on_break_main() -> string[] {
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L5
-
-  L1:
+    pop_jump_if_true L3
     load_var _4
     load_const 2
     cmp_int_op ==
-    pop_jump_if_false L2
-    jump L4
-
-  L2:
+    pop_jump_if_true L2
     load_type string
     load_var log
     load_const "i"
     call baml.Array.push
     pop 1
-    jump L3
+    jump L1
     load_type string
     load_var log
     load_const "d"
@@ -478,7 +466,7 @@ function defer.defer_on_break_main() -> string[] {
     load_var _9
     rethrow
 
-  L3:
+  L1:
     load_type string
     load_var log
     load_const "d"
@@ -486,14 +474,14 @@ function defer.defer_on_break_main() -> string[] {
     pop 1
     jump L0
 
-  L4:
+  L2:
     load_type string
     load_var log
     load_const "d"
     call baml.Array.push
     pop 1
 
-  L5:
+  L3:
     load_var log
     return
 }
@@ -519,23 +507,17 @@ function defer.defer_on_continue_main() -> string[] {
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L5
-
-  L1:
+    pop_jump_if_true L3
     load_var _4
     load_const 1
     cmp_int_op ==
-    pop_jump_if_false L2
-    jump L4
-
-  L2:
+    pop_jump_if_true L2
     load_type string
     load_var log
     load_const "body"
     call baml.Array.push
     pop 1
-    jump L3
+    jump L1
     load_type string
     load_var log
     load_const "d"
@@ -544,23 +526,23 @@ function defer.defer_on_continue_main() -> string[] {
     load_var _9
     rethrow
 
+  L1:
+    load_type string
+    load_var log
+    load_const "d"
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_type string
+    load_var log
+    load_const "d"
+    call baml.Array.push
+    pop 1
+    jump L0
+
   L3:
-    load_type string
-    load_var log
-    load_const "d"
-    call baml.Array.push
-    pop 1
-    jump L0
-
-  L4:
-    load_type string
-    load_var log
-    load_const "d"
-    call baml.Array.push
-    pop 1
-    jump L0
-
-  L5:
     load_var log
     return
 }
@@ -586,10 +568,7 @@ function defer.defer_per_loop_iteration_main() -> string {
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _4
     store_var i
     load_var log
@@ -601,7 +580,7 @@ function defer.defer_per_loop_iteration_main() -> string {
     store_var log
     jump L0
 
-  L2:
+  L1:
     load_var log
     return
     load_var log
@@ -613,8 +592,6 @@ function defer.defer_per_loop_iteration_main() -> string {
 }
 
 function defer.defer_sees_final_value_main() -> string {
-    load_const ""
-    store_var log
     load_const "pending"
     store_var status
     load_const "complete"
@@ -744,17 +721,14 @@ function defer.unwind_call_free_defer_runs_once() -> int {
     store_var_load_var c
     call user.defer.unwind_risky_counter
     pop 1
-    jump L1
+    jump L0
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var c
     load_field .n
     return
@@ -766,17 +740,14 @@ function defer.unwind_defer_runs_once() -> string[] {
     store_var_load_var log
     call user.defer.unwind_risky_one
     pop 1
-    jump L1
+    jump L0
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var log
     return
 }
@@ -787,17 +758,14 @@ function defer.unwind_nested_defers() -> string[] {
     store_var_load_var log
     call user.defer.unwind_risky_nested
     pop 1
-    jump L1
+    jump L0
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var log
     return
 }
@@ -808,17 +776,14 @@ function defer.unwind_panicking_binding_precedes_side_effects() -> string[] {
     store_var_load_var log
     call user.defer.unwind_risky_binding
     pop 1
-    jump L1
+    jump L0
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var log
     return
 }

@@ -146,7 +146,6 @@ function intersection_bounds.ib_label(item: #0) -> string {
     load_type intersection_bounds.IbTagged<Label = string>
     load_const "tag"
     virtual_call nargs=1 ntypeargs=0
-    store_var _3
     load_var item
     load_type intersection_bounds.IbSized
     load_const "size"
@@ -156,7 +155,6 @@ function intersection_bounds.ib_label(item: #0) -> string {
     load_var _5
     call baml.String.from
     store_var _4
-    load_var _3
     load_const "/"
     bin_op +
     load_var _4

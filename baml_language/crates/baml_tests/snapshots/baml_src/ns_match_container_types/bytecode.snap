@@ -157,8 +157,7 @@ function match_container_types.classify_list(x: int[] | string[]) -> string {
     store_var_load_var _4
     load_const 0
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_const "strings"
@@ -176,17 +175,14 @@ function match_container_types.classify_map(x: map<string, int> | map<string, st
     store_var _2
     load_var _2
     narrow_bind map<string, int>, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "string values"
     jump L1
 
   L0:
-    load_const "string values"
-    jump L2
-
-  L1:
     load_const "int values"
 
-  L2:
+  L1:
     return
 }
 
@@ -214,53 +210,41 @@ function match_container_types.classify_switch(x: int[] | string[] | int | strin
     store_var _2
     load_var _2
     narrow_bind int[], slot=2
-    pop_jump_if_false L0
-    jump L7
-
-  L0:
+    pop_jump_if_true L3
     load_var x
     store_var _3
     load_var _3
     narrow_bind string[], slot=3
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
+    pop_jump_if_true L2
     load_var x
     store_var _4
     load_var _4
     narrow_bind int, slot=4
-    pop_jump_if_false L2
-    jump L5
-
-  L2:
+    pop_jump_if_true L1
     load_var x
     store_var _5
     load_var _5
     narrow_bind string, slot=5
-    pop_jump_if_false L3
+    pop_jump_if_true L0
+    load_const "bool"
+    jump L4
+
+  L0:
+    load_const "string"
+    jump L4
+
+  L1:
+    load_const "int"
+    jump L4
+
+  L2:
+    load_const "strings"
     jump L4
 
   L3:
-    load_const "bool"
-    jump L8
-
-  L4:
-    load_const "string"
-    jump L8
-
-  L5:
-    load_const "int"
-    jump L8
-
-  L6:
-    load_const "strings"
-    jump L8
-
-  L7:
     load_const "ints"
 
-  L8:
+  L4:
     return
 }
 
@@ -294,17 +278,14 @@ function match_container_types.classify_union_element(u: (int | string)[] | int[
     store_var _2
     load_var _2
     narrow_bind int[], slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "mixed"
     jump L1
 
   L0:
-    load_const "mixed"
-    jump L2
-
-  L1:
     load_const "ints"
 
-  L2:
+  L1:
     return
 }
 
@@ -313,17 +294,14 @@ function match_container_types.classify_union_element_mixed_first(u: (int | stri
     store_var _2
     load_var _2
     narrow_bind (int | string)[], slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "ints"
     jump L1
 
   L0:
-    load_const "ints"
-    jump L2
-
-  L1:
     load_const "mixed"
 
-  L2:
+  L1:
     return
 }
 
@@ -332,17 +310,14 @@ function match_container_types.classify_unknown_vs_int(u: unknown[] | int[]) -> 
     store_var _2
     load_var _2
     narrow_bind unknown[], slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "ints"
     jump L1
 
   L0:
-    load_const "ints"
-    jump L2
-
-  L1:
     load_const "unknowns"
 
-  L2:
+  L1:
     return
 }
 
@@ -353,17 +328,6 @@ function match_container_types.int_list_is_int_array_fn() -> bool {
     load_type int
     alloc_array 3
     is_type int[]
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -373,17 +337,6 @@ function match_container_types.int_list_is_not_unknown_list_fn() -> bool {
     load_type int
     alloc_array 2
     is_type unknown[]
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -420,17 +373,6 @@ function match_container_types.string_list_is_int_array_fn() -> bool {
     load_type string
     alloc_array 2
     is_type int[]
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -467,16 +409,5 @@ function match_container_types.unknown_list_is_unknown_list_fn() -> bool {
     load_type unknown
     alloc_array 2
     is_type unknown[]
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }

@@ -97,17 +97,14 @@ function future_methods.methods_on_errored_future() -> baml.future.State {
     store_var_load_var f
     await
     pop 1
-    jump L1
+    jump L0
     load_var e
     is_type baml.errors.Io
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var f
     call baml.future.Future.state
     return

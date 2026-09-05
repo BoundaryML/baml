@@ -625,23 +625,29 @@ pub enum Terminator<'db> {
         otherwise: BlockId,
     },
 
-    /// Short-circuit `&&` / `||`.
+    /// Short-circuit `&&` / `||` / `??`.
     ///
-    /// Evaluates `operand` and peeks at the result (without popping):
-    /// - `&&` (`is_and = true`): if false, jump to `join` (value stays on stack);
-    ///   if true, pop and fall through to `eval_rhs`.
-    /// - `||` (`is_and = false`): if true, jump to `join` (value stays on stack);
-    ///   if false, pop and fall through to `eval_rhs`.
+    /// On the short-circuit edge, assign `operand` to `destination` and go
+    /// to `join`: when false for `&&`, true for `||`, or non-null for `??`.
+    /// Otherwise, go to `eval_rhs` without assigning `destination`.
     ///
     /// The `eval_rhs` block must assign to `destination` and then goto `join`.
-    /// At `join`, `destination` is on TOS from whichever path executed.
+    /// At `join`, `destination` holds the expression value. Stackification
+    /// decides whether that value lives on the operand stack or in a slot.
     ShortCircuit {
         operand: Operand<'db>,
-        is_and: bool,
+        kind: ShortCircuitKind,
         destination: Place,
         eval_rhs: BlockId,
         join: BlockId,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShortCircuitKind {
+    And,
+    Or,
+    Coalesce,
 }
 
 /// The type arguments of the `Future<T, E>` a [`Terminator::Spawn`] yields.
@@ -1009,15 +1015,26 @@ pub enum Rvalue<'db> {
 
 impl Rvalue<'_> {
     /// Whether an unused evaluation can be erased, including its operand reads.
-    /// Non-mutating operations can still fail (arithmetic, indexing, allocation).
+    /// Allocation identity is unobservable when the result does not escape, but
+    /// evaluating an initializer can still fail (checked arithmetic or indexing).
     pub fn can_discard(&self) -> bool {
-        let operand = |op: &Operand<'_>| {
-            matches!(
-                op,
-                Operand::Constant(_)
-                    | Operand::Copy(Place::Local(_) | Place::Capture(_))
-                    | Operand::Move(Place::Local(_) | Place::Capture(_))
-            )
+        self.can_discard_with(|_| false)
+    }
+
+    /// A bounds proof applies to this evaluation site, not to the entire local.
+    pub(crate) fn can_discard_with(&self, in_bounds: impl Fn(&Place) -> bool) -> bool {
+        fn read(place: &Place, in_bounds: &impl Fn(&Place) -> bool) -> bool {
+            match place {
+                Place::Local(_) | Place::Capture(_) => true,
+                // A fixed field projection is type-checked, not a user accessor.
+                // An indexing operation in its base still needs its own proof.
+                Place::Field { base, .. } => read(base, in_bounds),
+                Place::Index { base, .. } => read(base, in_bounds) && in_bounds(place),
+            }
+        }
+        let operand = |op: &Operand<'_>| match op {
+            Operand::Constant(_) => true,
+            Operand::Copy(place) | Operand::Move(place) => read(place, &in_bounds),
         };
         match self {
             Self::Use(op) => operand(op),
@@ -1046,20 +1063,30 @@ impl Rvalue<'_> {
                 operand: arg,
                 type_value,
             } => operand(arg) && operand(type_value),
-            Self::TypeTag(place) => matches!(place, Place::Local(_) | Place::Capture(_)),
-            Self::LoadType(_) | Self::CurrentPackage(_) => true,
-            Self::Array(..)
+            Self::TypeTag(place) | Self::Discriminant(place) | Self::Len(place) => {
+                read(place, &in_bounds)
+            }
+            Self::LoadType(_)
+            | Self::CurrentPackage(_)
             | Self::Uint8Array(_)
-            | Self::Map(..)
-            | Self::Aggregate { .. }
-            | Self::Discriminant(_)
-            | Self::Len(_)
-            | Self::MakeClosure { .. }
-            | Self::MakeBoundMethod { .. }
-            | Self::MakeVirtualBoundMethod { .. }
+            | Self::MakeGenericFunction { .. } => true,
+            Self::Array(_, elements)
+            | Self::Aggregate {
+                fields: elements, ..
+            } => elements.iter().all(operand),
+            Self::Map(_, _, entries) => entries
+                .iter()
+                .all(|(key, value)| operand(key) && operand(value)),
+            Self::MakeClosure { captures, .. } => captures.iter().all(operand),
+            Self::MakeBoundMethod { receiver, .. } => operand(receiver),
+            Self::VirtualFieldAccess { receiver, .. } => {
+                // The type checker proves the implements rule and total field
+                // links (E0124). Resolution failure is a VM internal invariant
+                // violation, not a BAML panic; the receiver can still trap.
+                operand(receiver)
+            }
+            Self::MakeVirtualBoundMethod { .. }
             | Self::MakeVirtualFunction { .. }
-            | Self::VirtualFieldAccess { .. }
-            | Self::MakeGenericFunction { .. }
             | Self::MakeGenericFunctionFromValue { .. } => false,
         }
     }

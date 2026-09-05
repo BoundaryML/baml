@@ -184,12 +184,10 @@ function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client |
     call user.env_ref_clients.EnvRefDynamicEcho@spec
     store_var _9
     load_type string
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -236,21 +234,16 @@ function env_ref_clients.EnvRefDynamicEcho@spec(question: string) -> ai.Function
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_const "BAML_TEST_ENV_REF_UNSET_CLIENT"
     call baml.env.ref
     call baml.env.Ref.get
-    store_var_load_var _8
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
+    jump_if_not_null_or_pop L0
     load_const "openai/gpt-4o-mini"
-    store_var _8
 
   L0:
-    load_var _8
     call ai.clients.resolve
-    store_var _6
+    store_var _7
     load_const "EnvRefDynamicEcho"
     load_deref ?1
     load_const "question"
@@ -322,12 +315,10 @@ function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null, 
     call user.env_ref_clients.EnvRefEcho@spec
     store_var _9
     load_type string
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -374,7 +365,7 @@ function env_ref_clients.EnvRefEcho@spec(question: string) -> ai.FunctionSpec<st
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_const "gpt-4o-mini"
     load_const <omitted>
     load_const <omitted>
@@ -393,7 +384,7 @@ function env_ref_clients.EnvRefEcho@spec(question: string) -> ai.FunctionSpec<st
     load_const <omitted>
     load_const <omitted>
     call openai.ResponsesClient.new
-    store_var _6
+    store_var _7
     load_const "EnvRefEcho"
     load_deref ?1
     load_const "question"
@@ -465,12 +456,10 @@ function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client 
     call user.env_ref_clients.EnvRefResolvedEcho@spec
     store_var _9
     load_type string
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -517,11 +506,11 @@ function env_ref_clients.EnvRefResolvedEcho@spec(question: string) -> ai.Functio
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_const "openai/gpt-4o-mini"
     call ai.clients.resolve
     call ai.clients.resolve
-    store_var _6
+    store_var _7
     load_const "EnvRefResolvedEcho"
     load_deref ?1
     load_const "question"
@@ -593,12 +582,10 @@ function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | nu
     call user.env_ref_clients.LiveEnvRefEcho@spec
     store_var _9
     load_type string
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -645,10 +632,10 @@ function env_ref_clients.LiveEnvRefEcho@spec(question: string) -> ai.FunctionSpe
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_global user.env_ref_clients.LiveEnvRefOpenAi
     call ai.clients.resolve
-    store_var _6
+    store_var _7
     load_const "LiveEnvRefEcho"
     load_deref ?1
     load_const "question"
@@ -720,12 +707,10 @@ function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Cli
     call user.env_ref_clients.LiveEnvRefFallbackEcho@spec
     store_var _9
     load_type string
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -772,21 +757,16 @@ function env_ref_clients.LiveEnvRefFallbackEcho@spec(question: string) -> ai.Fun
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_const "BAML_TEST_CLIENT_UNSET"
     call baml.env.ref
     call baml.env.Ref.get
-    store_var_load_var _8
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
+    jump_if_not_null_or_pop L0
     load_const "openai/gpt-4o-mini"
-    store_var _8
 
   L0:
-    load_var _8
     call ai.clients.resolve
-    store_var _6
+    store_var _7
     load_const "LiveEnvRefFallbackEcho"
     load_deref ?1
     load_const "question"
@@ -833,14 +813,18 @@ function env_ref_clients.blank_credential_is_unconfigured() -> string {
     load_const ""
     load_const null
     call ai.wire.resolve_credential
-    store_var_load_var _5
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
+    jump_if_not_null_or_pop L0
+    jump L1
+
+  L0:
+    store_var _5
+    jump L2
+
+  L1:
     load_const "<null>"
     store_var _5
 
-  L0:
+  L2:
     load_type string
     load_var _5
     call baml.String.from
@@ -848,43 +832,51 @@ function env_ref_clients.blank_credential_is_unconfigured() -> string {
     load_const "  \t "
     load_const null
     call ai.wire.resolve_credential
-    store_var_load_var _12
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L1
-    load_const "<null>"
-    store_var _12
+    jump_if_not_null_or_pop L3
+    jump L4
 
-  L1:
+  L3:
+    store_var _11
+    jump L5
+
+  L4:
+    load_const "<null>"
+    store_var _11
+
+  L5:
     load_type string
-    load_var _12
+    load_var _11
     call baml.String.from
-    store_var _10
+    store_var _9
     load_const "BAML_TEST_ENV_REF_UNSET"
     call baml.env.ref
     load_const null
     call ai.wire.resolve_credential
-    store_var_load_var _19
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
-    load_const "<null>"
-    store_var _19
+    jump_if_not_null_or_pop L6
+    jump L7
 
-  L2:
-    load_type string
-    load_var _19
-    call baml.String.from
+  L6:
     store_var _17
+    jump L8
+
+  L7:
+    load_const "<null>"
+    store_var _17
+
+  L8:
+    load_type string
+    load_var _17
+    call baml.String.from
+    store_var _15
     load_type string
     load_const "literal="
     load_var _3
     bin_op +
     load_const "spaces="
-    load_var _10
+    load_var _9
     bin_op +
     load_const "ref="
-    load_var _17
+    load_var _15
     bin_op +
     load_type string
     alloc_array 3
@@ -920,10 +912,10 @@ function env_ref_clients.credential_sources_names_every_variable() -> string {
 function env_ref_clients.dynamic_client_selector_runs_against_the_mock() -> string {
     load_const "{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"pong\"}]}],\"usage\":{\"input_tokens\":3,\"output_tokens\":1}}"
     call user.llm_mock.MockResponse.ok
-    store_var _3
+    store_var _2
     load_type string
     load_type baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure
-    load_var _3
+    load_var _2
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(dynamic_client_selector_runs_against_the_mock, 0)>, 0
@@ -935,10 +927,10 @@ function env_ref_clients.dynamic_client_selector_runs_against_the_mock() -> stri
 function env_ref_clients.env_ref_api_key_reaches_the_wire() -> string {
     load_const "{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"pong\"}]}],\"usage\":{\"input_tokens\":3,\"output_tokens\":1}}"
     call user.llm_mock.MockResponse.ok
-    store_var _3
+    store_var _2
     load_type string
     load_type baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure
-    load_var _3
+    load_var _2
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(env_ref_api_key_reaches_the_wire, 0)>, 0
@@ -950,10 +942,10 @@ function env_ref_clients.env_ref_api_key_reaches_the_wire() -> string {
 function env_ref_clients.env_ref_base_url_resolves_at_request_time() -> string {
     load_const "{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"pong\"}]}],\"usage\":{\"input_tokens\":3,\"output_tokens\":1}}"
     call user.llm_mock.MockResponse.ok
-    store_var _3
+    store_var _2
     load_type string
     load_type baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure
-    load_var _3
+    load_var _2
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(env_ref_base_url_resolves_at_request_time, 0)>, 0
@@ -973,11 +965,8 @@ function env_ref_clients.env_ref_is_pure_data() -> string {
     store_var _5
     load_var r
     call baml.env.Ref.get
-    store_var _10
     load_const "HOME"
     sys_op baml.env.get
-    store_var _11
-    load_var2 5 6
     call baml.ops.equals_equals
     store_var _9
     load_type bool
@@ -1007,11 +996,9 @@ function env_ref_clients.env_ref_is_pure_data() -> string {
 }
 
 function env_ref_clients.env_ref_keeps_the_secret_out_of_the_client() -> string {
+    load_const "gpt-4o-mini"
     load_const "HOME"
     call baml.env.ref
-    store_var _2
-    load_const "gpt-4o-mini"
-    load_var _2
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -1069,6 +1056,7 @@ function env_ref_clients.env_ref_secret_visibility() -> string {
     load_const "HOME"
     call baml.String.includes
     store_var _5
+    load_const "name="
     load_type bool
     load_var _5
     call baml.String.from
@@ -1083,7 +1071,6 @@ function env_ref_clients.env_ref_secret_visibility() -> string {
     load_var _8
     call baml.String.from
     store_var _7
-    load_const "name="
     load_var _4
     bin_op +
     load_const "|value="
@@ -1137,11 +1124,9 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     call openai.ResponsesClient.new
     call openai.ResponsesClient.resolved_api_key
     store_var _2
+    load_const "m"
     load_const "HOME"
     call baml.env.ref
-    store_var _8
-    load_const "m"
-    load_var _8
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -1157,15 +1142,10 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     call openai.ChatClient.new
     call openai.ChatClient.resolved_api_key
-    store_var_load_var _5
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
+    jump_if_not_null_or_pop L0
     load_const "<null>"
-    store_var _5
 
   L0:
-    load_var _5
     store_var _4
     load_const "m"
     load_const "sk-explicit"
@@ -1186,7 +1166,7 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     call openai.ImageClient.new
     call openai.ImageClient.resolved_api_key
-    store_var _10
+    store_var _9
     load_const "m"
     load_const <omitted>
     load_const <omitted>
@@ -1205,16 +1185,11 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     call openai.AzureClient.new
     call openai.AzureClient.resolved_api_key
-    store_var_load_var _13
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L1
+    jump_if_not_null_or_pop L1
     load_const "<null>"
-    store_var _13
 
   L1:
-    load_var _13
-    store_var _12
+    store_var _11
     load_const "m"
     load_const "sk-explicit"
     load_const <omitted>
@@ -1229,16 +1204,11 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     call openai.OpenRouterClient.new
     call openai.OpenRouterClient.resolved_api_key
-    store_var_load_var _18
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
+    jump_if_not_null_or_pop L2
     load_const "<null>"
-    store_var _18
 
   L2:
-    load_var _18
-    store_var _17
+    store_var _15
     load_const "m"
     load_const <omitted>
     load_const "sk-explicit"
@@ -1253,16 +1223,11 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     call openai.OllamaClient.new
     call openai.OllamaClient.resolved_api_key
-    store_var_load_var _23
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L3
+    jump_if_not_null_or_pop L3
     load_const "<null>"
-    store_var _23
 
   L3:
-    load_var _23
-    store_var _22
+    store_var _19
     load_const "m"
     load_const <omitted>
     load_const "sk-explicit"
@@ -1279,16 +1244,11 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     call openai.GenericClient.new
     call openai.GenericClient.resolved_api_key
-    store_var_load_var _28
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L4
+    jump_if_not_null_or_pop L4
     load_const "<null>"
-    store_var _28
 
   L4:
-    load_var _28
-    store_var _27
+    store_var _23
     load_const "m"
     load_const "sk-explicit"
     load_const <omitted>
@@ -1307,7 +1267,7 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     call anthropic.Client.new
     call anthropic.Client.resolved_api_key
-    store_var _32
+    store_var _27
     load_const "m"
     load_const "sk-explicit"
     load_const <omitted>
@@ -1324,7 +1284,7 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     call google.GeminiClient.new
     call google.GeminiClient.resolved_api_key
-    store_var _34
+    store_var _29
     load_const "m"
     load_const <omitted>
     load_const <omitted>
@@ -1347,16 +1307,11 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     call google.VertexClient.new
     call google.VertexClient.resolved_api_key
-    store_var_load_var _37
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L5
+    jump_if_not_null_or_pop L5
     load_const "<null>"
-    store_var _37
 
   L5:
-    load_var _37
-    store_var _36
+    store_var _31
     load_const "m"
     load_const "sk-explicit"
     load_const <omitted>
@@ -1370,14 +1325,14 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     call vercel.AiGatewayImageClient.new
     call vercel.AiGatewayImageClient.resolved_api_key
-    store_var _41
+    store_var _35
     load_type string
     load_var2 1 2
+    load_var2 3 4
     load_var2 5 6
-    load_var2 8 10
-    load_var2 12 14
-    load_var2 15 16
-    load_var _41
+    load_var2 7 8
+    load_var2 9 10
+    load_var _35
     load_type string
     alloc_array 11
     load_const "|"
@@ -1388,10 +1343,10 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
 function env_ref_clients.explicit_resolve_selector_runs_against_the_mock() -> string {
     load_const "{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"pong\"}]}],\"usage\":{\"input_tokens\":3,\"output_tokens\":1}}"
     call user.llm_mock.MockResponse.ok
-    store_var _3
+    store_var _2
     load_type string
     load_type baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure
-    load_var _3
+    load_var _2
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(explicit_resolve_selector_runs_against_the_mock, 0)>, 0
@@ -1429,10 +1384,10 @@ function env_ref_clients.live_env_ref_fallback_selection_answers() -> bool {
 function env_ref_clients.plain_string_api_key_still_works() -> string {
     load_const "{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"pong\"}]}],\"usage\":{\"input_tokens\":3,\"output_tokens\":1}}"
     call user.llm_mock.MockResponse.ok
-    store_var _3
+    store_var _2
     load_type string
     load_type baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure
-    load_var _3
+    load_var _2
     load_type llm_mock.MockResponse
     alloc_array 1
     make_closure .<lambda(plain_string_api_key_still_works, 0)>, 0
@@ -1465,113 +1420,82 @@ function env_ref_clients.resolve_credential_arms() -> string {
     load_const "sk-literal"
     load_const "HOME"
     call ai.wire.resolve_credential
-    store_var_load_var _3
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
+    jump_if_not_null_or_pop L0
     load_const "<null>"
-    store_var _3
 
   L0:
-    load_var _3
     store_var _2
     load_const "   "
     load_const "HOME"
     call ai.wire.resolve_credential
-    store_var_load_var _7
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L1
+    jump_if_not_null_or_pop L1
     load_const "<null>"
-    store_var _7
 
   L1:
-    load_var _7
-    store_var _6
+    store_var _5
     load_const "BAML_TEST_ENV_REF_UNSET"
     call baml.env.ref
     load_const "HOME"
     call ai.wire.resolve_credential
-    store_var_load_var _11
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
+    jump_if_not_null_or_pop L2
     load_const "<null>"
-    store_var _11
 
   L2:
-    load_var _11
-    store_var _10
+    store_var _8
     load_const "HOME"
     call baml.env.ref
     load_const null
     call ai.wire.resolve_credential
-    store_var_load_var _16
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L3
+    jump_if_not_null_or_pop L3
     load_const "<null>"
-    store_var _16
 
   L3:
-    load_var _16
-    store_var _15
+    store_var _12
     load_const "BAML_TEST_ENV_REF_UNSET"
     call baml.env.ref
     load_const null
     call ai.wire.resolve_credential
-    store_var_load_var _21
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L4
+    jump_if_not_null_or_pop L4
     load_const "<null>"
-    store_var _21
 
   L4:
-    load_var _21
-    store_var _20
+    store_var _16
     load_const null
     load_const "HOME"
     call ai.wire.resolve_credential
-    store_var_load_var _26
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L5
+    jump_if_not_null_or_pop L5
     load_const "<null>"
-    store_var _26
 
   L5:
-    load_var _26
-    store_var _25
+    store_var _20
     load_const null
     load_const null
     call ai.wire.resolve_credential
-    store_var_load_var _30
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L6
+    jump_if_not_null_or_pop L6
     load_const "<null>"
-    store_var _30
 
   L6:
-    load_var _30
-    store_var _29
+    store_var _23
     load_const null
     load_const "BAML_TEST_ENV_REF_UNSET"
     call ai.wire.resolve_credential
-    store_var_load_var _34
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L7
-    load_const "<null>"
-    store_var _34
+    jump_if_not_null_or_pop L7
+    jump L8
 
   L7:
+    store_var _27
+    jump L9
+
+  L8:
+    load_const "<null>"
+    store_var _27
+
+  L9:
     load_type string
-    load_var2 1 3
-    load_var2 5 7
-    load_var2 9 11
-    load_var2 13 15
+    load_var2 1 2
+    load_var2 3 4
+    load_var2 5 6
+    load_var2 7 8
     load_type string
     alloc_array 8
     load_const "|"
@@ -1583,6 +1507,7 @@ function env_ref_clients.resolve_credential_arms_expected() -> string {
     load_const "HOME"
     call baml.env.get_or_panic
     store_var home
+    load_const "sk-literal|"
     load_type string
     load_var home
     call baml.String.from
@@ -1599,7 +1524,6 @@ function env_ref_clients.resolve_credential_arms_expected() -> string {
     load_var home
     call baml.String.from
     store_var _18
-    load_const "sk-literal|"
     load_var _9
     bin_op +
     load_const "|"
@@ -1680,21 +1604,18 @@ function env_ref_clients.resolve_of_a_ref_reads_at_call_time() -> string {
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    jump L2
+    jump L1
     load_var e
     is_type ai.errors.InvalidRequest
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var e
     load_field .detail
 
-  L2:
+  L1:
     return
 }
 
@@ -1739,34 +1660,29 @@ function env_ref_clients.resolve_unknown_prefix_is_typed() -> string {
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    jump L2
+    jump L1
     load_var e
     is_type ai.errors.InvalidRequest
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_type string
     load_var e
     load_field .provider
     call baml.String.from
-    store_var _5
     load_type string
     load_var e
     load_field .detail
     call baml.String.from
     store_var _8
-    load_var _5
     load_const "|"
     bin_op +
     load_var _8
     bin_op +
 
-  L2:
+  L1:
     return
 }
 
@@ -1776,21 +1692,18 @@ function env_ref_clients.resolve_without_a_slash_is_typed() -> string {
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    jump L2
+    jump L1
     load_var e
     is_type ai.errors.InvalidRequest
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var e
     load_field .detail
 
-  L2:
+  L1:
     return
 }
 
@@ -1811,30 +1724,25 @@ function env_ref_clients.unset_base_url_is_the_same_configuration_error() -> str
     load_const <omitted>
     call openai.GenericClient.new
     call openai.GenericClient.resolved_base_url
-    jump L2
+    jump L1
     load_var e
     is_type ai.errors.InvalidRequest
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var e
     load_field .detail
 
-  L2:
+  L1:
     return
 }
 
 function env_ref_clients.unset_ref_base_url_is_a_configuration_error() -> string {
+    load_const "m"
     load_const "BAML_TEST_ENV_REF_UNSET_BASE_URL"
     call baml.env.ref
-    store_var _2
-    load_const "m"
-    load_var _2
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -1849,20 +1757,17 @@ function env_ref_clients.unset_ref_base_url_is_a_configuration_error() -> string
     load_const <omitted>
     call openai.GenericClient.new
     call openai.GenericClient.resolved_base_url
-    jump L2
+    jump L1
     load_var e
     is_type ai.errors.InvalidRequest
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_var e
     load_field .detail
 
-  L2:
+  L1:
     return
 }

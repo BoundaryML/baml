@@ -76,17 +76,14 @@ function optimizer_effects.and_inline(a: bool, box: optimizer_effects.Box) -> in
 
 function optimizer_effects.or_inline(a: bool, box: optimizer_effects.Box) -> int {
     load_var a
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var2 2 2
     load_field .value
     load_const 1
     bin_op +
     store_field .value
 
-  L1:
+  L0:
     load_var box
     load_field .value
     return
@@ -103,14 +100,11 @@ function optimizer_effects.unused_division(x: int) -> int {
     return
     load_var e
     is_type baml.panics.DivisionByZero
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var e
     rethrow
 
-  L2:
+  L1:
     load_const 7
     jump L0
 }
@@ -125,14 +119,11 @@ function optimizer_effects.unused_index(values: int[], index: int) -> int {
     return
     load_var e
     is_type baml.panics.IndexOutOfBounds
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var e
     rethrow
 
-  L2:
+  L1:
     load_const 7
     jump L0
 }

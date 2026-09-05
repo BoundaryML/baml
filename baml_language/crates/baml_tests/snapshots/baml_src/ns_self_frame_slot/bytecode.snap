@@ -177,17 +177,6 @@ function self_frame_slot.$init_test_ns_self_frame_slot_self_frame_slot(registry:
 function self_frame_slot.<(#0[] as user.self_frame_slot.Marked)>.is_self(self: #0[], other: unknown) -> bool {
     load_var other
     is_type #0[]
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -201,25 +190,12 @@ function self_frame_slot.<(#0[] as user.self_frame_slot.Marked)>.type_name(self:
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
 function self_frame_slot.<(int as user.self_frame_slot.Marked)>.is_self(self: int, other: unknown) -> bool {
     load_var other
     is_type int
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -233,25 +209,12 @@ function self_frame_slot.<(int as user.self_frame_slot.Marked)>.type_name(self: 
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
 function self_frame_slot.<(user.self_frame_slot.Crate<#0> as user.self_frame_slot.Marked)>.is_self(self: self_frame_slot.Crate<#0>, other: unknown) -> bool {
     load_var other
     is_type self_frame_slot.Crate<...>
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -265,25 +228,12 @@ function self_frame_slot.<(user.self_frame_slot.Crate<#0> as user.self_frame_slo
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
 function self_frame_slot.<(user.self_frame_slot.Croc as user.self_frame_slot.Marked)>.is_self(self: self_frame_slot.Croc, other: unknown) -> bool {
     load_var other
     is_type self_frame_slot.Croc
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -297,18 +247,16 @@ function self_frame_slot.<(user.self_frame_slot.Croc as user.self_frame_slot.Mar
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
 function self_frame_slot.<(user.self_frame_slot.IntShelf as user.self_frame_slot.Store<int>)>.describe(self: self_frame_slot.IntShelf) -> string {
+    load_const "override->"
     load_type self_frame_slot.IntShelf
     load_type int
     load_var self
     call user.self_frame_slot.Store.describe
     store_var _2
-    load_const "override->"
     load_var _2
     bin_op +
     return
@@ -319,8 +267,6 @@ function self_frame_slot.Kinded.kind_name(self: self_frame_slot.Kinded) -> strin
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -335,51 +281,26 @@ function self_frame_slot.Kinded.match_kind(self: self_frame_slot.Kinded, other: 
     store_var _3
     load_var _3
     narrow_bind #0, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_const "self"
 
-  L2:
+  L1:
     return
 }
 
 function self_frame_slot.Kinded.same_kind(self: self_frame_slot.Kinded, other: unknown) -> bool {
     load_var other
     is_type #0
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
 function self_frame_slot.Kinded.same_kind_of(self: self_frame_slot.Kinded, other: self_frame_slot.Kinded) -> bool {
     load_var other
     is_type #0
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
     return
 }
 
@@ -388,7 +309,6 @@ function self_frame_slot.Store.describe(self: self_frame_slot.Store<#1>) -> stri
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _5
     load_type #1
     load_type baml.ToString
     load_const "to_string"
@@ -399,7 +319,6 @@ function self_frame_slot.Store.describe(self: self_frame_slot.Store<#1>) -> stri
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
-    load_var _5
     load_const "/"
     bin_op +
     load_var _7
@@ -416,8 +335,6 @@ function self_frame_slot.bin_describe_fn() -> string {
     load_type self_frame_slot.Store<float, Key = bool>
     load_const "describe"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -428,8 +345,6 @@ function self_frame_slot.blanket_closure_kind_name_fn() -> string {
     load_type self_frame_slot.Kinded
     load_const "kind_namer"
     virtual_call nargs=1 ntypeargs=0
-    store_var f
-    load_var f
     call_indirect
     return
 }
@@ -448,8 +363,6 @@ function self_frame_slot.closure_kind_name_fn() -> string {
     load_type self_frame_slot.Kinded
     load_const "kind_namer"
     virtual_call nargs=1 ntypeargs=0
-    store_var f
-    load_var f
     call_indirect
     return
 }
@@ -459,8 +372,6 @@ function self_frame_slot.dog_kind_name_fn() -> string {
     load_type self_frame_slot.Kinded
     load_const "kind_name"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -470,8 +381,6 @@ function self_frame_slot.dog_match_kind_cat_fn() -> string {
     load_type self_frame_slot.Kinded
     load_const "match_kind"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -481,8 +390,6 @@ function self_frame_slot.dog_match_kind_dog_fn() -> string {
     load_type self_frame_slot.Kinded
     load_const "match_kind"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -492,8 +399,6 @@ function self_frame_slot.dog_same_kind_cat_fn() -> bool {
     load_type self_frame_slot.Kinded
     load_const "same_kind"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -503,8 +408,6 @@ function self_frame_slot.dog_same_kind_dog_fn() -> bool {
     load_type self_frame_slot.Kinded
     load_const "same_kind"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -514,8 +417,6 @@ function self_frame_slot.dog_same_kind_int_fn() -> bool {
     load_type self_frame_slot.Kinded
     load_const "same_kind"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -525,8 +426,6 @@ function self_frame_slot.dog_same_kind_of_cat_fn() -> bool {
     load_type self_frame_slot.Kinded
     load_const "same_kind_of"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -536,8 +435,6 @@ function self_frame_slot.dog_same_kind_of_dog_fn() -> bool {
     load_type self_frame_slot.Kinded
     load_const "same_kind_of"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -546,8 +443,6 @@ function self_frame_slot.existential_kind_name_fn() -> string {
     load_type self_frame_slot.Kinded
     load_const "kind_name"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -557,17 +452,12 @@ function self_frame_slot.free_impl_concrete_self_fn() -> bool {
     load_type self_frame_slot.Marked
     load_const "is_self"
     virtual_call nargs=2 ntypeargs=0
-    store_var _2
-    load_var _2
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_const 5
     load_const "s"
     load_type self_frame_slot.Marked
     load_const "is_self"
     virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
     unary_op !
 
   L0:
@@ -579,8 +469,6 @@ function self_frame_slot.free_impl_concrete_self_name_fn() -> string {
     load_type self_frame_slot.Marked
     load_const "type_name"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -597,10 +485,7 @@ function self_frame_slot.free_impl_generic_self_fn() -> bool {
     load_type self_frame_slot.Marked
     load_const "is_self"
     virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var xs
     load_const "a"
     load_type string
@@ -608,8 +493,6 @@ function self_frame_slot.free_impl_generic_self_fn() -> bool {
     load_type self_frame_slot.Marked
     load_const "is_self"
     virtual_call nargs=2 ntypeargs=0
-    store_var _6
-    load_var _6
     unary_op !
 
   L0:
@@ -623,8 +506,6 @@ function self_frame_slot.free_impl_generic_self_name_fn() -> string {
     load_type self_frame_slot.Marked
     load_const "type_name"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -640,10 +521,7 @@ function self_frame_slot.in_body_generic_self_fn() -> bool {
     load_type self_frame_slot.Marked
     load_const "is_self"
     virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var ci
     load_const "s"
     load_type string
@@ -651,23 +529,16 @@ function self_frame_slot.in_body_generic_self_fn() -> bool {
     load_type self_frame_slot.Marked
     load_const "is_self"
     virtual_call nargs=2 ntypeargs=0
-    store_var _6
-    load_var _6
     unary_op !
-
-  L0:
-    jump_if_false L1
-    pop 1
+    jump_if_false_or_pop L0
     load_var ci
     load_const 1
     load_type self_frame_slot.Marked
     load_const "is_self"
     virtual_call nargs=2 ntypeargs=0
-    store_var _8
-    load_var _8
     unary_op !
 
-  L1:
+  L0:
     return
 }
 
@@ -678,8 +549,6 @@ function self_frame_slot.in_body_generic_self_name_fn() -> string {
     load_type self_frame_slot.Marked
     load_const "type_name"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -691,17 +560,12 @@ function self_frame_slot.in_body_self_fn() -> bool {
     load_type self_frame_slot.Marked
     load_const "is_self"
     virtual_call nargs=2 ntypeargs=0
-    store_var _2
-    load_var _2
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var c
     load_const 1
     load_type self_frame_slot.Marked
     load_const "is_self"
     virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
     unary_op !
 
   L0:
@@ -717,8 +581,6 @@ function self_frame_slot.int_list_kind_name_fn() -> string {
     load_type self_frame_slot.Kinded
     load_const "kind_name"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -734,8 +596,6 @@ function self_frame_slot.int_list_same_kind_int_list_fn() -> bool {
     load_type self_frame_slot.Kinded
     load_const "same_kind"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -751,8 +611,6 @@ function self_frame_slot.int_list_same_kind_string_list_fn() -> bool {
     load_type self_frame_slot.Kinded
     load_const "same_kind"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -761,7 +619,5 @@ function self_frame_slot.shelf_describe_fn() -> string {
     load_type self_frame_slot.Store<int, Key = string>
     load_const "describe"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }

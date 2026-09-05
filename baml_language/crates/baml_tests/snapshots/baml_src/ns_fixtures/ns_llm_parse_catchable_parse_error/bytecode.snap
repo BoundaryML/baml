@@ -30,12 +30,10 @@ function fixtures.llm_parse_catchable_parse_error.ExtractInvoice(text: string, c
     call user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice@spec
     store_var _9
     load_type fixtures.llm_parse_catchable_parse_error.Invoice
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -82,10 +80,10 @@ function fixtures.llm_parse_catchable_parse_error.ExtractInvoice@spec(text: stri
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_global user.fixtures.llm_parse_catchable_parse_error.GPT4o
     call ai.clients.resolve
-    store_var _6
+    store_var _7
     load_const "ExtractInvoice"
     load_deref ?1
     load_const "text"
@@ -131,22 +129,16 @@ function fixtures.llm_parse_catchable_parse_error.ExtractInvoice@stream(text: st
 function fixtures.llm_parse_catchable_parse_error.TryExtract(json: string) -> fixtures.llm_parse_catchable_parse_error.Invoice | null {
     load_var json
     call user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice@parse
-    jump L2
+    jump L1
     load_var _
     is_type baml.errors.ParseError
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var _
     rethrow
 
-  L1:
-    load_var _
-    load_field .0
-    pop 1
+  L0:
     load_const null
 
-  L2:
+  L1:
     return
 }

@@ -43,16 +43,13 @@ function fixtures.function_call.array_length() -> int {
 
 function fixtures.function_call.param_in_if_statement(b: bool) -> int {
     load_var b
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const 2
     jump L1
 
   L0:
-    load_const 2
-    jump L2
-
-  L1:
     load_const 1
 
-  L2:
+  L1:
     return
 }

@@ -924,6 +924,15 @@ pub enum Instruction {
     /// constant-pool string naming the static package; a dynamic function's
     /// runtime owner takes precedence.
     LoadCurrentPackage(usize),
+
+    /// Pop the condition on both edges and branch when true.
+    PopJumpIfTrue(isize),
+    /// Keep a false value on the taken edge; pop on fallthrough.
+    JumpIfFalseOrPop(isize),
+    /// Keep a true value on the taken edge; pop on fallthrough.
+    JumpIfTrueOrPop(isize),
+    /// Keep a non-null value on the taken edge; pop on fallthrough.
+    JumpIfNotNullOrPop(isize),
 }
 
 /// Compact bytecode opcodes.
@@ -1125,6 +1134,12 @@ pub enum OpCode {
     // arg count; `Self` type, interface type, and method name come off the
     // stack and the resolved capture-less closure is pushed.
     MakeVirtualFunction,
+
+    // Conditional branches, appended to preserve serialized discriminants.
+    PopJumpIfTrue,
+    JumpIfFalseOrPop,
+    JumpIfTrueOrPop,
+    JumpIfNotNullOrPop,
 }
 
 impl OpCode {
@@ -1247,6 +1262,10 @@ impl OpCode {
             | Self::Jump
             | Self::PopJumpIfFalse
             | Self::JumpIfFalse
+            | Self::PopJumpIfTrue
+            | Self::JumpIfFalseOrPop
+            | Self::JumpIfTrueOrPop
+            | Self::JumpIfNotNullOrPop
             | Self::VirtualCall
             | Self::VirtualLoadField
             | Self::VirtualStoreField
@@ -1397,6 +1416,10 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Jump as u8 => Ok(Self::Jump),
             x if x == Self::PopJumpIfFalse as u8 => Ok(Self::PopJumpIfFalse),
             x if x == Self::JumpIfFalse as u8 => Ok(Self::JumpIfFalse),
+            x if x == Self::PopJumpIfTrue as u8 => Ok(Self::PopJumpIfTrue),
+            x if x == Self::JumpIfFalseOrPop as u8 => Ok(Self::JumpIfFalseOrPop),
+            x if x == Self::JumpIfTrueOrPop as u8 => Ok(Self::JumpIfTrueOrPop),
+            x if x == Self::JumpIfNotNullOrPop as u8 => Ok(Self::JumpIfNotNullOrPop),
             x if x == Self::JumpTable as u8 => Ok(Self::JumpTable),
             x if x == Self::MakeClosure as u8 => Ok(Self::MakeClosure),
             x if x == Self::MakeGenericFunction as u8 => Ok(Self::MakeGenericFunction),
@@ -1541,6 +1564,10 @@ impl std::fmt::Display for OpCode {
             Self::Jump => "JUMP",
             Self::PopJumpIfFalse => "POP_JUMP_IF_FALSE",
             Self::JumpIfFalse => "JUMP_IF_FALSE",
+            Self::PopJumpIfTrue => "POP_JUMP_IF_TRUE",
+            Self::JumpIfFalseOrPop => "JUMP_IF_FALSE_OR_POP",
+            Self::JumpIfTrueOrPop => "JUMP_IF_TRUE_OR_POP",
+            Self::JumpIfNotNullOrPop => "JUMP_IF_NOT_NULL_OR_POP",
             Self::JumpTable => "JUMP_TABLE",
             Self::MakeClosure => "MAKE_CLOSURE",
             Self::MakeGenericFunction => "MAKE_GENERIC_FUNCTION",
@@ -1678,6 +1705,10 @@ impl std::fmt::Display for Instruction {
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
             Instruction::PopJumpIfFalse(o) => write!(f, "POP_JUMP_IF_FALSE {o:+}"),
             Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
+            Instruction::PopJumpIfTrue(o) => write!(f, "POP_JUMP_IF_TRUE {o:+}"),
+            Instruction::JumpIfFalseOrPop(o) => write!(f, "JUMP_IF_FALSE_OR_POP {o:+}"),
+            Instruction::JumpIfTrueOrPop(o) => write!(f, "JUMP_IF_TRUE_OR_POP {o:+}"),
+            Instruction::JumpIfNotNullOrPop(o) => write!(f, "JUMP_IF_NOT_NULL_OR_POP {o:+}"),
             Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
             Instruction::CmpOp(op) => write!(f, "CMP_OP {op}"),
             Instruction::AddInt => f.write_str("ADD_INT"),
@@ -2384,7 +2415,11 @@ impl Bytecode {
                 // ── Jump operands: translate to byte offsets ────────
                 Instruction::Jump(offset)
                 | Instruction::PopJumpIfFalse(offset)
-                | Instruction::JumpIfFalse(offset) => {
+                | Instruction::JumpIfFalse(offset)
+                | Instruction::PopJumpIfTrue(offset)
+                | Instruction::JumpIfFalseOrPop(offset)
+                | Instruction::JumpIfTrueOrPop(offset)
+                | Instruction::JumpIfNotNullOrPop(offset) => {
                     // In the old VM, offset is relative to the instruction
                     // itself (IP was pre-incremented before step() ran, and
                     // the jump uses instruction_ptr.checked_add_signed(offset)
@@ -2715,6 +2750,10 @@ impl Bytecode {
             Instruction::Jump(_) => OpCode::Jump,
             Instruction::PopJumpIfFalse(_) => OpCode::PopJumpIfFalse,
             Instruction::JumpIfFalse(_) => OpCode::JumpIfFalse,
+            Instruction::PopJumpIfTrue(_) => OpCode::PopJumpIfTrue,
+            Instruction::JumpIfFalseOrPop(_) => OpCode::JumpIfFalseOrPop,
+            Instruction::JumpIfTrueOrPop(_) => OpCode::JumpIfTrueOrPop,
+            Instruction::JumpIfNotNullOrPop(_) => OpCode::JumpIfNotNullOrPop,
 
             // Two-operand variants
             Instruction::JumpTable(_) => OpCode::JumpTable,
@@ -2775,6 +2814,41 @@ mod compact_tests {
         assert_eq!(compact.code[0], OpCode::LoadIntSmall as u8);
         assert_eq!(compact.code[1], 42u8);
         assert_eq!(compact.code[2], OpCode::Return as u8);
+    }
+
+    #[test]
+    fn conditional_branches_encode_both_directions_and_round_trip() {
+        let branches = [
+            (
+                Instruction::PopJumpIfTrue as fn(isize) -> Instruction,
+                OpCode::PopJumpIfTrue,
+            ),
+            (Instruction::JumpIfFalseOrPop, OpCode::JumpIfFalseOrPop),
+            (Instruction::JumpIfTrueOrPop, OpCode::JumpIfTrueOrPop),
+            (Instruction::JumpIfNotNullOrPop, OpCode::JumpIfNotNullOrPop),
+        ];
+        for (branch, opcode) in branches {
+            assert_eq!(opcode.encoded_size(), 5);
+            assert_eq!(OpCode::try_from(opcode as u8).unwrap(), opcode);
+            let bc = make_bytecode(
+                vec![
+                    branch(2),
+                    Instruction::LoadConst(0),
+                    branch(-2),
+                    Instruction::Return,
+                ],
+                vec![ConstValue::Int(42)],
+            );
+            let code = bc.lower_to_compact().code;
+            assert_eq!(code.len(), 13);
+            assert_eq!(code[0], opcode as u8);
+            assert_eq!(i32::from_le_bytes(code[1..5].try_into().unwrap()), 2);
+            assert_eq!(code[7], opcode as u8);
+            assert_eq!(i32::from_le_bytes(code[8..12].try_into().unwrap()), -12);
+            let encoded = borsh::to_vec(&bc.instructions).unwrap();
+            let decoded: Vec<Instruction> = borsh::from_slice(&encoded).unwrap();
+            assert_eq!(format!("{decoded:?}"), format!("{:?}", bc.instructions));
+        }
     }
 
     #[test]

@@ -39,8 +39,6 @@ function interfaces_class_generics.<(user.interfaces_class_generics.AemEchoer as
     load_type interfaces_class_generics.AemEq<#0>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -55,17 +53,14 @@ function interfaces_class_generics.<(user.interfaces_class_generics.McapIntDrive
     load_field .value
     load_const 42
     cmp_int_op ==
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "wrong"
     jump L1
 
   L0:
-    load_const "wrong"
-    jump L2
-
-  L1:
     load_const "ok"
 
-  L2:
+  L1:
     return
 }
 
@@ -82,8 +77,6 @@ function interfaces_class_generics.McapTask.drive(self: interfaces_class_generic
     load_type interfaces_class_generics.McapDriver<interfaces_class_generics.McapTask<#0>>
     load_const "drive"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -97,8 +90,6 @@ function interfaces_class_generics.aem_accept_echo(value: interfaces_class_gener
     load_type interfaces_class_generics.AemEcho<int>
     load_const "echo"
     virtual_call nargs=2 ntypeargs=2
-    store_var _0
-    load_var _0
     return
 }
 

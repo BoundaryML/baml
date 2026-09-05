@@ -105,6 +105,7 @@ function tostring_sugar.$init_test_ns_tostring_sugar_tostring_sugar(registry: te
 }
 
 function tostring_sugar.<(user.tostring_sugar.PointShow as baml.ToString)>.to_string(self: tostring_sugar.PointShow) -> string {
+    load_const "("
     load_type int
     load_var self
     load_field .x
@@ -115,7 +116,6 @@ function tostring_sugar.<(user.tostring_sugar.PointShow as baml.ToString)>.to_st
     load_field .y
     call baml.String.from
     store_var _8
-    load_const "("
     load_var _5
     bin_op +
     load_const ", "
@@ -160,8 +160,6 @@ function tostring_sugar.implementor_to_string_fn() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -250,8 +248,6 @@ function tostring_sugar.widget_to_string_fn() -> string {
     load_type tostring_sugar.MyShow
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 

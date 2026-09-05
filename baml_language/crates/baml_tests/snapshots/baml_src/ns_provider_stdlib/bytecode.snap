@@ -40,7 +40,6 @@ function provider_stdlib.provider_schema_values() -> string {
     load_var schema
     load_const ".type"
     call baml.json.path
-    store_var _7
     load_type string
     load_var schema
     load_const ".properties.name.type"
@@ -62,7 +61,6 @@ function provider_stdlib.provider_schema_values() -> string {
     load_const "missing"
     call baml.json.path_or
     store_var _18
-    load_var _7
     load_const "|"
     bin_op +
     load_var _10

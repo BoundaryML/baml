@@ -59,11 +59,9 @@ fn user.fixtures.test_with_not_keyword.make_foo() -> fixtures.test_with_not_keyw
 fn user.fixtures.test_with_not_keyword.use_with_as_var() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // with
 
     bb0: {
-        _1 = const 42_i64;
-        _0 = copy _1;
+        _0 = const 42_i64;
         goto -> bb1;
     }
 

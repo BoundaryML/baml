@@ -90,11 +90,8 @@ fn user.fixtures.type_annotation.test_list(function_name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // function_name // param
-    let _2: reflect.Type[] // ts
 
     bb0: {
-        _2 = []: reflect.Type[];
-        drop(_2);
         _0 = const "ok";
         goto -> bb1;
     }
@@ -123,11 +120,8 @@ fn user.fixtures.type_annotation.test_map(function_name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // function_name // param
-    let _2: map<string, reflect.Type> // m
 
     bb0: {
-        _2 = {  }: map<string, reflect.Type>;
-        drop(_2);
         _0 = const "ok";
         goto -> bb1;
     }

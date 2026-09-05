@@ -5,24 +5,21 @@ function baml.<(#0[] as baml.Sortable)>.sort(self: #0[]) -> #0[] {
     load_type #0
     load_var self
     call baml._is_primitive_array
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_type #0
     load_type never
     load_var self
     load_type #0
     make_closure .<lambda(sort, 0)>, captures=0, ntypeargs=1
     call baml.Array.sort_by
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_type #0[]
     load_var self
     call baml._rust_sort
 
-  L2:
+  L1:
     return
 }
 
@@ -33,23 +30,19 @@ function baml.<(float[] as baml.FloatStats)>.mean(self: float[]) -> float {
     load_var _3
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var self
     load_type baml.Summable
     load_const "sum"
     virtual_call nargs=1 ntypeargs=0
-    store_var _5
     load_var self
     container_len
     store_var _6
-    load_var2 3 4
+    load_var _6
     bin_op /
     return
 
-  L1:
+  L0:
     load_const "float[].mean: cannot take the mean of an empty array"
     init_instance baml.errors.InvalidArgument .message
     throw
@@ -83,12 +76,11 @@ function baml.<(string as baml.ops.Add<string>)>.add(self: string, rhs: string) 
     load_type string
     load_var self
     call baml.String.from
-    store_var _3
     load_type string
     load_var rhs
     call baml.String.from
     store_var _5
-    load_var2 3 4
+    load_var _5
     bin_op +
     return
 }
@@ -142,27 +134,21 @@ function baml.Array.filter_map(self: #0[], fn: (#0) -> #1 | null throws #2) -> #
     store_var _8
     load_var _8
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L3
-
-  L1:
+    pop_jump_if_true L1
     load_var2 6 2
     call_indirect
     store_var _12
     load_var _12
     load_const null
     cmp_op ==
-    pop_jump_if_false L2
-    jump L0
-
-  L2:
+    pop_jump_if_true L0
     load_type #1
     load_var2 3 7
     call baml.Array.push
     pop 1
     jump L0
 
-  L3:
+  L1:
     load_var out
     return
 }
@@ -204,16 +190,13 @@ function baml.Array.for_each(self: #0[], fn: (#0) -> void throws #1) -> void {
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 5 2
     call_indirect
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_const null
     return
 }
@@ -228,14 +211,11 @@ function baml.Array.generate(length: int, f: (int) -> #0 throws #1) -> #0[] {
   L0:
     load_var2 4 1
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var out
     return
 
-  L2:
+  L1:
     load_var2 4 2
     call_indirect
     store_var _8
@@ -268,78 +248,70 @@ function baml.Array.join(self: #0[], separator: string) -> string {
     store_var_load_var _4
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L4
+    pop_jump_if_true L3
 
   L0:
     load_var self
     is_type _[]
-    pop_jump_if_false L6
+    pop_jump_if_false L5
     load_var self
     container_len
     store_var_load_var _7
     load_const 1
     cmp_int_op >=
-    pop_jump_if_false L6
-    load_var self
-    load_const 0
-    load_array_element
-    pop 1
+    pop_jump_if_false L5
     load_var self
     container_len
-    store_var _15
+    store_var _13
     load_var self
     load_const 1
-    load_var _15
+    load_var _13
     call baml.Array.slice
-    store_var _14
+    store_var _12
     load_type #0
     load_var self
     load_const 0
     load_array_element
     call baml.String.from
     store_var joined
-    load_var _14
+    load_var _12
     load_type baml.iter.Iterable<Error = never, Item = #0>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _21
+    store_var _19
 
   L1:
-    load_var _21
+    load_var _19
     load_type baml.iter.Iterator<Error = never, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _22
-    load_var _22
+    store_var _20
+    load_var _20
     is_type baml.iter.Done
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L2
     load_var2 7 2
     bin_op +
-    store_var _26
+    store_var _24
     load_type #0
-    load_var _22
+    load_var _20
     call baml.String.from
-    store_var _28
+    store_var _26
     load_var2 10 11
     bin_op +
     store_var joined
     jump L1
 
-  L3:
+  L2:
     load_var joined
-    jump L5
+    jump L4
 
-  L4:
+  L3:
     load_const ""
 
-  L5:
+  L4:
     return
 
-  L6:
+  L5:
     unreachable
 }
 
@@ -389,10 +361,7 @@ function baml.Array.sort_by_key(self: #0[], key: (#0) -> #1 throws #2) -> #0[] {
     load_var n
     load_const 1
     cmp_int_op <=
-    pop_jump_if_false L0
-    jump L14
-
-  L0:
+    pop_jump_if_true L8
     load_type #0
     load_var self
     load_const 0
@@ -408,7 +377,7 @@ function baml.Array.sort_by_key(self: #0[], key: (#0) -> #1 throws #2) -> #0[] {
     virtual_call nargs=1 ntypeargs=0
     store_var _11
 
-  L1:
+  L0:
     load_var _11
     load_type baml.iter.Iterator<Error = never, Item = #0>
     load_const "next"
@@ -416,10 +385,7 @@ function baml.Array.sort_by_key(self: #0[], key: (#0) -> #1 throws #2) -> #0[] {
     store_var _12
     load_var _12
     is_type baml.iter.Done
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var2 7 2
     call_indirect
     store_var _17
@@ -428,22 +394,19 @@ function baml.Array.sort_by_key(self: #0[], key: (#0) -> #1 throws #2) -> #0[] {
     load_var _17
     call baml.Array.push
     pop 1
-    jump L1
+    jump L0
 
-  L3:
+  L1:
     load_type int
     alloc_array 0
     store_var order
     load_const 0
     store_var p
 
-  L4:
+  L2:
     load_var2 10 3
     cmp_int_op <
-    pop_jump_if_false L5
-    jump L13
-
-  L5:
+    pop_jump_if_true L7
     load_type int
     load_type never
     load_var order
@@ -463,7 +426,7 @@ function baml.Array.sort_by_key(self: #0[], key: (#0) -> #1 throws #2) -> #0[] {
     virtual_call nargs=1 ntypeargs=0
     store_var _34
 
-  L6:
+  L3:
     load_var _34
     load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "next"
@@ -471,10 +434,7 @@ function baml.Array.sort_by_key(self: #0[], key: (#0) -> #1 throws #2) -> #0[] {
     store_var _35
     load_var _35
     is_type baml.iter.Done
-    pop_jump_if_false L7
-    jump L9
-
-  L7:
+    pop_jump_if_true L4
     load_type #0
     load_var2 4 13
     call baml.Array.at
@@ -482,17 +442,14 @@ function baml.Array.sort_by_key(self: #0[], key: (#0) -> #1 throws #2) -> #0[] {
     load_var _39
     load_const null
     cmp_op ==
-    pop_jump_if_false L8
-    jump L6
-
-  L8:
+    pop_jump_if_true L3
     load_type #0
     load_var2 11 14
     call baml.Array.push
     pop 1
-    jump L6
+    jump L3
 
-  L9:
+  L4:
     load_type #0
     load_var self
     call baml.Array.clear
@@ -503,7 +460,7 @@ function baml.Array.sort_by_key(self: #0[], key: (#0) -> #1 throws #2) -> #0[] {
     virtual_call nargs=1 ntypeargs=0
     store_var _50
 
-  L10:
+  L5:
     load_var _50
     load_type baml.iter.Iterator<Error = never, Item = #0>
     load_const "next"
@@ -511,21 +468,18 @@ function baml.Array.sort_by_key(self: #0[], key: (#0) -> #1 throws #2) -> #0[] {
     store_var _51
     load_var _51
     is_type baml.iter.Done
-    pop_jump_if_false L11
-    jump L12
-
-  L11:
+    pop_jump_if_true L6
     load_type #0
     load_var2 1 16
     call baml.Array.push
     pop 1
-    jump L10
+    jump L5
 
-  L12:
+  L6:
     load_var self
-    jump L15
+    jump L9
 
-  L13:
+  L7:
     load_type int
     load_var2 9 10
     call baml.Array.push
@@ -534,12 +488,12 @@ function baml.Array.sort_by_key(self: #0[], key: (#0) -> #1 throws #2) -> #0[] {
     load_const 1
     add_int
     store_var p
-    jump L4
+    jump L2
 
-  L14:
+  L8:
     load_var self
 
-  L15:
+  L9:
     return
 }
 
@@ -581,10 +535,7 @@ function baml.Bigint.random(lower: bigint, upper: bigint, rng: baml.random.Rng) 
   L0:
     load_var2 1 2
     cmp_bigint_op >=
-    pop_jump_if_false L1
-    jump L5
-
-  L1:
+    pop_jump_if_true L3
     load_var2 1 2
     call baml.Bigint._random_byte_count
     store_var width
@@ -592,35 +543,28 @@ function baml.Bigint.random(lower: bigint, upper: bigint, rng: baml.random.Rng) 
     load_type baml.random.Rng
     load_const "random"
     virtual_call nargs=2 ntypeargs=0
-    store_var _17
-    load_var2 8 1
-    load_var upper
+    load_var2 1 2
     call baml.Bigint._random_in_range
     store_var r
 
-  L2:
+  L1:
     load_var2 7 2
     cmp_bigint_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var r
     return
 
-  L4:
+  L2:
     load_var2 3 6
     load_type baml.random.Rng
     load_const "random"
     virtual_call nargs=2 ntypeargs=0
-    store_var _21
-    load_var2 9 1
-    load_var upper
+    load_var2 1 2
     call baml.Bigint._random_in_range
     store_var r
-    jump L2
+    jump L1
 
-  L5:
+  L3:
     load_type bigint
     load_var lower
     call baml.String.from
@@ -659,8 +603,6 @@ function baml.Bool.random(rng: baml.random.Rng) -> bool {
     load_type baml.random.Rng
     load_const "random"
     virtual_call nargs=2 ntypeargs=0
-    store_var _5
-    load_var _5
     load_const 0
     load_array_element
     load_const 128
@@ -737,8 +679,7 @@ function baml.Float.is_finite(self: float) -> bool {
     load_var self
     call baml.Float.is_nan
     unary_op !
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var self
     call baml.Float.is_infinite
     unary_op !
@@ -784,8 +725,6 @@ function baml.Float.random(rng: baml.random.Rng) -> float {
     load_type baml.random.Rng
     load_const "random_int"
     virtual_call nargs=1 ntypeargs=0
-    store_var _3
-    load_var _3
     call baml.Float._unit_from_draw
     return
 }
@@ -883,43 +822,33 @@ function baml.Int.random(lower: int, upper: int, rng: baml.random.Rng) -> int {
   L0:
     load_var2 1 2
     cmp_int_op >=
-    pop_jump_if_false L1
-    jump L5
-
-  L1:
+    pop_jump_if_true L3
     load_var rng
     load_type baml.random.Rng
     load_const "random_int"
     virtual_call nargs=1 ntypeargs=0
-    store_var _16
-    load_var2 7 1
-    load_var upper
+    load_var2 1 2
     call baml.Int._random_in_range
     store_var r
 
-  L2:
+  L1:
     load_var2 6 2
     cmp_int_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var r
     return
 
-  L4:
+  L2:
     load_var rng
     load_type baml.random.Rng
     load_const "random_int"
     virtual_call nargs=1 ntypeargs=0
-    store_var _19
-    load_var2 8 1
-    load_var upper
+    load_var2 1 2
     call baml.Int._random_in_range
     store_var r
-    jump L2
+    jump L1
 
-  L5:
+  L3:
     load_type int
     load_var lower
     call baml.String.from
@@ -995,22 +924,19 @@ function baml.String.ends_with(self: string, suffix: string) -> bool {
 function baml.String.from(value: #0) -> string {
     load_var value
     is_type baml.ToString
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_type #0
     load_var value
     call baml._to_string_default
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var value
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
 
-  L2:
+  L1:
     return
 }
 
@@ -1252,8 +1178,6 @@ function baml.crypto.<(baml.crypto.Aes128GcmSiv as baml.crypto.GenerateKey)>.ran
     load_type baml.random.Rng
     load_const "random"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1269,8 +1193,6 @@ function baml.crypto.<(baml.crypto.Aes256GcmSiv as baml.crypto.GenerateKey)>.ran
     load_type baml.random.Rng
     load_const "random"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1286,8 +1208,6 @@ function baml.crypto.<(baml.crypto.ChaCha20Poly1305 as baml.crypto.GenerateKey)>
     load_type baml.random.Rng
     load_const "random"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1309,8 +1229,6 @@ function baml.crypto.<(baml.crypto.XChaCha20Poly1305 as baml.crypto.GenerateKey)
     load_type baml.random.Rng
     load_const "random"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1336,16 +1254,6 @@ function baml.csv.<(baml.csv.Reader as baml.iter.Iterable)>.iter(self: baml.csv.
 
 function baml.csv.<(baml.csv.Reader as baml.iter.Iterator)>.next(self: baml.csv.Reader) -> baml.csv.Record | baml.iter.Done {
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const "unreachable: Reader.next loop ended"
-    call baml.sys.panic
-    jump L10
-
-  L2:
     load_var self
     call baml.csv.Reader._poll
     store_var _2
@@ -1353,32 +1261,23 @@ function baml.csv.<(baml.csv.Reader as baml.iter.Iterator)>.next(self: baml.csv.
     store_var _3
     load_var _3
     narrow_bind baml.csv.Record, slot=3
-    pop_jump_if_false L3
-    jump L9
-
-  L3:
+    pop_jump_if_true L3
     load_var _2
     store_var _5
     load_var _5
     narrow_bind baml.iter.Done, slot=4
-    pop_jump_if_false L4
-    jump L8
-
-  L4:
+    pop_jump_if_true L2
     load_var _2
     store_var _7
     load_var _7
     narrow_bind baml.csv._Skip, slot=5
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
+    pop_jump_if_true L1
     load_var self
     call baml.csv.Reader._read_chunk
     pop 1
     jump L0
 
-  L6:
+  L1:
     load_var _7
     store_var s
     load_var self
@@ -1386,10 +1285,7 @@ function baml.csv.<(baml.csv.Reader as baml.iter.Iterator)>.next(self: baml.csv.
     store_var_load_var _10
     load_const null
     cmp_op ==
-    pop_jump_if_false L7
-    jump L0
-
-  L7:
+    pop_jump_if_true L0
     load_var s
     load_field .error
     load_var _10
@@ -1397,14 +1293,14 @@ function baml.csv.<(baml.csv.Reader as baml.iter.Iterator)>.next(self: baml.csv.
     pop 1
     jump L0
 
-  L8:
+  L2:
     load_var _5
-    jump L10
+    jump L4
 
-  L9:
+  L3:
     load_var _3
 
-  L10:
+  L4:
     return
 }
 
@@ -1415,16 +1311,6 @@ function baml.csv.<(baml.csv.Rows<#0> as baml.iter.Iterable)>.iter(self: baml.cs
 
 function baml.csv.<(baml.csv.Rows<#0> as baml.iter.Iterator)>.next(self: baml.csv.Rows<#0>) -> #0 | baml.iter.Done {
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const "unreachable: Rows.next loop ended"
-    call baml.sys.panic
-    jump L8
-
-  L2:
     load_var self
     load_field .reader
     load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
@@ -1435,10 +1321,7 @@ function baml.csv.<(baml.csv.Rows<#0> as baml.iter.Iterator)>.next(self: baml.cs
     store_var _4
     load_var _4
     narrow_bind baml.iter.Done, slot=3
-    pop_jump_if_false L3
-    jump L7
-
-  L3:
+    pop_jump_if_true L2
     load_type #0
     load_var2 2 1
     load_field .reader
@@ -1448,14 +1331,11 @@ function baml.csv.<(baml.csv.Rows<#0> as baml.iter.Iterator)>.next(self: baml.cs
     store_var _11
     load_var _11
     narrow_bind baml.csv._Skip, slot=5
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L1
     load_var _7
-    jump L8
+    jump L3
 
-  L5:
+  L1:
     load_var _11
     store_var s
     load_var self
@@ -1464,10 +1344,7 @@ function baml.csv.<(baml.csv.Rows<#0> as baml.iter.Iterator)>.next(self: baml.cs
     store_var_load_var _14
     load_const null
     cmp_op ==
-    pop_jump_if_false L6
-    jump L0
-
-  L6:
+    pop_jump_if_true L0
     load_var s
     load_field .error
     load_var _14
@@ -1475,10 +1352,10 @@ function baml.csv.<(baml.csv.Rows<#0> as baml.iter.Iterator)>.next(self: baml.cs
     pop 1
     jump L0
 
-  L7:
+  L2:
     load_var _4
 
-  L8:
+  L3:
     return
 }
 
@@ -1505,10 +1382,7 @@ function baml.csv.Reader._read_chunk(self: baml.csv.Reader) -> void {
     load_field ._file
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var self
     load_field ._file
     load_const 65536
@@ -1516,48 +1390,42 @@ function baml.csv.Reader._read_chunk(self: baml.csv.Reader) -> void {
     load_const "read"
     virtual_call nargs=2 ntypeargs=0
     store_var chunk
-    jump L4
+    jump L2
     load_var e
     is_type baml.errors.Io
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_var self
     call baml.csv.Reader._mark_exhausted
     pop 1
     load_var e
     rethrow
 
-  L3:
+  L1:
     load_const null
     store_var chunk
 
-  L4:
+  L2:
     load_var chunk
     load_const null
     cmp_op ==
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
+    pop_jump_if_true L3
     load_var2 1 2
     call baml.csv.Reader._feed
     pop 1
     load_const null
-    jump L7
+    jump L4
 
-  L6:
+  L3:
     load_var self
     call baml.csv.Reader._feed_eof
     pop 1
     load_const null
 
-  L7:
+  L4:
     return
 }
 
@@ -1570,59 +1438,41 @@ function baml.csv.Reader.close(self: baml.csv.Reader) -> null {
     store_var_load_var _3
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L1
     load_var self
     load_field ._owns_file
-    pop_jump_if_false L1
+    pop_jump_if_false L0
     load_var _3
     sys_op baml.fs.File.close
     pop 1
 
+  L0:
+    load_const null
+    jump L2
+
   L1:
     load_const null
-    jump L3
 
   L2:
-    load_const null
-
-  L3:
     return
 }
 
 function baml.csv.Reader.headers(self: baml.csv.Reader) -> string[] | null {
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const "unreachable: Reader.headers loop ended"
-    call baml.sys.panic
-    jump L5
-
-  L2:
     load_var self
     call baml.csv.Reader._poll_headers
     store_var _3
     load_var _3
     narrow_bind baml.csv._Headers, slot=2
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L1
     load_var self
     call baml.csv.Reader._read_chunk
     pop 1
     jump L0
 
-  L4:
+  L1:
     load_var _3
     load_field .names
-
-  L5:
     return
 }
 
@@ -1691,29 +1541,26 @@ function baml.csv.Writer._emit(self: baml.csv.Writer, out: string) -> null {
     store_var_load_var _3
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L1
     load_var out
     call baml.String.length
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L1
+    pop_jump_if_false L0
     load_var2 3 2
     load_type baml.io.Write
     load_const "write"
     virtual_call nargs=2 ntypeargs=0
     pop 1
 
+  L0:
+    load_const null
+    jump L2
+
   L1:
     load_const null
-    jump L3
 
   L2:
-    load_const null
-
-  L3:
     return
 }
 
@@ -1735,25 +1582,22 @@ function baml.csv.Writer.close(self: baml.csv.Writer) -> null {
     store_var_load_var _3
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L2
-
-  L0:
+    pop_jump_if_true L1
     load_var self
     load_field ._owns_file
-    pop_jump_if_false L1
+    pop_jump_if_false L0
     load_var _3
     sys_op baml.fs.File.close
     pop 1
 
+  L0:
+    load_const null
+    jump L2
+
   L1:
     load_const null
-    jump L3
 
   L2:
-    load_const null
-
-  L3:
     return
 }
 
@@ -1880,26 +1724,20 @@ function baml.csv.create(path: string, options: baml.csv.WriterOptions | null) -
     load_var path
     load_const "w"
     sys_op baml.fs.open
-    jump L3
+    jump L2
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _
     rethrow
 
-  L2:
-    load_var _
-    load_field .0
-    pop 1
+  L1:
     load_var _
     load_field .0
     init_instance baml.errors.Io .message
     throw
 
-  L3:
+  L2:
     load_var options
     load_const true
     call baml.csv._writer
@@ -1924,27 +1762,21 @@ function baml.csv.decode(source: string | uint8array, options: baml.csv.ReaderOp
     load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = #0>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    jump L3
+    jump L2
     load_var _
     is_type baml.errors.Io
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _
     rethrow
 
-  L2:
-    load_var _
-    load_field .0
-    pop 1
+  L1:
     load_const "unreachable: in-memory CSV source raised Io: "
     load_var _
     load_field .0
     bin_op +
     call baml.sys.panic
 
-  L3:
+  L2:
     return
 }
 
@@ -1967,20 +1799,14 @@ function baml.csv.decode_one(source: string | uint8array, options: baml.csv.Read
     load_var _7
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L1
-    jump L7
-
-  L1:
+    pop_jump_if_true L4
     load_var all
     container_len
     store_var _10
     load_var _10
     load_const 1
     cmp_int_op >
-    pop_jump_if_false L2
-    jump L6
-
-  L2:
+    pop_jump_if_true L3
     load_type #0
     load_var all
     load_const 0
@@ -1989,21 +1815,18 @@ function baml.csv.decode_one(source: string | uint8array, options: baml.csv.Read
     load_var _15
     load_const null
     cmp_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L1
     load_var _15
-    jump L5
+    jump L2
 
-  L4:
+  L1:
     load_const "unreachable: decode_one lost its record"
     call baml.sys.panic
 
-  L5:
+  L2:
     return
 
-  L6:
+  L3:
     load_var all
     container_len
     store_var _14
@@ -2018,7 +1841,7 @@ function baml.csv.decode_one(source: string | uint8array, options: baml.csv.Read
     call baml.csv._error
     throw
 
-  L7:
+  L4:
     load_const baml.csv.ErrorKind.NotFound
     alloc_variant baml.csv.ErrorKind
     load_const "expected exactly one data record, found none"
@@ -2045,17 +1868,14 @@ function baml.csv.decode_optional(source: string | uint8array, options: baml.csv
     load_var _7
     load_const 1
     cmp_int_op >
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_type #0
     load_var all
     load_const 0
     call baml.Array.at
     return
 
-  L2:
+  L1:
     load_var all
     container_len
     store_var _11
@@ -2083,26 +1903,20 @@ function baml.csv.open(path: string, options: baml.csv.ReaderOptions | null) -> 
     load_var path
     load_const "r"
     sys_op baml.fs.open
-    jump L3
+    jump L2
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _
     rethrow
 
-  L2:
-    load_var _
-    load_field .0
-    pop 1
+  L1:
     load_var _
     load_field .0
     init_instance baml.errors.Io .message
     throw
 
-  L3:
+  L2:
     load_var options
     load_const true
     call baml.csv._reader
@@ -2126,8 +1940,6 @@ function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOpt
     store_var out
 
   L1:
-    load_const true
-    pop_jump_if_false L5
     load_var r
     load_type baml.iter.Iterator<Error = baml.csv.Error | baml.errors.Io, Item = baml.csv.Record>
     load_const "next"
@@ -2135,10 +1947,7 @@ function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOpt
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L2
-    jump L5
-
-  L2:
+    pop_jump_if_true L3
     load_var _7
     call baml.csv.Record.fields
     store_var _11
@@ -2149,28 +1958,22 @@ function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOpt
     jump L1
     load_var _
     is_type baml.errors.Io
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var _
     rethrow
 
-  L4:
-    load_var _
-    load_field .0
-    pop 1
+  L2:
     load_const "unreachable: in-memory CSV source raised Io: "
     load_var _
     load_field .0
     bin_op +
     call baml.sys.panic
-    jump L6
+    jump L4
 
-  L5:
+  L3:
     load_var out
 
-  L6:
+  L4:
     return
 }
 
@@ -2233,27 +2036,21 @@ function baml.csv.stringify(rows: #0[], options: baml.csv.WriterOptions | null) 
     pop 1
     load_var w
     call baml.csv.Writer.text
-    jump L3
+    jump L2
     load_var _
     is_type baml.errors.Io
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _
     rethrow
 
-  L2:
-    load_var _
-    load_field .0
-    pop 1
+  L1:
     load_const "unreachable: buffer writer raised Io: "
     load_var _
     load_field .0
     bin_op +
     call baml.sys.panic
 
-  L3:
+  L2:
     return
 }
 
@@ -2283,39 +2080,30 @@ function baml.csv.stringify_records(records: (null | bool | int | bigint | float
     store_var _7
     load_var _7
     is_type baml.iter.Done
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L2
     load_var2 4 6
     call baml.csv.Writer.write_record
     pop 1
     jump L1
 
-  L3:
+  L2:
     load_var w
     call baml.csv.Writer.text
-    jump L6
+    jump L4
     load_var _
     is_type baml.errors.Io
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L3
     load_var _
     rethrow
 
-  L5:
-    load_var _
-    load_field .0
-    pop 1
+  L3:
     load_const "unreachable: buffer writer raised Io: "
     load_var _
     load_field .0
     bin_op +
     call baml.sys.panic
 
-  L6:
+  L4:
     return
 }
 
@@ -2417,15 +2205,10 @@ function baml.env.Ref.or(self: baml.env.Ref, fallback: string) -> string {
     load_var self
     load_field .name
     sys_op baml.env.get
-    store_var_load_var _3
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
+    jump_if_not_null_or_pop L0
     load_var fallback
-    store_var _3
 
   L0:
-    load_var _3
     return
 }
 
@@ -2435,45 +2218,30 @@ function baml.env.get(key: string) -> string | null {
 function baml.env.get_or_panic(key: string) -> string {
     load_var key
     sys_op baml.env.get
-    store_var_load_var _2
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
+    jump_if_not_null_or_pop L0
     load_const "env var not found: "
     load_var key
     bin_op +
     call baml.sys.panic
-    store_var _2
 
   L0:
-    load_var _2
     return
 }
 
 function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string {
     load_var lenient
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var key
+    call baml.env.get_or_panic
     jump L1
 
   L0:
     load_var key
-    call baml.env.get_or_panic
-    jump L3
+    sys_op baml.env.get
+    jump_if_not_null_or_pop L1
+    load_const ""
 
   L1:
-    load_var key
-    sys_op baml.env.get
-    store_var_load_var _3
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
-    load_const ""
-    store_var _3
-
-  L2:
-    load_var _3
-
-  L3:
     return
 }
 
@@ -2508,16 +2276,14 @@ function baml.errors.<(baml.errors.UnknownError as baml.ToString)>.to_string(sel
     load_var _6
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_type string
     load_var self
     load_field .message
     load_const ": "
     call baml.Array.join
     store_var _14
+    load_const "UnknownError: "
     load_type string
     load_var _14
     call baml.String.from
@@ -2526,25 +2292,22 @@ function baml.errors.<(baml.errors.UnknownError as baml.ToString)>.to_string(sel
     load_var detail
     call baml.String.from
     store_var _18
-    load_const "UnknownError: "
     load_var _13
     bin_op +
     load_const ": "
     bin_op +
     load_var _18
     bin_op +
-    jump L2
+    jump L1
 
-  L1:
+  L0:
+    load_const "UnknownError: "
     load_type string
     load_var detail
     call baml.String.from
-    store_var _8
-    load_const "UnknownError: "
-    load_var _8
     bin_op +
 
-  L2:
+  L1:
     return
 }
 
@@ -2557,18 +2320,15 @@ function baml.errors.Context.root_cause(self: baml.errors.Context) -> baml.error
     store_var_load_var _2
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var _2
+    call baml.errors.Context.root_cause
     jump L1
 
   L0:
-    load_var _2
-    call baml.errors.Context.root_cause
-    jump L2
-
-  L1:
     load_var self
 
-  L2:
+  L1:
     return
 }
 
@@ -2583,30 +2343,23 @@ function baml.errors.UnknownError.from(data: unknown) -> #0 | baml.errors.Unknow
     store_var _2
     load_var _2
     narrow_bind #0, slot=2
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L3
     load_var data
     is_type baml.errors.UnknownError
-    pop_jump_if_false L1
+    pop_jump_if_false L0
     load_var data
     load_field .0
     store_var _8
     load_var _8
     narrow_bind #0, slot=4
-    pop_jump_if_false L1
-    jump L4
+    pop_jump_if_true L2
 
-  L1:
+  L0:
     load_var data
-    store_var _13
-    load_var _13
+    store_var _12
+    load_var _12
     narrow_bind baml.errors.UnknownError, slot=6
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var data
     load_type string
     alloc_array 0
@@ -2616,30 +2369,27 @@ function baml.errors.UnknownError.from(data: unknown) -> #0 | baml.errors.Unknow
     call baml.errors.UnknownError._preserve_context
     pop 1
     load_var error
-    jump L6
+    jump L4
 
-  L3:
-    load_var _13
+  L1:
+    load_var _12
     store_var error
     load_var2 1 7
     call baml.errors.UnknownError._preserve_context
     pop 1
     load_var error
-    jump L6
+    jump L4
 
-  L4:
-    load_var data
-    load_field .0
-    pop 1
+  L2:
     load_var _8
     store_var inner
     load_var2 1 5
     call baml.errors.UnknownError._preserve_context
     pop 1
     load_var inner
-    jump L6
+    jump L4
 
-  L5:
+  L3:
     load_var _2
     store_var value
     load_var2 1 3
@@ -2647,7 +2397,7 @@ function baml.errors.UnknownError.from(data: unknown) -> #0 | baml.errors.Unknow
     pop 1
     load_var value
 
-  L6:
+  L4:
     return
 }
 
@@ -2656,30 +2406,23 @@ function baml.errors.UnknownError.with_message(data: unknown, message: string) -
     store_var _3
     load_var _3
     narrow_bind #0, slot=3
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L3
     load_var data
     is_type baml.errors.UnknownError
-    pop_jump_if_false L1
+    pop_jump_if_false L0
     load_var data
     load_field .0
     store_var _9
     load_var _9
     narrow_bind #0, slot=5
-    pop_jump_if_false L1
-    jump L4
+    pop_jump_if_true L2
 
-  L1:
+  L0:
     load_var data
-    store_var _14
-    load_var _14
+    store_var _13
+    load_var _13
     narrow_bind baml.errors.UnknownError, slot=7
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var2 1 2
     load_type string
     alloc_array 1
@@ -2689,10 +2432,10 @@ function baml.errors.UnknownError.with_message(data: unknown, message: string) -
     call baml.errors.UnknownError._preserve_context
     pop 1
     load_var error
-    jump L6
+    jump L4
 
-  L3:
-    load_var _14
+  L1:
+    load_var _13
     store_var error
     load_type string
     load_var error
@@ -2701,28 +2444,25 @@ function baml.errors.UnknownError.with_message(data: unknown, message: string) -
     load_type string
     alloc_array 1
     call baml.Array.concat
-    store_var _19
+    store_var _18
     load_var2 8 9
     store_field .message
     load_var2 1 8
     call baml.errors.UnknownError._preserve_context
     pop 1
     load_var error
-    jump L6
+    jump L4
 
-  L4:
-    load_var data
-    load_field .0
-    pop 1
+  L2:
     load_var _9
     store_var inner
     load_var2 1 6
     call baml.errors.UnknownError._preserve_context
     pop 1
     load_var inner
-    jump L6
+    jump L4
 
-  L5:
+  L3:
     load_var _3
     store_var value
     load_var2 1 4
@@ -2730,7 +2470,7 @@ function baml.errors.UnknownError.with_message(data: unknown, message: string) -
     pop 1
     load_var value
 
-  L6:
+  L4:
     return
 }
 
@@ -2748,8 +2488,6 @@ function baml.fs.File.bytes(self: baml.fs.File) -> uint8array {
     load_type baml.io.Read
     load_const "bytes"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2764,8 +2502,6 @@ function baml.fs.File.text(self: baml.fs.File) -> string {
     load_type baml.io.Read
     load_const "text"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2774,8 +2510,6 @@ function baml.fs.File.write(self: baml.fs.File, data: string | uint8array) -> in
     load_type baml.io.Write
     load_const "write"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -2963,59 +2697,53 @@ function baml.future.with_timeout(limit: baml.time.Duration, body: () -> #0 thro
     load_var _12
     await
     store_var _0
-    jump L8
+    jump L5
     load_var e
     is_type baml.panics.Cancelled
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L0
+    load_var e
+    rethrow
 
   L0:
+    load_deref ?4
+    call baml.spawn.CancelToken.is_cancelled
+    pop_jump_if_true L1
     load_var e
     rethrow
 
   L1:
-    load_deref ?4
-    call baml.spawn.CancelToken.is_cancelled
-    unary_op !
-    pop_jump_if_false L2
-    jump L7
-
-  L2:
     load_deref ?1
     call baml.time.Duration.to_milliseconds
     store_var limit_ms
     load_var limit_ms
     call baml.Bigint.to_int
     store_var reported
-    jump L5
+    jump L3
     load_var conversion
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var conversion
     rethrow
 
-  L4:
+  L2:
     load_const null
     store_var reported
 
-  L5:
+  L3:
     load_type bigint
     load_var limit_ms
     call baml.String.from
-    store_var _30
-    jump L6
+    store_var _29
+    jump L4
     load_var deadline
     call baml.future.Future.cancel
     pop 1
     load_var _16
     rethrow
 
-  L6:
+  L4:
     load_const "operation timed out after "
-    load_var _30
+    load_var _29
     bin_op +
     load_const "ms"
     bin_op +
@@ -3023,11 +2751,7 @@ function baml.future.with_timeout(limit: baml.time.Duration, body: () -> #0 thro
     init_instance baml.errors.Timeout .message, .duration_ms
     throw
 
-  L7:
-    load_var e
-    rethrow
-
-  L8:
+  L5:
     load_var deadline
     call baml.future.Future.cancel
     pop 1
@@ -3064,8 +2788,7 @@ function baml.http.Response.ok(self: baml.http.Response) -> bool {
     load_field .status_code
     load_const 200
     cmp_int_op >=
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var self
     load_field .status_code
     load_const 300
@@ -3137,13 +2860,23 @@ function baml.http.Server.serve(self: baml.http.Server, handler: (baml.http.Requ
     store_var header_read_timeout
 
   L5:
+    load_var tls_config
+    store_var _15
+    load_var allow_http1
+    store_var _16
+    load_var allow_http2
+    store_var _17
+    load_var max_body_size
+    store_var _18
+    load_var max_connections
+    store_var _19
     load_var header_read_timeout
     call baml.time.Duration.to_nanoseconds
-    store_var _15
+    store_var _20
     load_var2 1 2
-    load_var2 3 4
-    load_var2 5 6
-    load_var2 7 9
+    load_var2 9 10
+    load_var2 11 12
+    load_var2 13 14
     sys_op baml.http.Server._serve
     return
 }
@@ -3175,11 +2908,13 @@ function baml.http.TlsConfig.new(cert_pem: uint8array, key_pem: uint8array, allo
     store_var handshake_timeout
 
   L1:
+    load_var allow_tls1_2
+    store_var _7
     load_var handshake_timeout
     call baml.time.Duration.to_nanoseconds
-    store_var _7
+    store_var _8
     load_var2 1 2
-    load_var2 3 5
+    load_var2 5 6
     sys_op baml.http.TlsConfig._new
     return
 }
@@ -3197,18 +2932,15 @@ function baml.http._timeout_nanos(timeout: baml.time.Duration | null) -> bigint 
     load_var timeout
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var timeout
+    call baml.time.Duration.to_nanoseconds
     jump L1
 
   L0:
-    load_var timeout
-    call baml.time.Duration.to_nanoseconds
-    jump L2
-
-  L1:
     load_const 0n
 
-  L2:
+  L1:
     return
 }
 
@@ -3295,20 +3027,15 @@ function baml.io.Read.bytes(self: baml.io.Read) -> uint8array {
     load_type baml.io.Read
     load_const "read"
     virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
     store_var _4
     load_var _4
-    narrow_bind uint8array, slot=4
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    narrow_bind uint8array, slot=3
+    pop_jump_if_true L1
     load_var result
     return
 
-  L2:
-    load_var2 2 4
+  L1:
+    load_var2 2 3
     call baml.Uint8Array.concat
     store_var result
     jump L0
@@ -3319,25 +3046,20 @@ function baml.io.Read.text(self: baml.io.Read) -> string {
     load_type baml.io.Read
     load_const "bytes"
     virtual_call nargs=1 ntypeargs=0
-    store_var data
-    load_var data
     call baml.String.from_utf8
-    jump L2
+    jump L1
     load_var e
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const "invalid utf-8"
     init_instance baml.errors.ParseError .message
     throw
 
-  L2:
+  L1:
     return
 }
 
@@ -3346,39 +3068,33 @@ function baml.io.Write.write(self: baml.io.Write, data: string | uint8array) -> 
     store_var _4
     load_var _4
     narrow_bind string, slot=4
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var data
+    store_var remaining
     jump L1
 
   L0:
-    load_var data
-    store_var remaining
-    jump L2
-
-  L1:
     load_var _4
     call baml.String.to_utf8
     store_var remaining
 
-  L2:
+  L1:
     load_var remaining
     container_len
     store_var total
 
-  L3:
+  L2:
     load_var remaining
     container_len
     store_var _9
     load_var _9
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L3
     load_var total
     return
 
-  L5:
+  L3:
     load_var2 1 3
     load_type baml.io.Write
     load_const "write_some"
@@ -3387,22 +3103,13 @@ function baml.io.Write.write(self: baml.io.Write, data: string | uint8array) -> 
     load_var written
     load_const 0
     cmp_int_op <=
-    jump_if_false L6
-    jump L7
-
-  L6:
-    pop 1
+    pop_jump_if_true L4
     load_var remaining
     container_len
     store_var _16
     load_var2 7 8
     cmp_int_op >
-
-  L7:
-    pop_jump_if_false L8
-    jump L9
-
-  L8:
+    pop_jump_if_true L4
     load_var remaining
     container_len
     store_var _19
@@ -3410,9 +3117,9 @@ function baml.io.Write.write(self: baml.io.Write, data: string | uint8array) -> 
     load_var _19
     call baml.Uint8Array.slice
     store_var remaining
-    jump L3
+    jump L2
 
-  L9:
+  L4:
     load_const "writer made invalid progress"
     init_instance baml.errors.Io .message
     throw
@@ -3455,10 +3162,7 @@ function baml.iter.<(baml.iter.ArrayIterator<#0> as baml.iter.Iterator)>.next(se
     store_var _4
     load_var2 2 3
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var self
     load_field .arr
     load_var self
@@ -3472,12 +3176,12 @@ function baml.iter.<(baml.iter.ArrayIterator<#0> as baml.iter.Iterator)>.next(se
     bin_op +
     store_field .idx
     load_var item
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     alloc_instance baml.iter.Done
 
-  L2:
+  L1:
     return
 }
 
@@ -3489,36 +3193,32 @@ function baml.iter.<(baml.iter.Chain<#0, #1, #2> as baml.iter.Iterable)>.iter(se
 function baml.iter.<(baml.iter.Chain<#0, #1, #2> as baml.iter.Iterator)>.next(self: baml.iter.Chain<#0, #1, #2>) -> #0 | baml.iter.Done {
     load_var self
     load_field .first_done
-    unary_op !
-    pop_jump_if_false L2
+    pop_jump_if_true L1
     load_var self
     load_field .first
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _3
+    load_var _3
     is_type baml.iter.Done
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L0
+    load_var _3
+    jump L2
 
   L0:
-    load_var _4
-    jump L3
-
-  L1:
     load_var self
     load_const true
     store_field .first_done
 
-  L2:
+  L1:
     load_var self
     load_field .other
     load_type baml.iter.Iterator<Error = #2, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
 
-  L3:
+  L2:
     return
 }
 
@@ -3529,15 +3229,6 @@ function baml.iter.<(baml.iter.Filter<#0, #1, #2> as baml.iter.Iterable)>.iter(s
 
 function baml.iter.<(baml.iter.Filter<#0, #1, #2> as baml.iter.Iterator)>.next(self: baml.iter.Filter<#0, #1, #2>) -> #0 | baml.iter.Done {
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    alloc_instance baml.iter.Done
-    jump L5
-
-  L2:
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #1, Item = #0>
@@ -3546,10 +3237,7 @@ function baml.iter.<(baml.iter.Filter<#0, #1, #2> as baml.iter.Iterator)>.next(s
     store_var _2
     load_var _2
     is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L1
     load_var _2
     store_var_load_var x
     load_var self
@@ -3557,12 +3245,12 @@ function baml.iter.<(baml.iter.Filter<#0, #1, #2> as baml.iter.Iterator)>.next(s
     call_indirect
     pop_jump_if_false L0
     load_var x
-    jump L5
+    jump L2
 
-  L4:
+  L1:
     alloc_instance baml.iter.Done
 
-  L5:
+  L2:
     return
 }
 
@@ -3573,15 +3261,6 @@ function baml.iter.<(baml.iter.FilterMap<#0, #1, #2, #3> as baml.iter.Iterable)>
 
 function baml.iter.<(baml.iter.FilterMap<#0, #1, #2, #3> as baml.iter.Iterator)>.next(self: baml.iter.FilterMap<#0, #1, #2, #3>) -> #1 | baml.iter.Done {
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    alloc_instance baml.iter.Done
-    jump L6
-
-  L2:
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #2, Item = #0>
@@ -3590,10 +3269,7 @@ function baml.iter.<(baml.iter.FilterMap<#0, #1, #2, #3> as baml.iter.Iterator)>
     store_var _2
     load_var _2
     is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L5
-
-  L3:
+    pop_jump_if_true L1
     load_var2 2 1
     load_field .func
     call_indirect
@@ -3601,17 +3277,14 @@ function baml.iter.<(baml.iter.FilterMap<#0, #1, #2, #3> as baml.iter.Iterator)>
     load_var _6
     load_const null
     cmp_op ==
-    pop_jump_if_false L4
-    jump L0
-
-  L4:
+    pop_jump_if_true L0
     load_var _6
-    jump L6
+    jump L2
 
-  L5:
+  L1:
     alloc_instance baml.iter.Done
 
-  L6:
+  L2:
     return
 }
 
@@ -3622,15 +3295,6 @@ function baml.iter.<(baml.iter.FlatMap<#0, #1, #2, #3, #4> as baml.iter.Iterable
 
 function baml.iter.<(baml.iter.FlatMap<#0, #1, #2, #3, #4> as baml.iter.Iterator)>.next(self: baml.iter.FlatMap<#0, #1, #2, #3, #4>) -> #1 | baml.iter.Done {
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    alloc_instance baml.iter.Done
-    jump L8
-
-  L2:
     load_var self
     load_field .inner
     store_var _2
@@ -3638,13 +3302,10 @@ function baml.iter.<(baml.iter.FlatMap<#0, #1, #2, #3, #4> as baml.iter.Iterator
     store_var _3
     load_var _3
     narrow_bind baml.iter.Iterator<Error = #4, Item = #1>, slot=3
-    pop_jump_if_false L3
-    jump L6
-
-  L3:
+    pop_jump_if_true L2
     load_var _2
     is_type baml.iter.Done
-    pop_jump_if_false L10
+    pop_jump_if_false L5
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #2, Item = #0>
@@ -3653,10 +3314,7 @@ function baml.iter.<(baml.iter.FlatMap<#0, #1, #2, #3, #4> as baml.iter.Iterator
     store_var _9
     load_var _9
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L1
     load_var2 5 1
     load_field .func
     call_indirect
@@ -3668,11 +3326,11 @@ function baml.iter.<(baml.iter.FlatMap<#0, #1, #2, #3, #4> as baml.iter.Iterator
     store_field .inner
     jump L0
 
-  L5:
+  L1:
     alloc_instance baml.iter.Done
-    jump L8
+    jump L3
 
-  L6:
+  L2:
     load_var _3
     load_type baml.iter.Iterator<Error = #4, Item = #1>
     load_const "next"
@@ -3680,22 +3338,19 @@ function baml.iter.<(baml.iter.FlatMap<#0, #1, #2, #3, #4> as baml.iter.Iterator
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L7
-    jump L9
-
-  L7:
+    pop_jump_if_true L4
     load_var _5
 
-  L8:
+  L3:
     return
 
-  L9:
+  L4:
     load_var self
     alloc_instance baml.iter.Done
     store_field .inner
     jump L0
 
-  L10:
+  L5:
     unreachable
 }
 
@@ -3706,15 +3361,6 @@ function baml.iter.<(baml.iter.Flatten<#0, #1, #2, #3> as baml.iter.Iterable)>.i
 
 function baml.iter.<(baml.iter.Flatten<#0, #1, #2, #3> as baml.iter.Iterator)>.next(self: baml.iter.Flatten<#0, #1, #2, #3>) -> #1 | baml.iter.Done {
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    alloc_instance baml.iter.Done
-    jump L8
-
-  L2:
     load_var self
     load_field .inner
     store_var _2
@@ -3722,13 +3368,10 @@ function baml.iter.<(baml.iter.Flatten<#0, #1, #2, #3> as baml.iter.Iterator)>.n
     store_var _3
     load_var _3
     narrow_bind baml.iter.Iterator<Error = #3, Item = #1>, slot=3
-    pop_jump_if_false L3
-    jump L6
-
-  L3:
+    pop_jump_if_true L2
     load_var _2
     is_type baml.iter.Done
-    pop_jump_if_false L10
+    pop_jump_if_false L5
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #2, Item = #0>
@@ -3737,10 +3380,7 @@ function baml.iter.<(baml.iter.Flatten<#0, #1, #2, #3> as baml.iter.Iterator)>.n
     store_var _9
     load_var _9
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L1
     load_var _9
     load_type baml.iter.Iterable<Error = #3, Item = #1>
     load_const "iter"
@@ -3750,11 +3390,11 @@ function baml.iter.<(baml.iter.Flatten<#0, #1, #2, #3> as baml.iter.Iterator)>.n
     store_field .inner
     jump L0
 
-  L5:
+  L1:
     alloc_instance baml.iter.Done
-    jump L8
+    jump L3
 
-  L6:
+  L2:
     load_var _3
     load_type baml.iter.Iterator<Error = #3, Item = #1>
     load_const "next"
@@ -3762,22 +3402,19 @@ function baml.iter.<(baml.iter.Flatten<#0, #1, #2, #3> as baml.iter.Iterator)>.n
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L7
-    jump L9
-
-  L7:
+    pop_jump_if_true L4
     load_var _5
 
-  L8:
+  L3:
     return
 
-  L9:
+  L4:
     load_var self
     alloc_instance baml.iter.Done
     store_field .inner
     jump L0
 
-  L10:
+  L5:
     unreachable
 }
 
@@ -3795,19 +3432,16 @@ function baml.iter.<(baml.iter.Map<#0, #1, #2, #3> as baml.iter.Iterator)>.next(
     store_var _2
     load_var _2
     is_type baml.iter.Done
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var2 2 1
     load_field .func
     call_indirect
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     alloc_instance baml.iter.Done
 
-  L2:
+  L1:
     return
 }
 
@@ -3819,18 +3453,15 @@ function baml.iter.<(baml.iter.Peekable<#0, #1> as baml.iter.Iterable)>.iter(sel
 function baml.iter.<(baml.iter.Peekable<#0, #1> as baml.iter.Iterator)>.next(self: baml.iter.Peekable<#0, #1>) -> #0 | baml.iter.Done {
     load_var self
     load_field .has_buffer
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var self
     load_field .buffer
     store_var v
@@ -3842,7 +3473,7 @@ function baml.iter.<(baml.iter.Peekable<#0, #1> as baml.iter.Iterator)>.next(sel
     store_field .has_buffer
     load_var v
 
-  L2:
+  L1:
     return
 }
 
@@ -3857,14 +3488,11 @@ function baml.iter.<(baml.iter.Range as baml.iter.Iterator)>.next(self: baml.ite
     load_var self
     load_field .max
     cmp_int_op <
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    alloc_instance baml.iter.Done
     jump L1
 
   L0:
-    alloc_instance baml.iter.Done
-    jump L2
-
-  L1:
     load_var self
     load_field .i
     store_var cur
@@ -3877,7 +3505,7 @@ function baml.iter.<(baml.iter.Range as baml.iter.Iterator)>.next(self: baml.ite
     store_field .i
     load_var cur
 
-  L2:
+  L1:
     return
 }
 
@@ -3891,22 +3519,16 @@ function baml.iter.<(baml.iter.Repeat<#0> as baml.iter.Iterator)>.next(self: bam
     load_field .count
     load_const 0
     cmp_int_op <
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var self
     load_field .count
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    alloc_instance baml.iter.Done
     jump L2
 
-  L1:
-    alloc_instance baml.iter.Done
-    jump L4
-
-  L2:
+  L0:
     load_var self
     copy 0
     load_field .count
@@ -3915,13 +3537,13 @@ function baml.iter.<(baml.iter.Repeat<#0> as baml.iter.Iterator)>.next(self: bam
     store_field .count
     load_var self
     load_field .value
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_var self
     load_field .value
 
-  L4:
+  L2:
     return
 }
 
@@ -3936,8 +3558,13 @@ function baml.iter.<(baml.iter.Skip<#0, #1> as baml.iter.Iterator)>.next(self: b
     load_field .remaining
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_true L1
+    load_var self
+    load_field .source
+    load_type baml.iter.Iterator<Error = #1, Item = #0>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    jump L3
 
   L1:
     load_var self
@@ -3945,21 +3572,8 @@ function baml.iter.<(baml.iter.Skip<#0, #1> as baml.iter.Iterator)>.next(self: b
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    jump L5
-
-  L2:
-    load_var self
-    load_field .source
-    load_type baml.iter.Iterator<Error = #1, Item = #0>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _4
-    load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var self
     copy 0
     load_field .remaining
@@ -3968,13 +3582,13 @@ function baml.iter.<(baml.iter.Skip<#0, #1> as baml.iter.Iterator)>.next(self: b
     store_field .remaining
     jump L0
 
-  L4:
+  L2:
     load_var self
     load_const 0
     store_field .remaining
     alloc_instance baml.iter.Done
 
-  L5:
+  L3:
     return
 }
 
@@ -3987,18 +3601,15 @@ function baml.iter.<(baml.iter.SkipWhile<#0, #1, #2> as baml.iter.Iterator)>.nex
   L0:
     load_var self
     load_field .skipping
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    jump L5
+    jump L3
 
-  L2:
+  L1:
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #1, Item = #0>
@@ -4007,30 +3618,26 @@ function baml.iter.<(baml.iter.SkipWhile<#0, #1, #2> as baml.iter.Iterator)>.nex
     store_var _3
     load_var _3
     is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var _3
     store_var_load_var x
     load_var self
     load_field .predicate
     call_indirect
-    unary_op !
-    pop_jump_if_false L0
+    pop_jump_if_true L0
     load_var self
     load_const false
     store_field .skipping
     load_var x
-    jump L5
+    jump L3
 
-  L4:
+  L2:
     load_var self
     load_const false
     store_field .skipping
     alloc_instance baml.iter.Done
 
-  L5:
+  L3:
     return
 }
 
@@ -4042,54 +3649,43 @@ function baml.iter.<(baml.iter.StepBy<#0, #1> as baml.iter.Iterable)>.iter(self:
 function baml.iter.<(baml.iter.StepBy<#0, #1> as baml.iter.Iterator)>.next(self: baml.iter.StepBy<#0, #1>) -> #0 | baml.iter.Done {
     load_var self
     load_field .first
-    pop_jump_if_false L0
-    jump L6
-
-  L0:
+    pop_jump_if_true L3
     load_const 0
     store_var i
 
-  L1:
+  L0:
     load_var2 2 1
     load_field .n
     load_const 1
     sub_int
     cmp_int_op <
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    jump L7
+    jump L4
 
-  L3:
+  L1:
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #1, Item = #0>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _9
-    load_var _9
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L2
     load_var i
     load_const 1
     add_int
     store_var i
-    jump L1
+    jump L0
 
-  L5:
+  L2:
     alloc_instance baml.iter.Done
-    jump L7
+    jump L4
 
-  L6:
+  L3:
     load_var self
     load_const false
     store_field .first
@@ -4099,7 +3695,7 @@ function baml.iter.<(baml.iter.StepBy<#0, #1> as baml.iter.Iterator)>.next(self:
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
 
-  L7:
+  L4:
     return
 }
 
@@ -4113,10 +3709,7 @@ function baml.iter.<(baml.iter.Take<#0, #1> as baml.iter.Iterator)>.next(self: b
     load_field .remaining
     load_const 0
     cmp_int_op <=
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #1, Item = #0>
@@ -4125,10 +3718,7 @@ function baml.iter.<(baml.iter.Take<#0, #1> as baml.iter.Iterator)>.next(self: b
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var self
     copy 0
     load_field .remaining
@@ -4136,19 +3726,19 @@ function baml.iter.<(baml.iter.Take<#0, #1> as baml.iter.Iterator)>.next(self: b
     bin_op -
     store_field .remaining
     load_var _4
-    jump L4
+    jump L2
 
-  L2:
+  L0:
     load_var self
     load_const 0
     store_field .remaining
     alloc_instance baml.iter.Done
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     alloc_instance baml.iter.Done
 
-  L4:
+  L2:
     return
 }
 
@@ -4160,10 +3750,7 @@ function baml.iter.<(baml.iter.TakeWhile<#0, #1, #2> as baml.iter.Iterable)>.ite
 function baml.iter.<(baml.iter.TakeWhile<#0, #1, #2> as baml.iter.Iterator)>.next(self: baml.iter.TakeWhile<#0, #1, #2>) -> #0 | baml.iter.Done {
     load_var self
     load_field .done
-    pop_jump_if_false L0
-    jump L6
-
-  L0:
+    pop_jump_if_true L3
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #1, Item = #0>
@@ -4172,41 +3759,35 @@ function baml.iter.<(baml.iter.TakeWhile<#0, #1, #2> as baml.iter.Iterator)>.nex
     store_var _3
     load_var _3
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var _3
     store_var_load_var x
     load_var self
     load_field .predicate
     call_indirect
-    pop_jump_if_false L2
-    jump L3
+    pop_jump_if_true L0
+    load_var self
+    load_const true
+    store_field .done
+    jump L2
+
+  L0:
+    load_var x
+    jump L4
+
+  L1:
+    load_var self
+    load_const true
+    store_field .done
 
   L2:
-    load_var self
-    load_const true
-    store_field .done
-    jump L5
+    alloc_instance baml.iter.Done
+    jump L4
 
   L3:
-    load_var x
-    jump L7
+    alloc_instance baml.iter.Done
 
   L4:
-    load_var self
-    load_const true
-    store_field .done
-
-  L5:
-    alloc_instance baml.iter.Done
-    jump L7
-
-  L6:
-    alloc_instance baml.iter.Done
-
-  L7:
     return
 }
 
@@ -4216,8 +3797,6 @@ function baml.iter.<(string as baml.iter.Iterable)>.iter(self: string) -> baml.i
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -4250,8 +3829,6 @@ function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> (#0 as baml.ite
     store_var r
 
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var self
     load_type baml.iter.Iterator
     load_const "next"
@@ -4259,17 +3836,14 @@ function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> (#0 as baml.ite
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_type (#0 as baml.iter.Iterator).Item
     load_var2 2 3
     call baml.Array.push
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var r
     return
 }
@@ -4279,34 +3853,25 @@ function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
     store_var n
 
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var self
     load_type baml.iter.Iterator
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _3
-    load_var _3
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var n
     load_const 1
     add_int
     store_var n
     jump L0
 
-  L2:
+  L1:
     load_var n
     return
 }
 
 function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> bool {
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var self
     load_type baml.iter.Iterator
     load_const "next"
@@ -4314,21 +3879,17 @@ function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: ((#0 as b
     store_var _3
     load_var _3
     is_type baml.iter.Done
-    pop_jump_if_false L1
+    pop_jump_if_true L1
+    load_var2 3 2
+    call_indirect
+    pop_jump_if_true L0
+    load_const false
     jump L2
 
   L1:
-    load_var2 3 2
-    call_indirect
-    unary_op !
-    pop_jump_if_false L0
-    load_const false
-    jump L3
-
-  L2:
     load_const true
 
-  L3:
+  L2:
     return
 }
 
@@ -4353,8 +3914,6 @@ function baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: ((#0 as bam
 
 function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> (#0 as baml.iter.Iterator).Item | null {
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var self
     load_type baml.iter.Iterator
     load_const "next"
@@ -4362,22 +3921,19 @@ function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: ((#0 as ba
     store_var _3
     load_var _3
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _3
     store_var_load_var x
     load_var predicate
     call_indirect
     pop_jump_if_false L0
     load_var x
-    jump L3
+    jump L2
 
-  L2:
+  L1:
     load_const null
 
-  L3:
+  L2:
     return
 }
 
@@ -4395,8 +3951,6 @@ function baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: ((#0 as baml.
 
 function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: ((#0 as baml.iter.Iterator).Item) -> void throws #1) -> void {
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var self
     load_type baml.iter.Iterator
     load_const "next"
@@ -4404,16 +3958,13 @@ function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: ((#0 as baml.
     store_var _3
     load_var _3
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 3 2
     call_indirect
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_const null
     return
 }
@@ -4443,8 +3994,6 @@ function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (#1, (#0 as bam
     store_var acc
 
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var self
     load_type baml.iter.Iterator
     load_const "next"
@@ -4452,17 +4001,14 @@ function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (#1, (#0 as bam
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 4 5
     load_var fn
     call_indirect
     store_var acc
     jump L0
 
-  L2:
+  L1:
     load_var acc
     return
 }
@@ -4487,8 +4033,6 @@ function baml.iter.Iterator.skip_while(self: baml.iter.Iterator, predicate: ((#0
 
 function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> bool {
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var self
     load_type baml.iter.Iterator
     load_const "next"
@@ -4496,20 +4040,17 @@ function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: ((#0 as ba
     store_var _3
     load_var _3
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 3 2
     call_indirect
     pop_jump_if_false L0
     load_const true
-    jump L3
+    jump L2
 
-  L2:
+  L1:
     load_const false
 
-  L3:
+  L2:
     return
 }
 
@@ -4543,10 +4084,7 @@ function baml.iter.Iterator.take_while(self: baml.iter.Iterator, predicate: ((#0
 function baml.iter.Peekable.peek(self: baml.iter.Peekable<#0, #1>) -> #0 | baml.iter.Done {
     load_var self
     load_field .has_buffer
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #1, Item = #0>
@@ -4559,13 +4097,13 @@ function baml.iter.Peekable.peek(self: baml.iter.Peekable<#0, #1>) -> #0 | baml.
     load_const true
     store_field .has_buffer
     load_var v
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var self
     load_field .buffer
 
-  L2:
+  L1:
     return
 }
 
@@ -4615,10 +4153,7 @@ function baml.json._path_field(current: baml.json.json, key: string, selector: s
     store_var _4
     load_var _4
     narrow_bind map<string, baml.json.json>, slot=4
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "field access '."
     load_var key
     bin_op +
@@ -4628,25 +4163,14 @@ function baml.json._path_field(current: baml.json.json, key: string, selector: s
     init_instance baml.json.PathError .message, .selector
     throw
 
-  L1:
+  L0:
     load_var _4
     store_var m
     load_type string
     load_type baml.json.json
     load_var2 5 2
     call baml.Map.has
-    unary_op !
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_type string
-    load_type baml.json.json
-    load_var2 5 2
-    call baml.Map.get
-    return
-
-  L3:
+    pop_jump_if_true L1
     load_const "missing field '"
     load_var key
     bin_op +
@@ -4655,6 +4179,13 @@ function baml.json._path_field(current: baml.json.json, key: string, selector: s
     load_var selector
     init_instance baml.json.PathError .message, .selector
     throw
+
+  L1:
+    load_type string
+    load_type baml.json.json
+    load_var2 5 2
+    call baml.Map.get
+    return
 }
 
 function baml.json._path_index(current: baml.json.json, idx: int, selector: string) -> baml.json.json {
@@ -4662,10 +4193,7 @@ function baml.json._path_index(current: baml.json.json, idx: int, selector: stri
     store_var _4
     load_var _4
     narrow_bind baml.json.json[], slot=4
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_type int
     load_var idx
     call baml.String.from
@@ -4679,34 +4207,25 @@ function baml.json._path_index(current: baml.json.json, idx: int, selector: stri
     init_instance baml.json.PathError .message, .selector
     throw
 
-  L1:
+  L0:
     load_var _4
     store_var arr
     load_var idx
     load_const 0
     cmp_int_op <
-    jump_if_false L2
-    jump L3
-
-  L2:
-    pop 1
+    pop_jump_if_true L1
     load_var arr
     container_len
     store_var _8
     load_var2 2 6
     cmp_int_op >=
-
-  L3:
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L1
     load_type baml.json.json
     load_var2 5 2
     call baml.Array.at
     return
 
-  L5:
+  L1:
     load_type int
     load_var idx
     call baml.String.from
@@ -4765,61 +4284,55 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var selector
     load_const "."
     call baml.String.starts_with
-    jump_if_false L0
-    jump L1
-
-  L0:
-    pop 1
+    pop_jump_if_true L0
     load_var selector
     load_const "["
     call baml.String.starts_with
+    pop_jump_if_true L0
+    load_const "selector must start with '.' or '[' (jq style), got '"
+    load_var selector
+    bin_op +
+    load_const "'"
+    bin_op +
+    load_var selector
+    init_instance baml.json.PathError .message, .selector
+    throw
 
-  L1:
-    unary_op !
-    pop_jump_if_false L2
-    jump L47
-
-  L2:
+  L0:
     load_var j
     store_var current
     load_const 0
     store_var i
 
-  L3:
+  L1:
     load_var i
-    store_var _12
+    store_var _11
     load_var selector
     call baml.String.length
-    store_var _13
+    store_var _12
     load_var2 5 6
     cmp_int_op <
-    pop_jump_if_false L4
-    jump L8
-
-  L4:
+    pop_jump_if_true L4
     load_type #0
     load_var current
     call baml.json.to
-    jump L7
+    jump L3
     load_var _
     is_type baml.json.DecodeError
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
+    pop_jump_if_true L2
     load_var _
     rethrow
 
-  L6:
+  L2:
     load_const "leaf does not coerce to the requested type"
     load_var selector
     init_instance baml.json.PathError .message, .selector
     throw
 
-  L7:
+  L3:
     return
 
-  L8:
+  L4:
     load_var2 2 4
     load_var i
     load_const 1
@@ -4829,32 +4342,23 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var marker
     load_const "."
     cmp_op ==
-    pop_jump_if_false L9
-    jump L41
-
-  L9:
+    pop_jump_if_true L20
     load_var marker
     load_const "["
     cmp_op !=
-    pop_jump_if_false L10
-    jump L40
-
-  L10:
+    pop_jump_if_true L19
     load_var i
     load_const 1
     add_int
     store_var i
     load_var i
-    store_var _48
+    store_var _47
     load_var selector
     call baml.String.length
-    store_var _49
+    store_var _48
     load_var2 14 15
     cmp_int_op >=
-    pop_jump_if_false L11
-    jump L39
-
-  L11:
+    pop_jump_if_true L18
     load_var2 2 4
     load_var i
     load_const 1
@@ -4864,33 +4368,23 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var first
     load_const "\""
     cmp_op ==
-    jump_if_false L12
-    jump L13
-
-  L12:
-    pop 1
+    pop_jump_if_true L11
     load_var first
     load_const "'"
     cmp_op ==
-
-  L13:
-    pop_jump_if_false L14
-    jump L24
-
-  L14:
+    pop_jump_if_true L11
     load_var i
     store_var start
 
-  L15:
+  L5:
     load_var i
-    store_var _103
+    store_var _100
     load_var selector
     call baml.String.length
-    store_var _104
+    store_var _101
     load_var2 29 30
     cmp_int_op <
-    jump_if_false L16
-    pop 1
+    pop_jump_if_false L6
     load_var2 2 4
     load_var i
     load_const 1
@@ -4898,23 +4392,17 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     call baml.String.slice
     load_const "]"
     cmp_op !=
+    pop_jump_if_true L10
 
-  L16:
-    pop_jump_if_false L17
-    jump L23
-
-  L17:
+  L6:
     load_var i
-    store_var _110
+    store_var _108
     load_var selector
     call baml.String.length
-    store_var _111
+    store_var _109
     load_var2 31 32
     cmp_int_op >=
-    pop_jump_if_false L18
-    jump L22
-
-  L18:
+    pop_jump_if_true L9
     load_var2 2 28
     load_var i
     call baml.String.slice
@@ -4926,17 +4414,14 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var token
     call baml.Int.parse
     store_var idx
-    jump L21
+    jump L8
     load_var _
     is_type baml.errors.ParseError
-    pop_jump_if_false L19
-    jump L20
-
-  L19:
+    pop_jump_if_true L7
     load_var _
     rethrow
 
-  L20:
+  L7:
     load_const "bad bracket token '["
     load_var token
     bin_op +
@@ -4946,27 +4431,27 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     init_instance baml.json.PathError .message, .selector
     throw
 
-  L21:
+  L8:
     load_var2 3 34
     load_var selector
     call baml.json._path_index
     store_var current
-    jump L3
+    jump L1
 
-  L22:
+  L9:
     load_const "unterminated '[' segment"
     load_var selector
     init_instance baml.json.PathError .message, .selector
     throw
 
-  L23:
+  L10:
     load_var i
     load_const 1
     add_int
     store_var i
-    jump L15
+    jump L5
 
-  L24:
+  L11:
     load_var i
     load_const 1
     add_int
@@ -4976,15 +4461,15 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_const false
     store_var closed
 
-  L25:
+  L12:
     load_var i
-    store_var _63
+    store_var _62
     load_var selector
     call baml.String.length
-    store_var _64
+    store_var _63
     load_var2 19 20
     cmp_int_op <
-    pop_jump_if_false L29
+    pop_jump_if_false L14
     load_var2 2 4
     load_var i
     load_const 1
@@ -4994,16 +4479,10 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var ch
     load_const "\\"
     cmp_op ==
-    pop_jump_if_false L26
-    jump L36
-
-  L26:
+    pop_jump_if_true L16
     load_var2 21 16
     cmp_op ==
-    pop_jump_if_false L27
-    jump L28
-
-  L27:
+    pop_jump_if_true L13
     load_var2 17 21
     bin_op +
     store_var key
@@ -5011,9 +4490,9 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_const 1
     add_int
     store_var i
-    jump L25
+    jump L12
 
-  L28:
+  L13:
     load_const true
     store_var closed
     load_var i
@@ -5021,28 +4500,17 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     add_int
     store_var i
 
-  L29:
+  L14:
     load_var closed
-    unary_op !
-    jump_if_false L30
-    jump L31
-
-  L30:
-    pop 1
+    pop_jump_if_false L15
     load_var i
-    store_var _91
+    store_var _88
     load_var selector
     call baml.String.length
-    store_var _92
+    store_var _89
     load_var2 26 27
     cmp_int_op >=
-
-  L31:
-    jump_if_false L32
-    jump L33
-
-  L32:
-    pop 1
+    pop_jump_if_true L15
     load_var2 2 4
     load_var i
     load_const 1
@@ -5050,12 +4518,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     call baml.String.slice
     load_const "]"
     cmp_op !=
-
-  L33:
-    pop_jump_if_false L34
-    jump L35
-
-  L34:
+    pop_jump_if_true L15
     load_var i
     load_const 1
     add_int
@@ -5064,30 +4527,27 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var selector
     call baml.json._path_field
     store_var current
-    jump L3
+    jump L1
 
-  L35:
+  L15:
     load_const "unterminated quoted bracket key"
     load_var selector
     init_instance baml.json.PathError .message, .selector
     throw
 
-  L36:
+  L16:
     load_var i
     load_const 1
     add_int
-    store_var _72
+    store_var _71
     load_var selector
     call baml.String.length
-    store_var _74
+    store_var _73
     load_var2 22 23
     cmp_int_op >=
-    pop_jump_if_false L37
-    jump L38
-
-  L37:
+    pop_jump_if_true L17
     load_var key
-    store_var _76
+    store_var _75
     load_var2 2 4
     load_const 1
     add_int
@@ -5095,7 +4555,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_const 2
     add_int
     call baml.String.slice
-    store_var _77
+    store_var _76
     load_var2 24 25
     bin_op +
     store_var key
@@ -5103,33 +4563,33 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_const 2
     add_int
     store_var i
-    jump L25
+    jump L12
 
-  L38:
+  L17:
     load_const "unterminated escape in quoted bracket key"
     load_var selector
     init_instance baml.json.PathError .message, .selector
     throw
 
-  L39:
+  L18:
     load_const "unterminated '[' segment"
     load_var selector
     init_instance baml.json.PathError .message, .selector
     throw
 
-  L40:
+  L19:
     load_type int
     load_var i
     call baml.String.from
-    store_var _45
+    store_var _44
     load_const "expected '.' or '[' at offset "
-    load_var _45
+    load_var _44
     bin_op +
     load_var selector
     init_instance baml.json.PathError .message, .selector
     throw
 
-  L41:
+  L20:
     load_var i
     load_const 1
     add_int
@@ -5137,16 +4597,15 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     load_var i
     store_var start
 
-  L42:
+  L21:
     load_var i
-    store_var _24
+    store_var _21
     load_var selector
     call baml.String.length
-    store_var _25
+    store_var _22
     load_var2 9 10
     cmp_int_op <
-    jump_if_false L43
-    pop 1
+    pop_jump_if_false L22
     load_var2 2 4
     load_var i
     load_const 1
@@ -5154,10 +4613,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     call baml.String.slice
     load_const "."
     cmp_op !=
-
-  L43:
-    jump_if_false L44
-    pop 1
+    pop_jump_if_false L22
     load_var2 2 4
     load_var i
     load_const 1
@@ -5165,63 +4621,47 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     call baml.String.slice
     load_const "["
     cmp_op !=
+    pop_jump_if_true L23
 
-  L44:
-    pop_jump_if_false L45
-    jump L46
-
-  L45:
+  L22:
     load_var2 4 8
     cmp_int_op >
-    pop_jump_if_false L3
+    pop_jump_if_false L1
     load_var current
-    store_var _37
+    store_var _36
     load_var2 2 8
     load_var i
     call baml.String.slice
-    store_var _38
+    store_var _37
     load_var2 11 12
     load_var selector
     call baml.json._path_field
     store_var current
-    jump L3
+    jump L1
 
-  L46:
+  L23:
     load_var i
     load_const 1
     add_int
     store_var i
-    jump L42
-
-  L47:
-    load_const "selector must start with '.' or '[' (jq style), got '"
-    load_var selector
-    bin_op +
-    load_const "'"
-    bin_op +
-    load_var selector
-    init_instance baml.json.PathError .message, .selector
-    throw
+    jump L21
 }
 
 function baml.json.path_or(j: baml.json.json, selector: string, default: #0) -> #0 {
     load_type #0
     load_var2 1 2
     call baml.json.path
-    jump L2
+    jump L1
     load_var _
     is_type baml.json.PathError
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var _
     rethrow
 
-  L1:
+  L0:
     load_var default
 
-  L2:
+  L1:
     return
 }
 
@@ -5379,26 +4819,27 @@ function baml.net.TcpStream.connect(addr: string, timeout: baml.time.Duration | 
     load_var timeout
     load_const null
     cmp_op ==
-    pop_jump_if_false L1
+    pop_jump_if_true L1
+    load_var timeout
+    call baml.time.Duration.to_nanoseconds
     jump L2
 
   L1:
-    load_var timeout
-    call baml.time.Duration.to_nanoseconds
-    jump L3
+    load_const null
 
   L2:
-    load_const null
+    jump_if_not_null_or_pop L3
+    jump L4
 
   L3:
-    store_var_load_var _5
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L4
+    store_var _5
+    jump L5
+
+  L4:
     load_const 0n
     store_var _5
 
-  L4:
+  L5:
     load_var2 1 3
     sys_op baml.net.TcpStream._connect
     return
@@ -5428,26 +4869,27 @@ function baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket, timeout: baml.ti
     load_var timeout
     load_const null
     cmp_op ==
-    pop_jump_if_false L1
+    pop_jump_if_true L1
+    load_var timeout
+    call baml.time.Duration.to_nanoseconds
     jump L2
 
   L1:
-    load_var timeout
-    call baml.time.Duration.to_nanoseconds
-    jump L3
+    load_const null
 
   L2:
-    load_const null
+    jump_if_not_null_or_pop L3
+    jump L4
 
   L3:
-    store_var_load_var _5
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L4
+    store_var _5
+    jump L5
+
+  L4:
     load_const 0n
     store_var _5
 
-  L4:
+  L5:
     load_var2 1 3
     sys_op baml.net.UdpSocket._recv_from
     return
@@ -5465,26 +4907,27 @@ function baml.net.UdpSocket.send_to(self: baml.net.UdpSocket, data: uint8array, 
     load_var timeout
     load_const null
     cmp_op ==
-    pop_jump_if_false L1
+    pop_jump_if_true L1
+    load_var timeout
+    call baml.time.Duration.to_nanoseconds
     jump L2
 
   L1:
-    load_var timeout
-    call baml.time.Duration.to_nanoseconds
-    jump L3
+    load_const null
 
   L2:
-    load_const null
+    jump_if_not_null_or_pop L3
+    jump L4
 
   L3:
-    store_var_load_var _7
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L4
+    store_var _7
+    jump L5
+
+  L4:
     load_const 0n
     store_var _7
 
-  L4:
+  L5:
     load_var2 1 2
     load_var2 3 5
     sys_op baml.net.UdpSocket._send_to
@@ -5530,30 +4973,24 @@ function baml.ops.<(bigint as baml.ops.BitXor<int>)>.bit_xor(self: bigint, rhs: 
 function baml.ops.<(bigint as baml.ops.Compare)>.cmp(self: bigint, other: bigint) -> baml.ops.Ordering {
     load_var2 1 2
     cmp_bigint_op <
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var2 1 2
     cmp_bigint_op >
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    load_const baml.ops.Ordering.Equal
+    alloc_variant baml.ops.Ordering
+    jump L2
+
+  L0:
+    load_const baml.ops.Ordering.Greater
+    alloc_variant baml.ops.Ordering
     jump L2
 
   L1:
-    load_const baml.ops.Ordering.Equal
-    alloc_variant baml.ops.Ordering
-    jump L4
-
-  L2:
-    load_const baml.ops.Ordering.Greater
-    alloc_variant baml.ops.Ordering
-    jump L4
-
-  L3:
     load_const baml.ops.Ordering.Less
     alloc_variant baml.ops.Ordering
 
-  L4:
+  L2:
     return
 }
 
@@ -5602,41 +5039,32 @@ function baml.ops.<(bigint as baml.ops.Subtract<int>)>.sub(self: bigint, rhs: in
 function baml.ops.<(bool as baml.ops.Compare)>.cmp(self: bool, other: bool) -> baml.ops.Ordering {
     load_var self
     is_type true
-    pop_jump_if_false L0
+    pop_jump_if_true L1
+    load_var other
+    is_type true
+    pop_jump_if_true L0
+    load_const baml.ops.Ordering.Equal
+    alloc_variant baml.ops.Ordering
     jump L3
 
   L0:
-    load_var other
-    is_type true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const baml.ops.Ordering.Equal
-    alloc_variant baml.ops.Ordering
-    jump L6
-
-  L2:
     load_const baml.ops.Ordering.Less
     alloc_variant baml.ops.Ordering
-    jump L6
+    jump L3
 
-  L3:
+  L1:
     load_var other
     is_type true
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L2
     load_const baml.ops.Ordering.Greater
     alloc_variant baml.ops.Ordering
-    jump L6
+    jump L3
 
-  L5:
+  L2:
     load_const baml.ops.Ordering.Equal
     alloc_variant baml.ops.Ordering
 
-  L6:
+  L3:
     return
 }
 
@@ -5652,30 +5080,24 @@ function baml.ops.<(float as baml.ops.Add<int>)>.add(self: float, rhs: int) -> f
 function baml.ops.<(float as baml.ops.Compare)>.cmp(self: float, other: float) -> baml.ops.Ordering {
     load_var2 1 2
     cmp_float_op <
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var2 1 2
     cmp_float_op >
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    load_const baml.ops.Ordering.Equal
+    alloc_variant baml.ops.Ordering
+    jump L2
+
+  L0:
+    load_const baml.ops.Ordering.Greater
+    alloc_variant baml.ops.Ordering
     jump L2
 
   L1:
-    load_const baml.ops.Ordering.Equal
-    alloc_variant baml.ops.Ordering
-    jump L4
-
-  L2:
-    load_const baml.ops.Ordering.Greater
-    alloc_variant baml.ops.Ordering
-    jump L4
-
-  L3:
     load_const baml.ops.Ordering.Less
     alloc_variant baml.ops.Ordering
 
-  L4:
+  L2:
     return
 }
 
@@ -5739,30 +5161,24 @@ function baml.ops.<(int as baml.ops.BitXor<int>)>.bit_xor(self: int, rhs: int) -
 function baml.ops.<(int as baml.ops.Compare)>.cmp(self: int, other: int) -> baml.ops.Ordering {
     load_var2 1 2
     cmp_int_op <
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var2 1 2
     cmp_int_op >
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    load_const baml.ops.Ordering.Equal
+    alloc_variant baml.ops.Ordering
+    jump L2
+
+  L0:
+    load_const baml.ops.Ordering.Greater
+    alloc_variant baml.ops.Ordering
     jump L2
 
   L1:
-    load_const baml.ops.Ordering.Equal
-    alloc_variant baml.ops.Ordering
-    jump L4
-
-  L2:
-    load_const baml.ops.Ordering.Greater
-    alloc_variant baml.ops.Ordering
-    jump L4
-
-  L3:
     load_const baml.ops.Ordering.Less
     alloc_variant baml.ops.Ordering
 
-  L4:
+  L2:
     return
 }
 
@@ -5845,30 +5261,24 @@ function baml.ops.<(null as baml.ops.Equals)>.neq(self: null, other: null) -> bo
 function baml.ops.<(string as baml.ops.Compare)>.cmp(self: string, other: string) -> baml.ops.Ordering {
     load_var2 1 2
     cmp_op <
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var2 1 2
     cmp_op >
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    load_const baml.ops.Ordering.Equal
+    alloc_variant baml.ops.Ordering
+    jump L2
+
+  L0:
+    load_const baml.ops.Ordering.Greater
+    alloc_variant baml.ops.Ordering
     jump L2
 
   L1:
-    load_const baml.ops.Ordering.Equal
-    alloc_variant baml.ops.Ordering
-    jump L4
-
-  L2:
-    load_const baml.ops.Ordering.Greater
-    alloc_variant baml.ops.Ordering
-    jump L4
-
-  L3:
     load_const baml.ops.Ordering.Less
     alloc_variant baml.ops.Ordering
 
-  L4:
+  L2:
     return
 }
 
@@ -5889,13 +5299,10 @@ function baml.ops.Compare.clamp(self: baml.ops.Compare, min: #0, max: #0) -> #0 
     load_type baml.ops.Compare
     load_const "min"
     virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var2 5 2
+    load_var min
     load_type baml.ops.Compare
     load_const "max"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -5904,8 +5311,6 @@ function baml.ops.Compare.ge(self: baml.ops.Compare, other: #0) -> bool {
     load_type baml.ops.Compare
     load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
     load_const baml.ops.Ordering.Less
     alloc_variant baml.ops.Ordering
     call baml.ops.equals_equals
@@ -5918,8 +5323,6 @@ function baml.ops.Compare.gt(self: baml.ops.Compare, other: #0) -> bool {
     load_type baml.ops.Compare
     load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
     load_const baml.ops.Ordering.Greater
     alloc_variant baml.ops.Ordering
     call baml.ops.equals_equals
@@ -5931,8 +5334,6 @@ function baml.ops.Compare.le(self: baml.ops.Compare, other: #0) -> bool {
     load_type baml.ops.Compare
     load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
     load_const baml.ops.Ordering.Greater
     alloc_variant baml.ops.Ordering
     call baml.ops.equals_equals
@@ -5945,8 +5346,6 @@ function baml.ops.Compare.lt(self: baml.ops.Compare, other: #0) -> bool {
     load_type baml.ops.Compare
     load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
     load_const baml.ops.Ordering.Less
     alloc_variant baml.ops.Ordering
     call baml.ops.equals_equals
@@ -6030,8 +5429,6 @@ function baml.ops.Equals.neq(self: baml.ops.Equals, other: #0) -> bool {
     load_type baml.ops.Equals
     load_const "eq"
     virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
     unary_op !
     return
 }
@@ -6194,26 +5591,20 @@ function baml.sap.parse(text: string) -> #0 {
     load_type #0
     load_type #0
     sys_op baml.sap._ParseCache._parse_final
-    jump L2
+    jump L1
     load_var _
     is_type baml.errors.LlmClient
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var _
     rethrow
 
-  L1:
-    load_var _
-    load_field .0
-    pop 1
+  L0:
     load_var _
     load_field .0
     init_instance baml.errors.ParseError .message
     throw
 
-  L2:
+  L1:
     return
 }
 
@@ -6317,14 +5708,11 @@ function baml.sys.<(baml.sys.ReadPipeLines as baml.iter.Iterator)>.next(self: ba
 
   L0:
     load_var framing
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var line
     return
 
-  L2:
+  L1:
     load_var self
     load_field ._pending
     load_const 10
@@ -6332,25 +5720,17 @@ function baml.sys.<(baml.sys.ReadPipeLines as baml.iter.Iterator)>.next(self: ba
     store_var _7
     load_var _7
     narrow_bind int, slot=4
-    pop_jump_if_false L3
-    jump L7
-
-  L3:
+    pop_jump_if_true L4
     load_var self
     load_field .pipe
     load_const 65536
     load_type baml.io.Read
     load_const "read"
     virtual_call nargs=2 ntypeargs=0
-    store_var _20
-    load_var _20
     store_var _22
     load_var _22
-    narrow_bind uint8array, slot=12
-    pop_jump_if_false L4
-    jump L6
-
-  L4:
+    narrow_bind uint8array, slot=11
+    pop_jump_if_true L3
     load_var self
     load_field ._pending
     container_len
@@ -6358,7 +5738,7 @@ function baml.sys.<(baml.sys.ReadPipeLines as baml.iter.Iterator)>.next(self: ba
     load_var _28
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L5
+    pop_jump_if_false L2
     load_var self
     load_field ._pending
     call baml.sys._strip_carriage_return
@@ -6371,22 +5751,22 @@ function baml.sys.<(baml.sys.ReadPipeLines as baml.iter.Iterator)>.next(self: ba
     call baml.deep_copy
     store_field ._pending
 
-  L5:
+  L2:
     load_const false
     store_var framing
     jump L0
 
-  L6:
+  L3:
     load_var self
     load_field ._pending
     load_var _22
     call baml.Uint8Array.concat
     store_var _26
-    load_var2 1 13
+    load_var2 1 12
     store_field ._pending
     jump L0
 
-  L7:
+  L4:
     load_var _7
     store_var index
     load_var self
@@ -6615,59 +5995,44 @@ function baml.time.<(baml.time.Duration as baml.ops.Subtract<baml.time.Duration>
 function baml.time.<(baml.time.Instant as baml.FromJson)>.from_json(j: baml.json.json) -> baml.time.Instant {
     load_var j
     is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "Expected timestamp string"
     load_const ""
     init_instance baml.json.DecodeError .message, .path
     throw
 
-  L1:
+  L0:
     load_var j
     call baml.time.Instant.parse
-    jump L4
+    jump L2
     load_var _
     is_type baml.errors.ParseError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var _
     rethrow
 
-  L3:
-    load_var _
-    load_field .0
-    pop 1
+  L1:
     load_var _
     load_field .0
     load_const ""
     init_instance baml.json.DecodeError .message, .path
     throw
 
-  L4:
+  L2:
     return
 }
 
 function baml.time.<(baml.time.Instant as baml.ToJson)>.to_json(self: baml.time.Instant) -> baml.json.json {
     load_var self
     call baml.time.Instant._to_string_impl
-    jump L2
+    jump L1
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var _
     rethrow
 
-  L1:
-    load_var _
-    load_field .0
-    pop 1
+  L0:
     load_var _
     load_field .0
     load_const ""
@@ -6675,34 +6040,28 @@ function baml.time.<(baml.time.Instant as baml.ToJson)>.to_json(self: baml.time.
     init_instance baml.json.SerializationError .message, .path, .reason
     throw
 
-  L2:
+  L1:
     return
 }
 
 function baml.time.<(baml.time.Instant as baml.ToString)>.to_string(self: baml.time.Instant) -> string {
     load_var self
     call baml.time.Instant._to_string_impl
-    jump L2
+    jump L1
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var _
     rethrow
 
-  L1:
-    load_var _
-    load_field .0
-    pop 1
+  L0:
     load_const "Instant.to_string: "
     load_var _
     load_field .0
     bin_op +
     call baml.sys.panic
 
-  L2:
+  L1:
     return
 }
 
@@ -6739,59 +6098,44 @@ function baml.time.<(baml.time.Instant as baml.ops.Subtract<baml.time.Instant>)>
 function baml.time.<(baml.time.PlainDate as baml.FromJson)>.from_json(j: baml.json.json) -> baml.time.PlainDate {
     load_var j
     is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "Expected ISO 8601 date string"
     load_const ""
     init_instance baml.json.DecodeError .message, .path
     throw
 
-  L1:
+  L0:
     load_var j
     call baml.time.PlainDate.parse
-    jump L4
+    jump L2
     load_var _
     is_type baml.errors.ParseError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var _
     rethrow
 
-  L3:
-    load_var _
-    load_field .0
-    pop 1
+  L1:
     load_var _
     load_field .0
     load_const ""
     init_instance baml.json.DecodeError .message, .path
     throw
 
-  L4:
+  L2:
     return
 }
 
 function baml.time.<(baml.time.PlainDate as baml.ToJson)>.to_json(self: baml.time.PlainDate) -> baml.json.json {
     load_var self
     call baml.time.PlainDate._to_string_impl
-    jump L2
+    jump L1
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var _
     rethrow
 
-  L1:
-    load_var _
-    load_field .0
-    pop 1
+  L0:
     load_var _
     load_field .0
     load_const ""
@@ -6799,93 +6143,72 @@ function baml.time.<(baml.time.PlainDate as baml.ToJson)>.to_json(self: baml.tim
     init_instance baml.json.SerializationError .message, .path, .reason
     throw
 
-  L2:
+  L1:
     return
 }
 
 function baml.time.<(baml.time.PlainDate as baml.ToString)>.to_string(self: baml.time.PlainDate) -> string {
     load_var self
     call baml.time.PlainDate._to_string_impl
-    jump L2
+    jump L1
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var _
     rethrow
 
-  L1:
-    load_var _
-    load_field .0
-    pop 1
+  L0:
     load_const "PlainDate.to_string: "
     load_var _
     load_field .0
     bin_op +
     call baml.sys.panic
 
-  L2:
+  L1:
     return
 }
 
 function baml.time.<(baml.time.PlainDateTime as baml.FromJson)>.from_json(j: baml.json.json) -> baml.time.PlainDateTime {
     load_var j
     is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "Expected zoneless ISO 8601 string"
     load_const ""
     init_instance baml.json.DecodeError .message, .path
     throw
 
-  L1:
+  L0:
     load_var j
     call baml.time.PlainDateTime.parse
-    jump L4
+    jump L2
     load_var _
     is_type baml.errors.ParseError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var _
     rethrow
 
-  L3:
-    load_var _
-    load_field .0
-    pop 1
+  L1:
     load_var _
     load_field .0
     load_const ""
     init_instance baml.json.DecodeError .message, .path
     throw
 
-  L4:
+  L2:
     return
 }
 
 function baml.time.<(baml.time.PlainDateTime as baml.ToJson)>.to_json(self: baml.time.PlainDateTime) -> baml.json.json {
     load_var self
     call baml.time.PlainDateTime._to_string_impl
-    jump L2
+    jump L1
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var _
     rethrow
 
-  L1:
-    load_var _
-    load_field .0
-    pop 1
+  L0:
     load_var _
     load_field .0
     load_const ""
@@ -6893,34 +6216,28 @@ function baml.time.<(baml.time.PlainDateTime as baml.ToJson)>.to_json(self: baml
     init_instance baml.json.SerializationError .message, .path, .reason
     throw
 
-  L2:
+  L1:
     return
 }
 
 function baml.time.<(baml.time.PlainDateTime as baml.ToString)>.to_string(self: baml.time.PlainDateTime) -> string {
     load_var self
     call baml.time.PlainDateTime._to_string_impl
-    jump L2
+    jump L1
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var _
     rethrow
 
-  L1:
-    load_var _
-    load_field .0
-    pop 1
+  L0:
     load_const "PlainDateTime.to_string: "
     load_var _
     load_field .0
     bin_op +
     call baml.sys.panic
 
-  L2:
+  L1:
     return
 }
 
@@ -6957,39 +6274,30 @@ function baml.time.<(baml.time.PlainDateTime as baml.ops.Subtract<baml.time.Plai
 function baml.time.<(baml.time.PlainTime as baml.FromJson)>.from_json(j: baml.json.json) -> baml.time.PlainTime {
     load_var j
     is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "Expected ISO 8601 time string"
     load_const ""
     init_instance baml.json.DecodeError .message, .path
     throw
 
-  L1:
+  L0:
     load_var j
     call baml.time.PlainTime.parse
-    jump L4
+    jump L2
     load_var _
     is_type baml.errors.ParseError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var _
     rethrow
 
-  L3:
-    load_var _
-    load_field .0
-    pop 1
+  L1:
     load_var _
     load_field .0
     load_const ""
     init_instance baml.json.DecodeError .message, .path
     throw
 
-  L4:
+  L2:
     return
 }
 
@@ -7048,39 +6356,30 @@ function baml.time.<(baml.time.PlainTime as baml.ops.Subtract<baml.time.PlainTim
 function baml.time.<(baml.time.ZonedDateTime as baml.FromJson)>.from_json(j: baml.json.json) -> baml.time.ZonedDateTime {
     load_var j
     is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "Expected RFC 3339 / RFC 9557 timestamp string"
     load_const ""
     init_instance baml.json.DecodeError .message, .path
     throw
 
-  L1:
+  L0:
     load_var j
     call baml.time.ZonedDateTime.parse
-    jump L4
+    jump L2
     load_var _
     is_type baml.errors.ParseError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var _
     rethrow
 
-  L3:
-    load_var _
-    load_field .0
-    pop 1
+  L1:
     load_var _
     load_field .0
     load_const ""
     init_instance baml.json.DecodeError .message, .path
     throw
 
-  L4:
+  L2:
     return
 }
 
@@ -7096,26 +6395,17 @@ function baml.time.<(baml.time.ZonedDateTime as baml.ToJson)>.to_json(self: baml
     load_var self
     load_field ._iana
     call baml.time._format_zoned
-    jump L4
+    jump L2
     load_var _
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var _
     is_type baml.time.UnknownTimezoneError
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var _
     rethrow
 
-  L2:
-    load_var _
-    load_field .0
-    pop 1
+  L0:
     load_const "unknown timezone: "
     load_var _
     load_field .0
@@ -7125,10 +6415,7 @@ function baml.time.<(baml.time.ZonedDateTime as baml.ToJson)>.to_json(self: baml
     init_instance baml.json.SerializationError .message, .path, .reason
     throw
 
-  L3:
-    load_var _
-    load_field .0
-    pop 1
+  L1:
     load_var _
     load_field .0
     load_const ""
@@ -7136,7 +6423,7 @@ function baml.time.<(baml.time.ZonedDateTime as baml.ToJson)>.to_json(self: baml
     init_instance baml.json.SerializationError .message, .path, .reason
     throw
 
-  L4:
+  L2:
     return
 }
 
@@ -7213,21 +6500,18 @@ function baml.time.Duration.from_hours(h: int | bigint) -> baml.time.Duration {
     store_var _4
     load_var _4
     narrow_bind bigint, slot=3
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 0n
     load_var h
     add_bigint
     store_var _3
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var _4
     store_var _3
 
-  L2:
+  L1:
     load_var _3
     load_const 3600000000000n
     mul_bigint
@@ -7240,21 +6524,18 @@ function baml.time.Duration.from_microseconds(us: int | bigint) -> baml.time.Dur
     store_var _4
     load_var _4
     narrow_bind bigint, slot=3
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 0n
     load_var us
     add_bigint
     store_var _3
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var _4
     store_var _3
 
-  L2:
+  L1:
     load_var _3
     load_const 1000n
     mul_bigint
@@ -7267,21 +6548,18 @@ function baml.time.Duration.from_milliseconds(ms: int | bigint) -> baml.time.Dur
     store_var _4
     load_var _4
     narrow_bind bigint, slot=3
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 0n
     load_var ms
     add_bigint
     store_var _3
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var _4
     store_var _3
 
-  L2:
+  L1:
     load_var _3
     load_const 1000000n
     mul_bigint
@@ -7294,21 +6572,18 @@ function baml.time.Duration.from_minutes(m: int | bigint) -> baml.time.Duration 
     store_var _4
     load_var _4
     narrow_bind bigint, slot=3
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 0n
     load_var m
     add_bigint
     store_var _3
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var _4
     store_var _3
 
-  L2:
+  L1:
     load_var _3
     load_const 60000000000n
     mul_bigint
@@ -7321,19 +6596,16 @@ function baml.time.Duration.from_nanoseconds(ns: int | bigint) -> baml.time.Dura
     store_var _3
     load_var _3
     narrow_bind bigint, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 0n
     load_var ns
     add_bigint
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var _3
 
-  L2:
+  L1:
     init_instance baml.time.Duration ._nanoseconds
     return
 }
@@ -7343,21 +6615,18 @@ function baml.time.Duration.from_seconds(s: int | bigint) -> baml.time.Duration 
     store_var _4
     load_var _4
     narrow_bind bigint, slot=3
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 0n
     load_var s
     add_bigint
     store_var _3
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var _4
     store_var _3
 
-  L2:
+  L1:
     load_var _3
     load_const 1000000000n
     mul_bigint
@@ -7479,17 +6748,14 @@ function baml.time.Instant.max(self: baml.time.Instant, other: baml.time.Instant
     load_var self
     load_field ._nanoseconds
     cmp_bigint_op >
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var self
     jump L1
 
   L0:
-    load_var self
-    jump L2
-
-  L1:
     load_var other
 
-  L2:
+  L1:
     return
 }
 
@@ -7499,17 +6765,14 @@ function baml.time.Instant.min(self: baml.time.Instant, other: baml.time.Instant
     load_var self
     load_field ._nanoseconds
     cmp_bigint_op <
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var self
     jump L1
 
   L0:
-    load_var self
-    jump L2
-
-  L1:
     load_var other
 
-  L2:
+  L1:
     return
 }
 
@@ -7662,17 +6925,14 @@ function baml.time.PlainDateTime.max(self: baml.time.PlainDateTime, other: baml.
     load_var self
     load_field ._nanoseconds
     cmp_bigint_op >
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var self
     jump L1
 
   L0:
-    load_var self
-    jump L2
-
-  L1:
     load_var other
 
-  L2:
+  L1:
     return
 }
 
@@ -7685,17 +6945,14 @@ function baml.time.PlainDateTime.min(self: baml.time.PlainDateTime, other: baml.
     load_var self
     load_field ._nanoseconds
     cmp_bigint_op <
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var self
     jump L1
 
   L0:
-    load_var self
-    jump L2
-
-  L1:
     load_var other
 
-  L2:
+  L1:
     return
 }
 
@@ -7728,50 +6985,45 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
   L0:
     load_var timezone
     is_type baml.time.TimeZoneOffset
-    pop_jump_if_false L1
-    jump L14
-
-  L1:
+    pop_jump_if_true L12
     load_var disambiguation
     load_const "reject"
     call baml.ops.equals_equals
-    pop_jump_if_false L2
-    jump L6
-
-  L2:
+    pop_jump_if_true L5
     load_var2 2 1
     load_field ._nanoseconds
     load_var disambiguation
     sys_op baml.time._tz_to_instant
-    store_var _30
-    load_var _30
+    store_var _29
+    load_var _29
     load_const null
     cmp_op ==
-    pop_jump_if_false L3
-    jump L5
+    pop_jump_if_true L4
+    load_var _29
+    jump_if_not_null_or_pop L1
+    jump L2
+
+  L1:
+    store_var _35
+    jump L3
+
+  L2:
+    load_const 0n
+    store_var _35
 
   L3:
-    load_var _30
-    store_var_load_var _36
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L4
-    load_const 0n
-    store_var _36
-
-  L4:
-    load_var _36
+    load_var _35
     load_const null
     load_var timezone
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
-    jump L15
+    jump L13
 
-  L5:
+  L4:
     load_var timezone
     init_instance baml.time.UnknownTimezoneError .timezone
     throw
 
-  L6:
+  L5:
     load_var2 2 1
     load_field ._nanoseconds
     load_const "earlier"
@@ -7780,10 +7032,7 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     load_var _11
     load_const null
     cmp_op ==
-    pop_jump_if_false L7
-    jump L13
-
-  L7:
+    pop_jump_if_true L11
     load_var _11
     store_var earlier
     load_var2 2 1
@@ -7794,49 +7043,47 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     load_var _16
     load_const null
     cmp_op ==
-    pop_jump_if_false L8
-    jump L12
-
-  L8:
+    pop_jump_if_true L10
     load_var2 5 6
     call baml.ops.equals_equals
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
+    pop_jump_if_true L6
     load_const "wall-clock time is ambiguous or skipped in timezone "
     load_var timezone
     bin_op +
     init_instance baml.time.AmbiguousTimeError .message
     throw
 
-  L10:
+  L6:
     load_var earlier
-    store_var_load_var _25
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L11
+    jump_if_not_null_or_pop L7
+    jump L8
+
+  L7:
+    store_var _25
+    jump L9
+
+  L8:
     load_const 0n
     store_var _25
 
-  L11:
+  L9:
     load_var _25
     load_const null
     load_var timezone
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
-    jump L15
+    jump L13
+
+  L10:
+    load_var timezone
+    init_instance baml.time.UnknownTimezoneError .timezone
+    throw
+
+  L11:
+    load_var timezone
+    init_instance baml.time.UnknownTimezoneError .timezone
+    throw
 
   L12:
-    load_var timezone
-    init_instance baml.time.UnknownTimezoneError .timezone
-    throw
-
-  L13:
-    load_var timezone
-    init_instance baml.time.UnknownTimezoneError .timezone
-    throw
-
-  L14:
     load_var self
     load_field ._nanoseconds
     load_var timezone
@@ -7847,7 +7094,7 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     load_const null
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
 
-  L15:
+  L13:
     return
 }
 
@@ -7966,24 +7213,25 @@ function baml.time.TimeZoneOffset.from_timezone(timezone: string, at: baml.time.
     load_var _3
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L2
+    pop_jump_if_true L3
+    load_var _3
+    jump_if_not_null_or_pop L0
+    jump L1
 
   L0:
-    load_var _3
-    store_var_load_var _9
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L1
+    store_var _9
+    jump L2
+
+  L1:
     load_const 0
     store_var _9
 
-  L1:
+  L2:
     load_var _9
     init_instance baml.time.TimeZoneOffset ._nanoseconds
     return
 
-  L2:
+  L3:
     load_var timezone
     init_instance baml.time.UnknownTimezoneError .timezone
     throw
@@ -7999,10 +7247,7 @@ function baml.time.TimeZoneOffset.hours(self: baml.time.TimeZoneOffset) -> int {
 
 function baml.time.TimeZoneOffset.local() -> baml.time.TimeZoneOffset {
     sys_op baml.time.system_timezone
-    store_var _1
     sys_op baml.time.Instant.now
-    store_var _2
-    load_var2 1 2
     call baml.time.TimeZoneOffset.from_timezone
     return
 }
@@ -8021,32 +7266,23 @@ function baml.time.TimeZoneOffset.new(hours: int, minutes: int) -> baml.time.Tim
     load_var hours
     load_const 0
     cmp_int_op >
-    jump_if_false L0
-    pop 1
+    pop_jump_if_false L0
     load_var minutes
     load_const 0
     cmp_int_op <
+    pop_jump_if_true L3
 
   L0:
-    jump_if_false L1
-    jump L2
-
-  L1:
-    pop 1
     load_var hours
     load_const 0
     cmp_int_op <
-    jump_if_false L2
-    pop 1
+    pop_jump_if_false L1
     load_var minutes
     load_const 0
     cmp_int_op >
+    pop_jump_if_true L3
 
-  L2:
-    pop_jump_if_false L3
-    jump L8
-
-  L3:
+  L1:
     load_var hours
     load_const 60
     mul_int
@@ -8059,30 +7295,21 @@ function baml.time.TimeZoneOffset.new(hours: int, minutes: int) -> baml.time.Tim
     store_var_load_var nanoseconds
     load_const 86400000000000
     cmp_int_op >
-    jump_if_false L4
-    jump L5
-
-  L4:
-    pop 1
+    pop_jump_if_true L2
     load_var nanoseconds
     load_const -86400000000000
     cmp_int_op <
-
-  L5:
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
+    pop_jump_if_true L2
     load_var nanoseconds
     init_instance baml.time.TimeZoneOffset ._nanoseconds
     return
 
-  L7:
+  L2:
     load_const "TimeZoneOffset out of range: must be within ±24 hours"
     init_instance baml.errors.InvalidArgument .message
     throw
 
-  L8:
+  L3:
     load_const "TimeZoneOffset.new: hours and minutes must carry the same sign"
     init_instance baml.errors.InvalidArgument .message
     throw
@@ -8181,18 +7408,15 @@ function baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOff
 function baml.time.ZonedDateTime.from_instant(instant: baml.time.Instant, timezone: baml.time.TimeZoneOffset | string) -> baml.time.ZonedDateTime {
     load_var timezone
     is_type baml.time.TimeZoneOffset
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var instant
     load_field ._nanoseconds
     load_const null
     load_var timezone
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var instant
     load_field ._nanoseconds
     load_var timezone
@@ -8200,7 +7424,7 @@ function baml.time.ZonedDateTime.from_instant(instant: baml.time.Instant, timezo
     load_const null
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
 
-  L2:
+  L1:
     return
 }
 
@@ -8217,17 +7441,14 @@ function baml.time.ZonedDateTime.max(self: baml.time.ZonedDateTime, other: baml.
     load_var self
     load_field ._nanoseconds
     cmp_bigint_op >
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var self
     jump L1
 
   L0:
-    load_var self
-    jump L2
-
-  L1:
     load_var other
 
-  L2:
+  L1:
     return
 }
 
@@ -8244,17 +7465,14 @@ function baml.time.ZonedDateTime.min(self: baml.time.ZonedDateTime, other: baml.
     load_var self
     load_field ._nanoseconds
     cmp_bigint_op <
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var self
     jump L1
 
   L0:
-    load_var self
-    jump L2
-
-  L1:
     load_var other
 
-  L2:
+  L1:
     return
 }
 
@@ -8274,10 +7492,7 @@ function baml.time.ZonedDateTime.month(self: baml.time.ZonedDateTime) -> int {
 
 function baml.time.ZonedDateTime.now() -> baml.time.ZonedDateTime {
     sys_op baml.time.Instant.now
-    store_var _1
     sys_op baml.time.system_timezone
-    store_var _2
-    load_var2 1 2
     call baml.time.ZonedDateTime.from_instant
     return
 }
@@ -8305,37 +7520,33 @@ function baml.time.ZonedDateTime.timezone(self: baml.time.ZonedDateTime) -> baml
     store_var_load_var _2
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L2
+    pop_jump_if_true L1
+    load_var _2
+    jump_if_not_null_or_pop L0
+    load_const ""
 
   L0:
-    load_var _2
-    store_var_load_var _9
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L1
-    load_const ""
-    store_var _9
+    jump L5
 
   L1:
-    load_var _9
-    jump L4
-
-  L2:
     load_var self
     load_field ._offset_ns
-    store_var_load_var _5
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L3
+    jump_if_not_null_or_pop L2
+    jump L3
+
+  L2:
+    store_var _5
+    jump L4
+
+  L3:
     load_const 0
     store_var _5
 
-  L3:
+  L4:
     load_var _5
     init_instance baml.time.TimeZoneOffset ._nanoseconds
 
-  L4:
+  L5:
     return
 }
 
@@ -8345,73 +7556,75 @@ function baml.time.ZonedDateTime.timezone_offset(self: baml.time.ZonedDateTime) 
     store_var_load_var _2
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L6
-
-  L0:
+    pop_jump_if_true L8
     load_var _2
     store_var_load_var iana
-    store_var_load_var _11
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L1
+    jump_if_not_null_or_pop L0
     load_const ""
-    store_var _11
 
-  L1:
-    load_var2 6 1
+  L0:
+    load_var self
     load_field ._nanoseconds
     sys_op baml.time._tz_offset_at
-    store_var _9
-    load_var _9
+    store_var _8
+    load_var _8
     load_const null
     cmp_op ==
-    pop_jump_if_false L2
-    jump L4
+    pop_jump_if_true L4
+    load_var _8
+    jump_if_not_null_or_pop L1
+    jump L2
+
+  L1:
+    store_var _20
+    jump L3
 
   L2:
-    load_var _9
-    store_var_load_var _23
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L3
     load_const 0
-    store_var _23
+    store_var _20
 
   L3:
-    load_var _23
+    load_var _20
     init_instance baml.time.TimeZoneOffset ._nanoseconds
-    jump L8
+    jump L12
 
   L4:
     load_var iana
-    store_var_load_var _18
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L5
-    load_const ""
-    store_var _18
+    jump_if_not_null_or_pop L5
+    jump L6
 
   L5:
-    load_var _18
+    store_var _16
+    jump L7
+
+  L6:
+    load_const ""
+    store_var _16
+
+  L7:
+    load_var _16
     init_instance baml.time.UnknownTimezoneError .timezone
     throw
 
-  L6:
+  L8:
     load_var self
     load_field ._offset_ns
-    store_var_load_var _5
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L7
+    jump_if_not_null_or_pop L9
+    jump L10
+
+  L9:
+    store_var _5
+    jump L11
+
+  L10:
     load_const 0
     store_var _5
 
-  L7:
+  L11:
     load_var _5
     init_instance baml.time.TimeZoneOffset ._nanoseconds
 
-  L8:
+  L12:
     return
 }
 
@@ -8469,21 +7682,18 @@ function baml.time._wrap_into_day(total_ns: bigint) -> int {
     load_const 86400000000000n
     mod_bigint
     call baml.Bigint.to_int
-    jump L2
+    jump L1
     load_var e
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const "unreachable: nanoseconds wrapped into [0, 24h) exceed int range"
     call baml.sys.panic
 
-  L2:
+  L1:
     return
 }
 
@@ -8609,16 +7819,13 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
 function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     load_var j
     is_type map<_, _>
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "expected map"
     load_const ""
     init_instance baml.json.DecodeError .message, .path
     throw
 
-  L1:
+  L0:
     load_const null /* unknown class: map */
     store_var items
     load_type string
@@ -8630,7 +7837,7 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     virtual_call nargs=1 ntypeargs=0
     store_var _7
 
-  L2:
+  L1:
     load_var _7
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
@@ -8638,10 +7845,7 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     store_var _8
     load_var _8
     is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L5
-
-  L3:
+    pop_jump_if_true L2
     load_var _8
     store_var key
     load_var2 1 5
@@ -8649,19 +7853,16 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     store_var_load_var _13
     load_const null
     cmp_op ==
-    pop_jump_if_false L4
-    jump L2
-
-  L4:
+    pop_jump_if_true L1
     load_var _13
     call baml.toml.item_from_json
     store_var _19
     load_var2 2 5
     load_var _19
     store_map_element
-    jump L2
+    jump L1
 
-  L5:
+  L2:
     load_var items
     init_instance baml.toml.Table .items
     return

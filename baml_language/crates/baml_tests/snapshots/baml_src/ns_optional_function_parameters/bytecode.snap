@@ -60,17 +60,14 @@ function optional_function_parameters.classify(value: int | null) -> int {
     load_var value
     load_const null
     call baml.ops.equals_equals
-    pop_jump_if_false L1
+    pop_jump_if_true L1
+    load_var value
     jump L2
 
   L1:
-    load_var value
-    jump L3
-
-  L2:
     load_const 1
 
-  L3:
+  L2:
     return
 }
 
@@ -227,19 +224,16 @@ function optional_function_parameters.score(query: string, max_results: int, fil
     load_var filter
     load_const null
     call baml.ops.equals_equals
-    pop_jump_if_false L3
+    pop_jump_if_true L3
+    load_const 100
+    store_var filter_bonus
     jump L4
 
   L3:
-    load_const 100
-    store_var filter_bonus
-    jump L5
-
-  L4:
     load_const 0
     store_var filter_bonus
 
-  L5:
+  L4:
     load_var2 2 4
     add_int
     load_var filter_bonus

@@ -6,17 +6,14 @@ function fixtures.generic_match_typevar_arm.unwrap_or(o: fixtures.generic_match_
     store_var _3
     load_var _3
     narrow_bind fixtures.generic_match_typevar_arm.Opt<...>, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var default
     jump L1
 
   L0:
-    load_var default
-    jump L2
-
-  L1:
     load_var _3
     load_field .value
 
-  L2:
+  L1:
     return
 }

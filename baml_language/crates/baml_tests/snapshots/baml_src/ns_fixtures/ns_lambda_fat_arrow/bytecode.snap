@@ -39,11 +39,9 @@ function fixtures.lambda_fat_arrow.test_mixed() -> int {
     load_const 0
     make_closure .<lambda(test_mixed, 0)>, 0
     call_indirect
-    store_var _3
     load_const 0
     make_closure .<lambda(test_mixed, 1)>, 0
     call_indirect
-    load_var _3
     add_int
     return
 }

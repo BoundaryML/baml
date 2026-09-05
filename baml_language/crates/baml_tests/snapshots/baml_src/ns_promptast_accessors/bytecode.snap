@@ -103,10 +103,7 @@ function promptast_accessors.pa_message_metadata_survives_assembly() -> string {
     store_var _19
     load_var _19
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _19
     store_var m
     load_type string
@@ -133,7 +130,7 @@ function promptast_accessors.pa_message_metadata_survives_assembly() -> string {
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_type string
     load_var out
     load_const ";"
@@ -212,126 +209,127 @@ function promptast_accessors.pa_message_parts_preserve_media() -> string {
     store_var _23
     load_var _23
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L14
-
-  L1:
+    pop_jump_if_true L17
     load_var _23
     store_var part
     load_var part
     store_var _28
     load_var _28
     narrow_bind string, slot=11
-    pop_jump_if_false L2
-    jump L13
-
-  L2:
+    pop_jump_if_true L16
     load_var part
     store_var _35
     load_var _35
     narrow_bind baml.media.Image, slot=13
-    pop_jump_if_false L3
-    jump L11
-
-  L3:
+    pop_jump_if_true L12
     load_var part
-    store_var _45
-    load_var _45
+    store_var _44
+    load_var _44
     narrow_bind baml.media.Audio, slot=16
-    pop_jump_if_false L4
-    jump L9
-
-  L4:
+    pop_jump_if_true L8
     load_var part
-    store_var _55
-    load_var _55
+    store_var _53
+    load_var _53
     narrow_bind baml.media.Video, slot=19
-    pop_jump_if_false L5
-    jump L7
-
-  L5:
+    pop_jump_if_true L4
     load_var part
     call baml.media.Pdf.url
-    store_var_load_var _69
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L6
-    load_const ""
-    store_var _69
+    jump_if_not_null_or_pop L1
+    jump L2
 
-  L6:
+  L1:
+    store_var _66
+    jump L3
+
+  L2:
+    load_const ""
+    store_var _66
+
+  L3:
     load_type string
-    load_var _69
+    load_var _66
     call baml.String.from
-    store_var _67
+    store_var _64
     load_type string
     load_var kinds
     load_const "pdf="
-    load_var _67
+    load_var _64
     bin_op +
     call baml.Array.push
     pop 1
     jump L0
 
-  L7:
-    load_var _55
+  L4:
+    load_var _53
     call baml.media.Video.url
-    store_var_load_var _60
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L8
-    load_const ""
-    store_var _60
+    jump_if_not_null_or_pop L5
+    jump L6
 
-  L8:
-    load_type string
-    load_var _60
-    call baml.String.from
+  L5:
     store_var _58
+    jump L7
+
+  L6:
+    load_const ""
+    store_var _58
+
+  L7:
+    load_type string
+    load_var _58
+    call baml.String.from
+    store_var _56
     load_type string
     load_var kinds
     load_const "video="
-    load_var _58
+    load_var _56
     bin_op +
     call baml.Array.push
     pop 1
     jump L0
 
-  L9:
-    load_var _45
+  L8:
+    load_var _44
     call baml.media.Audio.url
-    store_var_load_var _50
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L10
-    load_const ""
-    store_var _50
+    jump_if_not_null_or_pop L9
+    jump L10
+
+  L9:
+    store_var _49
+    jump L11
 
   L10:
+    load_const ""
+    store_var _49
+
+  L11:
     load_type string
-    load_var _50
+    load_var _49
     call baml.String.from
-    store_var _48
+    store_var _47
     load_type string
     load_var kinds
     load_const "audio="
-    load_var _48
+    load_var _47
     bin_op +
     call baml.Array.push
     pop 1
     jump L0
 
-  L11:
+  L12:
     load_var _35
     call baml.media.Image.url
-    store_var_load_var _40
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L12
+    jump_if_not_null_or_pop L13
+    jump L14
+
+  L13:
+    store_var _40
+    jump L15
+
+  L14:
     load_const ""
     store_var _40
 
-  L12:
+  L15:
     load_type string
     load_var _40
     call baml.String.from
@@ -345,7 +343,7 @@ function promptast_accessors.pa_message_parts_preserve_media() -> string {
     pop 1
     jump L0
 
-  L13:
+  L16:
     load_type string
     load_var _28
     call baml.String.from
@@ -359,7 +357,7 @@ function promptast_accessors.pa_message_parts_preserve_media() -> string {
     pop 1
     jump L0
 
-  L14:
+  L17:
     load_type string
     load_var kinds
     load_const "|"
@@ -385,10 +383,7 @@ function promptast_accessors.paa_fold_messages_fn() -> string {
     store_var _5
     load_var _5
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _5
     store_var m
     load_var2 1 4
@@ -404,7 +399,7 @@ function promptast_accessors.paa_fold_messages_fn() -> string {
     store_var out
     jump L0
 
-  L2:
+  L1:
     load_var out
     return
 }

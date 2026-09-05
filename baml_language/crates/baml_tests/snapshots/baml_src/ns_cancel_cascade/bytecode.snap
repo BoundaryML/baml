@@ -53,10 +53,7 @@ function cancel_cascade.cancel_after_gc_relocation_still_settles() -> int {
     load_var i
     load_const 20000
     cmp_int_op <
-    pop_jump_if_false L1
-    jump L5
-
-  L1:
+    pop_jump_if_true L3
     load_const 1n
     call baml.time.Duration.from_milliseconds
     sys_op baml.sys.sleep
@@ -66,23 +63,20 @@ function cancel_cascade.cancel_after_gc_relocation_still_settles() -> int {
     pop 1
     load_var f
     await
-    jump L4
+    jump L2
     load_var e
     is_type baml.panics.Cancelled
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var e
     rethrow
 
-  L3:
+  L1:
     load_const 0
 
-  L4:
+  L2:
     return
 
-  L5:
+  L3:
     load_var2 3 4
     load_var i
     load_const 1
@@ -118,20 +112,17 @@ function cancel_cascade.cancel_from_handle_then_await_catches_cancelled() -> int
     pop 1
     load_var f
     await
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.Cancelled
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const 0
 
-  L2:
+  L1:
     return
 }
 
@@ -166,21 +157,18 @@ function cancel_cascade.cancel_unblocks_await_on_non_descendant_fn() -> bool {
     load_var waiter
     await
     store_var got
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.Cancelled
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const 0
     store_var got
 
-  L2:
+  L1:
     load_var started
     call baml.time.Instant.elapsed
     store_var elapsed
@@ -190,14 +178,13 @@ function cancel_cascade.cancel_unblocks_await_on_non_descendant_fn() -> bool {
     load_var got
     load_const 0
     cmp_int_op ==
-    jump_if_false L3
-    pop 1
+    jump_if_false_or_pop L2
     load_var elapsed
     call baml.time.Duration.to_milliseconds
     load_const 5000n
     cmp_bigint_op <
 
-  L3:
+  L2:
     return
 }
 

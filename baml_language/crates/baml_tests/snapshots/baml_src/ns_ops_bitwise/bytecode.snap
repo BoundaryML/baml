@@ -39,33 +39,11 @@ function ops_bitwise.band(x: #0, y: int) -> (#0 as baml.ops.BitAnd<int>).Output 
     load_type baml.ops.BitAnd<int>
     load_const "bit_and"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
 function ops_bitwise.bigint_ops() -> bool {
     load_const true
-    jump_if_false L0
-    pop 1
-    load_const true
-
-  L0:
-    jump_if_false L1
-    pop 1
-    load_const true
-
-  L1:
-    jump_if_false L2
-    pop 1
-    load_const true
-
-  L2:
-    jump_if_false L3
-    pop 1
-    load_const true
-
-  L3:
     return
 }
 
@@ -74,33 +52,11 @@ function ops_bitwise.bshl(x: #0, y: int) -> (#0 as baml.ops.ShiftLeft<int>).Outp
     load_type baml.ops.ShiftLeft<int>
     load_const "shl"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
 function ops_bitwise.int_ops() -> bool {
     load_const true
-    jump_if_false L0
-    pop 1
-    load_const true
-
-  L0:
-    jump_if_false L1
-    pop 1
-    load_const true
-
-  L1:
-    jump_if_false L2
-    pop 1
-    load_const true
-
-  L2:
-    jump_if_false L3
-    pop 1
-    load_const true
-
-  L3:
     return
 }
 
@@ -110,8 +66,7 @@ function ops_bitwise.mixed_widens() -> bool {
     bit_and_bigint
     load_const 2n
     cmp_bigint_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_const 6n
     load_const 3
     bit_and_bigint

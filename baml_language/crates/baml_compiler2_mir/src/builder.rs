@@ -298,14 +298,14 @@ impl<'db> MirBuilder<'db> {
     pub(crate) fn short_circuit(
         &mut self,
         operand: Operand<'db>,
-        is_and: bool,
+        kind: crate::ShortCircuitKind,
         destination: Place,
         eval_rhs: BlockId,
         join: BlockId,
     ) {
         self.set_terminator(Terminator::ShortCircuit {
             operand,
-            is_and,
+            kind,
             destination,
             eval_rhs,
             join,

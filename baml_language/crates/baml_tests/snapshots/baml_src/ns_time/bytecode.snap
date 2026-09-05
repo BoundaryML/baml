@@ -525,16 +525,13 @@ function time.$init_test_ns_time_time(registry: testing.TestCollector) -> null {
 function time.plain_date_to_plain_datetime_with_time() -> string {
     load_const "1979-05-27"
     call baml.time.PlainDate.parse
-    store_var d
     load_const "07:32:00"
     call baml.time.PlainTime.parse
     store_var t
-    load_var2 2 3
+    load_var t
     call baml.time.PlainDate.to_plain_datetime
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }

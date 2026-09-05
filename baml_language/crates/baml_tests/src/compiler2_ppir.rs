@@ -105,7 +105,7 @@ mod tests {
             baml_artifact::decode::<PackageInterface>(ArtifactKind::PackageInterface, &legacy),
             Err(baml_artifact::Error::Incompatible {
                 artifact_format: 1,
-                runtime_format: 2,
+                runtime_format: baml_artifact::FORMAT_VERSION,
                 ..
             })
         ));

@@ -17,10 +17,7 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.ArrayI
     load_var _2
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var self
     copy 0
     load_field .idx
@@ -28,12 +25,12 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.ArrayI
     bin_op +
     store_field .idx
     load_var _2
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     alloc_instance user.iter_impl_generics_only.core.Done
 
-  L2:
+  L1:
     return
 }
 
@@ -45,36 +42,32 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Chain<
 function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Chain<#0, #1> as user.iter_impl_generics_only.core.Iterator<#0, #1>)>.next(self: iter_impl_generics_only.core.Chain<#0, #1>) -> #0 | iter_impl_generics_only.core.Done {
     load_var self
     load_field .first_done
-    unary_op !
-    pop_jump_if_false L2
+    pop_jump_if_true L1
     load_var self
     load_field .iter
     load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _3
+    load_var _3
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L0
+    load_var _3
+    jump L2
 
   L0:
-    load_var _4
-    jump L3
-
-  L1:
     load_var self
     load_const true
     store_field .first_done
 
-  L2:
+  L1:
     load_var self
     load_field .other
     load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
 
-  L3:
+  L2:
     return
 }
 
@@ -85,15 +78,6 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Filter
 
 function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Filter<#0, #1, #2> as user.iter_impl_generics_only.core.Iterator<#0, #1 | #2>)>.next(self: iter_impl_generics_only.core.Filter<#0, #1, #2>) -> #0 | iter_impl_generics_only.core.Done {
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    alloc_instance user.iter_impl_generics_only.core.Done
-    jump L5
-
-  L2:
     load_var self
     load_field .iter
     load_type iter_impl_generics_only.core.Iterator<#0, #1>
@@ -102,10 +86,7 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Filter
     store_var _2
     load_var _2
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L1
     load_var _2
     store_var_load_var x
     load_var self
@@ -113,12 +94,12 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Filter
     call_indirect
     pop_jump_if_false L0
     load_var x
-    jump L5
+    jump L2
 
-  L4:
+  L1:
     alloc_instance user.iter_impl_generics_only.core.Done
 
-  L5:
+  L2:
     return
 }
 
@@ -129,15 +110,6 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Filter
 
 function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.FilterMap<#0, #1, #2, #3> as user.iter_impl_generics_only.core.Iterator<#1, #2 | #3>)>.next(self: iter_impl_generics_only.core.FilterMap<#0, #1, #2, #3>) -> #1 | iter_impl_generics_only.core.Done {
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    alloc_instance user.iter_impl_generics_only.core.Done
-    jump L6
-
-  L2:
     load_var self
     load_field .iter
     load_type iter_impl_generics_only.core.Iterator<#0, #2>
@@ -146,10 +118,7 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Filter
     store_var _2
     load_var _2
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L3
-    jump L5
-
-  L3:
+    pop_jump_if_true L1
     load_var2 2 1
     load_field .func
     call_indirect
@@ -157,17 +126,14 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Filter
     load_var _6
     load_const null
     cmp_op ==
-    pop_jump_if_false L4
-    jump L0
-
-  L4:
+    pop_jump_if_true L0
     load_var _6
-    jump L6
+    jump L2
 
-  L5:
+  L1:
     alloc_instance user.iter_impl_generics_only.core.Done
 
-  L6:
+  L2:
     return
 }
 
@@ -178,15 +144,6 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.FlatMa
 
 function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.FlatMap<#0, #1, #2, #3, #4> as user.iter_impl_generics_only.core.Iterator<#1, #2 | #3 | #4>)>.next(self: iter_impl_generics_only.core.FlatMap<#0, #1, #2, #3, #4>) -> #1 | iter_impl_generics_only.core.Done {
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    alloc_instance user.iter_impl_generics_only.core.Done
-    jump L8
-
-  L2:
     load_var self
     load_field .inner
     store_var _2
@@ -194,13 +151,10 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.FlatMa
     store_var _3
     load_var _3
     narrow_bind iter_impl_generics_only.core.Iterator<#1, #4>, slot=3
-    pop_jump_if_false L3
-    jump L6
-
-  L3:
+    pop_jump_if_true L2
     load_var _2
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L10
+    pop_jump_if_false L5
     load_var self
     load_field .iter
     load_type iter_impl_generics_only.core.Iterator<#0, #2>
@@ -209,10 +163,7 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.FlatMa
     store_var _9
     load_var _9
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L1
     load_var2 5 1
     load_field .func
     call_indirect
@@ -224,11 +175,11 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.FlatMa
     store_field .inner
     jump L0
 
-  L5:
+  L1:
     alloc_instance user.iter_impl_generics_only.core.Done
-    jump L8
+    jump L3
 
-  L6:
+  L2:
     load_var _3
     load_type iter_impl_generics_only.core.Iterator<#1, #4>
     load_const "next"
@@ -236,22 +187,19 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.FlatMa
     store_var _5
     load_var _5
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L7
-    jump L9
-
-  L7:
+    pop_jump_if_true L4
     load_var _5
 
-  L8:
+  L3:
     return
 
-  L9:
+  L4:
     load_var self
     alloc_instance user.iter_impl_generics_only.core.Done
     store_field .inner
     jump L0
 
-  L10:
+  L5:
     unreachable
 }
 
@@ -262,15 +210,6 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Flatte
 
 function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Flatten<#0, #1, #2> as user.iter_impl_generics_only.core.Iterator<#0, #1 | #2>)>.next(self: iter_impl_generics_only.core.Flatten<#0, #1, #2>) -> #0 | iter_impl_generics_only.core.Done {
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    alloc_instance user.iter_impl_generics_only.core.Done
-    jump L8
-
-  L2:
     load_var self
     load_field .inner
     store_var _2
@@ -278,13 +217,10 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Flatte
     store_var _3
     load_var _3
     narrow_bind iter_impl_generics_only.core.Iterator<#0, #2>, slot=3
-    pop_jump_if_false L3
-    jump L6
-
-  L3:
+    pop_jump_if_true L2
     load_var _2
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L10
+    pop_jump_if_false L5
     load_var self
     load_field .iter
     load_type iter_impl_generics_only.core.Iterator<iter_impl_generics_only.core.Iterable<#0, #2>, #1>
@@ -293,10 +229,7 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Flatte
     store_var _9
     load_var _9
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L1
     load_var _9
     load_type iter_impl_generics_only.core.Iterable<#0, #2>
     load_const "iter"
@@ -306,11 +239,11 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Flatte
     store_field .inner
     jump L0
 
-  L5:
+  L1:
     alloc_instance user.iter_impl_generics_only.core.Done
-    jump L8
+    jump L3
 
-  L6:
+  L2:
     load_var _3
     load_type iter_impl_generics_only.core.Iterator<#0, #2>
     load_const "next"
@@ -318,22 +251,19 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Flatte
     store_var _5
     load_var _5
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L7
-    jump L9
-
-  L7:
+    pop_jump_if_true L4
     load_var _5
 
-  L8:
+  L3:
     return
 
-  L9:
+  L4:
     load_var self
     alloc_instance user.iter_impl_generics_only.core.Done
     store_field .inner
     jump L0
 
-  L10:
+  L5:
     unreachable
 }
 
@@ -351,19 +281,16 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Map<#0
     store_var _2
     load_var _2
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var2 2 1
     load_field .func
     call_indirect
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     alloc_instance user.iter_impl_generics_only.core.Done
 
-  L2:
+  L1:
     return
 }
 
@@ -381,18 +308,15 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Peekab
 function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Peekable<#0, #1> as user.iter_impl_generics_only.core.Iterator<#0, #1>)>.next(self: iter_impl_generics_only.core.Peekable<#0, #1>) -> #0 | iter_impl_generics_only.core.Done {
     load_var self
     load_field .has_buffer
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var self
     load_field .iter
     load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var self
     load_field .buffer
     store_var v
@@ -404,7 +328,7 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Peekab
     store_field .has_buffer
     load_var v
 
-  L2:
+  L1:
     return
 }
 
@@ -419,14 +343,11 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Range 
     load_var self
     load_field .max
     cmp_int_op <
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    alloc_instance user.iter_impl_generics_only.core.Done
     jump L1
 
   L0:
-    alloc_instance user.iter_impl_generics_only.core.Done
-    jump L2
-
-  L1:
     load_var self
     load_field .i
     store_var cur
@@ -439,7 +360,7 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Range 
     store_field .i
     load_var cur
 
-  L2:
+  L1:
     return
 }
 
@@ -453,22 +374,16 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Repeat
     load_field .count
     load_const 0
     cmp_int_op <
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var self
     load_field .count
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    alloc_instance user.iter_impl_generics_only.core.Done
     jump L2
 
-  L1:
-    alloc_instance user.iter_impl_generics_only.core.Done
-    jump L4
-
-  L2:
+  L0:
     load_var self
     copy 0
     load_field .count
@@ -477,13 +392,13 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.Repeat
     store_field .count
     load_var self
     load_field .value
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_var self
     load_field .value
 
-  L4:
+  L2:
     return
 }
 
@@ -495,54 +410,43 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.StepBy
 function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.StepBy<#0, #1> as user.iter_impl_generics_only.core.Iterator<#0, #1>)>.next(self: iter_impl_generics_only.core.StepBy<#0, #1>) -> #0 | iter_impl_generics_only.core.Done {
     load_var self
     load_field .first
-    pop_jump_if_false L0
-    jump L6
-
-  L0:
+    pop_jump_if_true L3
     load_const 0
     store_var i
 
-  L1:
+  L0:
     load_var2 2 1
     load_field .n
     load_const 1
     sub_int
     cmp_int_op <
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var self
     load_field .iter
     load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    jump L7
+    jump L4
 
-  L3:
+  L1:
     load_var self
     load_field .iter
     load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _9
-    load_var _9
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L2
     load_var i
     load_const 1
     add_int
     store_var i
-    jump L1
+    jump L0
 
-  L5:
+  L2:
     alloc_instance user.iter_impl_generics_only.core.Done
-    jump L7
+    jump L4
 
-  L6:
+  L3:
     load_var self
     load_const false
     store_field .first
@@ -552,7 +456,7 @@ function iter_impl_generics_only.core.<(user.iter_impl_generics_only.core.StepBy
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
 
-  L7:
+  L4:
     return
 }
 
@@ -586,8 +490,6 @@ function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_
     store_var r
 
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var self
     load_type iter_impl_generics_only.core.Iterator<#1, #2>
     load_const "next"
@@ -595,17 +497,14 @@ function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_
     store_var _4
     load_var _4
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_type #1
     load_var2 2 3
     call baml.Array.push
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_var r
     return
 }
@@ -615,34 +514,25 @@ function iter_impl_generics_only.core.Iterator.count(self: iter_impl_generics_on
     store_var n
 
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var self
     load_type iter_impl_generics_only.core.Iterator<#1, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _3
-    load_var _3
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var n
     load_const 1
     add_int
     store_var n
     jump L0
 
-  L2:
+  L1:
     load_var n
     return
 }
 
 function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_only.core.Iterator<#1, #2>, predicate: (#1) -> bool throws #3) -> bool {
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var self
     load_type iter_impl_generics_only.core.Iterator<#1, #2>
     load_const "next"
@@ -650,21 +540,17 @@ function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_on
     store_var _3
     load_var _3
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L1
+    pop_jump_if_true L1
+    load_var2 3 2
+    call_indirect
+    pop_jump_if_true L0
+    load_const false
     jump L2
 
   L1:
-    load_var2 3 2
-    call_indirect
-    unary_op !
-    pop_jump_if_false L0
-    load_const false
-    jump L3
-
-  L2:
     load_const true
 
-  L3:
+  L2:
     return
 }
 
@@ -689,8 +575,6 @@ function iter_impl_generics_only.core.Iterator.filter_map(self: iter_impl_generi
 
 function iter_impl_generics_only.core.Iterator.find(self: iter_impl_generics_only.core.Iterator<#1, #2>, predicate: (#1) -> bool throws #3) -> #1 | null {
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var self
     load_type iter_impl_generics_only.core.Iterator<#1, #2>
     load_const "next"
@@ -698,22 +582,19 @@ function iter_impl_generics_only.core.Iterator.find(self: iter_impl_generics_onl
     store_var _3
     load_var _3
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _3
     store_var_load_var x
     load_var predicate
     call_indirect
     pop_jump_if_false L0
     load_var x
-    jump L3
+    jump L2
 
-  L2:
+  L1:
     load_const null
 
-  L3:
+  L2:
     return
 }
 
@@ -754,8 +635,6 @@ function iter_impl_generics_only.core.Iterator.reduce(self: iter_impl_generics_o
     store_var acc
 
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var self
     load_type iter_impl_generics_only.core.Iterator<#1, #2>
     load_const "next"
@@ -763,25 +642,20 @@ function iter_impl_generics_only.core.Iterator.reduce(self: iter_impl_generics_o
     store_var _5
     load_var _5
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 4 5
     load_var fn
     call_indirect
     store_var acc
     jump L0
 
-  L2:
+  L1:
     load_var acc
     return
 }
 
 function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_only.core.Iterator<#1, #2>, predicate: (#1) -> bool throws #3) -> bool {
   L0:
-    load_const true
-    pop_jump_if_false L2
     load_var self
     load_type iter_impl_generics_only.core.Iterator<#1, #2>
     load_const "next"
@@ -789,20 +663,17 @@ function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_onl
     store_var _3
     load_var _3
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 3 2
     call_indirect
     pop_jump_if_false L0
     load_const true
-    jump L3
+    jump L2
 
-  L2:
+  L1:
     load_const false
 
-  L3:
+  L2:
     return
 }
 
@@ -825,10 +696,7 @@ function iter_impl_generics_only.core.OutOfBodyBox.new(value: #0) -> iter_impl_g
 function iter_impl_generics_only.core.Peekable.peek(self: iter_impl_generics_only.core.Peekable<#0, #1>) -> #0 | iter_impl_generics_only.core.Done {
     load_var self
     load_field .has_buffer
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var self
     load_field .iter
     load_type iter_impl_generics_only.core.Iterator<#0, #1>
@@ -841,13 +709,13 @@ function iter_impl_generics_only.core.Peekable.peek(self: iter_impl_generics_onl
     load_const true
     store_field .has_buffer
     load_var v
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var self
     load_field .buffer
 
-  L2:
+  L1:
     return
 }
 

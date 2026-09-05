@@ -30,12 +30,10 @@ function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Cli
     call user.fixtures.llm_image_outputs.GenerateImage@spec
     store_var _9
     load_type image
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -82,7 +80,7 @@ function fixtures.llm_image_outputs.GenerateImage@spec(prompt: string) -> ai.Fun
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_const "gpt-image-1"
     load_const <omitted>
     load_const <omitted>
@@ -101,7 +99,7 @@ function fixtures.llm_image_outputs.GenerateImage@spec(prompt: string) -> ai.Fun
     load_const <omitted>
     load_const <omitted>
     call openai.ImageClient.new
-    store_var _6
+    store_var _7
     load_const "GenerateImage"
     load_deref ?1
     load_const "prompt"
@@ -173,12 +171,10 @@ function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.
     call user.fixtures.llm_image_outputs.GenerateImageSet@spec
     store_var _9
     load_type image[]
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -225,7 +221,7 @@ function fixtures.llm_image_outputs.GenerateImageSet@spec(prompt: string) -> ai.
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_const "gpt-image-1"
     load_const <omitted>
     load_const <omitted>
@@ -244,7 +240,7 @@ function fixtures.llm_image_outputs.GenerateImageSet@spec(prompt: string) -> ai.
     load_const <omitted>
     load_const <omitted>
     call openai.ImageClient.new
-    store_var _6
+    store_var _7
     load_const "GenerateImageSet"
     load_deref ?1
     load_const "prompt"
@@ -316,12 +312,10 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, 
     call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec
     store_var _9
     load_type (string | image)[]
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -368,7 +362,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(prompt: str
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_const "gpt-4.1"
     load_const <omitted>
     load_const <omitted>
@@ -387,7 +381,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative@spec(prompt: str
     load_const <omitted>
     load_const <omitted>
     call openai.ResponsesClient.new
-    store_var _6
+    store_var _7
     load_const "GenerateMixedImageNarrative"
     load_deref ?1
     load_const "prompt"

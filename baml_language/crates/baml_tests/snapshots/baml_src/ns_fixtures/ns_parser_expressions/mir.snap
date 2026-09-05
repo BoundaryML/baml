@@ -5,31 +5,9 @@ source: crates/baml_tests/src/corpus.rs
 fn user.fixtures.parser_expressions.Calculate() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // a
-    let _2: int // b
-    let _3: int
-    let _4: int // c
-    let _5: int
-    let _6: int
-    let _7: int // d
-    let _8: int
-    let _9: int
-    let _10: int
-    let _11: int
 
     bb0: {
-        _1 = const 3_i64;
-        _3 = copy _1;
-        _2 = copy _3 * const 3_i64;
-        _6 = copy _2;
-        _5 = copy _6 / const 2_i64;
-        _4 = copy _5 - const 1_i64;
-        _9 = copy _1;
-        _10 = copy _2;
-        _8 = copy _9 + copy _10;
-        _11 = copy _4;
-        _7 = copy _8 * copy _11;
-        _0 = copy _7;
+        _0 = const 36_i64;
         goto -> bb1;
     }
 
@@ -42,24 +20,18 @@ fn user.fixtures.parser_expressions.FieldAccess(user: fixtures.parser_expression
     // Locals:
     let _0: string // _0 // return
     let _1: fixtures.parser_expressions.User // user // param
-    let _2: string // name
-    let _3: string // bio
-    let _4: string // theme
-    let _5: string // firstTag
-    let _6: string[]
-    let _7: 0
+    let _2: string // theme
+    let _3: string // firstTag
+    let _4: string[]
+    let _5: 0
 
     bb0: {
-        _2 = copy _1.0;
-        drop(_2);
-        _3 = copy _1.1.0;
+        _2 = copy _1.1.1.0;
+        _4 = copy _1.2;
+        _5 = const 0_i64;
+        _3 = copy _4[_5];
         drop(_3);
-        _4 = copy _1.1.1.0;
-        _6 = copy _1.2;
-        _7 = const 0_i64;
-        _5 = copy _6[_7];
-        drop(_5);
-        _0 = copy _4;
+        _0 = copy _2;
         goto -> bb1;
     }
 
@@ -75,43 +47,41 @@ fn user.fixtures.parser_expressions.IndexAccess(users: fixtures.parser_expressio
     let _2: fixtures.parser_expressions.IndexUser // first
     let _3: fixtures.parser_expressions.IndexUser[]
     let _4: 0
-    let _5: int // idx
-    let _6: fixtures.parser_expressions.IndexUser // second
-    let _7: fixtures.parser_expressions.IndexUser[]
-    let _8: int
-    let _9: string // firstName
-    let _10: fixtures.parser_expressions.IndexUser
-    let _11: fixtures.parser_expressions.IndexUser[]
-    let _12: 0
-    let _13: string // tag
-    let _14: string[]
-    let _15: fixtures.parser_expressions.IndexUser
-    let _16: fixtures.parser_expressions.IndexUser[]
+    let _5: fixtures.parser_expressions.IndexUser // second
+    let _6: fixtures.parser_expressions.IndexUser[]
+    let _7: int
+    let _8: string // firstName
+    let _9: fixtures.parser_expressions.IndexUser
+    let _10: fixtures.parser_expressions.IndexUser[]
+    let _11: 0
+    let _12: string // tag
+    let _13: string[]
+    let _14: fixtures.parser_expressions.IndexUser
+    let _15: fixtures.parser_expressions.IndexUser[]
+    let _16: 0
     let _17: 0
-    let _18: 0
 
     bb0: {
         _3 = copy _1;
         _4 = const 0_i64;
         _2 = copy _3[_4];
         drop(_2);
-        _5 = const 1_i64;
-        _7 = copy _1;
-        _8 = copy _5;
-        _6 = copy _7[_8];
-        drop(_6);
-        _11 = copy _1;
-        _12 = const 0_i64;
-        _10 = copy _11[_12];
-        _9 = copy _10.0;
-        _16 = copy _1;
+        _6 = copy _1;
+        _7 = const 1_i64;
+        _5 = copy _6[_7];
+        drop(_5);
+        _10 = copy _1;
+        _11 = const 0_i64;
+        _9 = copy _10[_11];
+        _8 = copy _9.0;
+        _15 = copy _1;
+        _16 = const 0_i64;
+        _14 = copy _15[_16];
+        _13 = copy _14.2;
         _17 = const 0_i64;
-        _15 = copy _16[_17];
-        _14 = copy _15.2;
-        _18 = const 0_i64;
-        _13 = copy _14[_18];
-        drop(_13);
-        _0 = copy _9;
+        _12 = copy _13[_17];
+        drop(_12);
+        _0 = copy _8;
         goto -> bb1;
     }
 
@@ -123,31 +93,17 @@ fn user.fixtures.parser_expressions.IndexAccess(users: fixtures.parser_expressio
 fn user.fixtures.parser_expressions.TestPrecedence() -> bool {
     // Locals:
     let _0: bool // _0 // return
-    let _1: int // a
-    let _2: int
-    let _3: bool // d
 
     bb0: {
-        _1 = const 14_i64;
-        _2 = copy _1;
-        _3 = short_circuit(||) const true -> [eval: bb1, join: bb3];
+        goto -> bb1;
     }
 
     bb1: {
-        _3 = short_circuit(&&) const false -> [eval: bb2, join: bb3];
+        _0 = const true;
+        goto -> bb2;
     }
 
     bb2: {
-        _3 = const false;
-        goto -> bb3;
-    }
-
-    bb3: {
-        _0 = copy _3;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }

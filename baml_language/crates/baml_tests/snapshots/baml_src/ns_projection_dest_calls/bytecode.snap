@@ -76,8 +76,7 @@ function projection_dest_calls.pdc_call_base_nested_assignment() -> bool {
     load_field .title
     load_const "triage"
     call baml.ops.equals_equals
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var store
     load_field .calls
     load_const 1
@@ -93,14 +92,11 @@ function projection_dest_calls.pdc_eq_into_field_false() -> bool {
     store_var b
     load_const 1
     call user.projection_dest_calls.pdc_tag
-    store_var _2
     load_const 2
     call user.projection_dest_calls.pdc_tag
-    store_var _3
-    load_var2 2 3
     call baml.ops.equals_equals
     store_var _4
-    load_var2 1 4
+    load_var2 1 2
     store_field .flag
     load_var b
     load_field .flag
@@ -113,14 +109,11 @@ function projection_dest_calls.pdc_eq_into_field_true() -> bool {
     store_var b
     load_const 1
     call user.projection_dest_calls.pdc_tag
-    store_var _2
     load_const 1
     call user.projection_dest_calls.pdc_tag
-    store_var _3
-    load_var2 2 3
     call baml.ops.equals_equals
     store_var _4
-    load_var2 1 4
+    load_var2 1 2
     store_field .flag
     load_var b
     load_field .flag
@@ -165,14 +158,11 @@ function projection_dest_calls.pdc_ne_into_field_true() -> bool {
     store_var b
     load_const 1
     call user.projection_dest_calls.pdc_tag
-    store_var _2
     load_const 2
     call user.projection_dest_calls.pdc_tag
-    store_var _3
-    load_var2 2 3
     call baml.ops.equals_equals
     store_var _4
-    load_var2 1 4
+    load_var2 1 2
     unary_op !
     store_field .flag
     load_var b

@@ -191,12 +191,12 @@ function item_projections.<(user.item_projections.Gadget as user.item_projection
 }
 
 function item_projections.<(user.item_projections.Gadget as user.item_projections.Buildable)>.describe(self: item_projections.Gadget) -> string {
+    load_const "gadget "
     load_type int
     load_var self
     load_field .g
     call baml.String.from
     store_var _2
-    load_const "gadget "
     load_var _2
     bin_op +
     return
@@ -218,12 +218,12 @@ function item_projections.<(user.item_projections.Loud as user.item_projections.
 }
 
 function item_projections.<(user.item_projections.Plate<#0> as user.item_projections.Embosser)>.emboss(u: #1) -> string {
+    load_const "emboss "
     load_type #1
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
-    load_const "emboss "
     load_var _2
     bin_op +
     return
@@ -261,24 +261,24 @@ function item_projections.<(user.item_projections.Poly as user.item_projections.
 }
 
 function item_projections.<(user.item_projections.Press as user.item_projections.Stamper)>.emboss(u: #0) -> string {
+    load_const "emboss "
     load_type #0
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
-    load_const "emboss "
     load_var _2
     bin_op +
     return
 }
 
 function item_projections.<(user.item_projections.Press as user.item_projections.Stamper)>.stamp(self: item_projections.Press, u: #0) -> string {
+    load_const "stamp "
     load_type #0
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
-    load_const "stamp "
     load_var _3
     bin_op +
     return
@@ -296,17 +296,14 @@ function item_projections.<(user.item_projections.Sized as user.item_projections
     load_var other
     load_field .s
     cmp_int_op >
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var other
     jump L1
 
   L0:
-    load_var other
-    jump L2
-
-  L1:
     load_var self
 
-  L2:
+  L1:
     return
 }
 
@@ -329,12 +326,12 @@ function item_projections.<(user.item_projections.Widget as user.item_projection
 }
 
 function item_projections.<(user.item_projections.Widget as user.item_projections.Buildable)>.describe(self: item_projections.Widget) -> string {
+    load_const "widget "
     load_type int
     load_var self
     load_field .w
     call baml.String.from
     store_var _2
-    load_const "widget "
     load_var _2
     bin_op +
     return
@@ -355,8 +352,6 @@ function item_projections.Sizer.grow(self: item_projections.Sizer) -> #0 {
     load_type item_projections.Sizer
     load_const "pick"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -375,7 +370,5 @@ function item_projections.marked_via(t: #1) -> #0 {
     load_type item_projections.Marked<#0>
     load_const "mark"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }

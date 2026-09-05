@@ -58,20 +58,17 @@ function spawn_throws.await_rethrows_caught_by_user_catch_fn() -> int {
     store_var _3
     load_var _3
     await
-    jump L2
+    jump L1
     load_var e
     is_type baml.errors.Io
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const 99
 
-  L2:
+  L1:
     return
 }
 
@@ -114,20 +111,17 @@ function spawn_throws.caught_after_sleep_not_double_surfaced_fn() -> int {
     pop 1
     load_var _3
     await
-    jump L2
+    jump L1
     load_var e
     is_type baml.errors.Io
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const 99
 
-  L2:
+  L1:
     return
 }
 
@@ -151,20 +145,17 @@ function spawn_throws.caught_not_preempted_by_unrelated_await_fn() -> int {
     pop 1
     load_var _3
     await
-    jump L2
+    jump L1
     load_var e
     is_type baml.errors.Io
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const 99
 
-  L2:
+  L1:
     return
 }
 
@@ -178,20 +169,17 @@ function spawn_throws.racing_caught_not_double_surfaced_fn() -> int {
     store_var _3
     load_var _3
     await
-    jump L2
+    jump L1
     load_var e
     is_type baml.errors.Io
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const 99
 
-  L2:
+  L1:
     return
 }
 

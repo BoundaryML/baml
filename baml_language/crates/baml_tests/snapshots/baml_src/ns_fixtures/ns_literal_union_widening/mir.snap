@@ -57,11 +57,9 @@ fn user.fixtures.literal_union_widening.nestedArray() -> int[][] {
 fn user.fixtures.literal_union_widening.annotatedLiteralUnion() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: 1 | 2 // x
 
     bb0: {
-        _1 = const 1_i64;
-        _0 = copy _1;
+        _0 = const 1_i64;
         goto -> bb1;
     }
 

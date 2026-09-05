@@ -1260,9 +1260,7 @@ function strings.$init_test_ns_strings_strings(registry: testing.TestCollector) 
 }
 
 function strings.strings_concat() -> string {
-    load_const "Hello"
-    load_const " World"
-    bin_op +
+    load_const "Hello World"
     return
 }
 

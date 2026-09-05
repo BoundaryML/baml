@@ -200,17 +200,11 @@ function assignments.cross_block_param_mutation(c: bool, p: int) -> int {
 }
 
 function assignments.cross_block_soundness(c: bool) -> int {
-    load_const 1
-    store_var a
-    load_var a
-    store_var b
     load_var c
-    pop_jump_if_false L0
-    load_const 2
-    store_var a
+    pop_jump_if_true L0
 
   L0:
-    load_var b
+    load_const 1
     return
 }
 

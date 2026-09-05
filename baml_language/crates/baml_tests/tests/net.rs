@@ -46,8 +46,6 @@ async fn net_connect_and_read() {
         load_type baml.io.Read
         load_const "read"
         virtual_call nargs=2 ntypeargs=0
-        store_var _0
-        load_var _0
         return
     }
     "#);
@@ -77,8 +75,6 @@ async fn net_connect_failure() {
         load_type baml.io.Read
         load_const "read"
         virtual_call nargs=2 ntypeargs=0
-        store_var _0
-        load_var _0
         return
     }
     "#);

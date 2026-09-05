@@ -100,11 +100,9 @@ function functions.call_twice(f: (int, int) -> int throws never, x: int, y: int)
     load_var2 2 3
     load_var f
     call_indirect
-    store_var _4
     load_var2 2 3
     load_var f
     call_indirect
-    load_var _4
     add_int
     return
 }
@@ -120,61 +118,21 @@ function functions.early_return(x: int) -> int {
     load_var x
     load_const 42
     cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var x
     load_const 5
     add_int
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function functions.early_return_nested() -> int {
-    load_const 1
     load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
-    load_const 1
-    load_const 1
-    cmp_int_op !=
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
-    load_const 3
-    load_const 2
-    cmp_int_op !=
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_const 7
-    jump L6
-
-  L3:
-    load_const true
-    pop_jump_if_false L1
-    load_const 0
-    jump L6
-
-  L4:
-    load_const 0
-    jump L6
-
-  L5:
-    load_const 0
-
-  L6:
     return
 }
 
@@ -182,27 +140,22 @@ function functions.fib(n: int) -> int {
     load_var n
     load_const 1
     cmp_int_op <=
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var n
     load_const 1
     sub_int
     call user.functions.fib
-    store_var _3
     load_var n
     load_const 2
     sub_int
     call user.functions.fib
-    load_var _3
     add_int
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var n
 
-  L2:
+  L1:
     return
 }
 
@@ -242,11 +195,7 @@ function functions.literal_string() -> string {
 }
 
 function functions.mutable_variables_fn() -> int {
-    load_const 3
-    store_var y
     load_const 5
-    store_var y
-    load_var y
     return
 }
 

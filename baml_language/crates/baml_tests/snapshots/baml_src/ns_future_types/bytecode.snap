@@ -119,25 +119,12 @@ function future_types.captured_local_future_is_int_future_fn() -> bool {
     spawn
     store_var _4
     load_var _4
-    store_var_load_var f
-    is_type baml.future.Future<int, never>
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    store_var observed
-    jump L2
-
-  L1:
-    load_const true
-    store_var observed
-
-  L2:
+    store_var f
     load_var f
     await
     pop 1
-    load_var observed
+    load_var f
+    is_type baml.future.Future<int, never>
     return
 }
 
@@ -146,17 +133,14 @@ function future_types.classify_future(f: baml.future.Future<int, never> | baml.f
     store_var _2
     load_var _2
     narrow_bind baml.future.Future<int, never>, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "string"
     jump L1
 
   L0:
-    load_const "string"
-    jump L2
-
-  L1:
     load_const "int"
 
-  L2:
+  L1:
     return
 }
 
@@ -201,47 +185,35 @@ function future_types.classify_string_future_fn() -> string {
 function future_types.classify_tagged(v: baml.future.Future<int, never> | baml.future.Future<string, never> | int | string | bool) -> string {
     load_var v
     is_type baml.future.Future<int, never>
-    pop_jump_if_false L0
-    jump L7
-
-  L0:
+    pop_jump_if_true L3
     load_var v
     is_type baml.future.Future<string, never>
-    pop_jump_if_false L1
-    jump L6
-
-  L1:
+    pop_jump_if_true L2
     load_var v
     is_type int
-    pop_jump_if_false L2
-    jump L5
-
-  L2:
+    pop_jump_if_true L1
     load_var v
     is_type string
-    pop_jump_if_false L3
+    pop_jump_if_true L0
+    load_const "bool"
+    jump L4
+
+  L0:
+    load_const "string"
+    jump L4
+
+  L1:
+    load_const "int"
+    jump L4
+
+  L2:
+    load_const "string-future"
     jump L4
 
   L3:
-    load_const "bool"
-    jump L8
-
-  L4:
-    load_const "string"
-    jump L8
-
-  L5:
-    load_const "int"
-    jump L8
-
-  L6:
-    load_const "string-future"
-    jump L8
-
-  L7:
     load_const "int-future"
 
-  L8:
+  L4:
     return
 }
 
@@ -262,27 +234,14 @@ function future_types.future_array_matches_fn() -> bool {
     load_var _4
     load_type baml.future.Future<int, never>
     alloc_array 1
-    store_var_load_var fs
-    is_type baml.future.Future<int, never>[]
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    store_var observed
-    jump L2
-
-  L1:
-    load_const true
-    store_var observed
-
-  L2:
+    store_var fs
     load_var fs
     load_const 0
     load_array_element
     await
     pop 1
-    load_var observed
+    load_var fs
+    is_type baml.future.Future<int, never>[]
     return
 }
 
@@ -323,25 +282,12 @@ function future_types.int_future_is_int_future_fn() -> bool {
     spawn
     store_var _3
     load_var _3
-    store_var_load_var f
-    is_type baml.future.Future<int, never>
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    store_var observed
-    jump L2
-
-  L1:
-    load_const true
-    store_var observed
-
-  L2:
+    store_var f
     load_var f
     await
     pop 1
-    load_var observed
+    load_var f
+    is_type baml.future.Future<int, never>
     return
 }
 
@@ -354,25 +300,12 @@ function future_types.int_future_is_string_future_fn() -> bool {
     spawn
     store_var _3
     load_var _3
-    store_var_load_var f
-    is_type baml.future.Future<string, never>
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    store_var observed
-    jump L2
-
-  L1:
-    load_const true
-    store_var observed
-
-  L2:
+    store_var f
     load_var f
     await
     pop 1
-    load_var observed
+    load_var f
+    is_type baml.future.Future<string, never>
     return
 }
 
@@ -390,25 +323,12 @@ function future_types.spawn_is_int_future(v: #0) -> bool {
     spawn
     store_var _4
     load_var _4
-    store_var_load_var f
-    is_type baml.future.Future<int, never>
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    store_var observed
-    jump L2
-
-  L1:
-    load_const true
-    store_var observed
-
-  L2:
+    store_var f
     load_var f
     await
     pop 1
-    load_var observed
+    load_var f
+    is_type baml.future.Future<int, never>
     return
 }
 
@@ -459,36 +379,20 @@ function future_types.throwing_future_is_non_throwing_future_fn() -> bool {
     spawn
     store_var _3
     load_var _3
-    store_var_load_var f
-    is_type baml.future.Future<int, never>
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    store_var observed
-    jump L2
-
-  L1:
-    load_const true
-    store_var observed
-
-  L2:
+    store_var f
     load_var f
     await
     pop 1
-    jump L4
+    jump L0
     load_var e
     is_type baml.errors.Io
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L4:
-    load_var observed
+  L0:
+    load_var f
+    is_type baml.future.Future<int, never>
     return
 }
 
@@ -503,26 +407,13 @@ function future_types.wrong_future_array_fn() -> bool {
     load_var _4
     load_type baml.future.Future<string, never>
     alloc_array 1
-    store_var_load_var fs
-    is_type baml.future.Future<int, never>[]
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    store_var observed
-    jump L2
-
-  L1:
-    load_const true
-    store_var observed
-
-  L2:
+    store_var fs
     load_var fs
     load_const 0
     load_array_element
     await
     pop 1
-    load_var observed
+    load_var fs
+    is_type baml.future.Future<int, never>[]
     return
 }

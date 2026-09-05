@@ -97,14 +97,14 @@ fn user.fixtures.type_kinds.exercise_all_kinds() -> bool {
     let _6: bool
     let _7: bool
     let _8: bool
-    let _9: string
-    let _10: reflect.Type
-    let _11: string
-    let _12: reflect.Type
-    let _13: string
-    let _14: reflect.Type
-    let _15: string
-    let _16: reflect.Type
+    let _9: bool
+    let _10: bool
+    let _11: bool
+    let _12: bool
+    let _13: bool
+    let _14: bool
+    let _15: bool
+    let _16: bool
     let _17: string
     let _18: reflect.Type
     let _19: string
@@ -115,162 +115,182 @@ fn user.fixtures.type_kinds.exercise_all_kinds() -> bool {
     let _24: reflect.Type
     let _25: string
     let _26: reflect.Type
+    let _27: string
+    let _28: reflect.Type
+    let _29: string
+    let _30: reflect.Type
+    let _31: string
+    let _32: reflect.Type
+    let _33: string
+    let _34: reflect.Type
 
     bb0: {
-        _10 = load_type(fixtures.type_kinds.Foo);
+        _18 = load_type(fixtures.type_kinds.Foo);
         goto -> bb1;
     }
 
     bb1: {
-        _9 = call const fn user.fixtures.type_kinds.classify(copy _10) -> [bb2];
+        _17 = call const fn user.fixtures.type_kinds.classify(copy _18) -> [bb2];
     }
 
     bb2: {
-        _8 = copy _9 == const "class";
-        _7 = short_circuit(&&) copy _8 -> [eval: bb3, join: bb6];
+        _16 = copy _17 == const "class";
+        _15 = short_circuit(&&) copy _16 -> [eval: bb3, join: bb6];
     }
 
     bb3: {
-        _12 = load_type(fixtures.type_kinds.Color);
+        _20 = load_type(fixtures.type_kinds.Color);
         goto -> bb4;
     }
 
     bb4: {
-        _11 = call const fn user.fixtures.type_kinds.classify(copy _12) -> [bb5];
+        _19 = call const fn user.fixtures.type_kinds.classify(copy _20) -> [bb5];
     }
 
     bb5: {
-        _7 = copy _11 == const "enum";
+        _15 = copy _19 == const "enum";
         goto -> bb6;
     }
 
     bb6: {
-        _6 = short_circuit(&&) copy _7 -> [eval: bb7, join: bb10];
+        _14 = copy _15;
+        _13 = short_circuit(&&) copy _14 -> [eval: bb7, join: bb10];
     }
 
     bb7: {
-        _14 = load_type(int | string);
+        _22 = load_type(int | string);
         goto -> bb8;
     }
 
     bb8: {
-        _13 = call const fn user.fixtures.type_kinds.classify(copy _14) -> [bb9];
+        _21 = call const fn user.fixtures.type_kinds.classify(copy _22) -> [bb9];
     }
 
     bb9: {
-        _6 = copy _13 == const "union";
+        _13 = copy _21 == const "union";
         goto -> bb10;
     }
 
     bb10: {
-        _5 = short_circuit(&&) copy _6 -> [eval: bb11, join: bb14];
+        _12 = copy _13;
+        _11 = short_circuit(&&) copy _12 -> [eval: bb11, join: bb14];
     }
 
     bb11: {
-        _16 = load_type("fixed");
+        _24 = load_type("fixed");
         goto -> bb12;
     }
 
     bb12: {
-        _15 = call const fn user.fixtures.type_kinds.classify(copy _16) -> [bb13];
+        _23 = call const fn user.fixtures.type_kinds.classify(copy _24) -> [bb13];
     }
 
     bb13: {
-        _5 = copy _15 == const "literal";
+        _11 = copy _23 == const "literal";
         goto -> bb14;
     }
 
     bb14: {
-        _4 = short_circuit(&&) copy _5 -> [eval: bb15, join: bb18];
+        _10 = copy _11;
+        _9 = short_circuit(&&) copy _10 -> [eval: bb15, join: bb18];
     }
 
     bb15: {
-        _18 = load_type(fixtures.type_kinds.Foo[]);
+        _26 = load_type(fixtures.type_kinds.Foo[]);
         goto -> bb16;
     }
 
     bb16: {
-        _17 = call const fn user.fixtures.type_kinds.classify(copy _18) -> [bb17];
+        _25 = call const fn user.fixtures.type_kinds.classify(copy _26) -> [bb17];
     }
 
     bb17: {
-        _4 = copy _17 == const "array";
+        _9 = copy _25 == const "array";
         goto -> bb18;
     }
 
     bb18: {
-        _3 = short_circuit(&&) copy _4 -> [eval: bb19, join: bb22];
+        _8 = copy _9;
+        _7 = short_circuit(&&) copy _8 -> [eval: bb19, join: bb22];
     }
 
     bb19: {
-        _20 = load_type(map<string, fixtures.type_kinds.Foo>);
+        _28 = load_type(map<string, fixtures.type_kinds.Foo>);
         goto -> bb20;
     }
 
     bb20: {
-        _19 = call const fn user.fixtures.type_kinds.classify(copy _20) -> [bb21];
+        _27 = call const fn user.fixtures.type_kinds.classify(copy _28) -> [bb21];
     }
 
     bb21: {
-        _3 = copy _19 == const "map";
+        _7 = copy _27 == const "map";
         goto -> bb22;
     }
 
     bb22: {
-        _2 = short_circuit(&&) copy _3 -> [eval: bb23, join: bb26];
+        _6 = copy _7;
+        _5 = short_circuit(&&) copy _6 -> [eval: bb23, join: bb26];
     }
 
     bb23: {
-        _22 = load_type(fixtures.type_kinds.Marker);
+        _30 = load_type(fixtures.type_kinds.Marker);
         goto -> bb24;
     }
 
     bb24: {
-        _21 = call const fn user.fixtures.type_kinds.classify(copy _22) -> [bb25];
+        _29 = call const fn user.fixtures.type_kinds.classify(copy _30) -> [bb25];
     }
 
     bb25: {
-        _2 = copy _21 == const "interface";
+        _5 = copy _29 == const "interface";
         goto -> bb26;
     }
 
     bb26: {
-        _1 = short_circuit(&&) copy _2 -> [eval: bb27, join: bb30];
+        _4 = copy _5;
+        _3 = short_circuit(&&) copy _4 -> [eval: bb27, join: bb30];
     }
 
     bb27: {
-        _24 = load_type(int);
+        _32 = load_type(int);
         goto -> bb28;
     }
 
     bb28: {
-        _23 = call const fn user.fixtures.type_kinds.classify(copy _24) -> [bb29];
+        _31 = call const fn user.fixtures.type_kinds.classify(copy _32) -> [bb29];
     }
 
     bb29: {
-        _1 = copy _23 == const "primitive";
+        _3 = copy _31 == const "primitive";
         goto -> bb30;
     }
 
     bb30: {
-        _0 = short_circuit(&&) copy _1 -> [eval: bb31, join: bb34];
+        _2 = copy _3;
+        _1 = short_circuit(&&) copy _2 -> [eval: bb31, join: bb34];
     }
 
     bb31: {
-        _26 = load_type((int) -> bool throws never);
+        _34 = load_type((int) -> bool throws never);
         goto -> bb32;
     }
 
     bb32: {
-        _25 = call const fn user.fixtures.type_kinds.classify(copy _26) -> [bb33];
+        _33 = call const fn user.fixtures.type_kinds.classify(copy _34) -> [bb33];
     }
 
     bb33: {
-        _0 = copy _25 == const "function";
+        _1 = copy _33 == const "function";
         goto -> bb34;
     }
 
     bb34: {
+        _0 = copy _1;
+        goto -> bb35;
+    }
+
+    bb35: {
         return;
     }
 }

@@ -144,8 +144,6 @@ function reflect_type_of_generic.Box.describe(self: reflect_type_of_generic.Box<
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -162,8 +160,6 @@ function reflect_type_of_generic.Inner.name(self: reflect_type_of_generic.Inner<
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -172,8 +168,6 @@ function reflect_type_of_generic.InnerShow.show(self: reflect_type_of_generic.In
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -182,8 +176,6 @@ function reflect_type_of_generic.Leaf.describe(self: reflect_type_of_generic.Lea
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -206,8 +198,6 @@ function reflect_type_of_generic.array_of_int_fn() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -217,8 +207,6 @@ function reflect_type_of_generic.array_of_user_to_string_fn() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -255,8 +243,6 @@ function reflect_type_of_generic.describe() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -331,8 +317,6 @@ function reflect_type_of_generic.level1_str() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 

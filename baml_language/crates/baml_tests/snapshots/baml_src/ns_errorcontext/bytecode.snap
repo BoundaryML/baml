@@ -97,7 +97,7 @@ function errorcontext.ec_deferbody_fail_low() -> string {
 
 function errorcontext.ec_deferbody_main() -> string {
     call user.errorcontext.ec_deferbody_mid
-    jump L2
+    jump L1
     load_var e
     throw_if_panic
     load_var _2
@@ -106,17 +106,14 @@ function errorcontext.ec_deferbody_main() -> string {
     store_var _5
     load_var _5
     narrow_bind string, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "LOST: cause chain wiped by the defer re-raise"
     jump L1
 
   L0:
-    load_const "LOST: cause chain wiped by the defer re-raise"
-    jump L2
-
-  L1:
     load_var _5
 
-  L2:
+  L1:
     return
 }
 
@@ -150,101 +147,63 @@ function errorcontext.ec_deferthrow_check() -> bool {
     load_var rendered
     load_const "origin"
     call baml.String.index_of
-    store_var_load_var _3
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
+    jump_if_not_null_or_pop L0
     load_const -1
-    store_var _3
 
   L0:
-    load_var _3
     store_var origin_at
     load_var rendered
     load_const "wrap"
     call baml.String.index_of
-    store_var_load_var _7
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L1
+    jump_if_not_null_or_pop L1
     load_const -1
-    store_var _7
 
   L1:
-    load_var _7
     store_var wrap_at
     load_var rendered
     load_const "cleanup"
     call baml.String.index_of
-    store_var_load_var _11
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
+    jump_if_not_null_or_pop L2
     load_const -1
-    store_var _11
 
   L2:
-    load_var _11
     store_var cleanup_at
     load_var origin_at
     load_const 0
     cmp_int_op >=
-    jump_if_false L3
-    pop 1
+    jump_if_false_or_pop L3
     load_var wrap_at
+    load_const 0
+    cmp_int_op >=
+    jump_if_false_or_pop L3
+    load_var cleanup_at
     load_const 0
     cmp_int_op >=
 
   L3:
-    jump_if_false L4
-    pop 1
-    jump L5
+    store_var all_present
+    load_var2 2 3
+    cmp_int_op <
+    jump_if_false_or_pop L4
+    load_var2 3 4
+    cmp_int_op <
 
   L4:
-    store_var all_present
-    jump L6
-
-  L5:
-    load_var cleanup_at
-    load_const 0
-    cmp_int_op >=
-    store_var all_present
-
-  L6:
-    load_var2 2 4
-    cmp_int_op <
-    jump_if_false L7
-    pop 1
-    jump L8
-
-  L7:
     store_var ordered
-    jump L9
-
-  L8:
-    load_var2 4 6
-    cmp_int_op <
-    store_var ordered
-
-  L9:
     load_var rendered
     load_const "During handling of the above error, another error occurred"
     call baml.String.split
     container_len
     store_var pieces
     load_var all_present
-    jump_if_false L10
-    pop 1
+    jump_if_false_or_pop L5
     load_var ordered
-
-  L10:
-    jump_if_false L11
-    pop 1
+    jump_if_false_or_pop L5
     load_var pieces
     load_const 3
     cmp_int_op ==
 
-  L11:
+  L5:
     return
 }
 
@@ -290,7 +249,7 @@ function errorcontext.ec_deferunwind_fail_low() -> string {
 
 function errorcontext.ec_deferunwind_main() -> string {
     call user.errorcontext.ec_deferunwind_mid
-    jump L2
+    jump L1
     load_var e
     throw_if_panic
     load_var _2
@@ -299,17 +258,14 @@ function errorcontext.ec_deferunwind_main() -> string {
     store_var _5
     load_var _5
     narrow_bind string, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "LOST: cause chain wiped by the defer re-raise"
     jump L1
 
   L0:
-    load_const "LOST: cause chain wiped by the defer re-raise"
-    jump L2
-
-  L1:
     load_var _5
 
-  L2:
+  L1:
     return
 }
 
@@ -348,24 +304,21 @@ function errorcontext.ec_gap_main() -> string {
 
   L0:
     call user.errorcontext.ec_gap_fail_c
-    jump L3
+    jump L2
     load_var e2
     throw_if_panic
     load_var _7
     load_field .cause
     load_const null
     cmp_op ==
-    pop_jump_if_false L1
+    pop_jump_if_true L1
+    load_const "MISCHAINED: gap over-covered"
     jump L2
 
   L1:
-    load_const "MISCHAINED: gap over-covered"
-    jump L3
-
-  L2:
     load_var recovered
 
-  L3:
+  L2:
     return
     load_var _4
     rethrow
@@ -383,11 +336,11 @@ function errorcontext.ec_hazard_a_fail_outer() -> string {
 
 function errorcontext.ec_hazard_a_main() -> string {
     call user.errorcontext.ec_hazard_a_fail_outer
-    jump L3
+    jump L2
     load_var e
     throw_if_panic
     call user.errorcontext.ec_hazard_a_fail_inner
-    jump L3
+    jump L2
     load_var e2
     throw_if_panic
     load_var _6
@@ -401,17 +354,14 @@ function errorcontext.ec_hazard_a_main() -> string {
     store_var _9
     load_var _9
     narrow_bind string, slot=7
-    pop_jump_if_false L1
+    pop_jump_if_true L1
+    load_const "MISSED: enclosing handled error not found in chain"
     jump L2
 
   L1:
-    load_const "MISSED: enclosing handled error not found in chain"
-    jump L3
-
-  L2:
     load_var _9
 
-  L3:
+  L2:
     return
 }
 
@@ -427,36 +377,27 @@ function errorcontext.ec_hazard_b_fail_outer() -> string {
 
 function errorcontext.ec_hazard_b_main() -> string {
     call user.errorcontext.ec_hazard_b_fail_outer
-    jump L2
+    jump L1
     load_var e
     throw_if_panic
-    load_const 3
-    load_const 3
-    mul_int
-    load_const 3
-    add_int
-    pop 1
     call user.errorcontext.ec_hazard_b_fail_inner
-    jump L2
+    jump L1
     load_var e2
     throw_if_panic
-    load_var _11
+    load_var _4
     call baml.errors.Context.root_cause
     load_field .error
-    store_var _14
-    load_var _14
+    store_var _7
+    load_var _7
     narrow_bind string, slot=5
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "GARBAGE: outer context slot was recolored before the inner throw"
     jump L1
 
   L0:
-    load_const "GARBAGE: outer context slot was recolored before the inner throw"
-    jump L2
+    load_var _7
 
   L1:
-    load_var _14
-
-  L2:
     return
 }
 
@@ -472,11 +413,11 @@ function errorcontext.ec_nested_fail_b() -> string {
 
 function errorcontext.ec_nested_main() -> string {
     call user.errorcontext.ec_nested_fail_a
-    jump L2
+    jump L1
     load_var e
     throw_if_panic
     call user.errorcontext.ec_nested_fail_b
-    jump L2
+    jump L1
     load_var e2
     throw_if_panic
     load_var _4
@@ -485,17 +426,14 @@ function errorcontext.ec_nested_main() -> string {
     store_var _7
     load_var _7
     narrow_bind string, slot=5
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "no cause found"
     jump L1
 
   L0:
-    load_const "no cause found"
-    jump L2
-
-  L1:
     load_var _7
 
-  L2:
+  L1:
     return
 }
 
@@ -506,20 +444,17 @@ function errorcontext.ec_rethrow_fail_b() -> string {
 
 function errorcontext.ec_rethrow_main() -> string {
     call user.errorcontext.ec_rethrow_fail_b
-    jump L2
+    jump L1
     load_var inner
     is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var inner
     rethrow
 
-  L1:
+  L0:
     load_const "unreachable"
 
-  L2:
+  L1:
     return
     load_var e2
     throw_if_panic
@@ -527,21 +462,18 @@ function errorcontext.ec_rethrow_main() -> string {
     load_field .cause
     load_const null
     cmp_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_const "MISCHAINED: rethrow self-linked"
-    jump L2
+    jump L1
 
-  L4:
+  L2:
     load_const "no cause"
-    jump L2
+    jump L1
 }
 
 function errorcontext.ec_sibling_main() -> string {
     call user.errorcontext.ec_sibling_scope
-    jump L2
+    jump L1
     load_var e
     throw_if_panic
     load_var _2
@@ -550,17 +482,14 @@ function errorcontext.ec_sibling_main() -> string {
     store_var _5
     load_var _5
     narrow_bind string, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "no root cause found"
     jump L1
 
   L0:
-    load_const "no root cause found"
-    jump L2
-
-  L1:
     load_var _5
 
-  L2:
+  L1:
     return
 }
 
@@ -582,7 +511,7 @@ function errorcontext.ec_single_boom() -> string {
 
 function errorcontext.ec_single_main() -> string {
     call user.errorcontext.ec_single_boom
-    jump L2
+    jump L1
     load_var e
     throw_if_panic
     load_var _2
@@ -591,17 +520,14 @@ function errorcontext.ec_single_main() -> string {
     store_var _5
     load_var _5
     narrow_bind string, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "unexpected non-string error"
     jump L1
 
   L0:
-    load_const "unexpected non-string error"
-    jump L2
-
-  L1:
     load_var _5
 
-  L2:
+  L1:
     return
 }
 
@@ -612,7 +538,7 @@ function errorcontext.ec_stackdefers_fail_low() -> string {
 
 function errorcontext.ec_stackdefers_main() -> string {
     call user.errorcontext.ec_stackdefers_mid
-    jump L2
+    jump L1
     load_var e
     throw_if_panic
     load_var _2
@@ -621,17 +547,14 @@ function errorcontext.ec_stackdefers_main() -> string {
     store_var _5
     load_var _5
     narrow_bind string, slot=3
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "LOST: cause chain wiped by a stacked defer re-raise"
     jump L1
 
   L0:
-    load_const "LOST: cause chain wiped by a stacked defer re-raise"
-    jump L2
-
-  L1:
     load_var _5
 
-  L2:
+  L1:
     return
 }
 
@@ -665,16 +588,12 @@ function errorcontext.ec_tostring_check() -> bool {
     call baml.String.includes
     store_var has_wrap
     load_var has_sep
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var has_origin
-
-  L0:
-    jump_if_false L1
-    pop 1
+    jump_if_false_or_pop L0
     load_var has_wrap
 
-  L1:
+  L0:
     return
 }
 

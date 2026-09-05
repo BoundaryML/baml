@@ -110,12 +110,12 @@ function dispatch_matrix.<(int as user.dispatch_matrix.Speaker)>.speak(self: int
 }
 
 function dispatch_matrix.<(user.dispatch_matrix.Card as user.dispatch_matrix.Formatting)>.present(self: dispatch_matrix.Card) -> string {
+    load_const "card "
     load_const 7
     load_var self
     load_field .formatter
     call_indirect
     store_var _2
-    load_const "card "
     load_var _2
     bin_op +
     return
@@ -132,12 +132,12 @@ function dispatch_matrix.<(user.dispatch_matrix.Loud as user.dispatch_matrix.Spe
 }
 
 function dispatch_matrix.<(user.dispatch_matrix.Pack<#0> as user.dispatch_matrix.Speaker)>.speak(self: dispatch_matrix.Pack<#0>) -> string {
+    load_const "pack of "
     load_type #0
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
-    load_const "pack of "
     load_var _2
     bin_op +
     return
@@ -149,11 +149,11 @@ function dispatch_matrix.<(user.dispatch_matrix.Tally as user.dispatch_matrix.Co
 }
 
 function dispatch_matrix.<(user.dispatch_matrix.Wrapping as user.dispatch_matrix.Speaker)>.speak(self: dispatch_matrix.Wrapping) -> string {
+    load_const "wrapped "
     load_type dispatch_matrix.Wrapping
     load_var self
     call user.dispatch_matrix.Speaker.speak
     store_var _2
-    load_const "wrapped "
     load_var _2
     bin_op +
     return
@@ -165,13 +165,13 @@ function dispatch_matrix.Counter.start() -> int {
 }
 
 function dispatch_matrix.Formatting.present(self: dispatch_matrix.Formatting) -> string {
+    load_const "presented "
     load_var self
     load_const 1
     load_type dispatch_matrix.Formatting
     load_const "formatter"
     virtual_call nargs=2 ntypeargs=0
     store_var _2
-    load_const "presented "
     load_var _2
     bin_op +
     return
@@ -184,17 +184,14 @@ function dispatch_matrix.Speaker.speak(self: dispatch_matrix.Speaker) -> string 
 
 function dispatch_matrix.pick_speaker(loud: bool) -> dispatch_matrix.Loud | dispatch_matrix.Quiet {
     load_var loud
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    alloc_instance user.dispatch_matrix.Quiet
     jump L1
 
   L0:
-    alloc_instance user.dispatch_matrix.Quiet
-    jump L2
-
-  L1:
     alloc_instance user.dispatch_matrix.Loud
 
-  L2:
+  L1:
     return
 }
 
@@ -230,8 +227,6 @@ function dispatch_matrix.row12_interface_qualified() -> string {
     load_type dispatch_matrix.Speaker
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -240,8 +235,6 @@ function dispatch_matrix.row12_interface_qualified_dynamic(s: dispatch_matrix.Sp
     load_type dispatch_matrix.Speaker
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -258,8 +251,6 @@ function dispatch_matrix.row14_default_field_call() -> string {
     load_type dispatch_matrix.Formatting
     load_const "present"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -268,8 +259,6 @@ function dispatch_matrix.row1_static_provided() -> string {
     load_type dispatch_matrix.Speaker
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -280,8 +269,6 @@ function dispatch_matrix.row2_static_generic_bindings() -> string {
     load_type dispatch_matrix.Speaker
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -290,8 +277,6 @@ function dispatch_matrix.row3_static_adopted_default() -> string {
     load_type dispatch_matrix.Speaker
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -300,8 +285,6 @@ function dispatch_matrix.row4_static_primitive_target() -> string {
     load_type dispatch_matrix.Speaker
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -371,8 +354,6 @@ function dispatch_matrix.row8_default_bypass() -> string {
     load_type dispatch_matrix.Speaker
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -402,7 +383,5 @@ function dispatch_matrix.through_interface(s: dispatch_matrix.Speaker) -> string
     load_type dispatch_matrix.Speaker
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }

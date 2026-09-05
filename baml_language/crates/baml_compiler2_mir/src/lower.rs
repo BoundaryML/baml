@@ -4498,7 +4498,7 @@ impl<'db> LoweringContext<'db> {
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut mir = builder.build();
-        optimize::optimize_function(&mut mir);
+        optimize::optimize_function(&mut mir, self.opt);
 
         // Drain any lambda functions lowered during this function's body into the
         // MirFunction's lambdas list.  The lambda_idx values in MakeClosure rvalues
@@ -4615,7 +4615,7 @@ impl<'db> LoweringContext<'db> {
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut body = builder.build_body();
-        optimize::optimize_function_body(&mut body);
+        optimize::optimize_function_body(&mut body, self.opt);
         body
     }
 
@@ -4696,7 +4696,7 @@ impl<'db> LoweringContext<'db> {
         adapter_builder.return_();
 
         let mut adapter_mir = adapter_builder.build();
-        optimize::optimize_function(&mut adapter_mir);
+        optimize::optimize_function(&mut adapter_mir, self.opt);
         adapter_mir.item_ref = ItemRef::Free {
             package: Name::new(""),
             namespace: vec![],
@@ -5036,7 +5036,7 @@ impl<'db> LoweringContext<'db> {
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
         let lambda_builder = std::mem::replace(&mut self.builder, dummy);
         let mut lambda_mir = lambda_builder.build();
-        optimize::optimize_function(&mut lambda_mir);
+        optimize::optimize_function(&mut lambda_mir, self.opt);
         // Override item_ref with the synthetic name.
         lambda_mir.item_ref = ItemRef::Free {
             package: Name::new(""),
@@ -5591,7 +5591,7 @@ impl<'db> LoweringContext<'db> {
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
         let lambda_builder = std::mem::replace(&mut self.builder, dummy);
         let mut lambda_mir = lambda_builder.build();
-        optimize::optimize_function(&mut lambda_mir);
+        optimize::optimize_function(&mut lambda_mir, self.opt);
         lambda_mir.item_ref = ItemRef::Free {
             package: Name::new(""),
             namespace: vec![],
@@ -7581,32 +7581,30 @@ impl<'db> LoweringContext<'db> {
         dest: Place,
         is_and: bool,
     ) {
-        // `ShortCircuit`'s destination must be a `Place::Local`: the emitter
-        // materializes it with `emit_store_place` on the short-circuit edge,
-        // which does not handle Field/Index projections. Normalize through a
-        // temp and assign through at the join — mirrors `lower_await`.
-        let (sc_dest, projection_dest) = match dest {
-            Place::Local(_) => (dest, None),
-            projection => {
-                let tmp = self.builder.temp(RuntimeTy::Null {
-                    attr: TyAttr::default(),
-                });
-                (Place::Local(tmp), Some(projection))
-            }
-        };
+        // The expression has one value at its join, even when its eventual
+        // destination has unrelated definitions (mutable locals/projections).
+        let sc_dest = Place::Local(self.builder.temp(RuntimeTy::Bool {
+            attr: TyAttr::default(),
+        }));
 
         let lhs_op = self.lower_condition_operand(lhs);
 
         let bb_rhs = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
-        // ShortCircuit terminator: JumpIfFalse (peek) keeps lhs on TOS when
-        // short-circuiting. The rhs block evaluates and leaves its result on
-        // TOS. At join, dest is on TOS when the destination local is
-        // stack-carried (PhiLike); otherwise the emitter stores to its slot
-        // on both edges and the join reads the slot.
-        self.builder
-            .short_circuit(lhs_op, is_and, sc_dest.clone(), bb_rhs, bb_join);
+        // Both paths define the expression value. Stackification chooses its
+        // storage independently of the eventual mutable destination.
+        self.builder.short_circuit(
+            lhs_op,
+            if is_and {
+                crate::ShortCircuitKind::And
+            } else {
+                crate::ShortCircuitKind::Or
+            },
+            sc_dest.clone(),
+            bb_rhs,
+            bb_join,
+        );
 
         self.builder.set_current_block(bb_rhs);
         self.lower_expr(rhs, sc_dest.clone());
@@ -7627,10 +7625,8 @@ impl<'db> LoweringContext<'db> {
         }
 
         self.builder.set_current_block(bb_join);
-        if let Some(projection) = projection_dest {
-            self.builder
-                .assign(projection, Rvalue::Use(Operand::Copy(sc_dest)));
-        }
+        self.builder
+            .assign(dest, Rvalue::Use(Operand::Copy(sc_dest)));
     }
 
     /// Lower `a ?? b` — evaluate `a`, if null then evaluate `b`, otherwise use `a`.
@@ -7645,36 +7641,21 @@ impl<'db> LoweringContext<'db> {
         let result_place = Place::local(result);
 
         let lhs_op = self.lower_to_operand(lhs);
-        self.builder
-            .assign(result_place.clone(), Rvalue::Use(lhs_op));
-
-        // Test: lhs == null
-        let is_null = Rvalue::BinaryOp {
-            op: BinOp::Eq,
-            left: Operand::Copy(result_place.clone()),
-            right: Operand::Constant(Constant::Null),
-        };
-        let test_local = self.builder.temp(RuntimeTy::Bool {
-            attr: TyAttr::default(),
-        });
-        self.builder.assign(Place::local(test_local), is_null);
-
         let bb_rhs = self.builder.create_block();
-        let bb_lhs = self.builder.create_block();
         let bb_join = self.builder.create_block();
-
-        // If null → evaluate RHS, otherwise keep LHS
-        self.builder
-            .branch(Operand::Copy(Place::Local(test_local)), bb_rhs, bb_lhs);
+        self.builder.short_circuit(
+            lhs_op,
+            crate::ShortCircuitKind::Coalesce,
+            result_place.clone(),
+            bb_rhs,
+            bb_join,
+        );
 
         self.builder.set_current_block(bb_rhs);
         self.lower_expr(rhs, result_place.clone());
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
-
-        self.builder.set_current_block(bb_lhs);
-        self.builder.goto(bb_join);
 
         self.builder.set_current_block(bb_join);
         self.builder
@@ -10818,7 +10799,14 @@ impl<'db> LoweringContext<'db> {
     /// lowers exactly as before; the branch terminators stay strict-bool.
     fn lower_condition_operand(&mut self, condition: AstExprId) -> Operand<'db> {
         let op = self.lower_to_operand(condition);
-        if !self.tir_truthy_condition(self.expr_metadata_key(condition)) {
+        // `!value` performs truthiness itself, so its operand need not have a
+        // TIR adjustment. Predicate lowering can remove that Not; the branch
+        // must still receive an exact bool, including on this path.
+        let is_bool = matches!(
+            self.expr_ty(condition),
+            RuntimeTy::Bool { .. } | RuntimeTy::Literal(baml_type::Literal::Bool(_), ..)
+        );
+        if is_bool && !self.tir_truthy_condition(self.expr_metadata_key(condition)) {
             return op;
         }
         let coerced = self.builder.temp(RuntimeTy::Bool {
@@ -10834,6 +10822,42 @@ impl<'db> LoweringContext<'db> {
         Operand::Copy(Place::Local(coerced))
     }
 
+    /// A predicate needs control flow, not a materialized logical value.
+    fn lower_condition(&mut self, condition: AstExprId, on_true: BlockId, on_false: BlockId) {
+        match self.body.exprs[condition].clone() {
+            AstExpr::Binary {
+                op: AstBinaryOp::And,
+                lhs,
+                rhs,
+            } => {
+                let next = self.builder.create_block();
+                self.lower_condition(lhs, next, on_false);
+                self.builder.set_current_block(next);
+                self.lower_condition(rhs, on_true, on_false);
+            }
+            AstExpr::Binary {
+                op: AstBinaryOp::Or,
+                lhs,
+                rhs,
+            } => {
+                let next = self.builder.create_block();
+                self.lower_condition(lhs, on_true, next);
+                self.builder.set_current_block(next);
+                self.lower_condition(rhs, on_true, on_false);
+            }
+            AstExpr::Unary {
+                op: AstUnaryOp::Not,
+                expr,
+            } => {
+                self.lower_condition(expr, on_false, on_true);
+            }
+            _ => {
+                let operand = self.lower_condition_operand(condition);
+                self.builder.branch(operand, on_true, on_false);
+            }
+        }
+    }
+
     fn lower_if(
         &mut self,
         _expr_id: AstExprId,
@@ -10842,12 +10866,11 @@ impl<'db> LoweringContext<'db> {
         else_branch: Option<AstExprId>,
         dest: Place,
     ) {
-        let cond_op = self.lower_condition_operand(condition);
         let bb_then = self.builder.create_block();
         let bb_else = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
-        self.builder.branch(cond_op, bb_then, bb_else);
+        self.lower_condition(condition, bb_then, bb_else);
 
         self.builder.set_current_block(bb_then);
         self.lower_expr(then_branch, dest.clone());
@@ -12697,8 +12720,7 @@ impl LoweringContext<'_> {
                 }
 
                 self.builder.set_current_block(bb_cond);
-                let cond_op = self.lower_condition_operand(condition);
-                self.builder.branch(cond_op, bb_body, bb_exit);
+                self.lower_condition(condition, bb_body, bb_exit);
 
                 self.builder.set_current_block(bb_body);
                 let body_ty = self.expr_ty(body);
@@ -13855,9 +13877,8 @@ impl<'db> LoweringContext<'db> {
                 let saved_locals = self.locals.clone();
                 self.bind_pattern_inner(scrutinee, part, arm.pattern, part, false);
                 if let Some(guard) = arm.guard {
-                    let guard_op = self.lower_condition_operand(guard);
                     let bb_guarded = self.builder.create_block();
-                    self.builder.branch(guard_op, bb_guarded, bb_next);
+                    self.lower_condition(guard, bb_guarded, bb_next);
                     self.builder.set_current_block(bb_guarded);
                 }
                 self.lower_expr(arm.body, dest.clone());
@@ -13885,9 +13906,8 @@ impl<'db> LoweringContext<'db> {
         let saved_locals = self.locals.clone();
         self.bind_pattern(scrutinee, arm.pattern);
         if let Some(guard) = arm.guard {
-            let guard_op = self.lower_condition_operand(guard);
             let bb_guarded = self.builder.create_block();
-            self.builder.branch(guard_op, bb_guarded, bb_next);
+            self.lower_condition(guard, bb_guarded, bb_next);
             self.builder.set_current_block(bb_guarded);
         }
         self.lower_expr(arm.body, dest.clone());

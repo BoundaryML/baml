@@ -164,8 +164,6 @@ function iter_impl_generics_only.iter_array_iter() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -184,17 +182,13 @@ function iter_impl_generics_only.iter_chain() -> int[] {
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var b
-    load_var2 2 3
+    load_var2 1 2
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "chain"
     virtual_call nargs=2 ntypeargs=0
-    store_var _7
-    load_var _7
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -209,8 +203,6 @@ function iter_impl_generics_only.iter_collect() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -225,8 +217,6 @@ function iter_impl_generics_only.iter_count() -> int {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "count"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -249,8 +239,6 @@ function iter_impl_generics_only.iter_explicit_map_coerces_to_iterator() -> int[
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -270,13 +258,9 @@ function iter_impl_generics_only.iter_filter() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "filter"
     virtual_call nargs=2 ntypeargs=1
-    store_var _4
-    load_var _4
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -296,13 +280,9 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "filter"
     virtual_call nargs=2 ntypeargs=1
-    store_var _1
-    load_var _1
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -323,13 +303,9 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "filter_map"
     virtual_call nargs=2 ntypeargs=2
-    store_var _4
-    load_var _4
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -350,13 +326,9 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "filter_map"
     virtual_call nargs=2 ntypeargs=2
-    store_var _1
-    load_var _1
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -376,13 +348,9 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "flat_map"
     virtual_call nargs=2 ntypeargs=3
-    store_var _4
-    load_var _4
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -402,13 +370,9 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "flat_map"
     virtual_call nargs=2 ntypeargs=3
-    store_var _1
-    load_var _1
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -428,7 +392,7 @@ function iter_impl_generics_only.iter_flatten() -> int[] {
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _5
     load_type iter_impl_generics_only.core.Iterable<int, never>
-    load_var2 2 3
+    load_var2 1 2
     load_type iter_impl_generics_only.core.Iterable<int, never>
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
@@ -441,8 +405,6 @@ function iter_impl_generics_only.iter_flatten() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -462,13 +424,9 @@ function iter_impl_generics_only.iter_map() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "map"
     virtual_call nargs=2 ntypeargs=2
-    store_var _4
-    load_var _4
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -488,13 +446,9 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "map"
     virtual_call nargs=2 ntypeargs=2
-    store_var _1
-    load_var _1
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -519,12 +473,23 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     store_var _7
     load_var _7
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_type int
     load_var2 2 3
+    call baml.Array.push
+    pop 1
+
+  L0:
+    load_var p
+    load_type iter_impl_generics_only.core.Iterator<int, never>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _15
+    load_var _15
+    is_type iter_impl_generics_only.core.Done
+    pop_jump_if_true L1
+    load_type int
+    load_var2 2 4
     call baml.Array.push
     pop 1
 
@@ -533,36 +498,16 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _15
-    load_var _15
-    is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_type int
-    load_var2 2 4
-    call baml.Array.push
-    pop 1
-
-  L3:
-    load_var p
-    load_type iter_impl_generics_only.core.Iterator<int, never>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
     store_var _21
     load_var _21
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L2
     load_type int
     load_var2 2 5
     call baml.Array.push
     pop 1
 
-  L5:
+  L2:
     load_type int
     load_type never
     load_var p
@@ -570,24 +515,21 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     store_var _27
     load_var _27
     is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
+    pop_jump_if_true L3
     load_type int
     load_var2 2 6
     call baml.Array.push
     pop 1
-    jump L8
+    jump L4
 
-  L7:
+  L3:
     load_type int
     load_var out
     load_const 99
     call baml.Array.push
     pop 1
 
-  L8:
+  L4:
     load_var out
     return
 }
@@ -600,8 +542,6 @@ function iter_impl_generics_only.iter_range() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -623,8 +563,6 @@ function iter_impl_generics_only.iter_reduce() -> int {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "reduce"
     virtual_call nargs=3 ntypeargs=2
-    store_var _0
-    load_var _0
     return
 }
 
@@ -636,8 +574,6 @@ function iter_impl_generics_only.iter_repeat() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -689,18 +625,14 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
     virtual_call nargs=2 ntypeargs=1
     store_var found
     load_var some_large
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var every_small
-
-  L0:
-    jump_if_false L1
-    pop 1
+    jump_if_false_or_pop L0
     load_var found
     load_const 2
     call baml.ops.equals_equals
 
-  L1:
+  L0:
     return
 }
 
@@ -713,13 +645,9 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "step_by"
     virtual_call nargs=2 ntypeargs=0
-    store_var _1
-    load_var _1
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -730,7 +658,5 @@ function iter_impl_generics_only.out_of_body_inferred_ctor_dispatch() -> int {
     load_type iter_impl_generics_only.core.OutOfBodyValue<int>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }

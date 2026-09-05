@@ -1355,6 +1355,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    /// Select polarity from the actual layout, after redirect resolution.
+    fn emit_branch(&mut self, then_block: BlockId, else_block: BlockId) {
+        let resolved_else = self.resolve_pending_target(else_block);
+        if matches!(resolved_else, PendingJumpTarget::Block(block) if Some(block) == self.next_block)
+        {
+            let target = self.resolve_pending_target(then_block);
+            let jump = self.emit(Instruction::PopJumpIfTrue(0));
+            self.pending_jumps.push((jump, target));
+        } else {
+            let jump = self.emit(Instruction::PopJumpIfFalse(0));
+            self.pending_jumps.push((jump, resolved_else));
+            self.emit_jump_unless_fallthrough(then_block);
+        }
+    }
+
     /// Emit an unconditional jump to a target, even when the target is the
     /// next emitted MIR block.
     ///
@@ -2255,13 +2270,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 else_block,
             } => {
                 self.emit_operand_pull(condition);
-                // PopJumpIfFalse to else_block (pops condition from stack).
-                // Apply jump threading to resolve through empty blocks.
-                let resolved_else = self.resolve_pending_target(*else_block);
-                let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
-                self.pending_jumps.push((else_jump, resolved_else));
-                // Jump to then_block (may be elided if it's next).
-                self.emit_jump_unless_fallthrough(*then_block);
+                self.emit_branch(*then_block, *else_block);
             }
 
             Terminator::NarrowBind {
@@ -2273,10 +2282,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => {
                 self.emit_operand_pull(source);
                 self.emit_narrow_bind(ty_template, *destination);
-                let resolved_else = self.resolve_pending_target(*else_block);
-                let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
-                self.pending_jumps.push((else_jump, resolved_else));
-                self.emit_jump_unless_fallthrough(*then_block);
+                self.emit_branch(*then_block, *else_block);
             }
 
             Terminator::Switch {
@@ -2576,12 +2582,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
             Terminator::ShortCircuit {
                 operand,
-                is_and,
+                kind,
                 destination,
                 eval_rhs,
                 join,
             } => {
-                // Short-circuit lowering using JumpIfFalse (peek, no pop).
+                // Fused branches retain the value when taken and pop it otherwise.
                 //
                 // The short-circuit (taken) path leaves the operand value on TOS
                 // and jumps to the join. The `eval_rhs` block computes and stores
@@ -2602,38 +2608,24 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 );
                 self.emit_operand_pull(operand);
 
-                if *is_and {
-                    // &&: false → short-circuit edge (materialize dest), jump to join.
-                    //     true → pop, evaluate rhs.
-                    let sc_jump = self.emit(Instruction::JumpIfFalse(0));
-                    let resolved_join = self.resolve_pending_target(*join);
-                    if store_on_taken_path {
-                        self.emit(Instruction::Pop(1));
-                        self.emit_jump_always(*eval_rhs);
-                        let taken_pc = self.bytecode.instructions.len();
-                        self.patch_jump_to(sc_jump, taken_pc);
-                        self.emit_store_place(destination);
-                        let join_jump = self.emit(Instruction::Jump(0));
-                        self.pending_jumps.push((join_jump, resolved_join));
-                    } else {
-                        self.pending_jumps.push((sc_jump, resolved_join));
-                        self.emit(Instruction::Pop(1));
-                        self.emit_jump_unless_fallthrough(*eval_rhs);
+                let instruction = match kind {
+                    baml_compiler2_mir::ShortCircuitKind::And => Instruction::JumpIfFalseOrPop(0),
+                    baml_compiler2_mir::ShortCircuitKind::Or => Instruction::JumpIfTrueOrPop(0),
+                    baml_compiler2_mir::ShortCircuitKind::Coalesce => {
+                        Instruction::JumpIfNotNullOrPop(0)
                     }
+                };
+                let sc_jump = self.emit(instruction);
+                let resolved_join = self.resolve_pending_target(*join);
+                if store_on_taken_path {
+                    self.emit_jump_always(*eval_rhs);
+                    let taken_pc = self.bytecode.instructions.len();
+                    self.patch_jump_to(sc_jump, taken_pc);
+                    self.emit_store_place(destination);
+                    let join_jump = self.emit(Instruction::Jump(0));
+                    self.pending_jumps.push((join_jump, resolved_join));
                 } else {
-                    // ||: false → pop, evaluate rhs.
-                    //     true → short-circuit edge (materialize dest), jump to join.
-                    let false_jump = self.emit(Instruction::JumpIfFalse(0));
-                    let resolved_join = self.resolve_pending_target(*join);
-                    if store_on_taken_path {
-                        self.emit_store_place(destination);
-                    }
-                    let true_jump = self.emit(Instruction::Jump(0));
-                    self.pending_jumps.push((true_jump, resolved_join));
-                    // False landing: patch JumpIfFalse to here, pop, fall to eval_rhs.
-                    let false_pc = self.bytecode.instructions.len();
-                    self.patch_jump_to(false_jump, false_pc);
-                    self.emit(Instruction::Pop(1));
+                    self.pending_jumps.push((sc_jump, resolved_join));
                     self.emit_jump_unless_fallthrough(*eval_rhs);
                 }
             }
@@ -2649,6 +2641,44 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         for (instruction_idx, target) in self.pending_jumps.clone() {
             let target_pc = self.resolve_pending_target_pc(target);
             self.patch_jump_to(instruction_idx, target_pc);
+        }
+        // A taken value-preserving branch already established the predicate.
+        // Thread identical tests without moving PCs or skipping debugger stops.
+        for source in 0..self.bytecode.instructions.len() {
+            let branch = &self.bytecode.instructions[source];
+            let offset = match branch {
+                Instruction::JumpIfFalseOrPop(offset)
+                | Instruction::JumpIfTrueOrPop(offset)
+                | Instruction::JumpIfNotNullOrPop(offset) => *offset,
+                _ => continue,
+            };
+            let mut target = source.wrapping_add_signed(offset);
+            while target > source && target < self.bytecode.instructions.len() {
+                if self
+                    .bytecode
+                    .line_table
+                    .iter()
+                    .any(|entry| entry.pc == target && entry.sequence_point)
+                {
+                    break;
+                }
+                let next = &self.bytecode.instructions[target];
+                if std::mem::discriminant(next) != std::mem::discriminant(branch) {
+                    break;
+                }
+                let next_offset = match next {
+                    Instruction::JumpIfFalseOrPop(offset)
+                    | Instruction::JumpIfTrueOrPop(offset)
+                    | Instruction::JumpIfNotNullOrPop(offset)
+                        if *offset > 0 =>
+                    {
+                        *offset
+                    }
+                    _ => break,
+                };
+                target = target.wrapping_add_signed(next_offset);
+            }
+            self.patch_jump_to(source, target);
         }
     }
 
@@ -2681,6 +2711,19 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             Instruction::JumpIfFalse(_) => {
                 self.bytecode.instructions[instruction_idx] = Instruction::JumpIfFalse(offset);
+            }
+            Instruction::PopJumpIfTrue(_) => {
+                self.bytecode.instructions[instruction_idx] = Instruction::PopJumpIfTrue(offset);
+            }
+            Instruction::JumpIfFalseOrPop(_) => {
+                self.bytecode.instructions[instruction_idx] = Instruction::JumpIfFalseOrPop(offset);
+            }
+            Instruction::JumpIfTrueOrPop(_) => {
+                self.bytecode.instructions[instruction_idx] = Instruction::JumpIfTrueOrPop(offset);
+            }
+            Instruction::JumpIfNotNullOrPop(_) => {
+                self.bytecode.instructions[instruction_idx] =
+                    Instruction::JumpIfNotNullOrPop(offset);
             }
             _ => panic!("expected jump instruction at index {instruction_idx}"),
         }

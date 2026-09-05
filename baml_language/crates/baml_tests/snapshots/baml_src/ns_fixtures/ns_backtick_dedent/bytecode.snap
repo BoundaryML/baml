@@ -28,10 +28,7 @@ function fixtures.backtick_dedent.ForLoopVerbatim(xs: string[]) -> string {
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var  __m3_for
     store_var _8
     load_type string
@@ -48,17 +45,17 @@ function fixtures.backtick_dedent.ForLoopVerbatim(xs: string[]) -> string {
     store_var  __m3_for
     jump L0
 
-  L2:
+  L1:
     load_var  __m3_for
     return
 }
 
 function fixtures.backtick_dedent.MultilineInterpVerbatim() -> string {
+    load_const "value: "
     load_type string
     load_const "x"
     call baml.String.from
     store_var _1
-    load_const "value: "
     load_var _1
     bin_op +
     return
@@ -75,6 +72,7 @@ function fixtures.backtick_dedent.WithBlankLines() -> string {
 }
 
 function fixtures.backtick_dedent.WithInterps(name: string, count: int) -> string {
+    load_const "name:  "
     load_type string
     load_var name
     call baml.String.from
@@ -83,7 +81,6 @@ function fixtures.backtick_dedent.WithInterps(name: string, count: int) -> strin
     load_var count
     call baml.String.from
     store_var _7
-    load_const "name:  "
     load_var _5
     bin_op +
     load_const "\ncount: "

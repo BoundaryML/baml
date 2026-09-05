@@ -25,7 +25,6 @@ fn user.fixtures.method_explicit_type_args.use_method_type_args() -> int {
     let _3: int
     let _4: int | null
     let _5: reflect.Type
-    let _6: bool
 
     bb0: {
         _1 = user.fixtures.method_explicit_type_args.Foo { const "x" };
@@ -34,9 +33,7 @@ fn user.fixtures.method_explicit_type_args.use_method_type_args() -> int {
     }
 
     bb1: {
-        _3 = copy _4;
-        _6 = copy _3 == const null;
-        branch copy _6 -> [bb2, bb3];
+        _3 = short_circuit(??) copy _4 -> [eval: bb2, join: bb3];
     }
 
     bb2: {

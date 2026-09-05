@@ -35,13 +35,9 @@ fn user.fixtures.test_expr_basic.$init_test_ns_fixtures_ns_test_expr_basic_main(
 fn .<lambda($init_test_ns_fixtures_ns_test_expr_basic_main, 0)>() -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: int // x
-    let _2: int
 
     bb0: {
-        _1 = const 3_i64;
-        _2 = copy _1;
-        _0 = call const fn assert.equal(copy _2, const 3_i64) -> [bb1];
+        _0 = call const fn assert.equal(const 3_i64, const 3_i64) -> [bb1];
     }
 
     bb1: {
@@ -53,13 +49,9 @@ fn .<lambda($init_test_ns_fixtures_ns_test_expr_basic_main, 0)>() -> void {
 fn .<lambda($init_test_ns_fixtures_ns_test_expr_basic_main, 1)>() -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: string // result
-    let _2: string
 
     bb0: {
-        _1 = const "hello";
-        _2 = copy _1;
-        _0 = call const fn assert.not_null(copy _2) -> [bb1];
+        _0 = call const fn assert.not_null(const "hello") -> [bb1];
     }
 
     bb1: {

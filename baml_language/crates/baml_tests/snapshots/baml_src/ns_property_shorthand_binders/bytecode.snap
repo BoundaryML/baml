@@ -124,15 +124,10 @@ function property_shorthand_binders.psb_lookup(m: map<string, string>) -> string
     load_var m
     load_const "key"
     call baml.Map.get
-    store_var_load_var _2
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
+    jump_if_not_null_or_pop L0
     load_const "MISSING"
-    store_var _2
 
   L0:
-    load_var _2
     return
 }
 
@@ -143,17 +138,14 @@ function property_shorthand_binders.psb_quoted_catch_binder(s: string) -> string
     load_type int
     load_var _3
     call baml.String.from
-    jump L2
+    jump L1
     load_var key
     is_type baml.errors.ParseError
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var key
     rethrow
 
-  L1:
+  L0:
     load_type string
     load_type baml.errors.ParseError
     load_var key
@@ -171,7 +163,7 @@ function property_shorthand_binders.psb_quoted_catch_binder(s: string) -> string
     unary_op !
     call baml.String.from
 
-  L2:
+  L1:
     return
 }
 
@@ -203,10 +195,7 @@ function property_shorthand_binders.psb_quoted_for_binder(xs: string[]) -> strin
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _4
     load_const "key"
     load_type string
@@ -219,7 +208,7 @@ function property_shorthand_binders.psb_quoted_for_binder(xs: string[]) -> strin
     store_var out
     jump L0
 
-  L2:
+  L1:
     load_var out
     return
 }
@@ -229,14 +218,11 @@ function property_shorthand_binders.psb_quoted_if_let(v: string | null) -> strin
     store_var _2
     load_var _2
     narrow_bind string, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "NONE"
     jump L1
 
   L0:
-    load_const "NONE"
-    jump L2
-
-  L1:
     load_var _2
     load_const "key"
     load_type string
@@ -244,7 +230,7 @@ function property_shorthand_binders.psb_quoted_if_let(v: string | null) -> strin
     alloc_map 1
     call user.property_shorthand_binders.psb_lookup
 
-  L2:
+  L1:
     return
 }
 
@@ -253,14 +239,11 @@ function property_shorthand_binders.psb_quoted_key_differs_from_binder(v: string
     store_var _2
     load_var _2
     narrow_bind string, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "NONE"
     jump L1
 
   L0:
-    load_const "NONE"
-    jump L3
-
-  L1:
     load_type string
     load_type string
     load_var _2
@@ -270,17 +253,10 @@ function property_shorthand_binders.psb_quoted_key_differs_from_binder(v: string
     alloc_map 1
     load_const "other"
     call baml.Map.get
-    store_var_load_var _6
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L2
+    jump_if_not_null_or_pop L1
     load_const "MISSING"
-    store_var _6
 
-  L2:
-    load_var _6
-
-  L3:
+  L1:
     return
 }
 
@@ -289,14 +265,11 @@ function property_shorthand_binders.psb_quoted_match_arm(v: string | int) -> str
     store_var _2
     load_var _2
     narrow_bind string, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "NONE"
     jump L1
 
   L0:
-    load_const "NONE"
-    jump L2
-
-  L1:
     load_var _2
     load_const "key"
     load_type string
@@ -304,28 +277,17 @@ function property_shorthand_binders.psb_quoted_match_arm(v: string | int) -> str
     alloc_map 1
     call user.property_shorthand_binders.psb_lookup
 
-  L2:
+  L1:
     return
 }
 
 function property_shorthand_binders.psb_quoted_nested_block_let() -> string {
-    load_const true
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "NONE"
-    jump L2
-
-  L1:
     load_const "n"
     load_const "key"
     load_type string
     load_type string
     alloc_map 1
     call user.property_shorthand_binders.psb_lookup
-
-  L2:
     return
 }
 
@@ -346,17 +308,14 @@ function property_shorthand_binders.psb_shorthand_catch_binder(s: string) -> str
     load_type int
     load_var _3
     call baml.String.from
-    jump L2
+    jump L1
     load_var key
     is_type baml.errors.ParseError
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var key
     rethrow
 
-  L1:
+  L0:
     load_type string
     load_type baml.errors.ParseError
     load_var key
@@ -374,7 +333,7 @@ function property_shorthand_binders.psb_shorthand_catch_binder(s: string) -> str
     unary_op !
     call baml.String.from
 
-  L2:
+  L1:
     return
 }
 
@@ -421,10 +380,7 @@ function property_shorthand_binders.psb_shorthand_for_binder(xs: string[]) -> st
     store_var _4
     load_var _4
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _4
     load_const "key"
     load_type string
@@ -437,7 +393,7 @@ function property_shorthand_binders.psb_shorthand_for_binder(xs: string[]) -> st
     store_var out
     jump L0
 
-  L2:
+  L1:
     load_var out
     return
 }
@@ -447,14 +403,11 @@ function property_shorthand_binders.psb_shorthand_if_let(v: string | null) -> st
     store_var _2
     load_var _2
     narrow_bind string, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "NONE"
     jump L1
 
   L0:
-    load_const "NONE"
-    jump L2
-
-  L1:
     load_var _2
     load_const "key"
     load_type string
@@ -462,7 +415,7 @@ function property_shorthand_binders.psb_shorthand_if_let(v: string | null) -> st
     alloc_map 1
     call user.property_shorthand_binders.psb_lookup
 
-  L2:
+  L1:
     return
 }
 
@@ -471,14 +424,11 @@ function property_shorthand_binders.psb_shorthand_match_arm(v: string | int) -> 
     store_var _2
     load_var _2
     narrow_bind string, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "NONE"
     jump L1
 
   L0:
-    load_const "NONE"
-    jump L2
-
-  L1:
     load_var _2
     load_const "key"
     load_type string
@@ -486,28 +436,17 @@ function property_shorthand_binders.psb_shorthand_match_arm(v: string | int) -> 
     alloc_map 1
     call user.property_shorthand_binders.psb_lookup
 
-  L2:
+  L1:
     return
 }
 
 function property_shorthand_binders.psb_shorthand_nested_block_let() -> string {
-    load_const true
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "NONE"
-    jump L2
-
-  L1:
     load_const "n"
     load_const "key"
     load_type string
     load_type string
     alloc_map 1
     call user.property_shorthand_binders.psb_lookup
-
-  L2:
     return
 }
 
@@ -523,29 +462,26 @@ function property_shorthand_binders.psb_shorthand_param(key: string) -> string {
 
 function property_shorthand_binders.psb_shorthand_uses_innermost_binder(v: string | null) -> string {
     load_var v
-    store_var _3
-    load_var _3
+    store_var _2
+    load_var _2
     narrow_bind string, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "outer"
     load_const "key"
     load_type string
     load_type string
     alloc_map 1
     call user.property_shorthand_binders.psb_lookup
-    jump L2
+    jump L1
 
-  L1:
-    load_var _3
+  L0:
+    load_var _2
     load_const "key"
     load_type string
     load_type string
     alloc_map 1
     call user.property_shorthand_binders.psb_lookup
 
-  L2:
+  L1:
     return
 }

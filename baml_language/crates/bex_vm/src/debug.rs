@@ -178,6 +178,10 @@ pub(crate) fn display_instruction(
         }
         Instruction::Jump(offset)
         | Instruction::PopJumpIfFalse(offset)
+        | Instruction::PopJumpIfTrue(offset)
+        | Instruction::JumpIfFalseOrPop(offset)
+        | Instruction::JumpIfTrueOrPop(offset)
+        | Instruction::JumpIfNotNullOrPop(offset)
         | Instruction::JumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
         }
@@ -414,6 +418,10 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::UnaryOp(_) => Style::new().blue().bright(),
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
+        | Instruction::PopJumpIfTrue(_)
+        | Instruction::JumpIfFalseOrPop(_)
+        | Instruction::JumpIfTrueOrPop(_)
+        | Instruction::JumpIfNotNullOrPop(_)
         | Instruction::JumpIfFalse(_)
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
@@ -660,6 +668,10 @@ fn display_bytecode_textual(function: &Function) -> String {
         match instruction {
             Instruction::Jump(offset)
             | Instruction::PopJumpIfFalse(offset)
+            | Instruction::PopJumpIfTrue(offset)
+            | Instruction::JumpIfFalseOrPop(offset)
+            | Instruction::JumpIfTrueOrPop(offset)
+            | Instruction::JumpIfNotNullOrPop(offset)
             | Instruction::JumpIfFalse(offset) => {
                 let target = ip.wrapping_add_signed(*offset);
                 jump_targets.insert(target);
@@ -810,6 +822,23 @@ fn display_instruction_textual(
                 .cloned()
                 .unwrap_or_else(|| format!("?{target}"));
             format!("jump_if_false {label}")
+        }
+        Instruction::PopJumpIfTrue(offset)
+        | Instruction::JumpIfFalseOrPop(offset)
+        | Instruction::JumpIfTrueOrPop(offset)
+        | Instruction::JumpIfNotNullOrPop(offset) => {
+            let name = match instruction {
+                Instruction::PopJumpIfTrue(_) => "pop_jump_if_true",
+                Instruction::JumpIfFalseOrPop(_) => "jump_if_false_or_pop",
+                Instruction::JumpIfTrueOrPop(_) => "jump_if_true_or_pop",
+                _ => "jump_if_not_null_or_pop",
+            };
+            let target = ip.wrapping_add_signed(*offset);
+            let label = label_map
+                .get(&target)
+                .cloned()
+                .unwrap_or_else(|| format!("?{target}"));
+            format!("{name} {label}")
         }
         Instruction::JumpTable(table_idx) => {
             let default_target =
@@ -1182,6 +1211,10 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         // Jumps: show absolute target address.
         Instruction::Jump(offset)
         | Instruction::PopJumpIfFalse(offset)
+        | Instruction::PopJumpIfTrue(offset)
+        | Instruction::JumpIfFalseOrPop(offset)
+        | Instruction::JumpIfTrueOrPop(offset)
+        | Instruction::JumpIfNotNullOrPop(offset)
         | Instruction::JumpIfFalse(offset) => {
             let target = ip.wrapping_add_signed(*offset);
             format!("(to {target})")
@@ -1383,7 +1416,13 @@ pub fn display_compact_bytecode(
             }
 
             // Jump i32 operand: show relative offset and resolved absolute target
-            OpCode::Jump | OpCode::PopJumpIfFalse | OpCode::JumpIfFalse => {
+            OpCode::Jump
+            | OpCode::PopJumpIfFalse
+            | OpCode::JumpIfFalse
+            | OpCode::PopJumpIfTrue
+            | OpCode::JumpIfFalseOrPop
+            | OpCode::JumpIfTrueOrPop
+            | OpCode::JumpIfNotNullOrPop => {
                 let offset_val = read_i32(code, &mut pc);
                 let target = (pc as i64 + offset_val as i64) as usize;
                 writeln!(f, "{offset_val:+}  (-> {target:04})")?;

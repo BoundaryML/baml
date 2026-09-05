@@ -31,12 +31,10 @@ function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.
     call user.fixtures.anyfunction_reflect.RuntimeClassify@spec
     store_var _9
     load_type #0
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -85,10 +83,10 @@ function fixtures.anyfunction_reflect.RuntimeClassify@spec(input: string) -> ai.
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_global user.fixtures.anyfunction_reflect.RuntimeEnumClient
     call ai.clients.resolve
-    store_var _6
+    store_var _7
     load_const "RuntimeClassify"
     load_deref ?1
     load_const "input"
@@ -134,8 +132,6 @@ function fixtures.anyfunction_reflect.RuntimeClassify@stream(input: string, clie
 }
 
 function fixtures.anyfunction_reflect.bare_and_pinned() -> int {
-    load_const user.fixtures.anyfunction_reflect.web_search
-    store_var g
     load_const 0
     return
 }
@@ -195,7 +191,6 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _5
     load_var sig
     load_field .errors
     load_type baml.ToString
@@ -210,7 +205,7 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     load_var _10
     call baml.String.from
     store_var _9
-    load_var2 4 5
+    load_var _7
     bin_op +
     load_var _9
     bin_op +
@@ -230,13 +225,10 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     store_var _15
     load_var _15
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var _15
     store_var arg
-    load_var2 3 10
+    load_var2 3 9
     load_field .name
     bin_op +
     store_var _19
@@ -246,12 +238,12 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _22
-    load_var2 11 12
+    load_var2 10 11
     bin_op +
     store_var parts
     jump L0
 
-  L2:
+  L1:
     load_type string
     load_type reflect.Arg
     load_var sig
@@ -262,7 +254,7 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     virtual_call nargs=1 ntypeargs=0
     store_var _28
 
-  L3:
+  L2:
     load_var _28
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
@@ -270,10 +262,7 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     store_var _29
     load_var _29
     is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
+    pop_jump_if_true L3
     load_var _29
     store_var key
     load_type string
@@ -287,8 +276,8 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     load_const null
     call baml.ops.equals_equals
     unary_op !
-    pop_jump_if_false L3
-    load_var2 3 15
+    pop_jump_if_false L2
+    load_var2 3 14
     bin_op +
     store_var _41
     load_var opt
@@ -297,12 +286,12 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _44
-    load_var2 17 18
+    load_var2 16 17
     bin_op +
     store_var parts
-    jump L3
+    jump L2
 
-  L5:
+  L3:
     load_var parts
     return
 }
@@ -318,66 +307,43 @@ function fixtures.anyfunction_reflect.typed_dispatch(name: string, args: map<str
     load_var f
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_const true
-
-  L2:
-    pop_jump_if_false L3
-    jump L10
-
-  L3:
+    pop_jump_if_true L3
     load_type string | fixtures.anyfunction_reflect.Doc[]
     load_type fixtures.anyfunction_reflect.ToolError
     load_var2 4 2
     call reflect.call_any
-    jump L11
+    jump L4
     load_var e
     is_type fixtures.anyfunction_reflect.ToolError
-    pop_jump_if_false L4
-    jump L9
-
-  L4:
+    pop_jump_if_true L2
     load_var e
     is_type reflect.InvalidArgumentError
-    pop_jump_if_false L5
-    jump L8
-
-  L5:
+    pop_jump_if_true L1
     load_var e
     is_type reflect.errors.CompilationError
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L7:
+  L0:
     load_const "uncompiled-generic"
-    jump L11
+    jump L4
 
-  L8:
+  L1:
     load_const "bad-args"
-    jump L11
+    jump L4
 
-  L9:
+  L2:
     load_const "tool-error:"
     load_var e
     load_field .message
     bin_op +
-    jump L11
+    jump L4
 
-  L10:
+  L3:
     load_const "no-such-tool"
 
-  L11:
+  L4:
     return
 }
 
@@ -385,17 +351,14 @@ function fixtures.anyfunction_reflect.web_search(q: string) -> fixtures.anyfunct
     load_var q
     load_const "boom"
     cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var q
     init_instance user.fixtures.anyfunction_reflect.Doc .title
     load_type fixtures.anyfunction_reflect.Doc
     alloc_array 1
     return
 
-  L1:
+  L0:
     load_const "no results"
     init_instance user.fixtures.anyfunction_reflect.ToolError .message
     throw

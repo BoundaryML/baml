@@ -10,18 +10,11 @@ function fixtures.type_annotation.test_let_binding(function_name: string) -> str
 }
 
 function fixtures.type_annotation.test_list(function_name: string) -> string {
-    load_type reflect.Type
-    alloc_array 0
-    pop 1
     load_const "ok"
     return
 }
 
 function fixtures.type_annotation.test_map(function_name: string) -> string {
-    load_type string
-    load_type reflect.Type
-    alloc_map 0
-    pop 1
     load_const "ok"
     return
 }

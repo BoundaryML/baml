@@ -5,12 +5,9 @@ source: crates/baml_tests/src/corpus.rs
 fn user.fixtures.parser_statements.simple_assign() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // x
 
     bb0: {
-        _1 = const 1_i64;
-        _1 = const 5_i64;
-        _0 = copy _1;
+        _0 = const 5_i64;
         goto -> bb1;
     }
 
@@ -125,19 +122,9 @@ fn user.fixtures.parser_statements.assign_in_loop() -> int {
 fn user.fixtures.parser_statements.block_with_tail() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // x
-    let _2: int // y
-    let _3: int // z
-    let _4: int
-    let _5: int
 
     bb0: {
-        _2 = const 1_i64;
-        _3 = const 2_i64;
-        _4 = copy _2;
-        _5 = copy _3;
-        _1 = copy _4 + copy _5;
-        _0 = copy _1;
+        _0 = const 3_i64;
         goto -> bb1;
     }
 
@@ -149,17 +136,9 @@ fn user.fixtures.parser_statements.block_with_tail() -> int {
 fn user.fixtures.parser_statements.let_no_semicolons() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // x
-    let _2: int // y
-    let _3: int
-    let _4: int
 
     bb0: {
-        _1 = const 1_i64;
-        _2 = const 2_i64;
-        _3 = copy _1;
-        _4 = copy _2;
-        _0 = copy _3 + copy _4;
+        _0 = const 3_i64;
         goto -> bb1;
     }
 
@@ -171,29 +150,9 @@ fn user.fixtures.parser_statements.let_no_semicolons() -> int {
 fn user.fixtures.parser_statements.let_mixed_semicolons() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // a
-    let _2: int // b
-    let _3: int // c
-    let _4: int // d
-    let _5: int
-    let _6: int
-    let _7: int
-    let _8: int
-    let _9: int
-    let _10: int
 
     bb0: {
-        _1 = const 1_i64;
-        _2 = const 2_i64;
-        _3 = const 3_i64;
-        _4 = const 4_i64;
-        _7 = copy _1;
-        _8 = copy _2;
-        _6 = copy _7 + copy _8;
-        _9 = copy _3;
-        _5 = copy _6 + copy _9;
-        _10 = copy _4;
-        _0 = copy _5 + copy _10;
+        _0 = const 10_i64;
         goto -> bb1;
     }
 
@@ -297,15 +256,12 @@ fn user.fixtures.parser_statements.edge_semicolon_forces_boundary(bar: () -> int
     let _0: int // _0 // return
     let _1: () -> int[] throws never // bar // param
     let _2: int[]
-    let _3: int[]
 
     bb0: {
         _2 = call copy _1() -> [bb1];
     }
 
     bb1: {
-        _3 = [const 0_i64]: int[];
-        drop(_3);
         _0 = const 1_i64;
         goto -> bb2;
     }
@@ -324,15 +280,11 @@ fn user.fixtures.parser_statements.simple_break() -> int {
     }
 
     bb1: {
-        branch const true -> [bb2, bb2];
+        _0 = const 42_i64;
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const 42_i64;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -346,43 +298,24 @@ fn user.fixtures.parser_statements.simple_continue() -> int {
     }
 
     bb1: {
-        branch const true -> [bb1, bb2];
-    }
-
-    bb2: {
-        _0 = const 0_i64;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
+        goto -> bb1;
     }
 }
 
 fn user.fixtures.parser_statements.break_in_for() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // i
-    let _2: bool
-    let _3: int
 
     bb0: {
-        _1 = const 0_i64;
         goto -> bb1;
     }
 
     bb1: {
-        _3 = copy _1;
-        _2 = copy _3 < const 10_i64;
-        branch copy _2 -> [bb2, bb2];
+        _0 = const 1_i64;
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const 1_i64;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -431,19 +364,11 @@ fn user.fixtures.parser_statements.nested_break() -> int {
     }
 
     bb1: {
-        branch const true -> [bb2, bb3];
+        _0 = const 3_i64;
+        goto -> bb2;
     }
 
     bb2: {
-        branch const true -> [bb3, bb3];
-    }
-
-    bb3: {
-        _0 = const 3_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -457,19 +382,11 @@ fn user.fixtures.parser_statements.break_with_locals() -> int {
     }
 
     bb1: {
-        branch const true -> [bb2, bb3];
+        _0 = const 4_i64;
+        goto -> bb2;
     }
 
     bb2: {
-        branch const true -> [bb3, bb1];
-    }
-
-    bb3: {
-        _0 = const 4_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }
@@ -483,20 +400,15 @@ fn user.fixtures.parser_statements.continue_with_locals() -> int {
     }
 
     bb1: {
-        branch const true -> [bb4, bb2];
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = const 5_i64;
         goto -> bb3;
     }
 
     bb3: {
-        return;
-    }
-
-    bb4: {
-        branch const true -> [bb1, bb1];
+        goto -> bb1;
     }
 }
 
@@ -701,18 +613,15 @@ fn user.fixtures.parser_statements.ConditionalLogic(age: int) -> string {
 fn user.fixtures.parser_statements.let_statements() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int[] // z
-    let _2: fixtures.parser_statements.Point // point
+    let _1: fixtures.parser_statements.Point // point
+    let _2: int
     let _3: int
-    let _4: int
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
-        drop(_1);
-        _2 = user.fixtures.parser_statements.Point { const 1_i64, const 2_i64 };
-        _3 = copy _2.0;
-        _4 = copy _2.1;
-        _0 = copy _3 + copy _4;
+        _1 = user.fixtures.parser_statements.Point { const 1_i64, const 2_i64 };
+        _2 = copy _1.0;
+        _3 = copy _1.1;
+        _0 = copy _2 + copy _3;
         goto -> bb1;
     }
 
@@ -759,48 +668,29 @@ fn user.fixtures.parser_statements.simple_while_loop() -> int {
 fn user.fixtures.parser_statements.nested_while_loop() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // i
+    let _1: int // j
     let _2: bool
     let _3: int
-    let _4: int // j
-    let _5: bool
-    let _6: int
-    let _7: int
+    let _4: int
 
     bb0: {
-        _1 = const 0_i64;
         goto -> bb1;
     }
 
     bb1: {
-        _3 = copy _1;
-        _2 = copy _3 < const 10_i64;
-        branch copy _2 -> [bb4, bb2];
+        _1 = const 0_i64;
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = copy _1;
-        goto -> bb3;
+        _3 = copy _1;
+        _2 = copy _3 < const 10_i64;
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb3: {
-        return;
-    }
-
-    bb4: {
-        _4 = const 0_i64;
-        goto -> bb5;
-    }
-
-    bb5: {
-        _6 = copy _4;
-        _5 = copy _6 < const 10_i64;
-        branch copy _5 -> [bb6, bb1];
-    }
-
-    bb6: {
-        _7 = copy _4;
-        _4 = copy _7 + const 1_i64;
-        goto -> bb5;
+        _4 = copy _1;
+        _1 = copy _4 + const 1_i64;
+        goto -> bb2;
     }
 }

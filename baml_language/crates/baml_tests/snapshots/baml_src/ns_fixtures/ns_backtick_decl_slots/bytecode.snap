@@ -30,12 +30,10 @@ function fixtures.backtick_decl_slots.Greet(name: string, client: ai.Client | nu
     call user.fixtures.backtick_decl_slots.Greet@spec
     store_var _9
     load_type string
-    load_var2 5 6
+    load_var2 4 5
     load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | reflect.errors.CompilationError | ai.errors.Failure>
     load_const "run"
     virtual_call nargs=2 ntypeargs=1
-    store_var _6
-    load_var _6
     load_field .value
     return
 }
@@ -82,10 +80,10 @@ function fixtures.backtick_decl_slots.Greet@spec(name: string) -> ai.FunctionSpe
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
-    store_var _4
+    store_var _5
     load_global user.fixtures.backtick_decl_slots.Fast
     call ai.clients.resolve
-    store_var _6
+    store_var _7
     load_const "Greet"
     load_deref ?1
     load_const "name"
@@ -129,11 +127,11 @@ function fixtures.backtick_decl_slots.Greet@stream(name: string, client: ai.stre
 }
 
 function fixtures.backtick_decl_slots.Header(title: string) -> string {
+    load_const "# "
     load_type string
     load_var title
     call baml.String.from
     store_var _2
-    load_const "# "
     load_var _2
     bin_op +
     return

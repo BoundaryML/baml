@@ -6,22 +6,18 @@ fn user.fixtures.lexical_scoping.branch_locals(b: bool) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: bool // b // param
-    let _2: int // a
-    let _3: int // a
 
     bb0: {
         branch copy _1 -> [bb2, bb1];
     }
 
     bb1: {
-        _3 = const 2_i64;
-        _0 = copy _3;
+        _0 = const 2_i64;
         goto -> bb3;
     }
 
     bb2: {
-        _2 = const 1_i64;
-        _0 = copy _2;
+        _0 = const 1_i64;
         goto -> bb3;
     }
 
@@ -33,11 +29,9 @@ fn user.fixtures.lexical_scoping.branch_locals(b: bool) -> int {
 fn user.fixtures.lexical_scoping.same_scope_shadow() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // x
 
     bb0: {
-        _1 = const 2_i64;
-        _0 = copy _1;
+        _0 = const 2_i64;
         goto -> bb1;
     }
 
@@ -49,15 +43,9 @@ fn user.fixtures.lexical_scoping.same_scope_shadow() -> int {
 fn user.fixtures.lexical_scoping.initializer_uses_previous() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // x
-    let _2: int // x
-    let _3: int
 
     bb0: {
-        _1 = const 1_i64;
-        _3 = copy _1;
-        _2 = copy _3 + const 1_i64;
-        _0 = copy _2;
+        _0 = const 2_i64;
         goto -> bb1;
     }
 
@@ -86,11 +74,9 @@ fn user.fixtures.lexical_scoping.shadow_param(x: int) -> int {
 fn user.fixtures.lexical_scoping.outer_restored() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // x
 
     bb0: {
-        _1 = const 1_i64;
-        _0 = copy _1;
+        _0 = const 1_i64;
         goto -> bb1;
     }
 
@@ -102,11 +88,9 @@ fn user.fixtures.lexical_scoping.outer_restored() -> int {
 fn user.fixtures.lexical_scoping.declared_type_restored() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: string // x
 
     bb0: {
-        _1 = const "outer";
-        _0 = copy _1;
+        _0 = const "outer";
         goto -> bb1;
     }
 
@@ -118,38 +102,36 @@ fn user.fixtures.lexical_scoping.declared_type_restored() -> string {
 fn user.fixtures.lexical_scoping.for_loop_restores_outer() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // x
-    let _2: int[]
-    let _3: baml.iter.Iterator<Error = never, Item = int>
-    let _4: unknown
-    let _5: bool
-    let _6: int
-    let _7: int // x
+    let _1: int[]
+    let _2: baml.iter.Iterator<Error = never, Item = int>
+    let _3: unknown
+    let _4: bool
+    let _5: int
+    let _6: int // x
 
     bb0: {
-        _1 = const 1_i64;
-        _2 = [const 2_i64, const 3_i64]: int[];
-        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _2) -> [bb1];
+        _1 = [const 2_i64, const 3_i64]: int[];
+        _2 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _3) -> [bb2];
+        _3 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _2) -> [bb2];
     }
 
     bb2: {
-        _5 = is_type(copy _4, baml.iter.Done);
-        branch copy _5 -> [bb4, bb3];
+        _4 = is_type(copy _3, baml.iter.Done);
+        branch copy _4 -> [bb4, bb3];
     }
 
     bb3: {
-        _6 = copy _4;
-        fresh_cell(_7);
-        _7 = copy _6;
+        _5 = copy _3;
+        fresh_cell(_6);
+        _6 = copy _5;
         goto -> bb1;
     }
 
     bb4: {
-        _0 = copy _1;
+        _0 = const 1_i64;
         goto -> bb5;
     }
 
@@ -161,15 +143,9 @@ fn user.fixtures.lexical_scoping.for_loop_restores_outer() -> int {
 fn user.fixtures.lexical_scoping.nested_outer_restored() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // x
-    let _2: int // x
-    let _3: int // x
 
     bb0: {
-        _1 = const 1_i64;
-        _2 = const 2_i64;
-        _3 = const 3_i64;
-        _0 = copy _1;
+        _0 = const 1_i64;
         goto -> bb1;
     }
 
@@ -301,23 +277,21 @@ fn .<lambda(<lambda(nested_lambda_capture, 0)>, 1)>() -> int {
 fn user.fixtures.lexical_scoping.while_body_restores_outer() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // x
-    let _2: bool // once
-    let _3: bool
+    let _1: bool // once
+    let _2: bool
 
     bb0: {
-        _1 = const 1_i64;
-        _2 = const true;
+        _1 = const true;
         goto -> bb1;
     }
 
     bb1: {
-        _3 = copy _2;
-        branch copy _3 -> [bb4, bb2];
+        _2 = copy _1;
+        branch copy _2 -> [bb4, bb2];
     }
 
     bb2: {
-        _0 = copy _1;
+        _0 = const 1_i64;
         goto -> bb3;
     }
 
@@ -326,7 +300,7 @@ fn user.fixtures.lexical_scoping.while_body_restores_outer() -> int {
     }
 
     bb4: {
-        _2 = const false;
+        _1 = const false;
         goto -> bb1;
     }
 }

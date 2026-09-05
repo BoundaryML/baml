@@ -155,36 +155,30 @@ fn user.fixtures.catch_interface_refinement.app(mode: int) -> string {
 fn user.fixtures.catch_interface_refinement.local_throw() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: string // r
-    let _2: unknown // e
-    let _3: fixtures.catch_interface_refinement.Throttled
-    let _4: unknown
+    let _1: unknown // e
+    let _2: fixtures.catch_interface_refinement.Throttled
+    let _3: unknown
 
     bb0: {
-        _3 = user.fixtures.catch_interface_refinement.Throttled { const 1_i64 };
-        throw copy _3;
+        _2 = user.fixtures.catch_interface_refinement.Throttled { const 1_i64 };
+        throw copy _2;
     }
 
     bb1: {
-        _4 = copy _2;
-        _4 = narrow_bind copy _4 as Interface(QualifiedTypeName { pkg: Local, namespace: ["fixtures", "catch_interface_refinement"], name: "Failure" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
+        _3 = copy _1;
+        _3 = narrow_bind copy _3 as Interface(QualifiedTypeName { pkg: Local, namespace: ["fixtures", "catch_interface_refinement"], name: "Failure" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb2];
     }
 
     bb2: {
-        rethrow copy _2;
+        rethrow copy _1;
     }
 
     bb3: {
-        _1 = const "classified";
+        _0 = const "classified";
         goto -> bb4;
     }
 
     bb4: {
-        _0 = copy _1;
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }

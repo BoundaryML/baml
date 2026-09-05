@@ -47,8 +47,6 @@ function net.net_tcp_listener_accept_after_close_errors_fn() -> uint8array | nul
     load_type baml.io.Read
     load_const "read"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -67,19 +65,14 @@ function net.net_tcp_read_after_close_errors_fn() -> uint8array | null {
     load_type baml.io.Read
     load_const "read"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
 function net.net_udp_recv_timeout_fires_fn() -> uint8array {
     load_const "127.0.0.1:0"
     sys_op baml.net.UdpSocket.bind
-    store_var sock
     load_const 50n
     call baml.time.Duration.from_milliseconds
-    store_var _3
-    load_var2 1 2
     call baml.net.UdpSocket.recv_from
     load_field .data
     return

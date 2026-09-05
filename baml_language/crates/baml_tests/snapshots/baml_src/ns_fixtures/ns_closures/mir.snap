@@ -26,22 +26,28 @@ fn user.fixtures.closures.RangeCheck.is_valid(self: fixtures.closures.RangeCheck
     let _1: fixtures.closures.RangeCheck // self // param
     let _2: int // n // param
     let _3: bool
-    let _4: int
+    let _4: bool
     let _5: int
+    let _6: int
 
     bb0: {
-        _4 = copy _1.0;
-        _3 = copy _2 >= copy _4;
-        _0 = short_circuit(&&) copy _3 -> [eval: bb1, join: bb2];
+        _5 = copy _1.0;
+        _4 = copy _2 >= copy _5;
+        _3 = short_circuit(&&) copy _4 -> [eval: bb1, join: bb2];
     }
 
     bb1: {
-        _5 = copy _1.1;
-        _0 = copy _2 <= copy _5;
+        _6 = copy _1.1;
+        _3 = copy _2 <= copy _6;
         goto -> bb2;
     }
 
     bb2: {
+        _0 = copy _3;
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }

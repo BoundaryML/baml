@@ -42,8 +42,7 @@ function fixtures.patterns_class_destructure_namespaces.DestructureNamespaceQual
     load_var response
     load_field .score
     is_type 0
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_var response
@@ -51,9 +50,6 @@ function fixtures.patterns_class_destructure_namespaces.DestructureNamespaceQual
     jump L2
 
   L1:
-    load_var response
-    load_field .score
-    pop 1
     load_const 0
 
   L2:
@@ -78,8 +74,7 @@ function fixtures.patterns_class_destructure_namespaces.DestructureQualifiedMatc
     load_var response
     load_field .score
     is_type 0
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L1
 
   L0:
     load_var response
@@ -87,9 +82,6 @@ function fixtures.patterns_class_destructure_namespaces.DestructureQualifiedMatc
     jump L2
 
   L1:
-    load_var response
-    load_field .score
-    pop 1
     load_const 0
 
   L2:
@@ -118,17 +110,14 @@ function fixtures.patterns_class_destructure_namespaces.GenericTypePatternNamesp
     load_type string
     init_instance<1> user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box .value
     is_type fixtures.patterns_class_destructure_namespaces.llm.openai.Box<...>
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const 51
     jump L1
 
   L0:
-    load_const 51
-    jump L2
-
-  L1:
     load_const 0
 
-  L2:
+  L1:
     return
 }
 
@@ -137,17 +126,14 @@ function fixtures.patterns_class_destructure_namespaces.GenericTypePatternQualif
     load_type int
     init_instance<1> user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box .value
     is_type fixtures.patterns_class_destructure_namespaces.llm.openai.Box<...>
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const 50
     jump L1
 
   L0:
-    load_const 50
-    jump L2
-
-  L1:
     load_const 0
 
-  L2:
+  L1:
     return
 }
 

@@ -54,8 +54,7 @@ function class_spread_runtime.csr_generic_spread() -> bool {
     call_indirect
     load_const 42
     cmp_int_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_var task
     load_field .events
     load_const "created"
@@ -120,8 +119,7 @@ function class_spread_runtime.csr_spread_with_omitted_defaults() -> bool {
     load_field .budget
     load_const 1
     cmp_int_op ==
-    jump_if_false L0
-    pop 1
+    jump_if_false_or_pop L0
     load_const 1
     load_type int
     alloc_array 1
@@ -129,28 +127,22 @@ function class_spread_runtime.csr_spread_with_omitted_defaults() -> bool {
     load_field .dispatch
     call_indirect
     container_len
-    store_var _9
-    load_var _9
+    store_var _12
+    load_var _12
     load_const 1
     cmp_int_op ==
-
-  L0:
-    jump_if_false L1
-    pop 1
+    jump_if_false_or_pop L0
     load_var options
     load_field .registry
     load_const null
     call baml.ops.equals_equals
-
-  L1:
-    jump_if_false L2
-    pop 1
+    jump_if_false_or_pop L0
     load_var options
     load_field .hook
     load_const null
     call baml.ops.equals_equals
 
-  L2:
+  L0:
     return
 }
 

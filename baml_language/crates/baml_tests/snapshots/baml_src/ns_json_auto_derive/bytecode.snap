@@ -431,17 +431,14 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
     store_var _3
     load_var _3
     narrow_bind int, slot=1
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const -1
     jump L1
 
   L0:
-    load_const -1
-    jump L2
-
-  L1:
     load_var _3
 
-  L2:
+  L1:
     return
 }
 
@@ -533,17 +530,14 @@ function json_auto_derive.from_json_wrapper_body_fallback_val() -> int {
     store_var _6
     load_var _6
     narrow_bind int, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const -1
     jump L1
 
   L0:
-    load_const -1
-    jump L2
-
-  L1:
     load_var _6
 
-  L2:
+  L1:
     return
 }
 
@@ -839,18 +833,15 @@ function json_auto_derive.optional_class_override_non_null_val() -> int {
     store_var_load_var _5
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var _5
+    load_field .y
     jump L1
 
   L0:
-    load_var _5
-    load_field .y
-    jump L2
-
-  L1:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
@@ -865,18 +856,15 @@ function json_auto_derive.optional_class_override_null_val() -> int {
     store_var_load_var _5
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var _5
+    load_field .y
     jump L1
 
   L0:
-    load_var _5
-    load_field .y
-    jump L2
-
-  L1:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
@@ -900,37 +888,31 @@ function json_auto_derive.optional_primitive_field_from_json_sum() -> int {
     store_var_load_var _10
     load_const null
     cmp_op ==
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var _10
+    store_var v1
     jump L1
 
   L0:
-    load_var _10
-    store_var v1
-    jump L2
-
-  L1:
     load_const -1
     store_var v1
 
-  L2:
+  L1:
     load_var c2
     load_field .x
     store_var_load_var _14
     load_const null
     cmp_op ==
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var _14
     store_var v2
-    jump L5
+    jump L3
 
-  L4:
+  L2:
     load_const -1
     store_var v2
 
-  L5:
+  L3:
     load_var2 5 7
     add_int
     return
@@ -1006,8 +988,6 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
     load_type baml.ToJson
     load_const "to_json"
     virtual_call nargs=1 ntypeargs=0
-    store_var json_val
-    load_var json_val
     call baml.json.stringify
     call baml.json.parse
     store_var parsed_json
@@ -1062,7 +1042,5 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
     load_type baml.ToJson
     load_const "to_json"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }

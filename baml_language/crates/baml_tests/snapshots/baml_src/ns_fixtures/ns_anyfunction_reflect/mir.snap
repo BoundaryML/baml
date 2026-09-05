@@ -48,10 +48,8 @@ fn user.fixtures.anyfunction_reflect.current_time() -> string {
 fn user.fixtures.anyfunction_reflect.bare_and_pinned() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: reflect.AnyFunction<Returns = string | fixtures.anyfunction_reflect.Doc[], Throws = fixtures.anyfunction_reflect.ToolError> // g
 
     bb0: {
-        _1 = const fn user.fixtures.anyfunction_reflect.web_search;
         _0 = const 0_i64;
         goto -> bb1;
     }
@@ -277,71 +275,62 @@ fn user.fixtures.anyfunction_reflect.typed_dispatch(name: string, args: map<stri
 
     bb2: {
         _8 = copy _4 == const null;
-        branch copy _8 -> [bb4, bb3];
+        _7 = copy _8;
+        goto -> bb3;
     }
 
     bb3: {
-        _7 = const false;
-        goto -> bb5;
+        branch copy _7 -> [bb5, bb4];
     }
 
     bb4: {
-        _7 = const true;
-        goto -> bb5;
-    }
-
-    bb5: {
-        branch copy _7 -> [bb7, bb6];
-    }
-
-    bb6: {
         _10 = copy _4;
         _11 = load_type(string | fixtures.anyfunction_reflect.Doc[]);
         _12 = load_type(fixtures.anyfunction_reflect.ToolError);
-        _0 = call const fn reflect.call_any<copy _11, copy _12>(copy _10, copy _2) -> [bb15, unwind: bb8];
+        _0 = call const fn reflect.call_any<copy _11, copy _12>(copy _10, copy _2) -> [bb13, unwind: bb6];
+    }
+
+    bb5: {
+        _0 = const "no-such-tool";
+        goto -> bb13;
+    }
+
+    bb6: {
+        _13 = is_type(copy _9, fixtures.anyfunction_reflect.ToolError);
+        branch copy _13 -> [bb12, bb7];
     }
 
     bb7: {
-        _0 = const "no-such-tool";
-        goto -> bb15;
+        _14 = is_type(copy _9, reflect.InvalidArgumentError);
+        branch copy _14 -> [bb11, bb8];
     }
 
     bb8: {
-        _13 = is_type(copy _9, fixtures.anyfunction_reflect.ToolError);
-        branch copy _13 -> [bb14, bb9];
+        _15 = is_type(copy _9, reflect.errors.CompilationError);
+        branch copy _15 -> [bb10, bb9];
     }
 
     bb9: {
-        _14 = is_type(copy _9, reflect.InvalidArgumentError);
-        branch copy _14 -> [bb13, bb10];
-    }
-
-    bb10: {
-        _15 = is_type(copy _9, reflect.errors.CompilationError);
-        branch copy _15 -> [bb12, bb11];
-    }
-
-    bb11: {
         rethrow copy _9;
     }
 
-    bb12: {
+    bb10: {
         _0 = const "uncompiled-generic";
-        goto -> bb15;
+        goto -> bb13;
+    }
+
+    bb11: {
+        _0 = const "bad-args";
+        goto -> bb13;
+    }
+
+    bb12: {
+        _16 = copy _9.0;
+        _0 = const "tool-error:" + copy _16;
+        goto -> bb13;
     }
 
     bb13: {
-        _0 = const "bad-args";
-        goto -> bb15;
-    }
-
-    bb14: {
-        _16 = copy _9.0;
-        _0 = const "tool-error:" + copy _16;
-        goto -> bb15;
-    }
-
-    bb15: {
         return;
     }
 }
@@ -485,24 +474,26 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify@spec(input: string) -> ai.F
     let _0: ai.FunctionSpec<T> // _0 // return
     let _1: string // input // param [captured]
     let _2: map<string, unknown>
-    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _4: ai.tools.Toolbox
-    let _5: ai.tools.Tool[]
-    let _6: ai.Client
+    let _3: string
+    let _4: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _5: ai.tools.Toolbox
+    let _6: ai.tools.Tool[]
+    let _7: ai.Client
 
     bb0: {
-        _2 = { const "input": copy _1 }: map<string, unknown>;
-        _3 = make_closure lambda[0]<1 type_args>(copy _1);
-        _5 = []: ai.tools.Tool[];
-        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+        _3 = copy _1;
+        _2 = { const "input": copy _3 }: map<string, unknown>;
+        _4 = make_closure lambda[0]<1 type_args>(copy _1);
+        _6 = []: ai.tools.Tool[];
+        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
     }
 
     bb1: {
-        _6 = call const fn ai.clients.resolve(const item user.fixtures.anyfunction_reflect.RuntimeEnumClient) -> [bb2];
+        _7 = call const fn ai.clients.resolve(const item user.fixtures.anyfunction_reflect.RuntimeEnumClient) -> [bb2];
     }
 
     bb2: {
-        _0 = ai.FunctionSpec<#0> { const "RuntimeClassify", copy _2, copy _3, copy _4, copy _6 };
+        _0 = ai.FunctionSpec<#0> { const "RuntimeClassify", copy _2, copy _4, copy _5, copy _7 };
         goto -> bb3;
     }
 
@@ -566,7 +557,6 @@ fn .<lambda(RuntimeClassify@spec, 0)>( __spec_output_format: ai.OutputFormat) ->
     }
 
     bb1: {
-        _7 = const "";
         _14 = copy _6;
         _15 = copy capture[0];
         _16 = load_type(unknown);

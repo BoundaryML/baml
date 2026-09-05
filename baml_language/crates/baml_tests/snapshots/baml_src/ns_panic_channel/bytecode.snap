@@ -43,15 +43,12 @@ function panic_channel.$init_test_ns_panic_channel_panic_channel(registry: testi
 
 function panic_channel.throws_a_mixture(fail: bool) -> int {
     load_var fail
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "thrown"
     init_instance baml.errors.InvalidArgument .message
     throw
 
-  L1:
+  L0:
     load_const "raised"
     init_instance baml.panics.AssertionFailed .message
     throw

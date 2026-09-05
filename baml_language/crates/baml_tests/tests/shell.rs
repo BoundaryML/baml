@@ -35,8 +35,6 @@ async fn shell_with_pipe() {
         load_type baml.ToString
         load_const "to_string"
         virtual_call nargs=1 ntypeargs=0
-        store_var _0
-        load_var _0
         return
     }
     "#);

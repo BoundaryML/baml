@@ -171,30 +171,24 @@ function fixtures.lambda_advanced.test_lambda_calling_lambda() -> int {
 function fixtures.lambda_advanced.test_lambda_in_match_inferred() -> int {
     load_const "double"
     is_type "double"
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_const "double"
     is_type "negate"
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    make_closure .<lambda(test_lambda_in_match_inferred, 2)>, 0
+    store_var f
+    jump L2
+
+  L0:
+    make_closure .<lambda(test_lambda_in_match_inferred, 1)>, 0
+    store_var f
     jump L2
 
   L1:
-    make_closure .<lambda(test_lambda_in_match_inferred, 2)>, 0
-    store_var f
-    jump L4
-
-  L2:
-    make_closure .<lambda(test_lambda_in_match_inferred, 1)>, 0
-    store_var f
-    jump L4
-
-  L3:
     make_closure .<lambda(test_lambda_in_match_inferred, 0)>, 0
     store_var f
 
-  L4:
+  L2:
     load_const 21
     load_var f
     call_indirect
@@ -370,16 +364,13 @@ function fixtures.lambda_advanced.test_shadowing() -> string {
     store_var _10
     load_var _10
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L3
-
-  L1:
+    pop_jump_if_true L2
     load_var _10
     store_var y
     load_const 0
     store_var i
 
-  L2:
+  L1:
     load_var2 5 4
     cmp_int_op <
     pop_jump_if_false L0
@@ -391,9 +382,9 @@ function fixtures.lambda_advanced.test_shadowing() -> string {
     load_const 1
     add_int
     store_var i
-    jump L2
+    jump L1
 
-  L3:
+  L2:
     load_var x
     return
 }

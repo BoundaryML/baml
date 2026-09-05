@@ -1282,8 +1282,6 @@ function arrays.<(user.arrays.CompareScore as baml.ops.Compare)>.cmp(self: array
     load_type baml.ops.Compare
     load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1304,8 +1302,6 @@ function arrays.<(user.arrays.OutOfBodyScore as baml.ops.Compare)>.cmp(self: arr
     load_type baml.ops.Compare
     load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1326,8 +1322,6 @@ function arrays.<(user.arrays.SortableItem as baml.ops.Compare)>.cmp(self: array
     load_type baml.ops.Compare
     load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1392,7 +1386,7 @@ function arrays.flaky_cmp(a: arrays.Flaky, b: arrays.Flaky) -> baml.ops.Ordering
     load_field .value
     store_var _4
     load_var _4
-    narrow_bind int, slot=4
+    narrow_bind int, slot=3
     pop_jump_if_false L0
     load_var _4
     store_var x
@@ -1400,9 +1394,8 @@ function arrays.flaky_cmp(a: arrays.Flaky, b: arrays.Flaky) -> baml.ops.Ordering
     load_field .value
     store_var _7
     load_var _7
-    narrow_bind int, slot=6
-    pop_jump_if_false L0
-    jump L1
+    narrow_bind int, slot=5
+    pop_jump_if_true L1
 
   L0:
     load_const "cannot compare null"
@@ -1410,12 +1403,10 @@ function arrays.flaky_cmp(a: arrays.Flaky, b: arrays.Flaky) -> baml.ops.Ordering
     throw
 
   L1:
-    load_var2 5 6
+    load_var2 4 5
     load_type baml.ops.Compare
     load_const "cmp"
     virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1453,8 +1444,6 @@ function arrays.sort_bigints(xs: bigint[]) -> bigint[] {
     load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1472,8 +1461,6 @@ function arrays.sort_floats(xs: float[]) -> float[] {
     load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1482,8 +1469,6 @@ function arrays.sort_generic(xs: #0[]) -> #0[] {
     load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1492,8 +1477,6 @@ function arrays.sort_ints(xs: int[]) -> int[] {
     load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1502,8 +1485,6 @@ function arrays.sort_items(xs: arrays.SortableItem[]) -> arrays.SortableItem[] {
     load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1512,8 +1493,6 @@ function arrays.sort_strings(xs: string[]) -> string[] {
     load_type baml.Sortable
     load_const "sort"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -1524,20 +1503,17 @@ function arrays.sum_int_overflow_(a: int, b: int) -> int {
     load_type baml.Summable<Sum = int>
     load_const "sum"
     virtual_call nargs=1 ntypeargs=0
-    jump L2
+    jump L1
     load_var e
     is_type baml.panics.IntegerOverflow
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
@@ -1548,7 +1524,5 @@ function arrays.sum_int_two_(a: int, b: int) -> int {
     load_type baml.Summable<Sum = int>
     load_const "sum"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }

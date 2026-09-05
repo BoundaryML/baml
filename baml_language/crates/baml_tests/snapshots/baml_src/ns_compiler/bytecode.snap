@@ -72,6 +72,7 @@ function compiler.AssertMultiRejected(files: map<string, string>, expected: comp
     load_var expected
     container_len
     store_var _21
+    load_const "expected "
     load_type int
     load_var _21
     call baml.String.from
@@ -92,7 +93,6 @@ function compiler.AssertMultiRejected(files: map<string, string>, expected: comp
     load_var _27
     call baml.String.from
     store_var _26
-    load_const "expected "
     load_var _20
     bin_op +
     load_const " compiler diagnostic(s), got "
@@ -118,14 +118,11 @@ function compiler.AssertMultiRejected(files: map<string, string>, expected: comp
     store_var _33
     load_var2 15 16
     cmp_int_op <
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L3
     load_const null
     return
 
-  L4:
+  L3:
     load_var2 2 14
     load_array_element
     load_var2 4 14
@@ -178,17 +175,14 @@ function compiler.CompileDiagnostics(files: map<string, string>, packages: map<s
     load_var packages
     sys_op reflect.Package._compile
     store_var artifact
-    jump L3
+    jump L2
     load_var error
     is_type reflect.errors.CompilationError
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var error
     rethrow
 
-  L2:
+  L1:
     load_type reflect.Diagnostic
     load_type never
     load_var error
@@ -196,13 +190,13 @@ function compiler.CompileDiagnostics(files: map<string, string>, packages: map<s
     load_var files
     make_closure .<lambda(CompileDiagnostics, 0)>, 1
     call baml.Array.filter
-    jump L4
+    jump L3
 
-  L3:
+  L2:
     load_type reflect.Diagnostic
     alloc_array 0
 
-  L4:
+  L3:
     return
 }
 
@@ -219,45 +213,44 @@ function compiler.CompileFixturePackage(files: map<string, string>, packages: ma
   L0:
     load_var2 1 2
     sys_op reflect.Package._compile
-    jump L3
+    store_var artifact
+    jump L2
     load_var error
     is_type reflect.errors.CompilationError
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var error
     rethrow
 
-  L2:
+  L1:
+    load_const "compiler fixture failed to compile: "
     load_type string
     load_var error
     load_field .message
     call baml.String.from
     store_var _8
-    load_const "compiler fixture failed to compile: "
     load_var _8
     bin_op +
     call baml.sys.panic
+    store_var artifact
 
-  L3:
-    load_var packages
+  L2:
+    load_var2 3 2
     call reflect.Package._finish
-    jump L4
+    jump L3
     load_var error
     throw_if_panic
     load_var error
     call reflect._render_cause
     store_var _15
+    load_const "compiler fixture failed to initialize: "
     load_type string
     load_var _15
     call baml.String.from
     store_var _14
-    load_const "compiler fixture failed to initialize: "
     load_var _14
     bin_op +
     call baml.sys.panic
 
-  L4:
+  L3:
     return
 }

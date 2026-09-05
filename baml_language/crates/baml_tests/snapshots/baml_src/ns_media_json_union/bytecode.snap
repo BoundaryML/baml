@@ -44,37 +44,28 @@ function media_json_union.$init_test_ns_media_json_union_media_json_union(regist
 function media_json_union.classify_media_json_union(value: image | audio | video | pdf) -> string {
     load_var value
     is_type image
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var value
     is_type audio
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var value
     is_type video
-    pop_jump_if_false L2
+    pop_jump_if_true L0
+    load_const "pdf"
+    jump L3
+
+  L0:
+    load_const "video"
+    jump L3
+
+  L1:
+    load_const "audio"
     jump L3
 
   L2:
-    load_const "pdf"
-    jump L6
-
-  L3:
-    load_const "video"
-    jump L6
-
-  L4:
-    load_const "audio"
-    jump L6
-
-  L5:
     load_const "image"
 
-  L6:
+  L3:
     return
 }
 
@@ -88,17 +79,14 @@ function media_json_union.media_json_union_respects_reversed_order() -> string {
     load_var json
     call baml.json.from_json
     is_type audio
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "image"
     jump L1
 
   L0:
-    load_const "image"
-    jump L2
-
-  L1:
     load_const "audio"
 
-  L2:
+  L1:
     return
 }
 
@@ -141,7 +129,6 @@ function media_json_union.media_json_union_roundtrips_every_kind() -> string {
     store_var pdf_value
     load_var image_value
     call user.media_json_union.classify_media_json_union
-    store_var _26
     load_var audio_value
     call user.media_json_union.classify_media_json_union
     store_var _28
@@ -151,7 +138,6 @@ function media_json_union.media_json_union_roundtrips_every_kind() -> string {
     load_var pdf_value
     call user.media_json_union.classify_media_json_union
     store_var _32
-    load_var _26
     load_const ","
     bin_op +
     load_var _28
@@ -172,23 +158,20 @@ function media_json_union.rejects_media_json(json: string) -> bool {
     load_var json
     call baml.json.from_string
     pop 1
-    jump L2
+    jump L1
     load_var e
     is_type baml.json.DecodeError
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const true
-    jump L3
+    jump L2
 
-  L2:
+  L1:
     load_const false
 
-  L3:
+  L2:
     return
 }

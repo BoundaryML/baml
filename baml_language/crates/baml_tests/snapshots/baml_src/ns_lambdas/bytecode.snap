@@ -275,30 +275,24 @@ function lambdas.lambda_contextual_call(cb: (int) -> int throws int | string) ->
 function lambdas.lambda_contextual_main() -> int {
     make_closure .<lambda(lambda_contextual_main, 0)>, 0
     call user.lambdas.lambda_contextual_call
-    jump L4
+    jump L2
     load_var e
     is_type string
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var e
     is_type int
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L2:
+  L0:
     load_const 2
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
@@ -330,20 +324,17 @@ function lambdas.lambda_effect_main() -> int {
     load_type string
     load_const user.lambdas.lambda_effect_fail
     call user.lambdas.lambda_effect_forward
-    jump L2
+    jump L1
     load_var e
     is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     rethrow
 
-  L1:
+  L0:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
@@ -375,8 +366,6 @@ function lambdas.lambdas_callback_return_name(callback: (bool) -> #0 throws neve
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -432,16 +421,13 @@ function lambdas.lambdas_captures_loop_variable_accumulation() -> int {
     store_var _6
     load_var _6
     is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L1
     load_var2 4 2
     call_indirect
     pop 1
     jump L0
 
-  L2:
+  L1:
     load_deref ?1
     return
 }
@@ -508,22 +494,19 @@ function lambdas.lambdas_explicit_throwing_lambda_catches_error() -> int {
     load_const -1
     make_closure .<lambda(lambdas_explicit_throwing_lambda_catches_error, 0)>, 0
     call_indirect
-    jump L2
+    jump L1
     load_var e
     is_type "negative"
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_var e
     throw_if_panic
     load_const -2
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const -1
 
-  L2:
+  L1:
     return
 }
 
@@ -582,8 +565,6 @@ function lambdas.lambdas_inferred_returns_join_with_tail() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -596,14 +577,12 @@ function lambdas.lambdas_inferred_signature() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _5
     load_var sig
     load_field .errors
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
-    load_var _5
     load_const "/"
     bin_op +
     load_var _7
@@ -620,14 +599,12 @@ function lambdas.lambdas_inferred_throwing_signature() -> string {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _5
     load_var sig
     load_field .errors
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
-    load_var _5
     load_const "/"
     bin_op +
     load_var _7

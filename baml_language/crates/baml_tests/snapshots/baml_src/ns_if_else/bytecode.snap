@@ -236,199 +236,120 @@ function if_else.block_expression_fn() -> int {
 }
 
 function if_else.consecutive_if_without_else_fn() -> int {
-    load_const 0
-    store_var x
-    load_const true
-    pop_jump_if_false L0
     load_const 1
-    store_var x
-
-  L0:
-    load_const false
-    pop_jump_if_false L1
-    load_const 2
-    store_var x
-
-  L1:
-    load_var x
     return
 }
 
 function if_else.else_if_assignment_fn(a: bool, b: bool) -> int {
     load_var a
-    pop_jump_if_false L0
-    jump L3
+    pop_jump_if_true L1
+    load_var b
+    pop_jump_if_true L0
+    load_const 3
+    jump L2
 
   L0:
-    load_var b
-    pop_jump_if_false L1
+    load_const 2
     jump L2
 
   L1:
-    load_const 3
-    jump L4
-
-  L2:
-    load_const 2
-    jump L4
-
-  L3:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function if_else.else_if_assignment_with_locals_fn(a: bool, b: bool) -> int {
     load_var a
-    pop_jump_if_false L0
-    jump L3
+    pop_jump_if_true L1
+    load_var b
+    pop_jump_if_true L0
+    load_const 3
+    jump L2
 
   L0:
-    load_var b
-    pop_jump_if_false L1
+    load_const 2
     jump L2
 
   L1:
-    load_const 3
-    jump L4
-
-  L2:
-    load_const 2
-    jump L4
-
-  L3:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function if_else.else_if_return_locals(a: bool, b: bool) -> int {
     load_var a
-    pop_jump_if_false L0
-    jump L3
+    pop_jump_if_true L1
+    load_var b
+    pop_jump_if_true L0
+    load_const 3
+    jump L2
 
   L0:
-    load_var b
-    pop_jump_if_false L1
+    load_const 2
     jump L2
 
   L1:
-    load_const 3
-    jump L4
-
-  L2:
-    load_const 2
-    jump L4
-
-  L3:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function if_else.else_if_with_comparisons_fn() -> int {
-    load_const 5
-    load_const 0
-    cmp_int_op <
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_const 5
-    load_const 10
-    cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const 2
-    jump L4
-
-  L2:
     load_const 1
-    jump L4
-
-  L3:
-    load_const 0
-
-  L4:
     return
 }
 
 function if_else.else_if_with_param(a: bool, b: bool) -> int {
     load_var a
-    pop_jump_if_false L0
-    jump L3
+    pop_jump_if_true L1
+    load_var b
+    pop_jump_if_true L0
+    load_const 3
+    jump L2
 
   L0:
-    load_var b
-    pop_jump_if_false L1
+    load_const 2
     jump L2
 
   L1:
-    load_const 3
-    jump L4
-
-  L2:
-    load_const 2
-    jump L4
-
-  L3:
     load_const 1
 
-  L4:
+  L2:
     return
 }
 
 function if_else.if_else_assigned_then_passed_fn() -> int {
-    load_const false
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
     load_const 20
-    jump L2
-
-  L1:
-    load_const 10
-
-  L2:
     call user.if_else.if_else_identity
     return
 }
 
 function if_else.if_else_assignment_with_locals_fn(b: bool) -> int {
     load_var b
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const 2
     jump L1
 
   L0:
-    load_const 2
-    jump L2
-
-  L1:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function if_else.if_else_assignment_with_param(b: bool) -> int {
     load_var b
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const 2
     jump L1
 
   L0:
-    load_const 2
-    jump L2
-
-  L1:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
@@ -439,85 +360,60 @@ function if_else.if_else_identity(x: int) -> int {
 
 function if_else.if_else_return_locals(b: bool) -> int {
     load_var b
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const 2
     jump L1
 
   L0:
-    load_const 2
-    jump L2
-
-  L1:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function if_else.if_else_statement_fn(b: bool) -> int {
     load_var b
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const 4
     call user.if_else.if_else_identity
     pop 1
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const 1
     call user.if_else.if_else_identity
     pop 1
 
-  L2:
+  L1:
     load_const 1
     return
 }
 
 function if_else.if_else_with_param_true(b: bool) -> int {
     load_var b
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const 2
     jump L1
 
   L0:
-    load_const 2
-    jump L2
-
-  L1:
     load_const 1
 
-  L2:
+  L1:
     return
 }
 
 function if_else.if_without_else_fn() -> int {
-    load_const 0
-    store_var x
-    load_const true
-    pop_jump_if_false L0
     load_const 5
-    store_var x
-
-  L0:
-    load_var x
     return
 }
 
 function if_else.if_without_else_with_local_fn() -> int {
-    load_const true
-    pop_jump_if_false L0
-
-  L0:
     load_const 0
     return
 }
 
 function if_else.nested_block_with_if_fn() -> int {
-    load_const 1
-    store_var a
-    load_const 2
-    load_const 3
-    add_int
+    load_const 5
     store_var_load_var a
     load_const 5
     cmp_int_op ==

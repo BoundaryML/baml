@@ -344,16 +344,12 @@ function deep_copy.eq_circular_helper() -> bool {
 }
 
 function deep_copy.eq_different_primitives_helper() -> bool {
-    load_const 42
-    load_const 43
-    cmp_int_op ==
+    load_const false
     return
 }
 
 function deep_copy.eq_primitives_helper() -> bool {
-    load_const 42
-    load_const 42
-    cmp_int_op ==
+    load_const true
     return
 }
 

@@ -8,10 +8,7 @@ function reflect.AnyClass.attributes(self: reflect.AnyClass) -> reflect.Meta {
     store_var _4
     load_var _4
     narrow_bind reflect.class.Type, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const null
     load_const null
     load_const null
@@ -19,13 +16,13 @@ function reflect.AnyClass.attributes(self: reflect.AnyClass) -> reflect.Meta {
     load_type string
     alloc_map 0
     init_instance reflect.Meta .alias, .description, .docstring, .other
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_var _4
     call reflect.class.Type.meta
 
-  L2:
+  L1:
     return
 }
 
@@ -34,11 +31,9 @@ function reflect.AnyClass.get(self: reflect.AnyClass, name: string) -> #1 | null
     load_type reflect.AnyClass
     load_const "has_field"
     virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
-    unary_op !
-    pop_jump_if_false L0
-    jump L3
+    pop_jump_if_true L0
+    load_const null
+    jump L2
 
   L0:
     load_var2 1 2
@@ -47,26 +42,17 @@ function reflect.AnyClass.get(self: reflect.AnyClass, name: string) -> #1 | null
     virtual_call nargs=2 ntypeargs=0
     store_var _5
     load_var _5
-    store_var _6
-    load_var _6
-    narrow_bind reflect.class.Field, slot=5
-    pop_jump_if_false L1
+    narrow_bind reflect.class.Field, slot=3
+    pop_jump_if_true L1
+    load_const null
     jump L2
 
   L1:
-    load_const null
-    jump L4
+    load_type #1
+    load_var _5
+    call reflect.class.Field.value
 
   L2:
-    load_type #1
-    load_var _6
-    call reflect.class.Field.value
-    jump L4
-
-  L3:
-    load_const null
-
-  L4:
     return
 }
 
@@ -77,14 +63,11 @@ function reflect.AnyClass.get_field(self: reflect.AnyClass, name: string) -> ref
     store_var _5
     load_var _5
     narrow_bind reflect.class.Type, slot=3
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L0
+    load_const null
+    jump L3
 
   L0:
-    load_const null
-    jump L5
-
-  L1:
     load_var _5
     call reflect.class.Type.fields
     load_type baml.iter.Iterable<Error = never, Item = reflect.class.Field>
@@ -92,7 +75,7 @@ function reflect.AnyClass.get_field(self: reflect.AnyClass, name: string) -> ref
     virtual_call nargs=1 ntypeargs=0
     store_var _8
 
-  L2:
+  L1:
     load_var _8
     load_type baml.iter.Iterator<Error = never, Item = reflect.class.Field>
     load_const "next"
@@ -100,16 +83,13 @@ function reflect.AnyClass.get_field(self: reflect.AnyClass, name: string) -> ref
     store_var _9
     load_var _9
     is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var _9
     store_var_load_var field
     load_field .name
     load_var name
     cmp_op ==
-    pop_jump_if_false L2
+    pop_jump_if_false L1
     load_var field
     load_field .name
     load_var field
@@ -118,12 +98,12 @@ function reflect.AnyClass.get_field(self: reflect.AnyClass, name: string) -> ref
     load_field .meta
     load_var self
     init_instance reflect.class.Field .name, .type, .meta, ._owner
-    jump L5
+    jump L3
 
-  L4:
+  L2:
     load_const null
 
-  L5:
+  L3:
     return
 }
 
@@ -134,14 +114,11 @@ function reflect.AnyClass.has_field(self: reflect.AnyClass, name: string) -> boo
     store_var _5
     load_var _5
     narrow_bind reflect.class.Type, slot=3
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L0
+    load_const false
+    jump L3
 
   L0:
-    load_const false
-    jump L5
-
-  L1:
     load_var _5
     call reflect.class.Type.fields
     load_type baml.iter.Iterable<Error = never, Item = reflect.class.Field>
@@ -149,7 +126,7 @@ function reflect.AnyClass.has_field(self: reflect.AnyClass, name: string) -> boo
     virtual_call nargs=1 ntypeargs=0
     store_var _8
 
-  L2:
+  L1:
     load_var _8
     load_type baml.iter.Iterator<Error = never, Item = reflect.class.Field>
     load_const "next"
@@ -157,22 +134,19 @@ function reflect.AnyClass.has_field(self: reflect.AnyClass, name: string) -> boo
     store_var _9
     load_var _9
     is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var _9
     load_field .name
     load_var name
     cmp_op ==
-    pop_jump_if_false L2
+    pop_jump_if_false L1
     load_const true
-    jump L5
+    jump L3
 
-  L4:
+  L2:
     load_const false
 
-  L5:
+  L3:
     return
 }
 
@@ -183,15 +157,12 @@ function reflect.AnyClass.list_fields(self: reflect.AnyClass) -> reflect.class.F
     store_var _4
     load_var _4
     narrow_bind reflect.class.Type, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_type reflect.class.Field
     alloc_array 0
-    jump L5
+    jump L3
 
-  L1:
+  L0:
     load_type reflect.class.Field
     alloc_array 0
     store_var fields
@@ -202,7 +173,7 @@ function reflect.AnyClass.list_fields(self: reflect.AnyClass) -> reflect.class.F
     virtual_call nargs=1 ntypeargs=0
     store_var _8
 
-  L2:
+  L1:
     load_var _8
     load_type baml.iter.Iterator<Error = never, Item = reflect.class.Field>
     load_const "next"
@@ -210,10 +181,7 @@ function reflect.AnyClass.list_fields(self: reflect.AnyClass) -> reflect.class.F
     store_var _9
     load_var _9
     is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
+    pop_jump_if_true L2
     load_var _9
     store_var field
     load_type reflect.class.Field
@@ -227,12 +195,12 @@ function reflect.AnyClass.list_fields(self: reflect.AnyClass) -> reflect.class.F
     init_instance reflect.class.Field .name, .type, .meta, ._owner
     call baml.Array.push
     pop 1
-    jump L2
+    jump L1
 
-  L4:
+  L2:
     load_var fields
 
-  L5:
+  L3:
     return
 }
 
@@ -463,38 +431,29 @@ function reflect.class.Field.value(self: reflect.class.Field) -> #0 | null {
     store_var _3
     load_var _3
     narrow_bind reflect.AnyClass, slot=2
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_true L0
+    load_const null
+    jump L2
 
   L0:
-    load_const null
-    jump L4
-
-  L1:
     load_type #0
     load_var2 2 1
     load_field .name
     call reflect.class.get_field
-    jump L4
+    jump L2
     load_var e
     is_type reflect.errors.CompilationError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
+    pop_jump_if_true L1
     load_var e
     rethrow
 
-  L3:
-    load_var e
-    load_field .0
-    pop 1
+  L1:
     load_var e
     load_field .0
     init_instance reflect.errors.TypeMismatch .message
     throw
 
-  L4:
+  L2:
     return
 }
 

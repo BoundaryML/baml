@@ -242,24 +242,21 @@ function match_types.classify_all_guarded(x: int, flag: bool) -> string {
     is_type 0
     pop_jump_if_false L0
     load_var flag
-    pop_jump_if_false L0
-    jump L5
+    pop_jump_if_true L5
 
   L0:
     load_var x
     is_type 1
     pop_jump_if_false L1
     load_var flag
-    pop_jump_if_false L1
-    jump L4
+    pop_jump_if_true L4
 
   L1:
     load_var x
     is_type 2
     pop_jump_if_false L2
     load_var flag
-    pop_jump_if_false L2
-    jump L3
+    pop_jump_if_true L3
 
   L2:
     load_const "fallback"
@@ -285,38 +282,32 @@ function match_types.classify_animal(animal: match_types.Cat | match_types.Dog |
     store_var _2
     load_var _2
     narrow_bind match_types.Cat, slot=2
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var animal
     store_var _5
     load_var _5
     narrow_bind match_types.Dog, slot=3
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
+    pop_jump_if_true L0
     load_const "bird: "
     load_var animal
     load_field .name
     bin_op +
-    jump L4
+    jump L2
 
-  L2:
+  L0:
     load_const "dog: "
     load_var _5
     load_field .name
     bin_op +
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const "cat: "
     load_var _2
     load_field .name
     bin_op +
 
-  L4:
+  L2:
     return
 }
 
@@ -325,35 +316,29 @@ function match_types.classify_animal_wildcard(animal: match_types.Cat | match_ty
     store_var _2
     load_var _2
     narrow_bind match_types.Cat, slot=2
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var animal
     store_var _5
     load_var _5
     narrow_bind match_types.Dog, slot=3
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    load_const "other"
     jump L2
 
-  L1:
-    load_const "other"
-    jump L4
-
-  L2:
+  L0:
     load_const "dog: "
     load_var _5
     load_field .name
     bin_op +
-    jump L4
+    jump L2
 
-  L3:
+  L1:
     load_const "cat: "
     load_var _2
     load_field .name
     bin_op +
 
-  L4:
+  L2:
     return
 }
 
@@ -367,29 +352,25 @@ function match_types.classify_guard_on_typed_field(result: match_types.Success |
     load_field .data
     load_const ""
     cmp_op !=
-    pop_jump_if_false L0
-    jump L3
+    pop_jump_if_true L2
 
   L0:
     load_var result
     store_var _6
     load_var _6
     narrow_bind match_types.Success, slot=3
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_true L1
+    load_const "failure"
+    jump L3
 
   L1:
-    load_const "failure"
-    jump L4
+    load_const "empty success"
+    jump L3
 
   L2:
-    load_const "empty success"
-    jump L4
-
-  L3:
     load_const "success with data"
 
-  L4:
+  L3:
     return
 }
 
@@ -398,37 +379,30 @@ function match_types.classify_guarded_int(x: int, flag: bool) -> string {
     is_type 1
     pop_jump_if_false L0
     load_var flag
-    pop_jump_if_false L0
-    jump L5
+    pop_jump_if_true L3
 
   L0:
     load_var x
     is_type 1
-    pop_jump_if_false L1
+    pop_jump_if_true L2
+    load_var x
+    is_type 2
+    pop_jump_if_true L1
+    load_const "other"
     jump L4
 
   L1:
-    load_var x
-    is_type 2
-    pop_jump_if_false L2
-    jump L3
+    load_const "two"
+    jump L4
 
   L2:
-    load_const "other"
-    jump L6
+    load_const "one without flag"
+    jump L4
 
   L3:
-    load_const "two"
-    jump L6
-
-  L4:
-    load_const "one without flag"
-    jump L6
-
-  L5:
     load_const "one with flag"
 
-  L6:
+  L4:
     return
 }
 
@@ -437,70 +411,57 @@ function match_types.classify_mixed_class_primitive(x: match_types.MyClass | int
     store_var _2
     load_var _2
     narrow_bind match_types.MyClass, slot=2
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var x
     store_var _3
     load_var _3
     narrow_bind int, slot=3
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var x
     store_var _4
     load_var _4
     narrow_bind string, slot=4
-    pop_jump_if_false L2
+    pop_jump_if_true L0
+    load_const "bool"
+    jump L3
+
+  L0:
+    load_const "string"
+    jump L3
+
+  L1:
+    load_const "int"
     jump L3
 
   L2:
-    load_const "bool"
-    jump L6
-
-  L3:
-    load_const "string"
-    jump L6
-
-  L4:
-    load_const "int"
-    jump L6
-
-  L5:
     load_const "class"
 
-  L6:
+  L3:
     return
 }
 
 function match_types.classify_mixed_lit_typed_guard(x: int, flag: bool) -> string {
     load_var x
     is_type 0
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L2
     load_var x
     is_type 1
-    pop_jump_if_false L1
+    pop_jump_if_false L0
     load_var flag
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_true L1
+
+  L0:
+    load_const "other int"
+    jump L3
 
   L1:
-    load_const "other int"
-    jump L4
+    load_const "one with flag"
+    jump L3
 
   L2:
-    load_const "one with flag"
-    jump L4
-
-  L3:
     load_const "zero"
 
-  L4:
+  L3:
     return
 }
 
@@ -509,29 +470,23 @@ function match_types.classify_null_with_class(x: match_types.Cat | match_types.D
     store_var _2
     load_var _2
     narrow_bind match_types.Cat, slot=2
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
+    pop_jump_if_true L1
     load_var x
     store_var _3
     load_var _3
     narrow_bind match_types.Dog, slot=3
-    pop_jump_if_false L1
+    pop_jump_if_true L0
+    load_const "nothing"
+    jump L2
+
+  L0:
+    load_const "dog"
     jump L2
 
   L1:
-    load_const "nothing"
-    jump L4
-
-  L2:
-    load_const "dog"
-    jump L4
-
-  L3:
     load_const "cat"
 
-  L4:
+  L2:
     return
 }
 
@@ -540,17 +495,14 @@ function match_types.classify_nullable_status(s: match_types.Status | null) -> s
     load_const user.match_types.Status.Active
     alloc_variant user.match_types.Status
     cmp_op ==
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "other"
     jump L1
 
   L0:
-    load_const "other"
-    jump L2
-
-  L1:
     load_const "active"
 
-  L2:
+  L1:
     return
 }
 
@@ -591,8 +543,7 @@ function match_types.classify_result_guarded(result: match_types.SuccessCode | m
     load_field .code
     load_const 200
     cmp_int_op >
-    pop_jump_if_false L0
-    jump L5
+    pop_jump_if_true L4
 
   L0:
     load_var result
@@ -601,33 +552,29 @@ function match_types.classify_result_guarded(result: match_types.SuccessCode | m
     narrow_bind match_types.SuccessCode, slot=4
     pop_jump_if_false L1
     load_var strict
-    pop_jump_if_false L1
-    jump L4
+    pop_jump_if_true L3
 
   L1:
     load_var result
     store_var _8
     load_var _8
     narrow_bind match_types.SuccessCode, slot=5
-    pop_jump_if_false L2
-    jump L3
+    pop_jump_if_true L2
+    load_const "failure"
+    jump L5
 
   L2:
-    load_const "failure"
-    jump L6
+    load_const "success"
+    jump L5
 
   L3:
-    load_const "success"
-    jump L6
+    load_const "strict success"
+    jump L5
 
   L4:
-    load_const "strict success"
-    jump L6
-
-  L5:
     load_const "redirect"
 
-  L6:
+  L5:
     return
 }
 
@@ -752,41 +699,32 @@ function match_types.describe_animal(animal: match_types.Cat | match_types.Dog |
     store_var _2
     load_var _2
     narrow_bind match_types.Cat, slot=2
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var animal
     store_var _3
     load_var _3
     narrow_bind match_types.Dog, slot=3
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var animal
     store_var _4
     load_var _4
     narrow_bind match_types.Bird, slot=4
-    pop_jump_if_false L2
+    pop_jump_if_true L0
+    load_const "fish"
+    jump L3
+
+  L0:
+    load_const "bird"
+    jump L3
+
+  L1:
+    load_const "dog"
     jump L3
 
   L2:
-    load_const "fish"
-    jump L6
-
-  L3:
-    load_const "bird"
-    jump L6
-
-  L4:
-    load_const "dog"
-    jump L6
-
-  L5:
     load_const "cat"
 
-  L6:
+  L3:
     return
 }
 
@@ -795,41 +733,32 @@ function match_types.describe_sparse(animal: match_types.Cat | match_types.Dog |
     store_var _2
     load_var _2
     narrow_bind match_types.Cat, slot=2
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var animal
     store_var _3
     load_var _3
     narrow_bind match_types.Dog, slot=3
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var animal
     store_var _4
     load_var _4
     narrow_bind match_types.Bird, slot=4
-    pop_jump_if_false L2
+    pop_jump_if_true L0
+    load_const "fish"
+    jump L3
+
+  L0:
+    load_const "bird"
+    jump L3
+
+  L1:
+    load_const "dog"
     jump L3
 
   L2:
-    load_const "fish"
-    jump L6
-
-  L3:
-    load_const "bird"
-    jump L6
-
-  L4:
-    load_const "dog"
-    jump L6
-
-  L5:
     load_const "cat"
 
-  L6:
+  L3:
     return
 }
 
@@ -838,17 +767,14 @@ function match_types.describe_two(animal: match_types.Cat | match_types.Dog) -> 
     store_var _2
     load_var _2
     narrow_bind match_types.Cat, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_const "dog"
     jump L1
 
   L0:
-    load_const "dog"
-    jump L2
-
-  L1:
     load_const "cat"
 
-  L2:
+  L1:
     return
 }
 
@@ -865,8 +791,7 @@ function match_types.guard_all_fail() -> string {
     load_field .value
     load_const 90
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L3
+    pop_jump_if_true L3
 
   L0:
     load_var s
@@ -878,8 +803,7 @@ function match_types.guard_all_fail() -> string {
     load_field .value
     load_const 70
     cmp_int_op >=
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_true L2
 
   L1:
     load_const "needs work"
@@ -909,8 +833,7 @@ function match_types.guard_fallthrough() -> string {
     load_field .value
     load_const 90
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L3
+    pop_jump_if_true L3
 
   L0:
     load_var s
@@ -922,8 +845,7 @@ function match_types.guard_fallthrough() -> string {
     load_field .value
     load_const 70
     cmp_int_op >=
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_true L2
 
   L1:
     load_const "needs work"
@@ -953,8 +875,7 @@ function match_types.guard_true() -> string {
     load_field .value
     load_const 90
     cmp_int_op >=
-    pop_jump_if_false L0
-    jump L3
+    pop_jump_if_true L3
 
   L0:
     load_var s
@@ -966,8 +887,7 @@ function match_types.guard_true() -> string {
     load_field .value
     load_const 70
     cmp_int_op >=
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_true L2
 
   L1:
     load_const "needs work"
@@ -1003,41 +923,32 @@ function match_types.identify(x: int | string | bool | float) -> string {
     store_var _2
     load_var _2
     narrow_bind int, slot=2
-    pop_jump_if_false L0
-    jump L5
-
-  L0:
+    pop_jump_if_true L2
     load_var x
     store_var _3
     load_var _3
     narrow_bind string, slot=3
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
+    pop_jump_if_true L1
     load_var x
     store_var _4
     load_var _4
     narrow_bind bool, slot=4
-    pop_jump_if_false L2
+    pop_jump_if_true L0
+    load_const "decimal"
+    jump L3
+
+  L0:
+    load_const "boolean"
+    jump L3
+
+  L1:
+    load_const "text"
     jump L3
 
   L2:
-    load_const "decimal"
-    jump L6
-
-  L3:
-    load_const "boolean"
-    jump L6
-
-  L4:
-    load_const "text"
-    jump L6
-
-  L5:
     load_const "integer"
 
-  L6:
+  L3:
     return
 }
 
@@ -1050,15 +961,12 @@ function match_types.match_typed_pattern_with_field_access() -> int {
     store_var _2
     load_var _2
     narrow_bind match_types.MtpPoint, slot=2
-    pop_jump_if_false L0
+    pop_jump_if_true L0
+    load_var shape
+    load_field .radius
     jump L1
 
   L0:
-    load_var shape
-    load_field .radius
-    jump L2
-
-  L1:
     load_var _2
     store_var_load_var p
     load_field .x
@@ -1066,7 +974,7 @@ function match_types.match_typed_pattern_with_field_access() -> int {
     load_field .y
     add_int
 
-  L2:
+  L1:
     return
 }
 
@@ -1078,22 +986,19 @@ function match_types.typed_pattern_second_arm() -> string {
     store_var _2
     load_var _2
     narrow_bind match_types.Success, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
+    pop_jump_if_true L0
     load_const "failure: "
     load_var result
     load_field .reason
     bin_op +
-    jump L2
+    jump L1
 
-  L1:
+  L0:
     load_const "success: "
     load_var _2
     load_field .data
     bin_op +
 
-  L2:
+  L1:
     return
 }

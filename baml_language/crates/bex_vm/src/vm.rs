@@ -9077,10 +9077,10 @@ impl BexVm {
                     }
                 }
 
-                OpCode::PopJumpIfFalse => {
+                OpCode::PopJumpIfFalse | OpCode::PopJumpIfTrue => {
                     let offset = read_i32_unchecked(code, pc);
                     let cond = self.stack.ensure_pop();
-                    if cond == Value::bool(false) {
+                    if cond == Value::bool(op == OpCode::PopJumpIfTrue) {
                         *pc = (*pc as i64 + offset as i64) as usize;
                     }
                     if self.early_yield.should_early_yield() {
@@ -9094,6 +9094,25 @@ impl BexVm {
                     let cond = self.stack[top_slot];
                     if cond == Value::bool(false) {
                         *pc = (*pc as i64 + offset as i64) as usize;
+                    }
+                }
+
+                OpCode::JumpIfFalseOrPop | OpCode::JumpIfTrueOrPop | OpCode::JumpIfNotNullOrPop => {
+                    let offset = read_i32_unchecked(code, pc);
+                    let cond = self.stack[self.stack.ensure_stack_top()];
+                    let taken = match op {
+                        OpCode::JumpIfFalseOrPop => cond == Value::bool(false),
+                        OpCode::JumpIfTrueOrPop => cond == Value::bool(true),
+                        OpCode::JumpIfNotNullOrPop => !cond.is_null(),
+                        _ => unreachable!(),
+                    };
+                    if taken {
+                        *pc = (*pc as i64 + offset as i64) as usize;
+                    } else {
+                        self.stack.ensure_pop();
+                    }
+                    if self.early_yield.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
                     }
                 }
 
