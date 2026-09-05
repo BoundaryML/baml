@@ -36,12 +36,14 @@ class Review {
     feedback: string,
 }
 
-//#handle_issue(issue: Issue, mode: HandleMode = HandleMode.Live, update: bool = false, review: Review? = null) -> Issue
+//#handle_issue(issue: Issue, mode: HandleMode = HandleMode.Live, update: bool = false, review: Review? = null, thread: SlackRef? = null) -> Issue
 function handle_issue(
     issue: Issue,
     mode: HandleMode = HandleMode.Live,
     update: bool = false,
     review: Review? = null,
+    /// A Slack thread that hears each stage: design pass, fix pass, gate, push.
+    thread: SlackRef? = null,
 ) -> Issue {
     if (review == null) {
         //# skip: not ready (not gauged / not open / already handled)
@@ -85,6 +87,7 @@ function handle_issue(
         if (design == null) {
             //## stop: the design agent produced nothing
             write_outcome(sb, stopped_outcome(sb, started));
+            tell_thread(thread, ":x: the design pass produced nothing; a human takes it from here");
             return issue;
         };
         doc = render_design_doc(design ?? baml.sys.panic("unreachable"));
@@ -92,8 +95,13 @@ function handle_issue(
         if (difficulty == Difficulty.Hard) {
             //## hard: hand the design doc to the shepherd, no code change
             write_outcome(sb, outcome(sb, "hard", null, started, null, null, doc));
+            tell_thread(
+                thread,
+                ":memo: gauged Hard: the design doc is written for the shepherd, no code was changed",
+            );
             return with_design_doc(issue, doc);
         };
+        tell_thread(thread, ":memo: design pass done, starting the fix pass on `" + sb.branch + "`");
     } else {
         //# under review: the feedback is the plan
         doc = review.feedback;
@@ -113,6 +121,7 @@ function handle_issue(
         //## stop: the fix agent ran out of budget or reported nothing
         keep_branch = mode == HandleMode.Live;
         write_outcome(sb, stopped_outcome(sb, started));
+        tell_thread(thread, ":x: the fix agent stopped without a result on `" + sb.branch + "`");
         return out;
     };
     let fix = report ?? baml.sys.panic("unreachable");
@@ -123,6 +132,14 @@ function handle_issue(
         //## stop: gate failed — branch kept for a human in Live mode
         keep_branch = mode == HandleMode.Live;
         write_outcome(sb, outcome(sb, "gate_failed", null, started, gate, fix, doc));
+        tell_thread(
+            thread,
+            ":x: gate failed on `"
+                + sb.branch
+                + "`: "
+                + failed_steps(gate)
+                + "; the branch is kept for a human",
+        );
         return out;
     };
     if (review != null) {
@@ -138,6 +155,19 @@ function handle_issue(
             _ => "",
         };
         comment_on_pr(sb, pr, review_comment(fix));
+        //# the thread hears what was pushed
+        tell_thread(
+            thread,
+            ":arrows_counterclockwise: pushed "
+                + head_sha(sb)
+                + " to "
+                + pr
+                + "\n"
+                + fix.summary.trim()
+                + "\n_files: "
+                + fix.files_changed.join(", ")
+                + "_",
+        );
         write_outcome(sb, outcome(sb, "fixed", pr, started, gate, fix, null));
         return out;
     };
@@ -155,6 +185,7 @@ function handle_issue(
     //# push the branch and open the draft PR
     let pr = push_and_open_pr(sb, draft);
     write_outcome(sb, outcome(sb, "fixed", pr, started, gate, fix, doc));
+    tell_thread(thread, ":rocket: draft PR opened: " + pr + "\n" + fix.summary.trim());
     log.info(
         { "issue": issue.id, "pr": pr, "turns": read_turns(sb), "seconds": elapsed_s(started) },
     );
@@ -509,6 +540,9 @@ class CmdResult {
 /// is an allowlist of environment variables: none from this process leaks
 /// unless named here. The agent runs with `with_gh = false` and never sees
 /// GH_TOKEN, FEEDBACK_SUPABASE_KEY, ANTHROPIC_API_KEY or anything else.
+/// The Claude Code CLI runs on its own login, found through HOME: on a
+/// laptop the keychain, on the runner the login kept on the volume. No
+/// Claude credential ever passes through atb2.
 ///
 /// This guards the environment only. HOME is the host's, because the
 /// Claude Code CLI reads its login from there, so files under it
@@ -544,12 +578,18 @@ function sandbox_env(with_gh: bool) -> map<string, string> {
         env.set("GIT_TERMINAL_PROMPT", "0");
     }
     if (with_gh) {
-        let tok = baml.env.get("GH_TOKEN") ?? baml.env.get("GITHUB_TOKEN");
-        if (tok != null) {
-            env.set("GH_TOKEN", tok ?? "");
+        match (github_token()) {
+            null => null,
+            let t: string => env.set("GH_TOKEN", t),
         };
     }
     env
+}
+
+/// The token gh and git push with: GH_TOKEN, GITHUB_TOKEN, or the old
+/// bot's ATB_GITHUB_TOKEN (Infisical boundary-tools).
+function github_token() -> string? {
+    baml.env.get("GH_TOKEN") ?? baml.env.get("GITHUB_TOKEN") ?? baml.env.get("ATB_GITHUB_TOKEN")
 }
 
 /// Runs every sandbox process under `caffeinate -i` on macOS: a laptop that
@@ -1629,6 +1669,11 @@ function passed_count(output: string) -> string? {
     found
 }
 
+/// The worktree's HEAD, short, for the thread.
+function head_sha(sb: Sandbox) -> string {
+    git(sb.worktree, ["rev-parse", "--short", "HEAD"]).stdout.trim()
+}
+
 /// Live only. Lifts the worktree's push guard for this one push. The
 /// guard is set by open_sandbox and is what keeps the agent from pushing.
 function push_branch(sb: Sandbox) -> null {
@@ -1932,6 +1977,10 @@ testset "fix_in_budget" with testing.PassRate(0.6) {
                     let target = with_difficulty(reference_as_issue(issue.number, r), r.difficulty);
                     handle_issue(target, mode = HandleMode.DryRun);
                     let out = read_outcome(target) ?? baml.sys.panic("no outcome for #" + key);
+                    // the store, when configured, gets the eval's rows marked dataset=eval
+                    // (run_tests.sh exports ATB2_DATASET=eval); never mixed with live ones
+                    save_issue(target);
+                    save_run(target, out, HandleMode.DryRun);
                     log.info(
                         {
                             "issue": key,
@@ -2097,7 +2146,8 @@ testset "handle_issue" {
         assert.is_true(
             !env.has("GH_TOKEN")
                 && !env.has("FEEDBACK_SUPABASE_KEY")
-                && !env.has("ANTHROPIC_API_KEY"),
+                && !env.has("ANTHROPIC_API_KEY")
+                && !env.has("CLAUDE_CODE_OAUTH_TOKEN"),
         );
         // no ambient git credentials or ssh agent for the agent, and the host
         // git config (osxkeychain helper, planted hooks) is neutralized

@@ -13,7 +13,7 @@
 #
 #   tools/atb2/run_tests.sh            # menu: pick a pipeline stage to test
 #   tools/atb2/run_tests.sh create     # or name the stage directly:
-#   tools/atb2/run_tests.sh organize   #   create | organize | pr
+#   tools/atb2/run_tests.sh organize   #   create | organize | pr | wire
 #   tools/atb2/run_tests.sh pr
 #   tools/atb2/run_tests.sh --check     # only verify infisical + secrets
 #   tools/atb2/run_tests.sh -- <cmd>    # run <cmd> with the secrets, e.g.
@@ -40,13 +40,18 @@ atb2_home="${ATB2_HOME:-$HOME/.atb2}"
 BAML="${BAML_CLI:-$atb2_home/target/debug/baml-cli}"
 [ -x "$BAML" ] || BAML=baml
 export BAML
+# Everything this script runs is an eval: rows it writes to the store are
+# marked dataset=eval, never a real user's report (README, "Eval rows vs real rows").
+export ATB2_DATASET=eval
 
 die() { echo "run_tests: $*" >&2; exit 1; }
 
 command -v infisical >/dev/null || die "infisical CLI not found — brew install infisical"
 env="${FEEDBACK_INFISICAL_ENV:-dev}"
-project_id="${FEEDBACK_INFISICAL_PROJECT_ID:-}"
-project="${project_id:-the nearest .infisical.json}"
+# boundary-tools: where FEEDBACK_SUPABASE_*, ATB_SLACK_* and (prod) ATB_POSTHOG_* live.
+# The repo's own .infisical.json points at another workspace.
+project_id="${FEEDBACK_INFISICAL_PROJECT_ID:-bdd280e2-259c-4750-9b16-a8597a67214c}"
+project="$project_id"
 # (no arrays: macOS ships bash 3.2, where an empty array trips `set -u`)
 inf() {
     if [ -n "$project_id" ]; then
@@ -105,7 +110,10 @@ run_stage() {
             # budgets, feedback parsing; a regression there should not cost an
             # agent session
             exec "$BAML" test -i "root::handle_issue::*" -i "root::merge_issue::*" -i "root::fix_in_budget::*" -i "root::design_doc::*" ;;
-        *)  die "unknown stage: $1 (use create | organize | pr)" ;;
+        wire|4|"wiring")
+            echo "run_tests: testing WIRING (store, slack, intake, pipeline; token-free)"
+            exec "$BAML" test -i "root::store::*" -i "root::slack::*" -i "root::intake::*" -i "root::pipeline::*" -i "root::merge_requests::*" ;;
+        *)  die "unknown stage: $1 (use create | organize | pr | wire)" ;;
     esac
 }
 
@@ -114,14 +122,15 @@ if [ -n "${1:-}" ]; then
     run_stage "$1"
 fi
 
-[ -t 0 ] || die "no stage given and stdin is not a terminal — pass create | organize | pr"
+[ -t 0 ] || die "no stage given and stdin is not a terminal — pass create | organize | pr | wire"
 
 echo
 echo "Which part of the pipeline do you want to test?"
 echo "  1) issue creation      — repro_match, issue_enrichment"
 echo "  2) issue organization  — organize_issue, gauge_issue, difficulty_estimate"
 echo "  3) PR creation         — fix_in_budget, design_doc (real agent runs, slow)"
+echo "  4) wiring              — store, slack, intake, pipeline (token-free)"
 echo
-printf "Enter 1, 2, or 3 (or create/organize/pr): "
+printf "Enter 1, 2, 3 or 4 (or create/organize/pr/wire): "
 read -r choice
 run_stage "$choice"
