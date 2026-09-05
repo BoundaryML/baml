@@ -46,13 +46,13 @@ policy.max_delta_pct = 3.0
 # Ceilings are ~3% above the current CI-measured baselines. The daily
 # baseline refresh re-pegs them to CI's recorded sizes.
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = "62.2 MiB"
+max_file_bytes = "62.5 MiB"
 
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "71.5 MiB"
+max_file_bytes = "71.8 MiB"
 
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = "81.6 MiB"
+max_file_bytes = "82.4 MiB"
 
 [artifacts.packed-program]
 kind = "pack"
@@ -67,13 +67,13 @@ policy.max_delta_pct = 3.0
 # bytecode ships in every packed program. Each ceiling is ~3% above the
 # re-recorded baseline in `.ci/size-gate`.
 [artifacts.packed-program.platform.aarch64-apple-darwin]
-max_file_bytes = "25.3 MiB"
+max_file_bytes = "25.9 MiB"
 
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "28.1 MiB"
+max_file_bytes = "28.7 MiB"
 
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = "30.4 MiB"
+max_file_bytes = "31.0 MiB"
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"
