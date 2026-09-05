@@ -90,6 +90,37 @@ class Float {
     // `min` rather than being suppressed the way IEEE `minNum`/`maxNum` and
     // Rust's `f64::min`/`f64::max` suppress it.
 
+    /// Returns `1.0` if `self` is positive and `-1.0` if `self` is negative,
+    /// where the sign of `±0.0` and of NaN counts.
+    ///
+    /// This is a sign-bit test, not a comparison against zero: it never
+    /// returns `0.0` or NaN, so every float maps to exactly `±1.0`.
+    /// `(-0.0).signum()` is `-1.0` and `(0.0).signum()` is `1.0`. NaN returns
+    /// `1.0`, matching the total order, which places NaN above every number.
+    ///
+    /// Native because no BAML-level operator can see the sign of a zero. The
+    /// total order deliberately treats `-0.0` and `0.0` as one value — `==`
+    /// reports them equal and `-0.0 < 0.0` is false — and `1.0 / 0.0` throws
+    /// `DivisionByZero` rather than yielding a signed infinity. `to_string` is
+    /// the only other surface that reveals the sign.
+    ///
+    /// Note this is the one place `float` exposes a distinction the ordering
+    /// hides; it is the sign bit, not an order relation.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// (3.5).signum()          // 1.0
+    /// (-3.5).signum()         // -1.0
+    /// (0.0).signum()          // 1.0
+    /// (-0.0).signum()         // -1.0
+    /// (-float.inf()).signum() // -1.0
+    /// float.nan().signum()    // 1.0
+    /// ```
+    function signum(self) -> float throws never {
+        $rust_function
+    }
+
     // ─── Rounding (returns float) ─────────────────────────────────────────────
     //
     // These return `float` because the rounded value may exceed the `int`
@@ -261,10 +292,17 @@ class Float {
     ///   match `ln(self)`, since `±finite / +0.0` is `±inf`.
     /// - `base == 1` with `self == 1` gives NaN: `0 / 0`.
     ///
+    /// The result is a ratio of two logarithms, so it need not be correctly
+    /// rounded even when the exact answer is representable:
+    /// `(1000.0).log(10.0)` yields `2.9999999999999996` rather than `3.0`.
+    /// Prefer `log10` for base 10 and `ln` for base `e`; both were measured
+    /// more accurate on the cases tested, though Rust bounds the precision of
+    /// none of them.
+    ///
     /// # Examples
     ///
     /// ```baml
-    /// (1000.0).log(10.0)   // 3.0
+    /// (1000.0).log(10.0)   // 2.9999999999999996  (not 3.0 — see above)
     /// (8.0).log(2.0)       // 3.0
     /// (-1.0).log(10.0)     // NaN
     /// (0.0).log(10.0)      // -infinity
@@ -273,6 +311,115 @@ class Float {
     /// (1.0).log(1.0)       // NaN
     /// ```
     function log(self, base: float) -> float throws never {
+        $rust_function
+    }
+
+    /// Returns `e ** self`, the natural exponential of `self`.
+    ///
+    /// Computed as `float.e().pow(self)`, and **not** correctly rounded. It
+    /// carries no accuracy bound: `pow` has no documented precision guarantee
+    /// (Rust's float transcendentals are explicitly non-deterministic across
+    /// platforms and versions), and `float.e()` is itself a rounded constant
+    /// whose error is amplified by `self`. Measured against a correctly
+    /// rounded `exp` this was 1 ulp out at `2.0`, 29 at `100.0` and 310 at
+    /// `700.0`, growing roughly linearly with the exponent.
+    ///
+    /// Use it where a relative error of about `self * 1e-16` is acceptable,
+    /// not where the closest double to `e ** self` is required.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// (0.0).exp()           // 1.0
+    /// (1.0).exp()           // 2.718281828459045
+    /// (-float.inf()).exp()  // 0.0
+    /// float.nan().exp()     // NaN
+    /// ```
+    function exp(self) -> float throws never {
+        // `self * 1.0` coerces `Float` to `float`: `pow` takes a `float`
+        // exponent, and `self` is not one inside the class body. The multiply
+        // is exact for every input, NaN and ±0.0 included.
+        float.e().pow(self * 1.0)
+    }
+
+    /// Returns the natural logarithm (base `e`) of `self`.
+    ///
+    /// Defined as `self.log(float.e())`. `ln(e)` is `1.0`, so the division
+    /// `log` performs adds no error of its own and `ln` is exactly as accurate
+    /// as `log` — which Rust does not formally bound.
+    ///
+    /// Boundaries follow `log`: `self < 0` → NaN, `self == 0` → `-∞`,
+    /// `self == 1` → `0.0`.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// (1.0).ln()        // 0.0
+    /// float.e().ln()    // 1.0
+    /// (0.0).ln()        // -infinity
+    /// (-1.0).ln()       // NaN
+    /// ```
+    function ln(self) -> float throws never {
+        self.log(float.e())
+    }
+
+    /// Returns the base-2 logarithm of `self`.
+    ///
+    /// A readability alias for `self.log(2.0)`, with exactly its accuracy and
+    /// therefore no guarantee: Rust does not bound the precision of its float
+    /// logarithms. On the cases tested it was measured exact for powers of two
+    /// and within one ulp elsewhere, but that is an observation, not a
+    /// contract. Same boundaries as `ln`.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// (8.0).log2()      // 3.0
+    /// (1024.0).log2()   // 10.0
+    /// (1.0).log2()      // 0.0
+    /// (0.0).log2()      // -infinity
+    /// ```
+    function log2(self) -> float throws never {
+        self.log(2.0)
+    }
+
+    /// Returns the base-10 logarithm of `self`.
+    ///
+    /// Binds the platform's `log10` rather than computing `ln(self) / ln(10)`,
+    /// which loses the last bits at clean inputs — `(1000.0).log(10.0)` yields
+    /// `2.9999999999999996` rather than `3.0`. On every case tested `log10`
+    /// returned the correctly rounded result where the ratio did not, but Rust
+    /// documents no precision guarantee for either, so this is a measured
+    /// improvement rather than a promise. Same boundaries as `ln`.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// (1000.0).log10()  // 3.0
+    /// (100.0).log10()   // 2.0
+    /// (1.0).log10()     // 0.0
+    /// (0.0).log10()     // -infinity
+    /// ```
+    function log10(self) -> float throws never {
+        $rust_function
+    }
+
+    /// Returns the real cube root of `self`.
+    ///
+    /// Defined for negative inputs, unlike `self.pow(1.0 / 3.0)`: `pow` rounds
+    /// `1.0 / 3.0` to a double before exponentiating, so it returns NaN for a
+    /// negative base and misses perfect cubes (`(1000.0).pow(1.0 / 3.0)` yields
+    /// `9.999999999999998`).
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// (8.0).cbrt()      // 2.0
+    /// (-8.0).cbrt()     // -2.0
+    /// (1000.0).cbrt()   // 10.0
+    /// (0.0).cbrt()      // 0.0
+    /// ```
+    function cbrt(self) -> float throws never {
         $rust_function
     }
 
@@ -465,6 +612,36 @@ class Float {
     /// Returns positive infinity. Negate it — `-float.inf()` — for negative
     /// infinity.
     function inf() -> float throws never {
+        $rust_function
+    }
+
+    /// Returns the largest finite `float`, approximately
+    /// `1.7976931348623157e308`.
+    ///
+    /// Note this is the largest *finite* value, not the largest value —
+    /// `float.inf()` is larger. Named `max_finite` rather than `max_value`
+    /// (the `int` spelling) because `float`'s range includes the infinities.
+    function max_finite() -> float throws never {
+        $rust_function
+    }
+
+    /// Returns the smallest (most negative) finite `float`, approximately
+    /// `-1.7976931348623157e308`. Equal to `-float.max_finite()`.
+    ///
+    /// Note this is the most negative finite value, not the smallest positive
+    /// one — some languages (notably Java's `Double.MIN_VALUE`) use the latter
+    /// meaning for a similarly-named constant.
+    function min_finite() -> float throws never {
+        $rust_function
+    }
+
+    /// Returns the machine epsilon: the difference between `1.0` and the next
+    /// larger representable float, approximately `2.220446049250313e-16`.
+    ///
+    /// This is the standard tolerance unit for approximate float comparison,
+    /// e.g. `(a - b).abs() < float.epsilon() * scale`. It is *not* the smallest
+    /// positive float, which is far smaller (`5e-324`, subnormal).
+    function epsilon() -> float throws never {
         $rust_function
     }
 }

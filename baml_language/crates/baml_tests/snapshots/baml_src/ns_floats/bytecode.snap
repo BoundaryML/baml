@@ -1465,6 +1465,412 @@ function floats.$init_test_ns_floats_floats(registry: testing.TestCollector) -> 
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_signum_positive"
+    make_closure .<lambda($init_test_ns_floats_floats, 209)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_signum_negative"
+    make_closure .<lambda($init_test_ns_floats_floats, 210)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_signum_positive_zero"
+    make_closure .<lambda($init_test_ns_floats_floats, 211)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_signum_negative_zero"
+    make_closure .<lambda($init_test_ns_floats_floats, 212)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_signum_negative_zero_runtime"
+    make_closure .<lambda($init_test_ns_floats_floats, 213)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_signum_positive_nan"
+    make_closure .<lambda($init_test_ns_floats_floats, 214)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_signum_negative_nan"
+    make_closure .<lambda($init_test_ns_floats_floats, 215)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_signum_positive_infinity"
+    make_closure .<lambda($init_test_ns_floats_floats, 216)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_signum_negative_infinity"
+    make_closure .<lambda($init_test_ns_floats_floats, 217)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_signum_subnormal"
+    make_closure .<lambda($init_test_ns_floats_floats, 218)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_signum_is_total"
+    make_closure .<lambda($init_test_ns_floats_floats, 219)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_exp_zero_is_one"
+    make_closure .<lambda($init_test_ns_floats_floats, 220)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_exp_one_is_e"
+    make_closure .<lambda($init_test_ns_floats_floats, 221)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_exp_two"
+    make_closure .<lambda($init_test_ns_floats_floats, 222)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_exp_negative"
+    make_closure .<lambda($init_test_ns_floats_floats, 223)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_exp_negative_infinity_is_zero"
+    make_closure .<lambda($init_test_ns_floats_floats, 224)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_exp_positive_infinity"
+    make_closure .<lambda($init_test_ns_floats_floats, 225)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_exp_nan"
+    make_closure .<lambda($init_test_ns_floats_floats, 226)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_exp_ln_roundtrip"
+    make_closure .<lambda($init_test_ns_floats_floats, 227)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_ln_one_is_zero"
+    make_closure .<lambda($init_test_ns_floats_floats, 228)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_ln_e_is_one"
+    make_closure .<lambda($init_test_ns_floats_floats, 229)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_ln_ten"
+    make_closure .<lambda($init_test_ns_floats_floats, 230)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_ln_half"
+    make_closure .<lambda($init_test_ns_floats_floats, 231)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_ln_zero_is_negative_infinity"
+    make_closure .<lambda($init_test_ns_floats_floats, 232)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_ln_negative_is_nan"
+    make_closure .<lambda($init_test_ns_floats_floats, 233)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_ln_positive_infinity"
+    make_closure .<lambda($init_test_ns_floats_floats, 234)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_ln_nan"
+    make_closure .<lambda($init_test_ns_floats_floats, 235)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_log2_powers_of_two"
+    make_closure .<lambda($init_test_ns_floats_floats, 236)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_log2_fraction"
+    make_closure .<lambda($init_test_ns_floats_floats, 237)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_log2_non_power"
+    make_closure .<lambda($init_test_ns_floats_floats, 238)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_log2_zero_is_negative_infinity"
+    make_closure .<lambda($init_test_ns_floats_floats, 239)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_log2_negative_is_nan"
+    make_closure .<lambda($init_test_ns_floats_floats, 240)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_log10_powers_of_ten"
+    make_closure .<lambda($init_test_ns_floats_floats, 241)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_log10_beats_log_base_10"
+    make_closure .<lambda($init_test_ns_floats_floats, 242)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_log10_fraction"
+    make_closure .<lambda($init_test_ns_floats_floats, 243)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_log10_non_power"
+    make_closure .<lambda($init_test_ns_floats_floats, 244)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_log10_zero_is_negative_infinity"
+    make_closure .<lambda($init_test_ns_floats_floats, 245)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_log10_negative_is_nan"
+    make_closure .<lambda($init_test_ns_floats_floats, 246)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_log10_nan"
+    make_closure .<lambda($init_test_ns_floats_floats, 247)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_cbrt_perfect_cubes"
+    make_closure .<lambda($init_test_ns_floats_floats, 248)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_cbrt_negative"
+    make_closure .<lambda($init_test_ns_floats_floats, 249)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_cbrt_beats_pow_one_third"
+    make_closure .<lambda($init_test_ns_floats_floats, 250)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_cbrt_positive_zero"
+    make_closure .<lambda($init_test_ns_floats_floats, 251)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_cbrt_negative_zero"
+    make_closure .<lambda($init_test_ns_floats_floats, 252)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_cbrt_non_cube"
+    make_closure .<lambda($init_test_ns_floats_floats, 253)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_cbrt_one"
+    make_closure .<lambda($init_test_ns_floats_floats, 254)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_cbrt_infinity"
+    make_closure .<lambda($init_test_ns_floats_floats, 255)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_cbrt_nan"
+    make_closure .<lambda($init_test_ns_floats_floats, 256)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_cbrt_cube_roundtrip"
+    make_closure .<lambda($init_test_ns_floats_floats, 257)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_max_finite_is_finite"
+    make_closure .<lambda($init_test_ns_floats_floats, 258)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_max_finite_overflows_to_infinity"
+    make_closure .<lambda($init_test_ns_floats_floats, 259)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_max_finite_below_infinity"
+    make_closure .<lambda($init_test_ns_floats_floats, 260)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_min_finite_is_negated_max"
+    make_closure .<lambda($init_test_ns_floats_floats, 261)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_min_finite_is_most_negative_not_smallest_positive"
+    make_closure .<lambda($init_test_ns_floats_floats, 262)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_min_finite_overflows_to_negative_infinity"
+    make_closure .<lambda($init_test_ns_floats_floats, 263)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_epsilon_value"
+    make_closure .<lambda($init_test_ns_floats_floats, 264)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_epsilon_is_the_gap_above_one"
+    make_closure .<lambda($init_test_ns_floats_floats, 265)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.floats"
+    load_const "float_epsilon_is_not_smallest_positive"
+    make_closure .<lambda($init_test_ns_floats_floats, 266)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }

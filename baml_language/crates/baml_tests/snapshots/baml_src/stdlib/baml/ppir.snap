@@ -155,10 +155,15 @@ function baml.asinh(self: ?) -> float  [builtin]
 function baml.atan(self: ?) -> float  [builtin]
 function baml.atan2(self: ?, other: float) -> float  [builtin]
 function baml.atanh(self: ?) -> float  [builtin]
+function baml.cbrt(self: ?) -> float  [builtin]
 function baml.ceil(self: ?) -> float  [builtin]
 function baml.cos(self: ?) -> float  [builtin]
 function baml.cosh(self: ?) -> float  [builtin]
 function baml.e() -> float  [builtin]
+function baml.epsilon() -> float  [builtin]
+function baml.exp(self: ?) -> float  [expr] {
+  {  } float.e().pow(self Mul 1.0)
+}
 function baml.floor(self: ?) -> float  [builtin]
 function baml.fract(self: ?) -> float  [builtin]
 function baml.golden_ratio() -> float  [builtin]
@@ -173,7 +178,16 @@ function baml.is_finite(self: ?) -> bool  [expr] {
 function baml.is_infinite(self: ?) -> bool  [builtin]
 function baml.is_nan(self: ?) -> bool  [builtin]
 function baml.itrunc(self: ?) -> int  [builtin]
+function baml.ln(self: ?) -> float  [expr] {
+  {  } self.log(float.e())
+}
 function baml.log(self: ?, base: float) -> float  [builtin]
+function baml.log10(self: ?) -> float  [builtin]
+function baml.log2(self: ?) -> float  [expr] {
+  {  } self.log(2.0)
+}
+function baml.max_finite() -> float  [builtin]
+function baml.min_finite() -> float  [builtin]
 function baml.nan() -> float  [builtin]
 function baml.parse(text: string) -> float  [builtin]
 function baml.pi() -> float  [builtin]
@@ -182,6 +196,7 @@ function baml.random(rng: root.random.Rng = root.random.SystemRandom.get()) -> f
   {  } float._unit_from_draw(rng.random_int())
 }
 function baml.round(self: ?) -> float  [builtin]
+function baml.signum(self: ?) -> float  [builtin]
 function baml.sin(self: ?) -> float  [builtin]
 function baml.sinh(self: ?) -> float  [builtin]
 function baml.sqrt(self: ?) -> float  [builtin]

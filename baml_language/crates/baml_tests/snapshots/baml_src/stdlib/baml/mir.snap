@@ -1036,6 +1036,8 @@ fn baml.Float.is_finite(self: baml.Float) -> bool {
 
 fn baml.Float.abs = builtin(vm)
 
+fn baml.Float.signum = builtin(vm)
+
 fn baml.Float.floor = builtin(vm)
 
 fn baml.Float.ceil = builtin(vm)
@@ -1059,6 +1061,64 @@ fn baml.Float.sqrt = builtin(vm)
 fn baml.Float.pow = builtin(vm)
 
 fn baml.Float.log = builtin(vm)
+
+fn baml.Float.exp(self: baml.Float) -> float {
+    // Locals:
+    let _0: float // _0 // return
+    let _1: baml.Float // self // param
+    let _2: float
+    let _3: float
+
+    bb0: {
+        _2 = call const fn baml.Float.e() -> [bb1];
+    }
+
+    bb1: {
+        _3 = copy _1 * const 1_f64;
+        _0 = call const fn baml.Float.pow(copy _2, copy _3) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.Float.ln(self: baml.Float) -> float {
+    // Locals:
+    let _0: float // _0 // return
+    let _1: baml.Float // self // param
+    let _2: float
+
+    bb0: {
+        _2 = call const fn baml.Float.e() -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.Float.log(copy _1, copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.Float.log2(self: baml.Float) -> float {
+    // Locals:
+    let _0: float // _0 // return
+    let _1: baml.Float // self // param
+
+    bb0: {
+        _0 = call const fn baml.Float.log(copy _1, const 2_f64) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.Float.log10 = builtin(vm)
+
+fn baml.Float.cbrt = builtin(vm)
 
 fn baml.Float.hypot = builtin(vm)
 
@@ -1174,6 +1234,12 @@ fn baml.Float.golden_ratio = builtin(vm)
 fn baml.Float.nan = builtin(vm)
 
 fn baml.Float.inf = builtin(vm)
+
+fn baml.Float.max_finite = builtin(vm)
+
+fn baml.Float.min_finite = builtin(vm)
+
+fn baml.Float.epsilon = builtin(vm)
 
 fn baml._trunc_to_int = builtin(vm)
 

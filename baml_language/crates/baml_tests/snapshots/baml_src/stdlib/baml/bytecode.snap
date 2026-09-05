@@ -637,6 +637,9 @@ function baml.Float.atan2(self: float, other: float) -> float {
 function baml.Float.atanh(self: float) -> float {
 }
 
+function baml.Float.cbrt(self: float) -> float {
+}
+
 function baml.Float.ceil(self: float) -> float {
 }
 
@@ -647,6 +650,18 @@ function baml.Float.cosh(self: float) -> float {
 }
 
 function baml.Float.e() -> float {
+}
+
+function baml.Float.epsilon() -> float {
+}
+
+function baml.Float.exp(self: float) -> float {
+    call baml.Float.e
+    load_var self
+    load_const 1.0
+    bin_op *
+    call baml.Float.pow
+    return
 }
 
 function baml.Float.floor(self: float) -> float {
@@ -695,7 +710,31 @@ function baml.Float.is_nan(self: float) -> bool {
 function baml.Float.itrunc(self: float) -> int {
 }
 
+function baml.Float.ln(self: float) -> float {
+    call baml.Float.e
+    store_var _2
+    load_var2 1 2
+    call baml.Float.log
+    return
+}
+
 function baml.Float.log(self: float, base: float) -> float {
+}
+
+function baml.Float.log10(self: float) -> float {
+}
+
+function baml.Float.log2(self: float) -> float {
+    load_var self
+    load_const 2.0
+    call baml.Float.log
+    return
+}
+
+function baml.Float.max_finite() -> float {
+}
+
+function baml.Float.min_finite() -> float {
 }
 
 function baml.Float.nan() -> float {
@@ -728,6 +767,9 @@ function baml.Float.random(rng: baml.random.Rng) -> float {
 }
 
 function baml.Float.round(self: float) -> float {
+}
+
+function baml.Float.signum(self: float) -> float {
 }
 
 function baml.Float.sin(self: float) -> float {

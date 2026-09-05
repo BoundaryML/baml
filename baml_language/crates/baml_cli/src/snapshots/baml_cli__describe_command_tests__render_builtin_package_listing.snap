@@ -23,7 +23,7 @@ function         baml.deep_copy                   <builtin>/baml/core.baml:10
 interface        baml.Concrete                    <builtin>/baml/core.baml:18
 class            baml.TaggedString                <builtin>/baml/core.baml:34
 class            baml.Float                       <builtin>/baml/float.baml:17
-function         baml._trunc_to_int               <builtin>/baml/float.baml:484
+function         baml._trunc_to_int               <builtin>/baml/float.baml:661
 class            baml.Int                         <builtin>/baml/int.baml:33
 class            baml.Null                        <builtin>/baml/null.baml:2
 interface        baml.Sortable                    <builtin>/baml/sortable.baml:22
