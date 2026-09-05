@@ -131,8 +131,6 @@ function fixtures.backtick_decl_slots.Header(title: string) -> string {
     load_type string
     load_var title
     call baml.String.from
-    store_var _2
-    load_var _2
     bin_op +
     return
 }

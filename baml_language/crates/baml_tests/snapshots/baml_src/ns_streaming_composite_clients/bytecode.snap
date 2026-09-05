@@ -873,7 +873,6 @@ function streaming_composite_clients.nonstream_composites_preserve_cancellation_
     load_type string | ai.ModelTurn
     load_var retry_outcome
     call baml.String.from
-    store_var _39
     load_type int
     load_var retry_inner
     load_field .attempts
@@ -902,7 +901,6 @@ function streaming_composite_clients.nonstream_composites_preserve_cancellation_
     load_field .attempts
     call baml.String.from
     store_var _57
-    load_var _39
     bin_op +
     load_const ":"
     bin_op +

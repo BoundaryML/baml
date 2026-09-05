@@ -470,8 +470,6 @@ function truthiness.tr_frag(instructions: string | null) -> string {
     load_type string
     load_var instructions
     call baml.String.from
-    store_var _4
-    load_var _4
     bin_op +
     load_const "</x>"
     bin_op +
@@ -492,8 +490,6 @@ function truthiness.tr_frag_not(instructions: string | null) -> string {
     load_type string
     load_var instructions
     call baml.String.from
-    store_var _4
-    load_var _4
     bin_op +
     load_const "</x>"
     bin_op +
@@ -662,8 +658,6 @@ function truthiness.tr_literal_union(v: "" | "x" | null) -> string {
     load_type "x"
     load_var v
     call baml.String.from
-    store_var _4
-    load_var _4
     bin_op +
     load_const ">"
     bin_op +

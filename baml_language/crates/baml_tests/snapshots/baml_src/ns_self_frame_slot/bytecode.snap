@@ -256,8 +256,6 @@ function self_frame_slot.<(user.self_frame_slot.IntShelf as user.self_frame_slot
     load_type int
     load_var self
     call user.self_frame_slot.Store.describe
-    store_var _2
-    load_var _2
     bin_op +
     return
 }

@@ -55,8 +55,6 @@ function fixtures.backtick_dedent.MultilineInterpVerbatim() -> string {
     load_type string
     load_const "x"
     call baml.String.from
-    store_var _1
-    load_var _1
     bin_op +
     return
 }
@@ -76,12 +74,10 @@ function fixtures.backtick_dedent.WithInterps(name: string, count: int) -> strin
     load_type string
     load_var name
     call baml.String.from
-    store_var _5
     load_type int
     load_var count
     call baml.String.from
     store_var _7
-    load_var _5
     bin_op +
     load_const "\ncount: "
     bin_op +

@@ -44,8 +44,6 @@ function fixtures.backtick_strings.BacktickInterpBlockBody(items: int[]) -> stri
     load_const 0
     load_array_element
     call baml.String.from
-    store_var _2
-    load_var _2
     bin_op +
     return
 }
@@ -55,8 +53,6 @@ function fixtures.backtick_strings.BacktickInterpBool(b: bool) -> string {
     load_type bool
     load_var b
     call baml.String.from
-    store_var _2
-    load_var _2
     bin_op +
     return
 }
@@ -69,8 +65,6 @@ function fixtures.backtick_strings.BacktickInterpCallsFn() -> string {
     load_type string
     load_var _2
     call baml.String.from
-    store_var _1
-    load_var _1
     bin_op +
     return
 }
@@ -80,8 +74,6 @@ function fixtures.backtick_strings.BacktickInterpFloat(x: float) -> string {
     load_type float
     load_var x
     call baml.String.from
-    store_var _2
-    load_var _2
     bin_op +
     return
 }
@@ -91,8 +83,6 @@ function fixtures.backtick_strings.BacktickInterpInt(n: int) -> string {
     load_type int
     load_var n
     call baml.String.from
-    store_var _2
-    load_var _2
     bin_op +
     return
 }
@@ -102,12 +92,10 @@ function fixtures.backtick_strings.BacktickInterpMultiline(name: string, count: 
     load_type string
     load_var name
     call baml.String.from
-    store_var _5
     load_type int
     load_var count
     call baml.String.from
     store_var _7
-    load_var _5
     bin_op +
     load_const "\ncount: "
     bin_op +
@@ -136,8 +124,6 @@ function fixtures.backtick_strings.BacktickInterpSimple(name: string) -> string 
     load_type string
     load_var name
     call baml.String.from
-    store_var _3
-    load_var _3
     bin_op +
     load_const "!"
     bin_op +

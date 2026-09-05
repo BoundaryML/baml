@@ -196,8 +196,6 @@ function item_projections.<(user.item_projections.Gadget as user.item_projection
     load_var self
     load_field .g
     call baml.String.from
-    store_var _2
-    load_var _2
     bin_op +
     return
 }
@@ -223,8 +221,6 @@ function item_projections.<(user.item_projections.Plate<#0> as user.item_project
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _2
-    load_var _2
     bin_op +
     return
 }
@@ -266,8 +262,6 @@ function item_projections.<(user.item_projections.Press as user.item_projections
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _2
-    load_var _2
     bin_op +
     return
 }
@@ -278,8 +272,6 @@ function item_projections.<(user.item_projections.Press as user.item_projections
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _3
-    load_var _3
     bin_op +
     return
 }
@@ -331,8 +323,6 @@ function item_projections.<(user.item_projections.Widget as user.item_projection
     load_var self
     load_field .w
     call baml.String.from
-    store_var _2
-    load_var _2
     bin_op +
     return
 }

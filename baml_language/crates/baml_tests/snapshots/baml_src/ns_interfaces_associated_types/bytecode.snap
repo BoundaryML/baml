@@ -324,8 +324,6 @@ function interfaces_associated_types.ApdSomeInterface.same_label(self: interface
     load_type interfaces_associated_types.ApdSomeInterface
     load_const "label"
     virtual_call nargs=1 ntypeargs=0
-    store_var _4
-    load_var _4
     cmp_op ==
     return
 }

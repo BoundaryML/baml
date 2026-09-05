@@ -196,7 +196,6 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _7
     load_var sig
     load_field .args
     container_len
@@ -205,7 +204,6 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     load_var _10
     call baml.String.from
     store_var _9
-    load_var _7
     bin_op +
     load_var _9
     bin_op +
@@ -228,7 +226,7 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     pop_jump_if_true L1
     load_var _15
     store_var arg
-    load_var2 3 9
+    load_var2 3 8
     load_field .name
     bin_op +
     store_var _19
@@ -238,7 +236,7 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _22
-    load_var2 10 11
+    load_var2 9 10
     bin_op +
     store_var parts
     jump L0
@@ -277,7 +275,7 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     call baml.ops.equals_equals
     unary_op !
     pop_jump_if_false L2
-    load_var2 3 14
+    load_var2 3 13
     bin_op +
     store_var _41
     load_var opt
@@ -286,7 +284,7 @@ function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Re
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
     store_var _44
-    load_var2 16 17
+    load_var2 15 16
     bin_op +
     store_var parts
     jump L2

@@ -79,8 +79,6 @@ function baml.<(string as baml.ops.Add<string>)>.add(self: string, rhs: string) 
     load_type string
     load_var rhs
     call baml.String.from
-    store_var _5
-    load_var _5
     bin_op +
     return
 }
@@ -2287,12 +2285,10 @@ function baml.errors.<(baml.errors.UnknownError as baml.ToString)>.to_string(sel
     load_type string
     load_var _14
     call baml.String.from
-    store_var _13
     load_type string
     load_var detail
     call baml.String.from
     store_var _18
-    load_var _13
     bin_op +
     load_const ": "
     bin_op +

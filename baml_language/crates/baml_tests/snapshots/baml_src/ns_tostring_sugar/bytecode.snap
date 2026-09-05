@@ -110,13 +110,11 @@ function tostring_sugar.<(user.tostring_sugar.PointShow as baml.ToString)>.to_st
     load_var self
     load_field .x
     call baml.String.from
-    store_var _5
     load_type int
     load_var self
     load_field .y
     call baml.String.from
     store_var _8
-    load_var _5
     bin_op +
     load_const ", "
     bin_op +

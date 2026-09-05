@@ -110,8 +110,6 @@ function optional_chain_type_args.<(user.optional_chain_type_args.Cat as user.op
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _2
-    load_var _2
     bin_op +
     return
 }
@@ -171,8 +169,6 @@ function optional_chain_type_args.Callables.method(self: optional_chain_type_arg
     load_type int
     load_var v
     call baml.String.from
-    store_var _3
-    load_var _3
     bin_op +
     return
 }

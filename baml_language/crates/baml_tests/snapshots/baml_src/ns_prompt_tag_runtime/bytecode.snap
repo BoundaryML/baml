@@ -672,8 +672,6 @@ function prompt_tag_runtime.pt_media_string_interp_fn() -> string {
     load_type image
     load_var picture
     call baml.String.from
-    store_var _2
-    load_var _2
     bin_op +
     return
 }

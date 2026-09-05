@@ -845,7 +845,6 @@ function ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: str
     load_type string
     load_var kind
     call baml.String.from
-    store_var _81
     load_var t
     load_type baml.ToString
     load_const "to_string"
@@ -866,7 +865,6 @@ function ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: str
     load_var kind
     call baml.String.from
     store_var _90
-    load_var _81
     bin_op +
     load_const " output for "
     bin_op +
@@ -890,7 +888,6 @@ function ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: str
     load_type string
     load_var kind
     call baml.String.from
-    store_var _65
     load_var parts
     container_len
     store_var _69
@@ -902,7 +899,6 @@ function ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: str
     load_var kind
     call baml.String.from
     store_var _71
-    load_var _65
     bin_op +
     load_const " output, got "
     bin_op +
@@ -5823,8 +5819,6 @@ function ai.internal.validate_output_type(return_type: reflect.Type) -> void {
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _11
-    load_var _11
     bin_op +
     load_const "` cannot be rendered as an LLM output schema"
     bin_op +

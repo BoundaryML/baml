@@ -115,8 +115,6 @@ function dispatch_matrix.<(user.dispatch_matrix.Card as user.dispatch_matrix.For
     load_var self
     load_field .formatter
     call_indirect
-    store_var _2
-    load_var _2
     bin_op +
     return
 }
@@ -137,8 +135,6 @@ function dispatch_matrix.<(user.dispatch_matrix.Pack<#0> as user.dispatch_matrix
     load_type baml.ToString
     load_const "to_string"
     virtual_call nargs=1 ntypeargs=0
-    store_var _2
-    load_var _2
     bin_op +
     return
 }
@@ -153,8 +149,6 @@ function dispatch_matrix.<(user.dispatch_matrix.Wrapping as user.dispatch_matrix
     load_type dispatch_matrix.Wrapping
     load_var self
     call user.dispatch_matrix.Speaker.speak
-    store_var _2
-    load_var _2
     bin_op +
     return
 }
@@ -171,8 +165,6 @@ function dispatch_matrix.Formatting.present(self: dispatch_matrix.Formatting) ->
     load_type dispatch_matrix.Formatting
     load_const "formatter"
     virtual_call nargs=2 ntypeargs=0
-    store_var _2
-    load_var _2
     bin_op +
     return
 }

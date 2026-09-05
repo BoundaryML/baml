@@ -752,8 +752,6 @@ function csv.csv_caller_owned_handles_stay_open() -> string {
     load_type bigint
     load_var _4
     call baml.String.from
-    store_var _3
-    load_var _3
     bin_op +
     load_const ".csv"
     bin_op +
@@ -864,8 +862,6 @@ function csv.csv_create_then_fs_read() -> string {
     load_type bigint
     load_var _4
     call baml.String.from
-    store_var _3
-    load_var _3
     bin_op +
     load_const ".csv"
     bin_op +
@@ -1806,8 +1802,6 @@ function csv.csv_file_roundtrip() -> string {
     load_type bigint
     load_var _4
     call baml.String.from
-    store_var _3
-    load_var _3
     bin_op +
     load_const ".csv"
     bin_op +
@@ -1908,8 +1902,6 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
     load_var e
     load_field .kind
     call user.csv.kind_name
-    store_var _11
-    load_var _11
     bin_op +
     load_const ">"
     bin_op +
@@ -1944,8 +1936,6 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
     load_var e
     load_field .kind
     call user.csv.kind_name
-    store_var _21
-    load_var _21
     bin_op +
     load_const ">"
     bin_op +
@@ -2148,8 +2138,6 @@ function csv.csv_malformed_header_exhausts_reader() -> string {
     load_var e
     load_field .kind
     call user.csv.kind_name
-    store_var _10
-    load_var _10
     bin_op +
     load_const ">"
     bin_op +
@@ -2219,8 +2207,6 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
     load_var e
     load_field .kind
     call user.csv.kind_name
-    store_var _10
-    load_var _10
     bin_op +
     load_const ">"
     bin_op +
@@ -2255,8 +2241,6 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
     load_var e
     load_field .kind
     call user.csv.kind_name
-    store_var _20
-    load_var _20
     bin_op +
     load_const ">"
     bin_op +
@@ -2641,8 +2625,6 @@ function csv.csv_open_streams_file() -> string {
     load_type bigint
     load_var _4
     call baml.String.from
-    store_var _3
-    load_var _3
     bin_op +
     load_const ".csv"
     bin_op +
@@ -2673,7 +2655,7 @@ function csv.csv_open_streams_file() -> string {
     load_var _15
     is_type baml.iter.Done
     pop_jump_if_true L1
-    load_var2 5 7
+    load_var2 4 6
     load_field .n
     add_int
     store_var total
@@ -3459,7 +3441,6 @@ function csv.csv_reader_position() -> string {
     load_var p1
     load_field .byte
     call baml.json.stringify
-    store_var _16
     load_var p1
     load_field .line
     call baml.json.stringify
@@ -3480,7 +3461,6 @@ function csv.csv_reader_position() -> string {
     load_field .record
     call baml.json.stringify
     store_var _26
-    load_var _16
     bin_op +
     load_const " line="
     bin_op +
@@ -3546,8 +3526,6 @@ function csv.csv_reader_resumes_after_throw() -> string {
     load_var e
     load_field .kind
     call user.csv.kind_name
-    store_var _12
-    load_var _12
     bin_op +
     load_const ">"
     bin_op +
@@ -5687,8 +5665,6 @@ function csv.csv_writer_text_on_file_writer_throws() -> string {
     load_type bigint
     load_var _4
     call baml.String.from
-    store_var _3
-    load_var _3
     bin_op +
     load_const ".csv"
     bin_op +

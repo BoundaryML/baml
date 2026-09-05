@@ -609,8 +609,6 @@ function backtick_strings.bt_block_body_tail() -> string {
     load_type string
     load_const "hi there"
     call baml.String.from
-    store_var _2
-    load_var _2
     bin_op +
     load_const "!"
     bin_op +
@@ -622,8 +620,6 @@ function backtick_strings.bt_block_comment_interp() -> string {
     load_type string
     load_const "Ada"
     call baml.String.from
-    store_var _1
-    load_var _1
     bin_op +
     return
 }
@@ -661,8 +657,6 @@ function backtick_strings.bt_case_f() -> string {
     load_type string
     load_const "cd"
     call baml.String.from
-    store_var _3
-    load_var _3
     bin_op +
     return
 }
@@ -681,8 +675,6 @@ function backtick_strings.bt_case_h() -> string {
     load_type string
     load_const "hi"
     call baml.String.from
-    store_var _1
-    load_var _1
     bin_op +
     return
 }
@@ -692,8 +684,6 @@ function backtick_strings.bt_case_i() -> string {
     load_type string
     load_const "Y"
     call baml.String.from
-    store_var _2
-    load_var _2
     bin_op +
     load_const " Z"
     bin_op +
@@ -748,8 +738,6 @@ function backtick_strings.bt_case_n() -> string {
     load_type string
     load_const "Ada"
     call baml.String.from
-    store_var _2
-    load_var _2
     bin_op +
     call user.backtick_strings.bt_case_n_shout
     return
@@ -787,8 +775,6 @@ function backtick_strings.bt_case_p() -> string {
     load_type string
     load_var r
     call baml.String.from
-    store_var _1
-    load_var _1
     bin_op +
     return
 }
@@ -938,7 +924,6 @@ function backtick_strings.bt_icf_main() -> string {
     load_type string
     load_var _4
     call baml.String.from
-    store_var _3
     load_const "bye"
     call user.backtick_strings.bt_icf_shout
     store_var _7
@@ -946,7 +931,6 @@ function backtick_strings.bt_icf_main() -> string {
     load_var _7
     call baml.String.from
     store_var _6
-    load_var _3
     bin_op +
     load_const " and "
     bin_op +
@@ -1033,8 +1017,6 @@ function backtick_strings.bt_interp_bool() -> string {
     load_type bool
     load_const true
     call baml.String.from
-    store_var _1
-    load_var _1
     bin_op +
     return
 }
@@ -1044,8 +1026,6 @@ function backtick_strings.bt_interp_float() -> string {
     load_type float
     load_const 3.14
     call baml.String.from
-    store_var _1
-    load_var _1
     bin_op +
     return
 }
@@ -1055,8 +1035,6 @@ function backtick_strings.bt_interp_int() -> string {
     load_type int
     load_const 42
     call baml.String.from
-    store_var _1
-    load_var _1
     bin_op +
     return
 }
@@ -1066,7 +1044,6 @@ function backtick_strings.bt_interp_mixed() -> string {
     load_type int
     load_const 7
     call baml.String.from
-    store_var _7
     load_type bool
     load_const false
     call baml.String.from
@@ -1079,7 +1056,6 @@ function backtick_strings.bt_interp_mixed() -> string {
     load_const "test"
     call baml.String.from
     store_var _13
-    load_var _7
     bin_op +
     load_const ", ok="
     bin_op +
@@ -1115,8 +1091,6 @@ function backtick_strings.bt_let_bound_if_else() -> string {
     load_type string
     load_const "user"
     call baml.String.from
-    store_var _1
-    load_var _1
     bin_op +
     return
 }
@@ -1126,8 +1100,6 @@ function backtick_strings.bt_line_comment_interp() -> string {
     load_type string
     load_const "Ada"
     call baml.String.from
-    store_var _1
-    load_var _1
     bin_op +
     return
 }
@@ -1147,8 +1119,6 @@ function backtick_strings.bt_loop_in_block() -> string {
     load_type string
     load_var acc
     call baml.String.from
-    store_var _2
-    load_var _2
     bin_op +
     load_const "!"
     bin_op +
@@ -2429,8 +2399,6 @@ function backtick_strings.bt_nested_interp() -> string {
     load_var _2
     bin_op +
     call baml.String.from
-    store_var _5
-    load_var _5
     bin_op +
     load_const "]"
     bin_op +
@@ -2463,8 +2431,6 @@ function backtick_strings.bt_recursive_main() -> string {
     load_type string
     load_var _2
     call baml.String.from
-    store_var _1
-    load_var _1
     bin_op +
     return
 }
@@ -2474,8 +2440,6 @@ function backtick_strings.bt_simple_interp() -> string {
     load_type string
     load_const "world"
     call baml.String.from
-    store_var _2
-    load_var _2
     bin_op +
     load_const "!"
     bin_op +

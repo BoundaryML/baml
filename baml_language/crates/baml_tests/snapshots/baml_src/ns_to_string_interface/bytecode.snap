@@ -111,13 +111,11 @@ function to_string_interface.<(user.to_string_interface.IouPoint as baml.ToStrin
     load_var self
     load_field .x
     call baml.String.from
-    store_var _5
     load_type int
     load_var self
     load_field .y
     call baml.String.from
     store_var _8
-    load_var _5
     bin_op +
     load_const ", "
     bin_op +
@@ -134,13 +132,11 @@ function to_string_interface.<(user.to_string_interface.OvrPoint as baml.ToStrin
     load_var self
     load_field .x
     call baml.String.from
-    store_var _5
     load_type int
     load_var self
     load_field .y
     call baml.String.from
     store_var _8
-    load_var _5
     bin_op +
     load_const ", "
     bin_op +

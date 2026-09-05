@@ -76,7 +76,6 @@ function compiler.AssertMultiRejected(files: map<string, string>, expected: comp
     load_type int
     load_var _21
     call baml.String.from
-    store_var _20
     load_var actual
     container_len
     store_var _24
@@ -93,7 +92,6 @@ function compiler.AssertMultiRejected(files: map<string, string>, expected: comp
     load_var _27
     call baml.String.from
     store_var _26
-    load_var _20
     bin_op +
     load_const " compiler diagnostic(s), got "
     bin_op +
@@ -116,16 +114,16 @@ function compiler.AssertMultiRejected(files: map<string, string>, expected: comp
     load_var expected
     container_len
     store_var _33
-    load_var2 15 16
+    load_var2 14 15
     cmp_int_op <
     pop_jump_if_true L3
     load_const null
     return
 
   L3:
-    load_var2 2 14
+    load_var2 2 13
     load_array_element
-    load_var2 4 14
+    load_var2 4 13
     load_array_element
     load_type compiler.DiagnosticExpectation
     load_const "assert_matches"
@@ -227,8 +225,6 @@ function compiler.CompileFixturePackage(files: map<string, string>, packages: ma
     load_var error
     load_field .message
     call baml.String.from
-    store_var _8
-    load_var _8
     bin_op +
     call baml.sys.panic
     store_var artifact
@@ -246,8 +242,6 @@ function compiler.CompileFixturePackage(files: map<string, string>, packages: ma
     load_type string
     load_var _15
     call baml.String.from
-    store_var _14
-    load_var _14
     bin_op +
     call baml.sys.panic
 

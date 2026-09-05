@@ -960,32 +960,8 @@ fn simulate_rvalue_pull_stack<'db>(
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
-    if let Rvalue::BinaryOp { left, right, .. } = rvalue
-        && [left, right].iter().all(|operand| {
-            operand_as_local(operand).is_some_and(|local| {
-                local == carried_local
-                    || classifications
-                        .get(&local)
-                        .copied()
-                        .is_some_and(is_stack_carried_local)
-            })
-        })
-    {
-        return simulate_stack_consuming_aggregate(
-            AggregateStackShape {
-                value_operands: &[left, right],
-                trailing_operands: &[],
-                total_pops: 2,
-                extra_pushes_before_alloc: 0,
-            },
-            sim,
-            carried_local,
-            classifications,
-            def_use,
-        );
-    }
     if let Some(result) =
-        simulate_aggregate_operand_pull_stack(rvalue, sim, carried_local, classifications, def_use)
+        simulate_operand_prefix_pull_stack(rvalue, sim, carried_local, classifications, def_use)
     {
         return result;
     }
@@ -1070,7 +1046,9 @@ fn simulate_rvalue_pull_stack<'db>(
     pull_semantics::walk_rvalue_pull(&mut sink, rvalue).is_ok()
 }
 
-fn simulate_aggregate_operand_pull_stack(
+/// Validate operand prefixes both at direct evaluations and through inlined
+/// locals. Binary operands already stacked in source order need no reordering.
+fn simulate_operand_prefix_pull_stack(
     rvalue: &Rvalue<'_>,
     sim: &mut StackCarrySim,
     carried_local: Local,
@@ -1078,6 +1056,30 @@ fn simulate_aggregate_operand_pull_stack(
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> Option<bool> {
     match rvalue {
+        Rvalue::BinaryOp { left, right, .. }
+            if [left, right].iter().all(|operand| {
+                operand_as_local(operand).is_some_and(|local| {
+                    local == carried_local
+                        || classifications
+                            .get(&local)
+                            .copied()
+                            .is_some_and(is_stack_carried_local)
+                })
+            }) =>
+        {
+            Some(simulate_stack_consuming_aggregate(
+                AggregateStackShape {
+                    value_operands: &[left, right],
+                    trailing_operands: &[],
+                    total_pops: 2,
+                    extra_pushes_before_alloc: 0,
+                },
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            ))
+        }
         Rvalue::Array(_, elements) => {
             let values = elements.iter().collect::<Vec<_>>();
             Some(simulate_stack_consuming_aggregate(
@@ -1231,7 +1233,7 @@ fn simulate_stack_consuming_aggregate(
 fn aggregate_value_operand_index<'db>(rvalue: &Rvalue<'db>, local: Local) -> Option<usize> {
     let operands: Vec<&Operand<'db>> = match rvalue {
         Rvalue::Array(_, elements) => elements.iter().collect(),
-        // See `simulate_aggregate_operand_pull_stack`: only map values are
+        // See `simulate_operand_prefix_pull_stack`: only map values are
         // valid stack-carry prefix operands for the current VM stack layout.
         Rvalue::Map(_, _, entries) => entries.iter().map(|(_key, value)| value).collect(),
         Rvalue::Aggregate {
@@ -1399,7 +1401,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
                 ) {
                     return Err(());
                 }
-                if let Some(ok) = simulate_aggregate_operand_pull_stack(
+                if let Some(ok) = simulate_operand_prefix_pull_stack(
                     &def.rvalue,
                     self.sim,
                     self.carried_local,
@@ -1740,6 +1742,76 @@ mod tests {
     }
 
     #[test]
+    fn inlined_binary_prefix_preserves_both_operand_depths() {
+        use baml_compiler2_mir::BlockId;
+
+        use crate::analysis::{AnalysisResult, OptLevel};
+
+        let left = Local(1);
+        let right = Local(2);
+        let mut body = body_with_locals(vec![int_ty(), int_ty(), int_ty()]);
+        body.blocks[0].statements.push(Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(left),
+                value: Rvalue::Use(Operand::Constant(Constant::Int(20))),
+            },
+            span: None,
+        });
+        body.blocks[0].terminator = Some(Terminator::Call {
+            callee: Operand::Constant(Constant::Null),
+            args: vec![],
+            ntypeargs: 0,
+            runtime_type_check: false,
+            runtime_id: None,
+            destination: Place::Local(right),
+            target: BlockId(1),
+            unwind: None,
+        });
+        let mut continuation = BasicBlock::new(BlockId(1));
+        continuation.statements.push(Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(Local(0)),
+                value: Rvalue::BinaryOp {
+                    op: BinOp::Sub,
+                    left: Operand::copy_local(left),
+                    right: Operand::copy_local(right),
+                },
+            },
+            span: None,
+        });
+        continuation.terminator = Some(Terminator::Return);
+        body.blocks.push(continuation);
+        let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
+        assert_eq!(
+            analysis.classifications[&Local(0)],
+            LocalClassification::Virtual
+        );
+        for (local, expected_depth) in [(left, 1), (right, 0)] {
+            assert_eq!(
+                analysis.classifications[&local],
+                LocalClassification::AggregateOperand
+            );
+            for depth in [0, 1] {
+                let mut sim = StackCarrySim {
+                    depth: Some(depth),
+                    used: false,
+                };
+                assert_eq!(
+                    simulate_operand_pull_stack(
+                        &Operand::copy_local(Local(0)),
+                        &mut sim,
+                        local,
+                        &analysis.classifications,
+                        &analysis.def_use,
+                    ),
+                    depth == expected_depth,
+                    "{local:?} at depth {depth}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn aggregate_stack_carry_accepts_array_value_prefix() {
         let carried = Local(1);
         let sibling = Local(2);
@@ -1749,7 +1821,7 @@ mod tests {
             used: false,
         };
 
-        let ok = simulate_aggregate_operand_pull_stack(
+        let ok = simulate_operand_prefix_pull_stack(
             &Rvalue::Array(
                 TyTemplate::from(RealizedTy::unknown()),
                 vec![
@@ -1778,7 +1850,7 @@ mod tests {
             used: false,
         };
 
-        let ok = simulate_aggregate_operand_pull_stack(
+        let ok = simulate_operand_prefix_pull_stack(
             &Rvalue::Aggregate {
                 kind: AggregateKind::Array,
                 fields: vec![Operand::copy_local(sibling), Operand::copy_local(carried)],
@@ -1803,7 +1875,7 @@ mod tests {
             used: false,
         };
 
-        let ok = simulate_aggregate_operand_pull_stack(
+        let ok = simulate_operand_prefix_pull_stack(
             &Rvalue::Map(
                 TyTemplate::from(RealizedTy::string()),
                 TyTemplate::from(RealizedTy::unknown()),
@@ -1851,7 +1923,7 @@ mod tests {
             used: false,
         };
 
-        let ok = simulate_aggregate_operand_pull_stack(
+        let ok = simulate_operand_prefix_pull_stack(
             &Rvalue::Array(
                 TyTemplate::from(RealizedTy::unknown()),
                 vec![
@@ -1879,7 +1951,7 @@ mod tests {
             used: false,
         };
 
-        let ok = simulate_aggregate_operand_pull_stack(
+        let ok = simulate_operand_prefix_pull_stack(
             &Rvalue::Aggregate {
                 kind: AggregateKind::Class {
                     name: "Box".to_string(),
@@ -1913,7 +1985,7 @@ mod tests {
         let mut sim = StackCarrySim::new();
 
         assert_eq!(
-            simulate_aggregate_operand_pull_stack(
+            simulate_operand_prefix_pull_stack(
                 &rvalue,
                 &mut sim,
                 carried,

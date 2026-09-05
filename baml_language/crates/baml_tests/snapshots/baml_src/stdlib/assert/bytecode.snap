@@ -101,8 +101,6 @@ function assert.equal(actual: unknown, expected: unknown) -> void {
     load_type string
     load_var actual
     call baml.String.from
-    store_var _8
-    load_var _8
     bin_op +
     load_const "\""
     bin_op +
@@ -123,8 +121,6 @@ function assert.equal(actual: unknown, expected: unknown) -> void {
     load_type string
     load_var expected
     call baml.String.from
-    store_var _14
-    load_var _14
     bin_op +
     load_const "\""
     bin_op +
