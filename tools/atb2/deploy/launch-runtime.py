@@ -28,7 +28,9 @@ FIXED_ENV = {
 
 def runtime_environment(source):
     env = {key: source[key] for key in RUNTIME_KEYS if key in source}
-    if source.get("INFISICAL_TOKEN"):
+    client_id = source.get("INFISICAL_CLIENT_ID")
+    client_secret = source.get("INFISICAL_CLIENT_SECRET")
+    if client_id or client_secret or source.get("INFISICAL_TOKEN"):
         project = source.get("INFISICAL_PROJECT_ID")
         if not project:
             raise ValueError("INFISICAL_PROJECT_ID is required")
@@ -36,12 +38,33 @@ def runtime_environment(source):
         # exported shell code or place credentials in command arguments/files.
         export_env = {
             "PATH": FIXED_ENV["PATH"], "HOME": "/root", "LANG": "C.UTF-8",
-            "INFISICAL_TOKEN": source["INFISICAL_TOKEN"],
             "INFISICAL_DISABLE_UPDATE_CHECK": "true",
         }
         for key in ("INFISICAL_API_URL", "INFISICAL_DOMAIN"):
             if key in source:
                 export_env[key] = source[key]
+        if client_id or client_secret:
+            if not client_id or not client_secret:
+                raise ValueError("both Infisical Universal Auth credentials are required")
+            login_env = {
+                **export_env,
+                "INFISICAL_UNIVERSAL_AUTH_CLIENT_ID": client_id,
+                "INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET": client_secret,
+            }
+            login = subprocess.run(
+                ["/usr/local/bin/infisical", "login", "--method=universal-auth",
+                 "--plain", "--silent", "--telemetry=false"],
+                env=login_env, cwd="/", stdin=subprocess.DEVNULL,
+                capture_output=True, text=True, timeout=120,
+            )
+            token = login.stdout.strip()
+            if login.returncode or not token or any(c.isspace() or c == "\0" for c in token):
+                raise ValueError("Infisical login failed")
+            # Only the exporter receives the fresh access token. It never
+            # receives the client secret or the host's application credentials.
+            export_env["INFISICAL_TOKEN"] = token
+        else:
+            export_env["INFISICAL_TOKEN"] = source["INFISICAL_TOKEN"]
         result = subprocess.run(
             ["/usr/local/bin/infisical", "export", "--format=json", "--silent",
              "--telemetry=false", "--expand=false", "--projectId=" + project,

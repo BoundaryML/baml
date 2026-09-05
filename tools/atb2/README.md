@@ -121,10 +121,15 @@ itself until that exists. The site (`typescript2/app-feedback`) deploys
 through the Vercel GitHub app once its project is linked.
 
 The runner's secrets come from Infisical at start: the image carries the
-Infisical CLI and the root launcher captures `infisical export --format=json`
-from boundary-tools `prod` in memory, so the machine holds a single Fly secret,
-`INFISICAL_TOKEN`, and a rotation in Infisical takes effect on the next
-restart. The runner's GitHub identity is `ATB_GITHUB_TOKEN` (or `GH_TOKEN` when set),
+Infisical CLI. Configure the existing machine identity's `INFISICAL_CLIENT_ID`
+and `INFISICAL_CLIENT_SECRET` as Fly secrets, as in the original baml-bench.
+The root launcher logs in with Universal Auth on every boot, then captures
+`infisical export --format=json` from boundary-tools `prod` in memory. Client
+credentials are passed only in the login child's environment; the exporter
+receives only the new token. None of these authentication credentials reaches
+the builder or runtime user. Application-secret rotations take effect on restart.
+An existing `INFISICAL_TOKEN` remains supported when neither client credential
+is configured; a partial client pair fails closed. The runner's GitHub identity is `ATB_GITHUB_TOKEN` (or `GH_TOKEN` when set),
 already in that project. The agent's Claude Code CLI runs on its own login,
 made once on the machine (`fly ssh console -a atb2-runner`, then
 `runuser -u atb2 -- env HOME=/data/home claude`)
@@ -136,7 +141,9 @@ By hand, from the repo root:
 ```sh
 fly apps create atb2-runner                                            # once (exists)
 fly volumes create atb2_data --size 80 --region sjc -a atb2-runner     # once
-fly secrets set -a atb2-runner INFISICAL_TOKEN=...                     # once
+# Stage INFISICAL_CLIENT_ID and INFISICAL_CLIENT_SECRET using:
+# fly secrets import --stage -a atb2-runner
+# Supply NAME=VALUE lines via stdin from your local secret store.
 fly deploy tools/atb2 --config tools/atb2/deploy/fly.toml
 ```
 
