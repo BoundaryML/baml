@@ -393,6 +393,14 @@ impl PredefinedTypes {
                                 "render_null_as".into(),
                                 Type::merge(vec![Type::String, Type::None]),
                             ),
+                            (
+                                "format".into(),
+                                Type::merge(vec![
+                                    Type::None,
+                                    Type::Literal(LiteralValue::String(String::from("json"))),
+                                    Type::Literal(LiteralValue::String(String::from("toon"))),
+                                ]),
+                            ),
                         ],
                     ),
                 ),

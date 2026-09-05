@@ -207,6 +207,16 @@ pub(crate) enum MapStyle {
     ObjectLiteral,
 }
 
+#[derive(Clone, Copy, Default, strum::EnumString, strum::VariantNames)]
+pub(crate) enum OutputFormatMode {
+    #[default]
+    #[strum(serialize = "json")]
+    Json,
+
+    #[strum(serialize = "toon")]
+    Toon,
+}
+
 /// Hoist classes setting.
 ///
 /// Recursive classes are always hoisted.
@@ -233,6 +243,7 @@ pub struct RenderOptions {
     map_style: MapStyle,
     quote_class_fields: bool,
     render_null_as: RenderSetting<String>,
+    format: OutputFormatMode,
 }
 
 impl Default for RenderOptions {
@@ -247,6 +258,7 @@ impl Default for RenderOptions {
             map_style: MapStyle::TypeParameters,
             quote_class_fields: false,
             render_null_as: RenderSetting::Auto,
+            format: OutputFormatMode::Json,
         }
     }
 }
@@ -272,6 +284,7 @@ impl RenderOptions {
         hoist_classes: Option<HoistClasses>,
         quote_class_fields: Option<bool>,
         render_null_as: Option<Option<String>>,
+        format: Option<OutputFormatMode>,
     ) -> Self {
         Self {
             prefix: prefix.map_or(RenderSetting::Auto, |p| {
@@ -292,6 +305,7 @@ impl RenderOptions {
             render_null_as: render_null_as
                 .flatten()
                 .map_or(RenderSetting::Auto, RenderSetting::Always),
+            format: format.unwrap_or_default(),
         }
     }
 
@@ -363,6 +377,7 @@ struct ClassFieldRender {
     name: String,
     r#type: String,
     description: Option<String>,
+    toon_nested: bool,
 }
 
 impl std::fmt::Display for ClassRender {
@@ -401,6 +416,62 @@ impl std::fmt::Display for ClassRender {
             }
         }
         write!(f, "}}")
+    }
+}
+
+fn render_toon_key(key: &str) -> String {
+    let mut chars = key.chars();
+    let valid = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.'));
+
+    if valid {
+        key.to_string()
+    } else {
+        serde_json::to_string(key).expect("serializing a string cannot fail")
+    }
+}
+
+impl ClassRender {
+    fn render_toon(&self) -> String {
+        let mut result = String::new();
+
+        if let Some(description) = self.description.as_deref().map(str::trim) {
+            if !description.is_empty() {
+                for line in description.lines() {
+                    result.push_str(&format!("// {line}\n"));
+                }
+                result.push('\n');
+            }
+        }
+
+        for value in &self.values {
+            if let Some(description) = &value.description {
+                for line in description.lines() {
+                    result.push_str(&format!("// {line}\n"));
+                }
+            }
+
+            let key = render_toon_key(&value.name);
+            if let Some(array_schema) = value.r#type.strip_prefix("[N]") {
+                result.push_str(&key);
+                result.push_str("[N]");
+                result.push_str(array_schema);
+                result.push('\n');
+            } else if value.toon_nested || value.r#type.contains('\n') {
+                result.push_str(&format!("{key}:\n"));
+                for line in value.r#type.lines() {
+                    result.push_str("  ");
+                    result.push_str(line);
+                    result.push('\n');
+                }
+            } else {
+                result.push_str(&format!("{key}: {}\n", value.r#type));
+            }
+        }
+
+        result.trim_end().to_string()
     }
 }
 
@@ -486,7 +557,14 @@ impl OutputFormatContent {
                         "\n"
                     };
 
-                    Some(format!("Answer in JSON using this {type_prefix}:{end}"))
+                    Some(match options.format {
+                        OutputFormatMode::Json => {
+                            format!("Answer in JSON using this {type_prefix}:{end}")
+                        }
+                        OutputFormatMode::Toon => format!(
+                            "Answer in TOON using this {type_prefix}. Replace every N in an array header with the actual array length:{end}"
+                        ),
+                    })
                 }
                 TypeIR::RecursiveTypeAlias { .. } => {
                     let type_prefix = match &options.hoisted_class_prefix {
@@ -494,27 +572,67 @@ impl OutputFormatContent {
                         _ => RenderOptions::DEFAULT_TYPE_PREFIX_IN_RENDER_MESSAGE,
                     };
 
-                    Some(format!("Answer in JSON using this {type_prefix}: "))
+                    Some(match options.format {
+                        OutputFormatMode::Json => {
+                            format!("Answer in JSON using this {type_prefix}: ")
+                        }
+                        OutputFormatMode::Toon => format!(
+                            "Answer in TOON using this {type_prefix}. Replace every N in an array header with the actual array length: "
+                        ),
+                    })
                 }
-                TypeIR::List(_, _) => Some(String::from(
-                    "Answer with a JSON Array using this schema:\n",
-                )),
+                TypeIR::List(_, _) => Some(match options.format {
+                    OutputFormatMode::Json => {
+                        String::from("Answer with a JSON Array using this schema:\n")
+                    }
+                    OutputFormatMode::Toon => String::from(
+                        "Answer with a TOON array using this schema. Replace N with the actual array length:\n",
+                    ),
+                }),
                 TypeIR::Union(items, _) => match items.view() {
                     UnionTypeViewGeneric::Null => Some(format!(
                         "Answer ONLY with {}:\n",
                         output_format_content.render_null_type(options)
                     )),
                     UnionTypeViewGeneric::Optional(_) => {
-                        Some(String::from("Answer in JSON using this schema:\n"))
+                        Some(match options.format {
+                            OutputFormatMode::Json => {
+                                String::from("Answer in JSON using this schema:\n")
+                            }
+                            OutputFormatMode::Toon => {
+                                String::from("Answer in TOON using this schema:\n")
+                            }
+                        })
                     }
                     UnionTypeViewGeneric::OneOf(_) => {
-                        Some(String::from("Answer in JSON using any of these schemas:\n"))
+                        Some(match options.format {
+                            OutputFormatMode::Json => {
+                                String::from("Answer in JSON using any of these schemas:\n")
+                            }
+                            OutputFormatMode::Toon => {
+                                String::from("Answer in TOON using any of these schemas:\n")
+                            }
+                        })
                     }
                     UnionTypeViewGeneric::OneOfOptional(_) => {
-                        Some(String::from("Answer in JSON using any of these schemas:\n"))
+                        Some(match options.format {
+                            OutputFormatMode::Json => {
+                                String::from("Answer in JSON using any of these schemas:\n")
+                            }
+                            OutputFormatMode::Toon => {
+                                String::from("Answer in TOON using any of these schemas:\n")
+                            }
+                        })
                     }
                 },
-                TypeIR::Map(_, _, _) => Some(String::from("Answer in JSON using this schema:\n")),
+                TypeIR::Map(_, _, _) => Some(match options.format {
+                    OutputFormatMode::Json => {
+                        String::from("Answer in JSON using this schema:\n")
+                    }
+                    OutputFormatMode::Toon => {
+                        String::from("Answer in TOON using this schema:\n")
+                    }
+                }),
                 TypeIR::Tuple(_, _) => None,
                 TypeIR::Arrow(_, _) => None, // TODO: Error? Arrow shouldn't appear here.
                 TypeIR::Top(_) => panic!(
@@ -532,6 +650,19 @@ impl OutputFormatContent {
     }
 
     fn enum_to_string(&self, enm: &Enum, options: &RenderOptions) -> String {
+        if matches!(options.format, OutputFormatMode::Toon) {
+            return format!(
+                "{}[{}]: {}",
+                render_toon_key(enm.name.rendered_name()),
+                enm.values.len(),
+                enm.values
+                    .iter()
+                    .map(|(name, _)| name.rendered_name())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+        }
+
         EnumRender {
             name: enm.name.rendered_name().to_string(),
             delimiter: "----".into(),
@@ -731,7 +862,7 @@ impl OutputFormatContent {
                     ));
                 };
 
-                ClassRender {
+                let class = ClassRender {
                     name: class.name.rendered_name().to_string(),
                     description: class.description.clone(),
                     values: class
@@ -741,6 +872,10 @@ impl OutputFormatContent {
                             Ok(ClassFieldRender {
                                 name: name.rendered_name().to_string(),
                                 description: description.clone(),
+                                toon_nested: matches!(
+                                    field_type,
+                                    TypeIR::Class { .. } | TypeIR::Map(_, _, _)
+                                ),
                                 r#type: self.render_possibly_hoisted_type(
                                     options, field_type, render_ctx,
                                 )?,
@@ -748,8 +883,12 @@ impl OutputFormatContent {
                         })
                         .collect::<Result<_, minijinja::Error>>()?,
                     quote_fields: options.quote_class_fields,
+                };
+
+                match options.format {
+                    OutputFormatMode::Json => class.to_string(),
+                    OutputFormatMode::Toon => class.render_toon(),
                 }
-                .to_string()
             }
             TypeIR::RecursiveTypeAlias { name, .. } => name.to_owned(),
             TypeIR::List(inner, _) => {
@@ -765,7 +904,23 @@ impl OutputFormatContent {
 
                 let inner_str = self.render_possibly_hoisted_type(options, inner, render_ctx)?;
 
-                if !is_hoisted
+                if matches!(options.format, OutputFormatMode::Toon) {
+                    if inner_str.contains('\n') {
+                        let mut lines = inner_str.lines();
+                        let first = lines.next().unwrap_or_default();
+                        let rest = lines
+                            .map(|line| format!("    {line}"))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        if rest.is_empty() {
+                            format!("[N]:\n  - {first}")
+                        } else {
+                            format!("[N]:\n  - {first}\n{rest}")
+                        }
+                    } else {
+                        format!("[N]: {inner_str}")
+                    }
+                } else if !is_hoisted
                     && match inner.as_ref() {
                         TypeIR::Primitive(_, _) => false,
                         TypeIR::Enum { .. } => inner_str.len() > 15,
@@ -794,12 +949,22 @@ impl OutputFormatContent {
                     "Tuple type is not supported in outputs",
                 ))
             }
-            TypeIR::Map(key_type, value_type, _) => MapRender {
-                style: &options.map_style,
-                key_type: self.render_possibly_hoisted_type(options, key_type, render_ctx)?,
-                value_type: self.render_possibly_hoisted_type(options, value_type, render_ctx)?,
+            TypeIR::Map(key_type, value_type, _) => {
+                let key_type = self.render_possibly_hoisted_type(options, key_type, render_ctx)?;
+                let value_type =
+                    self.render_possibly_hoisted_type(options, value_type, render_ctx)?;
+                match options.format {
+                    OutputFormatMode::Json => MapRender {
+                        style: &options.map_style,
+                        key_type,
+                        value_type,
+                    }
+                    .to_string(),
+                    OutputFormatMode::Toon => {
+                        format!("<key ({key_type})>: {value_type}")
+                    }
+                }
             }
-            .to_string(),
             TypeIR::Arrow(_, _) => {
                 return Err(minijinja::Error::new(
                     minijinja::ErrorKind::BadSerialization,
@@ -964,11 +1129,22 @@ impl OutputFormatContent {
                 (Vec::new(), schema)
             };
 
-            let class_def = match &options.hoisted_class_prefix {
-                RenderSetting::Always(prefix) if !prefix.is_empty() => {
-                    format!("{prefix} {class_name} {schema_body}")
-                }
-                _ => format!("{class_name} {schema_body}"),
+            let class_def = match options.format {
+                OutputFormatMode::Toon => format!(
+                    "{}:\n{}",
+                    render_toon_key(class_name),
+                    schema_body
+                        .lines()
+                        .map(|line| format!("  {line}"))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ),
+                OutputFormatMode::Json => match &options.hoisted_class_prefix {
+                    RenderSetting::Always(prefix) if !prefix.is_empty() => {
+                        format!("{prefix} {class_name} {schema_body}")
+                    }
+                    _ => format!("{class_name} {schema_body}"),
+                },
             };
 
             // Prepend description if present
@@ -1124,6 +1300,7 @@ mod tests {
                 None,
                 None,
                 Some(Some("omit".to_string())),
+                None,
             ))
             .unwrap();
         assert_eq!(rendered, Some("string or omit".into()));
@@ -1143,6 +1320,7 @@ mod tests {
                 None,
                 None,
                 Some(Some("omit".to_string())),
+                None,
             ))
             .unwrap()
             .unwrap();
@@ -1161,6 +1339,115 @@ mod tests {
         assert_eq!(
             rendered,
             Some("Answer with a JSON Array using this schema:\nstring[]".to_string())
+        );
+    }
+
+    #[test]
+    fn render_toon_array() {
+        let content = OutputFormatContent::new_array();
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatMode::Toon,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(
+            rendered,
+            Some(
+                "Answer with a TOON array using this schema. Replace N with the actual array length:\n[N]: string"
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn render_toon_class_with_nested_types() {
+        let enums = vec![Enum {
+            name: Name::new("Status".to_string()),
+            values: vec![
+                (Name::new("ACTIVE".to_string()), None),
+                (Name::new("PAUSED".to_string()), None),
+            ],
+            constraints: Vec::new(),
+        }];
+        let classes = vec![
+            Class {
+                name: Name::new("Address".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![(Name::new("city".to_string()), TypeIR::string(), None, false)],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+            Class {
+                name: Name::new("Profile".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (
+                        Name::new("status".to_string()),
+                        TypeIR::r#enum("Status"),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("tags".to_string()),
+                        TypeIR::list(TypeIR::string()),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("metadata".to_string()),
+                        TypeIR::map(TypeIR::string(), TypeIR::int()),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("address".to_string()),
+                        TypeIR::class("Address"),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("nickname".to_string()),
+                        TypeIR::optional(TypeIR::string()),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("identifier".to_string()),
+                        TypeIR::union(vec![TypeIR::int(), TypeIR::string()]),
+                        None,
+                        false,
+                    ),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+        ];
+
+        let rendered = OutputFormatContent::target(TypeIR::class("Profile"))
+            .enums(enums)
+            .classes(classes)
+            .build()
+            .render(RenderOptions {
+                format: OutputFormatMode::Toon,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"Answer in TOON using this schema. Replace every N in an array header with the actual array length:
+status: 'ACTIVE' or 'PAUSED'
+tags[N]: string
+metadata:
+  <key (string)>: int
+address:
+  city: string
+nickname: string or null
+identifier: int or string"#
         );
     }
 
@@ -3559,6 +3846,7 @@ Answer in JSON using this schema: Ret"#
             None,       // hoist_classes
             None,       // quote_class_fields
             None,       // render_null_as
+            None,       // format
         );
 
         let rendered = content.render(options).unwrap().unwrap();

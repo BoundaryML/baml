@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use minijinja::{value::Kwargs, ErrorKind, Value};
 use strum::VariantNames;
-use types::HoistClasses;
+use types::{HoistClasses, OutputFormatMode};
 
 use self::types::OutputFormatContent;
 use crate::{types::RenderOptions, RenderContext};
@@ -209,10 +209,41 @@ impl minijinja::value::Object for OutputFormat {
             None
         };
 
+        let format = if kwargs.has("format") {
+            match kwargs
+                .get::<String>("format")
+                .map(|s| OutputFormatMode::from_str(s.as_str()))
+            {
+                Ok(Ok(format)) => Some(format),
+                Ok(Err(e)) => {
+                    return Err(Error::new(
+                        ErrorKind::SyntaxError,
+                        format!(
+                            "Invalid value for format (expected one of {}): {}",
+                            OutputFormatMode::VARIANTS.join(", "),
+                            e
+                        ),
+                    ))
+                }
+                Err(e) => {
+                    return Err(Error::new(
+                        ErrorKind::SyntaxError,
+                        format!(
+                            "Invalid value for format (expected one of {}): {}",
+                            OutputFormatMode::VARIANTS.join(", "),
+                            e
+                        ),
+                    ))
+                }
+            }
+        } else {
+            None
+        };
+
         let Ok(_) = kwargs.assert_all_used() else {
             return Err(Error::new(
                 ErrorKind::TooManyArguments,
-                "output_format() got an unexpected keyword argument (only 'prefix', 'always_hoist_enums', 'enum_value_prefix', 'or_splitter', 'hoisted_class_prefix', 'hoist_classes', 'map_style', 'quote_class_fields', and 'render_null_as' are allowed)",
+                "output_format() got an unexpected keyword argument (only 'prefix', 'always_hoist_enums', 'enum_value_prefix', 'or_splitter', 'hoisted_class_prefix', 'hoist_classes', 'map_style', 'quote_class_fields', 'render_null_as', and 'format' are allowed)",
             ));
         };
 
@@ -226,6 +257,7 @@ impl minijinja::value::Object for OutputFormat {
             hoist_classes,
             quote_class_fields,
             render_null_as,
+            format,
         ))?;
 
         match content {

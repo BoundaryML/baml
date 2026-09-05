@@ -155,6 +155,7 @@ syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }
 test-log = "0.2.16"
 textwrap = "0.16.0"
 thiserror = "2.0.12"
+toon-format = { version = "0.5.0", default-features = false }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 time = { version = "0.3.36", features = ["formatting"] }
