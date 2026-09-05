@@ -652,7 +652,9 @@ test "int_rem_euclid_zero_divisor_panics" {
 }
 
 // int.min_value() / -1 already panics (2^62 overflows int.max_value()) --
-// div_euclid must panic the same way rather than let a raw Rust panic escape.
+// div_euclid must panic the same way. The underlying i64 computation itself
+// succeeds fine (2^62 fits i64); it's BAML's tighter i63 range that requires
+// the guard, not an i64-level overflow.
 test "int_div_euclid_min_value_by_negative_one_panics" {
     {
         int.min_value().div_euclid(-1);

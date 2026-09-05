@@ -139,11 +139,13 @@ impl BamlClassInt for PackageBamlImpl {
             }
             .into());
         }
-        // `i64::div_euclid` panics on exactly these two conditions: a zero
-        // divisor (checked above), or `Value::INT_MIN.div_euclid(-1)` (Rust's
-        // own documented overflow case, identical to plain `/`'s
-        // `INT_MIN / -1`). Precheck both so a raw Rust panic never reaches the
-        // VM; only a `VmPanic` should.
+        // `Value::INT_MIN` is `-2^62`, not `i64::MIN` (`-2^63`), so
+        // `Value::INT_MIN.div_euclid(-1)` fits comfortably in `i64` — the
+        // underlying primitive does not panic here. The guard exists because
+        // its result, `2^62`, is one past `Value::INT_MAX` and therefore not
+        // representable as a BAML `int` — the same i63 reason `abs()`'s
+        // guard above exists, not an i64-level overflow. Matches plain `/`'s
+        // existing `INT_MIN / -1` panic for the same underlying reason.
         if int == Value::INT_MIN && other == -1 {
             return Err(VmPanic::IntegerOverflow {
                 message: format!("{int}.div_euclid({other}) overflows int"),

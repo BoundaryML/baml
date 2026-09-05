@@ -125,10 +125,14 @@ class Int {
         $rust_function
     }
 
-    /// Returns `self` divided by `other`, rounded toward negative infinity —
-    /// the quotient paired with `rem_euclid` so that
-    /// `self == self.div_euclid(other) * other + self.rem_euclid(other)` and
-    /// the remainder is never negative.
+    /// Returns the unique `q` satisfying
+    /// `self == q * other + self.rem_euclid(other)` with the remainder never
+    /// negative — the quotient paired with `rem_euclid`.
+    ///
+    /// This equals floor division (rounding toward negative infinity) when
+    /// `other` is positive, but rounds toward *positive* infinity instead
+    /// when `other` is negative: `(7).div_euclid(-3)` is `-2`, not `-3`
+    /// (`floor(7 / -3)`).
     ///
     /// This differs from `/`, which truncates toward zero. `/` and
     /// `div_euclid` agree whenever `self` is non-negative or divides `other`
@@ -157,7 +161,7 @@ class Int {
     }
 
     /// Returns the remainder of dividing `self` by `other`, always in
-    /// `[0, other.abs())` regardless of either operand's sign. Paired with
+    /// `[0, |other|)` regardless of either operand's sign. Paired with
     /// `div_euclid`; see that method for the identity they satisfy together.
     ///
     /// This differs from `%`, which takes the sign of the dividend and can be
@@ -168,8 +172,8 @@ class Int {
     /// # Panics
     ///
     /// - `baml.panics.DivisionByZero` if `other` is zero. Never overflows
-    ///   otherwise: the result satisfies `0 <= r < other.abs()`, and
-    ///   `other.abs()` is at most `2^62`, so `r` always fits in `int` — even
+    ///   otherwise: the result satisfies `0 <= r < |other|`, and `|other|`
+    ///   is at most `2^62`, so `r` always fits in `int` — even
     ///   `int.min_value().rem_euclid(-1)`, which is `0` because dividing by
     ///   `1` or `-1` always leaves remainder `0`.
     ///
