@@ -13240,16 +13240,9 @@ impl<'db> InferenceContext<'db> {
         let file = self.owner_file?;
         let info = baml_compiler2_hir::file_package::file_package(self.db, file);
         let pkg = baml_compiler2_hir::package::PackageId::new(self.db, info.package);
-        let aliases = self.overlap_alias_map();
-        crate::interfaces::first_failing_impl_bound(
-            self.db,
-            pkg,
-            &rendered_plain(actual),
-            &rendered_plain(expected),
-            aliases,
-            |a, b| baml_type::normalize::is_subtype(a, b, &self.facts),
-        )
-        .map(|(_param, bound, _actual_arg)| bound)
+        crate::impls::first_failing_impl_bound(self.db, pkg, actual, expected, |a, b| {
+            baml_type::normalize::is_subtype(a, b, &self.facts)
+        })
     }
 
     fn pattern_overlap_verdict(

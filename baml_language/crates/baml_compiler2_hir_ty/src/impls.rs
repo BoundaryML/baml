@@ -1,36 +1,13 @@
-//! The impl registry (I1): `(interface, concrete type) -> the unique
-//! implements block`, re-authored from TIR's `impl_rules.rs` in this
-//! crate's interned vocabulary (reference, never a dependency).
+//! Shared implementation selection for type checking, validation, and diagnostics.
 //!
-//! Design invariants carried over deliberately:
-//! - Every impl - in-body or out-of-body - normalizes to the same FREE
-//!   shape at fact-extraction time: an in-body `implements I {}` inside
-//!   `class C<T>` resolves exactly as `implement<T> I for C<T>`. The
-//!   syntactic origin never drives resolution.
-//! - Interfaces are BOUNDS, not inheritance: the interface head must
-//!   match exactly; an impl of a sub-interface never satisfies a
-//!   requested super-interface (`requires` is consulted separately, by
-//!   the `interface_requires` fact).
-//! - Coherence guarantees at most one impl per realized pair, so
-//!   resolution returns an `Option`, never a candidate set.
-//! - Blanket bounds re-enter the resolver with a depth budget
-//!   (`BLANKET_IMPL_BOUND_DEPTH`); a bound still carrying variables
-//!   after substitution is vacuously satisfied (its discharge is the
-//!   call site's obligation - I4 records it properly).
-//! - Matching uses a deliberately FACT-POOR equality (`AliasOnlyFacts`,
-//!   TIR's `AliasEquivCtx`): aliases and enum variants only, no
-//!   implements/projection/bounds facts. Termination depends on it - the
-//!   matcher is a link in the `implements_interface -> resolver ->
-//!   matcher` chain, and a fact-rich equality would close the loop.
-//! - Inputs are gated on realizedness with a `None`/`false` return (TIR
-//!   debug-asserts instead; this engine runs with live inference vars,
-//!   so the gate is a contract, not an assertion).
+//! In-class and out-of-body implementations have the same interned header facts.
+//! Selection matches an exact interface head, then checks concrete generic bounds
+//! recursively. Symbolic bounds remain obligations for the caller's parameter
+//! environment. Coherence guarantees at most one implementation per realized pair.
 //!
-//! Deliberately NOT replicated from TIR (survey-recorded defects): the
-//! single-bound conjunction asymmetry (bounds are `Vec` end to end
-//! here). Method frames are computed at `lookup_impl_member` from the
-//! match's bindings, where an unbound impl param is unreachable, never a
-//! stand-in type.
+//! Matching uses alias and enum facts only. Consulting implementation or projection
+//! facts during equality would re-enter selection recursively. Goal cycles and
+//! growing bound chains are guarded separately by a stack and a depth budget.
 
 use baml_compiler2_hir::{loc::ImplLoc, package::PackageId};
 use baml_type::{
@@ -1402,12 +1379,133 @@ pub(crate) fn all_impl_facts(db: &dyn baml_compiler2_ppir::Db) -> Vec<&ImplFacts
     out
 }
 
-/// Whether realized `concrete` implements realized `interface`. The
-/// public fact: searches the root packages derivable from every
-/// qualified name on both sides (a single guessed root misses
-/// orphan-legal placements like `implement dep.I for LocalEnum`).
-/// Unrealized inputs answer `false` - the conservative direction; the
-/// symbolic resolvers join with I4.
+/// Check an impl's symbolic bounds using the caller's parameter environment.
+/// Selection already checks realized bounds; only its deferred obligations
+/// need the richer subtype context here.
+pub(crate) fn implements_interface_with_bounds(
+    db: &dyn baml_compiler2_ppir::Db,
+    concrete: &baml_type::Ty,
+    interface: &baml_type::Interface,
+    mut is_subtype: impl FnMut(&baml_type::Ty, &baml_type::Ty) -> bool,
+) -> bool {
+    if interface.name.is_reflect_root_type("AnyClass") {
+        return is_subtype(concrete, &interface.to_ty());
+    }
+    let Some(resolved) = resolve_impl(
+        db,
+        &interned_ty(concrete),
+        &InferInterface::from_constraint(interface),
+    ) else {
+        return false;
+    };
+    failing_bound(&resolved.facts, &resolved.bindings, |actual, bound| {
+        is_realized(actual)
+            || is_subtype(&closed_plain(actual), &closed_plain(&bound.existential()))
+    })
+    .is_none()
+}
+
+/// Diagnostic refinement for an impl whose shape matches but whose bounds fail.
+/// Keep the owner's dependency order so the first reported obligation is stable.
+pub(crate) fn first_failing_impl_bound(
+    db: &dyn baml_compiler2_ppir::Db,
+    package: PackageId<'_>,
+    concrete: &Ty,
+    requested: &Ty,
+    mut is_subtype: impl FnMut(&baml_type::Ty, &baml_type::Ty) -> bool,
+) -> Option<baml_type::Ty> {
+    let InferTy::Interface(name, args, _, _) = requested.kind() else {
+        return None;
+    };
+    if concrete.has_infer()
+        || concrete.has_error()
+        || requested.has_infer()
+        || requested.has_error()
+    {
+        return None;
+    }
+    let eq = AliasOnlyFacts::memoized(db);
+    for pkg in std::iter::once(package).chain(
+        baml_compiler2_hir::package::package_dependency_closure(db, package)
+            .iter()
+            .copied(),
+    ) {
+        for (_, facts) in package_impl_candidates(db, pkg) {
+            if &facts.interface().name != name {
+                continue;
+            }
+            let params: Vec<_> = facts
+                .generic_params()
+                .iter()
+                .map(|(param, _)| param.clone())
+                .collect();
+            let mut bindings = FxHashMap::default();
+            if !match_pattern(
+                facts.for_ty_pattern(),
+                concrete,
+                &params,
+                &mut bindings,
+                &eq,
+            ) {
+                continue;
+            }
+            if facts.interface().generics.len() == args.len()
+                && !facts
+                    .interface()
+                    .generics
+                    .iter()
+                    .zip(args)
+                    .all(|(pattern, target)| {
+                        match_pattern(pattern, target, &params, &mut bindings, &eq)
+                    })
+            {
+                continue;
+            }
+            if let Some(bound) = failing_bound(&facts, &bindings, |actual, bound| {
+                is_subtype(&closed_plain(actual), &closed_plain(&bound.existential()))
+            }) {
+                return Some(closed_plain(&bound.existential()));
+            }
+        }
+    }
+    None
+}
+
+fn failing_bound(
+    facts: &ResolvedImplFacts<'_>,
+    bindings: &FxHashMap<ParamTy, Ty>,
+    mut satisfies: impl FnMut(&Ty, &InferInterface) -> bool,
+) -> Option<InferInterface> {
+    for (param, bounds) in facts.generic_params() {
+        let Some(actual) = bindings.get(param) else {
+            continue;
+        };
+        for bound in bounds {
+            let bound = realized(bound, bindings);
+            if bound
+                .generics
+                .iter()
+                .chain(bound.associated_types.iter().map(|(_, ty)| ty))
+                .any(Ty::has_typevar)
+            {
+                continue;
+            }
+            if !satisfies(actual, &bound) {
+                return Some(bound);
+            }
+        }
+    }
+    None
+}
+
+fn closed_plain(ty: &Ty) -> baml_type::Ty {
+    ClosedTy::try_from(ty)
+        .expect("closed impl facts substituted with admitted bindings")
+        .to_plain()
+}
+
+/// Whether selection finds an implementation. Symbolic bounds remain obligations
+/// for the caller; use [`implements_interface_with_bounds`] to discharge them.
 pub fn implements_interface(
     db: &dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
@@ -1416,8 +1514,8 @@ pub fn implements_interface(
     resolve_impl(db, concrete, interface).is_some()
 }
 
-/// The unique impl by which realized `concrete` implements realized
-/// `interface`, with bindings.
+/// Select the unique implementation and its bindings. Rigid type variables are
+/// admitted; unresolved inference variables and error sentinels are rejected.
 pub fn resolve_impl<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
@@ -1515,7 +1613,11 @@ fn search_roots<'db>(
 ) -> Vec<PackageId<'db>> {
     let mut names: Vec<Name> = vec![interface.name.package().clone()];
     collect_packages(concrete, &mut names);
-    for arg in &interface.generics {
+    for arg in interface
+        .generics
+        .iter()
+        .chain(interface.associated_types.iter().map(|(_, ty)| ty))
+    {
         collect_packages(arg, &mut names);
     }
     names.sort();
@@ -1533,6 +1635,9 @@ fn collect_packages(ty: &Ty, out: &mut Vec<Name>) {
         | InferTy::Enum(qtn, _)
         | InferTy::EnumVariant(qtn, ..)
         | InferTy::TypeAlias(qtn, _) => out.push(qtn.package().clone()),
+        InferTy::AssociatedTypeProjection { interface, .. } => {
+            out.push(interface.name.package().clone());
+        }
         _ => {}
     }
     // Primitives and structural types live in the stdlib package.
@@ -1553,11 +1658,7 @@ fn collect_packages(ty: &Ty, out: &mut Vec<Name>) {
     ) {
         out.push(Name::new("baml"));
     }
-    let mut children = Vec::new();
-    baml_type::interned::for_each_child(ty.kind(), |child| children.push(child.clone()));
-    for child in children {
-        collect_packages(&child, out);
-    }
+    baml_type::interned::for_each_child(ty.kind(), |child| collect_packages(child, out));
 }
 
 /// Structural head match: exact interface, joint unification of the
@@ -1714,7 +1815,7 @@ fn match_pattern(
     target: &Ty,
     params: &[ParamTy],
     bindings: &mut FxHashMap<ParamTy, Ty>,
-    eq: &AliasOnlyFacts<'_>,
+    eq: &impl TypeContext,
 ) -> bool {
     if let InferTy::TypeVar(param, _) = pattern.kind()
         && params.contains(param)
@@ -1728,7 +1829,15 @@ fn match_pattern(
         };
     }
     if !pattern.has_typevar() {
-        return eq_admitted(pattern, target, eq);
+        return match (pattern.kind(), target.kind()) {
+            (InferTy::Int { .. }, InferTy::Literal(baml_type::Literal::Int(_), ..))
+            | (InferTy::Bigint { .. }, InferTy::Literal(baml_type::Literal::Bigint(_), ..))
+            | (InferTy::Float { .. }, InferTy::Literal(baml_type::Literal::Float(_), ..))
+            | (InferTy::String { .. }, InferTy::Literal(baml_type::Literal::String(_), ..))
+            | (InferTy::Bool { .. }, InferTy::Literal(baml_type::Literal::Bool(_), ..)) => true,
+            (InferTy::Enum(p, _), InferTy::EnumVariant(t, ..)) => p == t,
+            _ => eq_admitted(pattern, target, eq),
+        };
     }
     // Substitute-and-compare escape: a pattern whose vars are all bound
     // already can be compared semantically (union normalization no
@@ -1804,14 +1913,6 @@ fn match_pattern(
                 && match_pattern(pr, tr, params, bindings, eq)
                 && match_pattern(pt, tt, params, bindings, eq)
         }
-        // Widenings: a literal target matches its base primitive; an
-        // enum-variant target matches its enum.
-        (InferTy::Int { .. }, InferTy::Literal(baml_type::Literal::Int(_), ..))
-        | (InferTy::Bigint { .. }, InferTy::Literal(baml_type::Literal::Bigint(_), ..))
-        | (InferTy::Float { .. }, InferTy::Literal(baml_type::Literal::Float(_), ..))
-        | (InferTy::String { .. }, InferTy::Literal(baml_type::Literal::String(_), ..))
-        | (InferTy::Bool { .. }, InferTy::Literal(baml_type::Literal::Bool(_), ..)) => true,
-        (InferTy::Enum(p, _), InferTy::EnumVariant(t, ..)) => p == t,
         _ => false,
     }
 }
@@ -1823,7 +1924,7 @@ fn match_union_members(
     target_members: &[Ty],
     params: &[ParamTy],
     bindings: &mut FxHashMap<ParamTy, Ty>,
-    eq: &AliasOnlyFacts<'_>,
+    eq: &impl TypeContext,
 ) -> bool {
     fn search(
         patterns: &[Ty],
@@ -1831,7 +1932,7 @@ fn match_union_members(
         used: &mut Vec<bool>,
         params: &[ParamTy],
         bindings: &mut FxHashMap<ParamTy, Ty>,
-        eq: &AliasOnlyFacts<'_>,
+        eq: &impl TypeContext,
     ) -> bool {
         let Some(pattern) = patterns.first() else {
             return true;
@@ -2211,3 +2312,6 @@ fn interface_requires_inner(
     visited.pop();
     holds
 }
+
+#[cfg(test)]
+mod tests;
