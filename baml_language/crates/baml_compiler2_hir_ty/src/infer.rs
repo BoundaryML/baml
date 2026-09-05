@@ -6341,6 +6341,20 @@ impl<'db> InferenceContext<'db> {
             self.member_probe_depth += 1;
             let (field, field_resolution) = self.field_access_resolved(call, &resolved, member);
             self.member_probe_depth -= 1;
+            // A nested inference variable can already have enough evidence
+            // to resolve even though the receiver's class head was known
+            // (`Probe.new(1)` initially returns `Probe<?T>`). Keep the first
+            // pass non-committal so conditional impl probing can constrain the
+            // receiver, but after the ordinary lookup tiers miss, force the evidence
+            // we have and retry. Otherwise the `has_infer` cascade guard below
+            // permanently suppresses E0007 even though finalization later
+            // records a fully-ground `Probe<int>` receiver.
+            if field.has_error() && resolved.has_infer() {
+                let forced = self.force_occurring_vars(&resolved);
+                if forced != resolved {
+                    return self.member_callee(call, member_expr, &forced, member);
+                }
+            }
             // `recv.to_json()` is language sugar for `baml.json.from(recv)`
             // (universal serialization; TIR's builder lowers the call the
             // same way). It is a FALLBACK tier: an `implements baml.ToJson`

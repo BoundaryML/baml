@@ -159,6 +159,144 @@ fn unresolved_field() {
 }
 
 #[test]
+fn unresolved_method_on_inferred_generic_factory_result() {
+    let mut db = make_db();
+    let source = r#"
+class Probe<T> {
+  value T
+
+  function new(value: T) -> Probe<T> {
+    Probe<T> { value }
+  }
+
+  function get(self) -> T {
+    self.value
+  }
+}
+
+function inferred_missing() -> int {
+  Probe.new(1).zzz_probe_delta()
+}
+"#;
+    let file = db.add_file("test.baml", source);
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("type `Probe<int>` has no member `zzz_probe_delta`"),
+        "an inferred generic receiver must report its missing member:\n{output}"
+    );
+    assert_span_aware_e0007(&db, source, "zzz_probe_delta");
+}
+
+#[test]
+fn unresolved_method_on_explicit_generic_receiver() {
+    let mut db = make_db();
+    let source = r#"
+class Probe<T> {
+  value T
+
+  function new(value: T) -> Probe<T> {
+    Probe<T> { value }
+  }
+}
+
+function explicit_missing() -> int {
+  Probe<int>.new(1).zzz_probe_delta()
+}
+"#;
+    let file = db.add_file("test.baml", source);
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("type `Probe<int>` has no member `zzz_probe_delta`"),
+        "an explicit generic receiver must keep the normal missing-member diagnostic:\n{output}"
+    );
+    assert_span_aware_e0007(&db, source, "zzz_probe_delta");
+}
+
+#[test]
+fn unresolved_method_on_stdlib_inferred_generic_factory_results() {
+    for (source, member) in [
+        (
+            "function repeat_missing() -> int { baml.iter.Repeat.new(7).zzz_probe_repeat() }",
+            "zzz_probe_repeat",
+        ),
+        (
+            "function iterator_missing() -> int { baml.iter.ArrayIterator.new([1, 2]).zzz_probe_iterator() }",
+            "zzz_probe_iterator",
+        ),
+    ] {
+        let mut db = make_db();
+        let file = db.add_file("test.baml", source);
+        let output = render_tir(&db, file);
+        assert!(
+            output.contains(&format!("has no member `{member}`")),
+            "a stdlib inferred generic receiver must report its missing member:\n{output}"
+        );
+        assert_span_aware_e0007(&db, source, member);
+    }
+}
+
+#[test]
+fn valid_method_on_inferred_generic_factory_result() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Probe<T> {
+  value T
+
+  function new(value: T) -> Probe<T> {
+    Probe<T> { value }
+  }
+
+  function get(self) -> T {
+    self.value
+  }
+}
+
+function inferred_valid() -> int {
+  Probe.new(1).get()
+}
+"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("Probe.new(1).get() : int"),
+        "a valid method must keep resolving on an inferred generic receiver:\n{output}"
+    );
+    assert!(!output.contains("!!"), "unexpected diagnostics:\n{output}");
+}
+
+fn assert_span_aware_e0007(db: &baml_project::ProjectDatabase, source: &str, member: &str) {
+    let diagnostics = baml_project::collect_compiler2_diagnostics(db);
+    let matching = diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.id == baml_compiler_diagnostics::DiagnosticId::NoSuchField
+                && diagnostic.message.contains(member)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        matching.len(),
+        1,
+        "expected exactly one E0007 for {member}: {diagnostics:#?}"
+    );
+    assert_eq!(matching[0].code(), "E0007");
+    let span = matching[0]
+        .primary_span()
+        .expect("E0007 must retain its source span");
+    let start = usize::from(span.range.start());
+    let end = usize::from(span.range.end());
+    assert!(
+        source[start..end].contains(member),
+        "E0007 span must cover the missing member: {:?}",
+        &source[start..end]
+    );
+}
+
+#[test]
 fn unresolved_field_chained_access() {
     // Test: in `data.inner.foo`, if `inner` doesn't exist on the class,
     // the squiggly should only cover "inner", not "data.inner".
