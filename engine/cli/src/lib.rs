@@ -6,6 +6,7 @@ pub(crate) mod deploy;
 pub(crate) mod format;
 pub(crate) mod lsp;
 pub(crate) mod propelauth;
+pub(crate) mod telemetry;
 pub(crate) mod tui;
 use anyhow::Result;
 
@@ -62,7 +63,9 @@ pub fn run_cli(
     argv: Vec<String>,
     caller_type: baml_runtime::RuntimeCliDefaults,
 ) -> Result<ExitCode> {
-    let mut cli = commands::RuntimeCli::parse_from_smart(argv);
+    let mut cli = commands::RuntimeCli::parse_from_smart(argv.clone());
+    telemetry::capture_command_started(&argv, &cli.command, caller_type);
+
     if !matches!(cli.command, commands::Commands::Test(_)) {
         // We only need to set the exit handlers if we're not running tests
         // and the caller is Python.
