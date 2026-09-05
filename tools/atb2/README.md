@@ -159,3 +159,42 @@ rows, and `dataset=eq.live` in a dashboard filter hides them.
 The eval dataset itself (`eval/supabase`, tables `triage_issues` /
 `triage_feedback`) is separate: reference issues and synthetic reports,
 eval-only by construction.
+
+### Slack Events intake
+
+The Fly runner starts `main_ingress()`: HTTP on port 8080 shares the process
+with the existing pipeline and merge-request loops. `/health` reports listener
+liveness, not pipeline progress. `/slack/events` accepts signed Slack requests
+within a five-minute replay window. `ATB_SLACK_SIGNING_SECRET` (or
+`ATB2_SLACK_SIGNING_SECRET`) is loaded by the root launcher.
+
+Mentions route to `babysit <PR URL>`, a placeholder reply for shirt requests,
+or durable feedback. A single store insert, capped at two seconds, precedes
+HTTP acknowledgement. Unique `slack_event_id` values make retries harmless;
+failed writes return 503 so Slack can retry. Slack acknowledgements are best
+effort after persistence. The pipeline scans previously stored untriaged
+reports, so work survives process restarts.
+
+Before deployment apply the SQL from this branch's PR description. Configure
+the Slack Events URL as `https://atb2-runner.fly.dev/slack/events` and subscribe
+to `app_mention`. Use events instead of enabling the optional channel-history
+poller for the same intake. `python3 deploy/test_slack_http.py` checks a real
+local listener with fixture credentials and no external writes.
+
+### Shepherd approval
+
+Set `ATB2_SHEPHERDS` to explicit GitHub-login/Slack-user pairs, for example
+`maintainer:U123,reviewer:U456`. Missing or ambiguous mappings cannot approve.
+Subscribe the Slack app to `reaction_added`, add `reactions:read`, and reinstall
+it. Apply the approval branch's column SQL before deploying.
+
+Newly triaged issues wait in `awaiting_approval`. The mapped shepherd reacts
+with `white_check_mark` or `+1` on the bot's approval message. Approval checks
+the channel and exact message timestamp, then conditionally changes the state
+to `approved`. The automatic handle stage reads approved issues only. Existing
+open issues are moved into the approval workflow during triage; failed Slack
+announcements are retried. Reopened issues get a fresh approval message.
+
+Direct operator calls to `handle_issue` and existing PR review rounds remain
+manual entrypoints. The approval gate controls automatic issue implementation;
+it does not isolate an agent's filesystem or replace the runtime security boundary.

@@ -139,6 +139,10 @@ export function statusLabel(issue: Issue): string {
   switch (s.state) {
     case "open":
       return "Open";
+    case "awaiting_approval":
+      return "Awaiting approval";
+    case "approved":
+      return "Approved";
     case "in_progress":
       return s.pr ? "PR open" : "In progress";
     case "merged":

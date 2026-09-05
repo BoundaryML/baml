@@ -56,7 +56,13 @@ function run_pipeline(
     // the later stages of this same run
     let created: Issue[] = [];
     if (want.includes("triage")) {
-        for (let fb in fresh) {
+        for (
+            let fb in if (db_configured()) {
+                untriaged_feedback()
+            } else {
+                fresh
+            }
+        ) {
             match (triage_feedback(fb)) {
                 null => report.skipped.push(fb.id + ": no issue (fixed on this toolchain)"),
                 let i: Issue => {
@@ -67,11 +73,14 @@ function run_pipeline(
             };
         }
     };
-    //# handle: open, gauged issues -> handle_issue -> runs row
+    if (want.includes("triage") && db_configured()) {
+        announce_approvals();
+    };
+    //# handle: approved, gauged issues -> handle_issue -> runs row
     let handled: Issue[] = [];
     if (want.includes("handle")) {
         let open = if (db_configured()) {
-            load_issues_in("open")
+            load_issues_in("approved")
         } else {
             created
         };
@@ -278,6 +287,47 @@ function origin_of(fb: Feedback) -> json {
     }
 }
 
+/// Includes durable Slack events and reports ingested in earlier runs. Scan
+/// past no_issue rows so they cannot starve newer reports at the head of a page.
+function untriaged_feedback() -> Feedback[] {
+    let pending: Feedback[] = [];
+    let offset = 0;
+    while (pending.length() < 50) {
+        let rows = select(
+            "feedback",
+            "select=*&issue_ids=eq.%7B%7D&dataset="
+                + eq(dataset())
+                + "&order=created_at,id&limit=100&offset="
+                + offset.to_string(),
+        );
+        for (let row in rows) {
+            let id = baml.json.path_or<string>(row, ".id", "");
+            if (
+                select(
+                    "events",
+                    "select=id&feedback_id="
+                        + eq(id)
+                        + "&kind=eq.no_issue&dataset="
+                        + eq(dataset())
+                        + "&limit=1",
+                )
+                    .length()
+                    == 0
+            ) {
+                pending.push(feedback_from_row(row));
+                if (pending.length() >= 50) {
+                    return pending;
+                };
+            };
+        }
+        if (rows.length() < 100) {
+            return pending;
+        };
+        offset += 100;
+    }
+    pending
+}
+
 // ==================== triage ====================
 
 /// One report through triage. Null when the repro is already fixed on this
@@ -292,10 +342,16 @@ function triage_feedback(fb: Feedback) -> Issue? {
         },
         let issue: Issue => {
             //# organize + gauge
-            let gauged = gauge_issue(organize_issue(issue));
+            let gauged = with_status(gauge_issue(organize_issue(issue)), AwaitingApproval { state: "awaiting_approval" });
             save_issue(gauged);
             //# link the report to its issue
-            save_feedback(with_issue(fb, gauged.id), origin_of(fb));
+            if (db_configured()) {
+                update(
+                    "feedback",
+                    "id=" + eq(fb.id) + "&dataset=" + eq(dataset()),
+                    { "issue_ids": with_issue(fb, gauged.id).issue_ids }.to_json(),
+                );
+            };
             //# open the issue's thread
             notify("issue_created", gauged, issue_created_text(gauged), { "feedback": fb.id }.to_json());
             gauged
@@ -326,6 +382,9 @@ function with_issue(fb: Feedback, issue_id: string) -> Feedback {
 /// handle_issue for one issue, its outcome saved and told. Null when
 /// handle_issue did not run (not ready, already fixed).
 function handle_one(issue: Issue, mode: HandleMode) -> HandleOutcome? {
+    if (!issue_approved(issue)) {
+        return null;
+    };
     //# a stale outcome.json from an earlier run must not be read as this run's
     let stale = run_dir_for(branch_for(issue)) + "/outcome.json";
     if (baml.fs.exists(stale)) {
@@ -426,4 +485,27 @@ testset "pipeline" {
             assert.equal(r.ingested, 0);
         };
     }
+}
+
+/// Only the automatic stage requires approval. Manual handle_issue calls and
+/// review rounds are explicit operator work, outside this queue.
+function issue_approved(issue: Issue) -> bool {
+    match (issue.status) {
+        let s: Approved => slack_id(s.by),
+        _ => false,
+    }
+}
+
+/// Reannounce pending issues after a Slack outage; also bring pre-gate open
+/// issues into the approval workflow. A missing shepherd mapping stays blocked.
+function announce_approvals() -> null {
+    for (let i in load_issues_in("open")) {
+        save_issue(with_status(i, AwaitingApproval { state: "awaiting_approval" }));
+    }
+    for (let i in load_issues_in("awaiting_approval")) {
+        if (i.slack_ts == null && shepherd_slack_id(i.shepherd) != null) {
+            notify("issue_created", i, issue_created_text(i), { "approval": "requested" }.to_json());
+        };
+    }
+    null
 }

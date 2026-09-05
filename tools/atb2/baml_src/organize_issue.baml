@@ -73,6 +73,8 @@ function organize_issue(issue: Issue) -> Issue {
         resolution_plan: issue.resolution_plan,
         difficulty: issue.difficulty,
         design_doc: issue.design_doc,
+        slack_ts: issue.slack_ts,
+        slack_channel: issue.slack_channel,
     }
 }
 
@@ -92,6 +94,8 @@ function issue_in(subsystem: Subsystem, shepherd: string?) -> Issue {
         resolution_plan: null,
         difficulty: null,
         design_doc: null,
+        slack_ts: null,
+        slack_channel: null,
     }
 }
 

@@ -20,6 +20,13 @@ class LauncherTests(unittest.TestCase):
     def export(self, rows, returncode=0):
         return subprocess.CompletedProcess([], returncode, json.dumps(rows), "private diagnostic")
 
+    def test_slack_intake_and_shepherd_config_survive_filtering(self):
+        source = {"ATB_SLACK_SIGNING_SECRET": "fixture", "ATB2_SHEPHERDS": "owner:U1"}
+        env = launcher.runtime_environment(source)
+        self.assertEqual(env["ATB_SLACK_SIGNING_SECRET"], "fixture")
+        self.assertEqual(env["ATB2_SHEPHERDS"], "owner:U1")
+        self.assertNotIn("INFISICAL_TOKEN", env)
+
     def test_only_named_values_cross_boundary(self):
         value = "quotes'\" newline\n$(never-run); literal"
         rows = [{"key": key, "value": val} for key, val in {
