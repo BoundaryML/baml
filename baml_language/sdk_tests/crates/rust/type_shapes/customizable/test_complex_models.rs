@@ -5,13 +5,48 @@
 // arms as unit variants from their value, class/primitive arms wrapping
 // their payload — and a trailing `| null` lowering to `Option<...>`
 // around the enum.
-use baml_bridge::Map;
+use baml_bridge::{
+    Map, baml_value::internal::__BamlValuePrivate, wire::inbound_value::Value as WireValue,
+};
 use baml_sdk::complex_models::{
     AccountTier, AuditEvent, CardPayment, CardPaymentOrWirePayment, ComplexProfile, ContactMethod,
-    CreatedOrUpdatedOrApproved, DraftOrSentOrPaid, GeoPoint, IntOrStringOrBool, Invoice,
-    InvoiceOrPostalAddressOrString, LineItem, PostalAddress, ProfileOwner, WirePayment,
-    round_trip_complex_profile,
+    CreatedOrUpdatedOrApproved, DraftOrSentOrPaid, GeoPoint, GraphQueryOrGraphDiff,
+    IntOrStringOrBool, Invoice, InvoiceOrPostalAddressOrString, LineItem,
+    LiteralUnionIdentifierEdges, PostalAddress, ProfileOwner, Utf8LossyOrUtf8Strict, WirePayment,
+    round_trip_complex_profile, round_trip_literal_union_identifier_edges,
 };
+
+// SDK_PARITY_LINT(skip): exercises Rust identifier synthesis for string-literal union arms
+#[test]
+fn test_complex_models_round_trip_non_identifier_string_literal_union_arms() {
+    for (command, command_wire_value) in [
+        (GraphQueryOrGraphDiff::GraphQuery, "graph.query"),
+        (GraphQueryOrGraphDiff::GraphDiff, "graph.diff"),
+    ] {
+        assert_string_wire_value(&command, command_wire_value);
+        for (encoding, encoding_wire_value) in [
+            (Utf8LossyOrUtf8Strict::Utf8Lossy, "utf8-lossy"),
+            (Utf8LossyOrUtf8Strict::Utf8Strict, "utf8-strict"),
+        ] {
+            assert_string_wire_value(&encoding, encoding_wire_value);
+            let value = LiteralUnionIdentifierEdges {
+                command: command.clone(),
+                encoding,
+            };
+            assert_eq!(
+                round_trip_literal_union_identifier_edges(value.clone()).unwrap(),
+                value
+            );
+        }
+    }
+}
+
+fn assert_string_wire_value<T: __BamlValuePrivate>(value: &T, expected: &str) {
+    match value.to_baml().value {
+        Some(WireValue::StringValue(actual)) => assert_eq!(actual, expected),
+        other => panic!("expected string wire value {expected:?}, got {other:?}"),
+    }
+}
 
 #[test]
 fn test_complex_models_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() {
