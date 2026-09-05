@@ -23,6 +23,7 @@ fn main() {
     assert_eq!(env::var("HOME").unwrap(), "/data/bootstrap/home");
     assert_eq!(Command::new("id").arg("-u").output().unwrap().stdout, b"1001\n");
     assert!(env::var("FEEDBACK_SUPABASE_KEY").is_err());
+    assert!(env::var("INFISICAL_TOKEN").is_err());
     for path in ["/data/home/.credentials.json", "/proc/1/environ"] {
         let err = fs::read(path).expect_err("builder read a protected file");
         assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
@@ -43,6 +44,12 @@ use std::{env, fs, process::Command};
 fn main() {
     assert_eq!(Command::new("id").arg("-u").output().unwrap().stdout, b"1000\n");
     assert_eq!(env::var("HOME").unwrap(), "/data/home");
+    assert_eq!(env::var("FEEDBACK_SUPABASE_KEY").unwrap(), "exported-app-placeholder");
+    for key in ["INFISICAL_TOKEN", "UNRELATED_SECRET", "LD_PRELOAD", "ANTHROPIC_API_KEY"] {
+        assert!(env::var(key).is_err(), "unexpected runtime variable: {key}");
+    }
+    let raw_env = fs::read("/proc/self/environ").unwrap();
+    assert!(!String::from_utf8_lossy(&raw_env).contains("machine-placeholder"));
     assert_eq!(fs::read_to_string("/data/home/.credentials.json").unwrap(), "test-login-placeholder");
     assert!(fs::read("/data/bootstrap/isolation-passed").is_err());
     assert!(!Command::new("setpriv").args(["--reuid=0", "id"]).status().unwrap().success());
@@ -57,6 +64,30 @@ export ATB2_CANARY_REV
 ATB2_CANARY_REV=$(git -C /data/bootstrap/repo rev-parse HEAD)
 chown -R builder:builder /data/bootstrap
 export FEEDBACK_SUPABASE_KEY=offline-test-placeholder
+export INFISICAL_TOKEN=machine-placeholder INFISICAL_PROJECT_ID=offline-test
+export UNRELATED_SECRET=excluded-placeholder
+# Substitute only inside this disposable, network-disabled test container.
+# The real launcher's subprocess must fetch as root, with no token in argv.
+cat > /tmp/fake-infisical <<'EOF'
+#!/usr/bin/python3
+import json, os, sys
+assert os.geteuid() == 0
+assert os.environ["INFISICAL_TOKEN"] == "machine-placeholder"
+assert "machine-placeholder" not in str(sys.argv)
+assert "FEEDBACK_SUPABASE_KEY" not in os.environ
+if os.path.exists("/root/export-failure"):
+    print("machine-placeholder", file=sys.stderr)
+    sys.exit(1)
+print(json.dumps([
+    {"key": "FEEDBACK_SUPABASE_KEY", "value": "exported-app-placeholder"},
+    {"key": "INFISICAL_TOKEN", "value": "exported-machine-placeholder"},
+    {"key": "LD_PRELOAD", "value": "/nonexistent"},
+    {"key": "HOME", "value": "/wrong"},
+    {"key": "ANTHROPIC_API_KEY", "value": "excluded"},
+]))
+EOF
+chmod 755 /tmp/fake-infisical
+mv -fT /tmp/fake-infisical /usr/local/bin/infisical
 /usr/local/bin/atb2-bootstrap
 test "$(cat /data/bootstrap/isolation-passed)" = ok
 test "$(stat -c %a /data/home)" = 700
@@ -65,6 +96,18 @@ test "$(stat -c %a /data/home)" = 700
 setpriv --reuid=1001 --regid=1001 --clear-groups git -C /data/bootstrap/repo remote remove origin
 /usr/local/bin/atb2-bootstrap
 echo 'PASS: real build isolation, existing login preserved, cached offline boot'
+
+# Failed secret retrieval must stop startup without printing exporter secrets.
+touch /root/export-failure
+if /usr/local/bin/atb2-bootstrap > /tmp/failed-launch-output 2>&1; then
+  echo 'FAIL: runtime started after failed secret retrieval' >&2
+  exit 1
+fi
+if grep -qE 'machine-placeholder|runtime isolation passed' /tmp/failed-launch-output; then
+  echo 'FAIL: secret diagnostic leaked or runtime started' >&2
+  exit 1
+fi
+unlink /root/export-failure
 
 # Failed artifact reads must not publish an empty binary over a working one.
 before=$(sha256sum /data/target/debug/baml-cli)

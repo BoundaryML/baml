@@ -2,23 +2,13 @@
 # Runtime only: bootstrap drops privileges before invoking this script.
 set -euo pipefail
 umask 077
-if [ "$(id -u)" != 1000 ]; then
-  echo "atb2: runtime must run as the atb2 user" >&2
+if [ "$(id -u)" != 1000 ] || [ -n "${INFISICAL_TOKEN+x}" ]; then
+  echo "atb2: runtime requires the atb2 user without an Infisical machine token" >&2
   exit 1
 fi
 runner_home="${ATB2_HOME:-/data}"
 export HOME="$runner_home/home"
 cli="$runner_home/target/debug/baml-cli"
-if [ -z "${ATB2_SECRETS_LOADED:-}" ]; then
-  if [ -n "${INFISICAL_TOKEN:-}" ]; then
-    echo "atb2: secrets from Infisical (${INFISICAL_PROJECT_ID:?set in fly.toml}, ${INFISICAL_ENV:-prod})"
-    export ATB2_SECRETS_LOADED=1
-    exec infisical run \
-      --projectId "$INFISICAL_PROJECT_ID" --env "${INFISICAL_ENV:-prod}" \
-      --silent -- "$0" "$@"
-  fi
-  export ATB2_SECRETS_LOADED=1
-fi
 
 # gh + git use the token the way handle_issue expects (sandbox_env passes GH_TOKEN
 # to gh; git pushes go through gh's credential helper); the old bot's token

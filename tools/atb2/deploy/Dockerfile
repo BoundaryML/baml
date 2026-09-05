@@ -51,6 +51,7 @@ COPY baml_src ./baml_src
 COPY deploy/entrypoint.sh /usr/local/bin/atb2-entrypoint
 COPY deploy/build-cli.sh /usr/local/bin/atb2-build-cli
 COPY deploy/bootstrap.sh /usr/local/bin/atb2-bootstrap
+COPY deploy/launch-runtime.py /usr/local/bin/atb2-launch-runtime.py
 RUN chmod 755 /usr/local/bin/atb2-entrypoint /usr/local/bin/atb2-build-cli /usr/local/bin/atb2-bootstrap
 
 USER root

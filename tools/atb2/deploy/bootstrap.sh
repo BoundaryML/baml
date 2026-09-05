@@ -29,11 +29,12 @@ done
 
 # Different UID, no supplementary groups/capabilities, no privilege escalation,
 # and no inherited tokens. The root parent retains Infisical's machine token.
-as_builder=(setpriv --reuid=1001 --regid=1001 --clear-groups
-  --no-new-privs --bounding-set=-all env -i
+as_builder=(env -i
   PATH="$PATH" HOME=/data/bootstrap/home USER=builder LOGNAME=builder
   LANG=C.UTF-8 TERM=dumb ATB2_HOME=/data/bootstrap
-  CARGO_HOME=/data/bootstrap/cargo RUSTUP_HOME=/data/bootstrap/rustup)
+  CARGO_HOME=/data/bootstrap/cargo RUSTUP_HOME=/data/bootstrap/rustup
+  setpriv --reuid=1001 --regid=1001 --clear-groups
+  --no-new-privs --bounding-set=-all)
 # Seed private toolchains from the immutable image, once per volume. Rustup can
 # then install the canary tree's required components without modifying shared
 # executables or the other user's toolchain. Interrupted copies retry on boot.
@@ -46,9 +47,9 @@ seed_toolchain='
   fi
 '
 "${as_builder[@]}" sh -eu -c "$seed_toolchain"
-"${as_builder[@]}" ATB2_CANARY_REV="${ATB2_CANARY_REV:-}" /usr/local/bin/atb2-build-cli
+"${as_builder[@]}" env ATB2_CANARY_REV="${ATB2_CANARY_REV:-}" /usr/local/bin/atb2-build-cli
 
-as_runtime=(setpriv --reuid=1000 --regid=1000 --clear-groups
+as_runtime=(env -i PATH="$PATH" setpriv --reuid=1000 --regid=1000 --clear-groups
   --no-new-privs --bounding-set=-all)
 "${as_runtime[@]}" env -i PATH="$PATH" RUSTUP_HOME=/data/rustup sh -eu -c "$seed_toolchain"
 # Read the artifact as the builder, not root: a malicious artifact symlink
@@ -77,7 +78,5 @@ if [ -n "$artifact" ]; then
   echo 'atb2: compiler installation failed; previous runtime binary preserved' >&2
   exit 1
 fi
-unset ATB2_SECRETS_LOADED
-export HOME=/data/home USER=atb2 LOGNAME=atb2
-export CARGO_HOME=/data/cargo RUSTUP_HOME=/data/rustup
-exec "${as_runtime[@]}" /usr/local/bin/atb2-entrypoint "$@"
+# Fetch secrets while still root, then replace the environment before setpriv.
+exec /usr/bin/python3 -I /usr/local/bin/atb2-launch-runtime.py "$@"

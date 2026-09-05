@@ -91,12 +91,17 @@ compiler builds as `builder` (UID 1001) with a private home and cache under
 `/data/bootstrap`. `/data/home` is mode 0700 and owned by `atb2` (UID 1000),
 so build scripts cannot read the persistent Claude login. The builder receives
 an allowlisted environment and no capabilities. Bootstrap copies the binary
-using unprivileged readers/writers, then permanently drops to `atb2` before
-loading Infisical secrets and starting the pipeline. The runtime has its own
+using unprivileged readers/writers, fetches Infisical secrets as root, then
+executes the privilege drop with a fresh, allowlisted environment. The machine
+token never reaches the runtime process. The runtime has its own
 Cargo cache under `/data/cargo`. Each user has a private Rustup installation
 seeded from the image, so canary's required toolchains and components can be
 installed independently. Shared tools and application files remain root-owned
 and are not writable by either user.
+
+The allowed runtime variables are listed in `deploy/launch-runtime.py`.
+New runtime settings must be added there. Exported values are treated as
+literal strings, with shell parameter expansion disabled.
 
 Existing volumes keep their login and runtime state. The first boot after
 this change builds a fresh compiler in the isolated cache, even if the old
@@ -116,15 +121,15 @@ itself until that exists. The site (`typescript2/app-feedback`) deploys
 through the Vercel GitHub app once its project is linked.
 
 The runner's secrets come from Infisical at start: the image carries the
-Infisical CLI and the entrypoint wraps the process in `infisical run` against
-boundary-tools `prod`, so the machine holds a single Fly secret,
+Infisical CLI and the root launcher captures `infisical export --format=json`
+from boundary-tools `prod` in memory, so the machine holds a single Fly secret,
 `INFISICAL_TOKEN`, and a rotation in Infisical takes effect on the next
 restart. The runner's GitHub identity is `ATB_GITHUB_TOKEN` (or `GH_TOKEN` when set),
 already in that project. The agent's Claude Code CLI runs on its own login,
 made once on the machine (`fly ssh console -a atb2-runner`, then
 `runuser -u atb2 -- env HOME=/data/home claude`)
-and kept under HOME on the volume; no Claude credential is stored anywhere
-or passed by atb2, on the runner or on a laptop. None of it goes to CI.
+and stored under `/data/home` on the runner's persistent volume. The Claude
+credential is not stored in Infisical or CI and is not passed by atb2.
 
 By hand, from the repo root:
 

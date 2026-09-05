@@ -43,6 +43,8 @@ jobs:
         with:
           persist-credentials: false
       - run: docker build -f tools/atb2/deploy/Dockerfile -t atb2-runner:ci tools/atb2
+      - name: Verify runtime secret filtering
+        run: python3 tools/atb2/deploy/test_launch_runtime.py
       - name: Verify builder cannot read the runtime login
         run: >-
           docker run --rm --network none --entrypoint bash
