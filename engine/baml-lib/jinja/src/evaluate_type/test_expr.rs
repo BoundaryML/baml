@@ -289,6 +289,16 @@ fn test_call_function() {
 fn test_output_format() {
     let types = PredefinedTypes::default(JinjaContext::Prompt);
     assert_eq!(
+        assert_evaluates_to!("ctx.output_format(format='xml')", &types),
+        Type::String
+    );
+
+    assert_eq!(
+        assert_fails_to!("ctx.output_format(format='yaml')", &types),
+        vec!["Function 'baml::OutputFormat' expects argument 'format' to be of type (none | literal[\"json\"] | literal[\"xml\"]), but got literal[\"yaml\"]"]
+    );
+
+    assert_eq!(
         assert_evaluates_to!("ctx.output_format(prefix='hi')", &types),
         Type::String
     );
