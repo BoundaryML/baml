@@ -328,9 +328,15 @@ pub async fn call_and_encode(
     let options = CffiHandleTableOptions::for_wire();
     let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
 
-    let caught = AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx))
-        .catch_unwind()
-        .await;
+    #[cfg(not(target_arch = "wasm32"))]
+    let (call_ctx, log_sink) = crate::host_logs::attach_env_log_sink(call_ctx);
+
+    let call =
+        AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx)).catch_unwind();
+    #[cfg(not(target_arch = "wasm32"))]
+    let caught = crate::host_logs::drive_with_log_drain(call, log_sink.as_ref()).await;
+    #[cfg(target_arch = "wasm32")]
+    let caught = call.await;
 
     let result = match caught {
         Ok(call_result) => result_to_outbound(call_result, &options),
@@ -416,9 +422,16 @@ pub async fn call_handle_and_encode(
 
     let options = CffiHandleTableOptions::for_wire();
     let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
-    let caught = AssertUnwindSafe(runtime.call_callable(handle, args, call_ctx))
-        .catch_unwind()
-        .await;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let (call_ctx, log_sink) = crate::host_logs::attach_env_log_sink(call_ctx);
+
+    let call = AssertUnwindSafe(runtime.call_callable(handle, args, call_ctx)).catch_unwind();
+    #[cfg(not(target_arch = "wasm32"))]
+    let caught = crate::host_logs::drive_with_log_drain(call, log_sink.as_ref()).await;
+    #[cfg(target_arch = "wasm32")]
+    let caught = call.await;
+
     let result = match caught {
         Ok(call_result) => result_to_outbound(call_result, &options),
         Err(panic_info) => BamlOutboundResult {
