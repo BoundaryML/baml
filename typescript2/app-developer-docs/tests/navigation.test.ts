@@ -131,7 +131,14 @@ test('generated reference hubs, search, and sitemap share published release data
 });
 
 test('generated references are live SSR without exhaustive static export', async () => {
-  const [nextConfig, packageRoute, cliRoute, workflow] = await Promise.all([
+  const [
+    nextConfig,
+    packageRoute,
+    cliRoute,
+    pullRequestWorkflow,
+    releaseWorkflow,
+    engineReleaseWorkflow,
+  ] = await Promise.all([
     readFile(resolve(process.cwd(), 'next.config.ts'), 'utf8'),
     readFile(
       resolve(process.cwd(), 'app/baml/packages/[version]/[[...fqn]]/page.tsx'),
@@ -145,6 +152,17 @@ test('generated references are live SSR without exhaustive static export', async
       resolve(process.cwd(), '../../.github/workflows/developer-docs.yml'),
       'utf8',
     ),
+    readFile(
+      resolve(
+        process.cwd(),
+        '../../.github/workflows/release-baml-language.yml',
+      ),
+      'utf8',
+    ),
+    readFile(
+      resolve(process.cwd(), '../../.github/workflows/release.yml'),
+      'utf8',
+    ),
   ]);
 
   assert.doesNotMatch(nextConfig, /output:\s*['"]export['"]/);
@@ -154,6 +172,27 @@ test('generated references are live SSR without exhaustive static export', async
     assert.doesNotMatch(route, /generateStaticParams/);
     assert.doesNotMatch(route, /dynamicParams\s*=\s*false/);
   }
-  assert.doesNotMatch(workflow, /upload-artifact|download-artifact|\/out\b/);
-  assert.match(workflow, /DB-backed SSR and HTTP contracts/);
+  assert.doesNotMatch(
+    pullRequestWorkflow,
+    /upload-artifact|download-artifact|\/out\b/,
+  );
+  assert.match(pullRequestWorkflow, /DB-backed SSR and HTTP contracts/);
+  assert.doesNotMatch(releaseWorkflow, /deploy-developer-docs|static export/);
+  assert.doesNotMatch(engineReleaseWorkflow, /publish-developer-docs/);
+  const publication = releaseWorkflow.indexOf(
+    'Publish the immutable documentation release',
+  );
+  const runtimeVerification = releaseWorkflow.indexOf(
+    'Verify the immutable release through the runtime reader',
+  );
+  const publicVerification = releaseWorkflow.indexOf(
+    'Verify the exact-version release through public SSR',
+  );
+  const promotion = releaseWorkflow.indexOf(
+    'Advance the documentation channel after verification',
+  );
+  assert.ok(publication >= 0);
+  assert.ok(runtimeVerification > publication);
+  assert.ok(publicVerification > runtimeVerification);
+  assert.ok(promotion > publicVerification);
 });

@@ -50,6 +50,17 @@ test('exact-version routes validate and add only the required v prefix', () => {
   assert.equal(routeVersionToCanonicalVersion(routed), canonical);
   assert.equal(routeVersionToCanonicalVersion(canonical), null);
   assert.equal(routeVersionToCanonicalVersion('v'), null);
+  assert.equal(routeVersionToCanonicalVersion('v01.2.3'), null);
+  assert.equal(routeVersionToCanonicalVersion('v1.2.3-alpha..1'), null);
+  assert.equal(routeVersionToCanonicalVersion('v1.2.3-01'), null);
+  assert.equal(
+    routeVersionToCanonicalVersion('v1.2.3-alpha.1+linux-x86-64'),
+    '1.2.3-alpha.1+linux-x86-64',
+  );
+  assert.equal(
+    routeVersionToCanonicalVersion('v1.2.3-alpha.1+linux_x86_64'),
+    null,
+  );
   assert.throws(() => canonicalVersionToRouteVersion('../latest'));
   assert.equal(isPrereleaseVersion(canonical), true);
   assert.equal(isPrereleaseVersion('0.18.1'), false);

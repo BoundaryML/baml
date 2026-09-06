@@ -128,23 +128,35 @@ function collectAnchors(
 
 function collectKnownCrossReferences(
   value: JsonValue,
-  targets: Map<
+  targetsByExportedId: Map<
     string,
     { anchor: string | null; qualifiedName: string; routePath: string }
   >,
+  exportedIdsByQualifiedName: ReadonlyMap<string, string>,
   output: Set<string>,
 ): void {
   const stringValue = z.string().safeParse(value);
   if (stringValue.success) {
-    if (targets.has(stringValue.data)) {
+    if (targetsByExportedId.has(stringValue.data)) {
       output.add(stringValue.data);
+    }
+    for (const match of stringValue.data.matchAll(
+      /[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*/g,
+    )) {
+      const exportedId = exportedIdsByQualifiedName.get(match[0]);
+      if (exportedId) output.add(exportedId);
     }
     return;
   }
 
   if (Array.isArray(value)) {
     for (const child of value) {
-      collectKnownCrossReferences(child, targets, output);
+      collectKnownCrossReferences(
+        child,
+        targetsByExportedId,
+        exportedIdsByQualifiedName,
+        output,
+      );
     }
     return;
   }
@@ -152,7 +164,12 @@ function collectKnownCrossReferences(
   const objectValue = z.record(z.string(), jsonValueSchema).safeParse(value);
   if (!objectValue.success) return;
   for (const child of Object.values(objectValue.data)) {
-    collectKnownCrossReferences(child, targets, output);
+    collectKnownCrossReferences(
+      child,
+      targetsByExportedId,
+      exportedIdsByQualifiedName,
+      output,
+    );
   }
 }
 
@@ -216,6 +233,7 @@ export function buildReferencePages(
     string,
     { anchor: string | null; qualifiedName: string; routePath: string }
   >();
+  const exportedIdsByQualifiedName = new Map<string, string>();
   const implementationAnchorOwnerCounts = new Map<string, number>();
   for (const declaration of declarations) {
     for (const anchor of declaration.anchors) {
@@ -233,6 +251,10 @@ export function buildReferencePages(
       qualifiedName: declaration.qualifiedName,
       routePath: declaration.routePath,
     });
+    exportedIdsByQualifiedName.set(
+      declaration.qualifiedName,
+      declaration.item.id,
+    );
     for (const anchor of declaration.anchors) {
       const isUnambiguousOwner =
         !anchor.memberKind.startsWith('implementation') ||
@@ -341,12 +363,14 @@ export function buildReferencePages(
     collectKnownCrossReferences(
       jsonValueSchema.parse(declaration.item),
       targetByExportedId,
+      exportedIdsByQualifiedName,
       referencedIds,
     );
     for (const implementation of declaration.implementations) {
       collectKnownCrossReferences(
         jsonValueSchema.parse(implementation),
         targetByExportedId,
+        exportedIdsByQualifiedName,
         referencedIds,
       );
     }

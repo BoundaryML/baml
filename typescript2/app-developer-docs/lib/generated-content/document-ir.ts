@@ -218,6 +218,17 @@ export interface DocumentRouteInput {
   snapshot: DocumentSnapshot;
 }
 
+export interface DocumentManifestInput {
+  contentSchemaVersion: typeof DOCUMENT_SCHEMA_VERSION;
+  routes: readonly {
+    contentHash: string;
+    metadata: DocumentRouteMetadata;
+    path: string;
+  }[];
+  sourceRevision: string;
+  version: string;
+}
+
 export interface DocumentReleaseBundle {
   contentSchemaVersion: typeof DOCUMENT_SCHEMA_VERSION;
   generatedAt: string;
@@ -254,6 +265,24 @@ export function hashDocumentSnapshot(snapshot: DocumentSnapshot): string {
   return sha256(
     `${DOCUMENT_SCHEMA_VERSION}\n${canonicalDocumentSnapshot(snapshot)}`,
   );
+}
+
+export function hashDocumentManifest(input: DocumentManifestInput): string {
+  const manifest = {
+    contentSchemaVersion: z
+      .literal(DOCUMENT_SCHEMA_VERSION)
+      .parse(input.contentSchemaVersion),
+    routes: [...input.routes]
+      .sort((left, right) => left.path.localeCompare(right.path))
+      .map((route) => ({
+        contentHash: sha256Schema.parse(route.contentHash),
+        metadata: documentRouteMetadataSchema.parse(route.metadata),
+        path: routePathSchema.parse(route.path),
+      })),
+    sourceRevision: sourceRevisionSchema.parse(input.sourceRevision),
+    version: nonEmptyStringSchema.parse(input.version),
+  };
+  return sha256(canonicalJson(jsonValueSchema.parse(manifest)));
 }
 
 export function verifyDocumentSnapshotHash(

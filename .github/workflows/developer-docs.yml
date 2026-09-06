@@ -11,6 +11,7 @@ on:
       - "baml_language/**"
       - ".github/actions/setup-node2/**"
       - ".github/workflows/developer-docs.yml"
+      - ".github/workflows/release-baml-language.yml"
   push:
     branches: [main, canary]
     paths:
@@ -22,6 +23,7 @@ on:
       - "baml_language/**"
       - ".github/actions/setup-node2/**"
       - ".github/workflows/developer-docs.yml"
+      - ".github/workflows/release-baml-language.yml"
   workflow_dispatch:
 
 concurrency:
@@ -169,13 +171,30 @@ jobs:
         env:
           VERSION: v${{ env.GENERATED_CONTENT_VERSION }}
         run: |
-          for attempt in $(seq 1 30); do
-            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && break
+          set -euo pipefail
+          ready=false
+          for _ in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then
+              ready=true
+              break
+            fi
             sleep 1
           done
-          curl --fail --silent "http://127.0.0.1:4173/baml/packages/$VERSION/boundary/id" | grep -q "boundary.id"
-          curl --fail --silent "http://127.0.0.1:4173/baml/packages/$VERSION/boundary/id/current" | grep -q "boundary.id.current"
-          curl --fail --silent "http://127.0.0.1:4173/cli/$VERSION/commands/generate/add" | grep -q "baml generate add"
-          curl --fail --silent "http://127.0.0.1:4173/cli/$VERSION/commands/generate/add" | grep -q "noindex"
+          if [[ "$ready" != true ]]; then
+            echo "::error::developer docs server did not become ready"
+            exit 1
+          fi
+          curl --fail --silent --dump-header "$RUNNER_TEMP/package.headers" \
+            --output "$RUNNER_TEMP/package.html" \
+            "http://127.0.0.1:4173/baml/packages/$VERSION/boundary/id"
+          grep -q "boundary.id" "$RUNNER_TEMP/package.html"
+          grep -qi '^cache-control:.*no-store' "$RUNNER_TEMP/package.headers"
+          curl --fail --silent --output "$RUNNER_TEMP/package-child.html" \
+            "http://127.0.0.1:4173/baml/packages/$VERSION/boundary/id/current"
+          grep -q "boundary.id.current" "$RUNNER_TEMP/package-child.html"
+          curl --fail --silent --output "$RUNNER_TEMP/cli.html" \
+            "http://127.0.0.1:4173/cli/$VERSION/commands/generate/add"
+          grep -q "baml generate add" "$RUNNER_TEMP/cli.html"
+          grep -q "noindex" "$RUNNER_TEMP/cli.html"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:4173/cli/$VERSION/commands/not-a-command")" = "404"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:4173/cli/v0.0.0-missing)" = "404"

@@ -64,8 +64,10 @@ export function GeneratedVersionSwitcher({
       if (!response.ok) throw new Error('Version lookup failed.');
       const result = versionOptionsResponseSchema.parse(await response.json());
       setOptions(result.options);
-    } finally {
       setLoaded(true);
+    } catch {
+      setLoaded(false);
+    } finally {
       setLoading(false);
     }
   }

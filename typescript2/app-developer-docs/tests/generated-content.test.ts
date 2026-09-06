@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { hashDocumentManifest } from '../lib/generated-content/document-ir.ts';
 import { projectDocumentRelease } from '../lib/generated-content/document-projector.ts';
 import {
   canonicalJson,
@@ -161,7 +162,40 @@ test('only the compiler-allowlisted boundary.id namespace landing page is hidden
   );
 });
 
-function sampleRelease(version: string): CompleteReleasePublicationInput {
+test('projected type displays retain logical declaration links', () => {
+  const pages = buildReferencePages(
+    'example',
+    1,
+    [
+      { id: 'C:example.Target', kind: 'class', name: 'Target' },
+      {
+        id: 'V:example.make',
+        kind: 'function',
+        name: 'make',
+        signature: {
+          params: [],
+          returns: { display: 'map<example.Target, string>' },
+        },
+      },
+    ],
+    [],
+  );
+  const makePage = pages.find((page) => page.qualifiedName === 'example.make');
+  assert.ok(makePage && 'cross_references' in makePage.pageData);
+  assert.deepEqual(makePage.pageData.cross_references, [
+    {
+      anchor: null,
+      exported_id: 'C:example.Target',
+      qualified_name: 'example.Target',
+      route_path: 'example/Target',
+    },
+  ]);
+});
+
+function sampleRelease(
+  version: string,
+  cliDescription: string | null = 'Build and run BAML projects.',
+): CompleteReleasePublicationInput {
   const sourceHash = '1'.repeat(64);
   const payload = {
     artifact_schema_version: 1 as const,
@@ -177,7 +211,7 @@ function sampleRelease(version: string): CompleteReleasePublicationInput {
     root: {
       arguments: [],
       command_path: [],
-      description: 'Build and run BAML projects.',
+      description: cliDescription,
       flags: [],
       name: 'baml',
       subcommands: [],
@@ -235,6 +269,12 @@ test('document projection is deterministic and deduplicates unchanged releases',
   const first = projectDocumentRelease(sampleRelease('0.18.0'));
   const repeated = projectDocumentRelease(sampleRelease('0.18.0'));
   const nextVersion = projectDocumentRelease(sampleRelease('0.18.1'));
+  const nullDescriptionFirst = projectDocumentRelease(
+    sampleRelease('0.19.0', null),
+  );
+  const nullDescriptionNext = projectDocumentRelease(
+    sampleRelease('0.19.1', null),
+  );
 
   assert.equal(first.manifestHash, repeated.manifestHash);
   assert.deepEqual(
@@ -245,5 +285,24 @@ test('document projection is deterministic and deduplicates unchanged releases',
     [...first.snapshots.keys()].sort(),
     [...nextVersion.snapshots.keys()].sort(),
   );
+  assert.equal(first.manifestHash, hashDocumentManifest(first));
+  assert.notEqual(
+    first.manifestHash,
+    hashDocumentManifest({
+      ...first,
+      routes: first.routes.map((route, index) =>
+        index === 0
+          ? {
+              ...route,
+              metadata: { ...route.metadata, title: 'Tampered title' },
+            }
+          : route,
+      ),
+    }),
+  );
   assert.notEqual(first.manifestHash, nextVersion.manifestHash);
+  assert.deepEqual(
+    [...nullDescriptionFirst.snapshots.keys()].sort(),
+    [...nullDescriptionNext.snapshots.keys()].sort(),
+  );
 });

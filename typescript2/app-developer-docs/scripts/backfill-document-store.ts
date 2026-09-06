@@ -112,11 +112,33 @@ async function main(): Promise<void> {
   const parsedArguments = parseOperatorArguments(
     process.argv.slice(2),
     ['version', 'channel'],
-    [],
+    ['production'],
   );
   const version = requireOperatorValue(parsedArguments, 'version');
   const channelValue = parsedArguments.values.get('channel');
   const channel = channelValue ? channelSchema.parse(channelValue) : null;
+  const databaseContext = process.env.DEVELOPER_DOCS_DATABASE_CONTEXT;
+  if (!databaseContext) {
+    throw new Error(
+      'DEVELOPER_DOCS_DATABASE_CONTEXT is required for database backfill.',
+    );
+  }
+  if (
+    databaseContext === 'production' &&
+    !parsedArguments.flags.has('production')
+  ) {
+    throw new Error(
+      'Production backfill requires the explicit --production flag.',
+    );
+  }
+  if (
+    parsedArguments.flags.has('production') &&
+    databaseContext !== 'production'
+  ) {
+    throw new Error(
+      '--production requires DEVELOPER_DOCS_DATABASE_CONTEXT=production.',
+    );
+  }
   const databaseUrl = requireGeneratedContentPublisherDatabaseUrl();
   const release = await readLegacyRelease(databaseUrl, version);
   const publication = await publishDocumentRelease(

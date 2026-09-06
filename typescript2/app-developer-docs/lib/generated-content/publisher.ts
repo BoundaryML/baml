@@ -8,6 +8,7 @@ import {
   documentReleaseRowSchema,
   documentRouteMetadataSchema,
   documentSnapshotSchema,
+  hashDocumentManifest,
   hashDocumentSnapshot,
 } from '@/lib/generated-content/document-ir';
 import { canonicalJson, jsonValueSchema } from '@/lib/generated-content/json';
@@ -17,8 +18,18 @@ export interface DocumentPublicationSummary {
   aliasChanged: boolean;
   manifestHash: string;
   mode: 'inserted' | 'verified-existing';
+  publishedAt: string;
   routeCount: number;
+  snapshotDeduplicationRatio: number;
+  snapshotReusedCount: number;
+  snapshotUploadedCount: number;
   uniqueSnapshotCount: number;
+  version: string;
+}
+
+export interface DocumentAliasPromotionSummary {
+  alias: DocumentAliasRow['alias'];
+  aliasChanged: boolean;
   version: string;
 }
 
@@ -80,6 +91,11 @@ function validateBundle(bundle: DocumentReleaseBundle): void {
   if (bundle.snapshots.size > bundle.routes.length) {
     throw new Error('Unique snapshot count cannot exceed route count.');
   }
+  assertEqual(
+    hashDocumentManifest(bundle),
+    bundle.manifestHash,
+    'manifest_hash',
+  );
   const paths = new Set<string>();
   for (const route of bundle.routes) {
     if (paths.has(route.path)) {
@@ -120,7 +136,11 @@ function snapshotRows(bundle: DocumentReleaseBundle) {
 async function uploadMissingSnapshots(
   databaseUrl: string,
   bundle: DocumentReleaseBundle,
-): Promise<void> {
+): Promise<{
+  snapshotDeduplicationRatio: number;
+  snapshotReusedCount: number;
+  snapshotUploadedCount: number;
+}> {
   const sql = postgres(databaseUrl, { max: 1, prepare: false });
   const snapshots = snapshotRows(bundle);
   const snapshotsByHash = new Map(
@@ -150,9 +170,10 @@ async function uploadMissingSnapshots(
       (snapshot) => !existingHashes.has(snapshot.content_hash),
     );
 
+    let snapshotUploadedCount = 0;
     for (let index = 0; index < missingSnapshots.length; index += 250) {
       const chunk = missingSnapshots.slice(index, index + 250);
-      await sql`
+      const insertedRows = await sql`
         INSERT INTO developer_docs.doc_snapshots (
           content_hash,
           schema_version,
@@ -171,7 +192,9 @@ async function uploadMissingSnapshots(
           searchable_text text
         )
         ON CONFLICT (content_hash) DO NOTHING
+        RETURNING content_hash
       `;
+      snapshotUploadedCount += insertedRows.length;
     }
 
     if (missingSnapshots.length > 0) {
@@ -186,6 +209,13 @@ async function uploadMissingSnapshots(
         'uploaded snapshot count',
       );
     }
+    const snapshotReusedCount = snapshots.length - snapshotUploadedCount;
+    return {
+      snapshotDeduplicationRatio:
+        snapshots.length === 0 ? 0 : snapshotReusedCount / snapshots.length,
+      snapshotReusedCount,
+      snapshotUploadedCount,
+    };
   } finally {
     await sql.end();
   }
@@ -205,7 +235,7 @@ export async function publishDocumentRelease(
   alias: DocumentAliasRow['alias'] | null,
 ): Promise<DocumentPublicationSummary> {
   validateBundle(bundle);
-  await uploadMissingSnapshots(databaseUrl, bundle);
+  const snapshotUpload = await uploadMissingSnapshots(databaseUrl, bundle);
   const sql = postgres(databaseUrl, { max: 1, prepare: false });
 
   try {
@@ -234,6 +264,7 @@ export async function publishDocumentRelease(
           ? null
           : documentReleaseRowSchema.parse(releaseRows[0]);
       const mode = existingRelease ? 'verified-existing' : 'inserted';
+      let publishedAt = existingRelease?.published_at.toISOString() ?? null;
 
       if (existingRelease) {
         assertEqual(
@@ -304,7 +335,7 @@ export async function publishDocumentRelease(
           'routes',
         );
       } else {
-        await transaction`
+        const insertedReleases = await transaction`
           INSERT INTO developer_docs.doc_releases (
             version,
             source_revision,
@@ -326,7 +357,16 @@ export async function publishDocumentRelease(
             ${bundle.routes.length},
             ${bundle.snapshots.size}
           )
+          RETURNING published_at
         `;
+        if (insertedReleases.length !== 1) {
+          throw new Error(
+            `Failed to record document release ${bundle.version}.`,
+          );
+        }
+        publishedAt = new Date(
+          String(insertedReleases[0]?.published_at),
+        ).toISOString();
         await transaction`
           INSERT INTO developer_docs.doc_routes (
             version,
@@ -345,6 +385,12 @@ export async function publishDocumentRelease(
             route_metadata jsonb
           )
         `;
+      }
+
+      if (!publishedAt) {
+        throw new Error(
+          `Document release ${bundle.version} has no publish time.`,
+        );
       }
 
       let aliasChanged = false;
@@ -372,10 +418,58 @@ export async function publishDocumentRelease(
         aliasChanged,
         manifestHash: bundle.manifestHash,
         mode,
+        publishedAt,
         routeCount: bundle.routes.length,
+        ...snapshotUpload,
         uniqueSnapshotCount: bundle.snapshots.size,
         version: bundle.version,
       };
+    });
+  } finally {
+    await sql.end();
+  }
+}
+
+export async function promoteDocumentAlias(
+  databaseUrl: string,
+  version: string,
+  alias: DocumentAliasRow['alias'],
+): Promise<DocumentAliasPromotionSummary> {
+  const sql = postgres(databaseUrl, { max: 1, prepare: false });
+  try {
+    return await sql.begin(async (transaction) => {
+      await transaction`
+        SELECT pg_advisory_xact_lock(hashtextextended(${`document-alias:${alias}`}, 0))
+      `;
+      const releases = await transaction`
+        SELECT version
+        FROM developer_docs.doc_releases
+        WHERE version = ${version}
+        FOR SHARE
+      `;
+      if (releases.length !== 1) {
+        throw new Error(
+          `Cannot promote missing document release ${version} to ${alias}.`,
+        );
+      }
+
+      const aliases = await transaction`
+        SELECT version
+        FROM developer_docs.doc_aliases
+        WHERE alias = ${alias}
+        FOR UPDATE
+      `;
+      const aliasChanged =
+        aliases.length === 0 || String(aliases[0]?.version) !== version;
+      await transaction`
+        INSERT INTO developer_docs.doc_aliases (alias, version)
+        VALUES (${alias}, ${version})
+        ON CONFLICT (alias) DO UPDATE SET
+          version = EXCLUDED.version,
+          updated_at = now()
+        WHERE developer_docs.doc_aliases.version IS DISTINCT FROM EXCLUDED.version
+      `;
+      return { alias, aliasChanged, version };
     });
   } finally {
     await sql.end();

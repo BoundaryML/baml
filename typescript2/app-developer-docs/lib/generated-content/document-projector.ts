@@ -8,13 +8,10 @@ import {
   type DocumentSnapshot,
   documentRouteMetadataSchema,
   documentSnapshotSchema,
+  hashDocumentManifest,
   hashDocumentSnapshot,
 } from '@/lib/generated-content/document-ir';
-import {
-  canonicalJson,
-  jsonValueSchema,
-  sha256,
-} from '@/lib/generated-content/json';
+import { canonicalJson, jsonValueSchema } from '@/lib/generated-content/json';
 import { exportedItemSchema } from '@/lib/generated-content/package-export';
 import { declarationMemberGroups } from '@/lib/generated-content/reference-rendering';
 import type { CompleteReleasePublicationInput } from '@/lib/generated-content/release-generator';
@@ -252,6 +249,8 @@ function cliRoutes(
       'cli',
       {
         blocks: [{ root, type: 'cliOverview' }],
+        // Keep the immutable snapshot intrinsic and version-neutral. The
+        // release-specific fallback belongs only in route metadata.
         description: root.description,
         headings: [
           { depth: 2, id: 'usage', label: 'Usage' },
@@ -398,22 +397,18 @@ export function projectDocumentRelease(
     }
     snapshots.set(route.contentHash, route.snapshot);
   }
-  const manifest = {
+  const manifestHash = hashDocumentManifest({
     contentSchemaVersion: DOCUMENT_SCHEMA_VERSION,
-    routes: routes.map((route) => ({
-      contentHash: route.contentHash,
-      metadata: route.metadata,
-      path: route.path,
-    })),
+    routes,
     sourceRevision: release.sourceCommit,
     version: release.version,
-  };
+  });
 
   return {
     contentSchemaVersion: DOCUMENT_SCHEMA_VERSION,
     generatedAt: release.generatedAt,
     generatorVersion: release.generatorVersion,
-    manifestHash: sha256(canonicalJson(jsonValueSchema.parse(manifest))),
+    manifestHash,
     releasedAt: release.releasedAt,
     routes,
     snapshots,

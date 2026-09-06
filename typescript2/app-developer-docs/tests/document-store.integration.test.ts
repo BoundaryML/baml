@@ -9,14 +9,18 @@ import {
   type DocumentReleaseBundle,
   type DocumentRouteMetadata,
   type DocumentSnapshot,
+  hashDocumentManifest,
   hashDocumentSnapshot,
 } from '../lib/generated-content/document-ir.ts';
 import {
   closeDocumentStore,
   readDocumentRoute,
 } from '../lib/generated-content/document-store.ts';
-import { sha256 } from '../lib/generated-content/json.ts';
-import { publishDocumentRelease } from '../lib/generated-content/publisher.ts';
+import {
+  promoteDocumentAlias,
+  publishDocumentRelease,
+} from '../lib/generated-content/publisher.ts';
+import { verifyGeneratedRelease } from '../lib/generated-content/verify.ts';
 
 const databaseUrl = process.env.DEVELOPER_DOCS_TEST_DATABASE_URL;
 
@@ -59,21 +63,27 @@ function bundle(version: string, path = 'cli'): DocumentReleaseBundle {
     title: `BAML CLI ${routeVersion}`,
     wrapperVersion: '0.2.4',
   };
+  const routes = [
+    {
+      contentHash,
+      metadata,
+      path,
+      searchableText: 'BAML CLI Integration fixture',
+      snapshot,
+    },
+  ];
   return {
     contentSchemaVersion: DOCUMENT_SCHEMA_VERSION,
     generatedAt: '2026-09-01T00:01:00.000Z',
     generatorVersion: '4'.repeat(40),
-    manifestHash: sha256(`${version}:${path}:${contentHash}`),
+    manifestHash: hashDocumentManifest({
+      contentSchemaVersion: DOCUMENT_SCHEMA_VERSION,
+      routes,
+      sourceRevision: '5'.repeat(40),
+      version,
+    }),
     releasedAt: '2026-09-01T00:00:00.000Z',
-    routes: [
-      {
-        contentHash,
-        metadata,
-        path,
-        searchableText: 'BAML CLI Integration fixture',
-        snapshot,
-      },
-    ],
+    routes,
     snapshots: new Map([[contentHash, snapshot]]),
     sourceRevision: '5'.repeat(40),
     version,
@@ -96,8 +106,43 @@ test(
     const firstVersion = '99.0.0-test.document-store-a';
     const secondVersion = '99.0.0-test.document-store-b';
     const failedVersion = '99.0.0-test.document-store-failed';
-    await publishDocumentRelease(databaseUrl, bundle(firstVersion), 'nightly');
-    await publishDocumentRelease(databaseUrl, bundle(secondVersion), null);
+    const invalidManifestVersion =
+      '99.0.0-test.document-store-invalid-manifest';
+    const storedManifestMismatchVersion =
+      '99.0.0-test.document-store-stored-manifest-mismatch';
+    const firstPublication = await publishDocumentRelease(
+      databaseUrl,
+      bundle(firstVersion),
+      'nightly',
+    );
+    assert.equal(firstPublication.snapshotUploadedCount, 1);
+    assert.equal(firstPublication.snapshotReusedCount, 0);
+    assert.equal(firstPublication.snapshotDeduplicationRatio, 0);
+    assert.match(firstPublication.publishedAt, /^\d{4}-\d{2}-\d{2}T/);
+    const secondPublication = await publishDocumentRelease(
+      databaseUrl,
+      bundle(secondVersion),
+      null,
+    );
+    assert.equal(secondPublication.snapshotUploadedCount, 0);
+    assert.equal(secondPublication.snapshotReusedCount, 1);
+    assert.equal(secondPublication.snapshotDeduplicationRatio, 1);
+    assert.deepEqual(
+      await promoteDocumentAlias(databaseUrl, secondVersion, 'canary'),
+      {
+        alias: 'canary',
+        aliasChanged: true,
+        version: secondVersion,
+      },
+    );
+    assert.deepEqual(
+      await promoteDocumentAlias(databaseUrl, secondVersion, 'canary'),
+      {
+        alias: 'canary',
+        aliasChanged: false,
+        version: secondVersion,
+      },
+    );
 
     const snapshots = await sql`
       SELECT count(*)::integer AS count
@@ -109,6 +154,64 @@ test(
     process.env.GENERATED_CONTENT_DATABASE_URL = databaseUrl;
     const loaded = await readDocumentRoute(`v${firstVersion}`, 'cli');
     assert.equal(loaded?.content.title, 'BAML CLI');
+
+    await assert.rejects(
+      publishDocumentRelease(
+        databaseUrl,
+        {
+          ...bundle(invalidManifestVersion),
+          manifestHash: '0'.repeat(64),
+        },
+        null,
+      ),
+      /manifest_hash/,
+    );
+
+    const mismatchedBundle = bundle(storedManifestMismatchVersion);
+    const mismatchedRoute = mismatchedBundle.routes[0];
+    assert.ok(mismatchedRoute);
+    await sql.begin(async (transaction) => {
+      await transaction`
+        INSERT INTO developer_docs.doc_releases (
+          version,
+          source_revision,
+          released_at,
+          generator_version,
+          wrapper_version,
+          content_schema_version,
+          manifest_hash,
+          route_count,
+          unique_snapshot_count
+        ) VALUES (
+          ${mismatchedBundle.version},
+          ${mismatchedBundle.sourceRevision},
+          ${mismatchedBundle.releasedAt},
+          ${mismatchedBundle.generatorVersion},
+          ${mismatchedBundle.wrapperVersion},
+          ${mismatchedBundle.contentSchemaVersion},
+          ${'0'.repeat(64)},
+          1,
+          1
+        )
+      `;
+      await transaction`
+        INSERT INTO developer_docs.doc_routes (
+          version,
+          path,
+          content_hash,
+          route_metadata
+        ) VALUES (
+          ${mismatchedBundle.version},
+          ${mismatchedRoute.path},
+          ${mismatchedRoute.contentHash},
+          ${transaction.json(mismatchedRoute.metadata)}
+        )
+      `;
+    });
+    await assert.rejects(
+      verifyGeneratedRelease(storedManifestMismatchVersion),
+      /manifest hash does not match/,
+    );
 
     await assert.rejects(
       sql`
@@ -133,13 +236,13 @@ test(
       /immutable after publication/,
     );
 
-    await assert.rejects(
-      publishDocumentRelease(
+    await assert.rejects(async () => {
+      await publishDocumentRelease(
         databaseUrl,
         bundle(failedVersion, '/invalid'),
         null,
-      ),
-    );
+      );
+    });
     const failedRows = await sql`
       SELECT version
       FROM developer_docs.doc_releases
