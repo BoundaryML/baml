@@ -1,6 +1,8 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { extname, relative, resolve, sep } from 'node:path';
 
+import { robotsDisallowEntireSite } from '@/lib/deployment';
+
 const outputRoot = resolve(import.meta.dirname, '..', 'out');
 const hrefPattern = /\shref=(?:"([^"]+)"|'([^']+)')/g;
 const idPattern = /\sid=(?:"([^"]+)"|'([^']+)')/g;
@@ -127,6 +129,8 @@ const sitemapSource = await readFile(
   resolve(outputRoot, 'sitemap.xml'),
   'utf8',
 );
+const robotsSource = await readFile(resolve(outputRoot, 'robots.txt'), 'utf8');
+const deploymentWideNoindex = robotsDisallowEntireSite(robotsSource);
 const sitemapRoutes = new Set(
   [...sitemapSource.matchAll(sitemapLocationPattern)].flatMap((match) => {
     const location = match[1];
@@ -144,7 +148,7 @@ for (const [route, page] of pages) {
   if (!noindex && !sitemapRoutes.has(route)) {
     failures.add(`${route}: indexable page is missing from sitemap.xml`);
   }
-  if (noindex && sitemapRoutes.has(route)) {
+  if (noindex && sitemapRoutes.has(route) && !deploymentWideNoindex) {
     failures.add(`${route}: noindex page is present in sitemap.xml`);
   }
 }

@@ -1804,8 +1804,9 @@ jobs:
     name: Promote verified release channel manifest
     # Keep the mutable canary/nightly pointer on the preceding known-good
     # release until every publisher completes and the public Go and Swift
-    # packages execute their native runtimes successfully.
-    needs: [plan, publish-pkg-boundaryml-com, release-complete, smoke-go-release, smoke-swift-release]
+    # packages execute their native runtimes successfully, and until the
+    # matching developer reference is published and live.
+    needs: [plan, publish-pkg-boundaryml-com, release-complete, smoke-go-release, smoke-swift-release, deploy-developer-docs]
     if: >-
       ${{
         !cancelled() &&
@@ -1814,6 +1815,7 @@ jobs:
         needs.release-complete.result == 'success' &&
         needs.smoke-go-release.result == 'success' &&
         needs.smoke-swift-release.result == 'success' &&
+        needs.deploy-developer-docs.result == 'success' &&
         needs.plan.outputs.dry_run == 'false' &&
         needs.plan.outputs.source_branch == 'canary'
       }}
@@ -1847,12 +1849,15 @@ jobs:
     # every release smoke test. The publication is transactional and
     # idempotent: reruns verify immutable rows before touching the channel
     # pointer.
-    needs: [plan, publish-pkg-channel]
+    needs: [plan, publish-pkg-boundaryml-com, release-complete, smoke-go-release, smoke-swift-release]
     if: >-
       ${{
         !cancelled() &&
         needs.plan.result == 'success' &&
-        needs.publish-pkg-channel.result == 'success' &&
+        needs.publish-pkg-boundaryml-com.result == 'success' &&
+        needs.release-complete.result == 'success' &&
+        needs.smoke-go-release.result == 'success' &&
+        needs.smoke-swift-release.result == 'success' &&
         needs.plan.outputs.dry_run == 'false' &&
         needs.plan.outputs.source_branch == 'canary'
       }}
@@ -2306,5 +2311,5 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
           VERSION: ${{ needs.plan.outputs.version }}
           CHANNEL: ${{ needs.plan.outputs.channel }}
-          RELEASE_SUCCEEDED: ${{ needs.deploy-developer-docs.result == 'success' }}
+          RELEASE_SUCCEEDED: ${{ needs.publish-pkg-channel.result == 'success' }}
         run: uv run --script tools/notify-release-failure.py
