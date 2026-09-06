@@ -8,60 +8,21 @@ import {
   sha256,
 } from '@/lib/generated-content/json';
 import {
+  type ExportedImplementation,
+  type ExportedItem,
+  exportedImplementationSchema,
+  exportedItemSchema,
+} from '@/lib/generated-content/package-export';
+import {
   createMemberAnchors,
   qualifiedNameToRoutePath,
   qualifyExportedName,
 } from '@/lib/generated-content/routes';
 import {
-  declarationPageKindSchema,
   packageDescribeExportSchema,
   type ReferencePageData,
   referencePageDataSchema,
 } from '@/lib/generated-content/schemas';
-
-const exportedMemberSchema = z
-  .object({
-    id: z.string().min(1),
-    name: z.string().min(1),
-  })
-  .passthrough();
-
-const exportedItemSchema = z
-  .object({
-    assoc_types: z.array(exportedMemberSchema).optional(),
-    default_methods: z.array(exportedMemberSchema).optional(),
-    docstring: z.string().optional(),
-    fields: z.array(exportedMemberSchema).optional(),
-    id: z.string().min(1),
-    impls: z.array(z.string().min(1)).optional(),
-    kind: declarationPageKindSchema,
-    methods: z.array(exportedMemberSchema).optional(),
-    name: z.string().min(1),
-    namespace: z.array(z.string().min(1)).optional(),
-    required_methods: z.array(exportedMemberSchema).optional(),
-    variants: z.array(exportedMemberSchema).optional(),
-  })
-  .passthrough();
-
-const exportedImplementationSchema = z
-  .object({
-    docstring: z.string().optional(),
-    id: z.string().min(1),
-    methods: z
-      .array(
-        z
-          .object({
-            id: z.string().min(1),
-            name: z.string().min(1),
-          })
-          .passthrough(),
-      )
-      .optional(),
-  })
-  .passthrough();
-
-type ExportedItem = z.output<typeof exportedItemSchema>;
-type ExportedImplementation = z.output<typeof exportedImplementationSchema>;
 
 export interface ReferencePageProjection {
   pageData: ReferencePageData;

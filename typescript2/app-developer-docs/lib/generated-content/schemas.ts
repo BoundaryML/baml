@@ -271,6 +271,7 @@ export const cliArtifactRowSchema = z
 export type ReleaseRow = z.output<typeof releaseRowSchema>;
 export type ChannelPointerRow = z.output<typeof channelPointerRowSchema>;
 export type PackageExportRow = z.output<typeof packageExportRowSchema>;
+export type CrossReference = z.output<typeof crossReferenceSchema>;
 export type ReferencePageData = z.output<typeof referencePageDataSchema>;
 export type ReferencePageRow = z.output<typeof referencePageRowSchema>;
 export type CliArtifactPayload = z.output<typeof cliArtifactPayloadSchema>;

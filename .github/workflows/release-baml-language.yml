@@ -1804,8 +1804,9 @@ jobs:
     name: Promote verified release channel manifest
     # Keep the mutable canary/nightly pointer on the preceding known-good
     # release until every publisher completes and the public Go and Swift
-    # packages execute their native runtimes successfully.
-    needs: [plan, publish-pkg-boundaryml-com, release-complete, smoke-go-release, smoke-swift-release]
+    # packages execute their native runtimes successfully, and until the
+    # matching developer reference is published and live.
+    needs: [plan, publish-pkg-boundaryml-com, release-complete, smoke-go-release, smoke-swift-release, deploy-developer-docs]
     if: >-
       ${{
         !cancelled() &&
@@ -1814,6 +1815,7 @@ jobs:
         needs.release-complete.result == 'success' &&
         needs.smoke-go-release.result == 'success' &&
         needs.smoke-swift-release.result == 'success' &&
+        needs.deploy-developer-docs.result == 'success' &&
         needs.plan.outputs.dry_run == 'false' &&
         needs.plan.outputs.source_branch == 'canary'
       }}
@@ -1840,6 +1842,141 @@ jobs:
             "s3://$PKG_BUCKET/manifest/v1/$CHANNEL.json" \
             --content-type application/json \
             --cache-control "public, max-age=60, must-revalidate"
+
+  publish-developer-docs:
+    name: Publish generated developer documentation
+    # Generate documentation from the exact wrapper + toolchain that survived
+    # every release smoke test. The publication is transactional and
+    # idempotent: reruns verify immutable rows before touching the channel
+    # pointer.
+    needs: [plan, publish-pkg-boundaryml-com, release-complete, smoke-go-release, smoke-swift-release]
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan.result == 'success' &&
+        needs.publish-pkg-boundaryml-com.result == 'success' &&
+        needs.release-complete.result == 'success' &&
+        needs.smoke-go-release.result == 'success' &&
+        needs.smoke-swift-release.result == 'success' &&
+        needs.plan.outputs.dry_run == 'false' &&
+        needs.plan.outputs.source_branch == 'canary'
+      }}
+    runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-node2
+      - name: Require the generated-content writer credential
+        env:
+          GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_WRITE_URL }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$GENERATED_CONTENT_DATABASE_URL" ]]; then
+            echo "::error::GENERATED_CONTENT_DATABASE_WRITE_URL is not configured"
+            exit 1
+          fi
+      - name: Install the exact published BAML toolchain
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          export BAML_HOME="$RUNNER_TEMP/developer-docs-baml"
+          scripts/install.sh --version "$VERSION" --no-modify-path
+          baml_binary="$BAML_HOME/bin/baml"
+          actual_version="$("$baml_binary" --version | sed -n 's/^baml toolchain \([^ ]*\).*/\1/p')"
+          if [[ "$actual_version" != "$VERSION" ]]; then
+            echo "::error::installed BAML toolchain is $actual_version, expected $VERSION"
+            exit 1
+          fi
+          echo "BAML_BINARY=$baml_binary" >> "$GITHUB_ENV"
+          echo "BAML_HOME=$BAML_HOME" >> "$GITHUB_ENV"
+      - name: Publish and verify the immutable documentation snapshot
+        working-directory: typescript2/app-developer-docs
+        env:
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+          DEVELOPER_DOCS_DATABASE_CONTEXT: production
+          GENERATED_CONTENT_DATABASE_URL: ${{ secrets.GENERATED_CONTENT_DATABASE_WRITE_URL }}
+          RELEASED_AT: ${{ needs.plan.outputs.released_at }}
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          pnpm exec tsx scripts/populate-generated-content.ts \
+            --baml-bin "$BAML_BINARY" \
+            --source-commit "$SOURCE_SHA" \
+            --released-at "$RELEASED_AT" \
+            --channel "$CHANNEL" \
+            --organization boundaryml \
+            --database developer-docs \
+            --branch main \
+            --production
+          pnpm exec tsx scripts/verify-generated-content.ts \
+            --version "$VERSION"
+
+  deploy-developer-docs:
+    name: Rebuild developer.boundaryml.com
+    # The site is a static export. Rebuild the current production deployment
+    # after the database transaction commits so package, CLI, search, and
+    # sitemap outputs all observe the same snapshot. Redeploying the existing
+    # production deployment also decouples site code from this release checkout.
+    needs: [plan, publish-developer-docs]
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan.result == 'success' &&
+        needs.publish-developer-docs.result == 'success' &&
+        needs.plan.outputs.dry_run == 'false' &&
+        needs.plan.outputs.source_branch == 'canary'
+      }}
+    runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Redeploy the production developer site
+        env:
+          VERCEL_ORG_ID: ${{ vars.DEVELOPER_DOCS_VERCEL_ORG_ID }}
+          VERCEL_TELEMETRY_DISABLED: "1"
+          VERCEL_TOKEN: ${{ secrets.DEVELOPER_DOCS_VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$VERCEL_ORG_ID" ]]; then
+            echo "::error::DEVELOPER_DOCS_VERCEL_ORG_ID is not configured"
+            exit 1
+          fi
+          if [[ -z "$VERCEL_TOKEN" ]]; then
+            echo "::error::DEVELOPER_DOCS_VERCEL_TOKEN is not configured"
+            exit 1
+          fi
+          npx --yes vercel@59.11.2 redeploy developer.boundaryml.com \
+            --target production \
+            --scope "$VERCEL_ORG_ID" \
+            --token "$VERCEL_TOKEN"
+      - name: Verify the released reference is live
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          url="https://developer.boundaryml.com/baml/packages/$VERSION"
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error --location "$url" >/dev/null; then
+              echo "Published developer reference is live: $url"
+              exit 0
+            fi
+            if [[ "$attempt" -lt 12 ]]; then
+              sleep 5
+            fi
+          done
+          echo "::error::released developer reference did not become available: $url"
+          exit 1
 
   publish-homebrew:
     name: Publish Homebrew wrapper formula
@@ -2142,6 +2279,8 @@ jobs:
       - release-prerequisites-complete
       - release-complete
       - publish-pkg-channel
+      - publish-developer-docs
+      - deploy-developer-docs
       - smoke-swift-release
       - verify-release
     # Use the dispatch input so a failure in plan itself is still reportable.

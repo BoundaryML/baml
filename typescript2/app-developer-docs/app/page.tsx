@@ -10,6 +10,7 @@ import {
 import Link from 'next/link';
 
 import { PageHeader } from '@/components/page-header';
+import { documentationMetadata } from '@/lib/metadata';
 
 const sections = [
   {
@@ -57,9 +58,12 @@ const sections = [
 ];
 
 export const dynamic = 'force-static';
-export const metadata = {
+export const metadata = documentationMetadata({
+  description:
+    'Technical documentation for BAML, the BAML CLI, and Boundary Cloud Services.',
+  path: '/',
   title: 'BAML Developer Documentation',
-};
+});
 
 export default function HomePage() {
   return (
