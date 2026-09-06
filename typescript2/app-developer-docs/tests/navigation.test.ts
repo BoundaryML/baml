@@ -121,11 +121,39 @@ test('generated reference hubs, search, and sitemap share published release data
       readFile(resolve(process.cwd(), 'app/sitemap.ts'), 'utf8'),
     ]);
 
-  assert.match(packageHub, /listGeneratedReleaseSummaries/);
+  assert.match(packageHub, /listDocumentReleaseSummaries/);
   assert.doesNotMatch(packageHub, /const packages =/);
-  assert.match(cliHub, /listGeneratedReleaseSummaries/);
+  assert.match(cliHub, /listDocumentReleaseSummaries/);
   assert.match(cliContent, /<GeneratedReleaseCatalog \/>/);
   assert.match(searchMenu, /fetch\('\/search-index\.json'/);
   assert.match(searchRoute, /buildGeneratedSearchIndex/);
   assert.match(sitemap, /listGeneratedSitemapRoutes/);
+});
+
+test('generated references are live SSR without exhaustive static export', async () => {
+  const [nextConfig, packageRoute, cliRoute, workflow] = await Promise.all([
+    readFile(resolve(process.cwd(), 'next.config.ts'), 'utf8'),
+    readFile(
+      resolve(process.cwd(), 'app/baml/packages/[version]/[[...fqn]]/page.tsx'),
+      'utf8',
+    ),
+    readFile(
+      resolve(process.cwd(), 'app/cli/[version]/[[...path]]/page.tsx'),
+      'utf8',
+    ),
+    readFile(
+      resolve(process.cwd(), '../../.github/workflows/developer-docs.yml'),
+      'utf8',
+    ),
+  ]);
+
+  assert.doesNotMatch(nextConfig, /output:\s*['"]export['"]/);
+  for (const route of [packageRoute, cliRoute]) {
+    assert.match(route, /dynamic = 'force-dynamic'/);
+    assert.match(route, /cache\(readDocumentRoute\)/);
+    assert.doesNotMatch(route, /generateStaticParams/);
+    assert.doesNotMatch(route, /dynamicParams\s*=\s*false/);
+  }
+  assert.doesNotMatch(workflow, /upload-artifact|download-artifact|\/out\b/);
+  assert.match(workflow, /DB-backed SSR and HTTP contracts/);
 });

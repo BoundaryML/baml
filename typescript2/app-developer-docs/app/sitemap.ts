@@ -4,7 +4,8 @@ import { listGeneratedSitemapRoutes } from '@/lib/generated-content/discovery';
 import { documentationPages } from '@/lib/navigation';
 import { siteConfig } from '@/lib/site-config';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const paths = documentationPages.map((page) =>

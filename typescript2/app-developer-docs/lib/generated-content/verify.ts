@@ -1,91 +1,76 @@
-import { readStandardPackageAllowlist } from '@/lib/generated-content/allowlist';
 import {
-  hashCliSource,
-  verifyRawCliHelp,
-} from '@/lib/generated-content/cli-source';
-import { PAGE_SCHEMA_VERSION } from '@/lib/generated-content/constants';
-import type { GeneratedContentReader } from '@/lib/generated-content/database';
+  listAllStoredRoutes,
+  listDocumentReleaseSummaries,
+} from '@/lib/generated-content/document-store';
 
 export interface ReleaseVerificationSummary {
   cli_commands: number;
-  cli_payload_sha256: string;
-  cli_source_sha256: string;
-  package_exports: number;
-  page_schema_version: number;
+  content_schema_version: number;
+  manifest_hash: string;
   reference_pages: number;
+  routes: number;
+  unique_snapshots: number;
   version: string;
 }
 
-interface CliCommandTree {
-  subcommands: CliCommandTree[];
-}
-
-function countCliCommands(command: CliCommandTree): number {
-  return (
-    1 +
-    command.subcommands.reduce(
-      (total, child) => total + countCliCommands(child),
-      0,
-    )
-  );
-}
-
 export async function verifyGeneratedRelease(
-  reader: GeneratedContentReader,
   version: string,
 ): Promise<ReleaseVerificationSummary> {
-  const release = (await reader.listReleases()).find(
-    (candidate) => candidate.version === version,
+  const release = (await listDocumentReleaseSummaries()).find(
+    (candidate) => candidate.release.version === version,
   );
   if (!release) {
     throw new Error(`Generated-content release ${version} does not exist.`);
   }
 
-  const [expectedPackages, packageExports, pages, cliArtifact] =
-    await Promise.all([
-      readStandardPackageAllowlist(),
-      reader.listPackageExports(version),
-      reader.listReferencePages(version),
-      reader.getCliArtifact(version),
-    ]);
-
-  const actualPackages = packageExports.map((item) => item.package_name).sort();
-  const sortedExpectedPackages = [...expectedPackages].sort();
-  if (
-    JSON.stringify(actualPackages) !== JSON.stringify(sortedExpectedPackages)
-  ) {
+  const routes = (await listAllStoredRoutes()).filter(
+    (route) => route.version === version,
+  );
+  if (routes.length !== release.release.route_count) {
     throw new Error(
-      `Release ${version} package set does not match the checked-in publication allowlist.`,
+      `Release ${version} route count does not match its manifest.`,
+    );
+  }
+  const uniqueSnapshots = new Set(routes.map((route) => route.content_hash));
+  if (uniqueSnapshots.size !== release.release.unique_snapshot_count) {
+    throw new Error(
+      `Release ${version} snapshot count does not match its manifest.`,
     );
   }
 
-  const pageExportIds = new Set(
-    pages.map((page) => String(page.package_export_id)),
-  );
-  for (const packageExport of packageExports) {
-    if (!pageExportIds.has(String(packageExport.id))) {
-      throw new Error(
-        `Package ${packageExport.package_name} has no page projections.`,
-      );
+  const paths = new Set(routes.map((route) => route.path));
+  for (const route of routes) {
+    if (route.route_metadata.canonicalVersion !== version) {
+      throw new Error(`Route ${route.path} has mismatched version metadata.`);
+    }
+    for (const block of route.content.blocks) {
+      if (block.type !== 'bamlReference') continue;
+      const pageLinks =
+        block.page.page_kind === 'package' ||
+        block.page.page_kind === 'namespace'
+          ? block.page.children
+          : block.page.cross_references;
+      for (const link of [...pageLinks, ...block.namespacedChildren]) {
+        if (!paths.has(`baml/packages/${link.route_path}`)) {
+          throw new Error(
+            `Route ${route.path} links to missing document ${link.route_path}.`,
+          );
+        }
+      }
     }
   }
 
-  if (!cliArtifact) {
-    throw new Error(`Release ${version} has no CLI artifact.`);
-  }
-  verifyRawCliHelp(cliArtifact.payload.raw_help);
-  const sourceHash = hashCliSource(cliArtifact.payload.raw_help);
-  if (sourceHash !== cliArtifact.row.source_sha256) {
-    throw new Error(`CLI source hash mismatch for release ${version}.`);
-  }
-
   return {
-    cli_commands: countCliCommands(cliArtifact.payload.root),
-    cli_payload_sha256: cliArtifact.row.payload_sha256,
-    cli_source_sha256: cliArtifact.row.source_sha256,
-    package_exports: packageExports.length,
-    page_schema_version: PAGE_SCHEMA_VERSION,
-    reference_pages: pages.length,
+    cli_commands: routes.filter(
+      (route) => route.route_metadata.kind === 'cliCommand',
+    ).length,
+    content_schema_version: release.release.content_schema_version,
+    manifest_hash: release.release.manifest_hash,
+    reference_pages: routes.filter(
+      (route) => route.route_metadata.kind === 'packageReference',
+    ).length,
+    routes: routes.length,
+    unique_snapshots: uniqueSnapshots.size,
     version,
   };
 }

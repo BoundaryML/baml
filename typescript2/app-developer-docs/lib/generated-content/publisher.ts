@@ -1,29 +1,64 @@
 import postgres from 'postgres';
 
-import { PAGE_SCHEMA_VERSION } from '@/lib/generated-content/constants';
+import { GENERATED_CONTENT_PUBLISHER_DATABASE_ENVIRONMENT_VARIABLE } from '@/lib/generated-content/constants';
 import {
-  assertSha256,
-  canonicalJson,
-  jsonValueSchema,
-} from '@/lib/generated-content/json';
-import type { CompleteReleasePublicationInput } from '@/lib/generated-content/release-generator';
-import {
-  type ChannelPointerRow,
-  cliArtifactRowSchema,
-  packageExportRowSchema,
-  referencePageDataSchema,
-  referencePageRowSchema,
-  releaseRowSchema,
-} from '@/lib/generated-content/schemas';
+  type DocumentAliasRow,
+  type DocumentReleaseBundle,
+  type DocumentRouteInput,
+  documentReleaseRowSchema,
+  documentRouteMetadataSchema,
+  documentSnapshotSchema,
+  hashDocumentSnapshot,
+} from '@/lib/generated-content/document-ir';
+import { canonicalJson, jsonValueSchema } from '@/lib/generated-content/json';
 
-export interface PublicationSummary {
-  channel: ChannelPointerRow['channel'] | null;
-  channel_changed: boolean;
-  cli_artifacts: number;
+export interface DocumentPublicationSummary {
+  alias: DocumentAliasRow['alias'] | null;
+  aliasChanged: boolean;
+  manifestHash: string;
   mode: 'inserted' | 'verified-existing';
-  package_exports: number;
-  reference_pages: number;
+  routeCount: number;
+  uniqueSnapshotCount: number;
   version: string;
+}
+
+export function requireGeneratedContentPublisherDatabaseUrl(
+  environment: NodeJS.ProcessEnv = process.env,
+): string {
+  const databaseUrl =
+    environment[GENERATED_CONTENT_PUBLISHER_DATABASE_ENVIRONMENT_VARIABLE];
+  if (!databaseUrl) {
+    throw new Error(
+      `${GENERATED_CONTENT_PUBLISHER_DATABASE_ENVIRONMENT_VARIABLE} is required for document publication.`,
+    );
+  }
+  return databaseUrl;
+}
+
+function routeFingerprint(route: {
+  contentHash: string;
+  metadata: unknown;
+  path: string;
+}): string {
+  return canonicalJson(
+    jsonValueSchema.parse({
+      contentHash: route.contentHash,
+      metadata: documentRouteMetadataSchema.parse(route.metadata),
+      path: route.path,
+    }),
+  );
+}
+
+function storedRouteFingerprint(route: {
+  content_hash: string;
+  path: string;
+  route_metadata: unknown;
+}): string {
+  return routeFingerprint({
+    contentHash: route.content_hash,
+    metadata: route.route_metadata,
+    path: route.path,
+  });
 }
 
 function assertEqual(
@@ -33,392 +68,313 @@ function assertEqual(
 ): void {
   if (actual !== expected) {
     throw new Error(
-      `Immutable release mismatch for ${label}: expected ${JSON.stringify(expected)}, found ${JSON.stringify(actual)}.`,
+      `Immutable document release mismatch for ${label}: expected ${JSON.stringify(expected)}, found ${JSON.stringify(actual)}.`,
     );
   }
 }
 
-function pageFingerprint(page: {
-  pageData: unknown;
-  pageKind: string;
-  qualifiedName: string;
-  routePath: string;
-}): string {
-  return canonicalJson(
-    jsonValueSchema.parse({
-      page_data: referencePageDataSchema.parse(page.pageData),
-      page_kind: page.pageKind,
-      page_schema_version: PAGE_SCHEMA_VERSION,
-      qualified_name: page.qualifiedName,
-      route_path: page.routePath,
-    }),
-  );
+function validateBundle(bundle: DocumentReleaseBundle): void {
+  if (bundle.routes.length === 0 || bundle.snapshots.size === 0) {
+    throw new Error('A document release must contain routes and snapshots.');
+  }
+  if (bundle.snapshots.size > bundle.routes.length) {
+    throw new Error('Unique snapshot count cannot exceed route count.');
+  }
+  const paths = new Set<string>();
+  for (const route of bundle.routes) {
+    if (paths.has(route.path)) {
+      throw new Error(`Duplicate document route: ${route.path}.`);
+    }
+    paths.add(route.path);
+    const snapshot = documentSnapshotSchema.parse(route.snapshot);
+    assertEqual(
+      hashDocumentSnapshot(snapshot),
+      route.contentHash,
+      `${route.path}.contentHash`,
+    );
+    if (!bundle.snapshots.has(route.contentHash)) {
+      throw new Error(`Route ${route.path} refers to a missing snapshot.`);
+    }
+  }
 }
 
-function storedPageFingerprint(page: {
-  page_data: unknown;
-  page_kind: string;
-  page_schema_version: number;
-  qualified_name: string;
-  route_path: string;
-}): string {
-  return canonicalJson(
-    jsonValueSchema.parse({
-      page_data: referencePageDataSchema.parse(page.page_data),
-      page_kind: page.page_kind,
-      page_schema_version: page.page_schema_version,
-      qualified_name: page.qualified_name,
-      route_path: page.route_path,
-    }),
-  );
-}
-
-function validatePublicationInput(
-  release: CompleteReleasePublicationInput,
-): void {
-  const packageNames = new Set<string>();
-  const releaseRoutes = new Set<string>();
-  for (const packageInput of release.packages) {
-    if (packageNames.has(packageInput.packageName)) {
+function snapshotRows(bundle: DocumentReleaseBundle) {
+  const searchableTextByHash = new Map<string, string>();
+  for (const route of bundle.routes) {
+    const previous = searchableTextByHash.get(route.contentHash);
+    if (previous && previous !== route.searchableText) {
       throw new Error(
-        `Duplicate package publication input: ${packageInput.packageName}.`,
+        `Snapshot ${route.contentHash} has inconsistent searchable text.`,
       );
     }
-    packageNames.add(packageInput.packageName);
-    assertSha256(
-      packageInput.describeOutputJson,
-      packageInput.describeSha256,
-      `Package export ${packageInput.packageName}`,
-    );
-    for (const page of packageInput.pages) {
-      referencePageDataSchema.parse(page.pageData);
-      if (releaseRoutes.has(page.routePath)) {
-        throw new Error(`Release-wide route collision: ${page.routePath}.`);
-      }
-      releaseRoutes.add(page.routePath);
-    }
+    searchableTextByHash.set(route.contentHash, route.searchableText);
   }
-  assertSha256(
-    release.cli.payloadJson,
-    release.cli.payloadSha256,
-    `CLI payload ${release.version}`,
-  );
+  return [...bundle.snapshots].map(([contentHash, content]) => ({
+    content,
+    content_hash: contentHash,
+    schema_version: bundle.contentSchemaVersion,
+    searchable_text: searchableTextByHash.get(contentHash) ?? '',
+  }));
 }
 
-export async function publishCompleteRelease(
+async function uploadMissingSnapshots(
   databaseUrl: string,
-  release: CompleteReleasePublicationInput,
-  channel: ChannelPointerRow['channel'] | null,
-): Promise<PublicationSummary> {
-  validatePublicationInput(release);
+  bundle: DocumentReleaseBundle,
+): Promise<void> {
+  const sql = postgres(databaseUrl, { max: 1, prepare: false });
+  const snapshots = snapshotRows(bundle);
+  const snapshotsByHash = new Map(
+    snapshots.map((snapshot) => [snapshot.content_hash, snapshot]),
+  );
+  try {
+    const existingRows = await sql`
+      SELECT content_hash, schema_version
+      FROM developer_docs.doc_snapshots
+      WHERE content_hash = ANY(${[...snapshotsByHash.keys()]})
+    `;
+    for (const existingRow of existingRows) {
+      const contentHash = String(existingRow.content_hash);
+      const expected = snapshotsByHash.get(contentHash);
+      if (!expected)
+        throw new Error(`Unexpected stored snapshot ${contentHash}.`);
+      assertEqual(
+        Number(existingRow.schema_version),
+        expected.schema_version,
+        `${contentHash}.schema_version`,
+      );
+    }
+    const existingHashes = new Set(
+      existingRows.map((row) => String(row.content_hash)),
+    );
+    const missingSnapshots = snapshots.filter(
+      (snapshot) => !existingHashes.has(snapshot.content_hash),
+    );
+
+    for (let index = 0; index < missingSnapshots.length; index += 250) {
+      const chunk = missingSnapshots.slice(index, index + 250);
+      await sql`
+        INSERT INTO developer_docs.doc_snapshots (
+          content_hash,
+          schema_version,
+          content,
+          searchable_text
+        )
+        SELECT
+          snapshot.content_hash,
+          snapshot.schema_version,
+          snapshot.content,
+          snapshot.searchable_text
+        FROM jsonb_to_recordset(${sql.json(jsonValueSchema.parse(chunk))}::jsonb) AS snapshot(
+          content_hash text,
+          schema_version integer,
+          content jsonb,
+          searchable_text text
+        )
+        ON CONFLICT (content_hash) DO NOTHING
+      `;
+    }
+
+    if (missingSnapshots.length > 0) {
+      const uploadedRows = await sql`
+        SELECT content_hash
+        FROM developer_docs.doc_snapshots
+        WHERE content_hash = ANY(${missingSnapshots.map((snapshot) => snapshot.content_hash)})
+      `;
+      assertEqual(
+        uploadedRows.length,
+        missingSnapshots.length,
+        'uploaded snapshot count',
+      );
+    }
+  } finally {
+    await sql.end();
+  }
+}
+
+function routeRows(routes: readonly DocumentRouteInput[]) {
+  return routes.map((route) => ({
+    content_hash: route.contentHash,
+    path: route.path,
+    route_metadata: route.metadata,
+  }));
+}
+
+export async function publishDocumentRelease(
+  databaseUrl: string,
+  bundle: DocumentReleaseBundle,
+  alias: DocumentAliasRow['alias'] | null,
+): Promise<DocumentPublicationSummary> {
+  validateBundle(bundle);
+  await uploadMissingSnapshots(databaseUrl, bundle);
   const sql = postgres(databaseUrl, { max: 1, prepare: false });
 
   try {
     return await sql.begin(async (transaction) => {
       await transaction`
-        SELECT pg_advisory_xact_lock(hashtextextended(${release.version}, 0))
+        SELECT pg_advisory_xact_lock(hashtextextended(${bundle.version}, 0))
       `;
       const releaseRows = await transaction`
         SELECT
           version,
-          source_commit,
+          source_revision,
           released_at,
-          generated_at,
           generator_version,
-          created_at
-        FROM developer_docs.releases
-        WHERE version = ${release.version}
+          wrapper_version,
+          content_schema_version,
+          manifest_hash,
+          route_count,
+          unique_snapshot_count,
+          published_at
+        FROM developer_docs.doc_releases
+        WHERE version = ${bundle.version}
         FOR UPDATE
       `;
       const existingRelease =
         releaseRows.length === 0
           ? null
-          : releaseRowSchema.parse(releaseRows[0]);
+          : documentReleaseRowSchema.parse(releaseRows[0]);
       const mode = existingRelease ? 'verified-existing' : 'inserted';
 
       if (existingRelease) {
         assertEqual(
-          existingRelease.source_commit,
-          release.sourceCommit,
-          'source_commit',
+          existingRelease.source_revision,
+          bundle.sourceRevision,
+          'source_revision',
         );
         assertEqual(
           existingRelease.released_at.toISOString(),
-          new Date(release.releasedAt).toISOString(),
+          new Date(bundle.releasedAt).toISOString(),
           'released_at',
         );
         assertEqual(
           existingRelease.generator_version,
-          release.generatorVersion,
+          bundle.generatorVersion,
           'generator_version',
         );
+        assertEqual(
+          existingRelease.wrapper_version,
+          bundle.wrapperVersion,
+          'wrapper_version',
+        );
+        assertEqual(
+          existingRelease.content_schema_version,
+          bundle.contentSchemaVersion,
+          'content_schema_version',
+        );
+        assertEqual(
+          existingRelease.manifest_hash,
+          bundle.manifestHash,
+          'manifest_hash',
+        );
+        assertEqual(
+          existingRelease.route_count,
+          bundle.routes.length,
+          'route_count',
+        );
+        assertEqual(
+          existingRelease.unique_snapshot_count,
+          bundle.snapshots.size,
+          'unique_snapshot_count',
+        );
+
+        const storedRoutes = await transaction`
+          SELECT path, content_hash, route_metadata
+          FROM developer_docs.doc_routes
+          WHERE version = ${bundle.version}
+          ORDER BY path
+        `;
+        assertEqual(
+          storedRoutes.length,
+          bundle.routes.length,
+          'stored route count',
+        );
+        assertEqual(
+          canonicalJson(
+            storedRoutes
+              .map((route) =>
+                storedRouteFingerprint({
+                  content_hash: String(route.content_hash),
+                  path: String(route.path),
+                  route_metadata: route.route_metadata,
+                }),
+              )
+              .sort(),
+          ),
+          canonicalJson(bundle.routes.map(routeFingerprint).sort()),
+          'routes',
+        );
       } else {
         await transaction`
-          INSERT INTO developer_docs.releases (
+          INSERT INTO developer_docs.doc_releases (
             version,
-            source_commit,
+            source_revision,
             released_at,
-            generated_at,
-            generator_version
-          ) VALUES (
-            ${release.version},
-            ${release.sourceCommit},
-            ${release.releasedAt},
-            ${release.generatedAt},
-            ${release.generatorVersion}
-          )
-        `;
-      }
-
-      const storedPackageRows = packageExportRowSchema.array().parse(
-        await transaction`
-          SELECT
-            id,
-            release_version,
-            package_name,
-            describe_format_version,
-            describe_output_json,
-            describe_sha256,
-            generated_at
-          FROM developer_docs.package_exports
-          WHERE release_version = ${release.version}
-          ORDER BY package_name
-        `,
-      );
-
-      if (existingRelease) {
-        assertEqual(
-          storedPackageRows.length,
-          release.packages.length,
-          'package export count',
-        );
-      }
-
-      for (const packageInput of release.packages) {
-        let packageExport = storedPackageRows.find(
-          (row) => row.package_name === packageInput.packageName,
-        );
-        if (existingRelease) {
-          if (!packageExport) {
-            throw new Error(
-              `Immutable release is missing package ${packageInput.packageName}.`,
-            );
-          }
-          assertEqual(
-            packageExport.describe_format_version,
-            packageInput.describeFormatVersion,
-            `${packageInput.packageName}.describe_format_version`,
-          );
-          assertEqual(
-            packageExport.describe_sha256,
-            packageInput.describeSha256,
-            `${packageInput.packageName}.describe_sha256`,
-          );
-          assertEqual(
-            packageExport.describe_output_json,
-            packageInput.describeOutputJson,
-            `${packageInput.packageName}.describe_output_json`,
-          );
-        } else {
-          const insertedRows = await transaction`
-            INSERT INTO developer_docs.package_exports (
-              release_version,
-              package_name,
-              describe_format_version,
-              describe_output_json,
-              describe_sha256,
-              generated_at
-            ) VALUES (
-              ${release.version},
-              ${packageInput.packageName},
-              ${packageInput.describeFormatVersion},
-              ${packageInput.describeOutputJson},
-              ${packageInput.describeSha256},
-              ${release.generatedAt}
-            )
-            RETURNING
-              id,
-              release_version,
-              package_name,
-              describe_format_version,
-              describe_output_json,
-              describe_sha256,
-              generated_at
-          `;
-          packageExport = packageExportRowSchema.parse(insertedRows[0]);
-        }
-
-        const storedPages = referencePageRowSchema.array().parse(
-          await transaction`
-            SELECT
-              package_export_id,
-              page_schema_version,
-              qualified_name,
-              page_kind,
-              route_path,
-              page_data,
-              generated_at
-            FROM developer_docs.reference_pages
-            WHERE package_export_id = ${String(packageExport.id)}
-              AND page_schema_version = ${PAGE_SCHEMA_VERSION}
-            ORDER BY route_path
-          `,
-        );
-
-        if (existingRelease) {
-          const expectedFingerprints = packageInput.pages
-            .map(pageFingerprint)
-            .sort();
-          const storedFingerprints = storedPages
-            .map(storedPageFingerprint)
-            .sort();
-          assertEqual(
-            canonicalJson(expectedFingerprints),
-            canonicalJson(storedFingerprints),
-            `${packageInput.packageName}.reference_pages`,
-          );
-        } else {
-          const pageRows = packageInput.pages.map((page) => ({
-            package_export_id: String(packageExport.id),
-            page_data: page.pageData,
-            page_kind: page.pageKind,
-            page_schema_version: PAGE_SCHEMA_VERSION,
-            qualified_name: page.qualifiedName,
-            route_path: page.routePath,
-          }));
-          await transaction`
-            INSERT INTO developer_docs.reference_pages (
-              package_export_id,
-              page_schema_version,
-              qualified_name,
-              page_kind,
-              route_path,
-              page_data,
-              generated_at
-            )
-            SELECT
-              page.package_export_id,
-              page.page_schema_version,
-              page.qualified_name,
-              page.page_kind,
-              page.route_path,
-              page.page_data,
-              ${release.generatedAt}::timestamptz
-            FROM jsonb_to_recordset(${transaction.json(pageRows)}::jsonb) AS page(
-              package_export_id bigint,
-              page_schema_version integer,
-              qualified_name text,
-              page_kind text,
-              route_path text,
-              page_data jsonb
-            )
-          `;
-        }
-      }
-
-      const cliRows = await transaction`
-        SELECT
-          release_version,
-          wrapper_version,
-          artifact_schema_version,
-          source_sha256,
-          payload_sha256,
-          payload_json,
-          generated_at
-        FROM developer_docs.cli_artifacts
-        WHERE release_version = ${release.version}
-      `;
-      if (existingRelease) {
-        if (cliRows.length !== 1) {
-          throw new Error(
-            'Immutable release must contain exactly one CLI artifact.',
-          );
-        }
-        const cliRow = cliArtifactRowSchema.parse(cliRows[0]);
-        assertEqual(
-          cliRow.wrapper_version,
-          release.wrapperVersion,
-          'cli.wrapper_version',
-        );
-        assertEqual(
-          cliRow.artifact_schema_version,
-          release.cli.artifactSchemaVersion,
-          'cli.artifact_schema_version',
-        );
-        assertEqual(
-          cliRow.source_sha256,
-          release.cli.sourceSha256,
-          'cli.source_sha256',
-        );
-        assertEqual(
-          cliRow.payload_sha256,
-          release.cli.payloadSha256,
-          'cli.payload_sha256',
-        );
-        assertEqual(
-          cliRow.payload_json,
-          release.cli.payloadJson,
-          'cli.payload_json',
-        );
-      } else {
-        await transaction`
-          INSERT INTO developer_docs.cli_artifacts (
-            release_version,
+            generator_version,
             wrapper_version,
-            artifact_schema_version,
-            source_sha256,
-            payload_sha256,
-            payload_json,
-            generated_at
+            content_schema_version,
+            manifest_hash,
+            route_count,
+            unique_snapshot_count
           ) VALUES (
-            ${release.version},
-            ${release.wrapperVersion},
-            ${release.cli.artifactSchemaVersion},
-            ${release.cli.sourceSha256},
-            ${release.cli.payloadSha256},
-            ${release.cli.payloadJson},
-            ${release.generatedAt}
+            ${bundle.version},
+            ${bundle.sourceRevision},
+            ${bundle.releasedAt},
+            ${bundle.generatorVersion},
+            ${bundle.wrapperVersion},
+            ${bundle.contentSchemaVersion},
+            ${bundle.manifestHash},
+            ${bundle.routes.length},
+            ${bundle.snapshots.size}
+          )
+        `;
+        await transaction`
+          INSERT INTO developer_docs.doc_routes (
+            version,
+            path,
+            content_hash,
+            route_metadata
+          )
+          SELECT
+            ${bundle.version},
+            route.path,
+            route.content_hash,
+            route.route_metadata
+          FROM jsonb_to_recordset(${transaction.json(jsonValueSchema.parse(routeRows(bundle.routes)))}::jsonb) AS route(
+            path text,
+            content_hash text,
+            route_metadata jsonb
           )
         `;
       }
 
-      let channelChanged = false;
-      if (channel) {
-        const pointerRows = await transaction`
-          SELECT release_version
-          FROM developer_docs.channel_pointers
-          WHERE channel = ${channel}
+      let aliasChanged = false;
+      if (alias) {
+        const aliasRows = await transaction`
+          SELECT version
+          FROM developer_docs.doc_aliases
+          WHERE alias = ${alias}
           FOR UPDATE
         `;
-        channelChanged =
-          pointerRows.length === 0 ||
-          pointerRows[0]?.release_version !== release.version;
+        aliasChanged =
+          aliasRows.length === 0 || aliasRows[0]?.version !== bundle.version;
         await transaction`
-          INSERT INTO developer_docs.channel_pointers (
-            channel,
-            release_version
-          ) VALUES (
-            ${channel},
-            ${release.version}
-          )
-          ON CONFLICT (channel) DO UPDATE SET
-            release_version = EXCLUDED.release_version,
+          INSERT INTO developer_docs.doc_aliases (alias, version)
+          VALUES (${alias}, ${bundle.version})
+          ON CONFLICT (alias) DO UPDATE SET
+            version = EXCLUDED.version,
             updated_at = now()
-          WHERE developer_docs.channel_pointers.release_version IS DISTINCT FROM EXCLUDED.release_version
+          WHERE developer_docs.doc_aliases.version IS DISTINCT FROM EXCLUDED.version
         `;
       }
 
       return {
-        channel,
-        channel_changed: channelChanged,
-        cli_artifacts: 1,
+        alias,
+        aliasChanged,
+        manifestHash: bundle.manifestHash,
         mode,
-        package_exports: release.packages.length,
-        reference_pages: release.packages.reduce(
-          (total, packageInput) => total + packageInput.pages.length,
-          0,
-        ),
-        version: release.version,
+        routeCount: bundle.routes.length,
+        uniqueSnapshotCount: bundle.snapshots.size,
+        version: bundle.version,
       };
     });
   } finally {
