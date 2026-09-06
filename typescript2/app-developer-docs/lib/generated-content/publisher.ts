@@ -96,6 +96,14 @@ function validateBundle(bundle: DocumentReleaseBundle): void {
     bundle.manifestHash,
     'manifest_hash',
   );
+  for (const [contentHash, content] of bundle.snapshots) {
+    const snapshot = documentSnapshotSchema.parse(content);
+    assertEqual(
+      hashDocumentSnapshot(snapshot),
+      contentHash,
+      `${contentHash}.snapshot`,
+    );
+  }
   const paths = new Set<string>();
   for (const route of bundle.routes) {
     if (paths.has(route.path)) {

@@ -108,6 +108,8 @@ test(
     const failedVersion = '99.0.0-test.document-store-failed';
     const invalidManifestVersion =
       '99.0.0-test.document-store-invalid-manifest';
+    const invalidSnapshotMapVersion =
+      '99.0.0-test.document-store-invalid-snapshot-map';
     const storedManifestMismatchVersion =
       '99.0.0-test.document-store-stored-manifest-mismatch';
     const firstPublication = await publishDocumentRelease(
@@ -165,6 +167,23 @@ test(
         null,
       ),
       /manifest_hash/,
+    );
+
+    const invalidSnapshotMapBundle = bundle(invalidSnapshotMapVersion);
+    const invalidSnapshotMapHash =
+      invalidSnapshotMapBundle.routes[0]?.contentHash;
+    assert.ok(invalidSnapshotMapHash);
+    const invalidSnapshotMapValue = invalidSnapshotMapBundle.snapshots.get(
+      invalidSnapshotMapHash,
+    );
+    assert.ok(invalidSnapshotMapValue);
+    invalidSnapshotMapBundle.snapshots.set(invalidSnapshotMapHash, {
+      ...invalidSnapshotMapValue,
+      title: 'Tampered snapshot map value',
+    });
+    await assert.rejects(
+      publishDocumentRelease(databaseUrl, invalidSnapshotMapBundle, null),
+      /snapshot/,
     );
 
     const mismatchedBundle = bundle(storedManifestMismatchVersion);
