@@ -64,13 +64,13 @@ export default async function PackageVersionPage({
         { label: version },
       ]}
       description={`Immutable package reference generated from BAML ${snapshot.release.version}${channelLabel}.`}
+      headerControls={<GeneratedVersionSwitcher options={versionOptions} />}
       title={`Standard packages ${version}`}
       toc={[
         { href: '#packages', label: 'Packages' },
         { href: '#release', label: 'Release provenance' },
       ]}
     >
-      <GeneratedVersionSwitcher options={versionOptions} />
       <h2 id="packages">Packages</h2>
       <ul>
         {packagePages.map((page) => (

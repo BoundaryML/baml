@@ -54,10 +54,10 @@ export default async function CliCommandsPage({
         { label: 'Commands' },
       ]}
       description={`Every public command captured from the exact BAML ${snapshot.release.version} executable.`}
+      headerControls={<GeneratedVersionSwitcher options={versionOptions} />}
       title="Command index"
       toc={[{ href: '#commands', label: 'Commands' }]}
     >
-      <GeneratedVersionSwitcher options={versionOptions} />
       <h2 id="commands">Commands</h2>
       <CliCommandTree
         commands={snapshot.cli.payload.root.subcommands}

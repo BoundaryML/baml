@@ -101,10 +101,10 @@ export default async function CliCommandPage({
       description={
         commandNode.description ?? 'Exact-version generated command reference.'
       }
+      headerControls={<GeneratedVersionSwitcher options={versionOptions} />}
       title={`baml ${command.join(' ')}`}
       toc={toc}
     >
-      <GeneratedVersionSwitcher options={versionOptions} />
       <CliCommandContent command={commandNode} routeVersion={version} />
     </DocsShell>
   );

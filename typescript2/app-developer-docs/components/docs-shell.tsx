@@ -21,14 +21,18 @@ export function DocsShell({
   breadcrumbs,
   children,
   description,
+  headerControls,
   title,
   toc = [],
+  wideContent = false,
 }: {
   breadcrumbs: BreadcrumbItem[];
   children: React.ReactNode;
   description: string;
+  headerControls?: React.ReactNode;
   title: string;
   toc?: TocItem[];
+  wideContent?: boolean;
 }) {
   return (
     <div className="container-wrapper flex flex-1 flex-col px-2">
@@ -43,7 +47,7 @@ export function DocsShell({
               <div className="h-[var(--top-spacing)] shrink-0" />
               <article
                 aria-label={breadcrumbs.map((item) => item.label).join(' / ')}
-                className="mx-auto flex w-full max-w-160 min-w-0 flex-1 flex-col gap-6 px-4 py-6 text-foreground md:px-0 lg:py-8 dark:text-foreground"
+                className={`mx-auto flex w-full min-w-0 flex-1 flex-col gap-6 px-4 py-6 text-foreground md:px-0 lg:py-8 dark:text-foreground ${wideContent ? 'max-w-4xl' : 'max-w-160'}`}
               >
                 <header className="flex flex-col gap-2">
                   {breadcrumbs.length > 1 ? (
@@ -81,15 +85,22 @@ export function DocsShell({
                       ))}
                     </nav>
                   ) : null}
-                  <div className="flex items-center justify-between md:items-start">
-                    <h1 className="scroll-m-24 text-3xl font-semibold tracking-tight sm:text-3xl">
+                  <div className="flex items-start justify-between gap-4">
+                    <h1 className="min-w-0 scroll-m-24 text-3xl font-semibold tracking-tight sm:text-3xl">
                       {title}
                     </h1>
-                    <DocsPageActions />
+                    <div className="shrink-0">
+                      <DocsPageActions />
+                    </div>
                   </div>
                   <p className="text-[1.05rem] text-muted-foreground sm:max-w-[80%] sm:text-balance sm:text-base">
                     {description}
                   </p>
+                  {headerControls ? (
+                    <div className="mt-2 flex items-center">
+                      {headerControls}
+                    </div>
+                  ) : null}
                 </header>
                 <div
                   className="typeset w-full flex-1 pb-16 sm:pb-0"

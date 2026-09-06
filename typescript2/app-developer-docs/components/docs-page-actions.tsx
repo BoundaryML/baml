@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+import { useCopyFeedback } from '@/components/use-copy-feedback';
 import { documentationPages } from '@/lib/navigation';
 import { siteConfig } from '@/lib/site-config';
 
@@ -25,9 +26,9 @@ Help me understand how to use it. Be ready to explain concepts, give examples, o
 
 export function DocsPageActions() {
   const pathname = usePathname();
-  const [copied, setCopied] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { copiedAction, copy } = useCopyFeedback<'page'>();
   const pageIndex = documentationPages.findIndex(
     (page) => page.href === pathname,
   );
@@ -41,9 +42,7 @@ export function DocsPageActions() {
   const copyPage = async () => {
     const content = document.querySelector<HTMLElement>('[data-docs-content]');
     if (!content) return;
-    await navigator.clipboard.writeText(content.innerText);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+    await copy('page', content.innerText);
   };
 
   useEffect(() => {
@@ -74,12 +73,12 @@ export function DocsPageActions() {
           onClick={copyPage}
           type="button"
         >
-          {copied ? (
+          {copiedAction === 'page' ? (
             <Check aria-hidden="true" className="size-4" />
           ) : (
             <Copy aria-hidden="true" className="size-4" />
           )}
-          {copied ? 'Copied' : 'Copy Page'}
+          {copiedAction === 'page' ? 'Copied' : 'Copy Page'}
         </button>
         <button
           aria-expanded={menuOpen}

@@ -9,7 +9,16 @@ import {
   findCliCommand,
   flattenCliCommands,
 } from '@/lib/generated-content/cli-routes';
+import type {
+  CrossReference,
+  ReferencePageRow,
+} from '@/lib/generated-content/schemas';
 import type { GeneratedSearchIndex, SearchEntry } from '@/lib/search';
+
+const declarationReferencesByPages = new WeakMap<
+  ReferencePageRow[],
+  CrossReference[]
+>();
 
 function channelSuffix(channels: readonly string[]): string {
   return channels.length > 0 ? ` · ${channels.join(', ')}` : '';
@@ -19,6 +28,26 @@ export interface GeneratedVersionOption {
   channels: string[];
   href: string;
   routeVersion: string;
+}
+
+export function generatedDeclarationTypeReferences(
+  pages: ReferencePageRow[],
+): readonly CrossReference[] {
+  const cached = declarationReferencesByPages.get(pages);
+  if (cached) return cached;
+
+  const references: CrossReference[] = [];
+  for (const page of pages) {
+    if (!('exported_id' in page.page_data)) continue;
+    references.push({
+      anchor: null,
+      exported_id: page.page_data.exported_id,
+      qualified_name: page.qualified_name,
+      route_path: page.route_path,
+    });
+  }
+  declarationReferencesByPages.set(pages, references);
+  return references;
 }
 
 type VersionDestination =

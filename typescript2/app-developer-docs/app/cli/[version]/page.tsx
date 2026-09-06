@@ -57,6 +57,7 @@ export default async function CliVersionPage({
         root.description ??
         `Exact command reference for BAML ${snapshot.release.version}.`
       }
+      headerControls={<GeneratedVersionSwitcher options={versionOptions} />}
       title={`BAML CLI ${version}`}
       toc={[
         { href: '#usage', label: 'Usage' },
@@ -64,7 +65,6 @@ export default async function CliVersionPage({
         { href: '#release', label: 'Release provenance' },
       ]}
     >
-      <GeneratedVersionSwitcher options={versionOptions} />
       <h2 id="usage">Usage</h2>
       <pre>
         <code>{root.usage}</code>

@@ -1,5 +1,3 @@
-import Link from 'next/link';
-
 import { DocsShell } from '@/components/docs-shell';
 import { GeneratedReleaseCatalog } from '@/components/generated-release-catalog';
 import {
@@ -43,10 +41,6 @@ export default async function PackagesPage() {
         product="packages"
         releases={releases}
       />
-      <p>
-        Use the <Link href="/changelog">changelog</Link> to review language,
-        toolchain, and package changes between releases.
-      </p>
     </DocsShell>
   );
 }

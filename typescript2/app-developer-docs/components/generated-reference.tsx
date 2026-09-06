@@ -1,80 +1,29 @@
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
-import { z } from 'zod';
 
+import { GeneratedMemberActions } from '@/components/generated-member-actions';
+import {
+  type ExportedGeneric,
+  type ExportedMember,
+  type ExportedParameter,
+  type ExportedSignature,
+  type ExportedSource,
+  exportedImplementationSchema,
+  exportedItemSchema,
+} from '@/lib/generated-content/package-export';
+import {
+  createTypeReferenceIndex,
+  declarationMemberGroups,
+  type MemberKind,
+  memberDeclarationText,
+  type ReferenceTypeLink,
+  referenceHref,
+  shouldUseMultilineSignature,
+  splitMethods,
+  type TypeReferenceIndex,
+  typeDisplaySegments,
+} from '@/lib/generated-content/reference-rendering';
 import type { ReferencePageData } from '@/lib/generated-content/schemas';
-
-const typeDisplaySchema = z
-  .object({ display: z.string().min(1) })
-  .passthrough();
-const sourceSchema = z
-  .object({
-    end: z.number().int(),
-    file: z.string().min(1),
-    start: z.number().int(),
-  })
-  .passthrough();
-const parameterSchema = z
-  .object({
-    name: z.string().min(1),
-    optional: z.boolean().optional(),
-    ty: typeDisplaySchema,
-  })
-  .passthrough();
-const signatureSchema = z
-  .object({
-    params: z.array(parameterSchema),
-    returns: typeDisplaySchema,
-    throws: typeDisplaySchema.optional(),
-  })
-  .passthrough();
-const genericSchema = z.object({ name: z.string().min(1) }).passthrough();
-const memberSchema = z
-  .object({
-    docstring: z.string().optional(),
-    id: z.string().min(1),
-    name: z.string().min(1),
-    signature: signatureSchema.optional(),
-    ty: typeDisplaySchema.optional(),
-  })
-  .passthrough();
-const declarationSchema = z
-  .object({
-    assoc_types: z.array(memberSchema).optional(),
-    default_methods: z.array(memberSchema).optional(),
-    detail: z.string().optional(),
-    docstring: z.string().optional(),
-    fields: z.array(memberSchema).optional(),
-    generics: z.array(genericSchema).optional(),
-    methods: z.array(memberSchema).optional(),
-    name: z.string().min(1),
-    required_methods: z.array(memberSchema).optional(),
-    resolved: typeDisplaySchema.optional(),
-    signature: signatureSchema.optional(),
-    source: sourceSchema.optional(),
-    variants: z.array(memberSchema).optional(),
-  })
-  .passthrough();
-const implementationSchema = z
-  .object({
-    assoc_bindings: z
-      .array(
-        z
-          .object({ name: z.string().min(1), ty: typeDisplaySchema })
-          .passthrough(),
-      )
-      .optional(),
-    docstring: z.string().optional(),
-    for_ty: typeDisplaySchema.optional(),
-    id: z.string().min(1),
-    interface: z.string().optional(),
-    methods: z.array(memberSchema).optional(),
-    source: sourceSchema.optional(),
-  })
-  .passthrough();
-
-type ExportedMember = z.output<typeof memberSchema>;
-type ExportedSignature = z.output<typeof signatureSchema>;
 
 export interface ReferenceChildLink {
   page_kind: ReferencePageData['page_kind'];
@@ -86,66 +35,348 @@ function Docstring({ value }: { value: string }) {
   return <ReactMarkdown>{value}</ReactMarkdown>;
 }
 
-function signatureText(name: string, signature: ExportedSignature): string {
-  const parameters = signature.params
-    .map(
-      (parameter) =>
-        `${parameter.name}${parameter.optional ? '?' : ''}: ${parameter.ty.display}`,
-    )
-    .join(', ');
-  const throws =
-    signature.throws && signature.throws.display !== 'never'
-      ? ` throws ${signature.throws.display}`
-      : '';
-  return `${name}(${parameters}) -> ${signature.returns.display}${throws}`;
+interface TypeLinkContext {
+  references: TypeReferenceIndex;
+  routeVersion: string;
 }
 
-function SourceLocation({ source }: { source: z.output<typeof sourceSchema> }) {
+function TypeDisplay({
+  links,
+  value,
+}: {
+  links: TypeLinkContext;
+  value: string;
+}) {
+  return typeDisplaySegments(value, links.references).map((segment) => {
+    if (!segment.reference) return segment.text;
+    return (
+      <Link
+        className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:decoration-foreground"
+        href={referenceHref(links.routeVersion, segment.reference)}
+        key={`${segment.reference.exported_id}-${segment.start}`}
+      >
+        {segment.text}
+      </Link>
+    );
+  });
+}
+
+function GenericParameters({
+  generics,
+  links,
+}: {
+  generics: readonly ExportedGeneric[] | undefined;
+  links: TypeLinkContext;
+}) {
+  if (!generics?.length) return null;
   return (
-    <p className="text-sm text-muted-foreground">
-      Source: <code>{source.file}</code>, bytes {source.start}–{source.end}
+    <>
+      {'<'}
+      {generics.map((generic, genericIndex) => (
+        <span key={generic.name}>
+          {genericIndex > 0 ? ', ' : null}
+          {generic.name}
+          {generic.bounds.length > 0 ? ' extends ' : null}
+          {generic.bounds.map((bound, boundIndex) => (
+            <span key={bound}>
+              {boundIndex > 0 ? ' & ' : null}
+              <TypeDisplay links={links} value={bound} />
+            </span>
+          ))}
+        </span>
+      ))}
+      {'>'}
+    </>
+  );
+}
+
+function ParameterDisplay({
+  links,
+  parameter,
+}: {
+  links: TypeLinkContext;
+  parameter: ExportedParameter;
+}) {
+  if (parameter.name === 'self') return 'self';
+  return (
+    <>
+      {parameter.name}:{' '}
+      <TypeDisplay links={links} value={parameter.ty.display} />
+      {parameter.optional ? ' = …' : null}
+    </>
+  );
+}
+
+function FunctionSignature({
+  headingLevel,
+  links,
+  name,
+  signature,
+}: {
+  headingLevel?: 'h3' | 'h4';
+  links: TypeLinkContext;
+  name: string;
+  signature: ExportedSignature;
+}) {
+  const Name = headingLevel ?? 'span';
+  const thrownType =
+    signature.throws?.display === 'never' ? null : signature.throws?.display;
+  const multiline = shouldUseMultilineSignature(name, signature);
+  const nameElement = (
+    <Name className="inline font-mono text-[0.82rem] leading-5 font-semibold text-foreground">
+      {name}
+    </Name>
+  );
+
+  if (!multiline) {
+    return (
+      <div className="min-w-0 font-mono text-[0.82rem] leading-5 break-words whitespace-pre-wrap">
+        <span className="font-medium text-[var(--docs-purple)]">function </span>
+        {nameElement}
+        <span className="text-muted-foreground">
+          <GenericParameters generics={signature.generics} links={links} />(
+        </span>
+        {signature.params.map((parameter, index) => (
+          <span className="text-muted-foreground" key={parameter.name}>
+            {index > 0 ? ', ' : null}
+            <ParameterDisplay links={links} parameter={parameter} />
+          </span>
+        ))}
+        <span className="text-muted-foreground">) -&gt; </span>
+        <span className="text-muted-foreground">
+          <TypeDisplay links={links} value={signature.returns.display} />
+        </span>
+        {thrownType ? (
+          <>
+            {' '}
+            <span className="font-medium text-[var(--docs-purple)]">
+              throws
+            </span>{' '}
+            <span className="text-muted-foreground">
+              <TypeDisplay links={links} value={thrownType} />
+            </span>
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-w-0 font-mono text-[0.82rem] leading-5 break-words">
+      <div>
+        <span className="font-medium text-[var(--docs-purple)]">function </span>
+        {nameElement}
+        <span className="text-muted-foreground">
+          <GenericParameters generics={signature.generics} links={links} />(
+        </span>
+      </div>
+      <div className="pl-4 text-muted-foreground">
+        {signature.params.map((parameter, index) => (
+          <div key={parameter.name}>
+            <ParameterDisplay links={links} parameter={parameter} />
+            {index < signature.params.length - 1 ? ',' : null}
+          </div>
+        ))}
+      </div>
+      <div className="text-muted-foreground">
+        ) -&gt; <TypeDisplay links={links} value={signature.returns.display} />
+        {thrownType ? (
+          <>
+            {' '}
+            <span className="font-medium text-[var(--docs-purple)]">
+              throws
+            </span>{' '}
+            <TypeDisplay links={links} value={thrownType} />
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function SourceLocation({ source }: { source: ExportedSource }) {
+  return (
+    <p className="flex flex-wrap items-baseline gap-x-1 text-sm text-muted-foreground">
+      <span>Source:</span>
+      <code>{source.file}</code>
+      <span>
+        bytes {source.start}–{source.end}
+      </span>
     </p>
   );
 }
 
+function CompactDocstring({ value }: { value: string }) {
+  return (
+    <div className="mt-2 text-sm leading-6 text-muted-foreground [&_a]:underline [&_li]:mt-1 [&_ol]:mt-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:m-0 [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:pl-5">
+      <ReactMarkdown>{value}</ReactMarkdown>
+    </div>
+  );
+}
+
+function MemberRow({
+  anchor,
+  headingLevel = 'h3',
+  kind,
+  links,
+  member,
+}: {
+  anchor?: string;
+  headingLevel?: 'h3' | 'h4';
+  kind: MemberKind;
+  links: TypeLinkContext;
+  member: ExportedMember;
+}) {
+  const Heading = headingLevel;
+
+  const declaration = memberDeclarationText(member, kind);
+  if (member.signature) {
+    return (
+      <article
+        className="group/member relative scroll-mt-24 min-w-0 px-4 py-3 pr-20 transition-colors hover:bg-muted/25"
+        id={anchor}
+      >
+        <FunctionSignature
+          headingLevel={headingLevel}
+          links={links}
+          name={member.name}
+          signature={member.signature}
+        />
+        {anchor ? (
+          <GeneratedMemberActions
+            anchor={anchor}
+            declaration={declaration}
+            label={member.name}
+          />
+        ) : null}
+        {member.docstring ? (
+          <CompactDocstring value={member.docstring} />
+        ) : null}
+      </article>
+    );
+  }
+
+  const displayedType = member.ty ?? member.default;
+  return (
+    <article
+      className="group/member relative scroll-mt-24 grid min-w-0 gap-1.5 px-4 py-3 pr-20 transition-colors hover:bg-muted/25 sm:grid-cols-[minmax(12rem,0.65fr)_minmax(0,1fr)] sm:gap-4"
+      id={anchor}
+    >
+      <Heading className="min-w-0 font-mono text-sm leading-5 font-medium text-foreground">
+        {kind === 'associated-type' ? (
+          <span className="text-[var(--docs-purple)]">type </span>
+        ) : null}
+        {member.name}
+      </Heading>
+      <div className="min-w-0">
+        {displayedType ? (
+          <code className="font-mono text-xs leading-5 text-muted-foreground">
+            {kind === 'associated-type' ? '= ' : null}
+            <TypeDisplay links={links} value={displayedType.display} />
+          </code>
+        ) : null}
+        {member.docstring ? (
+          <CompactDocstring value={member.docstring} />
+        ) : null}
+      </div>
+      {anchor ? (
+        <GeneratedMemberActions
+          anchor={anchor}
+          declaration={declaration}
+          label={member.name}
+        />
+      ) : null}
+    </article>
+  );
+}
+
+function MemberRows({
+  anchors,
+  headingLevel,
+  kind,
+  links,
+  members,
+}: {
+  anchors: Map<string, string>;
+  headingLevel?: 'h3' | 'h4';
+  kind: MemberKind;
+  links: TypeLinkContext;
+  members: ExportedMember[];
+}) {
+  return members.map((member) => (
+    <MemberRow
+      anchor={anchors.get(member.id)}
+      headingLevel={headingLevel}
+      key={member.id}
+      kind={kind}
+      links={links}
+      member={member}
+    />
+  ));
+}
+
 function MemberGroup({
   anchors,
+  id,
+  kind,
+  links,
   members,
   title,
 }: {
   anchors: Map<string, string>;
+  id: string;
+  kind: MemberKind;
+  links: TypeLinkContext;
+  members: ExportedMember[];
+  title: string;
+}) {
+  return (
+    <section className="mt-8" data-not-typeset="">
+      <h2
+        className="scroll-mt-24 text-xl leading-7 font-semibold tracking-tight"
+        id={id}
+      >
+        {title}
+      </h2>
+      <div className="mt-3 divide-y overflow-hidden rounded-lg border bg-background">
+        <MemberRows
+          anchors={anchors}
+          kind={kind}
+          links={links}
+          members={members}
+        />
+      </div>
+    </section>
+  );
+}
+
+function ImplementationMethodRows({
+  anchors,
+  links,
+  members,
+  title,
+}: {
+  anchors: Map<string, string>;
+  links: TypeLinkContext;
   members: ExportedMember[];
   title: string;
 }) {
   if (members.length === 0) return null;
   return (
-    <section>
-      <h2>{title}</h2>
-      {members.map((member) => (
-        <article
-          className="scroll-mt-24 border-t py-5 first:border-t-0"
-          id={anchors.get(member.id)}
-          key={member.id}
-        >
-          <h3>
-            <code>{member.name}</code>
-          </h3>
-          {member.signature ? (
-            <pre>
-              <code>{signatureText(member.name, member.signature)}</code>
-            </pre>
-          ) : null}
-          {member.ty ? (
-            <pre>
-              <code>
-                {member.name}: {member.ty.display}
-              </code>
-            </pre>
-          ) : null}
-          {member.docstring ? <Docstring value={member.docstring} /> : null}
-        </article>
-      ))}
-    </section>
+    <div className="border-t">
+      <p className="bg-muted/15 px-4 py-2 text-[0.7rem] font-medium tracking-wider text-muted-foreground uppercase">
+        {title}
+      </p>
+      <div className="divide-y border-t">
+        <MemberRows
+          anchors={anchors}
+          headingLevel="h4"
+          kind="method"
+          links={links}
+          members={members}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -177,11 +408,14 @@ export function referencePageTableOfContents(
   if (page.page_kind === 'package' || page.page_kind === 'namespace') {
     return [{ href: '#contents', label: 'Contents' }];
   }
+  const declaration = exportedItemSchema.parse(page.declaration);
+  const memberGroups = declarationMemberGroups(declaration);
   return [
     { href: '#signature', label: 'Signature' },
-    ...(page.member_anchors.length > 0
-      ? [{ href: '#members', label: 'Members' }]
-      : []),
+    ...memberGroups.map((group) => ({
+      href: `#${group.id}`,
+      label: group.title,
+    })),
     ...(page.implementations.length > 0
       ? [{ href: '#implementations', label: 'Implementations' }]
       : []),
@@ -198,10 +432,12 @@ export function GeneratedReferenceContent({
   namespacedChildren = [],
   page,
   routeVersion,
+  typeReferences = [],
 }: {
   namespacedChildren?: ReferenceChildLink[];
   page: ReferencePageData;
   routeVersion: string;
+  typeReferences?: readonly ReferenceTypeLink[];
 }) {
   if (page.page_kind === 'package' || page.page_kind === 'namespace') {
     return (
@@ -216,37 +452,63 @@ export function GeneratedReferenceContent({
     );
   }
 
-  const declaration = declarationSchema.parse(page.declaration);
-  const implementations = implementationSchema
+  const declaration = exportedItemSchema.parse(page.declaration);
+  const implementations = exportedImplementationSchema
     .array()
     .parse(page.implementations);
   const anchors = new Map(
     page.member_anchors.map((anchor) => [anchor.exported_id, anchor.anchor]),
   );
-  const genericSuffix = declaration.generics?.length
-    ? `<${declaration.generics.map((generic) => generic.name).join(', ')}>`
-    : '';
-  const declarationSignature = declaration.signature
-    ? signatureText(page.qualified_name, declaration.signature)
-    : declaration.resolved
-      ? `type ${page.qualified_name}${genericSuffix} = ${declaration.resolved.display}`
-      : `${page.page_kind} ${page.qualified_name}${genericSuffix}`;
-  const memberGroups: [string, ExportedMember[]][] = [
-    ['Fields', declaration.fields ?? []],
-    ['Variants', declaration.variants ?? []],
-    ['Associated types', declaration.assoc_types ?? []],
-    ['Required methods', declaration.required_methods ?? []],
-    ['Default methods', declaration.default_methods ?? []],
-    ['Methods', declaration.methods ?? []],
-  ];
+  const memberGroups = declarationMemberGroups(declaration);
+  const links: TypeLinkContext = {
+    references: createTypeReferenceIndex(
+      [...page.cross_references, ...typeReferences],
+      page.qualified_name,
+    ),
+    routeVersion,
+  };
 
   return (
     <>
       <section>
         <h2 id="signature">Signature</h2>
-        <pre>
-          <code>{declarationSignature}</code>
-        </pre>
+        <div
+          className="overflow-x-auto rounded-lg bg-muted/40 px-4 py-3"
+          data-not-typeset=""
+        >
+          {declaration.signature ? (
+            <FunctionSignature
+              links={links}
+              name={page.qualified_name}
+              signature={declaration.signature}
+            />
+          ) : (
+            <code className="font-mono text-[0.82rem] leading-5 text-muted-foreground">
+              {declaration.resolved ? (
+                <>
+                  type {page.qualified_name}
+                  <GenericParameters
+                    generics={declaration.generics}
+                    links={links}
+                  />{' '}
+                  ={' '}
+                  <TypeDisplay
+                    links={links}
+                    value={declaration.resolved.display}
+                  />
+                </>
+              ) : (
+                <>
+                  {page.page_kind} {page.qualified_name}
+                  <GenericParameters
+                    generics={declaration.generics}
+                    links={links}
+                  />
+                </>
+              )}
+            </code>
+          )}
+        </div>
         {declaration.docstring ? (
           <Docstring value={declaration.docstring} />
         ) : null}
@@ -254,76 +516,102 @@ export function GeneratedReferenceContent({
           <SourceLocation source={declaration.source} />
         ) : null}
       </section>
-      {page.member_anchors.length > 0 ? (
+      {memberGroups.length > 0 ? (
         <div id="members">
-          {memberGroups.map(([title, members]) => (
+          {memberGroups.map((group) => (
             <MemberGroup
               anchors={anchors}
-              key={title}
-              members={members}
-              title={title}
+              id={group.id}
+              key={group.id}
+              kind={group.kind}
+              links={links}
+              members={group.members}
+              title={group.title}
             />
           ))}
         </div>
       ) : null}
       {implementations.length > 0 ? (
-        <section>
-          <h2 id="implementations">Implementations</h2>
-          {implementations.map((implementation) => {
-            const label = [
-              implementation.interface,
-              implementation.for_ty
-                ? `for ${implementation.for_ty.display}`
-                : null,
-            ]
-              .filter(Boolean)
-              .join(' ');
-            return (
-              <article
-                className="scroll-mt-24 border-t py-5 first:border-t-0"
-                id={anchors.get(implementation.id)}
-                key={implementation.id}
-              >
-                <h3>{label || 'Implementation'}</h3>
-                {implementation.assoc_bindings?.length ? (
-                  <p>
-                    {implementation.assoc_bindings.map((binding) => (
-                      <code key={binding.name}>
-                        {binding.name} = {binding.ty.display}{' '}
-                      </code>
-                    ))}
-                  </p>
-                ) : null}
-                {implementation.docstring ? (
-                  <Docstring value={implementation.docstring} />
-                ) : null}
-                {implementation.methods?.map((method) => (
-                  <article
-                    className="scroll-mt-24 border-t py-4"
-                    id={anchors.get(method.id)}
-                    key={method.id}
-                  >
-                    <h4>
-                      <code>{method.name}</code>
-                    </h4>
-                    {method.signature ? (
-                      <pre>
-                        <code>
-                          {signatureText(method.name, method.signature)}
-                        </code>
-                      </pre>
+        <section className="mt-8" data-not-typeset="">
+          <h2
+            className="text-xl leading-7 font-semibold tracking-tight"
+            id="implementations"
+          >
+            Implementations
+          </h2>
+          <div className="mt-3 space-y-3">
+            {implementations.map((implementation) => {
+              const implementationMethods = splitMethods(
+                implementation.methods ?? [],
+              );
+              return (
+                <article
+                  className="scroll-mt-24 overflow-hidden rounded-lg border bg-background"
+                  id={anchors.get(implementation.id)}
+                  key={implementation.id}
+                >
+                  <header className="bg-muted/35 px-4 py-3">
+                    <h3 className="text-sm leading-5 font-semibold break-words">
+                      {implementation.interface ? (
+                        <TypeDisplay
+                          links={links}
+                          value={implementation.interface}
+                        />
+                      ) : (
+                        'Implementation'
+                      )}
+                      {implementation.for_ty ? (
+                        <>
+                          {' '}
+                          for{' '}
+                          <TypeDisplay
+                            links={links}
+                            value={implementation.for_ty.display}
+                          />
+                        </>
+                      ) : null}
+                    </h3>
+                    {implementation.assoc_bindings?.length ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {implementation.assoc_bindings.map((binding) => (
+                          <code
+                            className="rounded-md bg-muted px-2 py-1 font-mono text-xs"
+                            key={binding.name}
+                          >
+                            {binding.name} ={' '}
+                            <TypeDisplay
+                              links={links}
+                              value={binding.ty.display}
+                            />
+                          </code>
+                        ))}
+                      </div>
                     ) : null}
-                    {method.docstring ? (
-                      <Docstring value={method.docstring} />
+                    {implementation.docstring ? (
+                      <CompactDocstring value={implementation.docstring} />
                     ) : null}
-                  </article>
-                ))}
-                {implementation.source ? (
-                  <SourceLocation source={implementation.source} />
-                ) : null}
-              </article>
-            );
-          })}
+                  </header>
+                  <ImplementationMethodRows
+                    anchors={anchors}
+                    links={links}
+                    members={implementationMethods.staticMethods}
+                    title="Static methods"
+                  />
+                  <ImplementationMethodRows
+                    anchors={anchors}
+                    links={links}
+                    members={implementationMethods.instanceMethods}
+                    title="Instance methods"
+                  />
+                  {implementation.source ? (
+                    <div className="border-t px-4 py-2.5">
+                      <SourceLocation source={implementation.source} />
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
         </section>
       ) : null}
       {page.cross_references.length > 0 ? (
@@ -332,9 +620,7 @@ export function GeneratedReferenceContent({
           <ul>
             {page.cross_references.map((reference) => (
               <li key={reference.exported_id}>
-                <Link
-                  href={`/baml/packages/${routeVersion}/${reference.route_path}${reference.anchor ? `#${reference.anchor}` : ''}`}
-                >
+                <Link href={referenceHref(routeVersion, reference)}>
                   <code>{reference.qualified_name}</code>
                 </Link>
               </li>

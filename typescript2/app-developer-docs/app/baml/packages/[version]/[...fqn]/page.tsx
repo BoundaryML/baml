@@ -12,7 +12,10 @@ import {
   listGeneratedReleaseRouteVersions,
   loadGeneratedReleaseSnapshot,
 } from '@/lib/generated-content/build-content';
-import { listGeneratedVersionOptions } from '@/lib/generated-content/discovery';
+import {
+  generatedDeclarationTypeReferences,
+  listGeneratedVersionOptions,
+} from '@/lib/generated-content/discovery';
 import { directRouteChildren } from '@/lib/generated-content/routes';
 import { documentationMetadata } from '@/lib/metadata';
 
@@ -91,6 +94,7 @@ export default async function ReferencePage({
     kind: 'package',
     routePath: page.route_path,
   });
+  const typeReferences = generatedDeclarationTypeReferences(snapshot.pages);
   const qualifiedParts = page.qualified_name.split('.');
   const breadcrumbs = [
     { href: '/baml', label: 'BAML' },
@@ -114,14 +118,16 @@ export default async function ReferencePage({
         page.page_data.summary ??
         `${page.page_kind} in the ${page.page_data.package_name} package.`
       }
+      headerControls={<GeneratedVersionSwitcher options={versionOptions} />}
       title={page.qualified_name}
       toc={referencePageTableOfContents(page.page_data, namespacedChildren)}
+      wideContent
     >
-      <GeneratedVersionSwitcher options={versionOptions} />
       <GeneratedReferenceContent
         namespacedChildren={namespacedChildren}
         page={page.page_data}
         routeVersion={version}
+        typeReferences={typeReferences}
       />
     </DocsShell>
   );
