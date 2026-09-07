@@ -1,7 +1,7 @@
 import {
   closeDocumentStore,
-  listAllStoredRoutes,
   listDocumentReleaseSummaries,
+  listStoredRoutesForVersion,
 } from '@/lib/generated-content/document-store';
 import {
   parseOperatorArguments,
@@ -22,9 +22,7 @@ async function main(): Promise<void> {
     if (!release) {
       throw new Error(`Generated-content release ${version} does not exist.`);
     }
-    const routes = (await listAllStoredRoutes()).filter(
-      (route) => route.version === version,
-    );
+    const routes = await listStoredRoutesForVersion(version);
     console.log(
       JSON.stringify(
         {

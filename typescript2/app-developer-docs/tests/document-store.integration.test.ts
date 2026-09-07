@@ -14,6 +14,7 @@ import {
 } from '../lib/generated-content/document-ir.ts';
 import {
   closeDocumentStore,
+  listStoredRoutesForVersion,
   readDocumentRoute,
 } from '../lib/generated-content/document-store.ts';
 import {
@@ -129,6 +130,10 @@ test(
     assert.equal(secondPublication.snapshotUploadedCount, 0);
     assert.equal(secondPublication.snapshotReusedCount, 1);
     assert.equal(secondPublication.snapshotDeduplicationRatio, 1);
+    process.env.GENERATED_CONTENT_DATABASE_URL = databaseUrl;
+    const secondVersionRoutes = await listStoredRoutesForVersion(secondVersion);
+    assert.equal(secondVersionRoutes.length, 1);
+    assert.equal(secondVersionRoutes[0]?.version, secondVersion);
     assert.deepEqual(
       await promoteDocumentAlias(databaseUrl, secondVersion, 'canary'),
       {
@@ -153,7 +158,6 @@ test(
     `;
     assert.equal(snapshots[0]?.count, 1);
 
-    process.env.GENERATED_CONTENT_DATABASE_URL = databaseUrl;
     const loaded = await readDocumentRoute(`v${firstVersion}`, 'cli');
     assert.equal(loaded?.content.title, 'BAML CLI');
 

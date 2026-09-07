@@ -1,7 +1,7 @@
 import { hashDocumentManifest } from '@/lib/generated-content/document-ir';
 import {
-  listAllStoredRoutes,
   listDocumentReleaseSummaries,
+  listStoredRoutesForVersion,
 } from '@/lib/generated-content/document-store';
 import { canonicalVersionToRouteVersion } from '@/lib/generated-content/versions';
 
@@ -25,9 +25,7 @@ export async function verifyGeneratedRelease(
     throw new Error(`Generated-content release ${version} does not exist.`);
   }
 
-  const routes = (await listAllStoredRoutes()).filter(
-    (route) => route.version === version,
-  );
+  const routes = await listStoredRoutesForVersion(version);
   if (routes.length !== release.release.route_count) {
     throw new Error(
       `Release ${version} route count does not match its manifest.`,

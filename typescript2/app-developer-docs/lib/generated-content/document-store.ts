@@ -172,7 +172,9 @@ export async function listDocumentVersionOptions(path: string): Promise<
   });
 }
 
-export async function listAllStoredRoutes(): Promise<StoredDocumentRoute[]> {
+export async function listStoredRoutesForVersion(
+  version: string,
+): Promise<StoredDocumentRoute[]> {
   const rows = await runtimeSql()`
     SELECT
       routes.version,
@@ -185,9 +187,8 @@ export async function listAllStoredRoutes(): Promise<StoredDocumentRoute[]> {
     FROM developer_docs.doc_routes AS routes
     INNER JOIN developer_docs.doc_snapshots AS snapshots
       ON snapshots.content_hash = routes.content_hash
-    INNER JOIN developer_docs.doc_releases AS releases
-      ON releases.version = routes.version
-    ORDER BY releases.released_at DESC, routes.path
+    WHERE routes.version = ${version}
+    ORDER BY routes.path
   `;
   const documents = storedDocumentRouteSchema.array().parse(rows);
   for (const document of documents) {
