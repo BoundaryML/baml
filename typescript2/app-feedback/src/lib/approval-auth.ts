@@ -75,3 +75,8 @@ export async function currentUser(): Promise<string | null> {
   const session = unseal((await cookies()).get(SESSION)?.value ?? "");
   return typeof session?.token === "string" ? identity(session.token) : null;
 }
+
+export function runPath(id: string = ""): string {
+  if (id !== "" && !/^[1-9][0-9]{0,18}$/.test(id)) throw new Error("Invalid run ID");
+  return id ? `/runs/${id}` : "/runs";
+}

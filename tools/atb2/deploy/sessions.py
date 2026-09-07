@@ -18,6 +18,9 @@ ROOT = Path('/data/agent-sessions')
 INDEX = ROOT/'workspaces'
 REPO = 'https://github.com/BoundaryML/baml.git'
 UUID = re.compile(r'[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z')
+_tasks_spec = importlib.util.spec_from_file_location('atb2_tasks', Path(__file__).with_name('tasks.py'))
+tasks = importlib.util.module_from_spec(_tasks_spec)
+_tasks_spec.loader.exec_module(tasks)
 LOCK_FD = None
 SAFE = re.compile(r'[A-Za-z0-9-]{1,100}\Z')
 
@@ -61,7 +64,7 @@ class Store:
         session.update(values)
     def reply(self, turn, text):
         return self.slack('chat.postMessage',{'channel':turn['channel'],'thread_ts':turn['thread_ts'],
-            'text':text[:12000],'client_msg_id':turn['id'],'unfurl_links':False,'unfurl_media':False})
+            'text':text[:12000].replace('&','&amp;').replace('<','&lt;').replace('>','&gt;'),'client_msg_id':turn['id'],'unfurl_links':False,'unfurl_media':False})
 
 
 def directory(session_id):
@@ -170,12 +173,13 @@ def has_context(session):
 
 def dispatch(store, session, turn, existing):
     kind=route(turn['prompt'],existing)
-    if kind in ('play','shirt'):return 'This capability is not available yet. Please try again after the next rollout.'
     if kind=='infer':
         prepare(store,session)
         text,_,_=agent(session,'Classify this Slack request as chat, feedback, babysit, shirt, play, or clarify. Return only JSON {"kind":"..."}. A bug report is feedback; questions are chat. If unsure choose clarify. Request:\n'+turn['prompt'],tools='')
         try:kind=json.loads(text)['kind']
         except (ValueError,KeyError,TypeError):kind='clarify'
+    if kind=='shirt':return tasks.shirt(store,turn)
+    if kind=='play':return tasks.play(store,session,turn,agent,bind)
     if kind=='babysit':
         match=re.search(r'https://github\.com/BoundaryML/baml/pull/([1-9][0-9]{0,9})(?=[\s>|/.,!?)]|$)',turn['prompt'])
         if not match:return 'Please include the BoundaryML/baml PR URL you want me to babysit.'

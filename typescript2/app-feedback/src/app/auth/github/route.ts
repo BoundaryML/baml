@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { challenge, cookieOptions, nonce, issuePath, proposalPath, seal, siteOrigin, STATE_COOKIE } from "@/lib/approval-auth";
+import { challenge, cookieOptions, nonce, runPath, issuePath, proposalPath, seal, siteOrigin, STATE_COOKIE } from "@/lib/approval-auth";
 
 export async function GET(request: NextRequest) {
   try {
     const id = request.nextUrl.searchParams.get("proposal") ?? "";
     const issue = request.nextUrl.searchParams.get("issue");
-    const returnTo = issue !== null ? issuePath(issue) : proposalPath(id);
+    const run = request.nextUrl.searchParams.get("run");
+    const returnTo = run !== null ? runPath(run) : issue !== null ? issuePath(issue) : proposalPath(id);
     const clientId = process.env.FEEDBACK_GITHUB_CLIENT_ID;
     if (!clientId) throw new Error("OAuth not configured");
     const state = nonce(), verifier = nonce();

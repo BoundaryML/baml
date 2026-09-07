@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   if (!stored || !code || stored.state !== request.nextUrl.searchParams.get("state")
     || typeof stored.verifier !== "string" || typeof stored.returnTo !== "string"
-    || !/^\/(?:issues|proposals)\/[a-zA-Z0-9-]{1,100}$/.test(stored.returnTo)) {
+    || !/^\/(?:(?:issues|proposals)\/[a-zA-Z0-9-]{1,100}|runs(?:\/[1-9][0-9]{0,18})?)$/.test(stored.returnTo)) {
     return new NextResponse("Invalid or expired sign-in. Please start again.", { status: 400 });
   }
   try {

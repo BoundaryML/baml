@@ -31,6 +31,7 @@ def clean_env():
             'CARGO_HOME': '/data/agent-cache/cargo', 'RUSTUP_HOME': '/usr/local/rustup',
             'CARGO_TARGET_DIR': '/data/agent-cache/target', 'CARGO_INCREMENTAL': '0',
             'CARGO_PROFILE_DEV_OPT_LEVEL': '1', 'CARGO_PROFILE_TEST_OPT_LEVEL': '1',
+            'BAML_AGENT_SKILL_CHECK': 'off', 'BAML_TELEMETRY_DISABLED': '1',
             'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC': '1', 'DISABLE_AUTOUPDATER': '1'}
 
 

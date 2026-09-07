@@ -182,8 +182,9 @@ liveness, not pipeline progress. `/slack/events` accepts signed Slack requests
 within a five-minute replay window. `ATB_SLACK_SIGNING_SECRET` (or
 `ATB2_SLACK_SIGNING_SECRET`) is loaded by the root launcher.
 
-Mentions route to `babysit <PR URL>`, a placeholder reply for shirt requests,
-or durable feedback. A single store insert, capped at two seconds, precedes
+Explicit `babysit <PR URL>` mentions enter the shared babysitter queue. Other
+mentions enter the durable session queue for questions, feedback, shirt claims,
+or scratch tasks. A single store insert, capped at two seconds, precedes
 HTTP acknowledgement. Unique `slack_event_id` values make retries harmless;
 failed writes return 503 so Slack can retry. Slack acknowledgements are best
 effort after persistence. The pipeline scans previously stored untriaged
@@ -307,11 +308,12 @@ loopback store fixture; no model requests or production credentials are used.
 
 ## Activation checklist
 
-1. Land the unified-workflow follow-up on the Slack PR. Before production use,
-   finish the outgoing-agent-commit secret/content gate and the website dependency
-   security updates identified in the review. Review CI and bot feedback.
-2. Apply the Slack columns and additional proposal-table SQL from the PR body in
-   the Supabase dashboard. This workflow follow-up needs no additional SQL.
+1. Review and land the seven stacked PRs in order: runtime, intake/issue approval,
+   shared babysitter/website approval, release indexing, CLI notices, thread
+   sessions, then scratch tasks/shirts.
+2. Before deploying each layer, apply its SQL from the PR description in the
+   Supabase dashboard. The session and scratch-task tables must exist before
+   deploying parts 7a and 7b.
 3. Configure the existing Infisical project/environment with the store service
    key, PostHog intake settings, GitHub token, Slack token/channel/signing secret,
    HTTPS `ATB2_UI_URL`, and `ATB2_SHEPHERDS` mappings for every assigned owner.
@@ -341,11 +343,10 @@ loopback store fixture; no model requests or production credentials are used.
    shepherd approve it. Verify fix creation, PR creation, shared babysitter
    activity and eventual manually merged status on both surfaces.
 
-Part 6 is a separate follow-up PR: record the release version containing a fix,
-map stored feedback IDs back to issues, and poll from ordinary CLI commands at
-most daily. Show “Your issue … was fixed in …; update using baml toolchain update”
-until the installed toolchain contains the fix. That notice is not required to
-start babysitting or process feedback end to end, and is not implemented here.
+The CLI notice layers additionally need the two public repository variables
+documented below and a published toolchain containing the CLI change. Their
+release indexer verifies the first published stable release containing a fix;
+merging a PR alone does not produce an update notice.
 
 ## Slack intake and issue approval
 
@@ -425,3 +426,27 @@ a replacement conversation with a Slack notice and stored context.
 
 Apply the part 7a SQL before deploying. The worker is spawned inside the existing
 runner process. The image uses digest-pinned Node 22 for the pinned Claude CLI.
+
+
+## Scratch tasks and shirts
+
+`@bammy try <task>` creates a scratch BAML project using the runner's canary
+compiler. It resumes the thread's agent with Read/Write/Edit/Bash tools inside
+the existing filesystem boundary. It never enters the push path. Follow-up
+questions reuse that conversation with read-only tools. The runner saves a
+private run containing the prompt, summary, visible text/tool turns, token count
+when available, compiler revision, and any reproducible defects filed through
+the shared feedback pipeline. Missing model credentials are reported as a
+limitation; they are not filed as compiler defects.
+
+The Slack reply links to `/runs/[id]`; `/runs` lists the latest 50 tasks. Both
+require a verified BoundaryML/baml maintainer GitHub account, as do proposal
+pages. The raw Claude journal stays on the volume; initialization metadata and
+thinking blocks are excluded from the stored transcript. Interrupted play runs
+require a new mention rather than automatically repeating a task.
+
+`@bammy give me a shirt` claims one code per Slack workspace/user through the
+private `claim_promo` RPC and delivers it by DM. A retry returns the same claimed
+code, so a failed DM does not consume a second one. Codes never appear in the
+thread. Apply the part 7b SQL, then load codes through the Supabase dashboard.
+Add the bot's `im:write` scope for `conversations.open`, reinstall it, and test DM delivery before inviting users to claim codes.
