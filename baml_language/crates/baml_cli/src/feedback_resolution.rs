@@ -120,6 +120,9 @@ fn apply(cache: &mut Cache, ids: &[Uuid], rows: Vec<Row>) -> Result<()> {
                 "merged",
                 "closed",
                 "wont_fix",
+                "rejected",
+                "deferred",
+                "shipped",
                 "duplicate",
             ]
             .contains(&state.as_str())
@@ -310,5 +313,24 @@ mod tests {
         apply(&mut cache, &[a], vec![]).unwrap();
         assert!(cache.reports[&a].is_empty());
         assert_eq!(cache.reports[&b].len(), 1);
+    }
+    #[test]
+    fn terminal_and_deferred_issues_do_not_block_other_reports() {
+        let id = Uuid::new_v4();
+        let mut cache = Cache::default();
+        for state in ["rejected", "deferred", "shipped"] {
+            apply(
+                &mut cache,
+                &[id],
+                vec![Row {
+                    report_id: id,
+                    issue_id: Some("i1".into()),
+                    state: Some(state.into()),
+                    fixed_in: None,
+                }],
+            )
+            .unwrap();
+            assert_eq!(cache.reports[&id][0].state, state);
+        }
     }
 }
