@@ -1,7 +1,7 @@
 # atb2
 
 The feedback pipeline: a user report becomes an issue, the issue becomes a
-draft PR, the PR gets to green. Written in BAML against canary's toolchain
+PR, the PR gets to green. Written in BAML against canary's toolchain
 (`~/.atb2/target/debug/baml-cli`, built by `handle_issue`; `BAML_CLI` overrides).
 
 ```
@@ -16,7 +16,7 @@ draft PR, the PR gets to green. Written in BAML against canary's toolchain
 |---------|---------------------|--------------|
 | ingest  | `intake.baml`, `slack.baml` | new reports from PostHog `baml_feedback` events and the Slack intake channel become `feedback` rows |
 | triage  | `create_issue.baml`, `organize_issue.baml`, `gauge_issue.baml` | repro, ticket, shepherd, difficulty; an `issues` row and a Slack thread |
-| handle  | `handle_issue.baml` | design pass, fix pass, the gate, a draft PR; a `runs` row and a thread reply |
+| handle  | `handle_issue.baml` | design pass, fix pass, the gate, a PR; a `runs` row and a thread reply |
 | merge   | `merge_issue.baml`  | CI failures and reviewer comments back to `handle_issue` until the PR merges; `merge_rounds` rows |
 
 `pipeline.baml` runs them end to end; `store.baml` is the Supabase layer;
@@ -105,8 +105,15 @@ literal strings, with shell parameter expansion disabled.
 
 Existing volumes keep their login and runtime state. The first boot after
 this change builds a fresh compiler in the isolated cache, even if the old
-runtime cache already contains one. Runtime checkout commands also use a Linux mount/process boundary with an isolated HOME.
-Claude authentication is handled by a messages-only broker outside that boundary.
+runtime cache already contains one. Agent commands and gates additionally run inside Linux bubblewrap mount and PID
+namespaces. Only their independent checkout and agent build cache are writable;
+the controller HOME, Git metadata, processes and credentials are excluded.
+Claude project hooks and project settings are disabled. A local broker forwards
+only Claude message requests and keeps the persistent login outside the sandbox.
+The runner refuses startup if namespace isolation is unavailable. Local agent
+execution therefore requires the Linux runner image, rather than a host CLI.
+Pushes export Git objects without credentials, then use fresh trusted metadata,
+a fixed repository URL and an exact branch lease.
 
 Set `ATB2_CANARY_REV` to a commit SHA to pin the runner's compiler. If the
 cached executable's recorded revision matches that pin, startup skips the
@@ -121,10 +128,15 @@ itself until that exists. The site (`typescript2/app-feedback`) deploys
 through the Vercel GitHub app once its project is linked.
 
 The runner's secrets come from Infisical at start: the image carries the
-Infisical CLI and the root launcher captures `infisical export --format=json`
-from boundary-tools `prod` in memory, so the machine holds a single Fly secret,
-`INFISICAL_TOKEN`, and a rotation in Infisical takes effect on the next
-restart. The runner's GitHub identity is `ATB_GITHUB_TOKEN` (or `GH_TOKEN` when set),
+Infisical CLI. Configure the existing machine identity's `INFISICAL_CLIENT_ID`
+and `INFISICAL_CLIENT_SECRET` as Fly secrets, as in the original baml-bench.
+The root launcher logs in with Universal Auth on every boot, then captures
+`infisical export --format=json` from boundary-tools `prod` in memory. Client
+credentials are passed only in the login child's environment; the exporter
+receives only the new token. None of these authentication credentials reaches
+the builder or runtime user. Application-secret rotations take effect on restart.
+An existing `INFISICAL_TOKEN` remains supported when neither client credential
+is configured; a partial client pair fails closed. The runner's GitHub identity is `ATB_GITHUB_TOKEN` (or `GH_TOKEN` when set),
 already in that project. The agent's Claude Code CLI runs on its own login,
 made once on the machine (`fly ssh console -a atb2-runner`, then
 `runuser -u atb2 -- env HOME=/data/home claude`)
@@ -136,7 +148,9 @@ By hand, from the repo root:
 ```sh
 fly apps create atb2-runner                                            # once (exists)
 fly volumes create atb2_data --size 80 --region sjc -a atb2-runner     # once
-fly secrets set -a atb2-runner INFISICAL_TOKEN=...                     # once
+# Stage INFISICAL_CLIENT_ID and INFISICAL_CLIENT_SECRET using:
+# fly secrets import --stage -a atb2-runner
+# Supply NAME=VALUE lines via stdin from your local secret store.
 fly deploy tools/atb2 --config deploy/fly.toml
 ```
 
@@ -160,13 +174,178 @@ The eval dataset itself (`eval/supabase`, tables `triage_issues` /
 `triage_feedback`) is separate: reference issues and synthetic reports,
 eval-only by construction.
 
-### Universal Auth and agent isolation
+### Slack Events intake
 
-The root launcher accepts `INFISICAL_CLIENT_ID` and `INFISICAL_CLIENT_SECRET`
-from the Fly machine identity, or the existing `INFISICAL_TOKEN` fallback.
-Neither reaches the runtime. Agent commands require Linux namespaces; startup
-fails closed if they are unavailable. Trusted pushes export Git objects into
-fresh controller-owned metadata and use a fixed repository and exact branch lease.
+The Fly runner starts `main_ingress()`: HTTP on port 8080 shares the process
+with the existing pipeline and merge-request loops. `/health` reports listener
+liveness, not pipeline progress. `/slack/events` accepts signed Slack requests
+within a five-minute replay window. `ATB_SLACK_SIGNING_SECRET` (or
+`ATB2_SLACK_SIGNING_SECRET`) is loaded by the root launcher.
+
+Mentions route to `babysit <PR URL>`, a placeholder reply for shirt requests,
+or durable feedback. A single store insert, capped at two seconds, precedes
+HTTP acknowledgement. Unique `slack_event_id` values make retries harmless;
+failed writes return 503 so Slack can retry. Slack acknowledgements are best
+effort after persistence. The pipeline scans previously stored untriaged
+reports, so work survives process restarts.
+
+Before deployment apply the SQL from this branch's PR description. Configure
+the Slack Events URL as `https://atb2-runner.fly.dev/slack/events` and subscribe
+to `app_mention`. Use events instead of enabling the optional channel-history
+poller for the same intake. `python3 deploy/test_slack_http.py` checks a real
+local listener with fixture credentials and no external writes.
+
+### Shepherd approval
+
+Set `ATB2_SHEPHERDS` to explicit GitHub-login/Slack-user pairs, for example
+`maintainer:U123,reviewer:U456`. Missing or ambiguous mappings cannot approve.
+Subscribe the Slack app to `reaction_added`, add `reactions:read`, and reinstall
+it. Apply this branch's schema additions before deploying.
+
+Newly triaged issues wait in `awaiting_approval`. The mapped shepherd reacts
+with `white_check_mark` or `+1` on the bot's approval message. Approval checks
+the channel and exact message timestamp, then conditionally changes the state
+to `approved`. The automatic handle stage reads approved issues only. Existing
+open issues are moved into the approval workflow during triage; failed Slack
+announcements are retried. Reopened issues get a fresh approval message.
+
+Direct operator calls to `handle_issue` remain manual entrypoints. Babysitter
+review rounds require the separate proposal approval described below. Neither
+approval gate replaces the separate Linux filesystem boundary.
+
+
+### Babysitter proposals and approval
+
+`@bammy babysit <PR URL>` investigates CI failures and configured reviewer comments,
+then publishes a proposed fix and test plan. The planning session has only Read,
+Glob and Grep tools. The website shows the full proposal; Slack shows its summary
+and a link. No implementation agent runs until this round is approved.
+
+A thumbs up or check mark on the exact proposal message approves it when made by
+a user explicitly mapped in `ATB2_SHEPHERDS`. Being the requester alone grants
+no approval rights. Website approval requires GitHub
+sign-in and current maintain/admin access to BoundaryML/baml. Proposals and CI
+logs are private to those website users. Website authentication uses state, PKCE,
+and an encrypted, secure HttpOnly cookie; repository access is checked again on
+approval. No browser receives the store credential.
+
+The runner consumes an approval once, implements its plan, independently runs the
+gate, announces the impending push in Slack, and pushes with a lease bound to the
+approved PR head. If the head or feedback changed before execution, it creates a
+new proposal. A concurrent push rejects the lease. A failed gate, blocked plan,
+or interrupted execution never retries a consumed approval automatically; a human
+can request babysitting again. New feedback after a successful push requires a new
+approval. The final message reports checks and remaining configured-reviewer
+feedback; it does not claim formal review approval or automatically merge the PR.
+The runner no longer posts `@coderabbitai resolve` after a review round.
+
+Pending proposals persist in `babysit_proposals` and release the worker. Approval
+requeues their original request on the next poll. Direct `merge_issue` calls now
+queue requests too, and the pipeline routes PR review work through the same queue.
+Apply the additional proposal SQL from the PR description before starting this
+version. It enables RLS with no anonymous access, makes proposal content immutable,
+and restricts status transitions. The earlier Slack column SQL is not sufficient.
+
+Set `ATB2_UI_URL` on the runner to the HTTPS feedback-site origin. For the website,
+configure these server-only environment variables in addition to its read-only
+store settings:
+
+- `FEEDBACK_SITE_URL`: the HTTPS feedback-site origin.
+- `FEEDBACK_GITHUB_CLIENT_ID` and `FEEDBACK_GITHUB_CLIENT_SECRET`: a GitHub OAuth
+  app with callback `<FEEDBACK_SITE_URL>/auth/github/callback` and homepage equal
+  to the site origin. Sign-in requests only `read:user`.
+- `FEEDBACK_APPROVAL_SESSION_KEY`: 32 random bytes represented as 64 hex characters.
+- `FEEDBACK_APPROVAL_SUPABASE_KEY`: a server-side store credential with access to
+  the private proposals table (the Supabase service-role key is supported).
+
+The website uses these credentials only in its authenticated server paths; its
+existing public issue views continue to use the anonymous key. Do not place any
+of these credentials in `NEXT_PUBLIC_` variables. Without website auth configured,
+approval in Slack still works, but the private proposal page requires sign-in.
+
+Checks: `bun test typescript2/app-feedback/tests/approval.test.mjs` verifies web
+approval authorization, CSRF rejection, session tampering/expiry and one-shot writes.
+The BAML tests cover proposal head/feedback binding and Slack approver/message checks.
+Approval is a workflow control, not a fix for the existing agent HOME/filesystem
+isolation limitation.
+
+## Unified issue and PR workflow
+
+PostHog `baml_feedback` events and Slack feedback mentions enter the same durable
+feedback store. Triage calls `create_issue`, `organize_issue`, then `gauge_issue`.
+A new issue is saved as `awaiting_approval` and announced in Slack with its website
+link and assigned shepherd mention. The assigned shepherd's thumbs up or check
+mark records approval and posts a reply. The next handle pass announces that it
+is creating a fix, runs `handle_issue`, and creates a PR ready for review after
+its tests pass. Hard issues produce a design document for a human instead.
+
+Every PR created by `handle_issue` is immediately handed to `request_merge`.
+An independent `@bammy babysit <PR URL>` enters exactly the same queue. All PR
+observation, proposals, approval, round accounting, retries and request recovery
+live in `merge_issue.baml`; `handle_issue` is the shared implementation/test/push
+primitive, not a second review loop. Issue reconciliation can recover a missing
+queue entry after a restart. Duplicate requests share one active babysitter.
+The single worker coalesces concurrent intake races before running an agent.
+
+Green and waiting-on-CI requests keep being observed for later comments until
+merge/closure. Unchanged results do not repeat completion messages. Failed,
+interrupted and round-limit results require human attention; approvals are never
+replayed. The fixed round limit is three. A fork PR is refused for modification.
+The runner never auto-merges and cannot guarantee that an external review bot
+will run or formally approve: that bot's repository settings still apply.
+
+Issue pages show the lifecycle and link to `/prs/<number>` for the shared
+babysitter timeline. Standalone babysit requests link there too. Proposal links
+lead to the existing maintainer-only plan/approval page. Public event rows carry
+only lifecycle metadata and proposal IDs, never the private plan or CI log text.
+Pages refresh every 30 seconds. Slack outages do not discard issue events;
+unannounced issue approval messages are retried.
+
+Offline queue integration checks: `python3 tools/atb2/deploy/test_workflow.py`
+from the repository root. They run the real BAML runtime against a temporary
+loopback store fixture; no model requests or production credentials are used.
+
+## Activation checklist
+
+1. Land the unified-workflow follow-up on the Slack PR. Before production use,
+   finish the outgoing-agent-commit secret/content gate and the website dependency
+   security updates identified in the review. Review CI and bot feedback.
+2. Apply the Slack columns and additional proposal-table SQL from the PR body in
+   the Supabase dashboard. This workflow follow-up needs no additional SQL.
+3. Configure the existing Infisical project/environment with the store service
+   key, PostHog intake settings, GitHub token, Slack token/channel/signing secret,
+   HTTPS `ATB2_UI_URL`, and `ATB2_SHEPHERDS` mappings for every assigned owner.
+   Defaults are aaronvg (Syntax), codeshaunted (Compiler), antoniosarosi (Runtime),
+   2kai2kai2 (StdLibrary), sxlijin (Tooling), and hellovai (Unknown). Missing maps
+   cannot approve. Keep `ATB2_SLACK_INTAKE_CHANNEL` unset when using Events intake.
+4. Configure the feedback website's Supabase read credentials and GitHub OAuth
+   approval credentials documented above. Set its production branch to canary in
+   the linked Vercel project. Runner Actions do not deploy the website.
+5. Ensure Fly has the staged Infisical client pair and GitHub has an app-scoped
+   `FLY_API_TOKEN`. Merge the reviewed PR into canary. The workflow deploys the
+   runner automatically; a separate manual `fly deploy` is unnecessary when that
+   workflow succeeds. The first compiler build may take 10–30 minutes.
+6. Confirm the machine passes the namespace preflight and HTTP health check.
+   SSH with `fly ssh console -a atb2-runner`, then log in with
+   `runuser -u atb2 -- env HOME=/data/home claude`. Verify a broker-backed test run;
+   live namespace/OAuth behavior has not been established by offline tests.
+7. Set Slack Events URL to `https://atb2-runner.fly.dev/slack/events`, subscribe
+   `app_mention` and `reaction_added`, add `reactions:read`, reinstall, and invite
+   the bot to the issue/test channel. Existing bot scopes include `chat:write`
+   and `app_mentions:read`.
+8. Test a same-repository disposable PR with `@bammy babysit <PR URL>`. Check the
+   linked UI, approve one proposed fix, verify tests and the pre-push Slack reply,
+   and verify that later CI/review feedback requires another approval.
+9. Submit one `baml feedback` report and confirm its PostHog event reaches the
+   feedback store, then the issue page and Slack announcement. Have the assigned
+   shepherd approve it. Verify fix creation, PR creation, shared babysitter
+   activity and eventual manually merged status on both surfaces.
+
+Part 6 is a separate follow-up PR: record the release version containing a fix,
+map stored feedback IDs back to issues, and poll from ordinary CLI commands at
+most daily. Show “Your issue … was fixed in …; update using baml toolchain update”
+until the installed toolchain contains the fix. That notice is not required to
+start babysitting or process feedback end to end, and is not implemented here.
 
 ## Slack intake and issue approval
 
@@ -183,3 +362,13 @@ and server-only `FEEDBACK_APPROVAL_SUPABASE_KEY`. The OAuth callback is
 `/auth/github/callback`. Slack and website approvals update the same pending row;
 only the winning conditional write succeeds. The runner narrates website approvals
 in the issue thread before starting the fix.
+
+### Handoff and outgoing commits
+
+The issue worker saves its result and closes the sandbox before reconciliation
+queues its PR. Finished PRs retire unconsumed proposals; recovery preserves
+queue timestamps so one request cannot repeatedly jump ahead of new work.
+Before a trusted push, every outgoing commit is scanned with Infisical plus
+checks for sensitive paths, credential patterns, special/binary files, DDL,
+conflict markers, piped installers, and unpinned workflow actions. A scan failure
+stops the push and requires human attention.

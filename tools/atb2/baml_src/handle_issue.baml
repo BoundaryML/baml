@@ -3,7 +3,7 @@
 //   Easy / Medium: an agent in a git worktree on a fresh branch implements
 //                  the fix, encodes the repro(s) as tests, and runs the
 //                  repo's gate; BAML re-runs the gate, pushes and opens a
-//                  DRAFT PR (Live) or stops before pushing (DryRun).
+//                  PR (Live) or stops before pushing (DryRun).
 //   Hard:          the agent writes a suggested fix + design doc for the
 //                  shepherd to hand to their own agent. No code change.
 //
@@ -21,7 +21,7 @@
 //   ~/.atb2/runs/<branch>/        audit trail: transcript.jsonl, pr_body.md, outcome.json
 
 enum HandleMode {
-    /// Push the branch and open a draft PR when the gate passes.
+    /// Push the branch and open a PR when the gate passes.
     Live,
     /// Everything up to (not including) the push — what the evals run.
     DryRun,
@@ -29,11 +29,13 @@ enum HandleMode {
 
 // ==================== Pipeline ====================
 /// A PR under review: merge_issue hands handle_issue the PR's branch and the
-/// feedback (failing checks, reviewer comments) to address on it.
+/// approved plan to implement on its exact head.
 class Review {
     branch: string,
-    /// The brief: what CI and the reviewer said, as merge_issue renders it.
+    /// The approved fix plan, including its CI and reviewer evidence.
     feedback: string,
+    expected_head: string?,
+    proposal_id: string?,
 }
 
 //#handle_issue(issue: Issue, mode: HandleMode = HandleMode.Live, update: bool = false, review: Review? = null, thread: SlackRef? = null) -> Issue
@@ -45,6 +47,9 @@ function handle_issue(
     /// A Slack thread that hears each stage: design pass, fix pass, gate, push.
     thread: SlackRef? = null,
 ) -> Issue {
+    if (mode == HandleMode.Live && !db_configured()) {
+        throw StoreError { message: "live fixes require the store so their PR can enter babysitting" };
+    };
     if (review == null) {
         //# skip: not ready (not gauged / not open / already handled)
         let skip = handle_ready(issue, update);
@@ -72,7 +77,7 @@ function handle_issue(
         null => open_sandbox(issue, update),
         // always from origin: a local branch kept after a failed round would
         // be stale against what a human may have pushed since
-        let r: Review => open_branch_sandbox(r.branch, false),
+        let r: Review => open_branch_sandbox(r.branch, true),
     };
     let keep_branch = false;
     defer {
@@ -80,6 +85,18 @@ function handle_issue(
         close_sandbox(sb, keep_branch);
     }
     let started = baml.time.Instant.now();
+    if (review != null) {
+        if (
+            review.expected_head == null
+                || review.proposal_id == null
+                || !babysit_push_allowed(review.proposal_id ?? "", review.expected_head ?? "")
+                || git(sb.worktree, ["rev-parse", "HEAD"]).stdout.trim() != review.expected_head
+        ) {
+            write_outcome(sb, stopped_outcome(sb, started));
+            tell_thread(thread, ":hand: missing approval or PR head changed; no fix was started");
+            return issue;
+        };
+    };
     let doc = "";
     if (review == null) {
         //# design pass: investigate, propose the fix, write the plan (read-only)
@@ -103,8 +120,10 @@ function handle_issue(
         };
         tell_thread(thread, ":memo: design pass done, starting the fix pass on `" + sb.branch + "`");
     } else {
-        //# under review: the feedback is the plan
-        doc = review.feedback;
+        //# under review: implement the approved proposal
+        doc
+            = "APPROVED PLAN: implement only this scope. If a different fix is needed, stop and report blockers; do not substitute another plan.\n\n"
+                + review.feedback;
         baml.fs.write(sb.run_dir + "/review.md", doc);
     };
     // what the caller gets back: the design doc lands on the issue; review
@@ -125,6 +144,14 @@ function handle_issue(
         return out;
     };
     let fix = report ?? baml.sys.panic("unreachable");
+    if (review != null && fix.blockers != null && (fix.blockers ?? "").trim().length() > 0) {
+        write_outcome(sb, stopped_outcome(sb, started));
+        tell_thread(
+            thread,
+            ":hand: the approved plan could not be completed as proposed; nothing pushed. Request a revised proposal.",
+        );
+        return out;
+    };
     //# re-run the gate ourselves (the agent's own claim is never trusted)
     checkpoint_uncommitted(sb);
     let gate = run_gate(sb.worktree);
@@ -143,18 +170,40 @@ function handle_issue(
         return out;
     };
     if (review != null) {
-        //# under review: push the fix to the PR and say what was addressed
+        //# under review: verify approval, announce, and push the fix
         if (mode == HandleMode.DryRun) {
             //## dry run: stop before the push
             write_outcome(sb, outcome(sb, "fixed", null, started, gate, fix, null));
             return out;
         };
-        push_branch(sb);
+        // The approval authorizes one exact base. Recheck immediately before
+        // pushing, then use an explicit lease rather than a mutable tracking ref.
+        if (
+            !babysit_push_allowed(review.proposal_id ?? "", review.expected_head ?? "")
+                || !git(
+                    sb.worktree,
+                    ["merge-base", "--is-ancestor", review.expected_head ?? "", "HEAD"],
+                ).ok
+        ) {
+            write_outcome(sb, stopped_outcome(sb, started));
+            tell_thread(thread, ":hand: proposal is no longer executable; nothing pushed");
+            return out;
+        };
+        // This notification is required: a Slack outage stops the push.
+        if (thread != null) {
+            slack_post(":arrow_up: approved fix passed the gate; pushing to `" + sb.branch + "` now.", thread);
+        };
+        record_pr_event(
+            pr_url_in_from_issue(issue),
+            "babysit_pushing",
+            { "proposal_id": review.proposal_id }.to_json(),
+            thread,
+        );
+        push_branch(sb, expected_head = review.expected_head);
         let pr = match (issue.status) {
             let s: InProgress => s.pr ?? "",
             _ => "",
         };
-        comment_on_pr(sb, pr, review_comment(fix));
         //# the thread hears what was pushed
         tell_thread(
             thread,
@@ -182,14 +231,21 @@ function handle_issue(
         write_outcome(sb, outcome(sb, "fixed", null, started, gate, fix, doc));
         return with_design_doc(issue, doc);
     };
-    //# push the branch and open the draft PR
+    //# push the branch and open the PR
     let pr = push_and_open_pr(sb, draft);
     write_outcome(sb, outcome(sb, "fixed", pr, started, gate, fix, doc));
-    tell_thread(thread, ":rocket: draft PR opened: " + pr + "\n" + fix.summary.trim());
+    let progressed = handoff_issue_pr(issue, pr, doc, thread);
+    tell_thread(
+        thread,
+        ":rocket: PR opened; babysitting starts after the fix is saved: "
+            + pr
+            + "\n"
+            + fix.summary.trim(),
+    );
     log.info(
         { "issue": issue.id, "pr": pr, "turns": read_turns(sb), "seconds": elapsed_s(started) },
     );
-    with_status(with_design_doc(issue, doc), InProgress { state: "in_progress", pr: pr })
+    progressed
 }
 
 /// Why the stage would not run on this issue; null means go.
@@ -558,18 +614,10 @@ class CmdResult {
     ok: bool,
 }
 
-/// The environment every child gets. It REPLACES the environment, so this
-/// is an allowlist of environment variables: none from this process leaks
-/// unless named here. The agent runs with `with_gh = false` and never sees
-/// GH_TOKEN, FEEDBACK_SUPABASE_KEY, ANTHROPIC_API_KEY or anything else.
-/// The Claude Code CLI runs on its own login, found through HOME: on a
-/// laptop the keychain, on the runner the login kept on the volume. No
-/// Claude credential ever passes through atb2.
-///
-/// This guards the environment only. HOME is the host's, because the
-/// Claude Code CLI reads its login from there, so files under it
-/// (~/.ssh, ~/.config/gh, ~/.aws) stay readable to the agent's Bash. The
-/// git credential paths are cut off below; the rest is a known gap.
+/// Allowlisted controller subprocess environment. Untrusted checkout commands
+/// additionally enter the Linux mount/process sandbox, which replaces HOME and
+/// the environment again. Claude receives only a temporary broker capability;
+/// its persistent login stays outside that boundary.
 function sandbox_env(with_gh: bool) -> map<string, string> {
     let env: map<string, string> = {
         "PATH": baml.env.get("PATH") ?? "/usr/local/bin:/usr/bin:/bin",
@@ -708,6 +756,7 @@ class Sandbox {
     run_dir: string,
     reused_branch: bool,
     base_head: string?,
+    source_head: string,
 }
 
 /// One cached clone, fetched each run. Safe to call from parallel tests:
@@ -814,11 +863,10 @@ function open_branch_sandbox(branch: string, update: bool) -> Sandbox {
         run_dir: rd,
         reused_branch: reused,
         base_head: base_head,
+        source_head: git(wt, ["rev-parse", "HEAD"]).stdout.trim(),
     }
 }
 
-/// Runs from `defer`: never throws. Removes the worktree (and the local
-/// branch unless kept for a human), then checks the cache is untouched.
 function close_sandbox(sb: Sandbox, keep_branch: bool) -> null {
     // Build output is private to this invocation and can be large. Keep the
     // conversation checkout if needed, but reclaim its completed build cache.
@@ -1607,8 +1655,8 @@ function head_sha(sb: Sandbox) -> string {
     git(sb.worktree, ["rev-parse", "--short", "HEAD"]).stdout.trim()
 }
 
-/// Live only. Lifts the worktree's push guard for this one push. The
-/// guard is set by open_sandbox and is what keeps the agent from pushing.
+/// Live only. Export objects without credentials, then push from fresh trusted
+/// metadata to a fixed repository with a lease captured before agent execution.
 function push_branch(sb: Sandbox, expected_head: string? = null) -> null {
     let push = run_with(
         Cmd {
@@ -1619,6 +1667,7 @@ function push_branch(sb: Sandbox, expected_head: string? = null) -> null {
                 sb.worktree,
                 sb.branch,
                 expected_head ?? sb.base_head ?? "",
+                sb.source_head,
             ],
             cwd: atb2_home(),
             timeout_ms: 600000,
@@ -1631,40 +1680,7 @@ function push_branch(sb: Sandbox, expected_head: string? = null) -> null {
     null
 }
 
-/// The PR comment after a review round: what was addressed, what was left
-/// and why. "@coderabbitai resolve" asks CodeRabbit to resolve its threads.
-function review_comment(r: FixReport) -> string {
-    "atb2 review round\n\n"
-        + r.summary.trim()
-        + "\n\n"
-        + (
-            match (r.blockers) {
-                null => "",
-                let b: string => "Not changed, and why:\n" + b.trim() + "\n\n",
-            }
-        )
-        + "_Files: "
-        + r.files_changed.join(", ")
-        + ". The full gate was re-run before this push._\n\n@coderabbitai resolve"
-}
-
-/// Live only. Posts `body` on the PR.
-function comment_on_pr(sb: Sandbox, pr: string, body: string) -> null {
-    let path = sb.run_dir + "/review_comment.md";
-    baml.fs.write(path, body);
-    run_with(
-        Cmd {
-            program: "gh",
-            args: ["pr", "comment", pr, "--repo", repo_slug(), "--body-file", path],
-            cwd: sb.worktree,
-            timeout_ms: 120000,
-        },
-        sandbox_env(true),
-    );
-    null
-}
-
-/// Live only. Pushes the branch and opens a draft PR — or updates the
+/// Live only. Pushes the branch and opens a PR — or updates the
 /// existing PR for the branch.
 function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
     //# push through trusted metadata
@@ -1703,7 +1719,7 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
         );
         return existing.stdout.trim();
     };
-    //# otherwise open a draft PR
+    //# otherwise open a PR
     let created = run_with(
         Cmd {
             program: "gh",
@@ -1712,7 +1728,6 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
                 "create",
                 "--repo",
                 repo_slug(),
-                "--draft",
                 "--base",
                 "canary",
                 "--head",
@@ -2302,4 +2317,21 @@ testset "handle_issue" {
         let j = judge_design_doc@parse(`{ "similarity": 0.7, "missing": null }`);
         assert.equal(j.similarity, 0.7);
     }
+}
+
+function pr_url_in_from_issue(issue: Issue) -> string {
+    match (issue.status) {
+        let s: InProgress => s.pr ?? "",
+        _ => "",
+    }
+}
+
+/// Save the PR association before making its shared babysitter runnable.
+/// If queue insertion fails, pipeline reconciliation recovers this in-progress issue.
+function handoff_issue_pr(issue: Issue, pr: string, doc: string, thread: SlackRef?) -> Issue {
+    let progressed = with_status(with_design_doc(issue, doc), InProgress { state: "in_progress", pr: pr });
+    save_issue(progressed);
+    // Reconciliation queues this only after handle_one has saved the outcome
+    // and handle_issue has closed its sandbox. Never wake a worker here.
+    progressed
 }

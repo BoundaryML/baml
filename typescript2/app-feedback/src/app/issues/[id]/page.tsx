@@ -1,4 +1,5 @@
 import { ApproveIssue } from "@/components/issues/approve-issue";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { IssueDetail } from "@/components/issues/issue-detail";
 import { Activity } from "@/components/issues/activity";
@@ -15,5 +16,7 @@ export default async function IssuePage({ params }: { params: Promise<{ id: stri
   const issue = await loadIssue(id);
   if (!issue) notFound();
   const events = await loadIssueEvents(id, issue.dataset);
-  return <><LiveUpdates /><ApproveIssue issue={issue} /><IssueDetail issue={issue} /><Activity events={events} /></>;
+  const pr = "pr" in issue.status ? issue.status.pr : null;
+  const number = pr?.match(/^https:\/\/github\.com\/BoundaryML\/baml\/pull\/([1-9][0-9]{0,9})$/)?.[1];
+  return <><LiveUpdates /><ApproveIssue issue={issue} /><IssueDetail issue={issue} />{number && <Link href={`/prs/${number}?dataset=${issue.dataset}`}>PR #{number} babysitter activity</Link>}<Activity events={events} /></>;
 }

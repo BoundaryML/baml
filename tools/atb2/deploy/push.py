@@ -10,6 +10,9 @@ import tempfile
 spec = importlib.util.spec_from_file_location('atb2_sandbox', Path(__file__).with_name('sandbox.py'))
 sandbox = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sandbox)
+scan_spec = importlib.util.spec_from_file_location('atb2_push_scan', Path(__file__).with_name('push-scan.py'))
+push_scan = importlib.util.module_from_spec(scan_spec)
+scan_spec.loader.exec_module(push_scan)
 REPOSITORY = 'https://github.com/BoundaryML/baml.git'
 
 
@@ -37,7 +40,7 @@ def main():
             and fields.get('host') == 'github.com'):
             sys.stdout.write('username=x-access-token\npassword=' + os.environ['GH_TOKEN'] + '\n\n')
         return 0
-    cwd, branch, expected = sys.argv[1:]
+    cwd, branch, expected, scan_base = sys.argv[1:]
     root, readonly = sandbox.workspace(cwd)
     if readonly or root != Path(cwd) or root.parent != Path('/data/worktrees'):
         raise ValueError('push requires an isolated checkout')
@@ -69,6 +72,7 @@ def main():
         git('--git-dir=trusted.git', 'cat-file', '-e', commit + '^{commit}', stdout=subprocess.DEVNULL)
         if expected:
             git('--git-dir=trusted.git', 'merge-base', '--is-ancestor', expected, commit, stdout=subprocess.DEVNULL)
+        push_scan.scan(git, scan_base, commit, folder)
         # Exact source SHA, fixed URL and exact destination ref. No origin or
         # URL rewrites from the checkout; an empty lease only permits creation.
         git('--git-dir=trusted.git', '-c', 'protocol.https.allow=always', 'push',
