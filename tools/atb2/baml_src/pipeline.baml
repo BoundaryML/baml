@@ -437,7 +437,55 @@ function merge_one(issue: Issue, mode: HandleMode) -> MergeResult? {
     match (pr) {
         null => null,
         let url: string => {
-            let r = merge_issue(url, mode = mode, issue_id = issue.id);
+            // The queue owns all review agents, avoiding concurrent worktrees
+            // and ensuring every review round passes through proposal approval.
+            let snapshot = pr_snapshot(url);
+            if (snapshot == null) {
+                return null;
+            };
+            let snap = snapshot ?? baml.sys.panic("checked snapshot");
+            if (!snap.merged && snap.state == "OPEN") {
+                let requests = select(
+                    "babysit_requests",
+                    "select=id,status,result&pr="
+                        + eq(url)
+                        + "&dataset="
+                        + eq(dataset())
+                        + "&order=created_at.desc&limit=1",
+                );
+                if (requests.length() == 0) {
+                    request_merge(url, thread = issue_thread(issue.id));
+                } else {
+                    let previous = requests.at(0) ?? baml.json.parse("{}");
+                    let kind = baml.json.path_or<string>(previous, ".result.kind", "");
+                    if (kind == "green" || kind == "waiting_on_checks") {
+                        update(
+                            "babysit_requests",
+                            "id=eq."
+                                + baml.json.path_or<int>(previous, ".id", 0).to_string()
+                                + "&status=eq.done&dataset="
+                                + eq(dataset()),
+                            {
+                                "status": "queued",
+                                "claimed_by": null,
+                                "claimed_at": null,
+                                "finished_at": null,
+                            }
+                                .to_json(),
+                        );
+                    };
+                };
+                return MergeResult { kind: "awaiting_approval", pr: url, rounds: 0 };
+            };
+            let r = MergeResult {
+                kind: if (snap.merged) {
+                    "merged"
+                } else {
+                    "closed"
+                },
+                pr: url,
+                rounds: 0,
+            };
             if (r.kind == "merged") {
                 let merged = with_status(issue, Merged { state: "merged", pr: url });
                 save_issue(merged);

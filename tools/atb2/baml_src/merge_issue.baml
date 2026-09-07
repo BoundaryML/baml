@@ -35,7 +35,8 @@ class MergeResult {
         | "out_of_rounds"
         | "dry_run"
         | "round_failed"
-        | "fork_refused",
+        | "fork_refused"
+        | "awaiting_approval",
     pr: string,
     rounds: int,
 }
@@ -51,7 +52,13 @@ function merge_issue(
     thread: SlackRef? = null,
     /// A Slack user id to @mention on the result line (the requester).
     mention: string? = null,
+    request_id: int? = null,
 ) -> MergeResult {
+    if (request_id == null) {
+        request_merge(pr, thread = thread);
+        tell_thread(thread, ":eyes: queued for investigation; each fix will require approval");
+        return MergeResult { kind: "awaiting_approval", pr: pr, rounds: 0 };
+    };
     let started = baml.time.Instant.now();
     //# only this repository's PRs: the sandbox and the push know origin only
     if (!pr.starts_with("https://github.com/" + repo_slug() + "/pull/")) {
@@ -75,7 +82,8 @@ function merge_issue(
             | "out_of_rounds"
             | "dry_run"
             | "round_failed"
-            | "fork_refused",
+            | "fork_refused"
+            | "awaiting_approval",
     ) -> MergeResult {
         log.info({ "pr": pr, "result": kind, "rounds": state.rounds });
         let r = MergeResult { kind: kind, pr: pr, rounds: state.rounds };
@@ -96,7 +104,7 @@ function merge_issue(
         thread,
         ":eyes: watching "
             + pr
-            + " until it merges: CI failures and review comments go back to the agent, up to "
+            + " for CI failures and review comments; each fix requires approval, up to "
             + max_rounds.to_string()
             + " rounds",
     );
@@ -145,15 +153,41 @@ function merge_issue(
         };
         //# hand the branch and the brief to handle_issue (fix pass, gate, push)
         let brief = render_feedback(fb, failed_logs(fb));
+        let proposal = approved_babysit_plan(snap, fb, brief, request_id, thread, mention);
+        if (proposal == null) {
+            return done("awaiting_approval");
+        };
+        let approved = proposal ?? baml.sys.panic("checked proposal");
+        tell_thread(
+            thread,
+            ":white_check_mark: approval received; implementing the proposed fix and running the gate before pushing.",
+        );
         handle_issue(
             issue_from_pr(snap),
             mode = mode,
-            review = Review { branch: snap.branch, feedback: brief },
+            review = Review {
+                branch: snap.branch,
+                feedback: approved.plan,
+                expected_head: snap.head,
+                proposal_id: approved.id,
+            },
             thread = thread,
         );
         //# how the round ended: handle_issue says so in outcome.json, not in its return
         let round = state.rounds + 1;
         let kind = round_outcome(snap.branch, round);
+        update(
+            "babysit_proposals",
+            "id=" + eq(approved.id) + "&status=eq.executing&dataset=" + eq(dataset()),
+            {
+                "status": if (kind == "fixed" && mode == HandleMode.Live) {
+                    "pushed"
+                } else {
+                    "failed"
+                },
+            }
+                .to_json(),
+        );
         state = MergeState { rounds: round, handled_ids: state.handled_ids };
         //# the thread hears how the round went
         tell_thread(thread, round_text(round, kind, fb));
@@ -691,6 +725,7 @@ function result_text(r: MergeResult) -> string {
                 + r.pr
                 + "; see ~/.atb2/merge for the outcome"
         },
+        "awaiting_approval" => ":hand: waiting for approval before changing or pushing " + r.pr,
         "waiting_on_checks" => ":hourglass: gave up waiting for checks on " + r.pr,
         "dry_run" => ":test_tube: dry run done on " + r.pr + ", nothing pushed",
         "fork_refused" => {
@@ -851,6 +886,7 @@ function merge_issue_loop(
     let served = 0;
     log.info({ "merge_request": runner, "polling_s": poll_s(), "once": once });
     while (true) {
+        requeue_approved_babysits();
         //# stale claims back to the queue
         let back = reclaim_stale_requests(reclaim_after_s);
         if (back > 0) {
@@ -877,8 +913,20 @@ function merge_issue_loop(
                 );
                 //# run it, narrating in the request's thread; a Slack or store
                 //# failure inside ends this request as round_failed
-                let result = merge_issue(r.pr, mode = mode, thread = merge_request_thread(r), mention = r.requested_by) catch (_) {
-                    StoreError => MergeResult { kind: "round_failed", pr: r.pr, rounds: 0 },
+                let result = merge_issue(
+                    r.pr,
+                    mode = mode,
+                    thread = merge_request_thread(r),
+                    mention = r.requested_by,
+                    request_id = r.id,
+                ) catch (_) {
+                    StoreError => {
+                        tell_thread(
+                            merge_request_thread(r),
+                            ":x: could not complete the proposal or store update; no new push is authorized. Check runner logs and retry babysitting.",
+                        );
+                        MergeResult { kind: "round_failed", pr: r.pr, rounds: 0 }
+                    },
                     SlackError => MergeResult { kind: "round_failed", pr: r.pr, rounds: 0 },
                 };
                 finish_merge_request(

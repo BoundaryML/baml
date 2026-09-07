@@ -34,6 +34,8 @@ class Review {
     branch: string,
     /// The brief: what CI and the reviewer said, as merge_issue renders it.
     feedback: string,
+    expected_head: string?,
+    proposal_id: string?,
 }
 
 //#handle_issue(issue: Issue, mode: HandleMode = HandleMode.Live, update: bool = false, review: Review? = null, thread: SlackRef? = null) -> Issue
@@ -80,6 +82,18 @@ function handle_issue(
         close_sandbox(sb, keep_branch);
     }
     let started = baml.time.Instant.now();
+    if (review != null) {
+        if (
+            review.expected_head == null
+                || review.proposal_id == null
+                || !babysit_push_allowed(review.proposal_id ?? "", review.expected_head ?? "")
+                || git(sb.worktree, ["rev-parse", "HEAD"]).stdout.trim() != review.expected_head
+        ) {
+            write_outcome(sb, stopped_outcome(sb, started));
+            tell_thread(thread, ":hand: missing approval or PR head changed; no fix was started");
+            return issue;
+        };
+    };
     let doc = "";
     if (review == null) {
         //# design pass: investigate, propose the fix, write the plan (read-only)
@@ -104,7 +118,9 @@ function handle_issue(
         tell_thread(thread, ":memo: design pass done, starting the fix pass on `" + sb.branch + "`");
     } else {
         //# under review: the feedback is the plan
-        doc = review.feedback;
+        doc
+            = "APPROVED PLAN: implement only this scope. If a different fix is needed, stop and report blockers; do not substitute another plan.\n\n"
+                + review.feedback;
         baml.fs.write(sb.run_dir + "/review.md", doc);
     };
     // what the caller gets back: the design doc lands on the issue; review
@@ -125,6 +141,14 @@ function handle_issue(
         return out;
     };
     let fix = report ?? baml.sys.panic("unreachable");
+    if (review != null && fix.blockers != null && (fix.blockers ?? "").trim().length() > 0) {
+        write_outcome(sb, stopped_outcome(sb, started));
+        tell_thread(
+            thread,
+            ":hand: the approved plan could not be completed as proposed; nothing pushed. Request a revised proposal.",
+        );
+        return out;
+    };
     //# re-run the gate ourselves (the agent's own claim is never trusted)
     checkpoint_uncommitted(sb);
     let gate = run_gate(sb.worktree);
@@ -149,12 +173,28 @@ function handle_issue(
             write_outcome(sb, outcome(sb, "fixed", null, started, gate, fix, null));
             return out;
         };
-        push_branch(sb);
+        // The approval authorizes one exact base. Recheck immediately before
+        // pushing, then use an explicit lease rather than a mutable tracking ref.
+        if (
+            !babysit_push_allowed(review.proposal_id ?? "", review.expected_head ?? "")
+                || !git(
+                    sb.worktree,
+                    ["merge-base", "--is-ancestor", review.expected_head ?? "", "HEAD"],
+                ).ok
+        ) {
+            write_outcome(sb, stopped_outcome(sb, started));
+            tell_thread(thread, ":hand: proposal is no longer executable; nothing pushed");
+            return out;
+        };
+        // This notification is required: a Slack outage stops the push.
+        if (thread != null) {
+            slack_post(":arrow_up: approved fix passed the gate; pushing to `" + sb.branch + "` now.", thread);
+        };
+        push_branch(sb, expected_head = review.expected_head);
         let pr = match (issue.status) {
             let s: InProgress => s.pr ?? "",
             _ => "",
         };
-        comment_on_pr(sb, pr, review_comment(fix));
         //# the thread hears what was pushed
         tell_thread(
             thread,
@@ -1694,7 +1734,7 @@ function head_sha(sb: Sandbox) -> string {
 
 /// Live only. Lifts the worktree's push guard for this one push. The
 /// guard is set by open_sandbox and is what keeps the agent from pushing.
-function push_branch(sb: Sandbox) -> null {
+function push_branch(sb: Sandbox, expected_head: string? = null) -> null {
     //# lift the push guard for this one push
     // pushurl is multi-valued, so it cannot be overridden with -c; the
     // no_push guard is removed here, and only here, for this one push
@@ -1707,7 +1747,11 @@ function push_branch(sb: Sandbox) -> null {
                 "-c",
                 "core.hooksPath=/dev/null",
                 "push",
-                "--force-with-lease",
+                if (expected_head == null) {
+                    "--force-with-lease"
+                } else {
+                    "--force-with-lease=refs/heads/" + sb.branch + ":" + (expected_head ?? "")
+                },
                 "-u",
                 "origin",
                 sb.branch,

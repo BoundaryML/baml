@@ -205,3 +205,58 @@ announcements are retried. Reopened issues get a fresh approval message.
 Direct operator calls to `handle_issue` and existing PR review rounds remain
 manual entrypoints. The approval gate controls automatic issue implementation;
 it does not isolate an agent's filesystem or replace the runtime security boundary.
+
+
+### Babysitter proposals and approval
+
+`@bammy babysit <PR URL>` investigates CI failures and configured reviewer comments,
+then publishes a proposed fix and test plan. The planning session has only Read,
+Glob and Grep tools. The website shows the full proposal; Slack shows its summary
+and a link. No implementation agent runs until this round is approved.
+
+A thumbs up or check mark on the exact proposal message approves it when made by
+its requester or a user mapped in `ATB2_SHEPHERDS`. Website approval requires GitHub
+sign-in and current maintain/admin access to BoundaryML/baml. Proposals and CI
+logs are private to those website users. Website authentication uses state, PKCE,
+and an encrypted, secure HttpOnly cookie; repository access is checked again on
+approval. No browser receives the store credential.
+
+The runner consumes an approval once, implements its plan, independently runs the
+gate, announces the impending push in Slack, and pushes with a lease bound to the
+approved PR head. If the head or feedback changed before execution, it creates a
+new proposal. A concurrent push rejects the lease. A failed gate, blocked plan,
+or interrupted execution never retries a consumed approval automatically; a human
+can request babysitting again. New feedback after a successful push requires a new
+approval. The final message reports checks and remaining configured-reviewer
+feedback; it does not claim formal review approval or automatically merge the PR.
+The runner no longer posts `@coderabbitai resolve` after a review round.
+
+Pending proposals persist in `babysit_proposals` and release the worker. Approval
+requeues their original request on the next poll. Direct `merge_issue` calls now
+queue requests too, and the pipeline routes PR review work through the same queue.
+Apply the additional proposal SQL from the PR description before starting this
+version. It enables RLS with no anonymous access, makes proposal content immutable,
+and restricts status transitions. The earlier Slack column SQL is not sufficient.
+
+Set `ATB2_UI_URL` on the runner to the HTTPS feedback-site origin. For the website,
+configure these server-only environment variables in addition to its read-only
+store settings:
+
+- `FEEDBACK_SITE_URL`: the HTTPS feedback-site origin.
+- `FEEDBACK_GITHUB_CLIENT_ID` and `FEEDBACK_GITHUB_CLIENT_SECRET`: a GitHub OAuth
+  app with callback `<FEEDBACK_SITE_URL>/auth/github/callback` and homepage equal
+  to the site origin. Sign-in requests only `read:user`.
+- `FEEDBACK_APPROVAL_SESSION_KEY`: 32 random bytes represented as 64 hex characters.
+- `FEEDBACK_APPROVAL_SUPABASE_KEY`: a server-side store credential with access to
+  the private proposals table (the Supabase service-role key is supported).
+
+The website uses these credentials only in its authenticated server paths; its
+existing public issue views continue to use the anonymous key. Do not place any
+of these credentials in `NEXT_PUBLIC_` variables. Without website auth configured,
+approval in Slack still works, but the private proposal page requires sign-in.
+
+Checks: `bun test typescript2/app-feedback/tests/approval.test.mjs` verifies web
+approval authorization, CSRF rejection, session tampering/expiry and one-shot writes.
+The BAML tests cover proposal head/feedback binding and Slack approver/message checks.
+Approval is a workflow control, not a fix for the existing agent HOME/filesystem
+isolation limitation.

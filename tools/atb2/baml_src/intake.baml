@@ -344,7 +344,9 @@ function slack_events(req: baml.http.Request, secret: string, now: bigint) -> ba
     };
     let event = baml.json.path_or<json>(envelope, ".event", baml.json.parse("{}"));
     if (baml.json.path_or<string>(event, ".type", "") == "reaction_added") {
-        accept_approval(event);
+        if (!accept_babysit_approval(event)) {
+            accept_approval(event);
+        };
         return intake_response(200, baml.json.parse("{}"));
     };
     if (baml.json.path_or<string>(event, ".type", "") != "app_mention") {
