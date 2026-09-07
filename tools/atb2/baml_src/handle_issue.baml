@@ -3,7 +3,7 @@
 //   Easy / Medium: an agent in a git worktree on a fresh branch implements
 //                  the fix, encodes the repro(s) as tests, and runs the
 //                  repo's gate; BAML re-runs the gate, pushes and opens a
-//                  DRAFT PR (Live) or stops before pushing (DryRun).
+//                  PR (Live) or stops before pushing (DryRun).
 //   Hard:          the agent writes a suggested fix + design doc for the
 //                  shepherd to hand to their own agent. No code change.
 //
@@ -21,7 +21,7 @@
 //   ~/.atb2/runs/<branch>/        audit trail: transcript.jsonl, pr_body.md, outcome.json
 
 enum HandleMode {
-    /// Push the branch and open a draft PR when the gate passes.
+    /// Push the branch and open a PR when the gate passes.
     Live,
     /// Everything up to (not including) the push — what the evals run.
     DryRun,
@@ -47,6 +47,9 @@ function handle_issue(
     /// A Slack thread that hears each stage: design pass, fix pass, gate, push.
     thread: SlackRef? = null,
 ) -> Issue {
+    if (mode == HandleMode.Live && !db_configured()) {
+        throw StoreError { message: "live fixes require the store so their PR can enter babysitting" };
+    };
     if (review == null) {
         //# skip: not ready (not gauged / not open / already handled)
         let skip = handle_ready(issue, update);
@@ -74,7 +77,7 @@ function handle_issue(
         null => open_sandbox(issue, update),
         // always from origin: a local branch kept after a failed round would
         // be stale against what a human may have pushed since
-        let r: Review => open_branch_sandbox(r.branch, false),
+        let r: Review => open_branch_sandbox(r.branch, true),
     };
     let keep_branch = false;
     defer {
@@ -190,6 +193,12 @@ function handle_issue(
         if (thread != null) {
             slack_post(":arrow_up: approved fix passed the gate; pushing to `" + sb.branch + "` now.", thread);
         };
+        record_pr_event(
+            pr_url_in_from_issue(issue),
+            "babysit_pushing",
+            { "proposal_id": review.proposal_id }.to_json(),
+            thread,
+        );
         push_branch(sb, expected_head = review.expected_head);
         let pr = match (issue.status) {
             let s: InProgress => s.pr ?? "",
@@ -222,14 +231,15 @@ function handle_issue(
         write_outcome(sb, outcome(sb, "fixed", null, started, gate, fix, doc));
         return with_design_doc(issue, doc);
     };
-    //# push the branch and open the draft PR
+    //# push the branch and open the PR
     let pr = push_and_open_pr(sb, draft);
     write_outcome(sb, outcome(sb, "fixed", pr, started, gate, fix, doc));
-    tell_thread(thread, ":rocket: draft PR opened: " + pr + "\n" + fix.summary.trim());
+    let progressed = handoff_issue_pr(issue, pr, doc, thread);
+    tell_thread(thread, ":rocket: PR opened and queued for babysitting: " + pr + "\n" + fix.summary.trim());
     log.info(
         { "issue": issue.id, "pr": pr, "turns": read_turns(sb), "seconds": elapsed_s(started) },
     );
-    with_status(with_design_doc(issue, doc), InProgress { state: "in_progress", pr: pr })
+    progressed
 }
 
 /// Why the stage would not run on this issue; null means go.
@@ -1718,7 +1728,7 @@ function push_branch(sb: Sandbox, expected_head: string? = null) -> null {
     null
 }
 
-/// Live only. Pushes the branch and opens a draft PR — or updates the
+/// Live only. Pushes the branch and opens a PR — or updates the
 /// existing PR for the branch.
 function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
     //# push through trusted metadata
@@ -1757,7 +1767,7 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
         );
         return existing.stdout.trim();
     };
-    //# otherwise open a draft PR
+    //# otherwise open a PR
     let created = run_with(
         Cmd {
             program: "gh",
@@ -1766,7 +1776,6 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
                 "create",
                 "--repo",
                 repo_slug(),
-                "--draft",
                 "--base",
                 "canary",
                 "--head",
@@ -2352,4 +2361,20 @@ testset "handle_issue" {
         let j = judge_design_doc@parse(`{ "similarity": 0.7, "missing": null }`);
         assert.equal(j.similarity, 0.7);
     }
+}
+
+function pr_url_in_from_issue(issue: Issue) -> string {
+    match (issue.status) {
+        let s: InProgress => s.pr ?? "",
+        _ => "",
+    }
+}
+
+/// Save the PR association before making its shared babysitter runnable.
+/// If queue insertion fails, pipeline reconciliation recovers this in-progress issue.
+function handoff_issue_pr(issue: Issue, pr: string, doc: string, thread: SlackRef?) -> Issue {
+    let progressed = with_status(with_design_doc(issue, doc), InProgress { state: "in_progress", pr: pr });
+    save_issue(progressed);
+    request_merge(pr, thread = thread);
+    progressed
 }

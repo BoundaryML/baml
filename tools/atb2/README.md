@@ -1,7 +1,7 @@
 # atb2
 
 The feedback pipeline: a user report becomes an issue, the issue becomes a
-draft PR, the PR gets to green. Written in BAML against canary's toolchain
+PR, the PR gets to green. Written in BAML against canary's toolchain
 (`~/.atb2/target/debug/baml-cli`, built by `handle_issue`; `BAML_CLI` overrides).
 
 ```
@@ -16,7 +16,7 @@ draft PR, the PR gets to green. Written in BAML against canary's toolchain
 |---------|---------------------|--------------|
 | ingest  | `intake.baml`, `slack.baml` | new reports from PostHog `baml_feedback` events and the Slack intake channel become `feedback` rows |
 | triage  | `create_issue.baml`, `organize_issue.baml`, `gauge_issue.baml` | repro, ticket, shepherd, difficulty; an `issues` row and a Slack thread |
-| handle  | `handle_issue.baml` | design pass, fix pass, the gate, a draft PR; a `runs` row and a thread reply |
+| handle  | `handle_issue.baml` | design pass, fix pass, the gate, a PR; a `runs` row and a thread reply |
 | merge   | `merge_issue.baml`  | CI failures and reviewer comments back to `handle_issue` until the PR merges; `merge_rounds` rows |
 
 `pipeline.baml` runs them end to end; `store.baml` is the Supabase layer;
@@ -268,3 +268,81 @@ approval authorization, CSRF rejection, session tampering/expiry and one-shot wr
 The BAML tests cover proposal head/feedback binding and Slack approver/message checks.
 Approval is a workflow control, not a fix for the existing agent HOME/filesystem
 isolation limitation.
+
+## Unified issue and PR workflow
+
+PostHog `baml_feedback` events and Slack feedback mentions enter the same durable
+feedback store. Triage calls `create_issue`, `organize_issue`, then `gauge_issue`.
+A new issue is saved as `awaiting_approval` and announced in Slack with its website
+link and assigned shepherd mention. The assigned shepherd's thumbs up or check
+mark records approval and posts a reply. The next handle pass announces that it
+is creating a fix, runs `handle_issue`, and creates a PR ready for review after
+its tests pass. Hard issues produce a design document for a human instead.
+
+Every PR created by `handle_issue` is immediately handed to `request_merge`.
+An independent `@bammy babysit <PR URL>` enters exactly the same queue. All PR
+observation, proposals, approval, round accounting, retries and request recovery
+live in `merge_issue.baml`; `handle_issue` is the shared implementation/test/push
+primitive, not a second review loop. Issue reconciliation can recover a missing
+queue entry after a restart. Duplicate requests share one active babysitter.
+The single worker coalesces concurrent intake races before running an agent.
+
+Green and waiting-on-CI requests keep being observed for later comments until
+merge/closure. Unchanged results do not repeat completion messages. Failed,
+interrupted and round-limit results require human attention; approvals are never
+replayed. The fixed round limit is three. A fork PR is refused for modification.
+The runner never auto-merges and cannot guarantee that an external review bot
+will run or formally approve: that bot's repository settings still apply.
+
+Issue pages show the lifecycle and link to `/prs/<number>` for the shared
+babysitter timeline. Standalone babysit requests link there too. Proposal links
+lead to the existing maintainer-only plan/approval page. Public event rows carry
+only lifecycle metadata and proposal IDs, never the private plan or CI log text.
+Pages refresh every 30 seconds. Slack outages do not discard issue events;
+unannounced issue approval messages are retried.
+
+Offline queue integration checks: `python3 tools/atb2/deploy/test_workflow.py`
+from the repository root. They run the real BAML runtime against a temporary
+loopback store fixture; no model requests or production credentials are used.
+
+## Activation checklist
+
+1. Land the unified-workflow follow-up on the Slack PR. Before production use,
+   finish the outgoing-agent-commit secret/content gate and the website dependency
+   security updates identified in the review. Review CI and bot feedback.
+2. Apply the Slack columns and additional proposal-table SQL from the PR body in
+   the Supabase dashboard. This workflow follow-up needs no additional SQL.
+3. Configure the existing Infisical project/environment with the store service
+   key, PostHog intake settings, GitHub token, Slack token/channel/signing secret,
+   HTTPS `ATB2_UI_URL`, and `ATB2_SHEPHERDS` mappings for every assigned owner.
+   Defaults are aaronvg (Syntax), codeshaunted (Compiler), antoniosarosi (Runtime),
+   2kai2kai2 (StdLibrary), sxlijin (Tooling), and hellovai (Unknown). Missing maps
+   cannot approve. Keep `ATB2_SLACK_INTAKE_CHANNEL` unset when using Events intake.
+4. Configure the feedback website's Supabase read credentials and GitHub OAuth
+   approval credentials documented above. Set its production branch to canary in
+   the linked Vercel project. Runner Actions do not deploy the website.
+5. Ensure Fly has the staged Infisical client pair and GitHub has an app-scoped
+   `FLY_API_TOKEN`. Merge the reviewed PR into canary. The workflow deploys the
+   runner automatically; a separate manual `fly deploy` is unnecessary when that
+   workflow succeeds. The first compiler build may take 10–30 minutes.
+6. Confirm the machine passes the namespace preflight and HTTP health check.
+   SSH with `fly ssh console -a atb2-runner`, then log in with
+   `runuser -u atb2 -- env HOME=/data/home claude`. Verify a broker-backed test run;
+   live namespace/OAuth behavior has not been established by offline tests.
+7. Set Slack Events URL to `https://atb2-runner.fly.dev/slack/events`, subscribe
+   `app_mention` and `reaction_added`, add `reactions:read`, reinstall, and invite
+   the bot to the issue/test channel. Existing bot scopes include `chat:write`
+   and `app_mentions:read`.
+8. Test a same-repository disposable PR with `@bammy babysit <PR URL>`. Check the
+   linked UI, approve one proposed fix, verify tests and the pre-push Slack reply,
+   and verify that later CI/review feedback requires another approval.
+9. Submit one `baml feedback` report and confirm its PostHog event reaches the
+   feedback store, then the issue page and Slack announcement. Have the assigned
+   shepherd approve it. Verify fix creation, PR creation, shared babysitter
+   activity and eventual manually merged status on both surfaces.
+
+Part 6 is a separate follow-up PR: record the release version containing a fix,
+map stored feedback IDs back to issues, and poll from ordinary CLI commands at
+most daily. Show “Your issue … was fixed in …; update using baml toolchain update”
+until the installed toolchain contains the fix. That notice is not required to
+start babysitting or process feedback end to end, and is not implemented here.

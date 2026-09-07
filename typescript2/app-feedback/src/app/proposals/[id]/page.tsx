@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveUpdates } from "@/components/issues/live-updates";
 import { notFound } from "next/navigation";
 import { currentApprover, proposalPath } from "@/lib/approval-auth";
 import { loadProposal } from "@/lib/proposals";
@@ -18,7 +19,8 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
   const proposal = await loadProposal(id);
   if (!proposal) notFound();
   const prSafe = /^https:\/\/github\.com\/BoundaryML\/baml\/pull\/\d+$/.test(proposal.pr);
-  return <main className="max-w-4xl mx-auto p-8 space-y-6">
+  return <main className="max-w-4xl mx-auto p-8 space-y-6"><LiveUpdates />
+    {prSafe && <Link className="underline" href={`/prs/${proposal.pr.split("/").pop()}`}>View babysitter activity</Link>}
     <div><p className="text-sm text-muted-foreground">Babysitter · {proposal.status}</p>
       <h1 className="text-2xl font-semibold">Proposed fix</h1>
       {prSafe ? <a className="underline" href={proposal.pr}>{proposal.pr}</a> : <p>{proposal.pr}</p>}

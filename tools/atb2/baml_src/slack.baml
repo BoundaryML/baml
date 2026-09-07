@@ -126,7 +126,9 @@ function notify(kind: string, issue: Issue, text: string, payload: json) -> null
         null
     };
     let posted = if (slack_configured()) {
-        slack_post(text, thread)
+        slack_post(text, thread) catch (_) {
+            SlackError => null
+        }
     } else {
         null
     };
@@ -166,7 +168,7 @@ function issue_link(issue: Issue) -> string {
 
 function issue_created_text(issue: Issue) -> string {
     let n = issue.feedback_ids.length();
-    ":new: *"
+    "ISSUE: *"
         + issue.title
         + "*\n"
         + issue_link(issue)
@@ -194,7 +196,7 @@ function issue_created_text(issue: Issue) -> string {
             match (issue.shepherd) {
                 null => "",
                 let s: string => {
-                    " · shepherd "
+                    " · shepherd: "
                         + match (shepherd_slack_id(issue.shepherd)) {
                             null => s,
                             let user: string => "<@" + user + ">",
@@ -212,7 +214,7 @@ function issue_created_text(issue: Issue) -> string {
 }
 
 function pr_opened_text(issue: Issue, o: HandleOutcome) -> string {
-    ":rocket: draft PR opened for *"
+    ":rocket: PR opened for *"
         + issue.title
         + "*\n"
         + (o.pr ?? "(no url)")
@@ -883,7 +885,7 @@ function accept_approval(event: json) -> null {
             notify(
                 "approved",
                 issue_from_row(saved.at(0) ?? baml.json.parse("{}")),
-                "Approved by <@" + r.user + ">; queued for the next fix pass.",
+                "Shepherd <@" + r.user + "> approved issue; queued for the next fix pass.",
                 status.to_json(),
             ) catch_all (_) {
                 _ => {

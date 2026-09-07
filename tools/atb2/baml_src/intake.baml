@@ -457,6 +457,18 @@ function persist_mention(m: SlackMention) -> bool {
     let table = "";
     let row: map<string, json> = {};
     if (m.route.kind == "babysit" && m.route.pr != null) {
+        // Both intake paths share the same request ownership. The worker also
+        // coalesces races before it starts a proposal or implementation.
+        if (active_babysit_request(m.route.pr ?? "") != null) {
+            spawn {
+                tell_thread(
+                    m.thread,
+                    "Already babysitting this PR; continuing in its original thread. "
+                        + pr_activity_link(m.route.pr ?? ""),
+                );
+            };
+            return false;
+        };
         table = "babysit_requests";
         row
             = {

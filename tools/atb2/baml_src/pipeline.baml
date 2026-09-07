@@ -4,9 +4,9 @@
 //            channel) -> feedback rows
 //   triage   each new report -> create_issue -> organize_issue -> gauge_issue
 //            -> an issues row, and a Slack thread opened for it
-//   handle   every open, gauged issue -> handle_issue -> a runs row; the
+//   handle   every approved, gauged issue -> handle_issue -> a runs row; the
 //            thread hears about the PR, or that a human is needed
-//   merge    every in-progress issue with a PR -> merge_issue -> merged
+//   merge    reconcile issue PRs with the shared merge_issue babysitter queue
 //
 //   cd tools/atb2 && baml run -e 'run_pipeline()'
 //   baml run -e 'run_pipeline(mode = HandleMode.DryRun, stages = "ingest,triage")'
@@ -382,7 +382,7 @@ function with_issue(fb: Feedback, issue_id: string) -> Feedback {
 /// handle_issue for one issue, its outcome saved and told. Null when
 /// handle_issue did not run (not ready, already fixed).
 function handle_one(issue: Issue, mode: HandleMode) -> HandleOutcome? {
-    if (!issue_approved(issue)) {
+    if (!issue_approved(issue) || handle_ready(issue, false) != null) {
         return null;
     };
     //# a stale outcome.json from an earlier run must not be read as this run's
@@ -392,6 +392,12 @@ function handle_one(issue: Issue, mode: HandleMode) -> HandleOutcome? {
             _ => null,
         };
     };
+    notify(
+        "fix_started",
+        issue,
+        "Creating a fix for *" + issue.title + "*; preparing the PR.",
+        baml.json.parse("{}"),
+    );
     let after = handle_issue(issue, mode = mode, thread = issue_thread(issue.id));
     let o = read_outcome(issue);
     match (o) {
@@ -427,76 +433,6 @@ function tell_outcome(issue: Issue, o: HandleOutcome, mode: HandleMode) -> null 
 }
 
 // ==================== merge ====================
-
-/// Queue review work or record the final state of an in-progress PR.
-function merge_one(issue: Issue) -> MergeResult? {
-    let pr = match (issue.status) {
-        let s: InProgress => s.pr,
-        _ => null,
-    };
-    match (pr) {
-        null => null,
-        let url: string => {
-            // The queue owns all review agents, avoiding concurrent worktrees
-            // and ensuring every review round passes through proposal approval.
-            let snapshot = pr_snapshot(url);
-            if (snapshot == null) {
-                return null;
-            };
-            let snap = snapshot ?? baml.sys.panic("checked snapshot");
-            if (!snap.merged && snap.state == "OPEN") {
-                let requests = select(
-                    "babysit_requests",
-                    "select=id,result&pr="
-                        + eq(url)
-                        + "&dataset="
-                        + eq(dataset())
-                        + "&order=created_at.desc&limit=1",
-                );
-                if (requests.length() == 0) {
-                    request_merge(url, thread = issue_thread(issue.id));
-                } else {
-                    let previous = requests.at(0) ?? baml.json.parse("{}");
-                    let kind = baml.json.path_or<string>(previous, ".result.kind", "");
-                    if (kind == "green" || kind == "waiting_on_checks") {
-                        update(
-                            "babysit_requests",
-                            "id=eq."
-                                + baml.json.path_or<int>(previous, ".id", 0).to_string()
-                                + "&status=eq.done&dataset="
-                                + eq(dataset()),
-                            {
-                                "status": "queued",
-                                "claimed_by": null,
-                                "claimed_at": null,
-                                "finished_at": null,
-                            }
-                                .to_json(),
-                        );
-                    };
-                };
-                return MergeResult { kind: "awaiting_approval", pr: url, rounds: 0 };
-            };
-            let r = MergeResult {
-                kind: if (snap.merged) {
-                    "merged"
-                } else {
-                    "closed"
-                },
-                pr: url,
-                rounds: 0,
-            };
-            if (r.kind == "merged") {
-                let merged = with_status(issue, Merged { state: "merged", pr: url });
-                save_issue(merged);
-                notify("merged", merged, merged_text(merged, url), r.to_json());
-            } else {
-                log_event("merge_issue", issue.id, null, r.to_json(), null, null);
-            };
-            r
-        },
-    }
-}
 
 // ==================== Unit tests (token-free) ====================
 
