@@ -256,6 +256,8 @@ function issue_from_pr(snap: PrSnapshot) -> Issue {
         resolution_plan: null,
         difficulty: Difficulty.Medium,
         design_doc: null,
+        slack_ts: null,
+        slack_channel: null,
     }
 }
 

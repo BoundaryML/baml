@@ -13,6 +13,8 @@ export type Difficulty = "Trivial" | "Easy" | "Medium" | "Hard";
 
 export type IssueStatus =
   | { state: "open" }
+  | { state: "awaiting_approval" }
+  | { state: "approved"; by: string }
   | { state: "in_progress"; pr: string | null }
   | { state: "rejected"; reason: string }
   | { state: "deferred"; reason: string; workaround: string | null }

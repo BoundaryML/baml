@@ -10,15 +10,17 @@
 #
 # Create the volume once:
 #   fly volumes create atb2_data --size 80 --region sjc -a atb2-runner
-# Secrets: the machine holds one, INFISICAL_TOKEN; the entrypoint pulls the
-# rest from Infisical (boundary-tools, prod) in the root launcher at start:
-#   fly secrets set -a atb2-runner INFISICAL_TOKEN=...   # once
+# Fly secrets: INFISICAL_CLIENT_ID and INFISICAL_CLIENT_SECRET from the existing
+# machine identity. The root launcher logs in via Universal Auth on every boot
+# and fetches boundary-tools prod. Stage the pair with fly secrets import.
+# INFISICAL_TOKEN is also supported when no client credentials are configured.
 # Everything the pipeline reads is in that project already: FEEDBACK_SUPABASE_URL/_KEY,
 # ATB_SLACK_BOT_TOKEN, ATB_SLACK_FIX_CHANNEL, ATB_POSTHOG_*, ATB_GITHUB_TOKEN (used as
 # GH_TOKEN). The agent's Claude Code CLI uses its own login on the machine (HOME on the
 # volume; `fly ssh console -a atb2-runner` then
 # `runuser -u atb2 -- env HOME=/data/home claude` to log in once); no Claude
-# credential is stored in Infisical or passed by atb2. CI holds only a Fly deploy token.
+# credential is stored in Infisical or exposed inside the agent sandbox. A local
+# broker uses the persistent login outside that boundary. CI holds only a Fly deploy token.
 app = "atb2-runner"
 primary_region = "sjc"
 
@@ -36,7 +38,7 @@ primary_region = "sjc"
   INFISICAL_ENV = "prod"
 
 [processes]
-  runner = "runner_loop(every_s = 300)"
+  runner = "main_ingress(every_s = 300)"
 
 # a panic ends the process; Fly restarts it and the loops resume from the store
 [[restart]]
@@ -54,5 +56,17 @@ primary_region = "sjc"
   memory = "32gb"
   processes = ["runner"]
 
-[checks]
-  # no http surface; liveness is the process itself
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["runner"]
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30m"

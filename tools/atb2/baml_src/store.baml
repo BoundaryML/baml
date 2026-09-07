@@ -37,7 +37,13 @@ function dataset() -> string {
 /// shape); the body is JSON text. Panics on transport or non-2xx, like
 /// supabase_get: a store that is configured but broken must not be
 /// silently skipped.
-function supabase_send(method: string, path: string, body: string, prefer: string) -> string {
+function supabase_send(
+    method: string,
+    path: string,
+    body: string,
+    prefer: string,
+    timeout_s: int = 30,
+) -> string {
     let base = baml.env.get("FEEDBACK_SUPABASE_URL") ?? "";
     if (!base.starts_with("https://")) {
         // the service key rides in two headers: never over plain http
@@ -56,7 +62,7 @@ function supabase_send(method: string, path: string, body: string, prefer: strin
     };
     let res = baml.http.send(
         baml.http.Request { method: method, url: url, headers: headers, body: body },
-        timeout = baml.time.Duration.from_seconds(30),
+        timeout = baml.time.Duration.from_seconds(timeout_s),
     ) catch (e) {
         _ => {
             throw StoreError { message: method + " failed for " + url };
@@ -223,6 +229,8 @@ function issue_row(issue: Issue) -> json {
             let d: Difficulty => d.to_string(),
         },
         "design_doc": issue.design_doc,
+        "slack_ts": issue.slack_ts,
+        "slack_channel": issue.slack_channel,
         "dataset": dataset(),
     }
         .to_json()
@@ -245,6 +253,8 @@ function issue_from_row(row: json) -> Issue {
         resolution_plan: baml.json.path_or<string?>(row, ".resolution_plan", null),
         difficulty: difficulty_from(baml.json.path_or<string?>(row, ".difficulty", null)),
         design_doc: baml.json.path_or<string?>(row, ".design_doc", null),
+        slack_ts: baml.json.path_or<string?>(row, ".slack_ts", null),
+        slack_channel: baml.json.path_or<string?>(row, ".slack_channel", null),
     }
 }
 

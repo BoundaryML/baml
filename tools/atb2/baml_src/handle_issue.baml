@@ -205,6 +205,7 @@ function handle_ready(issue: Issue, update: bool) -> string? {
     };
     match (issue.status) {
         let s: Open => null,
+        let s: Approved => null,
         _ => "not open",
     }
 }
@@ -382,6 +383,11 @@ function verdict_from_check(
 }
 
 function with_status(issue: Issue, status: IssueStatus) -> Issue {
+    let reset_anchor = match (status) {
+        let s: AwaitingApproval => true,
+        let s: Open => true,
+        _ => false,
+    };
     Issue {
         id: issue.id,
         title: issue.title,
@@ -396,6 +402,16 @@ function with_status(issue: Issue, status: IssueStatus) -> Issue {
         resolution_plan: issue.resolution_plan,
         difficulty: issue.difficulty,
         design_doc: issue.design_doc,
+        slack_ts: if (reset_anchor) {
+            null
+        } else {
+            issue.slack_ts
+        },
+        slack_channel: if (reset_anchor) {
+            null
+        } else {
+            issue.slack_channel
+        },
     }
 }
 
@@ -414,6 +430,8 @@ function with_design_doc(issue: Issue, doc: string) -> Issue {
         resolution_plan: issue.resolution_plan,
         difficulty: issue.difficulty,
         design_doc: doc,
+        slack_ts: issue.slack_ts,
+        slack_channel: issue.slack_channel,
     }
 }
 
@@ -1957,6 +1975,8 @@ function gh_issue(number: int, difficulty: Difficulty?) -> Issue {
         resolution_plan: null,
         difficulty: difficulty,
         design_doc: null,
+        slack_ts: null,
+        slack_channel: null,
     }
 }
 
@@ -2016,6 +2036,8 @@ testset "handle_issue" {
             resolution_plan: null,
             difficulty: Difficulty.Easy,
             design_doc: null,
+            slack_ts: null,
+            slack_channel: null,
         };
         assert.is_true(branch_for(piped).starts_with("agent/issue-01j9x7ab-"));
         assert.equal(github_number(piped) == null, true);
@@ -2210,6 +2232,8 @@ testset "handle_issue" {
             resolution_plan: null,
             difficulty: Difficulty.Easy,
             design_doc: null,
+            slack_ts: null,
+            slack_channel: null,
         };
         assert.contains(test_route(with_repro), "diagnostic_errors");
         assert.contains(test_route(base), "Rust test");

@@ -167,3 +167,19 @@ from the Fly machine identity, or the existing `INFISICAL_TOKEN` fallback.
 Neither reaches the runtime. Agent commands require Linux namespaces; startup
 fails closed if they are unavailable. Trusted pushes export Git objects into
 fresh controller-owned metadata and use a fixed repository and exact branch lease.
+
+## Slack intake and issue approval
+
+The runner serves signed Slack events at `/slack/events` and health at `/health`
+on port 8080. Subscribe to `app_mention` and `reaction_added`, with
+`chat:write`, `app_mentions:read`, and `reactions:read`.
+Set `ATB2_SHEPHERDS` to a comma-separated GitHub-login:Slack-user-ID map.
+New issues announce their shepherd and wait for approval before implementation.
+
+On the website the assigned shepherd can sign in with GitHub and click
+**Approve issue**. Configure `FEEDBACK_SITE_URL`, `FEEDBACK_GITHUB_CLIENT_ID`,
+`FEEDBACK_GITHUB_CLIENT_SECRET`, `FEEDBACK_APPROVAL_SESSION_KEY` (64 hex digits),
+and server-only `FEEDBACK_APPROVAL_SUPABASE_KEY`. The OAuth callback is
+`/auth/github/callback`. Slack and website approvals update the same pending row;
+only the winning conditional write succeeds. The runner narrates website approvals
+in the issue thread before starting the fix.

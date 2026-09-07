@@ -1,4 +1,4 @@
-// The data source: the atb2 store in Supabase (tools/atb2/db/schema.sql),
+// The data source: the atb2 store in Supabase,
 // read through PostgREST with the anon key, which sees issues, runs and
 // events but never a reporter's identity (feedback only via feedback_public).
 //
@@ -139,9 +139,19 @@ export interface IssueEvent {
   created_at: string;
 }
 
-export async function loadIssueEvents(id: string): Promise<IssueEvent[]> {
+export async function loadIssueEvents(id: string, dataset: "live" | "eval" = "live"): Promise<IssueEvent[]> {
   if (dataSource === "mock") return [];
   return rest<IssueEvent[]>(
-    `events?select=id,kind,payload,slack_ts,created_at&issue_id=eq.${encodeURIComponent(id)}&order=created_at`,
+    `events?select=id,kind,payload,slack_ts,created_at&issue_id=eq.${encodeURIComponent(id)}&dataset=eq.${dataset}&order=created_at,id`,
+  );
+}
+
+/** Public lifecycle metadata; private plans are read only on authorized proposal pages. */
+export async function loadPrEvents(number: string, dataset: "live" | "eval" = "live"): Promise<IssueEvent[]> {
+  if (!/^[1-9][0-9]{0,9}$/.test(number)) throw new Error("Invalid PR number");
+  if (dataSource === "mock") return [];
+  const pr = `https://github.com/BoundaryML/baml/pull/${number}`;
+  return rest<IssueEvent[]>(
+    `events?select=id,kind,payload,slack_ts,created_at&payload->>pr=eq.${encodeURIComponent(pr)}&dataset=eq.${dataset}&order=created_at,id`,
   );
 }

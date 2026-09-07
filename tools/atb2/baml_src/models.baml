@@ -115,7 +115,23 @@ class Shipped {
     date: string,
 }
 
-type IssueStatus = Open | InProgress | Rejected | Deferred | Merged | Shipped;
+class AwaitingApproval {
+    state: "awaiting_approval",
+}
+
+class Approved {
+    state: "approved",
+    by: string,
+}
+
+type IssueStatus = AwaitingApproval
+    | Approved
+    | Open
+    | InProgress
+    | Rejected
+    | Deferred
+    | Merged
+    | Shipped;
 
 class Issue {
     id: string,
@@ -139,4 +155,7 @@ class Issue {
     /// Hard issues only: suggested fix + design doc for the shepherd to hand
     /// to their own agent. Null until handle_issue runs the Hard path.
     design_doc: string?,
+    /// The bot message to react to, bound to its Slack channel.
+    slack_ts: string?,
+    slack_channel: string?,
 }
