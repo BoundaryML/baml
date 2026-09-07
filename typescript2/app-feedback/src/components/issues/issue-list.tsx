@@ -16,6 +16,8 @@ type ViewMode = "list" | "board";
 const STATUS_OPTIONS: { value: StatusState | "all"; label: string }[] = [
   { value: "all", label: "All" },
   { value: "open", label: "Open" },
+  { value: "awaiting_approval", label: "Awaiting approval" },
+  { value: "approved", label: "Approved" },
   { value: "in_progress", label: "In progress" },
   { value: "merged", label: "Merged" },
   { value: "shipped", label: "Shipped" },
@@ -28,6 +30,8 @@ const DIFFICULTIES: Difficulty[] = ["Trivial", "Easy", "Medium", "Hard"];
 
 const BOARD_COLUMNS: { state: StatusState; label: string; color: string }[] = [
   { state: "open", label: "Open", color: "bg-blue-500" },
+  { state: "awaiting_approval", label: "Awaiting approval", color: "bg-orange-600" },
+  { state: "approved", label: "Approved", color: "bg-teal-600" },
   { state: "in_progress", label: "In progress", color: "bg-amber-500" },
   { state: "merged", label: "Merged", color: "bg-purple-500" },
   { state: "shipped", label: "Shipped", color: "bg-green-600" },

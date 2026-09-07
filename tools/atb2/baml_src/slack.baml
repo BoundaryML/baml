@@ -120,11 +120,25 @@ function slack_post(text: string, thread: SlackRef?) -> SlackRef {
 /// notification for an issue opens its thread; later ones reply in it.
 /// Always logs the event, Slack or not.
 function notify(kind: string, issue: Issue, text: string, payload: json) -> null {
-    let posted = if (slack_configured()) {
-        let thread = issue_thread(issue.id);
-        slack_post(text, thread)
+    let thread = if (slack_configured()) {
+        issue_thread(issue.id) ?? feedback_thread(issue)
     } else {
         null
+    };
+    let posted = if (slack_configured()) {
+        slack_post(text, thread) catch (_) {
+            SlackError => null
+        }
+    } else {
+        null
+    };
+    if (kind == "issue_created" && posted != null && db_configured()) {
+        let anchor = posted ?? baml.sys.panic("checked post");
+        update(
+            "issues",
+            "id=" + eq(issue.id) + "&state=eq.awaiting_approval&dataset=" + eq(dataset()),
+            { "slack_ts": anchor.ts, "slack_channel": anchor.channel }.to_json(),
+        );
     };
     log_event(
         kind,
@@ -137,7 +151,7 @@ function notify(kind: string, issue: Issue, text: string, payload: json) -> null
         },
         match (posted) {
             null => null,
-            let p: SlackRef => p.ts,
+            let p: SlackRef => (thread ?? p).ts,
         },
     );
     log.info({ "issue": issue.id, "notified": kind, "slack": posted != null });
@@ -154,7 +168,7 @@ function issue_link(issue: Issue) -> string {
 
 function issue_created_text(issue: Issue) -> string {
     let n = issue.feedback_ids.length();
-    ":new: *"
+    "ISSUE: *"
         + issue.title
         + "*\n"
         + issue_link(issue)
@@ -181,7 +195,13 @@ function issue_created_text(issue: Issue) -> string {
         + (
             match (issue.shepherd) {
                 null => "",
-                let s: string => " · shepherd " + s,
+                let s: string => {
+                    " · shepherd: "
+                        + match (shepherd_slack_id(issue.shepherd)) {
+                            null => s,
+                            let user: string => "<@" + user + ">",
+                        }
+                },
             }
         )
         + (
@@ -190,10 +210,11 @@ function issue_created_text(issue: Issue) -> string {
                 let d: Difficulty => " · " + d.to_string(),
             }
         )
+        + "\nReact :white_check_mark: or :+1: to this message to approve the fix."
 }
 
 function pr_opened_text(issue: Issue, o: HandleOutcome) -> string {
-    ":rocket: draft PR opened for *"
+    ":rocket: PR opened for *"
         + issue.title
         + "*\n"
         + (o.pr ?? "(no url)")
@@ -255,22 +276,6 @@ function needs_human_text(issue: Issue, o: HandleOutcome) -> string {
 
 function merged_text(issue: Issue, pr: string) -> string {
     ":white_check_mark: merged *" + issue.title + "*\n" + pr
-}
-
-function merge_round_text(issue: Issue, pr: string, round: int, kind: string) -> string {
-    (
-        if (kind == "fixed") {
-            ":arrows_counterclockwise: "
-        } else {
-            ":warning: "
-        }
-    )
-        + "review round "
-        + round.to_string()
-        + " on "
-        + pr
-        + ": "
-        + kind
 }
 
 function failed_steps(g: GateResult) -> string {
@@ -649,5 +654,328 @@ testset "slack" {
             true,
         );
         assert.equal(pr_url_in("hello") == null, true);
+    }
+}
+
+// ==================== Signed HTTP intake ====================
+
+function hmac_sha256_hex(key: string, message: string) -> string {
+    let block = 64;
+    let key_bytes = key.to_utf8();
+    let k = if (key_bytes.length() > block) {
+        let h = baml.crypto.Sha256.new();
+        h.update(key_bytes);
+        h.finish()
+    } else {
+        key_bytes
+    };
+    let ipad = uint8array.zeroes(0) catch_all (e) {
+        _ => baml.sys.panic("zeroes")
+    };
+    let opad = uint8array.zeroes(0) catch_all (e) {
+        _ => baml.sys.panic("zeroes")
+    };
+    for (let i = 0; i < block; i += 1) {
+        let b = k.at(i) ?? 0;
+        ipad.push(b ^ 54);
+        opad.push(b ^ 92);
+    }
+    let inner = baml.crypto.Sha256.new();
+    inner.update(ipad);
+    inner.update(message.to_utf8());
+    let outer = baml.crypto.Sha256.new();
+    outer.update(opad);
+    outer.update(inner.finish());
+    outer.finish().to_hex()
+}
+
+/// Header names are case insensitive. Reject ambiguous duplicates.
+function slack_header(req: baml.http.Request, name: string) -> string? {
+    let found: string? = null;
+    for (let key in req.headers.keys()) {
+        if (key.to_lower_case() == name) {
+            if (found != null) {
+                return null;
+            };
+            found = req.headers.get(key);
+        };
+    }
+    found
+}
+
+/// Raw-body HMAC with Slack's five-minute replay window. No early exit
+/// based on the matching prefix of the signature.
+function slack_signature_ok(req: baml.http.Request, secret: string, now: bigint) -> bool {
+    let ts = slack_header(req, "x-slack-request-timestamp") ?? "";
+    let sig = slack_header(req, "x-slack-signature") ?? "";
+    if (secret.length() == 0 || ts.length() == 0 || ts.length() > 16 || sig.length() != 67) {
+        return false;
+    };
+    let timestamp = bigint.parse(ts) catch (_) {
+        _ => {
+            return false;
+        }
+    };
+    if ((now - timestamp).abs() > 300n) {
+        return false;
+    };
+    let expected = ("v0=" + hmac_sha256_hex(secret, "v0:" + ts + ":" + req.body)).to_utf8();
+    let actual = sig.to_utf8();
+    if (actual.length() != expected.length()) {
+        return false;
+    };
+    let diff = 0;
+    for (let i = 0; i < expected.length(); i += 1) {
+        diff = diff | ((expected.at(i) ?? 0) ^ (actual.at(i) ?? 0));
+    }
+    diff == 0
+}
+
+class MentionRoute {
+    kind: string,
+    text: string,
+    pr: string?,
+}
+
+function parse_mention(raw: string) -> MentionRoute {
+    let text = raw.trim();
+    if (text.starts_with("<@")) {
+        let end = text.index_of(">");
+        if (end != null) {
+            text = text.slice((end ?? 0) + 1, text.length()).trim();
+        };
+    };
+    let command = (text.split(" ").at(0) ?? "").to_lower_case();
+    if (command == "babysit") {
+        return MentionRoute { kind: "babysit", text: text, pr: pr_url_in(text) };
+    };
+    let shirt = text.to_lower_case().split(" ").some((word: string) -> bool {
+        let clean = trim_punct(word);
+        clean == "shirt" || clean == "tshirt" || clean == "t-shirt"
+    });
+    MentionRoute {
+        kind: if (shirt) {
+            "shirt"
+        } else {
+            "feedback"
+        },
+        text: text,
+        pr: null,
+    }
+}
+
+// ==================== Shepherd approval ====================
+
+function shepherd_id_in(login: string?, config: string) -> string? {
+    if (login == null) {
+        return null;
+    };
+    let found: string? = null;
+    for (let entry in config.split(",")) {
+        let pair = entry.trim().split(":");
+        if (
+            pair.length() == 2
+                && (pair.at(0) ?? "").trim().to_lower_case() == (login ?? "").to_lower_case()
+        ) {
+            let user = (pair.at(1) ?? "").trim();
+            if (found != null || !slack_id(user) || !(user.starts_with("U") || user.starts_with("W"))) {
+                return null;
+            };
+            found = user;
+        };
+    }
+    found
+}
+
+function shepherd_slack_id(login: string?) -> string? {
+    shepherd_id_in(login, baml.env.get("ATB2_SHEPHERDS") ?? "")
+}
+
+/// Reply under the original feedback thread. The approval anchor itself is
+/// the bot's distinct message, so two issues in a thread cannot approve each other.
+function feedback_thread(issue: Issue) -> SlackRef? {
+    if (!db_configured()) {
+        return null;
+    };
+    for (let id in issue.feedback_ids) {
+        let rows = select("feedback", "select=origin&id=" + eq(id) + "&dataset=" + eq(dataset()) + "&limit=1");
+        let row = rows.at(0) ?? baml.json.parse("{}");
+        let channel = baml.json.path_or<string>(row, ".origin.channel", "");
+        let ts = baml.json.path_or<string>(row, ".origin.ts", "");
+        if (slack_id(channel) && slack_ts(ts)) {
+            return SlackRef { channel: channel, ts: ts };
+        };
+    }
+    null
+}
+
+class ApprovalReaction {
+    user: string,
+    channel: string,
+    ts: string,
+}
+
+function approval_reaction(event: json) -> ApprovalReaction? {
+    if (
+        baml.json.path_or<string>(event, ".type", "") != "reaction_added"
+            || baml.json.path_or<string>(event, ".item.type", "") != "message"
+    ) {
+        return null;
+    };
+    let emoji = baml.json.path_or<string>(event, ".reaction", "");
+    if (emoji != "white_check_mark" && emoji != "+1") {
+        return null;
+    };
+    let user = baml.json.path_or<string>(event, ".user", "");
+    let channel = baml.json.path_or<string>(event, ".item.channel", "");
+    let ts = baml.json.path_or<string>(event, ".item.ts", "");
+    if (!slack_id(user) || !slack_id(channel) || !slack_ts(ts)) {
+        return null;
+    };
+    ApprovalReaction { user: user, channel: channel, ts: ts }
+}
+
+function can_approve(issue: Issue, reaction: ApprovalReaction, mapping: string) -> bool {
+    let awaiting = match (issue.status) {
+        let s: AwaitingApproval => true,
+        _ => false,
+    };
+    awaiting
+        && issue.slack_ts == reaction.ts
+        && issue.slack_channel == reaction.channel
+        && shepherd_id_in(issue.shepherd, mapping) == reaction.user
+}
+
+function accept_approval(event: json) -> null {
+    let parsed = approval_reaction(event);
+    if (parsed == null) {
+        return null;
+    };
+    if (!db_configured()) {
+        throw IntakeError { message: "approval needs the store" };
+    };
+    let r = parsed ?? baml.sys.panic("checked reaction");
+    let filter = "state=eq.awaiting_approval&slack_ts="
+        + eq(r.ts)
+        + "&slack_channel="
+        + eq(r.channel)
+        + "&dataset="
+        + eq(dataset());
+    let rows = rows_of(supabase_send("GET", "issues?select=*&" + filter + "&limit=2", "", "", timeout_s = 1));
+    // Ambiguous anchors fail closed.
+    if (rows.length() != 1) {
+        return null;
+    };
+    let issue = issue_from_row(rows.at(0) ?? baml.json.parse("{}"));
+    if (!can_approve(issue, r, baml.env.get("ATB2_SHEPHERDS") ?? "")) {
+        return null;
+    };
+    let status = Approved { state: "approved", by: r.user };
+    let saved = rows_of(
+        supabase_send(
+            "PATCH",
+            "issues?" + filter + "&id=" + eq(issue.id) + "&shepherd=" + eq(issue.shepherd ?? ""),
+            baml.json.stringify({ "status": status }.to_json()),
+            "return=representation",
+            timeout_s = 1,
+        ),
+    );
+    if (saved.length() > 0) {
+        spawn {
+            notify(
+                "approved",
+                issue_from_row(saved.at(0) ?? baml.json.parse("{}")),
+                "Shepherd <@" + r.user + "> approved issue; queued for the next fix pass.",
+                status.to_json(),
+            ) catch_all (_) {
+                _ => {
+                    log.warn({ "approval": "narration failed; approval is stored" });
+                    null
+                },
+            };
+        };
+    };
+    null
+}
+
+function approval_fixture() -> Issue {
+    let row = baml.json.from_json<map<string, json>>(
+        issue_row(with_status(gh_issue(1, Difficulty.Easy), AwaitingApproval { state: "awaiting_approval" })),
+    );
+    row.set("shepherd", "owner".to_json());
+    row.set("slack_ts", "123.4".to_json());
+    row.set("slack_channel", "C1".to_json());
+    issue_from_row(row.to_json())
+}
+
+testset "approval" {
+    test "only the assigned shepherd can approve the exact message in its channel" {
+        let issue = approval_fixture();
+        let right = ApprovalReaction { user: "U1", channel: "C1", ts: "123.4" };
+        assert.equal(can_approve(issue, right, "owner:U1"), true);
+        assert.equal(can_approve(issue, right, "owner:U2"), false);
+        assert.equal(can_approve(issue, right, ""), false);
+        assert.equal(
+            can_approve(issue, ApprovalReaction { user: "U1", channel: "C2", ts: "123.4" }, "owner:U1"),
+            false,
+        );
+        assert.equal(
+            can_approve(issue, ApprovalReaction { user: "U1", channel: "C1", ts: "123.0" }, "owner:U1"),
+            false,
+        );
+        assert.equal(
+            can_approve(with_status(issue, Approved { state: "approved", by: "U1" }), right, "owner:U1"),
+            false,
+        );
+    }
+    test "mapping is explicit and ambiguous duplicate mappings are refused" {
+        assert.equal(shepherd_id_in("OWNER", "other:U2, owner:U1") ?? "", "U1");
+        assert.equal(shepherd_id_in("owner", "owner:U1,owner:U2") == null, true);
+        assert.equal(shepherd_id_in("owner", "owner:bad") == null, true);
+        assert.equal(shepherd_id_in(null, "owner:U1") == null, true);
+    }
+    test "only approval emoji on a message becomes an approval" {
+        let r = approval_reaction(
+            baml.json.parse(
+                `{"type":"reaction_added","reaction":"white_check_mark","user":"U1","item":{"type":"message","channel":"C1","ts":"123.4"}}`,
+            ),
+        );
+        assert.equal(r == null, false);
+        assert.equal(
+            approval_reaction(
+                baml.json.parse(
+                    `{"type":"reaction_added","reaction":"heart","user":"U1","item":{"type":"message","channel":"C1","ts":"123.4"}}`,
+                ),
+            )
+                == null,
+            true,
+        );
+        assert.equal(
+            approval_reaction(
+                baml.json.parse(
+                    `{"type":"reaction_removed","reaction":"+1","user":"U1","item":{"type":"message","channel":"C1","ts":"123.4"}}`,
+                ),
+            )
+                == null,
+            true,
+        );
+    }
+    test "automatic handling refuses open and awaiting issues" {
+        let pending = approval_fixture();
+        assert.equal(issue_approved(pending), false);
+        assert.equal(handle_one(pending, HandleMode.DryRun) == null, true);
+        assert.equal(
+            handle_one(with_status(pending, Open { state: "open" }), HandleMode.DryRun) == null,
+            true,
+        );
+        let approved = with_status(pending, Approved { state: "approved", by: "U1" });
+        assert.equal(issue_approved(approved), true);
+        assert.equal(handle_ready(approved, false) == null, true);
+        assert.equal(issue_from_row(issue_row(approved)).slack_ts ?? "", "123.4");
+        assert.equal(issue_from_row(issue_row(approved)).slack_channel ?? "", "C1");
+        assert.equal(
+            with_status(approved, AwaitingApproval { state: "awaiting_approval" }).slack_ts == null,
+            true,
+        );
     }
 }

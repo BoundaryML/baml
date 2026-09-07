@@ -37,6 +37,8 @@ function create_issue(fb: Feedback) -> Issue? {
         resolution_plan: draft.resolution_plan,
         difficulty: null,
         design_doc: null,
+        slack_ts: null,
+        slack_channel: null,
     }
 }
 
@@ -644,6 +646,8 @@ function reference_as_issue(number: int, r: ReferenceIssue) -> Issue {
         resolution_plan: r.resolution_plan,
         difficulty: null,
         design_doc: null,
+        slack_ts: null,
+        slack_channel: null,
     }
 }
 

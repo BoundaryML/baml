@@ -4,9 +4,9 @@
 //            channel) -> feedback rows
 //   triage   each new report -> create_issue -> organize_issue -> gauge_issue
 //            -> an issues row, and a Slack thread opened for it
-//   handle   every open, gauged issue -> handle_issue -> a runs row; the
+//   handle   every approved, gauged issue -> handle_issue -> a runs row; the
 //            thread hears about the PR, or that a human is needed
-//   merge    every in-progress issue with a PR -> merge_issue -> merged
+//   merge    reconcile issue PRs with the shared merge_issue babysitter queue
 //
 //   cd tools/atb2 && baml run -e 'run_pipeline()'
 //   baml run -e 'run_pipeline(mode = HandleMode.DryRun, stages = "ingest,triage")'
@@ -56,7 +56,13 @@ function run_pipeline(
     // the later stages of this same run
     let created: Issue[] = [];
     if (want.includes("triage")) {
-        for (let fb in fresh) {
+        for (
+            let fb in if (db_configured()) {
+                untriaged_feedback()
+            } else {
+                fresh
+            }
+        ) {
             match (triage_feedback(fb)) {
                 null => report.skipped.push(fb.id + ": no issue (fixed on this toolchain)"),
                 let i: Issue => {
@@ -67,11 +73,14 @@ function run_pipeline(
             };
         }
     };
-    //# handle: open, gauged issues -> handle_issue -> runs row
+    if (want.includes("triage") && db_configured()) {
+        announce_approvals();
+    };
+    //# handle: approved, gauged issues -> handle_issue -> runs row
     let handled: Issue[] = [];
     if (want.includes("handle")) {
         let open = if (db_configured()) {
-            load_issues_in("open")
+            load_issues_in("approved")
         } else {
             created
         };
@@ -278,6 +287,47 @@ function origin_of(fb: Feedback) -> json {
     }
 }
 
+/// Includes durable Slack events and reports ingested in earlier runs. Scan
+/// past no_issue rows so they cannot starve newer reports at the head of a page.
+function untriaged_feedback() -> Feedback[] {
+    let pending: Feedback[] = [];
+    let offset = 0;
+    while (pending.length() < 50) {
+        let rows = select(
+            "feedback",
+            "select=*&issue_ids=eq.%7B%7D&dataset="
+                + eq(dataset())
+                + "&order=created_at,id&limit=100&offset="
+                + offset.to_string(),
+        );
+        for (let row in rows) {
+            let id = baml.json.path_or<string>(row, ".id", "");
+            if (
+                select(
+                    "events",
+                    "select=id&feedback_id="
+                        + eq(id)
+                        + "&kind=eq.no_issue&dataset="
+                        + eq(dataset())
+                        + "&limit=1",
+                )
+                    .length()
+                    == 0
+            ) {
+                pending.push(feedback_from_row(row));
+                if (pending.length() >= 50) {
+                    return pending;
+                };
+            };
+        }
+        if (rows.length() < 100) {
+            return pending;
+        };
+        offset += 100;
+    }
+    pending
+}
+
 // ==================== triage ====================
 
 /// One report through triage. Null when the repro is already fixed on this
@@ -292,10 +342,16 @@ function triage_feedback(fb: Feedback) -> Issue? {
         },
         let issue: Issue => {
             //# organize + gauge
-            let gauged = gauge_issue(organize_issue(issue));
+            let gauged = with_status(gauge_issue(organize_issue(issue)), AwaitingApproval { state: "awaiting_approval" });
             save_issue(gauged);
             //# link the report to its issue
-            save_feedback(with_issue(fb, gauged.id), origin_of(fb));
+            if (db_configured()) {
+                update(
+                    "feedback",
+                    "id=" + eq(fb.id) + "&dataset=" + eq(dataset()),
+                    { "issue_ids": with_issue(fb, gauged.id).issue_ids }.to_json(),
+                );
+            };
             //# open the issue's thread
             notify("issue_created", gauged, issue_created_text(gauged), { "feedback": fb.id }.to_json());
             gauged
@@ -326,6 +382,22 @@ function with_issue(fb: Feedback, issue_id: string) -> Feedback {
 /// handle_issue for one issue, its outcome saved and told. Null when
 /// handle_issue did not run (not ready, already fixed).
 function handle_one(issue: Issue, mode: HandleMode) -> HandleOutcome? {
+    if (!issue_approved(issue) || handle_ready(issue, false) != null) {
+        return null;
+    };
+    match (issue.status) {
+        let approved: Approved => {
+            if (approved.by.starts_with("github:")) {
+                notify(
+                    "approved",
+                    issue,
+                    "Shepherd @" + (issue.shepherd ?? "") + " approved issue on the website.",
+                    approved.to_json(),
+                );
+            };
+        },
+        _ => null,
+    };
     //# a stale outcome.json from an earlier run must not be read as this run's
     let stale = run_dir_for(branch_for(issue)) + "/outcome.json";
     if (baml.fs.exists(stale)) {
@@ -333,6 +405,12 @@ function handle_one(issue: Issue, mode: HandleMode) -> HandleOutcome? {
             _ => null,
         };
     };
+    notify(
+        "fix_started",
+        issue,
+        "Creating a fix for *" + issue.title + "*; preparing the PR.",
+        baml.json.parse("{}"),
+    );
     let after = handle_issue(issue, mode = mode, thread = issue_thread(issue.id));
     let o = read_outcome(issue);
     match (o) {
@@ -369,28 +447,6 @@ function tell_outcome(issue: Issue, o: HandleOutcome, mode: HandleMode) -> null 
 
 // ==================== merge ====================
 
-/// merge_issue for one in-progress issue. Null when it has no PR.
-function merge_one(issue: Issue, mode: HandleMode) -> MergeResult? {
-    let pr = match (issue.status) {
-        let s: InProgress => s.pr,
-        _ => null,
-    };
-    match (pr) {
-        null => null,
-        let url: string => {
-            let r = merge_issue(url, mode = mode, issue_id = issue.id);
-            if (r.kind == "merged") {
-                let merged = with_status(issue, Merged { state: "merged", pr: url });
-                save_issue(merged);
-                notify("merged", merged, merged_text(merged, url), r.to_json());
-            } else {
-                log_event("merge_issue", issue.id, null, r.to_json(), null, null);
-            };
-            r
-        },
-    }
-}
-
 // ==================== Unit tests (token-free) ====================
 
 testset "pipeline" {
@@ -425,5 +481,56 @@ testset "pipeline" {
             assert.equal(r.merged, 0);
             assert.equal(r.ingested, 0);
         };
+    }
+}
+
+/// This gate controls automatic issue implementation. Babysitter review
+/// rounds have their own per-proposal approval gate.
+function issue_approved(issue: Issue) -> bool {
+    match (issue.status) {
+        let s: Approved => {
+            slack_id(s.by)
+                || (
+                    issue.shepherd != null
+                        && s.by.to_lower_case()
+                            == "github:" + (issue.shepherd ?? "").to_lower_case()
+                )
+        },
+        _ => false,
+    }
+}
+
+/// Reannounce pending issues after a Slack outage; also bring pre-gate open
+/// issues into the approval workflow. A missing shepherd mapping stays blocked.
+function announce_approvals() -> null {
+    for (let i in load_issues_in("open")) {
+        save_issue(with_status(i, AwaitingApproval { state: "awaiting_approval" }));
+    }
+    for (let i in load_issues_in("awaiting_approval")) {
+        if (i.slack_ts == null && shepherd_slack_id(i.shepherd) != null) {
+            notify("issue_created", i, issue_created_text(i), { "approval": "requested" }.to_json());
+        };
+    }
+    null
+}
+
+function merge_one(issue: Issue, mode: HandleMode) -> MergeResult? {
+    let pr = match (issue.status) {
+        let s: InProgress => s.pr,
+        _ => null,
+    };
+    match (pr) {
+        null => null,
+        let url: string => {
+            let r = merge_issue(url, mode = mode, issue_id = issue.id);
+            if (r.kind == "merged") {
+                let merged = with_status(issue, Merged { state: "merged", pr: url });
+                save_issue(merged);
+                notify("merged", merged, merged_text(merged, url), r.to_json());
+            } else {
+                log_event("merge_issue", issue.id, null, r.to_json(), null, null);
+            };
+            r
+        },
     }
 }

@@ -16,7 +16,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.562.0",
-    "next": "15",
+    "next": "15.5.25",
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "tailwind-merge": "^3.4.0",
@@ -28,7 +28,11 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15",
+    "eslint-config-next": "15.5.25",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": "8.5.28",
+    "nanoid": "3.3.18"
   }
 }

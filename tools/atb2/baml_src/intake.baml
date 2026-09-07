@@ -6,7 +6,7 @@
 //   PostHog   `baml feedback` posts a `baml_feedback` event; posthog_feedback
 //             turns new events into Feedback (run_pipeline's ingest stage)
 //   Slack     @bammy mentions and reactions arrive at the HTTP server here
-//             (next PR): babysit <PR> -> merge_issue, a report -> triage,
+//             babysit <PR> -> the approval queue, a report -> triage,
 //             a reaction -> approval
 //   by hand   `baml run -e 'request_merge("<PR url>")'`, `run_pipeline()`
 //
@@ -257,5 +257,342 @@ testset "intake" {
         assert.equal(slack_feedback(null).ran, false);
         assert.equal(slack_feedback(null).feedback.length(), 0);
         assert.equal(slack_feedback(null).resume == null, true);
+    }
+}
+
+// ==================== Slack Events HTTP server ====================
+
+/// One process owns the HTTP listener, pipeline and merge queue.
+function main_ingress(
+    port: int = 8080,
+    every_s: int = 300,
+    mode: HandleMode = HandleMode.Live,
+) -> never {
+    spawn { runner_loop(every_s = every_s, mode = mode) };
+    serve_slack(port = port)
+}
+
+/// Also callable alone for local HTTP verification, without starting agents.
+function serve_slack(port: int = 8080) -> never {
+    let server = baml.http.Server.bind("0.0.0.0:" + port.to_string()) catch (_) {
+        _ => baml.sys.panic("cannot bind Slack listener"),
+    };
+    server.serve(
+        slack_http,
+        max_body_size = 131072,
+        max_connections = 64,
+        header_read_timeout = baml.time.Duration.from_seconds(5),
+    ) catch (_) {
+        _ => baml.sys.panic("Slack listener stopped"),
+    }
+}
+
+function intake_response(status: int, body: json) -> baml.http.Response {
+    baml.http.Response.new(
+        status,
+        { "content-type": "application/json" },
+        baml.json.stringify(body).to_utf8(),
+    )
+}
+
+function slack_http(req: baml.http.Request) -> baml.http.Response throws never {
+    slack_http_inner(req) catch_all (_) {
+        _ => baml.http.Response.new(503, { "content-type": "application/json" }, "{}".to_utf8()),
+    }
+}
+
+function slack_http_inner(req: baml.http.Request) -> baml.http.Response {
+    let path = req.url.split("?").at(0) ?? req.url;
+    if (path == "/health" && req.method == "GET") {
+        return intake_response(200, { "ok": true }.to_json());
+    };
+    if (path != "/slack/events") {
+        return intake_response(404, baml.json.parse("{}"));
+    };
+    if (req.method != "POST") {
+        return intake_response(405, baml.json.parse("{}"));
+    };
+    slack_events(
+        req,
+        baml.env.get("ATB2_SLACK_SIGNING_SECRET") ?? baml.env.get("ATB_SLACK_SIGNING_SECRET") ?? "",
+        baml.time.Instant.now().to_timestamp_seconds(),
+    )
+}
+
+function slack_events(req: baml.http.Request, secret: string, now: bigint) -> baml.http.Response {
+    if (req.body.to_utf8().length() > 131072) {
+        return intake_response(413, baml.json.parse("{}"));
+    };
+    if (!slack_signature_ok(req, secret, now)) {
+        return intake_response(403, baml.json.parse("{}"));
+    };
+    let envelope = baml.json.parse(req.body) catch (_) {
+        _ => {
+            return intake_response(400, baml.json.parse("{}"));
+        },
+    };
+    let kind = baml.json.path_or<string>(envelope, ".type", "");
+    if (kind == "url_verification") {
+        let challenge = baml.json.path_or<string?>(envelope, ".challenge", null);
+        if (challenge == null) {
+            return intake_response(400, baml.json.parse("{}"));
+        };
+        return intake_response(200, { "challenge": challenge }.to_json());
+    };
+    if (kind != "event_callback") {
+        return intake_response(200, baml.json.parse("{}"));
+    };
+    let event = baml.json.path_or<json>(envelope, ".event", baml.json.parse("{}"));
+    if (baml.json.path_or<string>(event, ".type", "") == "reaction_added") {
+        accept_approval(event);
+        return intake_response(200, baml.json.parse("{}"));
+    };
+    if (baml.json.path_or<string>(event, ".type", "") != "app_mention") {
+        return intake_response(200, baml.json.parse("{}"));
+    };
+    let mention = slack_mention(envelope);
+    if (mention == null) {
+        return intake_response(200, baml.json.parse("{}"));
+    };
+    let m = mention ?? baml.sys.panic("checked mention");
+    // Save before ACK: a failed insert returns 503 so Slack retries. The
+    // single insert has a two-second timeout; Slack replies run after ACK.
+    let inserted = persist_mention(m);
+    if (inserted) {
+        spawn {
+            slack_post(mention_ack(m), m.thread) catch_all (_) {
+                _ => {
+                    log.warn({ "slack": "intake acknowledgement failed" });
+                    null
+                },
+            };
+        };
+    };
+    intake_response(200, baml.json.parse("{}"))
+}
+
+class SlackMention {
+    event_id: string,
+    team: string,
+    user: string,
+    ts: string,
+    thread: SlackRef,
+    route: MentionRoute,
+}
+
+function slack_id(s: string) -> bool {
+    s.length() > 0
+        && s.length() <= 80
+        && s.chars().every((c: string) -> bool {
+            (c >= "A" && c <= "Z") || (c >= "a" && c <= "z") || (c >= "0" && c <= "9")
+        })
+}
+
+function slack_ts(s: string) -> bool {
+    s.length() > 0
+        && s.length() <= 32
+        && s.chars().every((c: string) -> bool {
+            (c >= "0" && c <= "9") || c == "."
+        })
+}
+
+function slack_mention(envelope: json) -> SlackMention? {
+    let event = baml.json.path_or<json>(envelope, ".event", baml.json.parse("{}"));
+    if (
+        baml.json.path_or<string?>(event, ".bot_id", null) != null
+            || baml.json.path_or<string?>(event, ".subtype", null) != null
+    ) {
+        return null;
+    };
+    let event_id = baml.json.path_or<string>(envelope, ".event_id", "");
+    let team = baml.json.path_or<string>(envelope, ".team_id", "");
+    let channel = baml.json.path_or<string>(event, ".channel", "");
+    let user = baml.json.path_or<string>(event, ".user", "");
+    let ts = baml.json.path_or<string>(event, ".ts", "");
+    let anchor = baml.json.path_or<string>(event, ".thread_ts", ts);
+    if (
+        !slack_id(event_id)
+            || !slack_id(team)
+            || !slack_id(channel)
+            || !slack_id(user)
+            || !slack_ts(ts)
+            || !slack_ts(anchor)
+    ) {
+        return null;
+    };
+    let route = parse_mention(baml.json.path_or<string>(event, ".text", ""));
+    if (route.text.length() == 0) {
+        return null;
+    };
+    SlackMention {
+        event_id: event_id,
+        team: team,
+        user: user,
+        ts: ts,
+        thread: SlackRef { channel: channel, ts: anchor },
+        route: route,
+    }
+}
+
+function mention_feedback(m: SlackMention) -> Feedback {
+    Feedback {
+        id: "SL-" + m.team + "-" + m.thread.channel + "-" + m.ts.replace_all(".", "-"),
+        title: first_line(m.route.text, 120),
+        body: m.route.text,
+        source: FeedbackSource.Slack,
+        author: Author { email: null, github: null, device_id: "slack:" + m.user },
+        toolchain: toolchain_mentioned(m.route.text),
+        files: {},
+        comments: [],
+        issue_ids: [],
+    }
+}
+
+function persist_mention(m: SlackMention) -> bool {
+    if (!db_configured()) {
+        throw IntakeError { message: "Slack intake needs the store" };
+    };
+    let table = "";
+    let row: map<string, json> = {};
+    if (m.route.kind == "babysit" && m.route.pr != null) {
+        // Both intake paths share the same request ownership. The worker also
+        // coalesces races before it starts a proposal or implementation.
+        table = "babysit_requests";
+        row
+            = {
+                "pr": m.route.pr.to_json(),
+                "channel": m.thread.channel.to_json(),
+                "thread_ts": m.thread.ts.to_json(),
+                "requested_by": m.user.to_json(),
+                "kind": "babysit".to_json(),
+                "dataset": dataset().to_json(),
+            };
+    } else if (m.route.kind == "feedback") {
+        table = "feedback";
+        let fb = mention_feedback(m);
+        guard_dataset(fb.id);
+        row
+            = baml.json.from_json<map<string, json>>(
+                feedback_row(fb, { "kind": "slack", "channel": m.thread.channel, "ts": m.thread.ts }.to_json()),
+            );
+        row.set("slack_thread_ts", m.thread.ts.to_json());
+    } else {
+        // Informational replies create no queue work.
+        return true;
+    };
+    row.set("slack_event_id", m.event_id.to_json());
+    let text = supabase_send(
+        "POST",
+        table + "?on_conflict=slack_event_id",
+        baml.json.stringify([row]),
+        "resolution=ignore-duplicates,return=representation",
+        timeout_s = 2,
+    );
+    rows_of(text).length() > 0
+}
+
+function mention_ack(m: SlackMention) -> string {
+    if (m.route.kind == "shirt") {
+        return "Shirt codes are coming soon.";
+    };
+    if (m.route.kind == "babysit") {
+        if (m.route.pr == null) {
+            return "Use babysit followed by a GitHub PR URL.";
+        };
+        return "Queued this PR for babysitting.";
+    };
+    "Logged as feedback: " + mention_feedback(m).id + ". Triage will follow in this thread."
+}
+
+function signed_slack_request(
+    body: string,
+    timestamp: string,
+    secret: string,
+) -> baml.http.Request {
+    baml.http.Request {
+        method: "POST",
+        url: "/slack/events",
+        headers: {
+            "X-Slack-Request-Timestamp": timestamp,
+            "X-Slack-Signature": "v0=" + hmac_sha256_hex(secret, "v0:" + timestamp + ":" + body),
+        },
+        body: body,
+    }
+}
+
+testset "slack_http" {
+    test "HMAC SHA256 matches standard vectors including a long key" {
+        assert.equal(
+            hmac_sha256_hex("key", "The quick brown fox jumps over the lazy dog"),
+            "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8",
+        );
+        assert.equal(
+            hmac_sha256_hex("", ""),
+            "b613679a0814d9ec772f95d778c35fc5ff1697c493715653c6c712144292c5ad",
+        );
+    }
+    test "HMAC hashes keys longer than its block" {
+        assert.equal(
+            hmac_sha256_hex(
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "test",
+            ),
+            "1228d938c9fd0321973d610248b62e03d404697ee5cb7196ac17d7fd18c610ca",
+        );
+    }
+    test "signature covers raw bytes and rejects stale or future replays" {
+        let req = signed_slack_request("{}", "1000", "test-secret");
+        assert.equal(slack_signature_ok(req, "test-secret", 1000n), true);
+        assert.equal(slack_signature_ok(req, "test-secret", 1301n), false);
+        assert.equal(slack_signature_ok(req, "test-secret", 699n), false);
+        assert.equal(slack_signature_ok(req, "wrong", 1000n), false);
+        assert.equal(slack_signature_ok(req, "", 1000n), false);
+        let changed = baml.http.Request { method: req.method, url: req.url, headers: req.headers, body: "{ }" };
+        assert.equal(slack_signature_ok(changed, "test-secret", 1000n), false);
+    }
+    test "signed challenge is JSON escaped and does not touch the store" {
+        let body = `{"type":"url_verification","challenge":"a\\\"b"}`;
+        let out = slack_events(signed_slack_request(body, "1000", "secret"), "secret", 1000n);
+        assert.equal(out.status_code, 200);
+        assert.equal(
+            baml.json.path_or<string>(baml.json.parse(out.text()), ".challenge", ""),
+            "a\"b",
+        );
+        assert.equal(
+            slack_events(signed_slack_request("broken", "1000", "secret"), "secret", 1000n).status_code,
+            400,
+        );
+    }
+    test "mention commands are anchored and links may be Slack wrapped" {
+        assert.equal(
+            parse_mention("<@U1> babysit <https://github.com/BoundaryML/baml/pull/42|PR>").pr ?? "",
+            "https://github.com/BoundaryML/baml/pull/42",
+        );
+        assert.equal(parse_mention("a babysit bug").kind, "feedback");
+        assert.equal(parse_mention("get me a tshirt").kind, "shirt");
+        assert.equal(parse_mention("shirtless function").kind, "feedback");
+    }
+    test "retry identity and original thread are preserved" {
+        let m = slack_mention(
+            baml.json.parse(
+                `{"event_id":"Ev1","team_id":"T1","event":{"type":"app_mention","channel":"C1","user":"U1","ts":"123.4","thread_ts":"123.0","text":"<@BOT> parser broke"}}`,
+            ),
+        )
+            ?? baml.sys.panic("no mention");
+        assert.equal(m.thread.ts, "123.0");
+        assert.equal(m.event_id, "Ev1");
+        assert.equal(mention_feedback(m).id, "SL-T1-C1-123-4");
+        assert.equal(mention_feedback(m).title, "parser broke");
+        assert.equal(slack_mention(baml.json.parse(`{"event":{"bot_id":"B1"}}`)) == null, true);
+    }
+    test "health is public but unsigned event intake is forbidden" {
+        assert.equal(
+            slack_http(baml.http.Request { method: "GET", url: "/health", headers: {}, body: "" }).status_code,
+            200,
+        );
+        assert.equal(
+            slack_http(baml.http.Request { method: "POST", url: "/slack/events", headers: {}, body: "{}" }).status_code,
+            403,
+        );
     }
 }
