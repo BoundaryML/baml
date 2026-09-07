@@ -1,22 +1,9 @@
-import Link from "next/link";
-import { playRuns } from "@/lib/play-runs";
-import { RunSignIn } from "@/components/runs/sign-in";
-import { LiveUpdates } from "@/components/issues/live-updates";
+import { SlackLink } from "@/components/slack-link";
 
-export const dynamic = "force-dynamic";
-export default async function RunsPage() {
-  let runs;
-  try { runs = await playRuns(); }
-  catch { return <main className="p-8">Runs are temporarily unavailable. Please try again.</main>; }
-  if (runs === null) return <RunSignIn />;
-  return <main className="max-w-4xl mx-auto p-8 space-y-6"><LiveUpdates />
+export default function RunsPage() {
+  return <main className="max-w-3xl mx-auto p-8 space-y-4">
     <h1 className="text-2xl font-semibold">Bammy runs</h1>
-    <p className="text-sm text-muted-foreground">Latest 50 scratch tasks from Slack.</p>
-    {runs.length === 0 && <p>No runs yet. Mention Bammy with “try” and a BAML task in Slack.</p>}
-    {runs.map(run => <article key={run.id} className="border rounded p-4 space-y-2">
-      <Link className="font-medium underline whitespace-pre-wrap break-words" href={`/runs/${run.id}`}>{run.prompt.slice(0, 240)}</Link>
-      <p className="text-sm text-muted-foreground">{run.play_status} · {run.created_at} · {run.turns} turns · {run.tokens ?? "unknown"} tokens</p>
-      <p className="whitespace-pre-wrap break-words text-sm">{run.report?.summary}</p>
-    </article>)}
+    <p>Read task summaries and ask follow-up questions in the original Slack thread. Prompts and transcripts are private and are not published on this website.</p>
+    <SlackLink>Open Slack</SlackLink>
   </main>;
 }

@@ -1345,14 +1345,6 @@ function babysit_fingerprint(snap: PrSnapshot, fb: PrFeedback) -> string {
     hash.finish().to_hex()
 }
 
-function proposal_link(id: string) -> string {
-    let base = (baml.env.get("ATB2_UI_URL") ?? "").trim();
-    if (!base.starts_with("https://")) {
-        throw StoreError { message: "ATB2_UI_URL must be HTTPS for proposal review" };
-    };
-    base + "/proposals/" + id
-}
-
 function draft_babysit_fix(pr: string, feedback: string) -> DesignDoc {
     client: Handle
     prompt: `
@@ -1417,7 +1409,6 @@ function approved_babysit_plan(
         throw StoreError { message: "babysitting requires a stored request and per-round approval" };
     };
     let id = baml.id.new();
-    proposal_link(id);
     let fingerprint = babysit_fingerprint(snap, fb);
     let filter = "request_id=eq." + (request_id ?? 0).to_string() + "&dataset=" + eq(dataset());
     let rows = select(

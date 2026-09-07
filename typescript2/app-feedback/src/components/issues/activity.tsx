@@ -11,7 +11,7 @@ export function Activity({ events }: { events: IssueEvent[] }) {
         return <li key={event.id} className="space-y-1">
           <time className="text-xs text-muted-foreground" dateTime={event.created_at}>{new Date(event.created_at).toLocaleString("en-US", { timeZone: "UTC" })} UTC</time>
           <p>{activityText(event)}</p>
-          {proposal && <Link className="text-sm underline" href={proposal}>View proposed fix and approval</Link>}
+          {proposal && <Link className="text-sm underline" href={proposal}>Approve on Slack</Link>}
         </li>;
       })}</ol>}
   </section>;

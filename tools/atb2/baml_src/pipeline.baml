@@ -391,19 +391,6 @@ function handle_one(issue: Issue, mode: HandleMode) -> HandleOutcome? {
     if (!issue_approved(issue) || handle_ready(issue, false) != null) {
         return null;
     };
-    match (issue.status) {
-        let approved: Approved => {
-            if (approved.by.starts_with("github:")) {
-                notify(
-                    "approved",
-                    issue,
-                    "Shepherd @" + (issue.shepherd ?? "") + " approved issue on the website.",
-                    approved.to_json(),
-                );
-            };
-        },
-        _ => null,
-    };
     //# a stale outcome.json from an earlier run must not be read as this run's
     let stale = run_dir_for(branch_for(issue)) + "/outcome.json";
     if (baml.fs.exists(stale)) {

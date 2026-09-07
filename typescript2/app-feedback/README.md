@@ -5,7 +5,7 @@ user feedback, and how far the pipeline has taken each one.
 
 ## Data
 
-The pages read the atb2 store in Supabase (`tools/atb2/db/schema.sql`) through
+The pages read the atb2 store in Supabase (schema SQL is in the stacked PR descriptions) through
 PostgREST with the anon key, which sees issues, runs and events but never a
 reporter's identity. `src/lib/db.ts` is the whole data layer; the view
 `issues_with_outcome` gives each issue its latest `handle_issue` run.
@@ -41,3 +41,16 @@ pnpm --filter app-feedback dev
 
 Built on the same stack and theme tokens as `app-beps` (Next 15, Tailwind v4,
 shadcn primitives) so the two read as one family of tools.
+
+## Slack approvals
+
+This website is read-only. Pending issues and proposal pages say **Approve on
+Slack**. Set `FEEDBACK_SLACK_URL` to the channel URL, for example
+`https://your-workspace.slack.com/archives/C0123456789`. The assigned shepherd
+approves an issue by reacting to its announcement; authorized shepherds approve
+babysitter fixes by reacting to the exact proposal message.
+
+No GitHub OAuth, session key, or Supabase service-role key is needed by this app.
+Private proposals and run transcripts stay in the store; `/proposals/[id]`,
+`/runs`, and `/runs/[id]` provide Slack instructions without reading private data.
+The existing SQL can remain in place; no schema changes are needed for this UI.

@@ -219,16 +219,14 @@ approval gate replaces the separate Linux filesystem boundary.
 
 `@bammy babysit <PR URL>` investigates CI failures and configured reviewer comments,
 then publishes a proposed fix and test plan. The planning session has only Read,
-Glob and Grep tools. The website shows the full proposal; Slack shows its summary
-and a link. No implementation agent runs until this round is approved.
+Glob and Grep tools. Slack shows the proposal summary; the full implementation
+plan stays in the private store. No implementation agent runs until this round is approved.
 
 A thumbs up or check mark on the exact proposal message approves it when made by
 a user explicitly mapped in `ATB2_SHEPHERDS`. Being the requester alone grants
-no approval rights. Website approval requires GitHub
-sign-in and current maintain/admin access to BoundaryML/baml. Proposals and CI
-logs are private to those website users. Website authentication uses state, PKCE,
-and an encrypted, secure HttpOnly cookie; repository access is checked again on
-approval. No browser receives the store credential.
+no approval rights. Approval is available only in Slack. The website links to the
+configured Slack channel and has no sign-in, approval endpoints, or privileged
+store credential. Private proposals and run transcripts are not published there.
 
 The runner consumes an approval once, implements its plan, scans outgoing commits
 for secrets, announces the push in Slack, and pushes with a lease bound to the
@@ -247,25 +245,11 @@ Apply the additional proposal SQL from the PR description before starting this
 version. It enables RLS with no anonymous access, makes proposal content immutable,
 and restricts status transitions. The earlier Slack column SQL is not sufficient.
 
-Set `ATB2_UI_URL` on the runner to the HTTPS feedback-site origin. For the website,
-configure these server-only environment variables in addition to its read-only
-store settings:
+Set `ATB2_UI_URL` on the runner to the HTTPS feedback-site origin. The website
+needs only `FEEDBACK_SUPABASE_URL`, `FEEDBACK_SUPABASE_ANON_KEY`, and
+`FEEDBACK_SLACK_URL` (the HTTPS Slack channel URL). Never use the service-role
+key for the website. GitHub OAuth and website approval secrets are not needed.
 
-- `FEEDBACK_SITE_URL`: the HTTPS feedback-site origin.
-- `FEEDBACK_GITHUB_CLIENT_ID` and `FEEDBACK_GITHUB_CLIENT_SECRET`: a GitHub OAuth
-  app with callback `<FEEDBACK_SITE_URL>/auth/github/callback` and homepage equal
-  to the site origin. Sign-in requests only `read:user`.
-- `FEEDBACK_APPROVAL_SESSION_KEY`: 32 random bytes represented as 64 hex characters.
-- `FEEDBACK_APPROVAL_SUPABASE_KEY`: a server-side store credential with access to
-  the private proposals table (the Supabase service-role key is supported).
-
-The website uses these credentials only in its authenticated server paths; its
-existing public issue views continue to use the anonymous key. Do not place any
-of these credentials in `NEXT_PUBLIC_` variables. Without website auth configured,
-approval in Slack still works, but the private proposal page requires sign-in.
-
-Checks: `bun test typescript2/app-feedback/tests/approval.test.mjs` verifies web
-approval authorization, CSRF rejection, session tampering/expiry and one-shot writes.
 The BAML tests cover proposal head/feedback binding and Slack approver/message checks.
 Approval is a workflow control, not a fix for the existing agent HOME/filesystem
 isolation limitation.
@@ -309,7 +293,7 @@ loopback store fixture; no model requests or production credentials are used.
 ## Activation checklist
 
 1. Review and land the seven stacked PRs in order: runtime, intake/issue approval,
-   shared babysitter/website approval, release indexing, CLI notices, thread
+   shared babysitter/Slack approval, release indexing, CLI notices, thread
    sessions, then scratch tasks/shirts.
 2. Before deploying each layer, apply its SQL from the PR description in the
    Supabase dashboard. The session and scratch-task tables must exist before
@@ -320,9 +304,9 @@ loopback store fixture; no model requests or production credentials are used.
    Defaults are aaronvg (Syntax), codeshaunted (Compiler), antoniosarosi (Runtime),
    2kai2kai2 (StdLibrary), sxlijin (Tooling), and hellovai (Unknown). Missing maps
    cannot approve. Keep `ATB2_SLACK_INTAKE_CHANNEL` unset when using Events intake.
-4. Configure the feedback website's Supabase read credentials and GitHub OAuth
-   approval credentials documented above. Set its production branch to canary in
-   the linked Vercel project. Runner Actions do not deploy the website.
+4. Configure the feedback website's Supabase read credentials and Slack channel
+   URL documented above. Deploy the website separately to its Vercel project.
+   Runner Actions do not deploy the website.
 5. Ensure Fly has the staged Infisical client pair and GitHub has an app-scoped
    `FLY_API_TOKEN`. Merge the reviewed PR into canary. The workflow deploys the
    runner automatically; a separate manual `fly deploy` is unnecessary when that
@@ -356,13 +340,9 @@ on port 8080. Subscribe to `app_mention` and `reaction_added`, with
 Set `ATB2_SHEPHERDS` to a comma-separated GitHub-login:Slack-user-ID map.
 New issues announce their shepherd and wait for approval before implementation.
 
-On the website the assigned shepherd can sign in with GitHub and click
-**Approve issue**. Configure `FEEDBACK_SITE_URL`, `FEEDBACK_GITHUB_CLIENT_ID`,
-`FEEDBACK_GITHUB_CLIENT_SECRET`, `FEEDBACK_APPROVAL_SESSION_KEY` (64 hex digits),
-and server-only `FEEDBACK_APPROVAL_SUPABASE_KEY`. The OAuth callback is
-`/auth/github/callback`. Slack and website approvals update the same pending row;
-only the winning conditional write succeeds. The runner narrates website approvals
-in the issue thread before starting the fix.
+The website says **Approve on Slack**. The assigned shepherd reacts to the issue
+announcement in Slack; only the winning conditional write succeeds. The runner
+narrates approval in the issue thread before starting the fix.
 
 ### Handoff and outgoing commits
 
@@ -439,9 +419,9 @@ when available, compiler revision, and any reproducible defects filed through
 the shared feedback pipeline. Missing model credentials are reported as a
 limitation; they are not filed as compiler defects.
 
-The Slack reply links to `/runs/[id]`; `/runs` lists the latest 50 tasks. Both
-require a verified BoundaryML/baml maintainer GitHub account, as do proposal
-pages. The raw Claude journal stays on the volume; initialization metadata and
+The Slack reply includes the task summary. `/runs/[id]` and `/runs` direct users
+back to Slack for follow-up questions; private transcripts remain in the store.
+The raw Claude journal stays on the volume; initialization metadata and
 thinking blocks are excluded from the stored transcript. Interrupted play runs
 require a new mention rather than automatically repeating a task.
 

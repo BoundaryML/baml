@@ -12,7 +12,7 @@ export function activityText(event: IssueEvent): string {
     case "fixed_dry_run": return "Dry-run fix passed; nothing pushed.";
     case "merged": return "PR merged.";
     case "babysit_started": return "Babysitter investigating CI and reviewer feedback.";
-    case "babysit_proposed": return "CI or reviewer feedback needs a fix. Review the proposal and approve its push.";
+    case "babysit_proposed": return "CI or reviewer feedback needs a fix. Review and approve the proposed fix on Slack.";
     case "babysit_approved": return "Fix approved; implementing the plan and running tests.";
     case "babysit_pushing": return "Approved fix passed tests; pushing to the PR branch.";
     case "babysit_round": return event.payload.result === "fixed"

@@ -146,7 +146,7 @@ export async function loadIssueEvents(id: string, dataset: "live" | "eval" = "li
   );
 }
 
-/** Public lifecycle metadata; private plans are read only on authorized proposal pages. */
+/** Public lifecycle metadata; private plans stay in the store and Slack. */
 export async function loadPrEvents(number: string, dataset: "live" | "eval" = "live"): Promise<IssueEvent[]> {
   if (!/^[1-9][0-9]{0,9}$/.test(number)) throw new Error("Invalid PR number");
   if (dataSource === "mock") return [];
