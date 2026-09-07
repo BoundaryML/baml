@@ -158,6 +158,9 @@ function failed_run(what: string) -> PipelineReport {
 function pipeline_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null {
     while (true) {
         //# one run; a store, intake or Slack failure ends this run only
+        if (mode == HandleMode.Live && db_configured()) {
+            reconcile_feedback_releases();
+        };
         let r = run_pipeline(mode = mode) catch (e) {
             StoreError => failed_run("store"),
             IntakeError => failed_run("intake"),
@@ -511,5 +514,27 @@ function announce_approvals() -> null {
             notify("issue_created", i, issue_created_text(i), { "approval": "requested" }.to_json());
         };
     }
+    null
+}
+
+/// Only controller credentials enter the root-owned release indexer, never an agent.
+function reconcile_feedback_releases() -> null {
+    let result = run_with(
+        Cmd {
+            program: "/usr/bin/python3",
+            args: ["-I", "/usr/local/lib/atb2/reconcile-releases.py"],
+            cwd: atb2_home(),
+            timeout_ms: 600000,
+        },
+        {
+            "PATH": "/usr/bin:/bin",
+            "FEEDBACK_SUPABASE_URL": baml.env.get("FEEDBACK_SUPABASE_URL") ?? "",
+            "FEEDBACK_SUPABASE_KEY": baml.env.get("FEEDBACK_SUPABASE_KEY") ?? "",
+            "GH_TOKEN": baml.env.get("GH_TOKEN") ?? baml.env.get("ATB_GITHUB_TOKEN") ?? "",
+        },
+    );
+    if (!result.ok) {
+        log.warn({ "release_resolution": "unavailable; retrying next pass" });
+    };
     null
 }

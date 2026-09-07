@@ -14,3 +14,4 @@
 !deploy/cli-cache-service.py
 !deploy/build-version.py
 !deploy/push-scan.py
+!deploy/reconcile-releases.py

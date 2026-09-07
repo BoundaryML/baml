@@ -379,3 +379,15 @@ immutable executables under `/data/cli-cache/<version>/<revision>/baml-cli`.
 Cache hits never build or fetch. Sandboxes mount this cache read-only.
 PR CI is the build/test gate; fixes do not automatically rebuild the CLI or run
 the full local workspace gate before pushing.
+## Published feedback fixes
+
+The hourly controller indexer backfills merge SHAs from GitHub for merged live
+issues, then checks published stable `baml-language-X.Y.Z` tags and their package
+manifests. It records the first verified containing release in `issues.fixed_in`.
+Nightlies, drafts, unpublished manifests, and unverified ancestry never produce
+update notices. The private Git index and polling lock live on the Fly volume.
+
+Apply the part 6a SQL from its PR description before deployment.
+`feedback_resolutions(report_ids uuid[])` accepts at most 100 full report UUIDs
+and exposes only linked issue IDs, status and fixed version. Its lookup uses
+feedback/issue primary keys; it does not expose reporter identities or contents.
