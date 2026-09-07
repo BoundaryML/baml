@@ -281,7 +281,7 @@ will run or formally approve: that bot's repository settings still apply.
 
 Issue pages show the lifecycle and link to `/prs/<number>` for the shared
 babysitter timeline. Standalone babysit requests link there too. Proposal links
-lead to the existing maintainer-only plan/approval page. Public event rows carry
+lead to Slack approval instructions. Public event rows carry
 only lifecycle metadata and proposal IDs, never the private plan or CI log text.
 Pages refresh every 30 seconds. Slack outages do not discard issue events;
 unannounced issue approval messages are retried.
