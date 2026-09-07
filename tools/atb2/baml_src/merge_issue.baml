@@ -1,9 +1,9 @@
 // PR -> green -> merged. Give it a PR; it watches the PR until it merges
 // or closes. Each time CI fails or the reviewer (CodeRabbit by default)
-// leaves comments, it gathers them into a brief and hands the PR's branch
-// to handle_issue, which runs the fix pass, the gate and the push exactly
-// as it does for a fresh issue. Stops when the PR merges or closes, when
-// it is green and nothing is new, or after `max_rounds`.
+// leaves comments, it proposes a fix and waits for approval before handing
+// the approved plan to handle_issue for implementation, the gate and a push.
+// Stops when the PR merges or closes, when it is green and nothing is new,
+// or after `max_rounds`.
 //
 //   cd tools/atb2 && baml run -e 'merge_issue("https://github.com/BoundaryML/baml/pull/4634")'
 //   ATB2_REVIEWERS=coderabbitai[bot],sxlijin   # whose comments are acted on
@@ -274,7 +274,7 @@ function round_text(round: int, kind: string, fb: PrFeedback) -> string {
 }
 
 /// The PR as an Issue, so handle_issue can work on it: the PR's title and
-/// body are the ticket; the status carries the PR for the review comment.
+/// body are the ticket; the status carries the PR URL for the outcome.
 function issue_from_pr(snap: PrSnapshot) -> Issue {
     Issue {
         id: "PR-" + snap.number.to_string(),
@@ -679,10 +679,9 @@ function render_feedback(fb: PrFeedback, logs: map<string, string>) -> string {
 }
 
 // ==================== The request queue ====================
-// "@bammy babysit <PR>": the Slack ingress (intake.baml, next PR) inserts a babysit_requests row; a
-// runner with the toolchain (`baml run -e 'merge_issue_loop()'`, the Fly
-// app's `requests` process) claims it and runs merge_issue with the Slack
-// thread attached. `request_merge(pr)` queues one by hand.
+// Slack intake inserts a babysit_requests row. The merge loop in the Fly
+// runner process claims it and runs merge_issue with the Slack thread attached.
+// `request_merge(pr)` queues one by hand.
 
 /// One queued request, as the Slack ingress wrote it.
 class MergeRequest {
@@ -1116,13 +1115,6 @@ testset "merge_issue" {
         assert.contains(t, "error B");
         assert.contains(t, "line 3");
         assert.is_true(!t.includes("FAIL x"));
-    }
-
-    test "the review comment says what was addressed and asks CodeRabbit to resolve" {
-        let note = review_comment(sample_report());
-        assert.is_true(note.starts_with("atb2 review round"));
-        assert.contains(note, "Guarded the type-ref lookup.");
-        assert.contains(note, "@coderabbitai resolve");
     }
 
     test "config defaults" {

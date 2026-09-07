@@ -3,7 +3,7 @@ import "server-only";
 export interface Proposal {
   id: string; pr: string; head: string; summary: string; plan: string;
   status: "pending" | "approved" | "executing" | "pushed" | "failed" | "stale";
-  approved_by: string | null; created_at: string;
+  approved_by: string | null;
 }
 // Private proposals may contain CI diagnostics. Never expose them through anon RLS.
 // This credential is used only after GitHub authorization in server routes/pages.
@@ -19,6 +19,6 @@ export async function proposalStore<T>(path: string, init: RequestInit = {}): Pr
   return response.json();
 }
 export async function loadProposal(id: string): Promise<Proposal | null> {
-  const rows = await proposalStore<Proposal[]>(`select=id,pr,head,summary,plan,status,approved_by,created_at&id=eq.${encodeURIComponent(id)}&dataset=eq.live&limit=1`);
+  const rows = await proposalStore<Proposal[]>(`select=id,pr,head,summary,plan,status,approved_by&id=eq.${encodeURIComponent(id)}&dataset=eq.live&limit=1`);
   return rows[0] ?? null;
 }

@@ -6,7 +6,7 @@
 //   PostHog   `baml feedback` posts a `baml_feedback` event; posthog_feedback
 //             turns new events into Feedback (run_pipeline's ingest stage)
 //   Slack     @bammy mentions and reactions arrive at the HTTP server here
-//             (next PR): babysit <PR> -> merge_issue, a report -> triage,
+//             babysit <PR> -> the approval queue, a report -> triage,
 //             a reaction -> approval
 //   by hand   `baml run -e 'request_merge("<PR url>")'`, `run_pipeline()`
 //

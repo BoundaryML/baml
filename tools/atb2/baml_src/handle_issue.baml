@@ -29,10 +29,10 @@ enum HandleMode {
 
 // ==================== Pipeline ====================
 /// A PR under review: merge_issue hands handle_issue the PR's branch and the
-/// feedback (failing checks, reviewer comments) to address on it.
+/// approved plan to implement on its exact head.
 class Review {
     branch: string,
-    /// The brief: what CI and the reviewer said, as merge_issue renders it.
+    /// The approved fix plan, including its CI and reviewer evidence.
     feedback: string,
     expected_head: string?,
     proposal_id: string?,
@@ -117,7 +117,7 @@ function handle_issue(
         };
         tell_thread(thread, ":memo: design pass done, starting the fix pass on `" + sb.branch + "`");
     } else {
-        //# under review: the feedback is the plan
+        //# under review: implement the approved proposal
         doc
             = "APPROVED PLAN: implement only this scope. If a different fix is needed, stop and report blockers; do not substitute another plan.\n\n"
                 + review.feedback;
@@ -167,7 +167,7 @@ function handle_issue(
         return out;
     };
     if (review != null) {
-        //# under review: push the fix to the PR and say what was addressed
+        //# under review: verify approval, announce, and push the fix
         if (mode == HandleMode.DryRun) {
             //## dry run: stop before the push
             write_outcome(sb, outcome(sb, "fixed", null, started, gate, fix, null));
@@ -1765,39 +1765,6 @@ function push_branch(sb: Sandbox, expected_head: string? = null) -> null {
         //## stop: the push was rejected
         baml.sys.panic("push failed: " + tail(push.stderr, 5));
     };
-    null
-}
-
-/// The PR comment after a review round: what was addressed, what was left
-/// and why. "@coderabbitai resolve" asks CodeRabbit to resolve its threads.
-function review_comment(r: FixReport) -> string {
-    "atb2 review round\n\n"
-        + r.summary.trim()
-        + "\n\n"
-        + (
-            match (r.blockers) {
-                null => "",
-                let b: string => "Not changed, and why:\n" + b.trim() + "\n\n",
-            }
-        )
-        + "_Files: "
-        + r.files_changed.join(", ")
-        + ". The full gate was re-run before this push._\n\n@coderabbitai resolve"
-}
-
-/// Live only. Posts `body` on the PR.
-function comment_on_pr(sb: Sandbox, pr: string, body: string) -> null {
-    let path = sb.run_dir + "/review_comment.md";
-    baml.fs.write(path, body);
-    run_with(
-        Cmd {
-            program: "gh",
-            args: ["pr", "comment", pr, "--repo", repo_slug(), "--body-file", path],
-            cwd: sb.worktree,
-            timeout_ms: 120000,
-        },
-        sandbox_env(true),
-    );
     null
 }
 

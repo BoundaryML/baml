@@ -1,7 +1,6 @@
 // Durable, one-round approvals. No agent with write tools runs while pending.
 class BabysitProposal {
     id: string,
-    request_id: int?,
     pr: string,
     head: string,
     fingerprint: string,
@@ -282,7 +281,6 @@ testset "babysit_approval" {
     test "approval is bound to the requester and exact proposal message" {
         let p = BabysitProposal {
             id: "p1",
-            request_id: 1,
             pr: "pr",
             head: "head",
             fingerprint: "fp",

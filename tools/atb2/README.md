@@ -193,7 +193,7 @@ local listener with fixture credentials and no external writes.
 Set `ATB2_SHEPHERDS` to explicit GitHub-login/Slack-user pairs, for example
 `maintainer:U123,reviewer:U456`. Missing or ambiguous mappings cannot approve.
 Subscribe the Slack app to `reaction_added`, add `reactions:read`, and reinstall
-it. Apply the approval branch's column SQL before deploying.
+it. Apply this branch's schema additions before deploying.
 
 Newly triaged issues wait in `awaiting_approval`. The mapped shepherd reacts
 with `white_check_mark` or `+1` on the bot's approval message. Approval checks
@@ -202,9 +202,9 @@ to `approved`. The automatic handle stage reads approved issues only. Existing
 open issues are moved into the approval workflow during triage; failed Slack
 announcements are retried. Reopened issues get a fresh approval message.
 
-Direct operator calls to `handle_issue` and existing PR review rounds remain
-manual entrypoints. The approval gate controls automatic issue implementation;
-it does not isolate an agent's filesystem or replace the runtime security boundary.
+Direct operator calls to `handle_issue` remain manual entrypoints. Babysitter
+review rounds require the separate proposal approval described below. Neither
+approval gate isolates the agent filesystem.
 
 
 ### Babysitter proposals and approval

@@ -276,22 +276,6 @@ function merged_text(issue: Issue, pr: string) -> string {
     ":white_check_mark: merged *" + issue.title + "*\n" + pr
 }
 
-function merge_round_text(issue: Issue, pr: string, round: int, kind: string) -> string {
-    (
-        if (kind == "fixed") {
-            ":arrows_counterclockwise: "
-        } else {
-            ":warning: "
-        }
-    )
-        + "review round "
-        + round.to_string()
-        + " on "
-        + pr
-        + ": "
-        + kind
-}
-
 function failed_steps(g: GateResult) -> string {
     g.steps
         .filter((s: GateStep) -> bool {

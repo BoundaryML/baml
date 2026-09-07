@@ -114,7 +114,7 @@ function run_pipeline(
             handled
         };
         for (let issue in in_progress) {
-            match (merge_one(issue, mode)) {
+            match (merge_one(issue)) {
                 null => report.skipped.push(issue.id + ": no PR to watch"),
                 let r: MergeResult => {
                     if (r.kind == "merged") {
@@ -428,8 +428,8 @@ function tell_outcome(issue: Issue, o: HandleOutcome, mode: HandleMode) -> null 
 
 // ==================== merge ====================
 
-/// merge_issue for one in-progress issue. Null when it has no PR.
-function merge_one(issue: Issue, mode: HandleMode) -> MergeResult? {
+/// Queue review work or record the final state of an in-progress PR.
+function merge_one(issue: Issue) -> MergeResult? {
     let pr = match (issue.status) {
         let s: InProgress => s.pr,
         _ => null,
@@ -447,7 +447,7 @@ function merge_one(issue: Issue, mode: HandleMode) -> MergeResult? {
             if (!snap.merged && snap.state == "OPEN") {
                 let requests = select(
                     "babysit_requests",
-                    "select=id,status,result&pr="
+                    "select=id,result&pr="
                         + eq(url)
                         + "&dataset="
                         + eq(dataset())
@@ -535,8 +535,8 @@ testset "pipeline" {
     }
 }
 
-/// Only the automatic stage requires approval. Manual handle_issue calls and
-/// review rounds are explicit operator work, outside this queue.
+/// This gate controls automatic issue implementation. Babysitter review
+/// rounds have their own per-proposal approval gate.
 function issue_approved(issue: Issue) -> bool {
     match (issue.status) {
         let s: Approved => slack_id(s.by),

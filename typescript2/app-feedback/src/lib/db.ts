@@ -1,4 +1,4 @@
-// The data source: the atb2 store in Supabase (tools/atb2/db/schema.sql),
+// The data source: the atb2 store in Supabase,
 // read through PostgREST with the anon key, which sees issues, runs and
 // events but never a reporter's identity (feedback only via feedback_public).
 //
