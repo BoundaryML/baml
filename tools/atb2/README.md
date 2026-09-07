@@ -105,8 +105,15 @@ literal strings, with shell parameter expansion disabled.
 
 Existing volumes keep their login and runtime state. The first boot after
 this change builds a fresh compiler in the isolated cache, even if the old
-runtime cache already contains one. This isolates startup builds; it does
-not isolate the runtime agent's Bash from the runtime user's files.
+runtime cache already contains one. Agent commands and gates additionally run inside Linux bubblewrap mount and PID
+namespaces. Only their independent checkout and agent build cache are writable;
+the controller HOME, Git metadata, processes and credentials are excluded.
+Claude project hooks and project settings are disabled. A local broker forwards
+only Claude message requests and keeps the persistent login outside the sandbox.
+The runner refuses startup if namespace isolation is unavailable. Local agent
+execution therefore requires the Linux runner image, rather than a host CLI.
+Pushes export Git objects without credentials, then use fresh trusted metadata,
+a fixed repository URL and an exact branch lease.
 
 Set `ATB2_CANARY_REV` to a commit SHA to pin the runner's compiler. If the
 cached executable's recorded revision matches that pin, startup skips the
@@ -204,7 +211,7 @@ announcements are retried. Reopened issues get a fresh approval message.
 
 Direct operator calls to `handle_issue` remain manual entrypoints. Babysitter
 review rounds require the separate proposal approval described below. Neither
-approval gate isolates the agent filesystem.
+approval gate replaces the separate Linux filesystem boundary.
 
 
 ### Babysitter proposals and approval
@@ -215,7 +222,8 @@ Glob and Grep tools. The website shows the full proposal; Slack shows its summar
 and a link. No implementation agent runs until this round is approved.
 
 A thumbs up or check mark on the exact proposal message approves it when made by
-its requester or a user mapped in `ATB2_SHEPHERDS`. Website approval requires GitHub
+a user explicitly mapped in `ATB2_SHEPHERDS`. Being the requester alone grants
+no approval rights. Website approval requires GitHub
 sign-in and current maintain/admin access to BoundaryML/baml. Proposals and CI
 logs are private to those website users. Website authentication uses state, PKCE,
 and an encrypted, secure HttpOnly cookie; repository access is checked again on

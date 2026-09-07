@@ -482,7 +482,7 @@ function cache_repo() -> string {
 }
 
 function target_dir() -> string {
-    atb2_home() + "/target"
+    atb2_home() + "/agent-cache/target"
 }
 
 function repo_url() -> string {
@@ -594,18 +594,10 @@ class CmdResult {
     ok: bool,
 }
 
-/// The environment every child gets. It REPLACES the environment, so this
-/// is an allowlist of environment variables: none from this process leaks
-/// unless named here. The agent runs with `with_gh = false` and never sees
-/// GH_TOKEN, FEEDBACK_SUPABASE_KEY, ANTHROPIC_API_KEY or anything else.
-/// The Claude Code CLI runs on its own login, found through HOME: on a
-/// laptop the keychain, on the runner the login kept on the volume. No
-/// Claude credential ever passes through atb2.
-///
-/// This guards the environment only. HOME is the host's, because the
-/// Claude Code CLI reads its login from there, so files under it
-/// (~/.ssh, ~/.config/gh, ~/.aws) stay readable to the agent's Bash. The
-/// git credential paths are cut off below; the rest is a known gap.
+/// Allowlisted controller subprocess environment. Untrusted checkout commands
+/// additionally enter the Linux mount/process sandbox, which replaces HOME and
+/// the environment again. Claude receives only a temporary broker capability;
+/// its persistent login stays outside that boundary.
 function sandbox_env(with_gh: bool) -> map<string, string> {
     let env: map<string, string> = {
         "PATH": baml.env.get("PATH") ?? "/usr/local/bin:/usr/bin:/bin",
@@ -667,7 +659,17 @@ function keep_awake(program: string, args: string[]) -> Cmd {
 
 function run_with(c: Cmd, env: map<string, string>) -> CmdResult {
     let label = c.program + " " + c.args.join(" ");
-    let awake = keep_awake(c.program, c.args);
+    let untrusted = c.cwd.starts_with(atb2_home() + "/worktrees/")
+        || c.cwd.starts_with(atb2_home() + "/repro-check/")
+        || (c.cwd == cache_repo() + "/baml_language");
+    let awake = if (untrusted) {
+        keep_awake(
+            "/usr/bin/python3",
+            ["-I", "/usr/local/lib/atb2/sandbox.py", c.cwd, c.program].concat(c.args),
+        )
+    } else {
+        keep_awake(c.program, c.args)
+    };
     let out = baml.sys.exec(
         awake.program,
         awake.args,
@@ -733,6 +735,7 @@ class Sandbox {
     worktree: string,
     run_dir: string,
     reused_branch: bool,
+    base_head: string?,
 }
 
 /// One cached clone, fetched each run. Safe to call from parallel tests:
@@ -743,7 +746,7 @@ function ensure_cache() -> null {
     //# mkdir the atb2 home
     baml.fs.mkdir(atb2_home(), baml.fs.MkdirOptions { recursive: true });
     //# mkdir the target dir
-    baml.fs.mkdir(target_dir(), baml.fs.MkdirOptions { recursive: true });
+    baml.fs.mkdir(atb2_home() + "/agent-cache", baml.fs.MkdirOptions { recursive: true });
     //# if the repo does not exist
     if (!baml.fs.exists(repo + "/.git")) {
         let clone = run(
@@ -758,8 +761,6 @@ function ensure_cache() -> null {
             baml.sys.panic("clone failed: " + tail(clone.stderr, 5));
         };
     };
-    //# worktree config must be on or the --worktree pushurl guard is a no-op
-    git(repo, ["config", "extensions.worktreeConfig", "true"]);
     //# fetch canary (retried: parallel tests share the cache)
     let tries = 0;
     //# while the tries are less than 3
@@ -783,10 +784,6 @@ function ensure_cache() -> null {
     baml.sys.panic("git fetch failed three times")
 }
 
-function branch_exists_locally(branch: string) -> bool {
-    git(cache_repo(), ["rev-parse", "--verify", "--quiet", "refs/heads/" + branch]).ok
-}
-
 function branch_exists_on_origin(branch: string) -> bool {
     git(cache_repo(), ["ls-remote", "--exit-code", "--heads", "origin", branch]).ok
 }
@@ -798,107 +795,66 @@ function open_sandbox(issue: Issue, update: bool) -> Sandbox {
 /// The sandbox for any branch: a fresh one off origin/canary, or (`update`)
 /// the branch as it is on origin. merge_issue opens PR branches this way.
 function open_branch_sandbox(branch: string, update: bool) -> Sandbox {
-    //# get the repo
-    let repo = cache_repo();
-    //# get the worktree
     let wt = worktree_for(branch);
-    //# get the run dir
     let rd = run_dir_for(branch);
-    //# if the worktree exists
     if (baml.fs.exists(wt)) {
-        //# remove the worktree
-        git(repo, ["worktree", "remove", "--force", wt]);
-        //# if the worktree still exists, remove the dir all
-        if (baml.fs.exists(wt)) {
-            baml.fs.remove_dir_all(wt);
-        };
+        baml.fs.remove_dir_all(wt);
     };
-    //# prune the worktree
-    git(repo, ["worktree", "prune"]);
-    //# remove the run dir
-    baml.fs.remove_dir_all(rd);
+    if (baml.fs.exists(rd)) {
+        baml.fs.remove_dir_all(rd);
+    };
     baml.fs.mkdir(rd, baml.fs.MkdirOptions { recursive: true });
-    //# mkdir the worktrees dir
     baml.fs.mkdir(atb2_home() + "/worktrees", baml.fs.MkdirOptions { recursive: true });
-    //# set reused to false
-    let reused = false;
-    //# if the branch exists locally and update is true
-    let add = if (branch_exists_locally(branch) && update) {
-        //# set reused to true
-        reused = true;
-        //# add the worktree
-        git(repo, ["worktree", "add", wt, branch])
-    } else {
-        //# if the branch exists locally
-        if (branch_exists_locally(branch)) {
-            git(repo, ["branch", "-D", branch]);
+    // Independent object storage and metadata: never mount the controller's
+    // linked-worktree .git directory into an agent sandbox.
+    let clone = git(cache_repo(), ["clone", "--no-local", "--no-hardlinks", "--no-checkout", cache_repo(), wt]);
+    if (!clone.ok) {
+        baml.sys.panic("isolated clone failed");
+    };
+    let reused = branch_exists_on_origin(branch);
+    if (reused && !update) {
+        baml.sys.panic("branch already exists; explicit update required");
+    };
+    if (reused) {
+        if (!git(wt, ["fetch", repo_url(), "refs/heads/" + branch]).ok) {
+            baml.sys.panic("isolated branch fetch failed");
         };
-        if (branch_exists_on_origin(branch)) {
-            reused = true;
-            git(repo, ["fetch", "origin", branch]);
-            git(repo, ["worktree", "add", "--track", "-b", branch, wt, "origin/" + branch])
-        } else {
-            git(repo, ["worktree", "add", "-b", branch, wt, "origin/canary"])
-        }
     };
-    //# if the add is not ok, panic
-    if (!add.ok) {
-        baml.sys.panic("worktree add failed: " + tail(add.stderr, 5));
+    let base = if (reused) {
+        "FETCH_HEAD"
+    } else {
+        "origin/canary"
     };
-    //# config the worktree
-    git(wt, ["config", "--worktree", "remote.origin.pushurl", "no_push://atb2"]);
-    //# config the user name
-    git(wt, ["config", "--worktree", "user.name", "atb2"]);
-    git(wt, ["config", "--worktree", "user.email", "atb2@boundaryml.com"]);
-
-    log.info({ "sandbox": wt, "branch": branch, "reused_branch": reused });
-    Sandbox { branch: branch, worktree: wt, run_dir: rd, reused_branch: reused }
+    if (!git(wt, ["checkout", "-b", branch, base]).ok) {
+        baml.sys.panic("isolated checkout failed");
+    };
+    git(wt, ["config", "remote.origin.pushurl", "no_push://atb2"]);
+    git(wt, ["config", "user.name", "atb2"]);
+    git(wt, ["config", "user.email", "atb2@boundaryml.com"]);
+    let base_head = if (reused) {
+        git(wt, ["rev-parse", "HEAD"]).stdout.trim()
+    } else {
+        null
+    };
+    Sandbox {
+        branch: branch,
+        worktree: wt,
+        run_dir: rd,
+        reused_branch: reused,
+        base_head: base_head,
+    }
 }
 
-/// Runs from `defer`: never throws. Removes the worktree (and the local
-/// branch unless kept for a human), then checks the cache is untouched.
 function close_sandbox(sb: Sandbox, keep_branch: bool) -> null {
-    let repo = cache_repo();
-    //# remove the worktree
-    let removed = git(repo, ["worktree", "remove", "--force", sb.worktree]);
-    git(repo, ["worktree", "prune"]);
-    if (baml.fs.exists(sb.worktree)) {
-        // git refused (or the tree was already unregistered): delete it outright
-        let rm = run(Cmd { program: "rm", args: ["-rf", sb.worktree], cwd: atb2_home(), timeout_ms: 600000 });
-        if (baml.fs.exists(sb.worktree)) {
-            log.warn(
-                {
-                    "sandbox": sb.worktree,
-                    "warning": "worktree not removed",
-                    "git": tail(removed.stderr, 2),
-                    "rm": tail(rm.stderr, 2),
-                },
-            );
-        };
+    if (!keep_branch && baml.fs.exists(sb.worktree)) {
+        baml.fs.remove_dir_all(sb.worktree);
     };
-    //# delete the local branch unless a human should pick it up
-    if (!keep_branch) {
-        git(repo, ["branch", "-D", sb.branch]);
-    };
-    //# keep the run dir as the audit trail (ATB2_KEEP_RUNS=0 deletes it)
     if ((baml.env.get("ATB2_KEEP_RUNS") ?? "1") == "0") {
         baml.fs.remove_dir_all(sb.run_dir) catch (_) {
-            _ => null,
+            _ => null
         };
     };
-    //# verify the cache repo is untouched
-    if (!cache_is_clean(sb)) {
-        log.warn(
-            { "sandbox": sb.worktree, "warning": "cache repo is not clean after close_sandbox" },
-        );
-    };
     null
-}
-
-function cache_is_clean(sb: Sandbox) -> bool {
-    let status = git(cache_repo(), ["status", "--porcelain"]);
-    let list = git(cache_repo(), ["worktree", "list", "--porcelain"]);
-    status.ok && status.stdout.trim().length() == 0 && !list.stdout.includes(sb.worktree)
 }
 
 /// canary's own baml-cli, rebuilt from the cache checkout after each fetch,
@@ -984,6 +940,14 @@ function claude_args(prompt: string, tools: string[]) -> string[] {
         // env is an allowlist, so this is the sandbox, not the prompt.
         "--permission-mode",
         "bypassPermissions",
+        "--safe-mode",
+        "--setting-sources",
+        "",
+        "--strict-mcp-config",
+        "--mcp-config",
+        "{\"mcpServers\":{}}",
+        "--settings",
+        "{\"disableAllHooks\":true}",
         "--no-session-persistence",
         "--tools",
         tools.join(","),
@@ -1008,10 +972,8 @@ function run_claude(
     env.set("ATB2_TRANSCRIPT", transcript_path);
     let r = run_with(
         Cmd {
-            program: "sh",
-            args: ["-c", "exec \"$@\" > \"$ATB2_TRANSCRIPT\" 2>&1", "atb2", "claude"].concat(
-                claude_args(prompt, tools),
-            ),
+            program: "claude",
+            args: claude_args(prompt, tools),
             cwd: cwd,
             timeout_ms: timeout_s * 1000,
         },
@@ -1732,38 +1694,26 @@ function head_sha(sb: Sandbox) -> string {
     git(sb.worktree, ["rev-parse", "--short", "HEAD"]).stdout.trim()
 }
 
-/// Live only. Lifts the worktree's push guard for this one push. The
-/// guard is set by open_sandbox and is what keeps the agent from pushing.
+/// Live only. Export objects without credentials, then push from fresh trusted
+/// metadata to a fixed repository with a lease captured before agent execution.
 function push_branch(sb: Sandbox, expected_head: string? = null) -> null {
-    //# lift the push guard for this one push
-    // pushurl is multi-valued, so it cannot be overridden with -c; the
-    // no_push guard is removed here, and only here, for this one push
-    git(sb.worktree, ["config", "--worktree", "--unset-all", "remote.origin.pushurl"]);
-    //# push with the host's credentials, hooks off
     let push = run_with(
         Cmd {
-            program: "git",
+            program: "/usr/bin/python3",
             args: [
-                "-c",
-                "core.hooksPath=/dev/null",
-                "push",
-                if (expected_head == null) {
-                    "--force-with-lease"
-                } else {
-                    "--force-with-lease=refs/heads/" + sb.branch + ":" + (expected_head ?? "")
-                },
-                "-u",
-                "origin",
+                "-I",
+                "/usr/local/lib/atb2/push.py",
+                sb.worktree,
                 sb.branch,
+                expected_head ?? sb.base_head ?? "",
             ],
-            cwd: sb.worktree,
+            cwd: atb2_home(),
             timeout_ms: 600000,
         },
         sandbox_env(true),
     );
     if (!push.ok) {
-        //## stop: the push was rejected
-        baml.sys.panic("push failed: " + tail(push.stderr, 5));
+        baml.sys.panic("trusted push failed");
     };
     null
 }
@@ -1771,7 +1721,7 @@ function push_branch(sb: Sandbox, expected_head: string? = null) -> null {
 /// Live only. Pushes the branch and opens a draft PR — or updates the
 /// existing PR for the branch.
 function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
-    //# lift the push guard and push the branch
+    //# push through trusted metadata
     let env = sandbox_env(true);
     push_branch(sb);
     //# update the existing PR for this branch, if there is one
@@ -1780,7 +1730,7 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
         Cmd {
             program: "gh",
             args: ["pr", "view", sb.branch, "--repo", repo_slug(), "--json", "url", "--jq", ".url"],
-            cwd: sb.worktree,
+            cwd: atb2_home(),
             timeout_ms: 120000,
         },
         env,
@@ -1800,7 +1750,7 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
                     "--body-file",
                     body_path,
                 ],
-                cwd: sb.worktree,
+                cwd: atb2_home(),
                 timeout_ms: 120000,
             },
             env,
@@ -1826,7 +1776,7 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
                 "--body-file",
                 body_path,
             ],
-            cwd: sb.worktree,
+            cwd: atb2_home(),
             timeout_ms: 120000,
         },
         env,

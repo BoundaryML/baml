@@ -19,7 +19,8 @@
 # GH_TOKEN). The agent's Claude Code CLI uses its own login on the machine (HOME on the
 # volume; `fly ssh console -a atb2-runner` then
 # `runuser -u atb2 -- env HOME=/data/home claude` to log in once); no Claude
-# credential is stored in Infisical or passed by atb2. CI holds only a Fly deploy token.
+# credential is stored in Infisical or exposed inside the agent sandbox. A local
+# broker uses the persistent login outside that boundary. CI holds only a Fly deploy token.
 app = "atb2-runner"
 primary_region = "sjc"
 

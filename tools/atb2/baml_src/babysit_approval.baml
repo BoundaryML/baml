@@ -191,9 +191,6 @@ function babysit_reactor_allowed(p: BabysitProposal, r: ApprovalReaction, mappin
     if (p.status != "pending" || p.channel != r.channel || p.slack_ts != r.ts) {
         return false;
     };
-    if (p.requested_by == r.user) {
-        return true;
-    };
     for (let entry in mapping.split(",")) {
         let login = (entry.split(":").at(0) ?? "").trim();
         if (shepherd_id_in(login, mapping) == r.user) {
@@ -278,7 +275,7 @@ function babysit_push_allowed(id: string, head: string) -> bool {
 }
 
 testset "babysit_approval" {
-    test "approval is bound to the requester and exact proposal message" {
+    test "approval requires an explicitly mapped approver and exact proposal message" {
         let p = BabysitProposal {
             id: "p1",
             pr: "pr",
@@ -293,7 +290,7 @@ testset "babysit_approval" {
         };
         assert.equal(
             babysit_reactor_allowed(p, ApprovalReaction { user: "U1", channel: "C1", ts: "123.4" }, ""),
-            true,
+            false,
         );
         assert.equal(
             babysit_reactor_allowed(p, ApprovalReaction { user: "U2", channel: "C1", ts: "123.4" }, ""),

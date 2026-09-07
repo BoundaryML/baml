@@ -20,6 +20,11 @@ if [ -n "${GH_TOKEN:-}" ]; then
   git config --global user.email "${ATB2_GIT_EMAIL:-atb2@boundaryml.com}"
 fi
 
+# Refuse deployment when the host cannot provide the required namespace boundary.
+mkdir -p /data/repro-check/preflight
+/usr/bin/python3 -I /usr/local/lib/atb2/sandbox.py /data/repro-check/preflight /usr/bin/true
+rmdir /data/repro-check/preflight
+
 expr="${1:-runner_loop()}"
 echo "atb2: $expr"
 cd /app

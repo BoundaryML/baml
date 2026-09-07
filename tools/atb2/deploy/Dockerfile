@@ -16,7 +16,7 @@ FROM rust:1-bookworm
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl git jq openssh-client pkg-config libssl-dev \
-      python3 clang lld cmake util-linux \
+      python3 clang lld cmake util-linux bubblewrap \
     && rm -rf /var/lib/apt/lists/*
 
 # gh
@@ -32,7 +32,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # Both from the npm registry, the Infisical one pinned.
 RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install -g @anthropic-ai/claude-code @infisical/cli@0.43.128
+    && npm install -g @anthropic-ai/claude-code@2.1.261 @infisical/cli@0.43.128
 
 RUN useradd -m -u 1000 -s /bin/bash atb2 \
     && useradd -m -u 1001 -s /bin/bash builder \
@@ -48,6 +48,7 @@ ENV ATB2_HOME=/data \
 WORKDIR /app
 COPY baml.toml ./
 COPY baml_src ./baml_src
+COPY deploy/sandbox.py deploy/push.py /usr/local/lib/atb2/
 COPY deploy/entrypoint.sh /usr/local/bin/atb2-entrypoint
 COPY deploy/build-cli.sh /usr/local/bin/atb2-build-cli
 COPY deploy/bootstrap.sh /usr/local/bin/atb2-bootstrap
