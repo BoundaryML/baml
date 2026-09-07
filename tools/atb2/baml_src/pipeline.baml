@@ -114,7 +114,7 @@ function run_pipeline(
             handled
         };
         for (let issue in in_progress) {
-            match (merge_one(issue, mode)) {
+            match (merge_one(issue)) {
                 null => report.skipped.push(issue.id + ": no PR to watch"),
                 let r: MergeResult => {
                     if (r.kind == "merged") {
@@ -512,25 +512,4 @@ function announce_approvals() -> null {
         };
     }
     null
-}
-
-function merge_one(issue: Issue, mode: HandleMode) -> MergeResult? {
-    let pr = match (issue.status) {
-        let s: InProgress => s.pr,
-        _ => null,
-    };
-    match (pr) {
-        null => null,
-        let url: string => {
-            let r = merge_issue(url, mode = mode, issue_id = issue.id);
-            if (r.kind == "merged") {
-                let merged = with_status(issue, Merged { state: "merged", pr: url });
-                save_issue(merged);
-                notify("merged", merged, merged_text(merged, url), r.to_json());
-            } else {
-                log_event("merge_issue", issue.id, null, r.to_json(), null, null);
-            };
-            r
-        },
-    }
 }

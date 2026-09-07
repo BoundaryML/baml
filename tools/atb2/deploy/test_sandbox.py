@@ -250,7 +250,7 @@ else: raise AssertionError('shared toolchain was writable')
                     args=[str(folder/'intended.git') if a==push.REPOSITORY else
                           'protocol.file.allow=always' if a=='protocol.https.allow=always' else a for a in args]
                 return real_run(args,**kwargs)
-            with patch.object(sys,'argv',['push.py',str(self.work),'fix',base]), patch.dict(os.environ,{'GH_TOKEN':'fixture'}), patch.object(subprocess,'run',side_effect=intercept):
+            with patch.object(sys,'argv',['push.py',str(self.work),'fix',base,base]), patch.dict(os.environ,{'GH_TOKEN':'fixture'}), patch.object(subprocess,'run',side_effect=intercept):
                 self.assertEqual(push.main(),0)
             self.assertEqual(git(folder/'intended.git','rev-parse','fix'),commit)
             self.assertEqual(git(folder/'attacker.git','rev-parse','fix'),base)
