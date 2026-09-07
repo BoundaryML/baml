@@ -5,6 +5,8 @@ namespace, application environment, or controller Git metadata enters bwrap.
 """
 import contextlib
 import fcntl
+
+import importlib.util
 import http.client
 import http.server
 import json
@@ -32,6 +34,11 @@ def clean_env():
             'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC': '1', 'DISABLE_AUTOUPDATER': '1'}
 
 
+_session_spec = importlib.util.spec_from_file_location('atb2_session_home', Path(__file__).with_name('session_home.py'))
+session_home = importlib.util.module_from_spec(_session_spec)
+_session_spec.loader.exec_module(session_home)
+
+
 def workspace(cwd):
     """Only individually mounted checkouts/scratch projects are exposed."""
     path = Path(cwd)
@@ -50,7 +57,7 @@ def workspace(cwd):
     raise ValueError('working directory is outside sandbox roots')
 
 
-def command(cwd, argv, extra=None):
+def command(cwd, argv, extra=None, conversation_home=None):
     root, readonly = workspace(cwd)
     args = ['/usr/bin/bwrap', '--unshare-user', '--unshare-pid', '--unshare-ipc',
             '--unshare-uts', '--die-with-parent', '--new-session', '--cap-drop', 'ALL',
@@ -79,6 +86,9 @@ def command(cwd, argv, extra=None):
     # The installed compiler is safe to expose read-only to repro checks.
     if Path('/data/target/debug/baml-cli').is_file():
         args += ['--ro-bind', '/data/target/debug/baml-cli', '/data/target/debug/baml-cli']
+    if conversation_home is not None:
+        args += ['--bind', str(conversation_home), '/home/agent', '--bind', str(root), '/workspace']
+        cwd = Path('/workspace') / Path(cwd).relative_to(root)
     env = clean_env()
     env.update(extra or {})
     for key, value in env.items(): args += ['--setenv', key, value]
@@ -191,7 +201,10 @@ def main():
     with contextlib.ExitStack() as stack:
         output = None
         extra = {}
+        home = None
         if argv[0] == 'claude':
+            root, _ = workspace(cwd)
+            argv, home = stack.enter_context(session_home.conversation(root, argv))
             proxy = stack.enter_context(broker())
             extra = {'ANTHROPIC_BASE_URL': 'http://127.0.0.1:' + str(proxy.server_port),
                      'CLAUDE_CODE_OAUTH_TOKEN': proxy.client_token,
@@ -202,7 +215,7 @@ def main():
                     raise ValueError('unsafe transcript path')
                 fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
                 output = stack.enter_context(os.fdopen(fd, 'wb'))
-        result = subprocess.run(command(cwd, argv, extra), env={'PATH': SAFE_PATH},
+        result = subprocess.run(command(cwd, argv, extra, home), env={'PATH': SAFE_PATH},
                                 stdout=output, stderr=subprocess.STDOUT if output else None)
         return result.returncode
 

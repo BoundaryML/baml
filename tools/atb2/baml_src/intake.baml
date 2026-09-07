@@ -469,15 +469,29 @@ function persist_mention(m: SlackMention) -> bool {
                 "kind": "babysit".to_json(),
                 "dataset": dataset().to_json(),
             };
-    } else if (m.route.kind == "feedback") {
-        table = "feedback";
+    } else if (m.route.kind != "babysit") {
+        table = "agent_turns";
         let fb = mention_feedback(m);
         guard_dataset(fb.id);
+        let feedback = baml.json.from_json<map<string, json>>(
+            feedback_row(
+                fb,
+                { "kind": "slack", "team": m.team, "channel": m.thread.channel, "ts": m.thread.ts }
+                    .to_json(),
+            ),
+        );
+        feedback.set("slack_thread_ts", m.thread.ts.to_json());
+        feedback.set("slack_event_id", m.event_id.to_json());
         row
-            = baml.json.from_json<map<string, json>>(
-                feedback_row(fb, { "kind": "slack", "channel": m.thread.channel, "ts": m.thread.ts }.to_json()),
-            );
-        row.set("slack_thread_ts", m.thread.ts.to_json());
+            = {
+                "team": m.team.to_json(),
+                "channel": m.thread.channel.to_json(),
+                "thread_ts": m.thread.ts.to_json(),
+                "requested_by": m.user.to_json(),
+                "prompt": m.route.text.to_json(),
+                "feedback": feedback.to_json(),
+                "dataset": dataset().to_json(),
+            };
     } else {
         // Informational replies create no queue work.
         return true;
@@ -495,7 +509,7 @@ function persist_mention(m: SlackMention) -> bool {
 
 function mention_ack(m: SlackMention) -> string {
     if (m.route.kind == "shirt") {
-        return "Shirt codes are coming soon.";
+        return "Queued your request in this thread.";
     };
     if (m.route.kind == "babysit") {
         if (m.route.pr == null) {
@@ -503,7 +517,7 @@ function mention_ack(m: SlackMention) -> string {
         };
         return "Queued this PR for babysitting.";
     };
-    "Logged as feedback: " + mention_feedback(m).id + ". Triage will follow in this thread."
+    "Queued your request; I will reply in this thread."
 }
 
 function signed_slack_request(

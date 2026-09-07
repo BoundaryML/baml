@@ -58,6 +58,7 @@ WORKDIR /app
 COPY baml.toml ./
 COPY baml_src ./baml_src
 COPY deploy/cache-cli.py deploy/cli-cache-service.py deploy/build-version.py /usr/local/lib/atb2/
+COPY deploy/sessions.py deploy/session_home.py /usr/local/lib/atb2/
 COPY deploy/reconcile-releases.py /usr/local/lib/atb2/
 COPY deploy/sandbox.py deploy/push.py deploy/push-scan.py /usr/local/lib/atb2/
 COPY deploy/entrypoint.sh /usr/local/bin/atb2-entrypoint

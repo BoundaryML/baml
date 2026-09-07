@@ -15,3 +15,5 @@
 !deploy/build-version.py
 !deploy/push-scan.py
 !deploy/reconcile-releases.py
+!deploy/sessions.py
+!deploy/session_home.py

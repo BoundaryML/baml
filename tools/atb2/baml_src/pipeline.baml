@@ -188,6 +188,9 @@ function pipeline_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -
 //#runner_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null
 function runner_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null {
     spawn { merge_issue_loop(mode = mode) };
+    if (mode == HandleMode.Live) {
+        spawn { agent_turn_loop() };
+    };
     pipeline_loop(every_s = every_s, mode = mode)
 }
 

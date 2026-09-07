@@ -1375,13 +1375,14 @@ function draft_babysit_fix(pr: string, feedback: string) -> DesignDoc {
     `
 }
 
-function make_babysit_plan(snap: PrSnapshot, brief: string) -> DesignDoc {
+function make_babysit_plan(snap: PrSnapshot, brief: string, thread: SlackRef?) -> DesignDoc {
     ensure_cache();
     let sb = open_branch_sandbox(snap.branch, true);
     defer { close_sandbox(sb, false); }
     if (git(sb.worktree, ["rev-parse", "HEAD"]).stdout.trim() != snap.head) {
         throw StoreError { message: "PR moved during proposal preparation; retry babysitting" };
     };
+    bind_agent_session(sb, thread, issue_id_for_pr(pr_url(snap.number)), pr_url(snap.number), "babysit");
     let session = run_claude(
         sb.worktree,
         draft_babysit_fix@render_prompt(pr_url(snap.number), brief).text(),
@@ -1461,7 +1462,7 @@ function approved_babysit_plan(
         );
         tell_thread(thread, ":hand: the PR or feedback changed; the previous proposal needs fresh approval.");
     };
-    let design = make_babysit_plan(snap, brief);
+    let design = make_babysit_plan(snap, brief, thread);
     let p = proposal_from_row(
         insert(
             "babysit_proposals",
