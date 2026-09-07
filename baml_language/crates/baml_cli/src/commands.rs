@@ -355,6 +355,9 @@ impl RuntimeCli {
 
         if self.command.requires_agent_skill() {
             crate::skill_check::check(self.command.agent_skill_project_path())?;
+            if self.global.quiet == 0 {
+                crate::feedback_command::poll_resolutions();
+            }
         }
 
         // Fire anonymous, best-effort telemetry for this invocation. The
