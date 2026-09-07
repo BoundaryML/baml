@@ -105,8 +105,8 @@ literal strings, with shell parameter expansion disabled.
 
 Existing volumes keep their login and runtime state. The first boot after
 this change builds a fresh compiler in the isolated cache, even if the old
-runtime cache already contains one. This isolates startup builds; it does
-not isolate the runtime agent's Bash from the runtime user's files.
+runtime cache already contains one. Runtime checkout commands also use a Linux mount/process boundary with an isolated HOME.
+Claude authentication is handled by a messages-only broker outside that boundary.
 
 Set `ATB2_CANARY_REV` to a commit SHA to pin the runner's compiler. If the
 cached executable's recorded revision matches that pin, startup skips the
@@ -159,3 +159,11 @@ rows, and `dataset=eq.live` in a dashboard filter hides them.
 The eval dataset itself (`eval/supabase`, tables `triage_issues` /
 `triage_feedback`) is separate: reference issues and synthetic reports,
 eval-only by construction.
+
+### Universal Auth and agent isolation
+
+The root launcher accepts `INFISICAL_CLIENT_ID` and `INFISICAL_CLIENT_SECRET`
+from the Fly machine identity, or the existing `INFISICAL_TOKEN` fallback.
+Neither reaches the runtime. Agent commands require Linux namespaces; startup
+fails closed if they are unavailable. Trusted pushes export Git objects into
+fresh controller-owned metadata and use a fixed repository and exact branch lease.
