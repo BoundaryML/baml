@@ -235,21 +235,25 @@ function still_broken(issue: Issue) -> bool {
 /// The `baml-cli` to check repros with: canary's own build when the cache
 /// has been built, else whatever `baml` resolves to.
 function check_cli() -> string {
-    let built = target_dir() + "/debug/baml-cli";
+    let built = atb2_home() + "/agent-cache/repo/target/debug/baml-cli";
     if (baml.fs.exists(built)) {
         built
     } else {
-        "baml"
+        atb2_home() + "/target/debug/baml-cli"
     }
 }
 
 /// Write the repro to a scratch project and run it with check_cli().
 function check_on_canary(r: Repro, n: int) -> Verdict {
     //# write the repro to a scratch project
-    let dir = atb2_home() + "/repro-check/" + baml.id.new();
+    let repro_id = baml.id.new();
+    let dir = atb2_home() + "/repro-check/" + repro_id;
     baml.fs.mkdir(dir + "/baml_src", baml.fs.MkdirOptions { recursive: true });
     defer {
         baml.fs.remove_dir_all(dir) catch (_) {
+            _ => null,
+        };
+        baml.fs.remove_dir_all(atb2_home() + "/agent-cache/repro-check/" + repro_id) catch (_) {
             _ => null,
         };
     }
@@ -424,7 +428,7 @@ function cache_repo() -> string {
 }
 
 function target_dir() -> string {
-    atb2_home() + "/target"
+    atb2_home() + "/agent-cache/target"
 }
 
 function repo_url() -> string {
@@ -609,7 +613,17 @@ function keep_awake(program: string, args: string[]) -> Cmd {
 
 function run_with(c: Cmd, env: map<string, string>) -> CmdResult {
     let label = c.program + " " + c.args.join(" ");
-    let awake = keep_awake(c.program, c.args);
+    let untrusted = c.cwd.starts_with(atb2_home() + "/worktrees/")
+        || c.cwd.starts_with(atb2_home() + "/repro-check/")
+        || (c.cwd == cache_repo() + "/baml_language");
+    let awake = if (untrusted) {
+        keep_awake(
+            "/usr/bin/python3",
+            ["-I", "/usr/local/lib/atb2/sandbox.py", c.cwd, c.program].concat(c.args),
+        )
+    } else {
+        keep_awake(c.program, c.args)
+    };
     let out = baml.sys.exec(
         awake.program,
         awake.args,
@@ -675,6 +689,7 @@ class Sandbox {
     worktree: string,
     run_dir: string,
     reused_branch: bool,
+    base_head: string?,
 }
 
 /// One cached clone, fetched each run. Safe to call from parallel tests:
@@ -685,7 +700,7 @@ function ensure_cache() -> null {
     //# mkdir the atb2 home
     baml.fs.mkdir(atb2_home(), baml.fs.MkdirOptions { recursive: true });
     //# mkdir the target dir
-    baml.fs.mkdir(target_dir(), baml.fs.MkdirOptions { recursive: true });
+    baml.fs.mkdir(atb2_home() + "/agent-cache", baml.fs.MkdirOptions { recursive: true });
     //# if the repo does not exist
     if (!baml.fs.exists(repo + "/.git")) {
         let clone = run(
@@ -700,8 +715,6 @@ function ensure_cache() -> null {
             baml.sys.panic("clone failed: " + tail(clone.stderr, 5));
         };
     };
-    //# worktree config must be on or the --worktree pushurl guard is a no-op
-    git(repo, ["config", "extensions.worktreeConfig", "true"]);
     //# fetch canary (retried: parallel tests share the cache)
     let tries = 0;
     //# while the tries are less than 3
@@ -725,10 +738,6 @@ function ensure_cache() -> null {
     baml.sys.panic("git fetch failed three times")
 }
 
-function branch_exists_locally(branch: string) -> bool {
-    git(cache_repo(), ["rev-parse", "--verify", "--quiet", "refs/heads/" + branch]).ok
-}
-
 function branch_exists_on_origin(branch: string) -> bool {
     git(cache_repo(), ["ls-remote", "--exit-code", "--heads", "origin", branch]).ok
 }
@@ -740,112 +749,81 @@ function open_sandbox(issue: Issue, update: bool) -> Sandbox {
 /// The sandbox for any branch: a fresh one off origin/canary, or (`update`)
 /// the branch as it is on origin. merge_issue opens PR branches this way.
 function open_branch_sandbox(branch: string, update: bool) -> Sandbox {
-    //# get the repo
-    let repo = cache_repo();
-    //# get the worktree
     let wt = worktree_for(branch);
-    //# get the run dir
     let rd = run_dir_for(branch);
-    //# if the worktree exists
     if (baml.fs.exists(wt)) {
-        //# remove the worktree
-        git(repo, ["worktree", "remove", "--force", wt]);
-        //# if the worktree still exists, remove the dir all
-        if (baml.fs.exists(wt)) {
-            baml.fs.remove_dir_all(wt);
-        };
+        baml.fs.remove_dir_all(wt);
     };
-    //# prune the worktree
-    git(repo, ["worktree", "prune"]);
-    //# remove the run dir
-    baml.fs.remove_dir_all(rd);
+    if (baml.fs.exists(rd)) {
+        baml.fs.remove_dir_all(rd);
+    };
     baml.fs.mkdir(rd, baml.fs.MkdirOptions { recursive: true });
-    //# mkdir the worktrees dir
     baml.fs.mkdir(atb2_home() + "/worktrees", baml.fs.MkdirOptions { recursive: true });
-    //# set reused to false
-    let reused = false;
-    //# if the branch exists locally and update is true
-    let add = if (branch_exists_locally(branch) && update) {
-        //# set reused to true
-        reused = true;
-        //# add the worktree
-        git(repo, ["worktree", "add", wt, branch])
-    } else {
-        //# if the branch exists locally
-        if (branch_exists_locally(branch)) {
-            git(repo, ["branch", "-D", branch]);
+    // Independent object storage and metadata: never mount the controller's
+    // linked-worktree .git directory into an agent sandbox.
+    let clone = git(cache_repo(), ["clone", "--no-local", "--no-hardlinks", "--no-checkout", cache_repo(), wt]);
+    if (!clone.ok) {
+        baml.sys.panic("isolated clone failed");
+    };
+    let reused = branch_exists_on_origin(branch);
+    if (reused && !update) {
+        baml.sys.panic("branch already exists; explicit update required");
+    };
+    if (reused) {
+        if (!git(wt, ["fetch", repo_url(), "refs/heads/" + branch]).ok) {
+            baml.sys.panic("isolated branch fetch failed");
         };
-        if (branch_exists_on_origin(branch)) {
-            reused = true;
-            git(repo, ["fetch", "origin", branch]);
-            git(repo, ["worktree", "add", "--track", "-b", branch, wt, "origin/" + branch])
-        } else {
-            git(repo, ["worktree", "add", "-b", branch, wt, "origin/canary"])
-        }
     };
-    //# if the add is not ok, panic
-    if (!add.ok) {
-        baml.sys.panic("worktree add failed: " + tail(add.stderr, 5));
+    let base = if (reused) {
+        "FETCH_HEAD"
+    } else {
+        "origin/canary"
     };
-    //# config the worktree
-    git(wt, ["config", "--worktree", "remote.origin.pushurl", "no_push://atb2"]);
-    //# config the user name
-    git(wt, ["config", "--worktree", "user.name", "atb2"]);
-    git(wt, ["config", "--worktree", "user.email", "atb2@boundaryml.com"]);
-
-    log.info({ "sandbox": wt, "branch": branch, "reused_branch": reused });
-    Sandbox { branch: branch, worktree: wt, run_dir: rd, reused_branch: reused }
+    if (!git(wt, ["checkout", "-b", branch, base]).ok) {
+        baml.sys.panic("isolated checkout failed");
+    };
+    git(wt, ["config", "remote.origin.pushurl", "no_push://atb2"]);
+    git(wt, ["config", "user.name", "atb2"]);
+    git(wt, ["config", "user.email", "atb2@boundaryml.com"]);
+    let base_head = if (reused) {
+        git(wt, ["rev-parse", "HEAD"]).stdout.trim()
+    } else {
+        null
+    };
+    Sandbox {
+        branch: branch,
+        worktree: wt,
+        run_dir: rd,
+        reused_branch: reused,
+        base_head: base_head,
+    }
 }
 
 /// Runs from `defer`: never throws. Removes the worktree (and the local
 /// branch unless kept for a human), then checks the cache is untouched.
 function close_sandbox(sb: Sandbox, keep_branch: bool) -> null {
-    let repo = cache_repo();
-    //# remove the worktree
-    let removed = git(repo, ["worktree", "remove", "--force", sb.worktree]);
-    git(repo, ["worktree", "prune"]);
-    if (baml.fs.exists(sb.worktree)) {
-        // git refused (or the tree was already unregistered): delete it outright
-        let rm = run(Cmd { program: "rm", args: ["-rf", sb.worktree], cwd: atb2_home(), timeout_ms: 600000 });
-        if (baml.fs.exists(sb.worktree)) {
-            log.warn(
-                {
-                    "sandbox": sb.worktree,
-                    "warning": "worktree not removed",
-                    "git": tail(removed.stderr, 2),
-                    "rm": tail(rm.stderr, 2),
-                },
-            );
-        };
+    // Build output is private to this invocation and can be large. Keep the
+    // conversation checkout if needed, but reclaim its completed build cache.
+    let cache = atb2_home()
+        + "/agent-cache/worktrees/"
+        + sb.worktree.replace_all(atb2_home() + "/worktrees/", "");
+    if (baml.fs.exists(cache)) {
+        baml.fs.remove_dir_all(cache);
     };
-    //# delete the local branch unless a human should pick it up
-    if (!keep_branch) {
-        git(repo, ["branch", "-D", sb.branch]);
+    if (!keep_branch && baml.fs.exists(sb.worktree)) {
+        baml.fs.remove_dir_all(sb.worktree);
     };
-    //# keep the run dir as the audit trail (ATB2_KEEP_RUNS=0 deletes it)
     if ((baml.env.get("ATB2_KEEP_RUNS") ?? "1") == "0") {
         baml.fs.remove_dir_all(sb.run_dir) catch (_) {
-            _ => null,
+            _ => null
         };
-    };
-    //# verify the cache repo is untouched
-    if (!cache_is_clean(sb)) {
-        log.warn(
-            { "sandbox": sb.worktree, "warning": "cache repo is not clean after close_sandbox" },
-        );
     };
     null
 }
 
-function cache_is_clean(sb: Sandbox) -> bool {
-    let status = git(cache_repo(), ["status", "--porcelain"]);
-    let list = git(cache_repo(), ["worktree", "list", "--porcelain"]);
-    status.ok && status.stdout.trim().length() == 0 && !list.stdout.includes(sb.worktree)
-}
-
 /// canary's own baml-cli, rebuilt from the cache checkout after each fetch,
 /// so the repro pre-check and the gate both speak for canary HEAD. Seconds
-/// when the shared target is warm.
+/// when the private baseline target is warm.
 function build_canary_cli() -> null {
     let b = run(
         Cmd {
@@ -926,6 +904,14 @@ function claude_args(prompt: string, tools: string[]) -> string[] {
         // env is an allowlist, so this is the sandbox, not the prompt.
         "--permission-mode",
         "bypassPermissions",
+        "--safe-mode",
+        "--setting-sources",
+        "",
+        "--strict-mcp-config",
+        "--mcp-config",
+        "{\"mcpServers\":{}}",
+        "--settings",
+        "{\"disableAllHooks\":true}",
         "--no-session-persistence",
         "--tools",
         tools.join(","),
@@ -950,10 +936,8 @@ function run_claude(
     env.set("ATB2_TRANSCRIPT", transcript_path);
     let r = run_with(
         Cmd {
-            program: "sh",
-            args: ["-c", "exec \"$@\" > \"$ATB2_TRANSCRIPT\" 2>&1", "atb2", "claude"].concat(
-                claude_args(prompt, tools),
-            ),
+            program: "claude",
+            args: claude_args(prompt, tools),
             cwd: cwd,
             timeout_ms: timeout_s * 1000,
         },
@@ -1337,31 +1321,6 @@ function changed_crates(worktree: string) -> string[] {
     changed_crates_from(git(worktree, ["diff", "--name-only", "origin/canary...HEAD"]).stdout)
 }
 
-/// Tests known to fail on canary itself; a gate failure that is only these
-/// is not the agent's. ATB2_FLAKY_TESTS overrides (comma-separated names).
-function flaky_tests() -> string[] {
-    (baml.env.get("ATB2_FLAKY_TESTS") ?? "claude_code_client_preserves_process_wait_timeout").split(
-        ",",
-    )
-}
-
-/// `FAIL [...] crate::module test_name` lines of nextest output, minus the
-/// known-flaky names.
-function unexpected_failures(output: string, flaky: string[]) -> string[] {
-    let out: string[] = [];
-    for (let line in output.lines()) {
-        let l = line.trim();
-        if (l.starts_with("FAIL [")) {
-            let parts = l.split(" ");
-            let name = parts.at(parts.length() - 1) ?? "";
-            if (!flaky.includes(name) && !out.includes(name)) {
-                out.push(name);
-            };
-        };
-    }
-    out
-}
-
 function gate_step(name: string, c: Cmd) -> GateStep {
     let started = baml.time.Instant.now();
     let r = run(c);
@@ -1423,72 +1382,28 @@ function run_gate(worktree: string) -> GateResult {
         };
     }
     if (ok) {
-        //## nextest on baml_tests (known-flaky failures subtracted)
-        // --no-fail-fast, then subtract the known-flaky tests: one flaky test
-        // must not sink a gate that canary itself would not pass
-        let s = gate_step(
-            "nextest baml_tests",
-            Cmd {
-                program: "cargo",
-                args: ["nextest", "run", "-p", "baml_tests", "--no-fail-fast"],
-                cwd: wd,
-                timeout_ms: 1800000,
-            },
-        );
-        let real = unexpected_failures(s.tail, flaky_tests());
-        // nextest exits 100 only when it compiled and ran and some tests
-        // failed; a compile error / timeout (124) exits otherwise. Gate the
-        // known-flaky pass on that code, not on captured stdout, so a
-        // non-completed run cannot be waved through with injected output.
-        let ran_tests = s.exit_code == 100;
-        let step = GateStep {
-            name: s.name,
-            ok: s.ok || (ran_tests && real.length() == 0),
-            seconds: s.seconds,
-            tail: if (s.ok || !ran_tests || real.length() > 0) {
-                s.tail
-            } else {
-                "only known-flaky failures: " + s.tail
-            },
-            exit_code: s.exit_code,
-        };
-        steps.push(step);
-        ok = step.ok;
+        // Every nonzero exit fails closed. Log tails are display-only and
+        // cannot establish that a failed run contained only known failures.
+        ok
+            = cargo(
+                "nextest baml_tests",
+                ["nextest", "run", "-p", "baml_tests", "--no-fail-fast"],
+                1800000,
+            );
     };
     if (ok) {
-        //## insta: snapshots must be settled
-        // insta re-runs the crate to refresh snapshots; test verdicts were
-        // already taken by the nextest step above, so this step gates on
-        // snapshot state only (the tree-clean check below catches churn)
-        let s = gate_step(
-            "insta baml_tests",
-            Cmd {
-                program: "cargo",
-                args: ["insta", "test", "--test-runner=nextest", "--accept", "-p", "baml_tests"],
-                cwd: wd,
-                timeout_ms: 1800000,
-            },
-        );
-        // settled = the run completed (exit 0, or 100 = test failures only, e.g.
-        // the known-flaky test); a compile error / timeout does not count. The
-        // tree-clean check below catches any real snapshot churn.
-        let snapshots_settled = s.ok || s.exit_code == 100;
-        steps.push(
-            GateStep {
-                name: s.name,
-                ok: snapshots_settled,
-                seconds: s.seconds,
-                tail: s.tail,
-                exit_code: s.exit_code,
-            },
-        );
-        ok = snapshots_settled;
+        ok
+            = cargo(
+                "insta baml_tests",
+                ["insta", "test", "--test-runner=nextest", "--accept", "-p", "baml_tests"],
+                1800000,
+            );
     };
     if (ok) {
         //## the tree must be clean after --accept
         // --accept must not have produced unreviewed snapshot churn
         let status = git(worktree, ["status", "--porcelain"]);
-        let clean = status.stdout.trim().length() == 0;
+        let clean = status.ok && status.stdout.trim().length() == 0;
         steps.push(
             GateStep {
                 name: "insta clean",
@@ -1676,32 +1591,24 @@ function head_sha(sb: Sandbox) -> string {
 
 /// Live only. Lifts the worktree's push guard for this one push. The
 /// guard is set by open_sandbox and is what keeps the agent from pushing.
-function push_branch(sb: Sandbox) -> null {
-    //# lift the push guard for this one push
-    // pushurl is multi-valued, so it cannot be overridden with -c; the
-    // no_push guard is removed here, and only here, for this one push
-    git(sb.worktree, ["config", "--worktree", "--unset-all", "remote.origin.pushurl"]);
-    //# push with the host's credentials, hooks off
+function push_branch(sb: Sandbox, expected_head: string? = null) -> null {
     let push = run_with(
         Cmd {
-            program: "git",
+            program: "/usr/bin/python3",
             args: [
-                "-c",
-                "core.hooksPath=/dev/null",
-                "push",
-                "--force-with-lease",
-                "-u",
-                "origin",
+                "-I",
+                "/usr/local/lib/atb2/push.py",
+                sb.worktree,
                 sb.branch,
+                expected_head ?? sb.base_head ?? "",
             ],
-            cwd: sb.worktree,
+            cwd: atb2_home(),
             timeout_ms: 600000,
         },
         sandbox_env(true),
     );
     if (!push.ok) {
-        //## stop: the push was rejected
-        baml.sys.panic("push failed: " + tail(push.stderr, 5));
+        baml.sys.panic("trusted push failed");
     };
     null
 }
@@ -1742,7 +1649,7 @@ function comment_on_pr(sb: Sandbox, pr: string, body: string) -> null {
 /// Live only. Pushes the branch and opens a draft PR — or updates the
 /// existing PR for the branch.
 function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
-    //# lift the push guard and push the branch
+    //# push through trusted metadata
     let env = sandbox_env(true);
     push_branch(sb);
     //# update the existing PR for this branch, if there is one
@@ -1751,7 +1658,7 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
         Cmd {
             program: "gh",
             args: ["pr", "view", sb.branch, "--repo", repo_slug(), "--json", "url", "--jq", ".url"],
-            cwd: sb.worktree,
+            cwd: atb2_home(),
             timeout_ms: 120000,
         },
         env,
@@ -1771,7 +1678,7 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
                     "--body-file",
                     body_path,
                 ],
-                cwd: sb.worktree,
+                cwd: atb2_home(),
                 timeout_ms: 120000,
             },
             env,
@@ -1797,7 +1704,7 @@ function push_and_open_pr(sb: Sandbox, draft: PrDraft) -> string {
                 "--body-file",
                 body_path,
             ],
-            cwd: sb.worktree,
+            cwd: atb2_home(),
             timeout_ms: 120000,
         },
         env,
@@ -2250,18 +2157,22 @@ testset "handle_issue" {
         assert.is_true(settled.includes("no snapshots to review"));
     }
 
-    test "known-flaky nextest failures are subtracted" {
-        let out = "        PASS [   0.9s] (1/3) baml_tests::shell exec_with_cwd\n        FAIL [   1.1s] (2/3) baml_tests::shell claude_code_client_preserves_process_wait_timeout\n        FAIL [   0.2s] (3/3) baml_tests::foo real_regression\n";
-        assert.equal(
-            unexpected_failures(out, ["claude_code_client_preserves_process_wait_timeout"]),
-            ["real_regression"],
+    test "failed gate output cannot become a pass when truncated" {
+        let step = gate_step(
+            "failure",
+            Cmd {
+                program: "/bin/sh",
+                args: [
+                    "-c",
+                    "echo 'FAIL [0.1s] unexpected_regression'; i=0; while [ $i -lt 65 ]; do echo ordinary-output; i=$((i+1)); done; exit 100",
+                ],
+                cwd: "/tmp",
+                timeout_ms: 10000,
+            },
         );
-        assert.equal(
-            unexpected_failures(out, ["claude_code_client_preserves_process_wait_timeout", "real_regression"])
-                .length(),
-            0,
-        );
-        assert.is_true(claude_args("x", fix_tools()).includes("bypassPermissions"));
+        assert.equal(step.exit_code, 100);
+        assert.is_true(!step.ok);
+        assert.is_true(!step.tail.includes("unexpected_regression"));
     }
 
     test "time budgets" {

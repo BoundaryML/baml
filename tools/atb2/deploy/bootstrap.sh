@@ -12,7 +12,7 @@ fi
 # runtime directories retain their contents, including the persistent CLI login.
 chown root:root /data
 chmod 711 /data
-for name in home repo target cargo rustup worktrees runs merge repro-check bootstrap; do
+for name in home repo target cargo rustup worktrees runs merge repro-check agent-cache bootstrap; do
   dir="/data/$name"
   if [ -L "$dir" ]; then
     echo "atb2: refusing symlink at $dir" >&2
@@ -78,5 +78,19 @@ if [ -n "$artifact" ]; then
   echo 'atb2: compiler installation failed; previous runtime binary preserved' >&2
   exit 1
 fi
+# Publish the compiler revision with the same UID boundary as the executable.
+# Play runs use this marker to report exactly which canary build they exercised.
+"${as_builder[@]}" cat /data/bootstrap/target/.baml-cli-rev |
+  "${as_runtime[@]}" /usr/bin/python3 -I -c '
+import os, re, sys, tempfile
+from pathlib import Path
+revision = sys.stdin.read(128).strip()
+if not re.fullmatch("[0-9a-f]{40}", revision):
+    raise SystemExit("atb2: invalid compiler revision")
+fd, tmp = tempfile.mkstemp(dir="/data/target", prefix=".revision-")
+with os.fdopen(fd, "w") as out:
+    out.write(revision + "\n")
+os.replace(tmp, "/data/target/.baml-cli-rev")
+'
 # Fetch secrets while still root, then replace the environment before setpriv.
 exec /usr/bin/python3 -I /usr/local/bin/atb2-launch-runtime.py "$@"
