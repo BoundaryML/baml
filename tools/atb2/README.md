@@ -391,3 +391,17 @@ Apply the part 6a SQL from its PR description before deployment.
 `feedback_resolutions(report_ids uuid[])` accepts at most 100 full report UUIDs
 and exposes only linked issue IDs, status and fixed version. Its lookup uses
 feedback/issue primary keys; it does not expose reporter identities or contents.
+
+### CLI resolution polling
+
+`baml feedback status/list/view` refresh resolution data with a 1.5-second total
+budget, falling back to the local cache when offline. Ordinary interactive
+commands poll at most daily and print an update notice on stderr. After upgrading
+to a stable toolchain containing the fix, the cached report displays `resolved`
+and its reminder stops. Delivery state and anonymity remain separate.
+
+Set repository variables `BAML_FEEDBACK_SUPABASE_URL` and
+`BAML_FEEDBACK_PUBLISHABLE_KEY` before publishing the CLI. The latter must be a
+public Supabase `sb_publishable_` key, never a service-role key. The toolchain
+release workflow embeds these public values, including cross builds. Builds
+without the publishable key leave polling inactive.
