@@ -82,6 +82,26 @@ function handle_issue(
         //## always: tear the sandbox down
         close_sandbox(sb, keep_branch);
     }
+    if (mode == HandleMode.Live) {
+        bind_agent_session(
+            sb,
+            thread,
+            if (review == null) {
+                issue.id
+            } else {
+                null
+            },
+            match (issue.status) {
+                let status: InProgress => status.pr,
+                _ => null,
+            },
+            if (review == null) {
+                "issue"
+            } else {
+                "babysit"
+            },
+        );
+    };
     let started = baml.time.Instant.now();
     if (review != null) {
         if (
@@ -836,7 +856,7 @@ function open_sandbox(issue: Issue, update: bool) -> Sandbox {
 /// The sandbox for any branch: a fresh one off origin/canary, or (`update`)
 /// the branch as it is on origin. merge_issue opens PR branches this way.
 function open_branch_sandbox(branch: string, update: bool) -> Sandbox {
-    let wt = worktree_for(branch);
+    let wt = worktree_for(branch) + "-" + baml.id.new();
     let rd = run_dir_for(branch);
     if (baml.fs.exists(wt)) {
         baml.fs.remove_dir_all(wt);
@@ -896,7 +916,13 @@ function close_sandbox(sb: Sandbox, keep_branch: bool) -> null {
     if (baml.fs.exists(cache)) {
         baml.fs.remove_dir_all(cache);
     };
-    if (!keep_branch && baml.fs.exists(sb.worktree)) {
+    let session_index = atb2_home()
+        + "/agent-sessions/workspaces/"
+        + sb.worktree.replace_all(atb2_home() + "/worktrees/", "");
+    if (baml.fs.exists(session_index)) {
+        release_agent_session(sb);
+    };
+    if (!keep_branch && !baml.fs.exists(session_index) && baml.fs.exists(sb.worktree)) {
         baml.fs.remove_dir_all(sb.worktree);
     };
     if ((baml.env.get("ATB2_KEEP_RUNS") ?? "1") == "0") {

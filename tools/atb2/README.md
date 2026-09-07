@@ -408,3 +408,23 @@ Set repository variables `BAML_FEEDBACK_SUPABASE_URL` and
 public Supabase `sb_publishable_` key, never a service-role key. The toolchain
 release workflow embeds these public values, including cross builds. Builds
 without the publishable key leave polling inactive.
+
+## Thread sessions
+
+Slack mentions are durably inserted before acknowledgement. Explicit babysit
+commands use the shared babysitter queue; other requests enter `agent_turns`.
+The worker infers questions versus feedback, asks when ambiguous, and resumes
+thread questions using `agent_sessions`. The session records Slack team/channel/
+root thread, the Claude session UUID, latest checkout, and issue/PR/feedback links.
+Session and turn tables are private to the service role.
+
+Each session has a persistent isolated HOME on the Fly volume, separate from
+`/data/home` and its login. A filesystem lock serializes agent turns, including
+issue implementation and babysitter proposals. Resumed questions have only
+Read/Glob/Grep; they do not inherit an earlier push approval. Each workflow
+invocation gets an independent checkout; the last completed checkout is retained
+for questions and replaced under the same session lock. Lost volume state starts
+a replacement conversation with a Slack notice and stored context.
+
+Apply the part 7a SQL before deploying. The worker is spawned inside the existing
+runner process. The image uses digest-pinned Node 22 for the pinned Claude CLI.

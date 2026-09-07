@@ -226,6 +226,17 @@ else: raise AssertionError('shared toolchain was writable')
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertIn('patched-fixture',result.stdout)
 
+    def test_conversation_home_persists_without_exposing_other_sessions(self):
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as other:
+            home=Path(first);second=Path(other)
+            command=sandbox.command(str(self.work),['/usr/bin/python3','-c',
+                'from pathlib import Path; Path.home().joinpath("conversation").write_text("remember")'],conversation_home=home)
+            subprocess.run(command,env={'PATH':sandbox.SAFE_PATH},check=True)
+            self.assertEqual((home/'conversation').read_text(),'remember')
+            command=sandbox.command(str(self.work),['/usr/bin/python3','-c',
+                'from pathlib import Path; assert not Path.home().joinpath("conversation").exists(); assert not Path("'+first+'/conversation").exists()'],conversation_home=second)
+            subprocess.run(command,env={'PATH':sandbox.SAFE_PATH},check=True)
+
     def test_push_ignores_agent_origin_and_credential_helper(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder=Path(tmp)
