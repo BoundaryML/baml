@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import postgres from 'postgres';
 
-import { requireGeneratedContentDatabaseUrl } from '@/lib/generated-content/database';
+import { GENERATED_CONTENT_MIGRATION_DATABASE_ENVIRONMENT_VARIABLE } from '@/lib/generated-content/constants';
 import { sha256 } from '@/lib/generated-content/json';
 import {
   parseOperatorArguments,
@@ -10,7 +10,7 @@ import {
 } from '@/scripts/operator-arguments';
 
 const migrationUrl = new URL(
-  '../migrations/0001-generated-content.sql',
+  '../migrations/0002-live-document-store.sql',
   import.meta.url,
 );
 
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
     console.log(
       JSON.stringify(
         {
-          migration: '0001-generated-content.sql',
+          migration: '0002-live-document-store.sql',
           migration_sha256: migrationHash,
           mode: 'review-only',
           target,
@@ -67,7 +67,14 @@ async function main(): Promise<void> {
     );
   }
 
-  const sql = postgres(requireGeneratedContentDatabaseUrl(), {
+  const databaseUrl =
+    process.env[GENERATED_CONTENT_MIGRATION_DATABASE_ENVIRONMENT_VARIABLE];
+  if (!databaseUrl) {
+    throw new Error(
+      `${GENERATED_CONTENT_MIGRATION_DATABASE_ENVIRONMENT_VARIABLE} is required when applying a migration.`,
+    );
+  }
+  const sql = postgres(databaseUrl, {
     max: 1,
     prepare: false,
   });
@@ -82,7 +89,7 @@ async function main(): Promise<void> {
   console.log(
     JSON.stringify(
       {
-        migration: '0001-generated-content.sql',
+        migration: '0002-live-document-store.sql',
         migration_sha256: migrationHash,
         mode: 'applied',
         target,

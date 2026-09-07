@@ -1,10 +1,9 @@
 import { DocsShell } from '@/components/docs-shell';
 import { GeneratedReleaseCatalog } from '@/components/generated-release-catalog';
 import {
-  listGeneratedReleaseSummaries,
-  loadGeneratedReleaseSnapshot,
-  selectFeaturedGeneratedRelease,
-} from '@/lib/generated-content/build-content';
+  listDocumentReleaseSummaries,
+  readDocumentRoute,
+} from '@/lib/generated-content/document-store';
 import { documentationMetadata } from '@/lib/metadata';
 
 export const metadata = documentationMetadata({
@@ -12,12 +11,18 @@ export const metadata = documentationMetadata({
   path: '/baml/packages',
   title: 'Standard packages',
 });
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function PackagesPage() {
-  const releases = await listGeneratedReleaseSummaries();
-  const featuredRelease = selectFeaturedGeneratedRelease(releases);
+  const releases = await listDocumentReleaseSummaries();
+  const featuredRelease =
+    releases.find((release) => release.aliases.includes('stable')) ??
+    releases.find((release) => release.aliases.includes('canary')) ??
+    releases.find((release) => release.aliases.includes('nightly')) ??
+    releases[0];
   const featured = featuredRelease
-    ? await loadGeneratedReleaseSnapshot(featuredRelease.routeVersion)
+    ? await readDocumentRoute(featuredRelease.routeVersion, 'baml/packages')
     : null;
 
   return (

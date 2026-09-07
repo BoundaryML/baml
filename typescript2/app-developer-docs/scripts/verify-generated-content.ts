@@ -1,4 +1,4 @@
-import { createGeneratedContentReader } from '@/lib/generated-content/database';
+import { closeDocumentStore } from '@/lib/generated-content/document-store';
 import { verifyGeneratedRelease } from '@/lib/generated-content/verify';
 import {
   parseOperatorArguments,
@@ -12,13 +12,10 @@ async function main(): Promise<void> {
     [],
   );
   const version = requireOperatorValue(parsedArguments, 'version');
-  const reader = createGeneratedContentReader();
   try {
-    console.log(
-      JSON.stringify(await verifyGeneratedRelease(reader, version), null, 2),
-    );
+    console.log(JSON.stringify(await verifyGeneratedRelease(version), null, 2));
   } finally {
-    await reader.close();
+    await closeDocumentStore();
   }
 }
 

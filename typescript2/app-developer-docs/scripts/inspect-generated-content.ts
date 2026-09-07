@@ -1,4 +1,8 @@
-import { createGeneratedContentReader } from '@/lib/generated-content/database';
+import {
+  closeDocumentStore,
+  listDocumentReleaseSummaries,
+  listStoredRoutesForVersion,
+} from '@/lib/generated-content/document-store';
 import {
   parseOperatorArguments,
   requireOperatorValue,
@@ -10,55 +14,34 @@ async function main(): Promise<void> {
     ['version'],
     [],
   );
-  const version = requireOperatorValue(parsedArguments, 'version');
-  const reader = createGeneratedContentReader();
   try {
-    const [releases, channels, packageExports, referencePages, cliArtifact] =
-      await Promise.all([
-        reader.listReleases(),
-        reader.listChannels(),
-        reader.listPackageExports(version),
-        reader.listReferencePages(version),
-        reader.getCliArtifact(version),
-      ]);
-    const release = releases.find((candidate) => candidate.version === version);
+    const version = requireOperatorValue(parsedArguments, 'version');
+    const release = (await listDocumentReleaseSummaries()).find(
+      (candidate) => candidate.release.version === version,
+    );
     if (!release) {
       throw new Error(`Generated-content release ${version} does not exist.`);
     }
-
+    const routes = await listStoredRoutesForVersion(version);
     console.log(
       JSON.stringify(
         {
-          channels: channels
-            .filter((channel) => channel.release_version === version)
-            .map((channel) => channel.channel),
-          cli: cliArtifact
-            ? {
-                artifact_schema_version:
-                  cliArtifact.row.artifact_schema_version,
-                payload_sha256: cliArtifact.row.payload_sha256,
-                source_sha256: cliArtifact.row.source_sha256,
-                wrapper_version: cliArtifact.row.wrapper_version,
-              }
-            : null,
-          generated_at: release.generated_at.toISOString(),
-          generator_version: release.generator_version,
-          package_exports: packageExports.map((item) => ({
-            describe_format_version: item.describe_format_version,
-            describe_sha256: item.describe_sha256,
-            package_name: item.package_name,
-          })),
-          reference_page_count: referencePages.length,
-          released_at: release.released_at.toISOString(),
-          source_commit: release.source_commit,
-          version: release.version,
+          aliases: release.aliases,
+          ...release.release,
+          published_at: release.release.published_at.toISOString(),
+          released_at: release.release.released_at.toISOString(),
+          routes_by_kind: Object.fromEntries(
+            Object.entries(
+              Object.groupBy(routes, (route) => route.route_metadata.kind),
+            ).map(([kind, entries]) => [kind, entries?.length ?? 0]),
+          ),
         },
         null,
         2,
       ),
     );
   } finally {
-    await reader.close();
+    await closeDocumentStore();
   }
 }
 

@@ -1,21 +1,39 @@
 'use client';
 
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, LoaderCircle } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { z } from 'zod';
 
-import type { GeneratedVersionOption } from '@/lib/generated-content/discovery';
+const versionOptionSchema = z
+  .object({
+    aliases: z.array(z.string()),
+    href: z.string().startsWith('/'),
+    routeVersion: z.string().startsWith('v'),
+  })
+  .strict();
+const versionOptionsResponseSchema = z
+  .object({ options: z.array(versionOptionSchema) })
+  .strict();
+type VersionOption = z.output<typeof versionOptionSchema>;
 
 export function GeneratedVersionSwitcher({
-  options,
+  currentHref,
+  currentRouteVersion,
+  storedPath,
 }: {
-  options: GeneratedVersionOption[];
+  currentHref: string;
+  currentRouteVersion: string;
+  storedPath: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const current = options.find((option) => option.href === pathname);
-  const selected = current ?? options[0];
+  const [options, setOptions] = useState<VersionOption[]>([
+    { aliases: [], href: currentHref, routeVersion: currentRouteVersion },
+  ]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -35,7 +53,24 @@ export function GeneratedVersionSwitcher({
     };
   }, [menuOpen]);
 
-  if (!selected) return null;
+  async function openMenu(): Promise<void> {
+    setMenuOpen((open) => !open);
+    if (loaded || loading) return;
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `/api/generated-versions?path=${encodeURIComponent(storedPath)}`,
+      );
+      if (!response.ok) throw new Error('Version lookup failed.');
+      const result = versionOptionsResponseSchema.parse(await response.json());
+      setOptions(result.options);
+      setLoaded(true);
+    } catch {
+      setLoaded(false);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="inline-flex min-w-0 max-w-full items-center gap-2 text-sm">
@@ -47,11 +82,18 @@ export function GeneratedVersionSwitcher({
           aria-expanded={menuOpen}
           aria-haspopup="menu"
           className="docs-focus-ring inline-flex h-8 max-w-[min(18rem,60vw)] items-center gap-2 rounded-lg bg-secondary px-3 font-mono text-xs font-medium text-secondary-foreground shadow-none hover:bg-accent md:h-7"
-          onClick={() => setMenuOpen((open) => !open)}
+          onClick={openMenu}
           type="button"
         >
-          <span className="truncate">{selected.routeVersion}</span>
-          <ChevronDown aria-hidden="true" className="size-4 shrink-0" />
+          <span className="truncate">{currentRouteVersion}</span>
+          {loading ? (
+            <LoaderCircle
+              aria-hidden="true"
+              className="size-4 shrink-0 animate-spin"
+            />
+          ) : (
+            <ChevronDown aria-hidden="true" className="size-4 shrink-0" />
+          )}
         </button>
         {menuOpen ? (
           <div
@@ -60,7 +102,7 @@ export function GeneratedVersionSwitcher({
           >
             {options.map((option) => (
               <button
-                aria-checked={option.href === selected.href}
+                aria-checked={option.href === pathname}
                 className="docs-focus-ring flex h-9 w-full items-center justify-between gap-3 rounded-md px-2 text-left font-mono text-xs whitespace-nowrap hover:bg-accent"
                 key={option.href}
                 onClick={() => {
@@ -70,13 +112,16 @@ export function GeneratedVersionSwitcher({
                 role="menuitemradio"
                 type="button"
               >
-                {option.routeVersion}
+                <span>
+                  {option.routeVersion}
+                  {option.aliases.length > 0
+                    ? ` · ${option.aliases.join(', ')}`
+                    : ''}
+                </span>
                 <Check
                   aria-hidden="true"
                   className={
-                    option.href === selected.href
-                      ? 'size-4'
-                      : 'size-4 opacity-0'
+                    option.href === pathname ? 'size-4' : 'size-4 opacity-0'
                   }
                 />
               </button>

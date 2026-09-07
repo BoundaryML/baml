@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-
+import { hashDocumentManifest } from '../lib/generated-content/document-ir.ts';
+import { projectDocumentRelease } from '../lib/generated-content/document-projector.ts';
 import {
   canonicalJson,
   jsonValueSchema,
   sha256,
 } from '../lib/generated-content/json.ts';
 import { buildReferencePages } from '../lib/generated-content/package-generator.ts';
+import type { CompleteReleasePublicationInput } from '../lib/generated-content/release-generator.ts';
 import {
   createMemberAnchors,
   deriveParentQualifiedName,
@@ -157,5 +159,150 @@ test('only the compiler-allowlisted boundary.id namespace landing page is hidden
   assert.throws(
     () => buildReferencePages('not_boundary', 1, collidingItems, []),
     /Projected package route collision: not_boundary\/id/,
+  );
+});
+
+test('projected type displays retain logical declaration links', () => {
+  const pages = buildReferencePages(
+    'example',
+    1,
+    [
+      { id: 'C:example.Target', kind: 'class', name: 'Target' },
+      {
+        id: 'V:example.make',
+        kind: 'function',
+        name: 'make',
+        signature: {
+          params: [],
+          returns: { display: 'map<example.Target, string>' },
+        },
+      },
+    ],
+    [],
+  );
+  const makePage = pages.find((page) => page.qualifiedName === 'example.make');
+  assert.ok(makePage && 'cross_references' in makePage.pageData);
+  assert.deepEqual(makePage.pageData.cross_references, [
+    {
+      anchor: null,
+      exported_id: 'C:example.Target',
+      qualified_name: 'example.Target',
+      route_path: 'example/Target',
+    },
+  ]);
+});
+
+function sampleRelease(
+  version: string,
+  cliDescription: string | null = 'Build and run BAML projects.',
+): CompleteReleasePublicationInput {
+  const sourceHash = '1'.repeat(64);
+  const payload = {
+    artifact_schema_version: 1 as const,
+    product_version: version,
+    raw_help: [
+      {
+        command_path: [],
+        invocation: ['help'],
+        sha256: sourceHash,
+        text: 'BAML help',
+      },
+    ],
+    root: {
+      arguments: [],
+      command_path: [],
+      description: cliDescription,
+      flags: [],
+      name: 'baml',
+      subcommands: [],
+      usage: 'baml',
+    },
+    wrapper_version: '0.2.4',
+  };
+  const describeOutputJson =
+    '{"format_version":1,"impls":[],"items":[],"package":"baml"}';
+  return {
+    cli: {
+      artifactSchemaVersion: 1,
+      payload,
+      payloadJson: canonicalJson(payload),
+      payloadSha256: sha256(canonicalJson(payload)),
+      productVersion: version,
+      sourceSha256: sourceHash,
+      wrapperVersion: '0.2.4',
+    },
+    generatedAt: '2026-09-01T00:01:00.000Z',
+    generatorVersion: '2'.repeat(40),
+    packages: [
+      {
+        describeFormatVersion: 1,
+        describeOutputJson,
+        describeSha256: sha256(describeOutputJson),
+        packageName: 'baml',
+        pages: [
+          {
+            pageData: {
+              children: [],
+              describe_format_version: 1,
+              display_name: 'baml',
+              package_name: 'baml',
+              page_kind: 'package',
+              qualified_name: 'baml',
+              schema_version: 1,
+              summary: 'BAML standard package.',
+            },
+            pageKind: 'package',
+            qualifiedName: 'baml',
+            routePath: 'baml',
+          },
+        ],
+      },
+    ],
+    releasedAt: '2026-09-01T00:00:00.000Z',
+    sourceCommit: '3'.repeat(40),
+    version,
+    wrapperVersion: '0.2.4',
+  };
+}
+
+test('document projection is deterministic and deduplicates unchanged releases', () => {
+  const first = projectDocumentRelease(sampleRelease('0.18.0'));
+  const repeated = projectDocumentRelease(sampleRelease('0.18.0'));
+  const nextVersion = projectDocumentRelease(sampleRelease('0.18.1'));
+  const nullDescriptionFirst = projectDocumentRelease(
+    sampleRelease('0.19.0', null),
+  );
+  const nullDescriptionNext = projectDocumentRelease(
+    sampleRelease('0.19.1', null),
+  );
+
+  assert.equal(first.manifestHash, repeated.manifestHash);
+  assert.deepEqual(
+    first.routes.map((route) => route.path),
+    ['baml/packages', 'baml/packages/baml', 'cli', 'cli/commands'],
+  );
+  assert.deepEqual(
+    [...first.snapshots.keys()].sort(),
+    [...nextVersion.snapshots.keys()].sort(),
+  );
+  assert.equal(first.manifestHash, hashDocumentManifest(first));
+  assert.notEqual(
+    first.manifestHash,
+    hashDocumentManifest({
+      ...first,
+      routes: first.routes.map((route, index) =>
+        index === 0
+          ? {
+              ...route,
+              metadata: { ...route.metadata, title: 'Tampered title' },
+            }
+          : route,
+      ),
+    }),
+  );
+  assert.notEqual(first.manifestHash, nextVersion.manifestHash);
+  assert.deepEqual(
+    [...nullDescriptionFirst.snapshots.keys()].sort(),
+    [...nullDescriptionNext.snapshots.keys()].sort(),
   );
 });
