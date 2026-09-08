@@ -16,7 +16,7 @@ PR, the PR gets to green. Written in BAML against canary's toolchain
 |---------|---------------------|--------------|
 | ingest  | `intake.baml`, `slack.baml` | new reports from PostHog `baml_feedback` events and the Slack intake channel become `feedback` rows |
 | triage  | `create_issue.baml`, `organize_issue.baml`, `gauge_issue.baml` | repro, ticket, shepherd, difficulty; an `issues` row and a Slack thread |
-| handle  | `handle_issue.baml` | design pass, fix pass, the gate, a PR; a `runs` row and a thread reply |
+| handle  | `handle_issue.baml` | design pass, fix pass, secret scan, a PR; a `runs` row and a thread reply |
 | merge   | `merge_issue.baml`  | CI failures and reviewer comments back to `handle_issue` until the PR merges; `merge_rounds` rows |
 
 `pipeline.baml` runs them end to end; `store.baml` is the Supabase layer;
@@ -229,10 +229,10 @@ logs are private to those website users. Website authentication uses state, PKCE
 and an encrypted, secure HttpOnly cookie; repository access is checked again on
 approval. No browser receives the store credential.
 
-The runner consumes an approval once, implements its plan, independently runs the
-gate, announces the impending push in Slack, and pushes with a lease bound to the
+The runner consumes an approval once, implements its plan, scans outgoing commits
+for secrets, announces the push in Slack, and pushes with a lease bound to the
 approved PR head. If the head or feedback changed before execution, it creates a
-new proposal. A concurrent push rejects the lease. A failed gate, blocked plan,
+new proposal. A concurrent push rejects the lease. A failed scan, blocked plan,
 or interrupted execution never retries a consumed approval automatically; a human
 can request babysitting again. New feedback after a successful push requires a new
 approval. The final message reports checks and remaining configured-reviewer
@@ -372,3 +372,10 @@ Before a trusted push, every outgoing commit is scanned with Infisical plus
 checks for sensitive paths, credential patterns, special/binary files, DDL,
 conflict markers, piped installers, and unpinned workflow actions. A scan failure
 stops the push and requires human attention.
+
+CLI versions are built only when an issue with repros needs one. The root-owned
+cache service delegates builds to the credential-free builder UID and publishes
+immutable executables under `/data/cli-cache/<version>/<revision>/baml-cli`.
+Cache hits never build or fetch. Sandboxes mount this cache read-only.
+PR CI is the build/test gate; fixes do not automatically rebuild the CLI or run
+the full local workspace gate before pushing.
