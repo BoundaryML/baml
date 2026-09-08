@@ -2,7 +2,7 @@
 //
 //   Easy / Medium: an agent in a git worktree on a fresh branch implements
 //                  the fix, encodes the repro(s) as tests, and runs the
-//                  repo's gate; BAML re-runs the gate, pushes and opens a
+//                  targeted checks; BAML scans, pushes and opens a
 //                  PR (Live) or stops before pushing (DryRun).
 //   Hard:          the agent writes a suggested fix + design doc for the
 //                  shepherd to hand to their own agent. No code change.
@@ -57,11 +57,9 @@ function handle_issue(
             log.info({ "issue": issue.id, "skipped": skip });
             return issue;
         };
-        //# is it still broken on canary HEAD?
-        // canary is fetched and its baml-cli rebuilt (seconds when warm) so the
-        // repros are checked against what a PR would actually land on
+        //# prepare the requested CLI only when repros need it
+        // Only a cache entry built from current canary can establish already-fixed.
         ensure_cache();
-        build_canary_cli();
         if (!still_broken(issue)) {
             //## already fixed: nothing to do
             log.info({ "issue": issue.id, "kind": "already_fixed", "checked_with": check_cli() });
@@ -92,7 +90,7 @@ function handle_issue(
                 || !babysit_push_allowed(review.proposal_id ?? "", review.expected_head ?? "")
                 || git(sb.worktree, ["rev-parse", "HEAD"]).stdout.trim() != review.expected_head
         ) {
-            write_outcome(sb, stopped_outcome(sb, started));
+            write_outcome(sb, stopped_outcome(sb, started, reason = "missing approval or PR head changed"));
             tell_thread(thread, ":hand: missing approval or PR head changed; no fix was started");
             return issue;
         };
@@ -134,7 +132,6 @@ function handle_issue(
         issue
     };
     //# fix pass: implement the plan, encode the repros as tests
-    warm_build(sb);
     let report = run_agent_fix(sb, issue, doc, time_budget_s(difficulty));
     if (report == null) {
         //## stop: the fix agent ran out of budget or reported nothing
@@ -145,30 +142,25 @@ function handle_issue(
     };
     let fix = report ?? baml.sys.panic("unreachable");
     if (review != null && fix.blockers != null && (fix.blockers ?? "").trim().length() > 0) {
-        write_outcome(sb, stopped_outcome(sb, started));
+        keep_branch = mode == HandleMode.Live;
+        write_outcome(
+            sb,
+            stopped_outcome(
+                sb,
+                started,
+                reason = "approved plan blocked: " + (fix.blockers ?? "").trim(),
+                report = fix,
+            ),
+        );
         tell_thread(
             thread,
             ":hand: the approved plan could not be completed as proposed; nothing pushed. Request a revised proposal.",
         );
         return out;
     };
-    //# re-run the gate ourselves (the agent's own claim is never trusted)
+    // CI on the PR is the build/test gate. The trusted push still scans secrets.
     checkpoint_uncommitted(sb);
-    let gate = run_gate(sb.worktree);
-    if (!gate.ok) {
-        //## stop: gate failed — branch kept for a human in Live mode
-        keep_branch = mode == HandleMode.Live;
-        write_outcome(sb, outcome(sb, "gate_failed", null, started, gate, fix, doc));
-        tell_thread(
-            thread,
-            ":x: gate failed on `"
-                + sb.branch
-                + "`: "
-                + failed_steps(gate)
-                + "; the branch is kept for a human",
-        );
-        return out;
-    };
+    let gate: GateResult? = null;
     if (review != null) {
         //# under review: verify approval, announce, and push the fix
         if (mode == HandleMode.DryRun) {
@@ -185,13 +177,19 @@ function handle_issue(
                     ["merge-base", "--is-ancestor", review.expected_head ?? "", "HEAD"],
                 ).ok
         ) {
-            write_outcome(sb, stopped_outcome(sb, started));
+            write_outcome(
+                sb,
+                stopped_outcome(sb, started, reason = "proposal is no longer executable", report = fix),
+            );
             tell_thread(thread, ":hand: proposal is no longer executable; nothing pushed");
             return out;
         };
         // This notification is required: a Slack outage stops the push.
         if (thread != null) {
-            slack_post(":arrow_up: approved fix passed the gate; pushing to `" + sb.branch + "` now.", thread);
+            slack_post(
+                ":arrow_up: approved fix ready; scanning and pushing to `" + sb.branch + "` now.",
+                thread,
+            );
         };
         record_pr_event(
             pr_url_in_from_issue(issue),
@@ -211,6 +209,7 @@ function handle_issue(
                 + head_sha(sb)
                 + " to "
                 + pr
+                + "; waiting for PR CI and review results"
                 + "\n"
                 + fix.summary.trim()
                 + "\n_files: "
@@ -279,29 +278,50 @@ function still_broken(issue: Issue) -> bool {
     if (issue.repros.length() == 0) {
         return true;
     };
+    // An issue requiring a concrete compiler triggers a cache lookup/build.
+    // A cache miss/failure is inconclusive, never evidence that the issue is fixed.
+    let cli = cli_for_version(issue.version);
+    if (cli == null) {
+        return true;
+    };
+    // An older version cannot establish whether current canary is already fixed.
+    let head = git(cache_repo(), ["rev-parse", "HEAD"]);
+    if (!head.ok || !(cli ?? "").includes("/" + head.stdout.trim() + "/baml-cli")) {
+        return true;
+    };
     let i = 0;
     for (let r in issue.repros) {
         i += 1;
-        if (check_on_canary(r, i) != Verdict.Fixed) {
+        if (check_on_canary(r, i, cli = cli) != Verdict.Fixed) {
             return true;
         };
     }
     false
 }
 
-/// The `baml-cli` to check repros with: canary's own build when the cache
-/// has been built, else whatever `baml` resolves to.
 function check_cli() -> string {
-    let built = atb2_home() + "/agent-cache/repo/target/debug/baml-cli";
-    if (baml.fs.exists(built)) {
-        built
-    } else {
-        atb2_home() + "/target/debug/baml-cli"
-    }
+    atb2_home() + "/target/debug/baml-cli"
+}
+
+/// Controller-only request: agents cannot write the shared cache or access its socket.
+function cli_for_version(version: string) -> string? {
+    if (atb2_home() != "/data") {
+        return check_cli();
+    };
+    let out = baml.sys.exec(
+        "/usr/bin/python3",
+        ["-I", "/usr/local/lib/atb2/cli-cache-service.py", version],
+        baml.sys.ProcessOptions { env: { "PATH": "/usr/bin:/bin" }, timeout_ms: 2550000 },
+    );
+    if (out.exit_code != 0) {
+        log.warn({ "cli_version": version, "cache": "unavailable; repro remains inconclusive" });
+        return null;
+    };
+    out.stdout.to_string().trim()
 }
 
 /// Write the repro to a scratch project and run it with check_cli().
-function check_on_canary(r: Repro, n: int) -> Verdict {
+function check_on_canary(r: Repro, n: int, cli: string? = null) -> Verdict {
     //# write the repro to a scratch project
     let repro_id = baml.id.new();
     let dir = atb2_home() + "/repro-check/" + repro_id;
@@ -344,13 +364,13 @@ function check_on_canary(r: Repro, n: int) -> Verdict {
     } else {
         ["check"]
     };
-    let out = run_with(Cmd { program: check_cli(), args: args, cwd: dir, timeout_ms: 180000 }, env);
+    let out = run_with(Cmd { program: cli ?? check_cli(), args: args, cwd: dir, timeout_ms: 180000 }, env);
     //# map exit code + diagnostics to a verdict
     let verdict = verdict_from_check(r.expectation, out.exit_code, out.stdout, out.stderr);
     log.info(
         {
             "repro_check": n,
-            "cli": check_cli(),
+            "cli": cli ?? check_cli(),
             "exit_code": out.exit_code,
             "verdict": verdict.to_string(),
         },
@@ -887,46 +907,8 @@ function close_sandbox(sb: Sandbox, keep_branch: bool) -> null {
     null
 }
 
-/// canary's own baml-cli, rebuilt from the cache checkout after each fetch,
-/// so the repro pre-check and the gate both speak for canary HEAD. Seconds
-/// when the private baseline target is warm.
-function build_canary_cli() -> null {
-    let b = run(
-        Cmd {
-            program: "cargo",
-            args: ["build", "-p", "baml_cli", "--bin", "baml-cli"],
-            cwd: cache_repo() + "/baml_language",
-            timeout_ms: 2400000,
-        },
-    );
-    if (!b.ok) {
-        log.warn(
-            {
-                "build_canary_cli": "failed; the repro check falls back to the installed toolchain",
-                "tail": tail(b.stderr, 3),
-            },
-        );
-    };
-    null
-}
-
-/// A first `cargo build` on a cold target dir costs 10-30 minutes; do it
-/// before the agent's clock starts.
-function warm_build(sb: Sandbox) -> null {
-    let b = run(
-        Cmd {
-            program: "cargo",
-            args: ["build", "-p", "baml_cli", "--bin", "baml-cli"],
-            cwd: sb.worktree + "/baml_language",
-            timeout_ms: 2400000,
-        },
-    );
-    log.info({ "warm_build": b.ok, "tail": tail(b.stderr, 2) });
-    null
-}
-
 /// Whatever the agent left uncommitted is committed before the worktree is
-/// removed, so nothing is lost and the gate sees the real tree.
+/// removed, so nothing is lost before the trusted secret scan and push.
 function checkpoint_uncommitted(sb: Sandbox) -> null {
     let status = git(sb.worktree, ["status", "--porcelain"]);
     if (status.stdout.trim().length() > 0) {
@@ -1019,7 +1001,11 @@ function run_claude(
     AgentRun {
         text: parsed.text,
         num_turns: parsed.num_turns,
-        exit_code: r.exit_code,
+        exit_code: if (r.exit_code != 0) {
+            r.exit_code
+        } else {
+            parsed.exit_code
+        },
         timed_out: r.exit_code == 124,
     }
 }
@@ -1032,6 +1018,7 @@ function parse_stream(transcript: string) -> AgentRun {
     let turns = 0;
     let assistants = 0;
     let saw_result = false;
+    let failed = false;
     for (let line in transcript.lines()) {
         if (line.trim().length() == 0) {
             continue;
@@ -1049,17 +1036,26 @@ function parse_stream(transcript: string) -> AgentRun {
         } else if (kind == "result") {
             saw_result = true;
             turns += baml.json.path_or<int>(ev, ".num_turns", 0);
-            text = baml.json.path_or<string>(ev, ".result", text);
+            failed = failed || baml.json.path_or<bool>(ev, ".is_error", false);
+            text = baml.json.path_or<string>(ev, ".result", "");
         };
     }
     AgentRun {
-        text: text,
+        text: if (failed) {
+            ""
+        } else {
+            text
+        },
         num_turns: if (saw_result) {
             turns
         } else {
             assistants
         },
-        exit_code: 0,
+        exit_code: if (failed || !saw_result) {
+            1
+        } else {
+            0
+        },
         timed_out: false,
     }
 }
@@ -1099,11 +1095,12 @@ function sandbox_rules(branch: string) -> string {
     "You are working in a git worktree of BoundaryML/baml on branch `"
         + branch
         + "`, checked out from `canary`. "
-        + "The Rust workspace is `baml_language/` (run cargo from there); `CARGO_TARGET_DIR` is shared and already warm, so "
+        + "The Rust workspace is `baml_language/` (run cargo from there); `CARGO_TARGET_DIR` is private to this checkout, so "
         + "the built CLI is at `$CARGO_TARGET_DIR/debug/baml-cli`, not `target/`.\n"
         + "Rules:\n"
         + "- Stay on this branch. Never `git push`, never checkout or create another branch, never touch `.git` directly.\n"
         + "- Never create or modify files outside this worktree.\n"
+        + "- Do not add Co-Authored-By or session trailers to commits.\n"
         + "- Commit as you go with conventional-commit messages (`fix(scope): ...`, `test(scope): ...`). Leave the tree clean.\n"
         + "- Never edit `.snap` files by hand; regenerate with `cargo insta test --test-runner=nextest --accept -p baml_tests`.\n"
         + "- Do not change CI, `mise.toml`, or `Cargo.lock` unless the fix genuinely requires it.\n"
@@ -1140,9 +1137,10 @@ class FixReport {
     /// Paths of the tests that encode the issue's repro(s).
     tests_added: string[],
     files_changed: string[],
-    /// What the agent believes about the gate; BAML re-runs it regardless.
+    /// Agent-reported validation only; PR CI is authoritative.
     gate_passed: bool,
-    /// Why it stopped short, if it did.
+    /// Actual reasons the approved scope cannot be completed. JSON null when complete;
+    /// put unrelated failures, caveats and validation notes in tests, not here.
     blockers: string?,
 }
 
@@ -1161,7 +1159,12 @@ function implement_fix(
         address on it; follow it unless the code proves it wrong, and if you deviate, say so in
         \`summary\`. For review feedback: read the branch's own diff first
         (\`git diff origin/canary...HEAD\`), address ALL of it and nothing else, and when a
-        comment is wrong leave the code and say why in \`blockers\` (one line per comment id).
+        comment is wrong leave the code and explain the disagreement in \`summary\`.
+        For an approved plan, do not change scope: report an actual required deviation in \`blockers\`.
+        Set \`blockers\` to JSON null when the approved scope is complete. Never write "None"
+        or validation notes there: any nonempty blocker stops the run before a push.
+        Put unrelated check failures and validation limitations in \`tests\`; do not claim they
+        are pre-existing without evidence. If they prevent the approved work, they are blockers.
 
         Title: ${issue.title}
         Subsystem: ${issue.subsystem.to_string()}
@@ -1179,16 +1182,21 @@ function implement_fix(
 
         How to work:
         1. Reproduce FIRST. Turn every repro above into a test before touching the fix, placed
-           per baml_language/TEST_INSTRUCTIONS.md. For this issue: ${test_route}
+           in the affected component's test suite. For Rust/BAML changes, follow
+           baml_language/TEST_INSTRUCTIONS.md. For Python controller changes, use its Python
+           tests; do not invent a Rust repro for behavior Rust cannot observe.
+           Suggested route for Rust/BAML changes: ${test_route}
            Confirm the new test fails before the fix and passes after it.
         2. Make the smallest correct fix. Cite the files you changed.
-        3. Verify with FAST, targeted checks only — your time budget is short and the full gate
-           (clippy, nextest, insta, the baml-cli corpus) is run by the pipeline after you finish:
-             cargo fmt --all -- --config imports_granularity=Crate --config group_imports=StdExternalCrate
-             cargo test -p <each crate you changed> <your new test name>      (the repro test: fails before, passes after)
-             cargo test --lib -p <each crate you changed>
-           If you added a diagnostic fixture or changed diagnostics, also: cargo insta test --test-runner=nextest --accept -p baml_tests
-           and commit the .snap changes. Do not run the whole workspace's clippy or nextest.
+        3. Run focused checks for the changed component when useful. CI on the PR is the
+           build/test gate; do not run a full workspace build, clippy, nextest or corpus suite
+           automatically. Existing BAML CLIs are available read-only under /data/cli-cache,
+           indexed by version and source revision in index.json. The controller builds a version
+           lazily only when an issue with repros needs it; builds are shared and immutable.
+           Use the matching cached CLI
+           when available; /data/target/debug/baml-cli is the runner's pinned version.
+           Do not claim a cached CLI includes your unbuilt edits. If testing a compiler change
+           needs a fresh build, report what you actually verified and let PR CI validate it.
         4. Commit everything. \`git status --porcelain\` must be empty. Do not push.
         5. Report in the shape of this team's PRs: \`problem\` (with the repro in a fenced baml code block),
            \`after\` (quote the exact diagnostic/value the repro now produces; cite files), a
@@ -1542,7 +1550,7 @@ function pr_title(issue: Issue) -> string {
     }
 }
 
-function pr_body(issue: Issue, r: FixReport, g: GateResult, turns: int, seconds: int) -> string {
+function pr_body(issue: Issue, r: FixReport, g: GateResult?, turns: int, seconds: int) -> string {
     let n = github_number(issue);
     let fixes = if (n != null) {
         "Fixes #" + (n ?? 0).to_string() + "\n\n"
@@ -1579,14 +1587,17 @@ function pr_body(issue: Issue, r: FixReport, g: GateResult, turns: int, seconds:
         + r.tests.trim()
         + "\n\n"
         + "## Validation\n\n"
-        + validation_checklist(g)
+        + match (g) {
+            null => "CI on this PR is the validation gate. No local pipeline gate was run.\n",
+            let checked: GateResult => validation_checklist(checked),
+        }
         + "\n_Opened by atb2 `handle_issue` ("
         + (issue.difficulty ?? Difficulty.Medium).to_string().to_lower_case()
         + ", "
         + turns.to_string()
         + " agent turns, "
         + (seconds / 60).to_string()
-        + " min); the checklist above was run by the pipeline after the agent finished._\n"
+        + " min)._\n"
 }
 
 /// The gate as a checklist: one line per step, with the pass count when
@@ -1765,22 +1776,33 @@ class HandleOutcome {
     reason: string?,
 }
 
+function last_result_event(transcript: string) -> json? {
+    let result: json? = null;
+    for (let line in transcript.lines()) {
+        let ev = baml.json.parse(line) catch (_) {
+            _ => null
+        };
+        if (
+            ev != null
+                && baml.json.path_or<string>(ev ?? baml.json.parse("{}"), ".type", "") == "result"
+        ) {
+            result = ev;
+        };
+    }
+    result
+}
+
 /// Reads the last agent transcript for the reason the run stopped.
 function stop_reason(path: string) -> string? {
     if (!baml.fs.exists(path)) {
         return "no transcript was written";
     };
-    let lines = baml.fs.read(path).split("\n").filter((l: string) -> bool {
-        l.includes("\"type\":\"result\"")
-    });
-    if (lines.length() == 0) {
-        return "killed at the time budget";
+    let ev = last_result_event(baml.fs.read(path));
+    if (ev == null) {
+        return "agent ended without a result; timeout or interruption is unverified";
     };
-    let ev = baml.json.parse(lines[lines.length() - 1]) catch (_) {
-        _ => baml.json.parse("{}"),
-    };
-    if (baml.json.path_or<bool>(ev, ".is_error", false)) {
-        return "cli error: " + baml.json.path_or<string>(ev, ".result", "").slice(0, 300);
+    if (baml.json.path_or<bool>(ev ?? baml.json.parse("{}"), ".is_error", false)) {
+        return "Claude CLI reported an error; inspect the private transcript";
     };
     "reply did not parse"
 }
@@ -1810,7 +1832,12 @@ function outcome(
 
 /// An agent pass ended without a result: budget exhausted (no `result`
 /// event in its transcript) or an unparseable reply.
-function stopped_outcome(sb: Sandbox, started: baml.time.Instant) -> HandleOutcome {
+function stopped_outcome(
+    sb: Sandbox,
+    started: baml.time.Instant,
+    reason: string? = null,
+    report: FixReport? = null,
+) -> HandleOutcome {
     let last = if (baml.fs.exists(sb.run_dir + "/fix.jsonl")) {
         sb.run_dir + "/fix.jsonl"
     } else {
@@ -1822,11 +1849,12 @@ function stopped_outcome(sb: Sandbox, started: baml.time.Instant) -> HandleOutco
         pr: null,
         turns: read_turns(sb),
         seconds: elapsed_s(started),
-        timed_out: baml.fs.exists(last) && !baml.fs.read(last).includes("\"type\":\"result\""),
+        // A missing result is not evidence of a timeout (manual kills and crashes also omit it).
+        timed_out: false,
         gate: null,
-        report: null,
+        report: report,
         design_doc: null,
-        reason: stop_reason(last),
+        reason: reason ?? stop_reason(last),
     }
 }
 
@@ -2304,6 +2332,59 @@ testset "handle_issue" {
         let d = with_design_doc(i, "doc");
         assert.equal(d.design_doc ?? "", "doc");
         assert.equal(d.title, i.title);
+    }
+
+    test "blocked and revoked runs preserve their reason instead of claiming parse failure" {
+        let sb = Sandbox {
+            branch: "test",
+            worktree: "/tmp/unused",
+            run_dir: "/tmp/atb2-stop-" + baml.id.new(),
+            reused_branch: true,
+            base_head: null,
+            source_head: "head",
+        };
+        let report = sample_report();
+        let stopped = stopped_outcome(
+            sb,
+            baml.time.Instant.now(),
+            reason = "approved plan blocked: needs a schema change",
+            report = report,
+        );
+        assert.equal(stopped.reason, "approved plan blocked: needs a schema change");
+        assert.equal(stopped.timed_out, false);
+        assert.equal(stopped.report?.summary, report.summary);
+        assert.equal(stopped.gate, null);
+        let revoked = stopped_outcome(sb, baml.time.Instant.now(), reason = "proposal is no longer executable");
+        assert.equal(revoked.reason, "proposal is no longer executable");
+        assert.equal(revoked.report, null);
+    }
+
+    test "fenced fix reports with embedded code and blocker notes parse" {
+        let row = baml.json.from_json<map<string, json>>(sample_report().to_json());
+        row.set("problem", "Example:\n```baml\nfunction Example() -> int { 1 }\n```".to_json());
+        row.set(
+            "blockers",
+            "None for the requested fix; unrelated checks need investigation".to_json(),
+        );
+        let r = implement_fix@parse("```json\n" + baml.json.stringify(row.to_json()) + "\n```");
+        assert.contains(r.problem, "function Example");
+        assert.contains(r.blockers ?? "", "unrelated checks");
+    }
+
+    test "CLI error results and truncated streams fail closed" {
+        let error = parse_stream(`{"type": "result", "is_error": true, "result": "a plausible report", "num_turns": 2}`);
+        assert.equal(error.exit_code, 1);
+        assert.equal(error.text, "");
+        assert.equal(parse_stream(`{"type":"assistant"}`).exit_code, 1);
+        assert.equal(
+            parse_stream(`{"type": "result", "is_error": false, "result": "ok"}`).text,
+            "ok",
+        );
+        assert.equal(
+            last_result_event("bad line\n" + `{"type": "result", "result": "ok"}`) != null,
+            true,
+        );
+        assert.equal(last_result_event(`{"type":"assistant","text":"result"}`), null);
     }
 
     test "llm replies parse" {

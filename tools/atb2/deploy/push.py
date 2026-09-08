@@ -50,8 +50,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='atb2-push-') as tmp:
         folder = Path(tmp)
         env = trusted_env(folder, token)
-        def git(*args, **kwargs):
-            return subprocess.run(['/usr/bin/git', *args], cwd=folder, env=env,
+        def git(*args, credentialed=False, **kwargs):
+            command_env = env if credentialed else {k: v for k, v in env.items() if k != "GH_TOKEN"}
+            return subprocess.run(['/usr/bin/git', *args], cwd=folder, env=command_env,
                                   check=True, stderr=subprocess.PIPE, timeout=600, **kwargs)
         git('check-ref-format', 'refs/heads/' + branch, stdout=subprocess.DEVNULL)
         # No controller command loads the checkout's .git/config. Both object
@@ -77,7 +78,7 @@ def main():
         # URL rewrites from the checkout; an empty lease only permits creation.
         git('--git-dir=trusted.git', '-c', 'protocol.https.allow=always', 'push',
             '--force-with-lease=refs/heads/' + branch + ':' + expected,
-            REPOSITORY, commit + ':refs/heads/' + branch, stdout=subprocess.DEVNULL)
+            REPOSITORY, commit + ':refs/heads/' + branch, credentialed=True, stdout=subprocess.DEVNULL)
         print(commit)
     return 0
 

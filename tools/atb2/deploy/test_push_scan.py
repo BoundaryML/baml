@@ -1,4 +1,6 @@
 """Outgoing history is checked before credentials can be used for a push."""
+import contextlib
+import io
 import importlib.util
 from pathlib import Path
 import subprocess
@@ -47,5 +49,22 @@ class ScanTests(unittest.TestCase):
             return real(args,**kwargs)
         with patch.object(subprocess,'run',side_effect=run):
             with self.assertRaises(subprocess.CalledProcessError): self.run_scan()
+
+class PushCredentialTests(unittest.TestCase):
+    def test_only_final_push_receives_the_credential(self):
+        spec = importlib.util.spec_from_file_location('push', Path(__file__).with_name('push.py'))
+        push = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(push)
+        calls = []
+        def run(command, **kwargs):
+            calls.append((command, kwargs['env']))
+            return subprocess.CompletedProcess(command, 0, b'a'*40+b'\n', b'')
+        with patch.object(push.sys, 'argv', ['push.py', '/data/worktrees/fixture', 'fixture', '', 'b'*40]), patch.dict(push.os.environ, {'GH_TOKEN':'credential-fixture'}), patch.object(push.sandbox, 'workspace', return_value=(Path('/data/worktrees/fixture'), False)), patch.object(push.sandbox, 'command', side_effect=lambda cwd, args: ['sandbox', *args]), patch.object(push.subprocess, 'run', side_effect=run), patch.object(push.push_scan, 'scan'), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(push.main(), 0)
+        self.assertGreater(len(calls), 2)
+        for command, env in calls[:-1]:
+            self.assertNotIn('GH_TOKEN', env)
+        self.assertIn('push', calls[-1][0])
+        self.assertEqual(calls[-1][1]['GH_TOKEN'], 'credential-fixture')
 
 if __name__=='__main__': unittest.main()

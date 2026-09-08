@@ -59,9 +59,18 @@ class WorkflowTests(unittest.TestCase):
     def test_issue_and_direct_requests_reuse_one_existing_babysitter(self):
         calls = self.run_expression('request_merge("https://github.com/BoundaryML/baml/pull/1")',
                                    lambda method, table, query, body: (200, [{'id': 7}]))
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1][0:2], ('GET', 'babysit_proposals'))
         self.assertEqual(calls[0][0:2], ('GET', 'babysit_requests'))
         self.assertIn('awaiting_approval', calls[0][2]['or'][0])
+
+    def test_retired_approval_does_not_block_a_fresh_babysit_request(self):
+        def respond(method, table, query, body):
+            if table == 'babysit_requests':
+                return 200, [{'id':7, 'status':'done', 'result':{'kind':'awaiting_approval'}}]
+            return 200, []
+        calls = self.run_expression('assert.equal(active_babysit_request("https://github.com/BoundaryML/baml/pull/1"), null)', respond)
+        self.assertTrue(all(method == 'GET' for method, _, _, _ in calls))
 
     def test_created_fix_cannot_wake_worker_before_outcome_and_cleanup(self):
         def respond(method, table, query, body):
