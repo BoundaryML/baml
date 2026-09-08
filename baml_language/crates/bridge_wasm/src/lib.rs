@@ -116,6 +116,7 @@ extern "C" {
         exec: (command: string, args: string[]) => Promise<any>;
         shell: (command: string) => Promise<any>;
         host_dispatch: (call: any) => void;
+        lsp_make_request: (request: LspRequest) => void;
         lsp_send_notification: (notification: LspNotification) => void;
         lsp_send_response: (response: LspResponse) => void;
         playground_send_notification: (notification: PlaygroundNotification) => void;
@@ -142,6 +143,9 @@ extern "C" {
 
     #[wasm_bindgen(method, getter, structural, js_name = "lsp_send_notification")]
     fn lsp_send_notification(this: &WasmCallbacks) -> Function;
+
+    #[wasm_bindgen(method, getter, structural, js_name = "lsp_make_request")]
+    fn lsp_make_request(this: &WasmCallbacks) -> Function;
 
     #[wasm_bindgen(method, getter, structural, js_name = "lsp_send_response")]
     fn lsp_send_response(this: &WasmCallbacks) -> Function;
@@ -258,6 +262,7 @@ impl BamlWasmRuntime {
         let sender = Arc::new(WasmClientSender::new(
             callbacks.lsp_send_notification(),
             callbacks.lsp_send_response(),
+            callbacks.lsp_make_request(),
         ));
         let playground_sender =
             playground_notify::WasmPlaygroundSender::new(callbacks.playground_send_notification());

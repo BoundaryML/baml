@@ -75,6 +75,12 @@ pub type OpenDocuments = HashMap<PathBuf, OpenDocument>;
 
 /// The host's channel to one client.
 pub trait ClientSender: Send + Sync {
+    fn send_request(&self, _request: lsp_server::Request) -> Result<(), LspError> {
+        Err(LspError::RequestFailed(
+            "server requests are unavailable".into(),
+        ))
+    }
+
     fn send_notification(&self, method: &str, params: serde_json::Value) -> Result<(), LspError>;
 }
 
@@ -99,23 +105,21 @@ pub struct SessionState {
     /// there is no lock, and the owner records a new baseline *before* the
     /// response carrying its result id leaves.
     pub semantic_tokens: Arc<HashMap<PathBuf, TokenBaseline>>,
+    pub(crate) rainbow: crate::rainbow::Rainbow,
 }
 
-/// What a session was last served for one document: the result id the
-/// client holds, and the encoded tokens behind it.
-///
-/// The result id is the [`SourceRevision`] the tokens were computed at —
-/// tokens cannot differ within a revision, so two requests at the same
-/// revision legitimately share an id.
-/// A baseline the owner must record for a session before responding.
+/// Semantic-token effects to commit before responding. Range requests start
+/// the animation without replacing the full-document delta baseline.
 pub struct BaselineCommit {
     pub path: PathBuf,
-    pub baseline: TokenBaseline,
+    pub baseline: Option<TokenBaseline>,
+    pub has_rust_sigil: bool,
 }
 
+/// The result id includes both the source revision and the rainbow phase.
 #[derive(Debug, Clone)]
 pub struct TokenBaseline {
-    pub result_id: SourceRevision,
+    pub result_id: String,
     pub tokens: Arc<Vec<lsp_types::SemanticToken>>,
 }
 
@@ -476,6 +480,7 @@ impl GlobalState {
             encoding,
             token_baselines: Arc::clone(&state.semantic_tokens),
             snippet_support: state.snippet_support,
+            rainbow: state.rainbow.view(Instant::now()),
         })
     }
 
@@ -574,6 +579,7 @@ impl GlobalState {
                 workspace_folders: Vec::new(),
                 lifecycle: SessionLifecycle::Uninitialized,
                 semantic_tokens: Arc::new(HashMap::new()),
+                rainbow: crate::rainbow::Rainbow::default(),
             },
         );
     }
@@ -650,6 +656,7 @@ impl GlobalState {
     /// so the client will re-request from scratch if it reopens).
     pub fn evict_token_baselines(&mut self, path: &Path) {
         for state in self.sessions.values_mut() {
+            state.rainbow.settle(path);
             if state.semantic_tokens.contains_key(path) {
                 Arc::make_mut(&mut state.semantic_tokens).remove(path);
             }
@@ -1034,11 +1041,23 @@ impl GlobalState {
         self.root_state
             .values()
             .filter_map(|state| state.diagnostics_due)
+            .chain(
+                self.initialized_sessions()
+                    .filter_map(|(_, state)| state.rainbow.next_deadline()),
+            )
             .min()
     }
 
     /// Fire every tail whose deadline has passed by posting its event.
     pub fn on_tick(&mut self, now: Instant) {
+        for state in self.sessions.values_mut() {
+            if state.lifecycle == SessionLifecycle::Initialized
+                && let Some(request) = state.rainbow.tick(now)
+                && let Err(error) = state.sender.send_request(request)
+            {
+                tracing::debug!(%error, "rainbow refresh was not delivered");
+            }
+        }
         let due: Vec<SourceRoot> = self
             .root_state
             .iter()

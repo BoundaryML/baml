@@ -155,11 +155,14 @@ macro_rules! define_request_tables {
                                         match outcome {
                                             Ok(Ok((result, commit))) => {
                                                 if let Some(commit) = commit {
-                                                    state.store_token_baseline(
-                                                        session,
-                                                        commit.path,
-                                                        commit.baseline,
-                                                    );
+                                                    if commit.has_rust_sigil
+                                                        && let Ok(session_state) = state.session_mut(session)
+                                                    {
+                                                        session_state.rainbow.observe(commit.path.clone(), web_time::Instant::now());
+                                                    }
+                                                    if let Some(baseline) = commit.baseline {
+                                                        state.store_token_baseline(session, commit.path, baseline);
+                                                    }
                                                 }
                                                 respond(result);
                                             }
@@ -261,11 +264,11 @@ define_request_tables! {
         "textDocument/references" => references,
         "textDocument/documentSymbol" => document_symbol,
         "workspace/symbol" => workspace_symbol,
-        "textDocument/semanticTokens/range" => semantic_tokens_range,
         "textDocument/inlayHint" => inlay_hint,
         "textDocument/codeLens" => code_lens,
     }
     snapshot_commit {
+        "textDocument/semanticTokens/range" => semantic_tokens_range,
         "textDocument/semanticTokens/full" => semantic_tokens_full,
         "textDocument/semanticTokens/full/delta" => semantic_tokens_delta,
     }

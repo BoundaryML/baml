@@ -72,6 +72,8 @@ pub enum SemanticTokenType {
     /// Boolean literal (`true` / `false`) — a custom type beyond the standard
     /// LSP legend, mirroring rust-analyzer's `boolean`.
     Boolean,
+    RustFunction,
+    RustType,
 }
 
 /// Token type legend — order determines the LSP legend index.
@@ -82,12 +84,16 @@ pub enum SemanticTokenType {
 pub const TOKEN_TYPES: &[SemanticTokenType] = &SemanticTokenType::ALL;
 
 impl SemanticTokenType {
+    pub fn is_rust_sigil(self) -> bool {
+        matches!(self, Self::RustFunction | Self::RustType)
+    }
+
     /// Every token type, in legend order.
     ///
     /// [`Self::legend_index`] is the enforcing source of the ordering; the
     /// round-trip unit test pins this array to it, so a variant can be
     /// neither missing here nor listed out of order without a test failure.
-    pub const ALL: [SemanticTokenType; 25] = [
+    pub const ALL: [SemanticTokenType; 27] = [
         SemanticTokenType::Namespace,
         SemanticTokenType::Type,
         SemanticTokenType::Class,
@@ -113,6 +119,8 @@ impl SemanticTokenType {
         SemanticTokenType::Decorator,
         SemanticTokenType::EscapeSequence,
         SemanticTokenType::Boolean,
+        SemanticTokenType::RustFunction,
+        SemanticTokenType::RustType,
     ];
 
     /// The index of this token type in the [`TOKEN_TYPES`] legend — the
@@ -147,6 +155,8 @@ impl SemanticTokenType {
             Self::Decorator => 22,
             Self::EscapeSequence => 23,
             Self::Boolean => 24,
+            Self::RustFunction => 25,
+            Self::RustType => 26,
         }
     }
 
@@ -178,6 +188,8 @@ impl SemanticTokenType {
             Self::Decorator => "decorator",
             Self::EscapeSequence => "escapeSequence",
             Self::Boolean => "boolean",
+            Self::RustFunction => "bamlRustFunction",
+            Self::RustType => "bamlRustType",
         }
     }
 }
@@ -194,10 +206,16 @@ pub fn semantic_highlight_style(
 
     let (foreground, base_dim) = match token_type {
         T::Keyword | T::Modifier => (Some(HighlightColor::Magenta), false),
-        T::Class | T::Struct | T::Interface | T::Enum | T::Type | T::TypeParameter => {
-            (Some(HighlightColor::Yellow), false)
+        T::Class
+        | T::Struct
+        | T::Interface
+        | T::Enum
+        | T::Type
+        | T::TypeParameter
+        | T::RustType => (Some(HighlightColor::Yellow), false),
+        T::Function | T::Method | T::Macro | T::RustFunction => {
+            (Some(HighlightColor::BrightBlue), false)
         }
-        T::Function | T::Method | T::Macro => (Some(HighlightColor::BrightBlue), false),
         T::EnumMember | T::Property => (Some(HighlightColor::Cyan), false),
         T::Parameter => (Some(HighlightColor::Yellow), true),
         T::Namespace => (Some(HighlightColor::BrightCyan), false),
@@ -603,6 +621,27 @@ impl Walk<'_> {
             _ => {}
         }
         if kind == SyntaxKind::WORD {
+            if token.text().starts_with('$')
+                && token
+                    .parent_ancestors()
+                    .find(|node| node.kind() == SyntaxKind::EXPR_FUNCTION_BODY)
+                    .and_then(|body| baml_compiler2_ast::check_builtin_body(&body))
+                    .is_some_and(|kind| {
+                        matches!(
+                            kind,
+                            baml_compiler2_ast::BuiltinKind::Vm
+                                | baml_compiler2_ast::BuiltinKind::Io
+                        )
+                    })
+            {
+                emit(
+                    token.text_range(),
+                    plain(SemanticTokenType::RustFunction),
+                    out,
+                );
+                return;
+            }
+
             if let Some(class) = (self.resolve)(token.text_range()) {
                 emit(token.text_range(), class, out);
             }
@@ -1060,6 +1099,9 @@ fn classify_type_token(
     name: &str,
     offset: TextSize,
 ) -> Class {
+    if name == "$rust_type" {
+        return plain(SemanticTokenType::RustType);
+    }
     if let Some(class) = classify::classify_primitive(name) {
         return class;
     }
@@ -1218,5 +1260,40 @@ function greet(person: Person) -> string {
             .cloned()
             .collect();
         assert_eq!(ranged, expected);
+    }
+}
+
+#[cfg(test)]
+mod rainbow_tests {
+    use super::*;
+    use crate::test_support::CursorTest;
+
+    #[test]
+    fn only_native_sigils_receive_the_magic_type() {
+        let test = CursorTest::new(
+            r#"
+class Handle { _data: $rust_type, }
+function Native() -> int { <[CURSOR]$rust_function }
+function Io() -> int { /* $rust_function */ $rust_io_function }
+function Text() -> string { "$rust_function $rust_type" }
+// $rust_function $rust_type
+function Ordinary() -> int { let x = 1; $rust_function }
+"#,
+        );
+        let text = test.cursor.file.text(&test.db);
+        let tokens = semantic_tokens(&test.db, test.cursor.file);
+        let magic: Vec<_> = tokens
+            .iter()
+            .filter(|t| t.token_type.is_rust_sigil())
+            .map(|t| &text[usize::from(t.range.start())..usize::from(t.range.end())])
+            .collect();
+        assert_eq!(magic, ["$rust_type", "$rust_function", "$rust_io_function"]);
+        let viewport = semantic_tokens_in_range(
+            &test.db,
+            test.cursor.file,
+            0,
+            u32::try_from(text.len()).unwrap(),
+        );
+        assert_eq!(tokens, &viewport);
     }
 }
