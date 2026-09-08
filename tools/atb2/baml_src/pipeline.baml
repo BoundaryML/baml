@@ -64,7 +64,7 @@ function run_pipeline(
             }
         ) {
             match (triage_feedback(fb)) {
-                null => report.skipped.push(fb.id + ": no issue (fixed on this toolchain)"),
+                null => report.skipped.push(fb.id + ": no issue (fixed or needs report details)"),
                 let i: Issue => {
                     report.issues_created += 1;
                     created.push(i);
@@ -336,11 +336,18 @@ function untriaged_feedback() -> Feedback[] {
 
 // ==================== triage ====================
 
-/// One report through triage. Null when the repro is already fixed on this
-/// toolchain (create_issue makes no ticket); the report is marked so.
+/// One report through triage. Insufficient reports and already-fixed repros
+/// get a terminal no_issue event instead of a ticket or Slack announcement.
 function triage_feedback(fb: Feedback) -> Issue? {
     //# create: repro, run it, write the ticket
-    let created = create_issue(fb);
+    let created = create_issue(fb) catch (e) {
+        FeedbackNeedsDetails => {
+            // Keep the original report, but do not create an issue or page a shepherd.
+            // This terminal event also prevents the same report being retried every poll.
+            log_event("no_issue", null, fb.id, { "reason": "needs_details" }.to_json(), null, null);
+            return null;
+        },
+    };
     match (created) {
         null => {
             log_event("no_issue", null, fb.id, { "reason": "fixed on this toolchain" }.to_json(), null, null);

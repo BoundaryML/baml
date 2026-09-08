@@ -19,7 +19,7 @@ CLI = Path(os.environ.get('BAML_CLI', str(Path.home() / '.atb2/target/debug/baml
 
 @unittest.skipUnless(CLI.is_file(), 'canary baml-cli required')
 class WorkflowTests(unittest.TestCase):
-    def run_expression(self, expression, respond):
+    def run_expression(self, expression, respond, reject_feedback=False):
         calls = []
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *_): pass
@@ -38,6 +38,15 @@ class WorkflowTests(unittest.TestCase):
             root = Path(tmp)
             shutil.copytree(SOURCE / 'baml_src', root / 'baml_src')
             shutil.copy(SOURCE / 'baml.toml', root / 'baml.toml')
+            if reject_feedback:
+                # Substitute only the model response; exercise the actual pipeline/store path.
+                path = root / 'baml_src/create_issue.baml'
+                code = path.read_text()
+                start = code.index('function assess_feedback(')
+                end = code.index('\n}', start) + 2
+                code = code[:start] + 'function assess_feedback(fb: Feedback) -> FeedbackAssessment { FeedbackAssessment { actionable: false, reason: "No concrete behavior" } }' + code[end:]
+                code = code.replace("assess_feedback@parse(", "baml.json.from_string<FeedbackAssessment>(")
+                path.write_text(code)
             with ThreadingHTTPServer(('127.0.0.1', 0), Handler) as server:
                 thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
                 # Production still requires HTTPS. This substitution exists only
@@ -55,6 +64,26 @@ class WorkflowTests(unittest.TestCase):
                     server.shutdown(); thread.join()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return calls
+
+    def test_vague_feedback_is_terminal_without_an_issue_or_notification(self):
+        terminal = []
+        def respond(method, table, query, body):
+            if method == 'POST' and table == 'events':
+                terminal.extend(body)
+                return 200, [{'id': 1}]
+            if method == 'GET' and table == 'feedback':
+                return 200, [{'id': 'FB-vague'}]
+            if method == 'GET' and table == 'events':
+                return 200, [{'id': 1}] if terminal else []
+            return 200, []
+        expression = 'let fb = Feedback { id: "FB-vague", title: "sum shit is broken", body: "", source: FeedbackSource.BamlFeedback, author: Author { email: null, github: null, device_id: "fixture" }, toolchain: null, files: {}, comments: [], issue_ids: [] }; assert.equal(triage_feedback(fb), null); assert.equal(untriaged_feedback().length(), 0);'
+        calls = self.run_expression(expression, respond, reject_feedback=True)
+        self.assertEqual(len(terminal), 1)
+        self.assertEqual(terminal[0]['kind'], 'no_issue')
+        self.assertEqual(terminal[0]['payload'], {'reason': 'needs_details'})
+        self.assertIsNone(terminal[0]['issue_id'])
+        self.assertIsNone(terminal[0]['slack_ts'])
+        self.assertEqual([(method, table) for method, table, _, _ in calls if method != 'GET'], [('POST', 'events')])
 
     def test_issue_and_direct_requests_reuse_one_existing_babysitter(self):
         calls = self.run_expression('request_merge("https://github.com/BoundaryML/baml/pull/1")',

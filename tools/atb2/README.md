@@ -453,3 +453,8 @@ outgoing commits, verifies the exact branch head, and pushes. Slack receives a
 push notification; the babysitter then watches that PR's CI and reviewer
 feedback. Each subsequent fix still requires a fresh approval. A cached CLI
 represents its recorded revision, never unbuilt edits in the checkout.
+
+Before generating a repro, triage checks whether the feedback describes a concrete
+problem or feature request. Vague reports stay in feedback storage with a terminal
+`no_issue` event (`reason=needs_details`), without creating an issue or pinging a
+shepherd. Specific reports do not need a complete repro to pass this check.
